@@ -8,7 +8,7 @@
 PRODUCT_NAME = gwid
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.github.kometteam.komet
+PRODUCT_BUNDLE_IDENTIFIER = com.gwid.app.gwid
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2025 com.gwid.app. All rights reserved.
