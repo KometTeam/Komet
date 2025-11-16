@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
@@ -3507,35 +3508,52 @@ class _SferumWebViewPanelState extends State<SferumWebViewPanel> {
               Expanded(
                 child: Stack(
                   children: [
-                    InAppWebView(
-                      initialUrlRequest: URLRequest(url: WebUri(widget.url)),
-                      initialSettings: InAppWebViewSettings(
-                        javaScriptEnabled: true,
-                        transparentBackground: true,
-                        useShouldOverrideUrlLoading: false,
-                        useOnLoadResource: false,
-                        useOnDownloadStart: false,
-                        cacheEnabled: true,
+                    if (!Platform.isLinux)
+                      InAppWebView(
+                        initialUrlRequest: URLRequest(url: WebUri(widget.url)),
+                        initialSettings: InAppWebViewSettings(
+                          javaScriptEnabled: true,
+                          transparentBackground: true,
+                          useShouldOverrideUrlLoading: false,
+                          useOnLoadResource: false,
+                          useOnDownloadStart: false,
+                          cacheEnabled: true,
+                        ),
+                        onLoadStart: (controller, url) {
+                          print('🌐 WebView начало загрузки: $url');
+                          setState(() {
+                            _isLoading = true;
+                          });
+                        },
+                        onLoadStop: (controller, url) {
+                          print('✅ WebView загрузка завершена: $url');
+                          setState(() {
+                            _isLoading = false;
+                          });
+                        },
+                        onReceivedError: (controller, request, error) {
+                          print(
+                            '❌ WebView ошибка: ${error.description} (${error.type})',
+                          );
+                        },
                       ),
-                      onLoadStart: (controller, url) {
-                        print('🌐 WebView начало загрузки: $url');
-                        setState(() {
-                          _isLoading = true;
-                        });
-                      },
-                      onLoadStop: (controller, url) {
-                        print('✅ WebView загрузка завершена: $url');
-                        setState(() {
-                          _isLoading = false;
-                        });
-                      },
-                      onReceivedError: (controller, request, error) {
-                        print(
-                          '❌ WebView ошибка: ${error.description} (${error.type})',
-                        );
-                      },
-                    ),
-                    if (_isLoading)
+                    if (Platform.isLinux)
+                      Container(
+                        color: colors.surface,
+                        child: const Center(
+                          child: Text(
+                            'Сферум временно не доступен на линуксе,\nмы думаем как это исправить.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    if (_isLoading && !Platform.isLinux)
                       Container(
                         color: colors.surface,
                         child: const Center(child: CircularProgressIndicator()),
