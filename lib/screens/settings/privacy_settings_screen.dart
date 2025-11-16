@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:gwid/api_service.dart';
 import 'package:gwid/theme_provider.dart';
@@ -15,12 +13,12 @@ class PrivacySettingsScreen extends StatefulWidget {
 }
 
 class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
-
   bool _isHidden = false;
   bool _isLoading = false;
-  String _searchByPhone = 'ALL'; // 'ALL', 'CONTACTS', 'NOBODY'
-  String _incomingCall = 'ALL'; // 'ALL', 'CONTACTS', 'NOBODY'
-  String _chatsInvite = 'ALL'; // 'ALL', 'CONTACTS', 'NOBODY'
+  String _searchByPhone = 'ALL';
+  String _incomingCall = 'ALL';
+  String _chatsInvite = 'ALL';
+  bool _contentLevelAccess = false;
 
   @override
   void initState() {
@@ -42,6 +40,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
         _searchByPhone = prefs.getString('privacy_search_by_phone') ?? 'ALL';
         _incomingCall = prefs.getString('privacy_incoming_call') ?? 'ALL';
         _chatsInvite = prefs.getString('privacy_chats_invite') ?? 'ALL';
+        _contentLevelAccess =
+            prefs.getBool('privacy_content_level_access') ?? false;
       });
     } catch (e) {
       print('Ошибка загрузки настроек приватности: $e');
@@ -60,8 +60,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       print('Ошибка сохранения настройки $key: $e');
     }
   }
-
-
 
   Future<void> _updateHiddenStatus(bool hidden) async {
     setState(() => _isLoading = true);
@@ -92,12 +90,14 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     String? searchByPhone,
     String? incomingCall,
     String? chatsInvite,
+    bool? contentLevelAccess,
   }) async {
     try {
       await ApiService.instance.updatePrivacySettings(
         searchByPhone: searchByPhone,
         incomingCall: incomingCall,
         chatsInvite: chatsInvite,
+        contentLevelAccess: contentLevelAccess,
       );
 
       if (searchByPhone != null) {
@@ -111,6 +111,13 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       if (chatsInvite != null) {
         await _savePrivacySetting('privacy_chats_invite', chatsInvite);
         if (mounted) setState(() => _chatsInvite = chatsInvite);
+      }
+      if (contentLevelAccess != null) {
+        await _savePrivacySetting(
+          'privacy_content_level_access',
+          contentLevelAccess,
+        );
+        if (mounted) setState(() => _contentLevelAccess = contentLevelAccess);
       }
 
       if (mounted) {
@@ -137,8 +144,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     }
   }
 
-
-
   void _showOptionDialog(
     String title,
     String currentValue,
@@ -162,7 +167,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
               currentValue,
               onSelect,
             ),
-            _buildDialogOption('Никто', 'NOBODY', currentValue, onSelect),
           ],
         );
       },
@@ -187,8 +191,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       },
     );
   }
-
-
 
   String _getPrivacyDescription(String value) {
     switch (value) {
@@ -306,6 +308,34 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                         ),
                       );
                     },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            _OutlinedSection(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionTitle("Уровень контента", colors),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: Icon(
+                      _contentLevelAccess
+                          ? Icons.shield_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    title: const Text("Безопасный режим"),
+                    subtitle: Text(
+                      _contentLevelAccess
+                          ? "Показывать только безопасный контент"
+                          : "Показывать весь доступный контент",
+                    ),
+                    value: _contentLevelAccess,
+                    onChanged: (value) =>
+                        _updatePrivacyOption(contentLevelAccess: value),
                   ),
                 ],
               ),

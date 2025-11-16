@@ -979,6 +979,10 @@ class ApiService {
           chatResponse['payload']?['chats'] ?? [];
 
       if (chatListJson.isEmpty) {
+        if (config != null) {
+          _processServerPrivacyConfig(config);
+        }
+
         final result = {
           'chats': [],
           'contacts': [],
@@ -1011,6 +1015,10 @@ class ApiService {
 
       if (presence != null) {
         updatePresenceData(presence);
+      }
+
+      if (config != null) {
+        _processServerPrivacyConfig(config);
       }
 
       final result = {
@@ -2564,27 +2572,28 @@ class ApiService {
       _lastChatsAt = null;
 
       print(
-        "✅ Кэш чатов очищен: _lastChatsPayload = $_lastChatsPayload, _chatsFetchedInThisSession = $_chatsFetchedInThisSession",
+        " Кэш чатов очищен: _lastChatsPayload = $_lastChatsPayload, _chatsFetchedInThisSession = $_chatsFetchedInThisSession",
       );
 
       _connectionStatusController.add("disconnected");
 
       await connect();
 
-      print("✅ Полное переподключение завершено");
+      print(" Полное переподключение завершено");
 
       await Future.delayed(const Duration(milliseconds: 1500));
 
       if (!_reconnectionCompleteController.isClosed) {
-        print("📢 Отправляем уведомление о завершении переподключения");
+        print(" Отправляем уведомление о завершении переподключения");
         _reconnectionCompleteController.add(null);
       }
     } catch (e) {
-      print("❌ Ошибка полного переподключения: $e");
+      print("Ошибка полного переподключения: $e");
       rethrow;
     }
   }
 
+  // ЫЫЫ ХУЯРЮ ВПЕРОД В БОГАЖНЕКЕ ГРАНАТАМЁТ
   Future<void> updatePrivacySettings({
     String? hidden,
     String? searchByPhone,
@@ -2595,6 +2604,7 @@ class ApiService {
     String? pushSound,
     bool? mCallPushNotification,
     bool? pushDetails,
+    bool? contentLevelAccess,
   }) async {
     final settings = {
       if (hidden != null) 'user': {'HIDDEN': hidden == 'true'},
@@ -2610,19 +2620,30 @@ class ApiService {
       if (pushDetails != null) 'user': {'PUSH_DETAILS': pushDetails},
     };
 
-    print('Обновляем настройки приватности: $settings');
+    print(''); // КАК ЖЕ ПОХУЙ
 
     if (hidden != null) {
       await _updateSinglePrivacySetting({'HIDDEN': hidden == 'true'});
     }
     if (searchByPhone != null) {
-      await _updateSinglePrivacySetting({'SEARCH_BY_PHONE': searchByPhone});
+      final seq = searchByPhone == 'ALL' ? 37 : 46;
+      await _updatePrivacySettingWithSeq({
+        'SEARCH_BY_PHONE': searchByPhone,
+      }, seq);
     }
     if (incomingCall != null) {
-      await _updateSinglePrivacySetting({'INCOMING_CALL': incomingCall});
+      final seq = incomingCall == 'ALL' ? 30 : 23;
+      await _updatePrivacySettingWithSeq({'INCOMING_CALL': incomingCall}, seq);
     }
     if (chatsInvite != null) {
-      await _updateSinglePrivacySetting({'CHATS_INVITE': chatsInvite});
+      final seq = chatsInvite == 'ALL' ? 51 : 55;
+      await _updatePrivacySettingWithSeq({'CHATS_INVITE': chatsInvite}, seq);
+    }
+    if (contentLevelAccess != null) {
+      final seq = contentLevelAccess ? 70 : 62;
+      await _updatePrivacySettingWithSeq({
+        'CONTENT_LEVEL_ACCESS': contentLevelAccess,
+      }, seq);
     }
 
     if (chatsPushNotification != null) {
@@ -2647,10 +2668,77 @@ class ApiService {
   Future<void> _updateSinglePrivacySetting(Map<String, dynamic> setting) async {
     await waitUntilOnline();
 
-    final payload = {'settings': setting};
+    final payload = {
+      'settings': {'user': setting},
+    };
 
     _sendMessage(22, payload);
-    print('Отправляем обновление настройки приватности: $payload');
+    print(''); //песюны
+  }
+
+  Future<void> _updatePrivacySettingWithSeq(
+    Map<String, dynamic> setting,
+    int seq,
+  ) async {
+    await waitUntilOnline();
+
+    final message = {
+      "ver": 11,
+      "cmd": 0,
+      "seq": seq,
+      "opcode": 22,
+      "payload": {
+        "settings": {"user": setting},
+      },
+    };
+
+    final encodedMessage = jsonEncode(message);
+    _channel?.sink.add(encodedMessage);
+    _log('SEND: $encodedMessage');
+    print(
+      '', //вроде надо а вроде бля как же похуй
+    );
+  }
+
+  void _processServerPrivacyConfig(Map<String, dynamic>? config) {
+    if (config == null) return;
+
+    final userConfig = config['user'] as Map<String, dynamic>?;
+    if (userConfig == null) return;
+
+    print('Обработка настроек приватности с сервера: $userConfig');
+
+    // Сохраняем настройки в SharedPreferences
+    final prefs = SharedPreferences.getInstance();
+    prefs.then((prefs) {
+      if (userConfig.containsKey('SEARCH_BY_PHONE')) {
+        prefs.setString(
+          'privacy_search_by_phone',
+          userConfig['SEARCH_BY_PHONE'],
+        );
+      }
+      if (userConfig.containsKey('INCOMING_CALL')) {
+        prefs.setString('privacy_incoming_call', userConfig['INCOMING_CALL']);
+      }
+      if (userConfig.containsKey('CHATS_INVITE')) {
+        prefs.setString('privacy_chats_invite', userConfig['CHATS_INVITE']);
+      }
+      if (userConfig.containsKey('CONTENT_LEVEL_ACCESS')) {
+        prefs.setBool(
+          'privacy_content_level_access',
+          userConfig['CONTENT_LEVEL_ACCESS'],
+        );
+      }
+      if (userConfig.containsKey('HIDDEN')) {
+        prefs.setBool('privacy_hidden', userConfig['HIDDEN']);
+      }
+    });
+
+    // Отправляем событие об обновлении настроек
+    _messageController.add({
+      'type': 'privacy_settings_updated',
+      'settings': {'user': userConfig},
+    });
   }
 
   void dispose() {
