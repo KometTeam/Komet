@@ -15,22 +15,17 @@ import 'services/cache_service.dart';
 import 'services/avatar_cache_service.dart';
 import 'services/chat_cache_service.dart';
 
-
 class ApiServiceV2 {
   ApiServiceV2._privateConstructor();
   static final ApiServiceV2 instance = ApiServiceV2._privateConstructor();
 
-
   final ConnectionManager _connectionManager = ConnectionManager();
 
-
   final ConnectionLogger _logger = ConnectionLogger();
-
 
   String? _authToken;
   bool _isInitialized = false;
   bool _isAuthenticated = false;
-
 
   final Map<int, List<Message>> _messageCache = {};
   final Map<int, Contact> _contactCache = {};
@@ -39,40 +34,29 @@ class ApiServiceV2 {
   final Duration _chatsCacheTtl = const Duration(seconds: 5);
   bool _chatsFetchedInThisSession = false;
 
-
   final Map<String, dynamic> _presenceData = {};
-
 
   final StreamController<Contact> _contactUpdatesController =
       StreamController<Contact>.broadcast();
   final StreamController<Map<String, dynamic>> _messageController =
       StreamController<Map<String, dynamic>>.broadcast();
 
-
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
-
 
   Stream<Contact> get contactUpdates => _contactUpdatesController.stream;
 
-
   Stream<ConnectionInfo> get connectionState => _connectionManager.stateStream;
 
-
   Stream<LogEntry> get logs => _connectionManager.logStream;
-
 
   Stream<HealthMetrics> get healthMetrics =>
       _connectionManager.healthMetricsStream;
 
-
   ConnectionInfo get currentConnectionState => _connectionManager.currentState;
-
 
   bool get isOnline => _connectionManager.isConnected;
 
-
   bool get canSendMessages => _connectionManager.canSendMessages;
-
 
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -86,7 +70,6 @@ class ApiServiceV2 {
       await _connectionManager.initialize();
       _setupMessageHandlers();
 
-
       _isAuthenticated = false;
 
       _isInitialized = true;
@@ -98,18 +81,15 @@ class ApiServiceV2 {
     }
   }
 
-
   void _setupMessageHandlers() {
     _connectionManager.messageStream.listen((message) {
       _handleIncomingMessage(message);
     });
   }
 
-
   void _handleIncomingMessage(Map<String, dynamic> message) {
     try {
       _logger.logMessage('IN', message);
-
 
       if (message['opcode'] == 19 &&
           message['cmd'] == 1 &&
@@ -118,16 +98,13 @@ class ApiServiceV2 {
         _logger.logConnection('Аутентификация успешна');
       }
 
-
       if (message['opcode'] == 128 && message['payload'] != null) {
         _handleContactUpdate(message['payload']);
       }
 
-
       if (message['opcode'] == 129 && message['payload'] != null) {
         _handlePresenceUpdate(message['payload']);
       }
-
 
       _messageController.add(message);
     } catch (e) {
@@ -137,7 +114,6 @@ class ApiServiceV2 {
       );
     }
   }
-
 
   void _handleContactUpdate(Map<String, dynamic> payload) {
     try {
@@ -157,7 +133,6 @@ class ApiServiceV2 {
     }
   }
 
-
   void _handlePresenceUpdate(Map<String, dynamic> payload) {
     try {
       _presenceData.addAll(payload);
@@ -173,7 +148,6 @@ class ApiServiceV2 {
     }
   }
 
-
   Future<void> connect() async {
     _logger.logConnection('Запрос подключения к серверу');
 
@@ -185,7 +159,6 @@ class ApiServiceV2 {
       rethrow;
     }
   }
-
 
   Future<void> reconnect() async {
     _logger.logConnection('Запрос переподключения');
@@ -199,17 +172,14 @@ class ApiServiceV2 {
     }
   }
 
-
   Future<void> forceReconnect() async {
     _logger.logConnection('Принудительное переподключение');
 
     try {
-
       _isAuthenticated = false;
 
       await _connectionManager.forceReconnect();
       _logger.logConnection('Принудительное переподключение успешно');
-
 
       await _performFullAuthenticationSequence();
     } catch (e) {
@@ -218,25 +188,19 @@ class ApiServiceV2 {
     }
   }
 
-
   Future<void> _performFullAuthenticationSequence() async {
     _logger.logConnection(
       'Выполнение полной последовательности аутентификации',
     );
 
     try {
-
       await _waitForConnectionReady();
-
 
       await _sendAuthenticationToken();
 
-
       await _waitForAuthenticationConfirmation();
 
-
       await _sendPingToConfirmSession();
-
 
       await _requestChatsAndContacts();
 
@@ -249,14 +213,12 @@ class ApiServiceV2 {
     }
   }
 
-
   Future<void> _waitForConnectionReady() async {
     const maxWaitTime = Duration(seconds: 30);
     final startTime = DateTime.now();
 
     while (DateTime.now().difference(startTime) < maxWaitTime) {
       if (_connectionManager.currentState.isActive) {
-
         await Future.delayed(const Duration(milliseconds: 500));
         return;
       }
@@ -265,7 +227,6 @@ class ApiServiceV2 {
 
     throw Exception('Таймаут ожидания готовности соединения');
   }
-
 
   Future<void> _sendAuthenticationToken() async {
     if (_authToken == null) {
@@ -295,17 +256,14 @@ class ApiServiceV2 {
 
     _connectionManager.sendMessage(19, payload);
 
-
     await _waitForAuthenticationConfirmation();
   }
-
 
   Future<void> _waitForAuthenticationConfirmation() async {
     const maxWaitTime = Duration(seconds: 10);
     final startTime = DateTime.now();
 
     while (DateTime.now().difference(startTime) < maxWaitTime) {
-
       if (_connectionManager.currentState.isActive && _isAuthenticated) {
         _logger.logConnection('Аутентификация подтверждена');
         return;
@@ -316,19 +274,16 @@ class ApiServiceV2 {
     throw Exception('Таймаут ожидания подтверждения аутентификации');
   }
 
-
   Future<void> _sendPingToConfirmSession() async {
     _logger.logConnection('Отправка ping для подтверждения готовности сессии');
 
     final payload = {"interactive": true};
     _connectionManager.sendMessage(1, payload);
 
-
     await Future.delayed(const Duration(milliseconds: 500));
 
     _logger.logConnection('Ping отправлен, сессия готова');
   }
-
 
   Future<void> _waitForSessionReady() async {
     const maxWaitTime = Duration(seconds: 30);
@@ -345,21 +300,17 @@ class ApiServiceV2 {
     throw Exception('Таймаут ожидания готовности сессии');
   }
 
-
   Future<void> _requestChatsAndContacts() async {
     _logger.logConnection('Запрос чатов и контактов');
-
 
     final chatsPayload = {"chatsCount": 100};
 
     _connectionManager.sendMessage(48, chatsPayload);
 
-
     final contactsPayload = {"status": "BLOCKED", "count": 100, "from": 0};
 
     _connectionManager.sendMessage(36, contactsPayload);
   }
-
 
   Future<void> disconnect() async {
     _logger.logConnection('Отключение от сервера');
@@ -372,7 +323,6 @@ class ApiServiceV2 {
     }
   }
 
-
   int _sendMessage(int opcode, Map<String, dynamic> payload) {
     if (!canSendMessages) {
       _logger.logConnection(
@@ -381,7 +331,6 @@ class ApiServiceV2 {
       );
       return -1;
     }
-
 
     if (_requiresAuthentication(opcode) && !_isAuthenticated) {
       _logger.logConnection(
@@ -407,9 +356,7 @@ class ApiServiceV2 {
     }
   }
 
-
   bool _requiresAuthentication(int opcode) {
-
     const authRequiredOpcodes = {
       19, // Аутентификация
       32, // Получение контактов
@@ -429,7 +376,6 @@ class ApiServiceV2 {
 
     return authRequiredOpcodes.contains(opcode);
   }
-
 
   Future<void> sendHandshake() async {
     _logger.logConnection('Отправка handshake');
@@ -453,7 +399,6 @@ class ApiServiceV2 {
     _sendMessage(6, payload);
   }
 
-
   void requestOtp(String phoneNumber) {
     _logger.logConnection('Запрос OTP', data: {'phone': phoneNumber});
 
@@ -464,7 +409,6 @@ class ApiServiceV2 {
     };
     _sendMessage(17, payload);
   }
-
 
   void verifyCode(String token, String code) {
     _logger.logConnection(
@@ -479,7 +423,6 @@ class ApiServiceV2 {
     };
     _sendMessage(18, payload);
   }
-
 
   Future<Map<String, dynamic>> authenticateWithToken(String token) async {
     _logger.logConnection('Аутентификация с токеном');
@@ -511,10 +454,8 @@ class ApiServiceV2 {
     }
   }
 
-
   Future<Map<String, dynamic>> getChatsAndContacts({bool force = false}) async {
     _logger.logConnection('Запрос чатов и контактов', data: {'force': force});
-
 
     if (!force && _lastChatsPayload != null && _lastChatsAt != null) {
       if (DateTime.now().difference(_lastChatsAt!) < _chatsCacheTtl) {
@@ -522,7 +463,6 @@ class ApiServiceV2 {
         return _lastChatsPayload!;
       }
     }
-
 
     if (!force) {
       final chatService = ChatCacheService();
@@ -562,7 +502,6 @@ class ApiServiceV2 {
       }
     }
 
-
     await _waitForSessionReady();
 
     try {
@@ -581,7 +520,6 @@ class ApiServiceV2 {
         _lastChatsAt = DateTime.now();
         return result;
       }
-
 
       final contactIds = <int>{};
       for (var chatJson in chatListJson) {
@@ -610,17 +548,14 @@ class ApiServiceV2 {
       _lastChatsAt = DateTime.now();
       _chatsFetchedInThisSession = true;
 
-
       final contacts = contactListJson
           .map((json) => Contact.fromJson(json))
           .toList();
       updateContactCache(contacts);
 
-
       final chatService = ChatCacheService();
       await chatService.cacheChats(chatListJson.cast<Map<String, dynamic>>());
       await chatService.cacheContacts(contacts);
-
 
       _preloadContactAvatars(contacts);
 
@@ -639,7 +574,6 @@ class ApiServiceV2 {
     }
   }
 
-
   Future<List<Message>> getMessageHistory(
     int chatId, {
     bool force = false,
@@ -649,12 +583,10 @@ class ApiServiceV2 {
       data: {'chat_id': chatId, 'force': force},
     );
 
-
     if (!force && _messageCache.containsKey(chatId)) {
       _logger.logConnection('История сообщений загружена из локального кэша');
       return _messageCache[chatId]!;
     }
-
 
     if (!force) {
       final chatService = ChatCacheService();
@@ -666,7 +598,6 @@ class ApiServiceV2 {
         return cachedMessages;
       }
     }
-
 
     await _waitForSessionReady();
 
@@ -703,10 +634,8 @@ class ApiServiceV2 {
 
       _messageCache[chatId] = messagesList;
 
-
       final chatService = ChatCacheService();
       await chatService.cacheChatMessages(chatId, messagesList);
-
 
       _preloadMessageImages(messagesList);
 
@@ -724,7 +653,6 @@ class ApiServiceV2 {
       return [];
     }
   }
-
 
   void sendMessage(int chatId, String text, {String? replyToMessageId}) {
     _logger.logConnection(
@@ -754,6 +682,33 @@ class ApiServiceV2 {
     _sendMessage(64, payload);
   }
 
+  void forwardMessage(int targetChatId, String messageId, int sourceChatId) {
+    _logger.logConnection(
+      'Пересылка сообщения',
+      data: {
+        'target_chat_id': targetChatId,
+        'message_id': messageId,
+        'source_chat_id': sourceChatId,
+      },
+    );
+
+    final int clientMessageId = DateTime.now().millisecondsSinceEpoch;
+    final payload = {
+      "chatId": targetChatId,
+      "message": {
+        "cid": clientMessageId,
+        "link": {
+          "type": "FORWARD",
+          "messageId": messageId,
+          "chatId": sourceChatId,
+        },
+        "attaches": [],
+      },
+      "notify": true,
+    };
+
+    _sendMessage(64, payload);
+  }
 
   Future<void> sendPhotoMessage(
     int chatId, {
@@ -777,14 +732,12 @@ class ApiServiceV2 {
         if (image == null) return;
       }
 
-
       final seq80 = _sendMessage(80, {"count": 1});
       final resp80 = await messages
           .firstWhere((m) => m['seq'] == seq80)
           .timeout(const Duration(seconds: 30));
 
       final String uploadUrl = resp80['payload']['url'];
-
 
       var request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
       request.files.add(await http.MultipartFile.fromPath('file', image.path));
@@ -801,7 +754,6 @@ class ApiServiceV2 {
       final Map photos = uploadJson['photos'] as Map;
       if (photos.isEmpty) throw Exception('Не получен токен фото');
       final String photoToken = (photos.values.first as Map)['token'];
-
 
       final int cid = cidOverride ?? DateTime.now().millisecondsSinceEpoch;
       final payload = {
@@ -832,7 +784,6 @@ class ApiServiceV2 {
     }
   }
 
-
   Future<void> blockContact(int contactId) async {
     _logger.logConnection(
       'Блокировка контакта',
@@ -840,7 +791,6 @@ class ApiServiceV2 {
     );
     _sendMessage(34, {'contactId': contactId, 'action': 'BLOCK'});
   }
-
 
   Future<void> unblockContact(int contactId) async {
     _logger.logConnection(
@@ -850,12 +800,10 @@ class ApiServiceV2 {
     _sendMessage(34, {'contactId': contactId, 'action': 'UNBLOCK'});
   }
 
-
   void getBlockedContacts() {
     _logger.logConnection('Запрос заблокированных контактов');
     _sendMessage(36, {'status': 'BLOCKED', 'count': 100, 'from': 0});
   }
-
 
   void createGroup(String name, List<int> participantIds) {
     _logger.logConnection(
@@ -866,7 +814,6 @@ class ApiServiceV2 {
     final payload = {"name": name, "participantIds": participantIds};
     _sendMessage(48, payload);
   }
-
 
   void addGroupMember(
     int chatId,
@@ -887,7 +834,6 @@ class ApiServiceV2 {
     _sendMessage(77, payload);
   }
 
-
   void removeGroupMember(
     int chatId,
     List<int> userIds, {
@@ -907,12 +853,10 @@ class ApiServiceV2 {
     _sendMessage(77, payload);
   }
 
-
   void leaveGroup(int chatId) {
     _logger.logConnection('Выход из группы', data: {'chat_id': chatId});
     _sendMessage(58, {"chatId": chatId});
   }
-
 
   void sendReaction(int chatId, String messageId, String emoji) {
     _logger.logConnection(
@@ -928,7 +872,6 @@ class ApiServiceV2 {
     _sendMessage(178, payload);
   }
 
-
   void removeReaction(int chatId, String messageId) {
     _logger.logConnection(
       'Удаление реакции',
@@ -939,12 +882,10 @@ class ApiServiceV2 {
     _sendMessage(179, payload);
   }
 
-
   void sendTyping(int chatId, {String type = "TEXT"}) {
     final payload = {"chatId": chatId, "type": type};
     _sendMessage(65, payload);
   }
-
 
   DateTime? getLastSeen(int userId) {
     final userPresence = _presenceData[userId.toString()];
@@ -954,7 +895,6 @@ class ApiServiceV2 {
     }
     return null;
   }
-
 
   void updateContactCache(List<Contact> contacts) {
     _contactCache.clear();
@@ -967,11 +907,9 @@ class ApiServiceV2 {
     );
   }
 
-
   Contact? getCachedContact(int contactId) {
     return _contactCache[contactId];
   }
-
 
   void clearChatsCache() {
     _lastChatsPayload = null;
@@ -980,18 +918,15 @@ class ApiServiceV2 {
     _logger.logConnection('Кэш чатов очищен');
   }
 
-
   void clearMessageCache(int chatId) {
     _messageCache.remove(chatId);
     _logger.logConnection('Кэш сообщений очищен', data: {'chat_id': chatId});
   }
 
-
   Future<void> clearAllCaches() async {
     _messageCache.clear();
     _contactCache.clear();
     clearChatsCache();
-
 
     try {
       await CacheService().clear();
@@ -1004,24 +939,20 @@ class ApiServiceV2 {
     _logger.logConnection('Все кэши очищены');
   }
 
-
   Future<void> saveToken(String token) async {
     _authToken = token;
     final prefs = await SharedPreferences.getInstance();
-
 
     await prefs.setString('authToken', token);
 
     _logger.logConnection('Токен сохранен');
   }
 
-
   Future<bool> hasToken() async {
     final prefs = await SharedPreferences.getInstance();
     _authToken = prefs.getString('authToken');
     return _authToken != null;
   }
-
 
   Future<void> logout() async {
     _logger.logConnection('Выход из системы');
@@ -1037,7 +968,6 @@ class ApiServiceV2 {
       _logger.logError('Ошибка при выходе из системы', error: e);
     }
   }
-
 
   Future<void> _preloadContactAvatars(List<Contact> contacts) async {
     try {
@@ -1058,7 +988,6 @@ class ApiServiceV2 {
       _logger.logError('Ошибка предзагрузки аватарок контактов', error: e);
     }
   }
-
 
   Future<void> _preloadMessageImages(List<Message> messages) async {
     try {
@@ -1091,13 +1020,11 @@ class ApiServiceV2 {
     }
   }
 
-
   String _generateDeviceId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = (timestamp % 1000000).toString().padLeft(6, '0');
     return "$timestamp$random";
   }
-
 
   Future<Map<String, dynamic>> getStatistics() async {
     final imageCacheStats = await ImageCacheService.instance.getCacheStats();
@@ -1120,7 +1047,6 @@ class ApiServiceV2 {
       'image_cache': imageCacheStats,
     };
   }
-
 
   void dispose() {
     _logger.logConnection('Освобождение ресурсов ApiServiceV2');

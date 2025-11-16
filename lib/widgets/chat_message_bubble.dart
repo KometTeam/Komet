@@ -23,7 +23,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
 import 'package:gwid/full_screen_video_player.dart';
 
-
 bool _currentIsDark = false;
 
 enum MessageReadStatus {
@@ -101,12 +100,9 @@ class FileDownloadProgressService {
 Color _getUserColor(int userId, BuildContext context) {
   final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-
   if (isDark != _currentIsDark) {
-    
     _currentIsDark = isDark;
   }
-
 
   final List<Color> materialYouColors = isDark
       ? [
@@ -161,7 +157,6 @@ Color _getUserColor(int userId, BuildContext context) {
   final colorIndex = userId % materialYouColors.length;
   final color = materialYouColors[colorIndex];
 
-
   return color;
 }
 
@@ -177,6 +172,7 @@ class ChatMessageBubble extends StatelessWidget {
   final Function(String)? onReaction;
   final VoidCallback? onRemoveReaction;
   final VoidCallback? onReply;
+  final VoidCallback? onForward;
   final int? myUserId;
   final bool? canEditMessage;
   final bool isGroupChat;
@@ -207,6 +203,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onReaction,
     this.onRemoveReaction,
     this.onReply,
+    this.onForward,
     this.myUserId,
     this.canEditMessage,
     this.isGroupChat = false,
@@ -871,6 +868,7 @@ class ChatMessageBubble extends StatelessWidget {
           onDeleteForAll: onDeleteForAll,
           onReaction: onReaction,
           onRemoveReaction: onRemoveReaction,
+          onForward: onForward,
           canEditMessage: canEditMessage ?? false,
           hasUserReaction: hasUserReaction,
         );
@@ -3513,6 +3511,7 @@ class _MessageContextMenu extends StatefulWidget {
   final VoidCallback? onDeleteForAll;
   final Function(String)? onReaction;
   final VoidCallback? onRemoveReaction;
+  final VoidCallback? onForward;
   final bool canEditMessage;
   final bool hasUserReaction;
 
@@ -3525,6 +3524,7 @@ class _MessageContextMenu extends StatefulWidget {
     this.onDeleteForAll,
     this.onReaction,
     this.onRemoveReaction,
+    this.onForward,
     required this.canEditMessage,
     required this.hasUserReaction,
   });
@@ -3797,6 +3797,15 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
             onTap: () {
               Navigator.pop(context);
               widget.onReply!();
+            },
+          ),
+        if (widget.onForward != null)
+          _buildActionButton(
+            icon: Icons.forward_rounded,
+            text: 'Переслать',
+            onTap: () {
+              Navigator.pop(context);
+              widget.onForward!();
             },
           ),
         if (widget.onEdit != null)

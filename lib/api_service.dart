@@ -1384,6 +1384,29 @@ class ApiService {
     }
   }
 
+  void forwardMessage(int targetChatId, String messageId, int sourceChatId) {
+    final int clientMessageId = DateTime.now().millisecondsSinceEpoch;
+    final payload = {
+      "chatId": targetChatId,
+      "message": {
+        "cid": clientMessageId,
+        "link": {
+          "type": "FORWARD",
+          "messageId": messageId,
+          "chatId": sourceChatId,
+        },
+        "attaches": [],
+      },
+      "notify": true,
+    };
+
+    if (_isSessionOnline) {
+      _sendMessage(64, payload);
+    } else {
+      _messageQueue.add({'opcode': 64, 'payload': payload});
+    }
+  }
+
   void _processMessageQueue() {
     if (_messageQueue.isEmpty) return;
     print("Отправка ${_messageQueue.length} сообщений из очереди...");

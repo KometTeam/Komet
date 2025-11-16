@@ -13,6 +13,7 @@ import 'package:gwid/models/message.dart';
 import 'package:gwid/widgets/chat_message_bubble.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gwid/services/chat_cache_service.dart';
+import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:gwid/screens/group_settings_screen.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
@@ -951,6 +952,188 @@ class _ChatScreenState extends State<ChatScreen> {
     FocusScope.of(context).requestFocus(FocusNode());
   }
 
+  void _forwardMessage(Message message) {
+    _showForwardDialog(message);
+  }
+
+  void _showForwardDialog(Message message) {
+    final chatData = ApiService.instance.lastChatsPayload;
+    if (chatData == null || chatData['chats'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Список чатов не загружен'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final chats = chatData['chats'] as List<dynamic>;
+    final availableChats = chats
+        .where(
+          (chat) => chat['id'] != widget.chatId || chat['id'] == 0,
+        ) //шелуха обработка избранного
+        .toList();
+
+    if (availableChats.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нет доступных чатов для пересылки'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Переслать сообщение'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: ListView.builder(
+            itemCount: availableChats.length,
+            itemBuilder: (context, index) {
+              final chat = availableChats[index] as Map<String, dynamic>;
+              return _buildForwardChatTile(context, chat, message);
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Отмена'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForwardChatTile(
+    BuildContext context,
+    Map<String, dynamic> chat,
+    Message message,
+  ) {
+    final chatId = chat['id'] as int;
+    final chatTitle = chat['title'] as String?;
+    // шелуха отдельная для избранного
+    String chatName;
+    Widget avatar;
+    String subtitle = '';
+
+    if (chatId == 0) {
+      chatName = 'Избранное';
+      avatar = CircleAvatar(
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        child: Icon(
+          Icons.star,
+          color: Theme.of(context).colorScheme.onPrimaryContainer,
+        ),
+      );
+      subtitle = 'Сохраненные сообщения';
+    } else {
+      final participants = chat['participants'] as Map<String, dynamic>? ?? {};
+      final isGroupChat = participants.length > 2;
+
+      if (isGroupChat) {
+        chatName = chatTitle?.isNotEmpty == true ? chatTitle! : 'Группа';
+        avatar = CircleAvatar(
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+          child: Icon(
+            Icons.group,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
+        );
+        subtitle = '${participants.length} участников';
+      } else {
+        final otherParticipantId = participants.keys
+            .map((id) => int.parse(id))
+            .firstWhere((id) => id != _actualMyId, orElse: () => 0);
+
+        final contact = _contactDetailsCache[otherParticipantId];
+        chatName = contact?.name ?? chatTitle ?? 'Чат $chatId';
+
+        final avatarUrl = contact?.photoBaseUrl;
+
+        avatar = AvatarCacheService().getAvatarWidget(
+          avatarUrl,
+          userId: otherParticipantId,
+          size: 48,
+          fallbackText: contact?.name ?? chatTitle ?? 'Чат $chatId',
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        );
+
+        subtitle = contact?.status ?? '';
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+              width: 1,
+            ),
+          ),
+          child: ClipOval(child: avatar),
+        ),
+        title: Text(
+          chatName,
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 16,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        subtitle: subtitle.isNotEmpty
+            ? Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              )
+            : null,
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        onTap: () {
+          Navigator.of(context).pop();
+          _performForward(message, chatId);
+        },
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _performForward(Message message, int targetChatId) {
+    ApiService.instance.forwardMessage(targetChatId, message.id, widget.chatId);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Сообщение переслано'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   void _cancelReply() {
     setState(() {
       _replyingToMessage = null;
@@ -1482,6 +1665,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     myUserId: _actualMyId,
                     chatId: widget.chatId,
                     onReply: () => _replyToMessage(item.message),
+                    onForward: () => _forwardMessage(item.message),
                     onEdit: isMe ? () => _editMessage(item.message) : null,
                     canEditMessage: isMe
                         ? item.message.canEdit(_actualMyId!)
