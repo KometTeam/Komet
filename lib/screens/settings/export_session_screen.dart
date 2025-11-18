@@ -1,10 +1,8 @@
-
-
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:gwid/api_service.dart';
 import 'package:gwid/proxy_service.dart';
 import 'package:gwid/spoofing_service.dart';
@@ -73,16 +71,55 @@ class _ExportSessionScreenState extends State<ExportSessionScreen> {
 
       Uint8List bytes = Uint8List.fromList(utf8.encode(finalFileContent));
 
-      final Directory directory = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-      final String filePath = '${directory.path}/komet_session_${DateTime.now().millisecondsSinceEpoch}.ksession';
-      
-      final File file = File(filePath);
-      await file.writeAsBytes(bytes);
+      final String fileName =
+          'komet_session_${DateTime.now().millisecondsSinceEpoch}.ksession';
+
+      String? outputFile;
+
+      if (Platform.isAndroid || Platform.isIOS) {
+        outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Сохранить файл сессии...',
+          fileName: fileName,
+          allowedExtensions: ['ksession'],
+          type: FileType.custom,
+          bytes: bytes,
+        );
+      } else {
+        outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Сохранить файл сессии...',
+          fileName: fileName,
+          allowedExtensions: ['ksession'],
+          type: FileType.custom,
+        );
+
+        if (outputFile != null) {
+          if (!outputFile.endsWith('.ksession')) {
+            outputFile += '.ksession';
+          }
+
+          final File file = File(outputFile);
+          await file.writeAsBytes(bytes);
+        }
+      }
+
+      if (outputFile == null) {
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Сохранение отменено')),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
+        String displayPath = outputFile;
+        if (Platform.isAndroid || Platform.isIOS) {
+          displayPath = fileName;
+        }
+
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Файл сессии успешно сохранен: $filePath'),
+            content: Text('Файл сессии успешно сохранен: $displayPath'),
             backgroundColor: Colors.green,
           ),
         );
@@ -122,7 +159,6 @@ class _ExportSessionScreenState extends State<ExportSessionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-
             Center(
               child: CircleAvatar(
                 radius: 40,
@@ -153,7 +189,6 @@ class _ExportSessionScreenState extends State<ExportSessionScreen> {
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 24),
-
 
             Text(
               '1. Защитите файл паролем',
@@ -214,7 +249,6 @@ class _ExportSessionScreenState extends State<ExportSessionScreen> {
             ),
             const SizedBox(height: 32),
 
-
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -242,7 +276,6 @@ class _ExportSessionScreenState extends State<ExportSessionScreen> {
               ),
             ),
             const SizedBox(height: 32),
-
 
             FilledButton.icon(
               onPressed: _isExporting ? null : _exportAndSaveSession,

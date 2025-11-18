@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:gwid/models/message.dart';
 import 'package:gwid/models/contact.dart';
+import 'package:gwid/models/profile.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +13,7 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter/services.dart';
 import 'package:gwid/proxy_service.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:gwid/services/account_manager.dart';
 
 class ApiService {
   ApiService._privateConstructor();
@@ -677,8 +679,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getChatsOnly({bool force = false}) async {
     if (authToken == null) {
-      final prefs = await SharedPreferences.getInstance();
-      authToken = prefs.getString('authToken');
+      await _loadTokenFromAccountManager();
     }
     if (authToken == null) throw Exception("Auth token not found");
 
@@ -985,6 +986,23 @@ class ApiService {
       final List<dynamic> chatListJson =
           chatResponse['payload']?['chats'] ?? [];
 
+      if (profile != null && authToken != null) {
+        try {
+          final accountManager = AccountManager();
+          await accountManager.initialize();
+          final currentAccount = accountManager.currentAccount;
+          if (currentAccount != null && currentAccount.token == authToken) {
+            final profileObj = Profile.fromJson(profile);
+            await accountManager.updateAccountProfile(
+              currentAccount.id,
+              profileObj,
+            );
+          }
+        } catch (e) {
+          print('Ошибка сохранения профиля в AccountManager: $e');
+        }
+      }
+
       if (chatListJson.isEmpty) {
         if (config != null) {
           _processServerPrivacyConfig(config);
@@ -1243,7 +1261,18 @@ class ApiService {
   Future<void> _sendInitialSetupRequests() async {
     print("Запускаем отправку единичных запросов при старте...");
 
+    if (!_isSessionOnline || !_isSessionReady) {
+      print("Сессия еще не готова, ждем...");
+      await waitUntilOnline();
+    }
+
     await Future.delayed(const Duration(seconds: 2));
+
+    if (!_isSessionOnline || !_isSessionReady) {
+      print("Сессия не готова для отправки запросов, пропускаем");
+      return;
+    }
+
     _sendMessage(272, {"folderSync": 0});
     await Future.delayed(const Duration(milliseconds: 500));
     _sendMessage(27, {"sync": 0, "type": "STICKER"});
@@ -1914,40 +1943,116 @@ class ApiService {
     });
   }
 
-  Future<void> saveToken(String token, {String? userId}) async {
+  Future<void> saveToken(
+    String token, {
+    String? userId,
+    Profile? profile,
+  }) async {
     print("Сохраняем новый токен: ${token.substring(0, 20)}...");
     if (userId != null) {
       print("Сохраняем UserID: $userId");
     }
+
+    final accountManager = AccountManager();
+    await accountManager.initialize();
+    final account = await accountManager.addAccount(
+      token: token,
+      userId: userId,
+      profile: profile,
+    );
+    await accountManager.switchAccount(account.id);
+
     authToken = token;
+    this.userId = userId;
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('authToken', token);
+    if (userId != null) {
+      await prefs.setString('userId', userId);
+    }
 
     disconnect();
 
     await connect();
     await getChatsAndContacts(force: true);
-    if (userId != null) {
-      await prefs.setString('userId', userId);
-    }
-    print("Токен и UserID успешно сохранены в SharedPreferences");
+    print("Токен и UserID успешно сохранены");
   }
 
   Future<bool> hasToken() async {
     if (authToken == null) {
-      final prefs = await SharedPreferences.getInstance();
-      authToken = prefs.getString('authToken');
-      userId = prefs.getString('userId');
-      if (authToken != null) {
+      final accountManager = AccountManager();
+      await accountManager.initialize();
+      await accountManager.migrateOldAccount();
+
+      final currentAccount = accountManager.currentAccount;
+      if (currentAccount != null) {
+        authToken = currentAccount.token;
+        userId = currentAccount.userId;
         print(
-          "Токен загружен из SharedPreferences: ${authToken!.substring(0, 20)}...",
+          "Токен загружен из AccountManager: ${authToken!.substring(0, 20)}...",
         );
-        if (userId != null) {
-          print("UserID загружен из SharedPreferences: $userId");
+      } else {
+        // Fallback на старый способ для обратной совместимости
+        final prefs = await SharedPreferences.getInstance();
+        authToken = prefs.getString('authToken');
+        userId = prefs.getString('userId');
+        if (authToken != null) {
+          print(
+            "Токен загружен из SharedPreferences: ${authToken!.substring(0, 20)}...",
+          );
+          if (userId != null) {
+            print("UserID загружен из SharedPreferences: $userId");
+          }
         }
       }
     }
     return authToken != null;
+  }
+
+  Future<void> _loadTokenFromAccountManager() async {
+    final accountManager = AccountManager();
+    await accountManager.initialize();
+    final currentAccount = accountManager.currentAccount;
+    if (currentAccount != null) {
+      authToken = currentAccount.token;
+      userId = currentAccount.userId;
+    }
+  }
+
+  Future<void> switchAccount(String accountId) async {
+    print("Переключение на аккаунт: $accountId");
+
+    disconnect();
+
+    final accountManager = AccountManager();
+    await accountManager.initialize();
+    await accountManager.switchAccount(accountId);
+
+    final currentAccount = accountManager.currentAccount;
+    if (currentAccount != null) {
+      authToken = currentAccount.token;
+      userId = currentAccount.userId;
+
+      _messageCache.clear();
+      _messageQueue.clear();
+      _lastChatsPayload = null;
+      _chatsFetchedInThisSession = false;
+      _isSessionOnline = false;
+      _isSessionReady = false;
+      _handshakeSent = false;
+
+      await connect();
+
+      await waitUntilOnline();
+
+      await getChatsAndContacts(force: true);
+
+      final profile = _lastChatsPayload?['profile'];
+      if (profile != null) {
+        final profileObj = Profile.fromJson(profile);
+        await accountManager.updateAccountProfile(accountId, profileObj);
+      }
+    }
   }
 
   Future<List<Contact>> fetchContactsByIds(List<int> contactIds) async {

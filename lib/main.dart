@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -17,6 +15,7 @@ import 'services/cache_service.dart';
 import 'services/avatar_cache_service.dart';
 import 'services/chat_cache_service.dart';
 import 'services/version_checker.dart';
+import 'services/account_manager.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -24,17 +23,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
 
-
   print("Инициализируем сервисы кеширования...");
   await CacheService().initialize();
   await AvatarCacheService().initialize();
   await ChatCacheService().initialize();
   print("Сервисы кеширования инициализированы");
 
+  print("Инициализируем AccountManager...");
+  await AccountManager().initialize();
+  await AccountManager().migrateOldAccount();
+  print("AccountManager инициализирован");
 
   final hasToken = await ApiService.instance.hasToken();
   print("При запуске приложения токен ${hasToken ? 'найден' : 'не найден'}");
-
 
   if (hasToken) {
     print("Инициируем подключение к WebSocket при запуске...");
@@ -60,7 +61,6 @@ class MyApp extends StatelessWidget {
 
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-
         final Color accentColor =
             (themeProvider.appTheme == AppTheme.system && lightDynamic != null)
             ? lightDynamic.primary
@@ -166,7 +166,6 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
 
 class _MiniFpsHud extends StatefulWidget {
   const _MiniFpsHud();

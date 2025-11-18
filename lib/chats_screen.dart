@@ -27,6 +27,8 @@ import 'package:gwid/downloads_screen.dart';
 import 'package:gwid/user_id_lookup_screen.dart';
 import 'package:gwid/widgets/message_preview_dialog.dart';
 import 'package:gwid/services/chat_read_settings_service.dart';
+import 'package:gwid/services/account_manager.dart';
+import 'package:gwid/models/account.dart';
 
 class SearchResult {
   final Chat chat;
@@ -90,6 +92,7 @@ class _ChatsScreenState extends State<ChatsScreen>
   String _connectionStatus = 'connecting';
   StreamSubscription<void>? _connectionStatusSubscription;
   StreamSubscription<String>? _connectionStateSubscription;
+  bool _isAccountsExpanded = false;
 
   @override
   void initState() {
@@ -157,6 +160,21 @@ class _ChatsScreenState extends State<ChatsScreen>
     setState(() {
       _isProfileLoading = true;
     });
+
+    try {
+      final accountManager = AccountManager();
+      await accountManager.initialize();
+      final currentAccount = accountManager.currentAccount;
+      if (currentAccount?.profile != null && mounted) {
+        setState(() {
+          _myProfile = currentAccount!.profile;
+          _isProfileLoading = false;
+        });
+        return;
+      }
+    } catch (e) {
+      print('Ошибка загрузки профиля из AccountManager: $e');
+    }
 
     final cachedProfileData = ApiService.instance.lastChatsPayload?['profile'];
     if (cachedProfileData != null && mounted) {
@@ -1735,93 +1753,258 @@ class _ChatsScreenState extends State<ChatsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: double.infinity,
+          FutureBuilder<List<Account>>(
+            future: _loadAccounts(),
+            builder: (context, accountsSnapshot) {
+              final accounts = accountsSnapshot.data ?? [];
+              final accountManager = AccountManager();
+              final currentAccount = accountManager.currentAccount;
+              final hasMultipleAccounts = accounts.length > 1;
 
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 16.0,
-              left: 16.0,
-              right: 16.0,
-              bottom: 16.0,
-            ),
-            decoration: BoxDecoration(color: colors.primaryContainer),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 30, // Чуть крупнее
-                      backgroundColor: colors.primary,
-                      backgroundImage:
-                          _isProfileLoading || _myProfile?.photoBaseUrl == null
-                          ? null
-                          : NetworkImage(_myProfile!.photoBaseUrl!),
-                      child: _isProfileLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+              return Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.only(
+                      top: MediaQuery.of(context).padding.top + 16.0,
+                      left: 16.0,
+                      right: 16.0,
+                      bottom: 16.0,
+                    ),
+                    decoration: BoxDecoration(color: colors.primaryContainer),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 30, // Чуть крупнее
+                              backgroundColor: colors.primary,
+                              backgroundImage:
+                                  _isProfileLoading ||
+                                      _myProfile?.photoBaseUrl == null
+                                  ? null
+                                  : NetworkImage(_myProfile!.photoBaseUrl!),
+                              child: _isProfileLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : (_myProfile?.photoBaseUrl == null
+                                        ? Text(
+                                            _myProfile
+                                                        ?.displayName
+                                                        .isNotEmpty ==
+                                                    true
+                                                ? _myProfile!.displayName[0]
+                                                      .toUpperCase()
+                                                : '?',
+                                            style: TextStyle(
+                                              color: colors.onPrimary,
+                                              fontSize: 28, // Крупнее
+                                            ),
+                                          )
+                                        : null),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                isDarkMode
+                                    ? Icons.brightness_7
+                                    : Icons.brightness_4, // Солнце / Луна
+                                color: colors.onPrimaryContainer,
+                                size: 26,
                               ),
+                              onPressed: () {
+                                themeProvider.toggleTheme();
+                              },
+                              tooltip: isDarkMode
+                                  ? 'Светлая тема'
+                                  : 'Темная тема',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        Text(
+                          _myProfile?.displayName ?? 'Загрузка...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: colors.onPrimaryContainer,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _myProfile?.formattedPhone ?? '',
+                                style: TextStyle(
+                                  color: colors.onPrimaryContainer.withOpacity(
+                                    0.8,
+                                  ),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isAccountsExpanded = !_isAccountsExpanded;
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 8.0),
+                                child: Icon(
+                                  _isAccountsExpanded
+                                      ? Icons.expand_less
+                                      : Icons.expand_more,
+                                  color: colors.onPrimaryContainer,
+                                  size: 24,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  ClipRect(
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOutCubic,
+                      child: _isAccountsExpanded
+                          ? Column(
+                              children: [
+                                if (hasMultipleAccounts)
+                                  ...accounts.map((account) {
+                                    final isCurrent =
+                                        account.id == currentAccount?.id;
+                                    return ListTile(
+                                      leading: CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: isCurrent
+                                            ? colors.primary
+                                            : colors.surfaceVariant,
+                                        backgroundImage:
+                                            account.avatarUrl != null
+                                            ? NetworkImage(account.avatarUrl!)
+                                            : null,
+                                        child: account.avatarUrl == null
+                                            ? Text(
+                                                account.displayName.isNotEmpty
+                                                    ? account.displayName[0]
+                                                          .toUpperCase()
+                                                    : '?',
+                                                style: TextStyle(
+                                                  color: isCurrent
+                                                      ? colors.onPrimary
+                                                      : colors.onSurfaceVariant,
+                                                  fontSize: 16,
+                                                ),
+                                              )
+                                            : null,
+                                      ),
+                                      title: Text(
+                                        account.displayName,
+                                        style: TextStyle(
+                                          fontWeight: isCurrent
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                      subtitle: account.displayPhone.isNotEmpty
+                                          ? Text(account.displayPhone)
+                                          : null,
+                                      trailing: isCurrent
+                                          ? Icon(
+                                              Icons.check_circle,
+                                              color: colors.primary,
+                                              size: 20,
+                                            )
+                                          : null,
+                                      onTap: isCurrent
+                                          ? null
+                                          : () async {
+                                              Navigator.pop(context);
+                                              try {
+                                                await ApiService.instance
+                                                    .switchAccount(account.id);
+                                                if (mounted) {
+                                                  setState(() {
+                                                    _isAccountsExpanded = false;
+                                                    _loadMyProfile();
+                                                    _chatsFuture = (() async {
+                                                      try {
+                                                        await ApiService
+                                                            .instance
+                                                            .waitUntilOnline();
+                                                        return ApiService
+                                                            .instance
+                                                            .getChatsAndContacts();
+                                                      } catch (e) {
+                                                        print(
+                                                          'Ошибка получения чатов: $e',
+                                                        );
+                                                        rethrow;
+                                                      }
+                                                    })();
+                                                  });
+                                                }
+                                              } catch (e) {
+                                                if (mounted) {
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        'Ошибка переключения аккаунта: $e',
+                                                      ),
+                                                      backgroundColor:
+                                                          colors.error,
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            },
+                                    );
+                                  }).toList(),
+
+                                ListTile(
+                                  leading: const Icon(Icons.add_circle_outline),
+                                  title: const Text('Добавить аккаунт'),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const PhoneEntryScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             )
-                          : (_myProfile?.photoBaseUrl == null
-                                ? Text(
-                                    _myProfile?.displayName.isNotEmpty == true
-                                        ? _myProfile!.displayName[0]
-                                              .toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      color: colors.onPrimary,
-                                      fontSize: 28, // Крупнее
-                                    ),
-                                  )
-                                : null),
+                          : const SizedBox.shrink(),
                     ),
-                    IconButton(
-                      icon: Icon(
-                        isDarkMode
-                            ? Icons.brightness_7
-                            : Icons.brightness_4, // Солнце / Луна
-                        color: colors.onPrimaryContainer,
-                        size: 26,
-                      ),
-                      onPressed: () {
-                        themeProvider.toggleTheme();
-                      },
-                      tooltip: isDarkMode ? 'Светлая тема' : 'Темная тема',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  _myProfile?.displayName ?? 'Загрузка...',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: colors.onPrimaryContainer,
                   ),
-                ),
-                const SizedBox(height: 4),
-
-                Text(
-                  _myProfile?.formattedPhone ?? '',
-                  style: TextStyle(
-                    color: colors.onPrimaryContainer.withOpacity(0.8),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
-
           Expanded(
             child: Column(
               children: [
+                _buildAccountsSection(context, colors),
                 ListTile(
                   leading: const Icon(Icons.person_outline),
                   title: const Text('Мой профиль'),
@@ -1903,6 +2086,16 @@ class _ChatsScreenState extends State<ChatsScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildAccountsSection(BuildContext context, ColorScheme colors) {
+    return const SizedBox.shrink();
+  }
+
+  Future<List<Account>> _loadAccounts() async {
+    final accountManager = AccountManager();
+    await accountManager.initialize();
+    return accountManager.accounts;
   }
 
   Widget _buildSearchResults() {
@@ -2002,10 +2195,23 @@ class _ChatsScreenState extends State<ChatsScreen>
         final participantCount =
             chat.participantsCount ?? chat.participantIds.length;
 
+        final Contact contactToUse = isSavedMessages
+            ? Contact(
+                id: chat.id,
+                name: "Избранное",
+                firstName: "",
+                lastName: "",
+                photoBaseUrl: null,
+                description: null,
+                isBlocked: false,
+                isBlockedByMe: false,
+              )
+            : contact;
+
         if (widget.onChatSelected != null) {
           widget.onChatSelected!(
             chat,
-            contact,
+            contactToUse,
             isGroupChat,
             isChannel,
             participantCount,
@@ -2015,7 +2221,7 @@ class _ChatsScreenState extends State<ChatsScreen>
             MaterialPageRoute(
               builder: (context) => ChatScreen(
                 chatId: chat.id,
-                contact: contact,
+                contact: contactToUse,
                 myId: chat.ownerId,
                 isGroupChat: isGroupChat,
                 isChannel: isChannel,
@@ -3587,18 +3793,28 @@ class _ChatsScreenState extends State<ChatsScreen>
           }
         }
 
-        final Contact contactFallback =
-            contact ??
-            Contact(
-              id: chat.id,
-              name: title,
-              firstName: "",
-              lastName: "",
-              photoBaseUrl: avatarUrl,
-              description: isChannel ? chat.description : null,
-              isBlocked: false,
-              isBlockedByMe: false,
-            );
+        final Contact contactFallback = isSavedMessages
+            ? Contact(
+                id: chat.id,
+                name: "Избранное",
+                firstName: "",
+                lastName: "",
+                photoBaseUrl: null,
+                description: null,
+                isBlocked: false,
+                isBlockedByMe: false,
+              )
+            : contact ??
+                  Contact(
+                    id: chat.id,
+                    name: title,
+                    firstName: "",
+                    lastName: "",
+                    photoBaseUrl: avatarUrl,
+                    description: isChannel ? chat.description : null,
+                    isBlocked: false,
+                    isBlockedByMe: false,
+                  );
 
         final participantCount =
             chat.participantsCount ?? chat.participantIds.length;

@@ -110,6 +110,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final Map<String, GlobalKey> _messageKeys = {};
 
   void _checkContactCache() {
+    if (widget.chatId == 0) {
+      return;
+    }
     final cachedContact = ApiService.instance.getCachedContact(
       widget.contact.id,
     );
@@ -208,6 +211,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     ApiService.instance.contactUpdates.listen((contact) {
+      if (widget.chatId == 0) {
+        return;
+      }
       if (contact.id == _currentContact.id && mounted) {
         ApiService.instance.updateCachedContact(contact);
         setState(() {
@@ -1681,7 +1687,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     deferImageLoading: deferImageLoading,
                     myUserId: _actualMyId,
                     chatId: widget.chatId,
-                    onReply: () => _replyToMessage(item.message),
+                    onReply: widget.isChannel
+                        ? null
+                        : () => _replyToMessage(item.message),
                     onForward: () => _forwardMessage(item.message),
                     onEdit: isMe ? () => _editMessage(item.message) : null,
                     canEditMessage: isMe
@@ -2059,19 +2067,31 @@ class _ChatScreenState extends State<ChatScreen> {
             onTap: _showContactProfile,
             child: Hero(
               tag: 'contact_avatar_${widget.contact.id}',
-              child: CircleAvatar(
-                radius: 18,
-                backgroundImage: widget.contact.photoBaseUrl != null
-                    ? NetworkImage(widget.contact.photoBaseUrl!)
-                    : null,
-                child: widget.contact.photoBaseUrl == null
-                    ? Text(
-                        widget.contact.name.isNotEmpty
-                            ? widget.contact.name[0].toUpperCase()
-                            : '?',
-                      )
-                    : null,
-              ),
+              child: widget.chatId == 0
+                  ? CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
+                      child: Icon(
+                        Icons.bookmark,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    )
+                  : CircleAvatar(
+                      radius: 18,
+                      backgroundImage: widget.contact.photoBaseUrl != null
+                          ? NetworkImage(widget.contact.photoBaseUrl!)
+                          : null,
+                      child: widget.contact.photoBaseUrl == null
+                          ? Text(
+                              widget.contact.name.isNotEmpty
+                                  ? widget.contact.name[0].toUpperCase()
+                                  : '?',
+                            )
+                          : null,
+                    ),
             ),
           ),
           const SizedBox(width: 8),
@@ -2135,7 +2155,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     )
-                  else
+                  else if (widget.chatId != 0)
                     _ContactPresenceSubtitle(
                       chatId: widget.chatId,
                       userId: widget.contact.id,

@@ -49,6 +49,8 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
         .where((contact) => contact != null)
         .cast<Contact>()
         .toList();
+    final totalParticipantsCount =
+        widget.chat.participantsCount ?? participantIds.length;
 
     return Container(
       decoration: BoxDecoration(
@@ -57,7 +59,6 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
       ),
       child: Column(
         children: [
-
           Container(
             margin: const EdgeInsets.only(top: 8),
             width: 40,
@@ -67,7 +68,6 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-
 
           Container(
             padding: const EdgeInsets.all(16),
@@ -93,7 +93,7 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
                         ),
                       ),
                       Text(
-                        '${participants.length} участников',
+                        '$totalParticipantsCount участников',
                         style: TextStyle(
                           fontSize: 14,
                           color: colors.onSurfaceVariant,
@@ -133,7 +133,6 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
             ),
           ),
 
-
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: SizedBox(
@@ -150,7 +149,6 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
               ),
             ),
           ),
-
 
           Expanded(
             child: ListView.builder(
@@ -349,9 +347,7 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
     int userId, {
     required bool cleanMessages,
   }) async {
-
     print('Удаляем участника $userId, очистка сообщений: $cleanMessages');
-
 
     _apiService.sendMessage(widget.chat.id, '', replyToMessageId: null);
   }

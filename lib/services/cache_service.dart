@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -7,42 +5,41 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 
-
 class CacheService {
   static final CacheService _instance = CacheService._internal();
   factory CacheService() => _instance;
   CacheService._internal();
 
-
   final Map<String, dynamic> _memoryCache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
-
 
   static const Duration _defaultTTL = Duration(hours: 24);
   static const int _maxMemoryCacheSize = 1000;
 
-
   SharedPreferences? _prefs;
 
-
   Directory? _cacheDirectory;
-
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
     _cacheDirectory = await getApplicationCacheDirectory();
-
 
     await _createCacheDirectories();
 
     print('CacheService инициализирован');
   }
 
-
   Future<void> _createCacheDirectories() async {
     if (_cacheDirectory == null) return;
 
-    final directories = ['avatars', 'images', 'files', 'chats', 'contacts'];
+    final directories = [
+      'avatars',
+      'images',
+      'files',
+      'chats',
+      'contacts',
+      'audio',
+    ];
 
     for (final dir in directories) {
       final directory = Directory('${_cacheDirectory!.path}/$dir');
@@ -52,20 +49,16 @@ class CacheService {
     }
   }
 
-
   Future<T?> get<T>(String key, {Duration? ttl}) async {
-
     if (_memoryCache.containsKey(key)) {
       final timestamp = _cacheTimestamps[key];
       if (timestamp != null && !_isExpired(timestamp, ttl ?? _defaultTTL)) {
         return _memoryCache[key] as T?;
       } else {
-
         _memoryCache.remove(key);
         _cacheTimestamps.remove(key);
       }
     }
-
 
     if (_prefs != null) {
       try {
@@ -80,7 +73,6 @@ class CacheService {
           final value = data['value'];
 
           if (!_isExpired(timestamp, ttl ?? _defaultTTL)) {
-
             _memoryCache[key] = value;
             _cacheTimestamps[key] = timestamp;
             return value as T?;
@@ -94,19 +86,15 @@ class CacheService {
     return null;
   }
 
-
   Future<void> set<T>(String key, T value, {Duration? ttl}) async {
     final timestamp = DateTime.now();
-
 
     _memoryCache[key] = value;
     _cacheTimestamps[key] = timestamp;
 
-
     if (_memoryCache.length > _maxMemoryCacheSize) {
       await _evictOldestMemoryCache();
     }
-
 
     if (_prefs != null) {
       try {
@@ -124,7 +112,6 @@ class CacheService {
     }
   }
 
-
   Future<void> remove(String key) async {
     _memoryCache.remove(key);
     _cacheTimestamps.remove(key);
@@ -139,14 +126,12 @@ class CacheService {
     }
   }
 
-
   Future<void> clear() async {
     _memoryCache.clear();
     _cacheTimestamps.clear();
 
     if (_prefs != null) {
       try {
-
         final keys = _prefs!.getKeys().where((key) => key.startsWith('cache_'));
         for (final key in keys) {
           await _prefs!.remove(key);
@@ -155,7 +140,6 @@ class CacheService {
         print('Ошибка очистки кэша: $e');
       }
     }
-
 
     if (_cacheDirectory != null) {
       try {
@@ -172,15 +156,12 @@ class CacheService {
     }
   }
 
-
   bool _isExpired(DateTime timestamp, Duration ttl) {
     return DateTime.now().difference(timestamp) > ttl;
   }
 
-
   Future<void> _evictOldestMemoryCache() async {
     if (_memoryCache.isEmpty) return;
-
 
     final sortedEntries = _cacheTimestamps.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
@@ -193,10 +174,8 @@ class CacheService {
     }
   }
 
-
   Future<Map<String, int>> getCacheSize() async {
     final memorySize = _memoryCache.length;
-
 
     int filesSize = 0;
     if (_cacheDirectory != null) {
@@ -219,25 +198,20 @@ class CacheService {
     };
   }
 
-
   Future<String?> cacheFile(String url, {String? customKey}) async {
     if (_cacheDirectory == null) return null;
 
     try {
-
       final fileName = _generateFileName(url, customKey);
       final filePath = '${_cacheDirectory!.path}/images/$fileName';
-
 
       final existingFile = File(filePath);
       if (await existingFile.exists()) {
         return filePath;
       }
 
-
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
-
         await existingFile.writeAsBytes(response.bodyBytes);
         return filePath;
       }
@@ -247,7 +221,6 @@ class CacheService {
 
     return null;
   }
-
 
   Future<File?> getCachedFile(String url, {String? customKey}) async {
     if (_cacheDirectory == null) return null;
@@ -267,32 +240,41 @@ class CacheService {
     return null;
   }
 
-
   String _generateFileName(String url, String? customKey) {
     final key = customKey ?? url;
-    final hash = key.hashCode.abs().toString().substring(0, 16);
+    final hashString = key.hashCode.abs().toString();
+    final hash = hashString.length >= 16
+        ? hashString.substring(0, 16)
+        : hashString.padRight(16, '0');
     final extension = _getFileExtension(url);
     return '$hash$extension';
   }
-
 
   String _getFileExtension(String url) {
     try {
       final uri = Uri.parse(url);
       final path = uri.path;
       final extension = path.substring(path.lastIndexOf('.'));
-      return extension.isNotEmpty && extension.length < 10 ? extension : '.jpg';
+      if (extension.isNotEmpty && extension.length < 10) {
+        return extension;
+      }
+      if (url.contains('audio') ||
+          url.contains('voice') ||
+          url.contains('.mp3') ||
+          url.contains('.ogg') ||
+          url.contains('.m4a')) {
+        return '.mp3';
+      }
+      return '.jpg';
     } catch (e) {
       return '.jpg';
     }
   }
 
-
   Future<bool> hasCachedFile(String url, {String? customKey}) async {
     final file = await getCachedFile(url, customKey: customKey);
     return file != null;
   }
-
 
   Future<Map<String, dynamic>> getDetailedCacheStats() async {
     final memorySize = _memoryCache.length;
@@ -308,12 +290,7 @@ class CacheService {
     };
   }
 
-
-  Future<void> removeCachedFile(String url, {String? customKey}) async {
-
-
-  }
-
+  Future<void> removeCachedFile(String url, {String? customKey}) async {}
 
   Future<Map<String, dynamic>> getCacheStats() async {
     final sizes = await getCacheSize();
@@ -328,5 +305,111 @@ class CacheService {
       'filesSizeMB': (sizes['files']! / (1024 * 1024)).toStringAsFixed(2),
       'maxMemorySize': _maxMemoryCacheSize,
     };
+  }
+
+  Future<String?> cacheAudioFile(String url, {String? customKey}) async {
+    if (_cacheDirectory == null) {
+      print('CacheService: _cacheDirectory is null, initializing...');
+      await initialize();
+      if (_cacheDirectory == null) {
+        print('CacheService: Failed to initialize cache directory');
+        return null;
+      }
+    }
+
+    try {
+      final fileName = _generateFileName(url, customKey);
+      final filePath = '${_cacheDirectory!.path}/audio/$fileName';
+
+      final existingFile = File(filePath);
+      if (await existingFile.exists()) {
+        print('CacheService: Audio file already cached: $filePath');
+        return filePath;
+      }
+
+      print('CacheService: Downloading audio from: $url');
+      print('CacheService: Target file path: $filePath');
+
+      final response = await http
+          .get(
+            Uri.parse(url),
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+          )
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              print('CacheService: Request timeout');
+              throw TimeoutException('Request timeout');
+            },
+          );
+
+      print(
+        'CacheService: Response status: ${response.statusCode}, content-length: ${response.contentLength}',
+      );
+
+      if (response.statusCode == 200) {
+        if (response.bodyBytes.isEmpty) {
+          print('CacheService: Response body is empty');
+          return null;
+        }
+
+        final audioDir = Directory('${_cacheDirectory!.path}/audio');
+        if (!await audioDir.exists()) {
+          await audioDir.create(recursive: true);
+        }
+
+        await existingFile.writeAsBytes(response.bodyBytes);
+        final fileSize = await existingFile.length();
+        print(
+          'CacheService: Audio cached successfully: $filePath (size: $fileSize bytes)',
+        );
+        return filePath;
+      } else {
+        print(
+          'CacheService: Failed to download audio, status code: ${response.statusCode}',
+        );
+        print(
+          'CacheService: Response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}',
+        );
+      }
+    } catch (e, stackTrace) {
+      print('Ошибка кэширования аудио файла $url: $e');
+      print('Stack trace: $stackTrace');
+      if (e is TimeoutException) {
+        print('CacheService: Request timed out');
+      } else if (e is SocketException) {
+        print('CacheService: Network error - ${e.message}');
+      } else if (e is HttpException) {
+        print('CacheService: HTTP error - ${e.message}');
+      }
+    }
+
+    return null;
+  }
+
+  Future<File?> getCachedAudioFile(String url, {String? customKey}) async {
+    if (_cacheDirectory == null) return null;
+
+    try {
+      final fileName = _generateFileName(url, customKey);
+      final filePath = '${_cacheDirectory!.path}/audio/$fileName';
+
+      final file = File(filePath);
+      if (await file.exists()) {
+        return file;
+      }
+    } catch (e) {
+      print('Ошибка получения кэшированного аудио файла: $e');
+    }
+
+    return null;
+  }
+
+  Future<bool> hasCachedAudioFile(String url, {String? customKey}) async {
+    final file = await getCachedAudioFile(url, customKey: customKey);
+    return file != null;
   }
 }

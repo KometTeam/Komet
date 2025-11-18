@@ -22,6 +22,9 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
 import 'package:gwid/full_screen_video_player.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:gwid/services/cache_service.dart';
+import 'package:video_player/video_player.dart';
 
 bool _currentIsDark = false;
 
@@ -400,15 +403,30 @@ class ChatMessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildVideoPreview({
+  Widget _buildVideoCirclePlayer({
     required BuildContext context,
     required int videoId,
     required String messageId,
     String? highQualityUrl,
     Uint8List? lowQualityBytes,
   }) {
-    final borderRadius = BorderRadius.circular(12);
+    return _VideoCirclePlayer(
+      videoId: videoId,
+      messageId: messageId,
+      chatId: chatId!,
+      highQualityUrl: highQualityUrl,
+      lowQualityBytes: lowQualityBytes,
+    );
+  }
 
+  Widget _buildVideoPreview({
+    required BuildContext context,
+    required int videoId,
+    required String messageId,
+    String? highQualityUrl,
+    Uint8List? lowQualityBytes,
+    int? videoType,
+  }) {
     // Логика открытия плеера
     void openFullScreenVideo() async {
       // Показываем индикатор загрузки, пока получаем URL
@@ -445,32 +463,39 @@ class ChatMessageBubble extends StatelessWidget {
       }
     }
 
-    // Виджет-контейнер (GestureDetector + Stack)
+    final isVideoCircle = videoType == 1;
+
+    if (isVideoCircle) {
+      return _buildVideoCirclePlayer(
+        context: context,
+        videoId: videoId,
+        messageId: messageId,
+        highQualityUrl: highQualityUrl,
+        lowQualityBytes: lowQualityBytes,
+      );
+    }
+
     return GestureDetector(
       onTap: openFullScreenVideo,
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: ClipRRect(
-          borderRadius: borderRadius,
+          borderRadius: BorderRadius.circular(12),
           child: Stack(
             alignment: Alignment.center,
             fit: StackFit.expand,
             children: [
-              // [!code ++] (НОВЫЙ БЛОК)
               // Если у нас есть ХОТЬ ЧТО-ТО (блюр или URL), показываем ProgressiveImage
               (highQualityUrl != null && highQualityUrl.isNotEmpty) ||
                       (lowQualityBytes != null)
                   ? _ProgressiveNetworkImage(
-                      url:
-                          highQualityUrl ??
-                          '', // _ProgressiveNetworkImage теперь это выдержит
+                      url: highQualityUrl ?? '',
                       previewBytes: lowQualityBytes,
                       width: 220,
                       height: 160,
                       fit: BoxFit.cover,
                       keepAlive: false,
                     )
-                  // ИНАЧЕ показываем нашу стандартную заглушку (а не пустоту)
                   : Container(
                       color: Colors.black26,
                       child: const Center(
@@ -481,12 +506,8 @@ class ChatMessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
-              // [!code ++] (КОНЕЦ НОВОГО БЛОКА)
-
-              // Иконка Play поверх (она будет поверх заглушки или картинки)
               Container(
                 decoration: BoxDecoration(
-                  // Небольшое затемнение, чтобы иконка была виднее
                   color: Colors.black.withOpacity(0.15),
                 ),
                 child: Icon(
@@ -765,7 +786,7 @@ class ChatMessageBubble extends StatelessWidget {
                 const Divider(height: 1),
               ],
               // Действия с сообщением (остаются без изменений)
-              if (onReply != null)
+              if (onReply != null && !isChannel)
                 ListTile(
                   leading: const Icon(Icons.reply),
                   title: const Text('Ответить'),
@@ -871,6 +892,7 @@ class ChatMessageBubble extends StatelessWidget {
           onForward: onForward,
           canEditMessage: canEditMessage ?? false,
           hasUserReaction: hasUserReaction,
+          isChannel: isChannel,
         );
       },
     );
@@ -945,6 +967,16 @@ class ChatMessageBubble extends StatelessWidget {
         message.text.isEmpty;
     if (isStickerOnly) {
       return _buildStickerOnlyMessage(context);
+    }
+
+    final isVideoCircle =
+        message.attaches.length == 1 &&
+        message.attaches.any(
+          (a) => a['_type'] == 'VIDEO' && (a['videoType'] as int?) == 1,
+        ) &&
+        message.text.isEmpty;
+    if (isVideoCircle) {
+      return _buildVideoCircleOnlyMessage(context);
     }
 
     final hasUnsupportedContent = _hasUnsupportedMessageTypes();
@@ -1176,8 +1208,7 @@ class ChatMessageBubble extends StatelessWidget {
   bool _hasUnsupportedMessageTypes() {
     final hasUnsupportedAttachments = message.attaches.any((attach) {
       final type = attach['_type']?.toString().toUpperCase();
-      return type == 'AUDIO' ||
-          type == 'VOICE' ||
+      return type == 'VOICE' ||
           type == 'GIF' ||
           type == 'LOCATION' ||
           type == 'CONTACT';
@@ -1334,7 +1365,7 @@ class ChatMessageBubble extends StatelessWidget {
 
   Widget _buildStickerOnlyMessage(BuildContext context) {
     final sticker = message.attaches.firstWhere((a) => a['_type'] == 'STICKER');
-    final stickerSize = 250.0;
+    final stickerSize = 170.0;
 
     final timeColor = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF9bb5c7)
@@ -1395,6 +1426,97 @@ class ChatMessageBubble extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildVideoCircleOnlyMessage(BuildContext context) {
+    final video = message.attaches.firstWhere((a) => a['_type'] == 'VIDEO');
+    final videoId = video['videoId'] as int?;
+    final previewData = video['previewData'] as String?;
+    final thumbnailUrl = video['url'] ?? video['baseUrl'] as String?;
+
+    Uint8List? previewBytes;
+    if (previewData != null && previewData.startsWith('data:')) {
+      final idx = previewData.indexOf('base64,');
+      if (idx != -1) {
+        final b64 = previewData.substring(idx + 7);
+        try {
+          previewBytes = base64Decode(b64);
+        } catch (_) {}
+      }
+    }
+
+    String? highQualityThumbnailUrl;
+    if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+      highQualityThumbnailUrl = thumbnailUrl;
+      if (!thumbnailUrl.contains('?')) {
+        highQualityThumbnailUrl =
+            '$thumbnailUrl?size=medium&quality=high&format=jpeg';
+      } else {
+        highQualityThumbnailUrl =
+            '$thumbnailUrl&size=medium&quality=high&format=jpeg';
+      }
+    }
+
+    final timeColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF9bb5c7)
+        : const Color(0xFF6b7280);
+
+    Widget videoContent = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: isMe
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Column(
+                crossAxisAlignment: isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  if (videoId != null && chatId != null)
+                    _buildVideoCirclePlayer(
+                      context: context,
+                      videoId: videoId,
+                      messageId: message.id,
+                      highQualityUrl: highQualityThumbnailUrl,
+                      lowQualityBytes: previewBytes,
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatMessageTime(context, message.time),
+                          style: TextStyle(fontSize: 12, color: timeColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (onReaction != null || (isMe && (onEdit != null || onDelete != null))) {
+      videoContent = GestureDetector(
+        onTapDown: (TapDownDetails details) {
+          _showMessageContextMenu(context, details.globalPosition);
+        },
+        child: videoContent,
+      );
+    }
+
+    return videoContent;
   }
 
   Widget _buildStickerImage(
@@ -1479,6 +1601,7 @@ class ChatMessageBubble extends StatelessWidget {
     for (final video in videos) {
       // 1. Извлекаем все, что нам нужно
       final videoId = video['videoId'] as int?;
+      final videoType = video['videoType'] as int?;
       final previewData = video['previewData'] as String?; // Блюр-превью
       final thumbnailUrl =
           video['url'] ?? video['baseUrl'] as String?; // HQ-превью URL
@@ -1519,6 +1642,7 @@ class ChatMessageBubble extends StatelessWidget {
               messageId: message.id,
               highQualityUrl: highQualityThumbnailUrl,
               lowQualityBytes: previewBytes,
+              videoType: videoType,
             ),
           ),
         );
@@ -1576,7 +1700,7 @@ class ChatMessageBubble extends StatelessWidget {
     bool isUltraOptimized,
   ) {
     // Стикеры обычно квадратные, около 200-250px
-    final stickerSize = 250.0;
+    final stickerSize = 170.0;
 
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -1992,6 +2116,65 @@ class ChatMessageBubble extends StatelessWidget {
     } else {
       return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
     }
+  }
+
+  List<Widget> _buildAudioWithCaption(
+    BuildContext context,
+    List<Map<String, dynamic>> attaches,
+    Color textColor,
+    bool isUltraOptimized,
+    double messageTextOpacity,
+  ) {
+    final audioMessages = attaches.where((a) => a['_type'] == 'AUDIO').toList();
+    final List<Widget> widgets = [];
+
+    if (audioMessages.isEmpty) return widgets;
+
+    for (final audio in audioMessages) {
+      widgets.add(
+        _buildAudioWidget(
+          context,
+          audio,
+          textColor,
+          isUltraOptimized,
+          messageTextOpacity,
+        ),
+      );
+      widgets.add(const SizedBox(height: 6));
+    }
+
+    return widgets;
+  }
+
+  Widget _buildAudioWidget(
+    BuildContext context,
+    Map<String, dynamic> audioData,
+    Color textColor,
+    bool isUltraOptimized,
+    double messageTextOpacity,
+  ) {
+    final borderRadius = BorderRadius.circular(isUltraOptimized ? 8 : 12);
+    final url = audioData['url'] as String?;
+    final duration = audioData['duration'] as int? ?? 0;
+    final wave = audioData['wave'] as String?;
+    final audioId = audioData['audioId'] as int?;
+
+    // Format duration
+    final durationSeconds = (duration / 1000).round();
+    final minutes = durationSeconds ~/ 60;
+    final seconds = durationSeconds % 60;
+    final durationText = '$minutes:${seconds.toString().padLeft(2, '0')}';
+
+    return _AudioPlayerWidget(
+      url: url ?? '',
+      duration: duration,
+      durationText: durationText,
+      wave: wave,
+      audioId: audioId,
+      textColor: textColor,
+      borderRadius: borderRadius,
+      messageTextOpacity: messageTextOpacity,
+    );
   }
 
   Future<void> _handleFileDownload(
@@ -2830,6 +3013,13 @@ class ChatMessageBubble extends StatelessWidget {
             isUltraOptimized,
             messageTextOpacity,
           ),
+          ..._buildAudioWithCaption(
+            context,
+            message.attaches,
+            textColor,
+            isUltraOptimized,
+            messageTextOpacity,
+          ),
           ..._buildPhotosWithCaption(
             context,
             message.attaches,
@@ -3514,6 +3704,7 @@ class _MessageContextMenu extends StatefulWidget {
   final VoidCallback? onForward;
   final bool canEditMessage;
   final bool hasUserReaction;
+  final bool isChannel;
 
   const _MessageContextMenu({
     required this.message,
@@ -3527,6 +3718,7 @@ class _MessageContextMenu extends StatefulWidget {
     this.onForward,
     required this.canEditMessage,
     required this.hasUserReaction,
+    this.isChannel = false,
   });
 
   @override
@@ -3790,7 +3982,7 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
             text: 'Копировать',
             onTap: _onCopy,
           ),
-        if (widget.onReply != null)
+        if (widget.onReply != null && !widget.isChannel)
           _buildActionButton(
             icon: Icons.reply_rounded,
             text: 'Ответить',
@@ -4123,6 +4315,635 @@ class _RotatingIconState extends State<_RotatingIcon>
     return RotationTransition(
       turns: _controller, // Анимация вращения
       child: Icon(widget.icon, size: widget.size, color: widget.color),
+    );
+  }
+}
+
+class _AudioPlayerWidget extends StatefulWidget {
+  final String url;
+  final int duration;
+  final String durationText;
+  final String? wave;
+  final int? audioId;
+  final Color textColor;
+  final BorderRadius borderRadius;
+  final double messageTextOpacity;
+
+  const _AudioPlayerWidget({
+    required this.url,
+    required this.duration,
+    required this.durationText,
+    this.wave,
+    this.audioId,
+    required this.textColor,
+    required this.borderRadius,
+    required this.messageTextOpacity,
+  });
+
+  @override
+  State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
+}
+
+class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
+  late AudioPlayer _audioPlayer;
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  bool _isCompleted = false;
+  Duration _position = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+  List<int>? _waveformData;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer = AudioPlayer();
+    _totalDuration = Duration(milliseconds: widget.duration);
+
+    if (widget.wave != null && widget.wave!.isNotEmpty) {
+      _decodeWaveform(widget.wave!);
+    }
+
+    if (widget.url.isNotEmpty) {
+      _preCacheAudio();
+    }
+
+    _audioPlayer.playerStateStream.listen((state) {
+      if (mounted) {
+        final wasCompleted = _isCompleted;
+        setState(() {
+          _isPlaying = state.playing;
+          _isLoading =
+              state.processingState == ProcessingState.loading ||
+              state.processingState == ProcessingState.buffering;
+          _isCompleted = state.processingState == ProcessingState.completed;
+        });
+
+        if (state.processingState == ProcessingState.completed &&
+            !wasCompleted) {
+          _audioPlayer.pause();
+        }
+      }
+    });
+
+    _audioPlayer.positionStream.listen((position) {
+      if (mounted) {
+        final reachedEnd =
+            _totalDuration.inMilliseconds > 0 &&
+            position.inMilliseconds >= _totalDuration.inMilliseconds - 50 &&
+            _isPlaying;
+
+        if (reachedEnd) {
+          _audioPlayer.pause();
+        }
+
+        setState(() {
+          _position = position;
+          if (reachedEnd) {
+            _isPlaying = false;
+            _isCompleted = true;
+          }
+        });
+      }
+    });
+
+    _audioPlayer.durationStream.listen((duration) {
+      if (mounted && duration != null) {
+        setState(() {
+          _totalDuration = duration;
+        });
+      }
+    });
+  }
+
+  void _decodeWaveform(String waveBase64) {
+    try {
+      String base64Data = waveBase64;
+      if (waveBase64.contains(',')) {
+        base64Data = waveBase64.split(',')[1];
+      }
+
+      final bytes = base64Decode(base64Data);
+      _waveformData = bytes.toList();
+    } catch (e) {
+      print('Error decoding waveform: $e');
+      _waveformData = null;
+    }
+  }
+
+  Future<void> _preCacheAudio() async {
+    try {
+      final cacheService = CacheService();
+      final hasCached = await cacheService.hasCachedAudioFile(
+        widget.url,
+        customKey: widget.audioId?.toString(),
+      );
+      if (!hasCached) {
+        print('Pre-caching audio: ${widget.url}');
+        final cachedPath = await cacheService.cacheAudioFile(
+          widget.url,
+          customKey: widget.audioId?.toString(),
+        );
+        if (cachedPath != null) {
+          print('Audio pre-cached successfully: $cachedPath');
+        } else {
+          print('Failed to pre-cache audio (no internet?): ${widget.url}');
+        }
+      } else {
+        print('Audio already cached: ${widget.url}');
+      }
+    } catch (e) {
+      print('Error pre-caching audio: $e');
+    }
+  }
+
+  Future<void> _togglePlayPause() async {
+    if (_isLoading) return;
+
+    try {
+      if (_isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        if (_isCompleted ||
+            (_totalDuration.inMilliseconds > 0 &&
+                _position.inMilliseconds >=
+                    _totalDuration.inMilliseconds - 100)) {
+          await _audioPlayer.stop();
+          await _audioPlayer.seek(Duration.zero);
+          if (mounted) {
+            setState(() {
+              _isCompleted = false;
+              _isPlaying = false;
+              _position = Duration.zero;
+            });
+          }
+          await Future.delayed(const Duration(milliseconds: 150));
+        }
+
+        if (_audioPlayer.processingState == ProcessingState.idle) {
+          if (widget.url.isNotEmpty) {
+            final cacheService = CacheService();
+            var cachedFile = await cacheService.getCachedAudioFile(
+              widget.url,
+              customKey: widget.audioId?.toString(),
+            );
+
+            if (cachedFile != null && await cachedFile.exists()) {
+              print('Using cached audio file: ${cachedFile.path}');
+              await _audioPlayer.setFilePath(cachedFile.path);
+            } else {
+              print('Audio not cached, playing from URL: ${widget.url}');
+              try {
+                await _audioPlayer.setUrl(widget.url);
+
+                cacheService
+                    .cacheAudioFile(
+                      widget.url,
+                      customKey: widget.audioId?.toString(),
+                    )
+                    .then((cachedPath) {
+                      if (cachedPath != null) {
+                        print('Audio cached in background: $cachedPath');
+                      } else {
+                        print('Failed to cache audio in background');
+                      }
+                    })
+                    .catchError((e) {
+                      print('Error caching audio in background: $e');
+                    });
+              } catch (e) {
+                print('Error setting audio URL: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Не удалось загрузить аудио: ${e.toString()}',
+                      ),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+                return;
+              }
+            }
+          }
+        }
+        await _audioPlayer.play();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка воспроизведения: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _seek(Duration position) async {
+    await _audioPlayer.seek(position);
+    if (mounted) {
+      setState(() {
+        _isCompleted = false;
+      });
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _totalDuration.inMilliseconds > 0
+        ? _position.inMilliseconds / _totalDuration.inMilliseconds
+        : 0.0;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.textColor.withOpacity(0.05),
+        borderRadius: widget.borderRadius,
+        border: Border.all(color: widget.textColor.withOpacity(0.1), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _togglePlayPause,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: widget.textColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: widget.textColor.withOpacity(
+                          0.8 * widget.messageTextOpacity,
+                        ),
+                        size: 24,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_waveformData != null && _waveformData!.isNotEmpty)
+                    SizedBox(
+                      height: 30,
+                      child: CustomPaint(
+                        painter: _WaveformPainter(
+                          waveform: _waveformData!,
+                          progress: progress,
+                          color: widget.textColor.withOpacity(
+                            0.6 * widget.messageTextOpacity,
+                          ),
+                          progressColor: widget.textColor.withOpacity(
+                            0.9 * widget.messageTextOpacity,
+                          ),
+                        ),
+                        child: GestureDetector(
+                          onTapDown: (details) {
+                            final RenderBox box =
+                                context.findRenderObject() as RenderBox;
+                            final localPosition = details.localPosition;
+                            final tapProgress =
+                                localPosition.dx / box.size.width;
+                            final newPosition = Duration(
+                              milliseconds:
+                                  (_totalDuration.inMilliseconds * tapProgress)
+                                      .round(),
+                            );
+                            _seek(newPosition);
+                          },
+                        ),
+                      ),
+                    )
+                  else
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: widget.textColor.withOpacity(0.1),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          widget.textColor.withOpacity(
+                            0.6 * widget.messageTextOpacity,
+                          ),
+                        ),
+                        minHeight: 3,
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(_position),
+                        style: TextStyle(
+                          color: widget.textColor.withOpacity(
+                            0.7 * widget.messageTextOpacity,
+                          ),
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        widget.durationText,
+                        style: TextStyle(
+                          color: widget.textColor.withOpacity(
+                            0.7 * widget.messageTextOpacity,
+                          ),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  final List<int> waveform;
+  final double progress;
+  final Color color;
+  final Color progressColor;
+
+  _WaveformPainter({
+    required this.waveform,
+    required this.progress,
+    required this.color,
+    required this.progressColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (waveform.isEmpty) return;
+
+    final paint = Paint()
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+
+    final barWidth = size.width / waveform.length;
+    final maxAmplitude = waveform.reduce((a, b) => a > b ? a : b).toDouble();
+
+    for (int i = 0; i < waveform.length; i++) {
+      final amplitude = waveform[i].toDouble();
+      final normalizedAmplitude = maxAmplitude > 0
+          ? amplitude / maxAmplitude
+          : 0.0;
+      final barHeight = normalizedAmplitude * size.height * 0.8;
+      final x = i * barWidth + barWidth / 2;
+      final isPlayed = i / waveform.length < progress;
+
+      paint.color = isPlayed ? progressColor : color;
+
+      canvas.drawLine(
+        Offset(x, size.height / 2 - barHeight / 2),
+        Offset(x, size.height / 2 + barHeight / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.waveform != waveform;
+  }
+}
+
+class _VideoCirclePlayer extends StatefulWidget {
+  final int videoId;
+  final String messageId;
+  final int chatId;
+  final String? highQualityUrl;
+  final Uint8List? lowQualityBytes;
+
+  const _VideoCirclePlayer({
+    required this.videoId,
+    required this.messageId,
+    required this.chatId,
+    this.highQualityUrl,
+    this.lowQualityBytes,
+  });
+
+  @override
+  State<_VideoCirclePlayer> createState() => _VideoCirclePlayerState();
+}
+
+class _VideoCirclePlayerState extends State<_VideoCirclePlayer> {
+  VideoPlayerController? _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
+  bool _isPlaying = false;
+  bool _isUserTapped = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVideo();
+  }
+
+  Future<void> _loadVideo() async {
+    try {
+      final videoUrl = await ApiService.instance.getVideoUrl(
+        widget.videoId,
+        widget.chatId,
+        widget.messageId,
+      );
+
+      if (!mounted) return;
+
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(videoUrl),
+        httpHeaders: const {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      );
+
+      await _controller!.initialize();
+
+      if (!mounted) return;
+
+      _controller!.setLooping(true);
+      _controller!.setVolume(0.0);
+      _controller!.play();
+
+      setState(() {
+        _isLoading = false;
+        _isPlaying = true;
+        _isUserTapped = false;
+      });
+    } catch (e) {
+      print('❌ [VideoCirclePlayer] Error loading video: $e');
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _videoListener() {
+    if (_controller == null || !_isUserTapped) return;
+
+    if (_controller!.value.position >= _controller!.value.duration &&
+        _controller!.value.duration > Duration.zero) {
+      _controller!.pause();
+      _controller!.seekTo(Duration.zero);
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+        });
+      }
+    }
+  }
+
+  void _togglePlayPause() {
+    if (_controller == null) return;
+
+    if (!_isUserTapped) {
+      _controller!.addListener(_videoListener);
+      _controller!.setLooping(false);
+      _controller!.setVolume(1.0);
+
+      _controller!.seekTo(Duration.zero);
+
+      setState(() {
+        _isUserTapped = true;
+        _isPlaying = true;
+      });
+
+      _controller!.play();
+      return;
+    }
+
+    if (_isPlaying) {
+      _controller!.pause();
+      setState(() {
+        _isPlaying = false;
+      });
+    } else {
+      if (_controller!.value.position >= _controller!.value.duration) {
+        _controller!.seekTo(Duration.zero);
+      }
+      _controller!.play();
+      setState(() {
+        _isPlaying = true;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_videoListener);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _togglePlayPause,
+      child: SizedBox(
+        width: 200,
+        height: 200,
+        child: ClipOval(
+          child: Stack(
+            alignment: Alignment.center,
+            fit: StackFit.expand,
+            children: [
+              if (_isLoading ||
+                  _hasError ||
+                  _controller == null ||
+                  !_controller!.value.isInitialized)
+                (widget.highQualityUrl != null &&
+                            widget.highQualityUrl!.isNotEmpty) ||
+                        (widget.lowQualityBytes != null)
+                    ? _ProgressiveNetworkImage(
+                        url: widget.highQualityUrl ?? '',
+                        previewBytes: widget.lowQualityBytes,
+                        width: 200,
+                        height: 200,
+                        fit: BoxFit.cover,
+                        keepAlive: false,
+                      )
+                    : Container(
+                        color: Colors.black26,
+                        child: const Center(
+                          child: Icon(
+                            Icons.video_library_outlined,
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                        ),
+                      )
+              else
+                VideoPlayer(_controller!),
+
+              if (_isLoading)
+                Container(
+                  color: Colors.black.withOpacity(0.3),
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+
+              if (!_isLoading &&
+                  !_hasError &&
+                  _controller != null &&
+                  _controller!.value.isInitialized)
+                AnimatedOpacity(
+                  opacity: _isPlaying ? 0.0 : 0.8,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_filled,
+                      color: Colors.white,
+                      size: 50,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -26,7 +26,7 @@ class GroupHeader extends StatelessWidget {
 
     final colors = Theme.of(context).colorScheme;
     final onlineCount = chat.onlineParticipantsCount;
-    final totalCount = chat.participantsCount;
+    final totalCount = chat.participantsCount ?? chat.participantIds.length;
 
     return GestureDetector(
       onTap: () => _showGroupManagementPanel(context),
@@ -38,7 +38,6 @@ class GroupHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-
             GroupAvatars(
               chat: chat,
               contacts: contacts,
@@ -48,7 +47,6 @@ class GroupHeader extends StatelessWidget {
             ),
 
             const SizedBox(width: 12),
-
 
             Expanded(
               child: Column(
@@ -67,7 +65,6 @@ class GroupHeader extends StatelessWidget {
                   const SizedBox(height: 2),
                   Row(
                     children: [
-
                       if (onlineCount > 0) ...[
                         Container(
                           width: 8,
@@ -88,7 +85,6 @@ class GroupHeader extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                       ],
-
 
                       Text(
                         '$totalCount участников',
