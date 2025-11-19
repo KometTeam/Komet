@@ -979,6 +979,27 @@ class ChatMessageBubble extends StatelessWidget {
       return _buildVideoCircleOnlyMessage(context);
     }
 
+    final isPhotoOnly =
+        message.attaches.isNotEmpty &&
+        message.attaches.every((a) => a['_type'] == 'PHOTO') &&
+        message.text.isEmpty &&
+        !message.isReply &&
+        !message.isForwarded;
+    if (isPhotoOnly) {
+      return _buildPhotoOnlyMessage(context);
+    }
+
+    final isVideoOnly =
+        message.attaches.isNotEmpty &&
+        message.attaches.every((a) => a['_type'] == 'VIDEO') &&
+        message.attaches.every((a) => (a['videoType'] as int?) != 1) &&
+        message.text.isEmpty &&
+        !message.isReply &&
+        !message.isForwarded;
+    if (isVideoOnly) {
+      return _buildVideoOnlyMessage(context);
+    }
+
     final hasUnsupportedContent = _hasUnsupportedMessageTypes();
 
     final messageOpacity = themeProvider.messageBubbleOpacity;
@@ -1503,6 +1524,208 @@ class ChatMessageBubble extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+
+    if (onReaction != null || (isMe && (onEdit != null || onDelete != null))) {
+      videoContent = GestureDetector(
+        onTapDown: (TapDownDetails details) {
+          _showMessageContextMenu(context, details.globalPosition);
+        },
+        child: videoContent,
+      );
+    }
+
+    return videoContent;
+  }
+
+  Widget _buildPhotoOnlyMessage(BuildContext context) {
+    final photos = message.attaches.where((a) => a['_type'] == 'PHOTO').toList();
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isUltraOptimized = themeProvider.ultraOptimizeChats;
+    final messageOpacity = themeProvider.messageBubbleOpacity;
+    final bubbleColor = _getBubbleColor(isMe, themeProvider, messageOpacity);
+    final textColor = _getTextColor(
+      isMe,
+      bubbleColor,
+      themeProvider.messageTextOpacity,
+      context,
+    );
+
+    final timeColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF9bb5c7)
+        : const Color(0xFF6b7280);
+
+    Widget photoContent = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: isMe
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isMe && isGroupChat && !isChannel) ...[
+                SizedBox(
+                  width: 40,
+                  child: isLastInGroup
+                      ? Transform.translate(
+                          offset: Offset(0, avatarVerticalOffset),
+                          child: _buildSenderAvatar(),
+                        )
+                      : null,
+                ),
+              ],
+              Column(
+                crossAxisAlignment: isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  _buildSmartPhotoGroup(context, photos, textColor, isUltraOptimized),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatMessageTime(context, message.time),
+                          style: TextStyle(fontSize: 12, color: timeColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (onReaction != null || (isMe && (onEdit != null || onDelete != null))) {
+      photoContent = GestureDetector(
+        onTapDown: (TapDownDetails details) {
+          _showMessageContextMenu(context, details.globalPosition);
+        },
+        child: photoContent,
+      );
+    }
+
+    return photoContent;
+  }
+
+  Widget _buildVideoOnlyMessage(BuildContext context) {
+    final videos = message.attaches.where((a) => a['_type'] == 'VIDEO').toList();
+
+    final timeColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF9bb5c7)
+        : const Color(0xFF6b7280);
+
+    Widget videoContent = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          ...videos.asMap().entries.map((entry) {
+            final index = entry.key;
+            final video = entry.value;
+            final videoId = video['videoId'] as int?;
+            final videoType = video['videoType'] as int?;
+            final previewData = video['previewData'] as String?;
+            final thumbnailUrl = video['url'] ?? video['baseUrl'] as String?;
+
+            Uint8List? previewBytes;
+            if (previewData != null && previewData.startsWith('data:')) {
+              final idx = previewData.indexOf('base64,');
+              if (idx != -1) {
+                final b64 = previewData.substring(idx + 7);
+                try {
+                  previewBytes = base64Decode(b64);
+                } catch (_) {}
+              }
+            }
+
+            String? highQualityThumbnailUrl;
+            if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+              highQualityThumbnailUrl = thumbnailUrl;
+              if (!thumbnailUrl.contains('?')) {
+                highQualityThumbnailUrl =
+                    '$thumbnailUrl?size=medium&quality=high&format=jpeg';
+              } else {
+                highQualityThumbnailUrl =
+                    '$thumbnailUrl&size=medium&quality=high&format=jpeg';
+              }
+            }
+
+            return Column(
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: isMe
+                      ? MainAxisAlignment.end
+                      : MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (!isMe && isGroupChat && !isChannel && index == 0) ...[
+                      SizedBox(
+                        width: 40,
+                        child: isLastInGroup
+                            ? Transform.translate(
+                                offset: Offset(0, avatarVerticalOffset),
+                                child: _buildSenderAvatar(),
+                              )
+                            : null,
+                      ),
+                    ],
+                    Column(
+                      crossAxisAlignment: isMe
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        if (videoId != null && chatId != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4.0),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 300),
+                              child: _buildVideoPreview(
+                                context: context,
+                                videoId: videoId,
+                                messageId: message.id,
+                                highQualityUrl: highQualityThumbnailUrl,
+                                lowQualityBytes: previewBytes,
+                                videoType: videoType,
+                              ),
+                            ),
+                          ),
+                        if (index == videos.length - 1)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4, right: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _formatMessageTime(context, message.time),
+                                  style: TextStyle(fontSize: 12, color: timeColor),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }).toList(),
         ],
       ),
     );
