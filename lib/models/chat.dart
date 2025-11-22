@@ -11,6 +11,7 @@ class Chat {
   final String? baseIconUrl; // URL иконки группы
   final String? description;
   final int? participantsCount;
+  final Message? pinnedMessage; // Закрепленное сообщение
 
   Chat({
     required this.id,
@@ -23,6 +24,7 @@ class Chat {
     this.baseIconUrl,
     this.description,
     this.participantsCount,
+    this.pinnedMessage,
   });
 
   factory Chat.fromJson(Map<String, dynamic> json) {
@@ -30,7 +32,6 @@ class Chat {
     List<int> participantIds = participantsMap.keys
         .map((id) => int.parse(id))
         .toList();
-
 
     Message lastMessage;
     if (json['lastMessage'] != null) {
@@ -46,6 +47,11 @@ class Chat {
       );
     }
 
+    Message? pinnedMessage;
+    if (json['pinnedMessage'] != null) {
+      pinnedMessage = Message.fromJson(json['pinnedMessage']);
+    }
+
     return Chat(
       id: json['id'] ?? 0,
       ownerId: json['owner'] ?? 0,
@@ -57,9 +63,9 @@ class Chat {
       baseIconUrl: json['baseIconUrl'],
       description: json['description'],
       participantsCount: json['participantsCount'],
+      pinnedMessage: pinnedMessage,
     );
   }
-
 
   bool get isGroup => type == 'CHAT' || participantIds.length > 2;
 
@@ -83,6 +89,7 @@ class Chat {
     String? title,
     String? type,
     String? baseIconUrl,
+    Message? pinnedMessage,
   }) {
     return Chat(
       id: id,
@@ -94,6 +101,8 @@ class Chat {
       type: type ?? this.type,
       baseIconUrl: baseIconUrl ?? this.baseIconUrl,
       description: description ?? this.description,
+      participantsCount: participantsCount,
+      pinnedMessage: pinnedMessage ?? this.pinnedMessage,
     );
   }
 }

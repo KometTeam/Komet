@@ -12,6 +12,7 @@ import 'package:gwid/models/contact.dart';
 import 'package:gwid/models/message.dart';
 import 'package:gwid/widgets/chat_message_bubble.dart';
 import 'package:gwid/widgets/complaint_dialog.dart';
+import 'package:gwid/widgets/pinned_message_widget.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gwid/services/chat_cache_service.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
@@ -91,6 +92,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final ValueNotifier<bool> _showScrollToBottomNotifier = ValueNotifier(false);
 
   late Contact _currentContact;
+  Message? _pinnedMessage;
 
   Message? _replyingToMessage;
 
@@ -175,6 +177,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _currentContact = widget.contact;
+    _pinnedMessage =
+        null; // Будет установлено при получении CONTROL сообщения с event 'pin'
     _initializeChat();
   }
 
@@ -395,6 +399,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _isLoadingHistory = false;
       });
+      _updatePinnedMessage();
     }
 
     try {
@@ -447,6 +452,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _buildChatItems();
         _isLoadingHistory = false;
       });
+      _updatePinnedMessage();
     } catch (e) {
       print("❌ Ошибка при загрузке с сервера: $e");
       if (mounted) {
@@ -512,6 +518,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _buildChatItems();
     _isLoadingMore = false;
     setState(() {});
+    _updatePinnedMessage();
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -591,6 +598,40 @@ class _ChatScreenState extends State<ChatScreen> {
     _chatItems = items;
   }
 
+  void _updatePinnedMessage() {
+    Message? latestPinned;
+    for (int i = _messages.length - 1; i >= 0; i--) {
+      final message = _messages[i];
+      final controlAttach = message.attaches.firstWhere(
+        (a) => a['_type'] == 'CONTROL',
+        orElse: () => const {},
+      );
+      if (controlAttach.isNotEmpty && controlAttach['event'] == 'pin') {
+        final pinnedMessageData = controlAttach['pinnedMessage'];
+        if (pinnedMessageData != null &&
+            pinnedMessageData is Map<String, dynamic>) {
+          try {
+            latestPinned = Message.fromJson(pinnedMessageData);
+            print('Найдено закрепленное сообщение: ${latestPinned.text}');
+            break;
+          } catch (e) {
+            print('Ошибка парсинга закрепленного сообщения: $e');
+          }
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _pinnedMessage = latestPinned;
+        if (latestPinned != null) {
+          print('Закрепленное сообщение установлено: ${latestPinned.text}');
+        } else {
+          print('Закрепленное сообщение не найдено');
+        }
+      });
+    }
+  }
+
   void _addMessage(Message message) {
     if (_messages.any((m) => m.id == message.id)) {
       print('Сообщение ${message.id} уже существует, пропускаем добавление');
@@ -630,6 +671,9 @@ class _ChatScreenState extends State<ChatScreen> {
       isGrouped: isGrouped,
     );
     _chatItems.add(messageItem);
+
+    // Обновляем закрепленное сообщение
+    _updatePinnedMessage();
 
     final theme = context.read<ThemeProvider>();
     if (theme.messageTransition == TransitionOption.slide) {
@@ -1371,7 +1415,7 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Удалить чат'),
         content: Text(
-          'Вы уверены, что хотите удалить чат с ${_currentContact.name}? Это действие нельзя отменить.',
+          'Вы уверены, что хотите удалить чат с ${_currentContact.name}? Это действие нельзя отменить.', //1231231233
         ),
         actions: [
           TextButton(
@@ -1441,7 +1485,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           FilledButton(
             onPressed: () {
-              Navigator.of(context).pop(); // Закрываем диалог подтверждения
+              Navigator.of(context).pop();
               try {
                 ApiService.instance.leaveGroup(widget.chatId);
 
@@ -1564,254 +1608,295 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Stack(
         children: [
           Positioned.fill(child: _buildChatWallpaper(theme)),
-          if (!_isIdReady || _isLoadingHistory)
-            const Center(child: CircularProgressIndicator())
-          else
-            ScrollablePositionedList.builder(
-              itemScrollController: _itemScrollController,
-              itemPositionsListener: _itemPositionsListener,
-              reverse: true,
-              padding: EdgeInsets.fromLTRB(
-                8.0,
-                90.0,
-                8.0,
-                widget.isChannel ? 30.0 : 110.0,
-              ),
-              itemCount: _chatItems.length,
-              itemBuilder: (context, index) {
-                final mappedIndex = _chatItems.length - 1 - index;
-                final item = _chatItems[mappedIndex];
-                final isLastVisual = index == _chatItems.length - 1;
-
-                if (isLastVisual && _hasMore && !_isLoadingMore) {
-                  _loadMore();
-                }
-
-                if (item is MessageItem) {
-                  final message = item.message;
-                  final key = _messageKeys.putIfAbsent(
-                    message.id,
-                    () => GlobalKey(),
-                  );
-                  final bool isHighlighted =
-                      _isSearching &&
-                      _searchResults.isNotEmpty &&
-                      _currentResultIndex != -1 &&
-                      message.id == _searchResults[_currentResultIndex].id;
-
-                  final isControlMessage = message.attaches.any(
-                    (a) => a['_type'] == 'CONTROL',
-                  );
-                  if (isControlMessage) {
-                    return _ControlMessageChip(
-                      message: message,
-                      contacts: _contactDetailsCache,
-                      myId: _actualMyId ?? widget.myId,
-                    );
-                  }
-
-                  final bool isMe = item.message.senderId == _actualMyId;
-
-                  MessageReadStatus? readStatus;
-                  if (isMe) {
-                    final messageId = item.message.id;
-                    if (messageId.startsWith('local_')) {
-                      readStatus = MessageReadStatus.sending;
-                    } else {
-                      readStatus = MessageReadStatus.sent;
-                    }
-                  }
-
-                  String? forwardedFrom;
-                  String? forwardedFromAvatarUrl;
-                  if (message.isForwarded) {
-                    final link = message.link;
-                    if (link is Map<String, dynamic>) {
-                      final chatName = link['chatName'] as String?;
-                      final chatIconUrl = link['chatIconUrl'] as String?;
-
-                      if (chatName != null) {
-                        forwardedFrom = chatName;
-                        forwardedFromAvatarUrl = chatIconUrl;
-                      } else {
-                        final forwardedMessage =
-                            link['message'] as Map<String, dynamic>?;
-                        final originalSenderId =
-                            forwardedMessage?['sender'] as int?;
-                        if (originalSenderId != null) {
-                          final originalSenderContact =
-                              _contactDetailsCache[originalSenderId];
-                          if (originalSenderContact == null) {
-                            _loadContactIfNeeded(originalSenderId);
-                            forwardedFrom = 'Участник $originalSenderId';
-                            forwardedFromAvatarUrl = null;
-                          } else {
-                            forwardedFrom = originalSenderContact.name;
-                            forwardedFromAvatarUrl =
-                                originalSenderContact.photoBaseUrl;
-                          }
-                        }
-                      }
-                    }
-                  }
-                  String? senderName;
-                  if (widget.isGroupChat && !isMe) {
-                    bool shouldShowName = true;
-                    if (mappedIndex > 0) {
-                      final previousItem = _chatItems[mappedIndex - 1];
-                      if (previousItem is MessageItem) {
-                        final previousMessage = previousItem.message;
-                        if (previousMessage.senderId == message.senderId) {
-                          final timeDifferenceInMinutes =
-                              (message.time - previousMessage.time) /
-                              (1000 * 60);
-                          if (timeDifferenceInMinutes < 5) {
-                            shouldShowName = false;
-                          }
-                        }
-                      }
-                    }
-                    if (shouldShowName) {
-                      final senderContact =
-                          _contactDetailsCache[message.senderId];
-                      senderName =
-                          senderContact?.name ?? 'Участник ${message.senderId}';
-                    }
-                  }
-                  final hasPhoto = item.message.attaches.any(
-                    (a) => a['_type'] == 'PHOTO',
-                  );
-                  final isNew = !_animatedMessageIds.contains(item.message.id);
-                  final deferImageLoading =
-                      hasPhoto &&
-                      isNew &&
-                      !_anyOptimize &&
-                      !context.read<ThemeProvider>().animatePhotoMessages;
-
-                  final bubble = ChatMessageBubble(
-                    key: key,
-                    message: item.message,
-                    isMe: isMe,
-                    readStatus: readStatus,
-                    deferImageLoading: deferImageLoading,
-                    myUserId: _actualMyId,
-                    chatId: widget.chatId,
-                    onReply: widget.isChannel
-                        ? null
-                        : () => _replyToMessage(item.message),
-                    onForward: () => _forwardMessage(item.message),
-                    onEdit: isMe ? () => _editMessage(item.message) : null,
-                    canEditMessage: isMe
-                        ? item.message.canEdit(_actualMyId!)
-                        : null,
-                    onDeleteForMe: isMe
-                        ? () async {
-                            await ApiService.instance.deleteMessage(
-                              widget.chatId,
-                              item.message.id,
-                              forMe: true,
-                            );
-                            widget.onChatUpdated?.call();
-                          }
-                        : null,
-                    onDeleteForAll: isMe
-                        ? () async {
-                            await ApiService.instance.deleteMessage(
-                              widget.chatId,
-                              item.message.id,
-                              forMe: false,
-                            );
-                            widget.onChatUpdated?.call();
-                          }
-                        : null,
-                    onReaction: (emoji) {
-                      _updateReactionOptimistically(item.message.id, emoji);
-                      ApiService.instance.sendReaction(
-                        widget.chatId,
-                        item.message.id,
-                        emoji,
-                      );
-                      widget.onChatUpdated?.call();
+          Column(
+            children: [
+              if (_pinnedMessage != null)
+                SafeArea(
+                  child: PinnedMessageWidget(
+                    pinnedMessage: _pinnedMessage!,
+                    contacts: _contactDetailsCache,
+                    myId: _actualMyId ?? 0,
+                    onTap: () {
+                      // TODO: Прокрутить к закрепленному сообщению
                     },
-                    onRemoveReaction: () {
-                      _removeReactionOptimistically(item.message.id);
-                      ApiService.instance.removeReaction(
-                        widget.chatId,
-                        item.message.id,
-                      );
-                      widget.onChatUpdated?.call();
+                    onClose: () {
+                      setState(() {
+                        _pinnedMessage = null;
+                      });
                     },
-                    isGroupChat: widget.isGroupChat,
-                    isChannel: widget.isChannel,
-                    senderName: senderName,
-                    forwardedFrom: forwardedFrom,
-                    forwardedFromAvatarUrl: forwardedFromAvatarUrl,
-                    contactDetailsCache: _contactDetailsCache,
-                    onReplyTap: _scrollToMessage,
-                    useAutoReplyColor: context
-                        .read<ThemeProvider>()
-                        .useAutoReplyColor,
-                    customReplyColor: context
-                        .read<ThemeProvider>()
-                        .customReplyColor,
-                    isFirstInGroup: item.isFirstInGroup,
-                    isLastInGroup: item.isLastInGroup,
-                    isGrouped: item.isGrouped,
-                    avatarVerticalOffset:
-                        -8.0, // Смещение аватарки вверх на 8px
-                    onComplain: () => _showComplaintDialog(item.message.id),
-                  );
+                  ),
+                ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    if (!_isIdReady || _isLoadingHistory)
+                      const Center(child: CircularProgressIndicator())
+                    else
+                      ScrollablePositionedList.builder(
+                        itemScrollController: _itemScrollController,
+                        itemPositionsListener: _itemPositionsListener,
+                        reverse: true,
+                        padding: EdgeInsets.fromLTRB(
+                          8.0,
+                          8.0, // Убираем дополнительный padding сверху, т.к. теперь pinned message в Column
+                          8.0,
+                          widget.isChannel ? 30.0 : 110.0,
+                        ),
+                        itemCount: _chatItems.length,
+                        itemBuilder: (context, index) {
+                          final mappedIndex = _chatItems.length - 1 - index;
+                          final item = _chatItems[mappedIndex];
+                          final isLastVisual = index == _chatItems.length - 1;
 
-                  Widget finalMessageWidget = bubble as Widget;
+                          if (isLastVisual && _hasMore && !_isLoadingMore) {
+                            _loadMore();
+                          }
 
-                  if (isHighlighted) {
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 1.5,
+                          if (item is MessageItem) {
+                            final message = item.message;
+                            final key = _messageKeys.putIfAbsent(
+                              message.id,
+                              () => GlobalKey(),
+                            );
+                            final bool isHighlighted =
+                                _isSearching &&
+                                _searchResults.isNotEmpty &&
+                                _currentResultIndex != -1 &&
+                                message.id ==
+                                    _searchResults[_currentResultIndex].id;
+
+                            final isControlMessage = message.attaches.any(
+                              (a) => a['_type'] == 'CONTROL',
+                            );
+                            if (isControlMessage) {
+                              return _ControlMessageChip(
+                                message: message,
+                                contacts: _contactDetailsCache,
+                                myId: _actualMyId ?? widget.myId,
+                              );
+                            }
+
+                            final bool isMe =
+                                item.message.senderId == _actualMyId;
+
+                            MessageReadStatus? readStatus;
+                            if (isMe) {
+                              final messageId = item.message.id;
+                              if (messageId.startsWith('local_')) {
+                                readStatus = MessageReadStatus.sending;
+                              } else {
+                                readStatus = MessageReadStatus.sent;
+                              }
+                            }
+
+                            String? forwardedFrom;
+                            String? forwardedFromAvatarUrl;
+                            if (message.isForwarded) {
+                              final link = message.link;
+                              if (link is Map<String, dynamic>) {
+                                final chatName = link['chatName'] as String?;
+                                final chatIconUrl =
+                                    link['chatIconUrl'] as String?;
+
+                                if (chatName != null) {
+                                  forwardedFrom = chatName;
+                                  forwardedFromAvatarUrl = chatIconUrl;
+                                } else {
+                                  final forwardedMessage =
+                                      link['message'] as Map<String, dynamic>?;
+                                  final originalSenderId =
+                                      forwardedMessage?['sender'] as int?;
+                                  if (originalSenderId != null) {
+                                    final originalSenderContact =
+                                        _contactDetailsCache[originalSenderId];
+                                    if (originalSenderContact == null) {
+                                      _loadContactIfNeeded(originalSenderId);
+                                      forwardedFrom =
+                                          'Участник $originalSenderId';
+                                      forwardedFromAvatarUrl = null;
+                                    } else {
+                                      forwardedFrom =
+                                          originalSenderContact.name;
+                                      forwardedFromAvatarUrl =
+                                          originalSenderContact.photoBaseUrl;
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            String? senderName;
+                            if (widget.isGroupChat && !isMe) {
+                              bool shouldShowName = true;
+                              if (mappedIndex > 0) {
+                                final previousItem =
+                                    _chatItems[mappedIndex - 1];
+                                if (previousItem is MessageItem) {
+                                  final previousMessage = previousItem.message;
+                                  if (previousMessage.senderId ==
+                                      message.senderId) {
+                                    final timeDifferenceInMinutes =
+                                        (message.time - previousMessage.time) /
+                                        (1000 * 60);
+                                    if (timeDifferenceInMinutes < 5) {
+                                      shouldShowName = false;
+                                    }
+                                  }
+                                }
+                              }
+                              if (shouldShowName) {
+                                final senderContact =
+                                    _contactDetailsCache[message.senderId];
+                                senderName =
+                                    senderContact?.name ??
+                                    'Участник ${message.senderId}';
+                              }
+                            }
+                            final hasPhoto = item.message.attaches.any(
+                              (a) => a['_type'] == 'PHOTO',
+                            );
+                            final isNew = !_animatedMessageIds.contains(
+                              item.message.id,
+                            );
+                            final deferImageLoading =
+                                hasPhoto &&
+                                isNew &&
+                                !_anyOptimize &&
+                                !context
+                                    .read<ThemeProvider>()
+                                    .animatePhotoMessages;
+
+                            final bubble = ChatMessageBubble(
+                              key: key,
+                              message: item.message,
+                              isMe: isMe,
+                              readStatus: readStatus,
+                              deferImageLoading: deferImageLoading,
+                              myUserId: _actualMyId,
+                              chatId: widget.chatId,
+                              onReply: widget.isChannel
+                                  ? null
+                                  : () => _replyToMessage(item.message),
+                              onForward: () => _forwardMessage(item.message),
+                              onEdit: isMe
+                                  ? () => _editMessage(item.message)
+                                  : null,
+                              canEditMessage: isMe
+                                  ? item.message.canEdit(_actualMyId!)
+                                  : null,
+                              onDeleteForMe: isMe
+                                  ? () async {
+                                      await ApiService.instance.deleteMessage(
+                                        widget.chatId,
+                                        item.message.id,
+                                        forMe: true,
+                                      );
+                                      widget.onChatUpdated?.call();
+                                    }
+                                  : null,
+                              onDeleteForAll: isMe
+                                  ? () async {
+                                      await ApiService.instance.deleteMessage(
+                                        widget.chatId,
+                                        item.message.id,
+                                        forMe: false,
+                                      );
+                                      widget.onChatUpdated?.call();
+                                    }
+                                  : null,
+                              onReaction: (emoji) {
+                                _updateReactionOptimistically(
+                                  item.message.id,
+                                  emoji,
+                                );
+                                ApiService.instance.sendReaction(
+                                  widget.chatId,
+                                  item.message.id,
+                                  emoji,
+                                );
+                                widget.onChatUpdated?.call();
+                              },
+                              onRemoveReaction: () {
+                                _removeReactionOptimistically(item.message.id);
+                                ApiService.instance.removeReaction(
+                                  widget.chatId,
+                                  item.message.id,
+                                );
+                                widget.onChatUpdated?.call();
+                              },
+                              isGroupChat: widget.isGroupChat,
+                              isChannel: widget.isChannel,
+                              senderName: senderName,
+                              forwardedFrom: forwardedFrom,
+                              forwardedFromAvatarUrl: forwardedFromAvatarUrl,
+                              contactDetailsCache: _contactDetailsCache,
+                              onReplyTap: _scrollToMessage,
+                              useAutoReplyColor: context
+                                  .read<ThemeProvider>()
+                                  .useAutoReplyColor,
+                              customReplyColor: context
+                                  .read<ThemeProvider>()
+                                  .customReplyColor,
+                              isFirstInGroup: item.isFirstInGroup,
+                              isLastInGroup: item.isLastInGroup,
+                              isGrouped: item.isGrouped,
+                              avatarVerticalOffset:
+                                  -8.0, // Смещение аватарки вверх на 8px
+                              onComplain: () =>
+                                  _showComplaintDialog(item.message.id),
+                            );
+
+                            Widget finalMessageWidget = bubble as Widget;
+
+                            if (isHighlighted) {
+                              return Container(
+                                margin: const EdgeInsets.symmetric(vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                      .withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: finalMessageWidget,
+                              );
+                            }
+
+                            return finalMessageWidget;
+                          } else if (item is DateSeparatorItem) {
+                            return _DateSeparatorChip(date: item.date);
+                          }
+                          if (isLastVisual && _isLoadingMore) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    if (_showScrollToBottomNotifier.value)
+                      Positioned(
+                        right: 16,
+                        bottom: 120,
+                        child: Opacity(
+                          opacity: 0.85,
+                          child: FloatingActionButton(
+                            mini: true,
+                            onPressed: _scrollToBottom,
+                            child: const Icon(Icons.arrow_downward_rounded),
+                          ),
                         ),
                       ),
-                      child: finalMessageWidget,
-                    );
-                  }
-
-                  return finalMessageWidget;
-                } else if (item is DateSeparatorItem) {
-                  return _DateSeparatorChip(date: item.date);
-                }
-                if (isLastVisual && _isLoadingMore) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-          Positioned(
-            right: 16,
-            bottom: 120,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: _showScrollToBottomNotifier,
-              builder: (context, showButton, child) {
-                return showButton
-                    ? Opacity(
-                        opacity: 0.85,
-                        child: FloatingActionButton(
-                          mini: true,
-                          onPressed: _scrollToBottom,
-                          child: const Icon(Icons.arrow_downward_rounded),
-                        ),
-                      )
-                    : const SizedBox.shrink();
-              },
-            ),
+                  ],
+                ),
+              ),
+            ],
           ),
           Positioned(left: 0, right: 0, bottom: 0, child: _buildTextInput()),
         ],
@@ -4378,6 +4463,16 @@ class _ControlMessageChip extends StatelessWidget {
           return 'Вы присоединились к группе';
         }
         return '$senderName присоединился(ась) к группе';
+
+      case 'pin':
+        final pinnedMessage = controlAttach['pinnedMessage'];
+        if (pinnedMessage != null && pinnedMessage is Map<String, dynamic>) {
+          final pinnedText = pinnedMessage['text'] as String?;
+          if (pinnedText != null && pinnedText.isNotEmpty) {
+            return '$senderDisplayName закрепил(а) сообщение: "$pinnedText"';
+          }
+        }
+        return '$senderDisplayName закрепил(а) сообщение';
 
       default:
         final eventTypeStr = eventType?.toString() ?? 'неизвестное';

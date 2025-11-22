@@ -173,6 +173,16 @@ class ControlMessageChip extends StatelessWidget {
         }
         return '$senderName присоединился(ась) к группе';
 
+      case 'pin':
+        final pinnedMessage = controlAttach['pinnedMessage'];
+        if (pinnedMessage != null && pinnedMessage is Map<String, dynamic>) {
+          final pinnedText = pinnedMessage['text'] as String?;
+          if (pinnedText != null && pinnedText.isNotEmpty) {
+            return '$senderDisplayName закрепил(а) сообщение: "$pinnedText"';
+          }
+        }
+        return '$senderDisplayName закрепил(а) сообщение';
+
       default:
         final eventTypeStr = eventType?.toString() ?? 'неизвестное';
         return 'Событие: $eventTypeStr';
