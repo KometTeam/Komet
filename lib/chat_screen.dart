@@ -352,7 +352,9 @@ class _ChatScreenState extends State<ChatScreen> {
         contactProfile['id'] != null &&
         contactProfile['id'] != 0) {
       _actualMyId = contactProfile['id'];
-      print('✅ ID пользователя успешно получен из ApiService: $_actualMyId');
+      print(
+        '✅ [_initializeChat] ID пользователя получен из ApiService: $_actualMyId',
+      );
 
       try {
         final myContact = Contact.fromJson(contactProfile);
@@ -365,9 +367,13 @@ class _ChatScreenState extends State<ChatScreen> {
           '⚠️ [_initializeChat] Не удалось добавить собственный профиль в кэш: $e',
         );
       }
-    } else {
+    } else if (_actualMyId == null) {
       _actualMyId = widget.myId;
-      print('ПРЕДУПРЕЖДЕНИЕ: Используется ID из виджета: $_actualMyId');
+      print(
+        '⚠️ [_initializeChat] ID не найден, используется из виджета: $_actualMyId',
+      );
+    } else {
+      print('✅ [_initializeChat] Используется ID из кэша: $_actualMyId');
     }
 
     if (!widget.isGroupChat && !widget.isChannel) {
@@ -1810,6 +1816,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (chatContacts != null && chatContacts.isNotEmpty) {
       for (final contact in chatContacts) {
         _contactDetailsCache[contact.id] = contact;
+
+        if (contact.id == widget.myId && _actualMyId == null) {
+          _actualMyId = contact.id;
+          print(
+            '✅ [_loadCachedContacts] Собственный ID восстановлен из кэша: $_actualMyId (${contact.name})',
+          );
+        }
       }
       print(
         '✅ Загружено ${_contactDetailsCache.length} контактов из кэша чата ${widget.chatId}',
@@ -1822,6 +1835,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (cachedContacts != null && cachedContacts.isNotEmpty) {
       for (final contact in cachedContacts) {
         _contactDetailsCache[contact.id] = contact;
+
+        if (contact.id == widget.myId && _actualMyId == null) {
+          _actualMyId = contact.id;
+          print(
+            '✅ [_loadCachedContacts] Собственный ID восстановлен из глобального кэша: $_actualMyId (${contact.name})',
+          );
+        }
       }
       print(
         '✅ Загружено ${_contactDetailsCache.length} контактов из глобального кэша',

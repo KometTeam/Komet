@@ -1,11 +1,8 @@
-
-
 import 'dart:typed_data';
 import 'package:msgpack_dart/msgpack_dart.dart';
 import 'package:es_compression/lz4.dart';
 
 final lz4Codec = Lz4Codec();
-
 
 Uint8List packPacket({
   required int ver,
@@ -49,7 +46,6 @@ Uint8List packPacket({
   return builder.toBytes();
 }
 
-
 Map<String, dynamic>? unpackPacket(Uint8List data) {
   if (data.length < 10) {
     print("Ошибка распаковки: Пакет слишком короткий для заголовка.");
@@ -82,8 +78,6 @@ Map<String, dynamic>? unpackPacket(Uint8List data) {
   if (compFlag != 0) {
     try {
       final compressedData = payloadBytes.sublist(4);
-
-
 
       payloadBytes = Uint8List.fromList(lz4Codec.decode(compressedData));
     } catch (e) {
