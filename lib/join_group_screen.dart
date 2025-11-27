@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
@@ -33,7 +31,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     _apiSubscription = ApiService.instance.messages.listen((message) {
       if (!mounted) return;
 
-
       if (message['type'] == 'group_join_success') {
         setState(() {
           _isLoading = false;
@@ -55,10 +52,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           ),
         );
 
-
         Navigator.of(context).pop();
       }
-
 
       if (message['cmd'] == 3 && message['opcode'] == 57) {
         setState(() {
@@ -90,16 +85,24 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     });
   }
 
+  String _normalizeLink(String inputLink) {
+    String link = inputLink.trim();
+
+    // Поддержка формата @https://max.ru/...
+    if (link.startsWith('@')) {
+      link = link.substring(1).trim();
+    }
+
+    return link;
+  }
 
   String _extractJoinLink(String inputLink) {
-    final link = inputLink.trim();
-
+    final link = _normalizeLink(inputLink);
 
     if (link.startsWith('join/')) {
       print('Ссылка уже в правильном формате: $link');
       return link;
     }
-
 
     final joinIndex = link.indexOf('join/');
     if (joinIndex != -1) {
@@ -108,18 +111,33 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       return extractedLink;
     }
 
-
     print('Не найдено "join/" в ссылке: $link');
     return link;
   }
 
+  bool _isChannelLink(String inputLink) {
+    final link = _normalizeLink(inputLink);
+
+    try {
+      final uri = Uri.parse(link);
+      if (uri.host == 'max.ru' &&
+          uri.pathSegments.isNotEmpty &&
+          uri.pathSegments.first.startsWith('id')) {
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
   void _joinGroup() async {
-    final inputLink = _linkController.text.trim();
+    final rawInput = _linkController.text.trim();
+    final inputLink = _normalizeLink(rawInput);
 
     if (inputLink.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Введите ссылку на группу'),
+          content: const Text('Введите ссылку'),
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -131,15 +149,49 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       return;
     }
 
+    // Сначала пытаемся распознать ссылку на канал (https://max.ru/id...)
+    if (_isChannelLink(inputLink)) {
+      setState(() {
+        _isLoading = true;
+      });
 
+      try {
+        final chatInfo = await ApiService.instance.getChatInfoByLink(inputLink);
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
+
+        // Показываем диалог подписки на канал
+        _showChannelSubscribeDialog(chatInfo, inputLink);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(10),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Иначе считаем, что это ссылка на группу с "join/"
     final processedLink = _extractJoinLink(inputLink);
-
 
     if (!processedLink.contains('join/')) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
-            'Неверный формат ссылки. Ссылка должна содержать "join/"',
+            'Неверный формат ссылки. Для группы ссылка должна содержать "join/"',
           ),
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
@@ -164,7 +216,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Ошибка присоединения к группе: ${e.toString()}'),
+          content: Text('Ошибка присоединения: ${e.toString()}'),
           backgroundColor: Theme.of(context).colorScheme.error,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -182,7 +234,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Присоединиться к группе'),
+        title: const Text('Присоединиться по ссылке'),
         backgroundColor: colors.surface,
         foregroundColor: colors.onSurface,
       ),
@@ -193,7 +245,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -205,10 +256,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.group_add, color: colors.primary),
+                          Icon(Icons.link, color: colors.primary),
                           const SizedBox(width: 8),
                           Text(
-                            'Присоединение к группе',
+                            'Присоединение по ссылке',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: colors.primary,
@@ -218,9 +269,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Введите ссылку на группу, чтобы присоединиться к ней. '
-                        'Можно вводить как полную ссылку (https://max.ru/join/...), '
-                        'так и короткую (join/...).',
+                        'Введите ссылку на группу или канал, чтобы присоединиться. '
+                        'Для групп можно вводить полную (https://max.ru/join/...) '
+                        'или короткую (join/...) ссылку, для каналов — ссылку вида '
+                        'https://max.ru/idXXXXXXXX.',
                         style: TextStyle(color: colors.onSurfaceVariant),
                       ),
                     ],
@@ -229,9 +281,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
                 const SizedBox(height: 24),
 
-
                 Text(
-                  'Ссылка на группу',
+                  'Ссылка',
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -241,8 +292,9 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                 TextField(
                   controller: _linkController,
                   decoration: InputDecoration(
-                    labelText: 'Ссылка на группу',
-                    hintText: 'https://max.ru/join/ABC123DEF456GHI789JKL',
+                    labelText: 'Ссылка на группу или канал',
+                    hintText:
+                        'https://max.ru/join/ABC123DEF456GHI789JKL или https://max.ru/id7452017130_gos',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -281,11 +333,12 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '• Ссылка должна содержать "join/"\n'
+                        '• Для групп: ссылка должна содержать "join/"\n'
                         '• После "join/" должен идти уникальный идентификатор группы\n'
-                        '• Примеры:\n'
+                        '• Примеры групп:\n'
                         '  - https://max.ru/join/ABC123DEF456GHI789JKL\n'
-                        '  - join/ABC123DEF456GHI789JKL',
+                        '  - join/ABC123DEF456GHI789JKL\n'
+                        '• Для каналов: ссылка вида https://max.ru/idXXXXXXXX',
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
                           fontSize: 13,
@@ -312,11 +365,11 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                               ),
                             ),
                           )
-                        : const Icon(Icons.group_add),
+                        : const Icon(Icons.link),
                     label: Text(
                       _isLoading
                           ? 'Присоединение...'
-                          : 'Присоединиться к группе',
+                          : 'Присоединиться по ссылке',
                     ),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 50),
@@ -336,6 +389,225 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  void _showChannelSubscribeDialog(
+    Map<String, dynamic> chatInfo,
+    String linkToJoin,
+  ) {
+    final String title = chatInfo['title'] ?? 'Канал';
+    final String? iconUrl =
+        chatInfo['baseIconUrl'] ?? chatInfo['baseUrl'] ?? chatInfo['iconUrl'];
+
+    int subscribeState = 0;
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Widget content;
+            List<Widget> actions = [];
+
+            if (subscribeState == 1) {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 32),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Подписка...',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              );
+              actions = [];
+            } else if (subscribeState == 2) {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 32),
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.green,
+                    size: 60,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Вы подписались на канал!',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              );
+              actions = [
+                FilledButton(
+                  child: const Text('Отлично'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+              ];
+            } else if (subscribeState == 3) {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 32),
+                  Icon(
+                    Icons.error_outline,
+                    color: Theme.of(context).colorScheme.error,
+                    size: 60,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Ошибка',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    errorMessage ?? 'Не удалось подписаться на канал.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              );
+              actions = [
+                TextButton(
+                  child: const Text('Закрыть'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+              ];
+            } else {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (iconUrl != null && iconUrl.isNotEmpty)
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundImage: NetworkImage(iconUrl),
+                      onBackgroundImageError: (e, s) {
+                        print("Ошибка загрузки аватара канала: $e");
+                      },
+                      backgroundColor: Colors.grey.shade300,
+                    )
+                  else
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.grey.shade300,
+                      child: const Icon(
+                        Icons.campaign,
+                        size: 60,
+                        color: Colors.white,
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Вы действительно хотите подписаться на этот канал?',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              );
+              actions = [
+                TextButton(
+                  child: const Text('Отмена'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+                FilledButton(
+                  child: const Text('Подписаться'),
+                  onPressed: () async {
+                    setState(() {
+                      subscribeState = 1;
+                    });
+
+                    try {
+                      await ApiService.instance.subscribeToChannel(linkToJoin);
+
+                      setState(() {
+                        subscribeState = 2;
+                      });
+
+                      await Future.delayed(const Duration(seconds: 2));
+                      if (mounted) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                    } catch (e) {
+                      setState(() {
+                        subscribeState = 3;
+                        errorMessage = e.toString().replaceFirst(
+                          "Exception: ",
+                          "",
+                        );
+                      });
+                    }
+                  },
+                ),
+              ];
+            }
+
+            return AlertDialog(
+              title: subscribeState == 0
+                  ? const Text('Подписаться на канал?')
+                  : null,
+              content: AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                        final slideAnimation =
+                            Tween<Offset>(
+                              begin: const Offset(0, 0.2),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutQuart,
+                              ),
+                            );
+
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: slideAnimation,
+                            child: child,
+                          ),
+                        );
+                      },
+                  child: Container(
+                    key: ValueKey<int>(subscribeState),
+                    child: content,
+                  ),
+                ),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: actions,
+            );
+          },
+        );
+      },
     );
   }
 }

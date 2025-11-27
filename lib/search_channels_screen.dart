@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
@@ -36,7 +34,6 @@ class _SearchChannelsScreenState extends State<SearchChannelsScreen> {
     _apiSubscription = ApiService.instance.messages.listen((message) {
       if (!mounted) return;
 
-
       if (message['type'] == 'channels_found') {
         setState(() {
           _isLoading = false;
@@ -64,7 +61,6 @@ class _SearchChannelsScreenState extends State<SearchChannelsScreen> {
           ),
         );
       }
-
 
       if (message['type'] == 'channels_not_found') {
         setState(() {
@@ -171,7 +167,6 @@ class _SearchChannelsScreenState extends State<SearchChannelsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -208,7 +203,6 @@ class _SearchChannelsScreenState extends State<SearchChannelsScreen> {
                 ),
 
                 const SizedBox(height: 24),
-
 
                 Text(
                   'Поисковый запрос',
@@ -300,7 +294,6 @@ class _SearchChannelsScreenState extends State<SearchChannelsScreen> {
                   ),
                 ),
 
-
                 if (_foundChannels.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   Text(
@@ -314,7 +307,6 @@ class _SearchChannelsScreenState extends State<SearchChannelsScreen> {
                     (channel) => _buildChannelCard(channel),
                   ),
                 ],
-
 
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 24),
@@ -483,7 +475,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
     _apiSubscription = ApiService.instance.messages.listen((message) {
       if (!mounted) return;
 
-
       if (message['type'] == 'channel_entered') {
         setState(() {
           _isLoading = false;
@@ -506,7 +497,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
         );
       }
 
-
       if (message['type'] == 'channel_subscribed') {
         setState(() {
           _isLoading = false;
@@ -524,7 +514,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
           ),
         );
       }
-
 
       if (message['type'] == 'channel_error') {
         setState(() {
@@ -561,15 +550,13 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
     });
   }
 
-
   String _extractChannelLink(String inputLink) {
-    final link = inputLink.trim();
+    String link = inputLink.trim();
 
-
-    if (link.startsWith('https://max.ru/') || link.startsWith('max.ru/')) {
-      return link;
+    // Поддержка формата @https://max.ru/...
+    if (link.startsWith('@')) {
+      link = link.substring(1).trim();
     }
-
 
     return link;
   }
@@ -675,7 +662,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -772,7 +758,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
 
                 const SizedBox(height: 24),
 
-
                 Column(
                   children: [
                     SizedBox(
@@ -820,7 +805,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
                   ],
                 ),
 
-
                 if (_webAppUrl != null) ...[
                   const SizedBox(height: 24),
                   Container(
@@ -858,7 +842,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () {
-
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: const Text(
@@ -888,7 +871,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
                     ),
                   ),
                 ],
-
 
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 24),

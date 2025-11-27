@@ -259,8 +259,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleJoinLink(Uri uri) {
-    if (uri.host == 'max.ru' && uri.path.startsWith('/join/')) {
-      final String fullLink = uri.toString();
+    if (uri.host != 'max.ru') return;
+
+    String fullLink = uri.toString();
+
+    // На всякий случай убираем возможный префикс '@' перед ссылкой
+    if (fullLink.startsWith('@')) {
+      fullLink = fullLink.substring(1);
+    }
+
+    final bool isGroupLink = uri.path.startsWith('/join/');
+    final bool isChannelLink =
+        !isGroupLink &&
+        uri.pathSegments.isNotEmpty &&
+        uri.pathSegments.first.startsWith('id');
+
+    if (!isGroupLink && !isChannelLink) {
+      return;
+    }
+
+    if (isGroupLink) {
       final String processedLink = _extractJoinLink(fullLink);
 
       if (!processedLink.contains('join/')) {
@@ -293,6 +311,39 @@ class _HomeScreenState extends State<HomeScreen> {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
               if (mounted) {
                 _showJoinConfirmationDialog(chatInfo, processedLink);
+              }
+            })
+            .catchError((error) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Ошибка: ${error.toString()}'),
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.all(10),
+                  ),
+                );
+              }
+            });
+      });
+    } else if (isChannelLink) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Загрузка информации о канале...'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(10),
+          duration: Duration(seconds: 10),
+        ),
+      );
+
+      ApiService.instance.waitUntilOnline().then((_) {
+        ApiService.instance
+            .getChatInfoByLink(fullLink)
+            .then((chatInfo) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              if (mounted) {
+                _showChannelSubscribeDialog(chatInfo, fullLink);
               }
             })
             .catchError((error) {
@@ -514,6 +565,227 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                   child: Container(
                     key: ValueKey<int>(joinState),
+                    child: content,
+                  ),
+                ),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: actions,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showChannelSubscribeDialog(
+    Map<String, dynamic> chatInfo,
+    String linkToJoin,
+  ) {
+    final String title = chatInfo['title'] ?? 'Канал';
+    final String? iconUrl =
+        chatInfo['baseIconUrl'] ?? chatInfo['baseUrl'] ?? chatInfo['iconUrl'];
+
+    int subscribeState = 0;
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Widget content;
+            List<Widget> actions = [];
+
+            if (subscribeState == 1) {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 32),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Подписка...',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              );
+              actions = [];
+            } else if (subscribeState == 2) {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 32),
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.green,
+                    size: 60,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Вы подписались на канал!',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              );
+              actions = [
+                FilledButton(
+                  child: const Text('Отлично'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+              ];
+            } else if (subscribeState == 3) {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 32),
+                  Icon(
+                    Icons.error_outline,
+                    color: Theme.of(context).colorScheme.error,
+                    size: 60,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Ошибка',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    errorMessage ?? 'Не удалось подписаться на канал.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              );
+              actions = [
+                TextButton(
+                  child: const Text('Закрыть'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+              ];
+            } else {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (iconUrl != null && iconUrl.isNotEmpty)
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundImage: NetworkImage(iconUrl),
+                      onBackgroundImageError: (e, s) {
+                        print("Ошибка загрузки аватара канала: $e");
+                      },
+                      backgroundColor: Colors.grey.shade300,
+                    )
+                  else
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.grey.shade300,
+                      child: const Icon(
+                        Icons.campaign,
+                        size: 60,
+                        color: Colors.white,
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Вы действительно хотите подписаться на этот канал?',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              );
+              actions = [
+                TextButton(
+                  child: const Text('Отмена'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+                FilledButton(
+                  child: const Text('Подписаться'),
+                  onPressed: () async {
+                    setState(() {
+                      subscribeState = 1;
+                    });
+
+                    try {
+                      await ApiService.instance.subscribeToChannel(linkToJoin);
+
+                      setState(() {
+                        subscribeState = 2;
+                      });
+
+                      ApiService.instance.clearChatsCache();
+
+                      await Future.delayed(const Duration(seconds: 2));
+                      if (mounted) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                    } catch (e) {
+                      setState(() {
+                        subscribeState = 3;
+                        errorMessage = e.toString().replaceFirst(
+                          "Exception: ",
+                          "",
+                        );
+                      });
+                    }
+                  },
+                ),
+              ];
+            }
+
+            return AlertDialog(
+              title: subscribeState == 0
+                  ? const Text('Подписаться на канал?')
+                  : null,
+              content: AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                        final slideAnimation =
+                            Tween<Offset>(
+                              begin: const Offset(0, 0.2),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutQuart,
+                              ),
+                            );
+
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: slideAnimation,
+                            child: child,
+                          ),
+                        );
+                      },
+                  child: Container(
+                    key: ValueKey<int>(subscribeState),
                     child: content,
                   ),
                 ),
