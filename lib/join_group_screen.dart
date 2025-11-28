@@ -55,6 +55,28 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         Navigator.of(context).pop();
       }
 
+      // Обработка успешной подписки на канал (opcode 57)
+      if (message['cmd'] == 1 && message['opcode'] == 57) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Успешно подписались на канал!'),
+            backgroundColor: Colors.green,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(10),
+          ),
+        );
+
+        Navigator.of(context).pop();
+      }
+
+      // Обработка ошибки подписки на канал (opcode 57)
       if (message['cmd'] == 3 && message['opcode'] == 57) {
         setState(() {
           _isLoading = false;

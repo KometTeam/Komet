@@ -108,7 +108,7 @@ class CustomThemePreset {
   CustomThemePreset({
     required this.id,
     required this.name,
-    this.appTheme = AppTheme.system,
+    this.appTheme = AppTheme.dark,
     this.accentColor = Colors.blue,
     this.useCustomChatWallpaper = false,
     this.chatWallpaperType = ChatWallpaperType.solid,

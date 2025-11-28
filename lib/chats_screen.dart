@@ -1027,7 +1027,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     color: Theme.of(context).colorScheme.onSecondaryContainer,
                   ),
                 ),
-                title: const Text('Присоединиться к группе'),
+                title: const Text('Присоединиться по ссылке'),
                 subtitle: const Text('По ссылке-приглашению'),
                 onTap: () {
                   Navigator.pop(context);
