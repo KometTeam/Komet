@@ -13,6 +13,7 @@ import 'package:gwid/screens/tos_screen.dart'; // Импорт экрана ToS
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:platform_info/platform_info.dart';
 
 class Country {
   final String name;
@@ -479,8 +480,11 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                             onCountryChanged: _onCountryChanged,
                             customPrefix: _customPrefix,
                           ),
-                          const SizedBox(height: 16),
-                          Center(
+                          
+                          (Platform.instance.android || Platform.instance.windows) ? Column(
+                            children: [
+                            const SizedBox(height: 16),
+                            Center(
                             child: TextButton(
                               onPressed: _isTosAccepted
                                   ? () {
@@ -510,7 +514,8 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                                 ),
                               ),
                             ),
-                          ),
+                            )]
+                          ) : const SizedBox(),
                           const SizedBox(height: 16),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,

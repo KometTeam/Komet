@@ -125,6 +125,7 @@ dependencies:
   chewie: ^1.7.5
 
   just_audio: ^0.9.40
+  platform_info: ^5.0.0
 
 dev_dependencies:
   flutter_test:
