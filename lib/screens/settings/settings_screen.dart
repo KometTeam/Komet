@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gwid/consts.dart';
 import 'package:gwid/models/profile.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/screens/manage_account_screen.dart';
@@ -470,7 +471,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 24.0),
             child: Text(
-              'v0.3.0-beta.1',
+              version,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Theme.of(

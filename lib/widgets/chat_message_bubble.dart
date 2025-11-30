@@ -26,8 +26,12 @@ import 'package:just_audio/just_audio.dart';
 import 'package:gwid/services/cache_service.dart';
 import 'package:video_player/video_player.dart';
 import 'package:gwid/services/music_player_service.dart';
+import 'package:platform_info/platform_info.dart';
 
 bool _currentIsDark = false;
+
+bool isMobile = Platform.instance.operatingSystem.iOS ||
+      Platform.instance.operatingSystem.android;
 
 enum MessageReadStatus {
   sending, // Отправляется (часы)
@@ -1081,12 +1085,22 @@ class ChatMessageBubble extends StatelessWidget {
     );
 
     if (onReaction != null || (isMe && (onEdit != null || onDelete != null))) {
-      messageContent = GestureDetector(
+      if (isMobile) {
+        messageContent = GestureDetector(
         onTapDown: (TapDownDetails details) {
           _showMessageContextMenu(context, details.globalPosition);
         },
         child: messageContent,
       );
+      } else {
+        messageContent = GestureDetector(
+        onSecondaryTapDown: (TapDownDetails details) {
+          _showMessageContextMenu(context, details.globalPosition);
+        },
+        child: messageContent,
+      );
+      }
+      
     }
 
     return Column(
@@ -1535,12 +1549,21 @@ class ChatMessageBubble extends StatelessWidget {
     );
 
     if (onReaction != null || (isMe && (onEdit != null || onDelete != null))) {
-      videoContent = GestureDetector(
+      if (isMobile) {
+        videoContent = GestureDetector(
         onTapDown: (TapDownDetails details) {
           _showMessageContextMenu(context, details.globalPosition);
         },
         child: videoContent,
       );
+      } else {
+        videoContent = GestureDetector(
+        onSecondaryTapDown: (TapDownDetails details) {
+          _showMessageContextMenu(context, details.globalPosition);
+        },
+        child: videoContent,
+      );
+      }
     }
 
     return videoContent;
@@ -1621,12 +1644,21 @@ class ChatMessageBubble extends StatelessWidget {
     );
 
     if (onReaction != null || (isMe && (onEdit != null || onDelete != null))) {
-      photoContent = GestureDetector(
+      if (isMobile) {
+        photoContent = GestureDetector(
         onTapDown: (TapDownDetails details) {
           _showMessageContextMenu(context, details.globalPosition);
         },
         child: photoContent,
       );
+      } else {
+        photoContent = GestureDetector(
+          onTapDown: (TapDownDetails details) {
+            _showMessageContextMenu(context, details.globalPosition);
+          },
+          child: photoContent,
+        );
+        }
     }
 
     return photoContent;
@@ -1749,12 +1781,21 @@ class ChatMessageBubble extends StatelessWidget {
     );
 
     if (onReaction != null || (isMe && (onEdit != null || onDelete != null))) {
-      videoContent = GestureDetector(
+      if (isMobile) {
+        videoContent = GestureDetector(
         onTapDown: (TapDownDetails details) {
           _showMessageContextMenu(context, details.globalPosition);
         },
         child: videoContent,
       );
+      } else {
+        videoContent = GestureDetector(
+          onSecondaryTapDown: (TapDownDetails details) {
+            _showMessageContextMenu(context, details.globalPosition);
+          },
+          child: videoContent,
+        );
+      }
     }
 
     return videoContent;

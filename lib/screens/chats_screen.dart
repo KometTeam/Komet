@@ -744,7 +744,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     fontSize: 16,
                   ),
                 ),
-                const Spacer(),
+                /*const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.search, size: 20),
                   onPressed: () {
@@ -755,7 +755,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     );
                   },
                   tooltip: 'Поиск каналов',
-                ),
+                ),*/
               ],
             ),
           ),
@@ -994,7 +994,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 },
               ),
 
-              ListTile(
+              /*ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(
                     context,
@@ -1014,7 +1014,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     ),
                   );
                 },
-              ),
+              ),*/
 
               ListTile(
                 leading: CircleAvatar(
@@ -3726,7 +3726,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       }
     }
   }
-  
+
    void _showDeleteAccountDialog(
     BuildContext context,
     Account account,
