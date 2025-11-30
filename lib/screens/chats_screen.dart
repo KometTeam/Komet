@@ -99,9 +99,16 @@ class _ChatsScreenState extends State<ChatsScreen>
   StreamSubscription<String>? _connectionStateSubscription;
   bool _isAccountsExpanded = false;
 
+  late SharedPreferences prefs;
+
+    Future<void> _initializePrefs() async {
+      prefs = await SharedPreferences.getInstance();
+    }
+
   @override
   void initState() {
     super.initState();
+    _initializePrefs();
     _loadMyProfile();
     _chatsFuture = (() async {
       try {
@@ -118,6 +125,9 @@ class _ChatsScreenState extends State<ChatsScreen>
         rethrow;
       }
     })();
+
+
+
     _listenForUpdates();
 
     _searchAnimationController = AnimationController(
@@ -155,6 +165,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         _loadChannels();
       }
     });
+    final prefs = SharedPreferences.getInstance();
   }
 
   @override
@@ -3582,7 +3593,8 @@ class _ChatsScreenState extends State<ChatsScreen>
               ),
             ]
           : [
-              IconButton(
+              if (prefs.getBool('show_sferum_button') ?? true)
+                IconButton(
                 icon: Image.asset(
                   'assets/images/spermum.png',
                   width: 28,
@@ -4508,7 +4520,7 @@ class _SferumWebViewPanelState extends State<SferumWebViewPanel> {
               color: colors.surface,
               child: const Center(
                 child: Text(
-                  'Сферум временно не доступен на линуксе,\nмы думаем как это исправить.',
+                  'Веб приложения временно не доступны на линуксе,\nмы думаем как это исправить.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),

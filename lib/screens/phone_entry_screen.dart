@@ -480,12 +480,11 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                             onCountryChanged: _onCountryChanged,
                             customPrefix: _customPrefix,
                           ),
-                          
-                          (Platform.instance.android || Platform.instance.windows) ? Column(
-                            children: [
+
+                          if (Platform.instance.android ||
+                              Platform.instance.windows) ...[
                             const SizedBox(height: 16),
-                            Center(
-                            child: TextButton(
+                            OutlinedButton(
                               onPressed: _isTosAccepted
                                   ? () {
                                       Navigator.of(context).push(
@@ -496,26 +495,19 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                                       );
                                     }
                                   : null,
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                              ),
                               child: Text(
-                                'зарегистрироваться',
+                                'Зарегистрироваться',
                                 style: GoogleFonts.manrope(
-                                  color: _isTosAccepted
-                                      ? colors.primary
-                                      : colors.onSurfaceVariant.withOpacity(
-                                          0.5,
-                                        ),
-                                  fontWeight: FontWeight.w600,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: _isTosAccepted
-                                      ? colors.primary
-                                      : colors.onSurfaceVariant.withOpacity(
-                                          0.5,
-                                        ),
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                            )]
-                          ) : const SizedBox(),
+                          ],
                           const SizedBox(height: 16),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,

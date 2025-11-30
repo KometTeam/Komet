@@ -146,21 +146,21 @@ extension ApiServiceAuth on ApiService {
       if (currentAccount != null) {
         authToken = currentAccount.token;
         userId = currentAccount.userId;
-        print(
-          "Токен загружен из AccountManager: ${authToken!.substring(0, 20)}...",
-        );
+        // print(
+        //   "Токен загружен из AccountManager: ${authToken!.substring(0, 20)}...",
+        // );
       } else {
         final prefs = await SharedPreferences.getInstance();
         authToken = prefs.getString('authToken');
         userId = prefs.getString('userId');
-        if (authToken != null) {
-          print(
-            "Токен загружен из SharedPreferences: ${authToken!.substring(0, 20)}...",
-          );
-          if (userId != null) {
-            print("UserID загружен из SharedPreferences: $userId");
-          }
-        }
+        // if (authToken != null) {
+        //   print(
+        //     "Токен загружен из SharedPreferences: ${authToken!.substring(0, 20)}...",
+        //   );
+        //   if (userId != null) {
+        //     print("UserID загружен из SharedPreferences: $userId");
+        //   }
+        // }
       }
     }
     return authToken != null;

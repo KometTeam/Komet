@@ -18,6 +18,7 @@ class _KometMiscScreenState extends State<KometMiscScreen> {
   bool _showUpdateNotification = true;
   bool _enableWebVersionCheck = false;
   bool _showSpoofUpdateDialog = true;
+  bool _showSferumButton = true;
 
   @override
   void initState() {
@@ -36,6 +37,8 @@ class _KometMiscScreenState extends State<KometMiscScreen> {
           prefs.getBool('enable_web_version_check') ?? false;
       _showSpoofUpdateDialog =
           prefs.getBool('show_spoof_update_dialog') ?? true;
+      _showSferumButton =
+          prefs.getBool('show_sferum_button') ?? true;
     });
   }
 
@@ -223,6 +226,24 @@ class _KometMiscScreenState extends State<KometMiscScreen> {
                       _showSpoofUpdateDialog = value;
                     });
                     _updateSettings('show_spoof_update_dialog', value);
+                  },
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  secondary: Icon(
+                    Icons.remove_red_eye,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: const Text("Показывать кнопку Сферум?"),
+                  subtitle: const Text(
+                    "Показывать кнопку Сферум в главном меню. Для применения нужен перезапуск приложения.",
+                  ),
+                  value: _showSferumButton,
+                  onChanged: (bool value) {
+                    setState(() {
+                      _showSferumButton = value;
+                    });
+                    _updateSettings('show_sferum_button', value);
                   },
                 ),
               ],
