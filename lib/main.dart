@@ -25,19 +25,27 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
 
+  print("Инициализируем сервисы кеширования...");
   await CacheService().initialize();
   await AvatarCacheService().initialize();
   await ChatCacheService().initialize();
   await ContactLocalNamesService().initialize();
+  print("Сервисы кеширования инициализированы");
 
+  print("Инициализируем AccountManager...");
   await AccountManager().initialize();
   await AccountManager().migrateOldAccount();
+  print("AccountManager инициализирован");
 
+  print("Инициализируем MusicPlayerService...");
   await MusicPlayerService().initialize();
+  print("MusicPlayerService инициализирован");
 
   final hasToken = await ApiService.instance.hasToken();
+  print("При запуске приложения токен ${hasToken ? 'найден' : 'не найден'}");
 
   if (hasToken) {
+    print("Инициируем подключение к WebSocket при запуске...");
     ApiService.instance.connect();
   }
 
@@ -74,7 +82,11 @@ class MyApp extends StatelessWidget {
             dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
           ),
           useMaterial3: true,
-          pageTransitionsTheme: PageTransitionsTheme(builders: {TargetPlatform.android: CupertinoPageTransitionsBuilder()}),
+          pageTransitionsTheme: PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            },
+          ),
           appBarTheme: AppBarTheme(
             titleTextStyle: TextStyle(
               fontSize: 16,
@@ -94,7 +106,11 @@ class MyApp extends StatelessWidget {
             dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
           ),
           useMaterial3: true,
-          pageTransitionsTheme: PageTransitionsTheme(builders: {TargetPlatform.android: CupertinoPageTransitionsBuilder()}),
+          pageTransitionsTheme: PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            },
+          ),
           appBarTheme: AppBarTheme(
             titleTextStyle: TextStyle(
               fontSize: 16,
@@ -102,7 +118,7 @@ class MyApp extends StatelessWidget {
               color: ColorScheme.fromSeed(
                 seedColor: accentColor,
                 brightness: Brightness.dark,
-              ).onSurface,
+              ).onSurface, // ← Используем цвет onSurface из цветовой схемы
             ),
           ),
         );
@@ -140,34 +156,33 @@ class MyApp extends StatelessWidget {
             ? oledTheme
             : baseDarkTheme;
 
-        return SafeArea(
-          child: MaterialApp(
-            title: 'Komet',
-            navigatorKey: navigatorKey,
-            builder: (context, child) {
-              final showHud = themeProvider.debugShowPerformanceOverlay;
-              return SizedBox.expand(
-                child: Stack(
-                  children: [
-                    if (child != null) child,
-                    if (showHud)
-                      const Positioned(top: 8, right: 56, child: _MiniFpsHud()),
-                  ],
-                ),
-              );
-            },
-            theme: baseLightTheme,
-            darkTheme: activeDarkTheme,
-            themeMode: themeProvider.themeMode,
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: const [Locale('ru'), Locale('en')],
-            locale: const Locale('ru'),
-            home: hasToken ? const HomeScreen() : const PhoneEntryScreen(),
-          ),
+        return MaterialApp(
+          title: 'Komet',
+          navigatorKey: navigatorKey,
+          builder: (context, child) {
+            final showHud = themeProvider.debugShowPerformanceOverlay;
+            return SizedBox.expand(
+              child: Stack(
+                children: [
+                  if (child != null) child,
+                  if (showHud)
+                    const Positioned(top: 8, right: 56, child: _MiniFpsHud()),
+                ],
+              ),
+            );
+          },
+          theme: baseLightTheme,
+          darkTheme: activeDarkTheme,
+          themeMode: themeProvider.themeMode,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('ru'), Locale('en')],
+          locale: const Locale('ru'),
+
+          home: hasToken ? const HomeScreen() : const PhoneEntryScreen(),
         );
       },
     );
