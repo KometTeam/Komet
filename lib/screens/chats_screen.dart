@@ -99,11 +99,18 @@ class _ChatsScreenState extends State<ChatsScreen>
   StreamSubscription<String>? _connectionStateSubscription;
   bool _isAccountsExpanded = false;
 
-  late SharedPreferences prefs;
+  SharedPreferences? _prefs;
 
-    Future<void> _initializePrefs() async {
-      prefs = await SharedPreferences.getInstance();
+  Future<void> _initializePrefs() async {
+    final p = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _prefs = p;
+      });
+    } else {
+      _prefs = p;
     }
+  }
 
   @override
   void initState() {
@@ -125,8 +132,6 @@ class _ChatsScreenState extends State<ChatsScreen>
         rethrow;
       }
     })();
-
-
 
     _listenForUpdates();
 
@@ -165,7 +170,6 @@ class _ChatsScreenState extends State<ChatsScreen>
         _loadChannels();
       }
     });
-    final prefs = SharedPreferences.getInstance();
   }
 
   @override
@@ -334,7 +338,11 @@ class _ChatsScreenState extends State<ChatsScreen>
 
       // Для части опкодов (48, 55, 135, 272, 274) нам не нужен явный chatId в корне
       // payload, поэтому не отбрасываем их, даже если chatId == null.
-      if (opcode == 272 || opcode == 274 || opcode == 48 || opcode == 55 || opcode == 135) {
+      if (opcode == 272 ||
+          opcode == 274 ||
+          opcode == 48 ||
+          opcode == 55 ||
+          opcode == 135) {
         // продолжаем обработку ниже
       } else if (chatId == null) {
         return;
@@ -357,8 +365,9 @@ class _ChatsScreenState extends State<ChatsScreen>
 
         if (mounted) {
           setState(() {
-            final existingIndex =
-                _allChats.indexWhere((chat) => chat.id == newChat.id);
+            final existingIndex = _allChats.indexWhere(
+              (chat) => chat.id == newChat.id,
+            );
 
             if (existingIndex != -1) {
               _allChats[existingIndex] = newChat;
@@ -593,7 +602,9 @@ class _ChatsScreenState extends State<ChatsScreen>
 
         // Приоритет: одиночный chat, дальше — первый из списка chats.
         Map<String, dynamic>? effectiveChatJson = chatJson;
-        if (effectiveChatJson == null && chatsJson != null && chatsJson.isNotEmpty) {
+        if (effectiveChatJson == null &&
+            chatsJson != null &&
+            chatsJson.isNotEmpty) {
           final first = chatsJson.first;
           if (first is Map<String, dynamic>) {
             effectiveChatJson = first;
@@ -607,8 +618,9 @@ class _ChatsScreenState extends State<ChatsScreen>
           ApiService.instance.updateChatInCacheFromJson(effectiveChatJson);
           if (mounted) {
             setState(() {
-              final existingIndex =
-                  _allChats.indexWhere((chat) => chat.id == newChat.id);
+              final existingIndex = _allChats.indexWhere(
+                (chat) => chat.id == newChat.id,
+              );
 
               if (existingIndex != -1) {
                 _allChats[existingIndex] = newChat;
@@ -640,8 +652,9 @@ class _ChatsScreenState extends State<ChatsScreen>
           ApiService.instance.updateChatInCacheFromJson(chatJson);
           if (mounted) {
             setState(() {
-              final existingIndex =
-                  _allChats.indexWhere((chat) => chat.id == updatedChat.id);
+              final existingIndex = _allChats.indexWhere(
+                (chat) => chat.id == updatedChat.id,
+              );
 
               if (existingIndex != -1) {
                 _allChats[existingIndex] = updatedChat;
@@ -1167,7 +1180,6 @@ class _ChatsScreenState extends State<ChatsScreen>
                   );
                 },
               ),*/
-
               ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(
@@ -1673,16 +1685,22 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   void _loadChatsAndContacts() {
+    // Берём актуальный снапшот чатов, если он уже есть (_lastChatsPayload),
+    // а если нет — ApiService сам дёрнет opcode 19.
+    final future = ApiService.instance.getChatsOnly();
+
     setState(() {
-      _chatsFuture = ApiService.instance.getChatsAndContacts(force: true);
+      _chatsFuture = future;
     });
 
-    _chatsFuture.then((data) {
-      if (mounted) {
-        final chats = data['chats'] as List;
-        final contacts = data['contacts'] as List;
-        final profileData = data['profile'];
+    future.then((data) {
+      if (!mounted) return;
 
+      final chats = (data['chats'] as List?) ?? const [];
+      final contacts = (data['contacts'] as List?) ?? const [];
+      final profileData = data['profile'];
+
+      setState(() {
         _allChats = chats
             .where((json) => json != null)
             .map((json) => Chat.fromJson(json))
@@ -1695,14 +1713,12 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
 
         if (profileData != null) {
-          setState(() {
-            _myProfile = Profile.fromJson(profileData);
-            _isProfileLoading = false;
-          });
+          _myProfile = Profile.fromJson(profileData);
+          _isProfileLoading = false;
         }
+      });
 
-        _filterChats();
-      }
+      _filterChats();
     });
   }
 
@@ -1943,6 +1959,12 @@ class _ChatsScreenState extends State<ChatsScreen>
                     _filteredChats = List.from(_allChats);
                   });
                 });
+              }
+              // Если чаты есть, но текущий фильтр/папка не даёт ни одного результата
+              // (например, после переподключения или некорректного фильтра),
+              // то по умолчанию показываем все чаты, а не пустой экран.
+              if (_filteredChats.isEmpty && _allChats.isNotEmpty) {
+                _filteredChats = List.from(_allChats);
               }
               if (_filteredChats.isEmpty && _allChats.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
@@ -3736,16 +3758,16 @@ class _ChatsScreenState extends State<ChatsScreen>
               ),
             ]
           : [
-              if (prefs.getBool('show_sferum_button') ?? true)
+              if ((_prefs?.getBool('show_sferum_button') ?? true))
                 IconButton(
-                icon: Image.asset(
-                  'assets/images/spermum.png',
-                  width: 28,
-                  height: 28,
+                  icon: Image.asset(
+                    'assets/images/spermum.png',
+                    width: 28,
+                    height: 28,
+                  ),
+                  onPressed: _openSferum,
+                  tooltip: 'Сферум',
                 ),
-                onPressed: _openSferum,
-                tooltip: 'Сферум',
-              ),
               IconButton(
                 icon: const Icon(Icons.download),
                 onPressed: () {
@@ -3882,7 +3904,7 @@ class _ChatsScreenState extends State<ChatsScreen>
     }
   }
 
-   void _showDeleteAccountDialog(
+  void _showDeleteAccountDialog(
     BuildContext context,
     Account account,
     AccountManager accountManager,

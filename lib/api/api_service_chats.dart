@@ -326,102 +326,21 @@ extension ApiServiceChats on ApiService {
   }
 
   Future<Map<String, dynamic>> getChatsOnly({bool force = false}) async {
-    if (authToken == null) {
-      await _loadTokenFromAccountManager();
-    }
-    if (authToken == null) throw Exception("Auth token not found");
+    // Эта функция теперь НЕ делает специальных запросов к серверу
+    // (вроде opcode 48 с chatIds:[0]) и не "ломает" глобальный кэш чатов.
+    //
+    // Использование:
+    // - без force: просто возвращаем последний снапшот, который уже
+    //   был получен через getChatsAndContacts / кэш;
+    // - с force: пробрасываем запрос в getChatsAndContacts(force: true),
+    //   чтобы получить полный список чатов.
 
-    if (!force && _lastChatsPayload != null && _lastChatsAt != null) {
-      if (DateTime.now().difference(_lastChatsAt!) < _chatsCacheTtl) {
-        return _lastChatsPayload!;
-      }
-    }
-
-    await _ensureCacheServicesInitialized();
-
-    if (!force && _lastChatsPayload == null) {
-      final cachedChats = await _chatCacheService.getCachedChats();
-      final cachedContacts = await _chatCacheService.getCachedContacts();
-      if (cachedChats != null &&
-          cachedContacts != null &&
-          cachedChats.isNotEmpty) {
-        final result = {
-          'chats': cachedChats,
-          'contacts': cachedContacts.map(_contactToMap).toList(),
-          'profile': null,
-          'presence': null,
-        };
-        _lastChatsPayload = result;
-        _lastChatsAt = DateTime.now();
-        updateContactCache(cachedContacts);
-        _preloadContactAvatars(cachedContacts);
-        return result;
-      }
+    if (!force && _lastChatsPayload != null) {
+      return _lastChatsPayload!;
     }
 
-    try {
-      // Используем opcode 48 для запроса конкретных чатов
-      // chatIds:[0] - это "Избранное" (Saved Messages)
-      final payload = {
-        "chatIds": [0],
-      };
-
-      final int chatSeq = _sendMessage(48, payload);
-      final chatResponse = await messages.firstWhere(
-        (msg) => msg['seq'] == chatSeq,
-      );
-
-      final List<dynamic> chatListJson =
-          chatResponse['payload']?['chats'] ?? [];
-
-      if (chatListJson.isEmpty) {
-        final result = {'chats': [], 'contacts': [], 'profile': null};
-        _lastChatsPayload = result;
-        _lastChatsAt = DateTime.now();
-        return result;
-      }
-
-      final contactIds = <int>{};
-      for (var chatJson in chatListJson) {
-        final participants =
-            chatJson['participants'] as Map<String, dynamic>? ?? {};
-        contactIds.addAll(participants.keys.map((id) => int.parse(id)));
-      }
-
-      List<dynamic> contactListJson = [];
-      if (contactIds.isNotEmpty) {
-        final int contactSeq = _sendMessage(32, {
-          "contactIds": contactIds.toList(),
-        });
-        final contactResponse = await messages.firstWhere(
-          (msg) => msg['seq'] == contactSeq,
-        );
-        contactListJson = contactResponse['payload']?['contacts'] ?? [];
-      }
-
-      final result = {
-        'chats': chatListJson,
-        'contacts': contactListJson,
-        'profile': null,
-        'presence': null,
-      };
-      _lastChatsPayload = result;
-
-      final List<Contact> contacts = contactListJson
-          .map((json) => Contact.fromJson(json as Map<String, dynamic>))
-          .toList();
-      updateContactCache(contacts);
-      _lastChatsAt = DateTime.now();
-      _preloadContactAvatars(contacts);
-      unawaited(
-        _chatCacheService.cacheChats(chatListJson.cast<Map<String, dynamic>>()),
-      );
-      unawaited(_chatCacheService.cacheContacts(contacts));
-      return result;
-    } catch (e) {
-      print('Ошибка получения чатов через opcode 48: $e');
-      rethrow;
-    }
+    // Если нужно именно "обновить" — вызываем полноценную синхронизацию.
+    return getChatsAndContacts(force: true);
   }
 
   Future<Map<String, dynamic>> getChatsAndContacts({bool force = false}) async {

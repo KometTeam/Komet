@@ -224,7 +224,14 @@ extension ApiServiceConnection on ApiService {
     if (_channel == null) {
       throw Exception('WebSocket is not connected. Connect first.');
     }
-    _log('➡️ SEND (raw): $jsonString');
+    try {
+      final decoded = jsonDecode(jsonString) as Map<String, dynamic>;
+      final opcode = decoded['opcode'];
+      final payload = decoded['payload'];
+      _log('➡️ SEND: opcode=$opcode, payload=$payload');
+    } catch (_) {
+      _log('➡️ SEND (raw): $jsonString');
+    }
     _channel!.sink.add(jsonString);
   }
 
@@ -250,7 +257,7 @@ extension ApiServiceConnection on ApiService {
 
     final encodedMessage = jsonEncode(message);
 
-    _log('➡️ SEND (custom): $encodedMessage');
+    _log('➡️ SEND: opcode=${message['opcode']}, payload=${message['payload']}');
     print('Отправляем кастомное сообщение (seq: $currentSeq): $encodedMessage');
 
     _channel!.sink.add(encodedMessage);
@@ -273,19 +280,8 @@ extension ApiServiceConnection on ApiService {
     final encodedMessage = jsonEncode(message);
     if (opcode == 1) {
       _log('➡️ SEND (ping) seq: $_seq');
-    } else if (opcode == 18 || opcode == 19) {
-      Map<String, dynamic> loggablePayload = Map.from(payload);
-      if (loggablePayload.containsKey('token')) {
-        String token = loggablePayload['token'] as String;
-
-        loggablePayload['token'] = token.length > 8
-            ? '${token.substring(0, 4)}...${token.substring(token.length - 4)}'
-            : '***';
-      }
-      final loggableMessage = {...message, 'payload': loggablePayload};
-      _log('➡️ SEND: ${jsonEncode(loggableMessage)}');
     } else {
-      _log('➡️ SEND: $encodedMessage');
+      _log('➡️ SEND: opcode=$opcode, payload=$payload');
     }
     print('Отправляем сообщение (seq: $_seq): $encodedMessage');
     _channel!.sink.add(encodedMessage);
@@ -293,47 +289,35 @@ extension ApiServiceConnection on ApiService {
   }
 
   void _listen() async {
-    _streamSubscription?.cancel();
-    _streamSubscription = _channel?.stream.listen(
+    if (_channel == null) {
+      return;
+    }
+
+    // Если уже есть активная подписка на текущий канал, не создаём вторую.
+    if (_streamSubscription != null) {
+      return;
+    }
+
+    _streamSubscription = _channel!.stream.listen(
       (message) {
         if (message == null) return;
         if (message is String && message.trim().isEmpty) {
           return;
         }
 
-        String loggableMessage = message;
         try {
           final decoded = jsonDecode(message) as Map<String, dynamic>;
-          if (decoded['opcode'] == 2) {
+          final opcode = decoded['opcode'];
+          if (opcode == 2) {
             _healthMonitor.onPongReceived();
-            loggableMessage = '⬅️ RECV (pong) seq: ${decoded['seq']}';
+            _log('⬅️ RECV (pong) seq: ${decoded['seq']}');
           } else {
-            Map<String, dynamic> loggableDecoded = Map.from(decoded);
-            bool wasModified = false;
-            if (loggableDecoded.containsKey('payload') &&
-                loggableDecoded['payload'] is Map) {
-              Map<String, dynamic> payload = Map.from(
-                loggableDecoded['payload'],
-              );
-              if (payload.containsKey('token')) {
-                String token = payload['token'] as String;
-                payload['token'] = token.length > 8
-                    ? '${token.substring(0, 4)}...${token.substring(token.length - 4)}'
-                    : '***';
-                loggableDecoded['payload'] = payload;
-                wasModified = true;
-              }
-            }
-            if (wasModified) {
-              loggableMessage = '⬅️ RECV: ${jsonEncode(loggableDecoded)}';
-            } else {
-              loggableMessage = '⬅️ RECV: $message';
-            }
+            final payload = decoded['payload'];
+            _log('⬅️ RECV: opcode=$opcode, payload=$payload');
           }
         } catch (_) {
-          loggableMessage = '⬅️ RECV (raw): $message';
+          _log('⬅️ RECV (raw): $message');
         }
-        _log(loggableMessage);
 
         try {
           final decodedMessage = message is String
