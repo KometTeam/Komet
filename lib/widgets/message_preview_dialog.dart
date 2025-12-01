@@ -203,6 +203,14 @@ class ControlMessageChip extends StatelessWidget {
 
       default:
         final eventTypeStr = eventType?.toString() ?? 'неизвестное';
+
+        if (eventTypeStr.toLowerCase() == 'system') {
+          return 'Стартовое событие, не обращайте внимания.';
+        }
+        if (eventTypeStr == 'joinByLink') {
+          return 'Кто-то присоединился(ась) по пригласительной ссылке...';
+        }
+
         return 'Событие: $eventTypeStr';
     }
   }

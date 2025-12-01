@@ -215,7 +215,7 @@ class ApiService {
         'headerUserAgent':
             spoofedData['user_agent'] as String? ??
             'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-        'appVersion': spoofedData['app_version'] as String? ?? '25.10.10',
+        'appVersion': spoofedData['app_version'] as String? ?? '25.12.1',
         'screen': spoofedData['screen'] as String? ?? '1170x2532 3.0x',
         'timezone': spoofedData['timezone'] as String? ?? 'Europe/Moscow',
       };
@@ -231,7 +231,7 @@ class ApiService {
         'deviceName': 'Chrome',
         'headerUserAgent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'appVersion': '25.10.10',
+        'appVersion': '25.12.1',
         'screen': '1920x1080 1.0x',
         'timezone': 'Europe/Moscow',
       };

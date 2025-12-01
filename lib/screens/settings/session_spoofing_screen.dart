@@ -59,7 +59,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       _localeController.text = prefs.getString('spoof_locale') ?? '';
       _deviceIdController.text = prefs.getString('spoof_deviceid') ?? '';
       _appVersionController.text =
-          prefs.getString('spoof_appversion') ?? '25.10.10';
+          prefs.getString('spoof_appversion') ?? '25.12.1';
       _selectedDeviceType = prefs.getString('spoof_devicetype') ?? 'WEB';
 
       if (_selectedDeviceType == 'WEB') {
@@ -84,7 +84,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     final pixelRatio = View.of(context).devicePixelRatio;
     final size = View.of(context).physicalSize;
 
-    _appVersionController.text = '25.10.10';
+    _appVersionController.text = '25.12.1';
     _localeController.text = Platform.localeName.split('_').first;
     _screenController.text =
         '${size.width.round()}x${size.height.round()} ${pixelRatio.toStringAsFixed(1)}x';
@@ -157,7 +157,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       _deviceNameController.text = preset.deviceName;
       _osVersionController.text = preset.osVersion;
       _screenController.text = preset.screen;
-      _appVersionController.text = '25.10.10';
+      _appVersionController.text = '25.12.1';
       _deviceIdController.text = _uuid.v4();
 
       if (_selectedMethod == SpoofingMethod.partial) {
@@ -215,7 +215,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       'device_type': _selectedDeviceType,
     };
 
-    final oldAppVersion = prefs.getString('spoof_appversion') ?? '25.10.10';
+    final oldAppVersion = prefs.getString('spoof_appversion') ?? '25.12.1';
     final newAppVersion = _appVersionController.text;
 
     bool otherDataChanged = false;

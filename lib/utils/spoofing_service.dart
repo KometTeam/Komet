@@ -22,7 +22,7 @@ class SpoofingService {
       'locale': prefs.getString('spoof_locale'),
       'device_id': prefs.getString('spoof_deviceid'),
       'device_type': prefs.getString('spoof_devicetype'),
-      'app_version': prefs.getString('spoof_appversion') ?? '25.10.10',
+      'app_version': prefs.getString('spoof_appversion') ?? '25.12.1',
     };
   }
 }
