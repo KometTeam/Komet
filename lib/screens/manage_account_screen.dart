@@ -3,10 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/profile.dart';
 import 'package:gwid/screens/phone_entry_screen.dart';
-import 'package:gwid/services/profile_cache_service.dart';
-import 'package:gwid/services/local_profile_manager.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 class ManageAccountScreen extends StatefulWidget {
   final Profile? myProfile;
@@ -21,11 +17,8 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
   late final TextEditingController _lastNameController;
   late final TextEditingController _descriptionController;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final ProfileCacheService _profileCache = ProfileCacheService();
-  final LocalProfileManager _profileManager = LocalProfileManager();
 
   Profile? _actualProfile;
-  String? _localAvatarPath;
   bool _isLoading = false;
 
   @override
@@ -35,9 +28,8 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
   }
 
   Future<void> _initializeProfileData() async {
-    await _profileManager.initialize();
-
-    _actualProfile = await _profileManager.getActualProfile(widget.myProfile);
+    // Берём только серверный профиль без локальных оверрайдов
+    _actualProfile = widget.myProfile;
 
     _firstNameController = TextEditingController(
       text: _actualProfile?.firstName ?? '',
@@ -48,12 +40,6 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
     _descriptionController = TextEditingController(
       text: _actualProfile?.description ?? '',
     );
-    final localPath = await _profileManager.getLocalAvatarPath();
-    if (mounted) {
-      setState(() {
-        _localAvatarPath = localPath;
-      });
-    }
   }
 
   Future<void> _saveProfile() async {
@@ -70,26 +56,21 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
       final lastName = _lastNameController.text.trim();
       final description = _descriptionController.text.trim();
 
-      final userId = _actualProfile?.id ?? widget.myProfile?.id ?? 0;
-      final photoBaseUrl =
-          _actualProfile?.photoBaseUrl ?? widget.myProfile?.photoBaseUrl;
-      final photoId = _actualProfile?.photoId ?? widget.myProfile?.photoId ?? 0;
-
-      await _profileCache.saveProfileData(
-        userId: userId,
-        firstName: firstName,
-        lastName: lastName,
-        description: description.isEmpty ? null : description,
-        photoBaseUrl: photoBaseUrl,
-        photoId: photoId,
+      // Отправляем изменения сразу на сервер (opcode 16)
+      final updatedProfile = await ApiService.instance.updateProfileText(
+        firstName,
+        lastName,
+        description,
       );
 
-      _actualProfile = await _profileManager.getActualProfile(widget.myProfile);
+      if (updatedProfile != null) {
+        _actualProfile = updatedProfile;
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Профиль сохранен локально"),
+            content: Text("Профиль обновлен"),
             behavior: SnackBarBehavior.floating,
             duration: Duration(seconds: 2),
           ),
@@ -163,40 +144,24 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
 
   Future<void> _pickAndUpdateProfilePhoto() async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
-      );
-
-      if (image == null) return;
-
       setState(() {
         _isLoading = true;
       });
 
-      File imageFile = File(image.path);
+      final firstName = _firstNameController.text.trim();
+      final lastName = _lastNameController.text.trim();
 
-      final userId = _actualProfile?.id ?? widget.myProfile?.id ?? 0;
-      if (userId != 0) {
-        final localPath = await _profileCache.saveAvatar(imageFile, userId);
+      // Полный серверный флоу: opcode 80 (url) + загрузка + opcode 16 (photoToken)
+      final updatedProfile =
+          await ApiService.instance.updateProfilePhoto(firstName, lastName);
 
-        if (localPath != null && mounted) {
-          setState(() {
-            _localAvatarPath = localPath;
-          });
-          _actualProfile = await _profileManager.getActualProfile(
-            widget.myProfile,
-          );
-        }
-      }
-
-      if (mounted) {
+      if (updatedProfile != null && mounted) {
+        setState(() {
+          _actualProfile = updatedProfile;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Фотография профиля сохранена"),
+            content: Text("Фотография профиля обновлена"),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -375,22 +340,15 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
   Widget _buildAvatarSection(ThemeData theme) {
     ImageProvider? avatarImage;
 
-    if (_localAvatarPath != null) {
-      avatarImage = FileImage(File(_localAvatarPath!));
-    } else if (_actualProfile?.photoBaseUrl != null) {
-      if (_actualProfile!.photoBaseUrl!.startsWith('file://')) {
-        final path = _actualProfile!.photoBaseUrl!.replaceFirst('file://', '');
-        avatarImage = FileImage(File(path));
-      } else {
-        avatarImage = NetworkImage(_actualProfile!.photoBaseUrl!);
-      }
-    } else if (widget.myProfile?.photoBaseUrl != null) {
-      avatarImage = NetworkImage(widget.myProfile!.photoBaseUrl!);
+    final photoUrl =
+        _actualProfile?.photoBaseUrl ?? widget.myProfile?.photoBaseUrl;
+    if (photoUrl != null) {
+      avatarImage = NetworkImage(photoUrl);
     }
 
     return Center(
       child: GestureDetector(
-        onTap: _pickAndUpdateProfilePhoto,
+        onTap: _showAvatarOptions,
         child: Stack(
           children: [
             CircleAvatar(
@@ -437,6 +395,262 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showAvatarOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('Выбрать из заготовленных аватаров'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _choosePresetAvatar();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Загрузить своё фото'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickAndUpdateProfilePhoto();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _choosePresetAvatar() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Выбор аватара',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Выбери картинку из коллекции, потом при желании можно загрузить своё фото.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 16),
+                FutureBuilder<Map<String, dynamic>>(
+                  future: ApiService.instance.fetchPresetAvatars(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            'Не удалось загрузить аватары: ${snapshot.error}',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final data = snapshot.data ?? {};
+                    final List<dynamic> categories =
+                        data['presetAvatars'] as List<dynamic>? ?? [];
+
+                    if (categories.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text('Список заготовленных аватаров пуст.'),
+                        ),
+                      );
+                    }
+
+                    final scrollController = ScrollController();
+
+                    return SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.6,
+                      child: Scrollbar(
+                        controller: scrollController,
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            final cat =
+                                categories[index] as Map<String, dynamic>? ??
+                                    {};
+                            final String name = cat['name']?.toString() ?? '';
+                            final List<dynamic> avatars =
+                                cat['avatars'] as List<dynamic>? ?? [];
+
+                            if (avatars.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (name.isNotEmpty) ...[
+                                    Text(
+                                      name,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
+                                  GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 4,
+                                      mainAxisSpacing: 12,
+                                      crossAxisSpacing: 12,
+                                    ),
+                                    itemCount: avatars.length,
+                                    itemBuilder: (context, i) {
+                                      final a = avatars[i]
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final String url =
+                                          a['url']?.toString() ?? '';
+                                      final int? photoId = a['id'] as int?;
+
+                                      if (url.isEmpty || photoId == null) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      return InkWell(
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                        onTap: () async {
+                                          final firstName =
+                                              _firstNameController.text.trim();
+                                          final lastName =
+                                              _lastNameController.text.trim();
+
+                                          try {
+                                            setState(() {
+                                              _isLoading = true;
+                                            });
+                                            final updatedProfile =
+                                                await ApiService.instance
+                                                    .setPresetAvatar(
+                                              firstName: firstName,
+                                              lastName: lastName,
+                                              photoId: photoId,
+                                            );
+                                            if (!mounted) return;
+
+                                            if (updatedProfile != null) {
+                                              setState(() {
+                                                _actualProfile =
+                                                    updatedProfile;
+                                              });
+                                              Navigator.of(context).pop();
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Аватар обновлён',
+                                                  ),
+                                                  behavior: SnackBarBehavior
+                                                      .floating,
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Ошибка смены аватара: $e',
+                                                ),
+                                                behavior: SnackBarBehavior
+                                                    .floating,
+                                                backgroundColor: theme
+                                                    .colorScheme.error,
+                                              ),
+                                            );
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() {
+                                                _isLoading = false;
+                                              });
+                                            }
+                                          }
+                                        },
+                                        child: CircleAvatar(
+                                          backgroundImage: NetworkImage(url),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

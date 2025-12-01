@@ -1,24 +1,76 @@
 part of 'api_service.dart';
 
 extension ApiServiceMedia on ApiService {
-  void updateProfileText(
+  /// Обновляет имя/фамилию/описание профиля через сервер (opcode 16)
+  /// и возвращает обновленный профиль из ответа.
+  Future<Profile?> updateProfileText(
     String firstName,
     String lastName,
     String description,
-  ) {
-    final payload = {
-      "firstName": firstName,
-      "lastName": lastName,
-      "description": description,
-    };
-    _sendMessage(16, payload);
+  ) async {
+    try {
+      await waitUntilOnline();
+
+      final Map<String, dynamic> payload = {
+        "firstName": firstName,
+        "lastName": lastName,
+      };
+      if (description.isNotEmpty) {
+        payload["description"] = description;
+      }
+
+      final int seq = _sendMessage(16, payload);
+      _log('➡️ SEND: opcode=16, payload=$payload');
+
+      // Ждем ответ именно на этот seq с opcode 16
+      final response = await messages.firstWhere(
+        (msg) => msg['seq'] == seq && msg['opcode'] == 16,
+      );
+
+      final Map<String, dynamic>? respPayload =
+          response['payload'] as Map<String, dynamic>?;
+
+      if (respPayload == null) {
+        throw Exception('Пустой ответ сервера на изменение профиля');
+      }
+
+      // Обработка ошибок вида { error, localizedMessage, message, title }
+      if (respPayload.containsKey('error')) {
+        final humanMessage = respPayload['localizedMessage'] ??
+            respPayload['message'] ??
+            respPayload['title'] ??
+            respPayload['error'];
+        throw Exception(humanMessage.toString());
+      }
+
+      final profileJson = respPayload['profile'];
+      if (profileJson is Map<String, dynamic>) {
+        // Обновляем глобальный снапшот чатов/профиля,
+        // чтобы все экраны сразу видели новые данные.
+        _lastChatsPayload ??= {
+          'chats': <dynamic>[],
+          'contacts': <dynamic>[],
+          'profile': null,
+          'presence': null,
+          'config': null,
+        };
+        _lastChatsPayload!['profile'] = profileJson;
+
+        return Profile.fromJson(profileJson);
+      }
+    } catch (e) {
+      _log('❌ Ошибка при обновлении профиля через opcode 16: $e');
+    }
+    return null;
   }
 
-  Future<void> updateProfilePhoto(String firstName, String lastName) async {
+  /// Загружает фото и привязывает его к профилю через opcode 80 + 16.
+  /// Возвращает обновленный профиль из ответа opcode 16.
+  Future<Profile?> updateProfilePhoto(String firstName, String lastName) async {
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      if (image == null) return;
+      if (image == null) return null;
 
       print("Запрашиваем URL для загрузки фото...");
       final int seq = _sendMessage(80, {"count": 1});
@@ -47,11 +99,123 @@ extension ApiServiceMedia on ApiService {
         "photoToken": photoToken,
         "avatarType": "USER_AVATAR",
       };
-      _sendMessage(16, payload);
+      final int seq16 = _sendMessage(16, payload);
       print("Запрос на смену аватара отправлен.");
+
+      // Ждем ответ opcode 16 с обновленным профилем
+      final resp16 = await messages.firstWhere(
+        (msg) => msg['seq'] == seq16 && msg['opcode'] == 16,
+      );
+
+      final Map<String, dynamic>? respPayload16 =
+          resp16['payload'] as Map<String, dynamic>?;
+
+      if (respPayload16 == null) {
+        throw Exception('Пустой ответ сервера на смену аватара');
+      }
+
+      if (respPayload16.containsKey('error')) {
+        final humanMessage = respPayload16['localizedMessage'] ??
+            respPayload16['message'] ??
+            respPayload16['title'] ??
+            respPayload16['error'];
+        throw Exception(humanMessage.toString());
+      }
+
+      final profileJson = respPayload16['profile'];
+      if (profileJson is Map<String, dynamic>) {
+        _lastChatsPayload ??= {
+          'chats': <dynamic>[],
+          'contacts': <dynamic>[],
+          'profile': null,
+          'presence': null,
+          'config': null,
+        };
+        _lastChatsPayload!['profile'] = profileJson;
+
+        final profile = Profile.fromJson(profileJson);
+        await ProfileCacheService().syncWithServerProfile(profile);
+        return profile;
+      }
     } catch (e) {
       print("!!! Ошибка в процессе смены аватара: $e");
     }
+    return null;
+  }
+
+  /// Загружает список заготовленных аватаров (opcode 25).
+  /// Возвращает payload вида:
+  /// { currentPresetId: int, presetAvatars: [ { name, avatars: [ {url,id}, ...] }, ... ] }
+  Future<Map<String, dynamic>> fetchPresetAvatars() async {
+    await waitUntilOnline();
+
+    final int seq = _sendMessage(25, {});
+    _log('➡️ SEND: opcode=25, payload={}');
+
+    final resp = await messages.firstWhere(
+      (msg) => msg['seq'] == seq && msg['opcode'] == 25,
+    );
+
+    final payload = resp['payload'] as Map<String, dynamic>?;
+    return payload ?? <String, dynamic>{};
+  }
+
+  /// Выбирает один из заготовленных аватаров (PRESET_AVATAR) через opcode 16.
+  /// firstName / lastName – текущие значения профиля (как в примерах сервера).
+  Future<Profile?> setPresetAvatar({
+    required String firstName,
+    required String lastName,
+    required int photoId,
+  }) async {
+    try {
+      await waitUntilOnline();
+
+      final payload = {
+        "firstName": firstName,
+        "lastName": lastName,
+        "photoId": photoId,
+        "avatarType": "PRESET_AVATAR",
+      };
+
+      final int seq16 = _sendMessage(16, payload);
+      _log('➡️ SEND: opcode=16 (PRESET_AVATAR), payload=$payload');
+
+      final resp16 = await messages.firstWhere(
+        (msg) => msg['seq'] == seq16 && msg['opcode'] == 16,
+      );
+
+      final Map<String, dynamic>? respPayload16 =
+          resp16['payload'] as Map<String, dynamic>?;
+
+      if (respPayload16 == null) {
+        throw Exception('Пустой ответ сервера на установку пресет‑аватара');
+      }
+
+      if (respPayload16.containsKey('error')) {
+        final humanMessage = respPayload16['localizedMessage'] ??
+            respPayload16['message'] ??
+            respPayload16['title'] ??
+            respPayload16['error'];
+        throw Exception(humanMessage.toString());
+      }
+
+      final profileJson = respPayload16['profile'];
+      if (profileJson is Map<String, dynamic>) {
+        _lastChatsPayload ??= {
+          'chats': <dynamic>[],
+          'contacts': <dynamic>[],
+          'profile': null,
+          'presence': null,
+          'config': null,
+        };
+        _lastChatsPayload!['profile'] = profileJson;
+
+        return Profile.fromJson(profileJson);
+      }
+    } catch (e) {
+      _log('❌ Ошибка при установке пресет‑аватара: $e');
+    }
+    return null;
   }
 
   Future<void> sendPhotoMessage(

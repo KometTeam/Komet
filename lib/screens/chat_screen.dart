@@ -60,7 +60,10 @@ class ChatScreen extends StatefulWidget {
   final int chatId;
   final Contact contact;
   final int myId;
+  /// Колбэк для мягких обновлений списка чатов (например, после редактирования сообщения).
   final VoidCallback? onChatUpdated;
+  /// Колбэк, который вызывается, когда чат нужно убрать из списка (удаление / выход из группы).
+  final VoidCallback? onChatRemoved;
   final bool isGroupChat;
   final bool isChannel;
   final int? participantCount;
@@ -72,6 +75,7 @@ class ChatScreen extends StatefulWidget {
     required this.contact,
     required this.myId,
     this.onChatUpdated,
+    this.onChatRemoved,
     this.isGroupChat = false,
     this.isChannel = false,
     this.participantCount,
@@ -709,9 +713,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ? (!readSettings.disabled && readSettings.readOnEnter)
         : theme.debugReadOnEnter;
 
-    if (shouldReadOnEnter &&
-        _messages.isNotEmpty &&
-        widget.onChatUpdated != null) {
+    if (shouldReadOnEnter && _messages.isNotEmpty) {
       final lastMessageId = _messages.last.id;
       ApiService.instance.markMessageAsRead(widget.chatId, lastMessageId);
     }
@@ -1189,8 +1191,6 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _replyingToMessage = null;
       });
-
-      widget.onChatUpdated?.call();
     }
   }
 
@@ -1835,7 +1835,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (mounted) {
                         Navigator.of(context).pop();
 
-                        widget.onChatUpdated?.call();
+                        widget.onChatRemoved?.call();
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -1911,7 +1911,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (mounted) {
                   Navigator.of(context).pop();
 
-                  widget.onChatUpdated?.call();
+                  widget.onChatRemoved?.call();
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(

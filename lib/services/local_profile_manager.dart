@@ -16,28 +16,9 @@ class LocalProfileManager {
   }
 
   Future<Profile?> getActualProfile(Profile? serverProfile) async {
-    await initialize();
-
-    final localAvatarPath = await _profileCache.getLocalAvatarPath();
-    final mergedProfile = await _profileCache.getMergedProfile(serverProfile);
-
-    if (mergedProfile != null && localAvatarPath != null) {
-      return Profile(
-        id: mergedProfile.id,
-        phone: mergedProfile.phone,
-        firstName: mergedProfile.firstName,
-        lastName: mergedProfile.lastName,
-        description: mergedProfile.description,
-        photoBaseUrl: 'file://$localAvatarPath',
-        photoId: mergedProfile.photoId,
-        updateTime: mergedProfile.updateTime,
-        options: mergedProfile.options,
-        accountStatus: mergedProfile.accountStatus,
-        profileOptions: mergedProfile.profileOptions,
-      );
-    }
-
-    return mergedProfile;
+    // Полностью отключаем локальные оверрайды профиля:
+    // всегда используем только данные с сервера.
+    return serverProfile;
   }
 
   Future<String?> getLocalAvatarPath() async {

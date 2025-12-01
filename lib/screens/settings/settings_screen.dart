@@ -451,8 +451,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _buildSettingsCategory(
           context,
           icon: Icons.psychology_outlined,
-          title: "Специальные возможности",
-          subtitle: "Обход ограничений",
+          title: "Специальные возможности и фишки",
+          subtitle: "Обход ограничений, эксперименты",
           screen: const BypassScreen(),
         ),
         _buildSettingsCategory(

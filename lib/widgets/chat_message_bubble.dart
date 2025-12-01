@@ -168,6 +168,13 @@ Color _getUserColor(int userId, BuildContext context) {
   return color;
 }
 
+class _KometColoredSegment {
+  final String text;
+  final Color? color;
+
+  _KometColoredSegment(this.text, this.color);
+}
+
 class ChatMessageBubble extends StatelessWidget {
   final Message message;
   final bool isMe;
@@ -3753,37 +3760,19 @@ class ChatMessageBubble extends StatelessWidget {
         if (message.text.isNotEmpty) ...[
           if (message.text.contains("welcome.saved.dialog.message"))
             Linkify(
-              text:'Привет! Это твои избранные. Все написанное сюда попадёт прямиком к дяде Майору.',
-              style: TextStyle(color: textColor, fontStyle: FontStyle.italic),
+              text:
+                  'Привет! Это твои избранные. Все написанное сюда попадёт прямиком к дяде Майору.',
+              style:
+                  TextStyle(color: textColor, fontStyle: FontStyle.italic),
               linkStyle: linkStyle,
               onOpen: onOpenLink,
               options: const LinkifyOptions(humanize: false),
               textAlign: TextAlign.left,
             )
-          else if (message.text.contains("komet.custom_text"))
-            Linkify(
-              style: message.text.contains("komet.custom_text.red") ? 
-              TextStyle(color: Color.from(alpha: 255, red: 255, green: 0, blue: 0)) : 
-              message.text.contains("komet.custom_text.black") ? 
-              TextStyle(color: Color.from(alpha: 255, red: 0, green: 0, blue: 0)) : 
-              message.text.contains("komet.custom_text.green") ? 
-              TextStyle(color: Color.from(alpha: 255, red: 0, green: 255, blue: 0)) : 
-              message.text.contains("komet.custom_text.white") ? 
-              TextStyle(color: Color.from(alpha: 255, red: 255, green: 255, blue: 255)) : defaultTextStyle,
-              linkStyle: linkStyle,
-              onOpen: onOpenLink,
-              options: const LinkifyOptions(humanize: false),
-              textAlign: message.text.contains("komet.custom_text.right") 
-                ? TextAlign.right 
-                : message.text.contains("komet.custom_text.center") ? TextAlign.center : TextAlign.left,
-              text: message.text
-              .replaceAll("komet.custom_text.red", "")
-              .replaceAll("komet.custom_text.black", "")
-              .replaceAll("komet.custom_text.green", "")
-              .replaceAll("komet.custom_text.white", "")
-              .replaceAll("komet.custom_text.right", "")
-              .replaceAll("komet.custom_text.center", "")
-              .replaceAll("komet.custom_text", ""),
+          else if (message.text.contains("komet.color_"))
+            _buildKometColorRichText(
+              message.text,
+              defaultTextStyle,
             )
           else
             Linkify(
@@ -3910,6 +3899,110 @@ class ChatMessageBubble extends StatelessWidget {
         ],
       ),
     ];
+  }
+
+  /// Строит раскрашенный текст на основе синтаксиса komet.color_#HEX'текст'.
+  /// Если цвет некорректный, используется красный.
+  Widget _buildKometColorRichText(
+    String rawText,
+    TextStyle baseStyle,
+  ) {
+    final segments = _parseKometColorSegments(rawText, baseStyle.color);
+
+    return RichText(
+      textAlign: TextAlign.left,
+      text: TextSpan(
+        style: baseStyle,
+        children: segments
+            .map(
+              (seg) => TextSpan(
+                text: seg.text,
+                style: seg.color != null
+                    ? baseStyle.copyWith(color: seg.color)
+                    : baseStyle,
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  List<_KometColoredSegment> _parseKometColorSegments(
+    String text,
+    Color? fallbackColor,
+  ) {
+    const marker = 'komet.color_';
+    final segments = <_KometColoredSegment>[];
+
+    int index = 0;
+    while (index < text.length) {
+      final start = text.indexOf(marker, index);
+      if (start == -1) {
+        segments.add(
+          _KometColoredSegment(text.substring(index), null),
+        );
+        break;
+      }
+
+      if (start > index) {
+        segments.add(
+          _KometColoredSegment(text.substring(index, start), null),
+        );
+      }
+
+      final colorStart = start + marker.length;
+      final firstQuote = text.indexOf("'", colorStart);
+      if (firstQuote == -1) {
+        // Кривой синтаксис — считаем всё остальное обычным текстом.
+        segments.add(
+          _KometColoredSegment(text.substring(start), null),
+        );
+        break;
+      }
+
+      final colorStr = text.substring(colorStart, firstQuote);
+      final textStart = firstQuote + 1;
+      final secondQuote = text.indexOf("'", textStart);
+      if (secondQuote == -1) {
+        segments.add(
+          _KometColoredSegment(text.substring(start), null),
+        );
+        break;
+      }
+
+      final segmentText = text.substring(textStart, secondQuote);
+      final color = _parseKometHexColor(colorStr, fallbackColor);
+
+      segments.add(_KometColoredSegment(segmentText, color));
+      index = secondQuote + 1;
+    }
+
+    return segments;
+  }
+
+  Color _parseKometHexColor(String raw, Color? fallbackColor) {
+    String hex = raw.trim();
+    if (hex.startsWith('#')) {
+      hex = hex.substring(1);
+    }
+
+    // Ожидаем 6 или 8 символов; всё остальное считаем "херовым" цветом.
+    final isValidLength = hex.length == 6 || hex.length == 8;
+    final isValidChars = RegExp(r'^[0-9a-fA-F]+$').hasMatch(hex);
+    if (!isValidLength || !isValidChars) {
+      return const Color(0xFFFF0000); // дефолт – красный
+    }
+
+    if (hex.length == 6) {
+      hex = 'FF$hex'; // добавляем альфу
+    }
+
+    try {
+      final value = int.parse(hex, radix: 16);
+      return Color(value);
+    } catch (_) {
+      return const Color(0xFFFF0000);
+    }
   }
 
   BoxDecoration _createBubbleDecoration(

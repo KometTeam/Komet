@@ -2529,7 +2529,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 isGroupChat: isGroupChat,
                 isChannel: isChannel,
                 participantCount: participantCount,
-                onChatUpdated: () {
+                onChatRemoved: () {
                   _removeChatLocally(chat.id);
                 },
               ),
@@ -2722,6 +2722,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                         participantCount: participantCount,
                         onChatUpdated: () {
                           _loadChatsAndContacts();
+                        },
+                        onChatRemoved: () {
+                          _removeChatLocally(chat.id);
                         },
                       ),
                     ),
@@ -4240,7 +4243,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 isGroupChat: isGroupChat,
                 isChannel: isChannel,
                 participantCount: participantCount,
-                onChatUpdated: () {
+                onChatRemoved: () {
                   _removeChatLocally(chat.id);
                 },
               ),

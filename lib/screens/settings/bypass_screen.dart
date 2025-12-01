@@ -2,127 +2,369 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
 
-class BypassScreen extends StatelessWidget {
+class BypassScreen extends StatefulWidget {
   final bool isModal;
 
   const BypassScreen({super.key, this.isModal = false});
 
   @override
+  State<BypassScreen> createState() => _BypassScreenState();
+}
+
+class _BypassScreenState extends State<BypassScreen> {
+  // 0 – обходы, 1 – фишки
+  int _selectedTab = 0;
+
+  @override
   Widget build(BuildContext context) {
+    if (widget.isModal) {
+      final colors = Theme.of(context).colorScheme;
+      return _buildModalSettings(context, colors);
+    }
     final colors = Theme.of(context).colorScheme;
 
-    if (isModal) {
-      return buildModalContent(context);
-    }
-
     return Scaffold(
-      appBar: AppBar(title: const Text("Bypass")),
+      appBar: AppBar(title: const Text("Специальные возможности и фишки")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colors.primaryContainer.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          // Переключатель вкладок (как между папками)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 480;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colors.outline.withOpacity(0.2)),
+                ),
+                child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: colors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Обход блокировки",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: colors.primary,
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (_selectedTab != 0) {
+                            setState(() => _selectedTab = 0);
+                          }
+                        },
+                        child: _SegmentButton(
+                          selected: _selectedTab == 0,
+                          label: isNarrow ? 'Bypass' : 'Обходы',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (_selectedTab != 1) {
+                            setState(() => _selectedTab = 1);
+                          }
+                        },
+                        child: _SegmentButton(
+                          selected: _selectedTab == 1,
+                          label: isNarrow ? 'Фишки' : 'Фишки (komet.color)',
+                        ),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Эта функция позволяет отправлять сообщения заблокированным пользователям. "
-                  "Включите эту опцию, если хотите обойти "
-                  "стандартные ограничения мессенджера.",
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          Consumer<ThemeProvider>(
-            builder: (context, themeProvider, child) {
-              return Card(
-                child: SwitchListTile(
-                  title: const Text(
-                    "Обход блокировки",
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    "Разрешить отправку сообщений заблокированным пользователям",
-                  ),
-                  value: themeProvider.blockBypass,
-                  onChanged: (value) {
-                    themeProvider.setBlockBypass(value);
-                  },
-                  secondary: Icon(
-                    themeProvider.blockBypass
-                        ? Icons.psychology
-                        : Icons.psychology_outlined,
-                    color: themeProvider.blockBypass
-                        ? colors.primary
-                        : colors.onSurfaceVariant,
-                  ),
                 ),
               );
             },
           ),
 
-          const SizedBox(height: 16),
-
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: colors.outline.withOpacity(0.3)),
+          if (_selectedTab == 0) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colors.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: colors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Обход блокировки",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Эта функция позволяет отправлять сообщения заблокированным пользователям. "
+                    "Включите эту опцию, если хотите обойти "
+                    "стандартные ограничения мессенджера.",
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+                ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.warning_outlined,
-                      color: colors.primary,
-                      size: 16,
+
+            const SizedBox(height: 24),
+
+            Consumer<ThemeProvider>(
+              builder: (context, themeProvider, child) {
+                return Card(
+                  child: SwitchListTile(
+                    title: const Text(
+                      "Обход блокировки",
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "ВНИМНИЕ🚨🚨🚨",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
+                    subtitle: const Text(
+                      "Разрешить отправку сообщений заблокированным пользователям",
+                    ),
+                    value: themeProvider.blockBypass,
+                    onChanged: (value) {
+                      themeProvider.setBlockBypass(value);
+                    },
+                    secondary: Icon(
+                      themeProvider.blockBypass
+                          ? Icons.psychology
+                          : Icons.psychology_outlined,
+                      color: themeProvider.blockBypass
+                          ? colors.primary
+                          : colors.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: colors.outline.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.warning_outlined,
                         color: colors.primary,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "ВНИМНИЕ🚨🚨🚨",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: colors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Используя любую из bypass функций, вас возможно накажут",
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Новый экран "фишек" (контент пока статичный)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.outline.withOpacity(0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.color_lens_outlined, color: colors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Фишки (цветные никнеймы, скоро)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: colors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "В будущих версиях можно будет подсвечивать отдельные буквы и слова в нике с помощью простого синтаксиса.",
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: colors.outline.withOpacity(0.3),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Используя любую из bypass функций, вас возможно накажут",
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 14,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Простой пример:",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          "komet.color_#FF0000'привет'",
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              "Отображение: ",
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                            const Text(
+                              "привет",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFF0000), // красный #FF0000
+                              ),
+                            ),
+                            Text(
+                              "",
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Сложный пример:",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            SelectableText(
+                              "komet.color_#FFFFFF'п'",
+                              style: TextStyle(fontFamily: 'monospace'),
+                            ),
+                            SelectableText(
+                              "komet.color_#FF0000'р'",
+                              style: TextStyle(fontFamily: 'monospace'),
+                            ),
+                            SelectableText(
+                              "komet.color_#00FF00'и'",
+                              style: TextStyle(fontFamily: 'monospace'),
+                            ),
+                            SelectableText(
+                              "komet.color_#0000FF'в'",
+                              style: TextStyle(fontFamily: 'monospace'),
+                            ),
+                            SelectableText(
+                              "komet.color_#FFFF00'е'",
+                              style: TextStyle(fontFamily: 'monospace'),
+                            ),
+                            SelectableText(
+                              "komet.color_#FF00FF'т'",
+                              style: TextStyle(fontFamily: 'monospace'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "В сообщении эти куски пишутся подряд без пробелов и переносов строки — здесь они показаны столбиком для наглядности.",
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              "Отображение: ",
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                            const Text(
+                              "п",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFFFFFF),
+                              ),
+                            ),
+                            const Text(
+                              "р",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFF0000),
+                              ),
+                            ),
+                            const Text(
+                              "и",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF00FF00),
+                              ),
+                            ),
+                            const Text(
+                              "в",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0000FF),
+                              ),
+                            ),
+                            const Text(
+                              "е",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFFFF00),
+                              ),
+                            ),
+                            const Text(
+                              "т",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFF00FF),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -178,7 +420,7 @@ class BypassScreen extends StatelessWidget {
                         ),
                         const Expanded(
                           child: Text(
-                            "Bypass",
+                            "Специальные возможности и фишки",
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -262,60 +504,35 @@ class BypassScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget buildModalContent(BuildContext context) {
+class _SegmentButton extends StatelessWidget {
+  final bool selected;
+  final String label;
+
+  const _SegmentButton({required this.selected, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colors.primaryContainer.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.outline.withOpacity(0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.info_outline, color: colors.primary, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Информация",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: colors.primary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Эта функция предназначена для обхода ограничений и блокировок. Используйте с осторожностью. Всю ответственность за ваш аккаунт несете только вы.",
-                style: TextStyle(
-                  color: colors.onSurface.withOpacity(0.8),
-                  fontSize: 14,
-                ),
-              ),
-            ],
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: selected ? colors.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: selected ? colors.onPrimary : colors.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 20),
-        Consumer<ThemeProvider>(
-          builder: (context, themeProvider, child) {
-            return SwitchListTile(
-              title: const Text("Обход блокировки"),
-              subtitle: const Text("Активировать функции обхода ограничений"),
-              value: themeProvider.blockBypass,
-              onChanged: (value) {
-                themeProvider.setBlockBypass(value);
-              },
-            );
-          },
-        ),
-      ],
+      ),
     );
   }
 }
