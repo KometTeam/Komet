@@ -176,6 +176,183 @@ class _KometColoredSegment {
   _KometColoredSegment(this.text, this.color);
 }
 
+enum _KometSegmentType {
+  normal,
+  colored,
+  galaxy,
+  pulse,
+}
+
+class _KometSegment {
+  final String text;
+  final _KometSegmentType type;
+  final Color? color; // Для colored и pulse
+
+  _KometSegment(this.text, this.type, {this.color});
+}
+
+class _GalaxyAnimatedText extends StatefulWidget {
+  final String text;
+
+  const _GalaxyAnimatedText({required this.text});
+
+  @override
+  State<_GalaxyAnimatedText> createState() => _GalaxyAnimatedTextState();
+}
+
+class _GalaxyAnimatedTextState extends State<_GalaxyAnimatedText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        final color = Color.lerp(Colors.black, Colors.white, t)!;
+
+        return ShaderMask(
+          shaderCallback: (Rect bounds) {
+            return LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color,
+                Color.lerp(Colors.white, Colors.black, t)!,
+              ],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.srcIn,
+          child: Text(
+            widget.text,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PulseAnimatedText extends StatefulWidget {
+  final String text;
+
+  const _PulseAnimatedText({required this.text});
+
+  @override
+  State<_PulseAnimatedText> createState() => _PulseAnimatedTextState();
+}
+
+class _PulseAnimatedTextState extends State<_PulseAnimatedText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  Color? _pulseColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _parseColor();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  void _parseColor() {
+    final text = widget.text;
+    const prefix = "komet.cosmetic.pulse#";
+    if (!text.startsWith(prefix)) {
+      _pulseColor = Colors.red;
+      return;
+    }
+
+    final afterHash = text.substring(prefix.length);
+    final quoteIndex = afterHash.indexOf("'");
+    if (quoteIndex == -1) {
+      _pulseColor = Colors.red;
+      return;
+    }
+
+    final hexStr = afterHash.substring(0, quoteIndex).trim();
+    _pulseColor = _parseHexColor(hexStr);
+  }
+
+  Color _parseHexColor(String hex) {
+    String hexClean = hex.trim();
+    if (hexClean.startsWith('#')) {
+      hexClean = hexClean.substring(1);
+    }
+    if (hexClean.length == 6) {
+      try {
+        return Color(int.parse('FF$hexClean', radix: 16));
+      } catch (e) {
+        return Colors.red;
+      }
+    }
+    return Colors.red;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.text;
+    const prefix = "komet.cosmetic.pulse#";
+    if (!text.startsWith(prefix) || !text.endsWith("'")) {
+      return Text(text);
+    }
+    
+    final afterHash = text.substring(prefix.length);
+    final quoteIndex = afterHash.indexOf("'");
+    if (quoteIndex == -1 || quoteIndex + 1 >= afterHash.length) {
+      return Text(text);
+    }
+
+    final messageText = afterHash.substring(quoteIndex + 1, afterHash.length - 1);
+    final baseColor = _pulseColor ?? Colors.red;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        final opacity = 0.5 + (t * 0.5);
+        final color = baseColor.withOpacity(opacity);
+
+        return Text(
+          messageText,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        );
+      },
+    );
+  }
+}
+
 class ChatMessageBubble extends StatelessWidget {
   final Message message;
   final bool isMe;
@@ -3871,14 +4048,7 @@ class ChatMessageBubble extends StatelessWidget {
               ),
             )
           else if (decryptedText != null)
-            Linkify(
-              text: decryptedText!,
-              style: defaultTextStyle,
-              linkStyle: linkStyle,
-              onOpen: onOpenLink,
-              options: const LinkifyOptions(humanize: false),
-              textAlign: TextAlign.left,
-            )
+            _buildMixedMessageContent(decryptedText!, defaultTextStyle, linkStyle, onOpenLink)
           else if (message.text.contains("welcome.saved.dialog.message"))
             Linkify(
               text:
@@ -3889,8 +4059,9 @@ class ChatMessageBubble extends StatelessWidget {
               options: const LinkifyOptions(humanize: false),
               textAlign: TextAlign.left,
             )
-          else if (message.text.contains("komet.color_"))
-            _buildKometColorRichText(message.text, defaultTextStyle)
+          else if (message.text.contains("komet.cosmetic.") ||
+              message.text.contains("komet.color_"))
+            _buildMixedMessageContent(message.text, defaultTextStyle, linkStyle, onOpenLink)
           else
             Linkify(
               text: message.text,
@@ -4016,6 +4187,144 @@ class ChatMessageBubble extends StatelessWidget {
         ],
       ),
     ];
+  }
+
+  /// Парсит сообщение на сегменты с разными эффектами
+  List<_KometSegment> _parseMixedMessageSegments(String text) {
+    final segments = <_KometSegment>[];
+    int index = 0;
+
+    while (index < text.length) {
+      // Ищем ближайший маркер
+      int nextPulse = text.indexOf("komet.cosmetic.pulse#", index);
+      int nextGalaxy = text.indexOf("komet.cosmetic.galaxy'", index);
+      int nextColor = text.indexOf("komet.color_", index);
+
+      // Находим ближайший маркер
+      int nextMarker = text.length;
+      String? markerType;
+      if (nextPulse != -1 && nextPulse < nextMarker) {
+        nextMarker = nextPulse;
+        markerType = "pulse";
+      }
+      if (nextGalaxy != -1 && nextGalaxy < nextMarker) {
+        nextMarker = nextGalaxy;
+        markerType = "galaxy";
+      }
+      if (nextColor != -1 && nextColor < nextMarker) {
+        nextMarker = nextColor;
+        markerType = "color";
+      }
+
+      // Если маркер не найден, добавляем оставшийся текст как обычный
+      if (markerType == null) {
+        if (index < text.length) {
+          segments.add(_KometSegment(text.substring(index), _KometSegmentType.normal));
+        }
+        break;
+      }
+
+      // Добавляем текст до маркера как обычный
+      if (nextMarker > index) {
+        segments.add(_KometSegment(text.substring(index, nextMarker), _KometSegmentType.normal));
+      }
+
+      // Обрабатываем найденный маркер
+      if (markerType == "pulse") {
+        const prefix = "komet.cosmetic.pulse#";
+        final afterHash = text.substring(nextMarker + prefix.length);
+        final quoteIndex = afterHash.indexOf("'");
+        if (quoteIndex != -1 && quoteIndex >= 6) {
+          final hexStr = afterHash.substring(0, quoteIndex).trim();
+          final textStart = quoteIndex + 1;
+          final secondQuote = afterHash.indexOf("'", textStart);
+          if (secondQuote != -1) {
+            final segmentText = afterHash.substring(textStart, secondQuote);
+            final color = _parseKometHexColor(hexStr, null);
+            segments.add(_KometSegment(segmentText, _KometSegmentType.pulse, color: color));
+            index = nextMarker + prefix.length + secondQuote + 2; // +2 для двух кавычек
+            continue;
+          }
+        }
+        // Если парсинг не удался, добавляем как обычный текст
+        segments.add(_KometSegment(text.substring(nextMarker, nextMarker + prefix.length + 10), _KometSegmentType.normal));
+        index = nextMarker + prefix.length + 10;
+      } else if (markerType == "galaxy") {
+        const prefix = "komet.cosmetic.galaxy'";
+        final textStart = nextMarker + prefix.length;
+        final quoteIndex = text.indexOf("'", textStart);
+        if (quoteIndex != -1) {
+          final segmentText = text.substring(textStart, quoteIndex);
+          segments.add(_KometSegment(segmentText, _KometSegmentType.galaxy));
+          index = quoteIndex + 1;
+          continue;
+        }
+        // Если парсинг не удался, добавляем как обычный текст
+        segments.add(_KometSegment(text.substring(nextMarker, textStart + 10), _KometSegmentType.normal));
+        index = textStart + 10;
+      } else if (markerType == "color") {
+        const marker = 'komet.color_';
+        final colorStart = nextMarker + marker.length;
+        final firstQuote = text.indexOf("'", colorStart);
+        if (firstQuote != -1) {
+          final colorStr = text.substring(colorStart, firstQuote);
+          final textStart = firstQuote + 1;
+          final secondQuote = text.indexOf("'", textStart);
+          if (secondQuote != -1) {
+            final segmentText = text.substring(textStart, secondQuote);
+            final color = _parseKometHexColor(colorStr, null);
+            segments.add(_KometSegment(segmentText, _KometSegmentType.colored, color: color));
+            index = secondQuote + 1;
+            continue;
+          }
+        }
+        // Если парсинг не удался, добавляем как обычный текст
+        segments.add(_KometSegment(text.substring(nextMarker, colorStart + 10), _KometSegmentType.normal));
+        index = colorStart + 10;
+      }
+    }
+
+    return segments;
+  }
+
+  /// Строит виджет для смешанного сообщения с разными эффектами
+  Widget _buildMixedMessageContent(
+    String text,
+    TextStyle baseStyle,
+    TextStyle linkStyle,
+    Future<void> Function(LinkableElement) onOpenLink,
+  ) {
+    final segments = _parseMixedMessageSegments(text);
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: segments.map((seg) {
+        switch (seg.type) {
+          case _KometSegmentType.normal:
+            return Linkify(
+              text: seg.text,
+              style: baseStyle,
+              linkStyle: linkStyle,
+              onOpen: onOpenLink,
+              options: const LinkifyOptions(humanize: false),
+            );
+          case _KometSegmentType.colored:
+            return Linkify(
+              text: seg.text,
+              style: baseStyle.copyWith(color: seg.color),
+              linkStyle: linkStyle,
+              onOpen: onOpenLink,
+              options: const LinkifyOptions(humanize: false),
+            );
+          case _KometSegmentType.galaxy:
+            return _GalaxyAnimatedText(text: seg.text);
+          case _KometSegmentType.pulse:
+            // Создаем строку в правильном формате для _PulseAnimatedText
+            final hexStr = seg.color!.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase();
+            return _PulseAnimatedText(text: "komet.cosmetic.pulse#$hexStr'${seg.text}'");
+        }
+      }).toList(),
+    );
   }
 
   /// Строит раскрашенный текст на основе синтаксиса komet.color_#HEX'текст'.

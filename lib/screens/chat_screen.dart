@@ -28,6 +28,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:gwid/screens/chat_encryption_settings_screen.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:gwid/services/chat_encryption_service.dart';
 
 bool _debugShowExactDate = false;
@@ -123,6 +124,10 @@ class _ChatScreenState extends State<ChatScreen> {
       false; // TODO: hook real state later
   ChatEncryptionConfig? _encryptionConfigForCurrentChat;
   bool _sendEncryptedForCurrentChat = false;
+  bool _specialMessagesEnabled = false;
+
+  bool _showKometColorPicker = false;
+  String? _currentKometColorPrefix;
 
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
@@ -353,6 +358,214 @@ class _ChatScreenState extends State<ChatScreen> {
         null; // Будет установлено при получении CONTROL сообщения с event 'pin'
     _initializeChat();
     _loadEncryptionConfig();
+    _loadSpecialMessagesSetting();
+
+    _textController.addListener(() {
+      _handleTextChangedForKometColor();
+    });
+  }
+
+  Future<void> _loadSpecialMessagesSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _specialMessagesEnabled =
+          prefs.getBool('special_messages_enabled') ?? false;
+    });
+  }
+
+  void _showSpecialMessagesPanel() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Особые сообщения',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            _SpecialMessageButton(
+              label: 'Цветной текст',
+              template: "komet.color_#''",
+              icon: Icons.color_lens,
+              onTap: () {
+                Navigator.pop(context);
+                Future.microtask(() {
+                  if (!mounted) return;
+                  final currentText = _textController.text;
+                  final cursorPos = _textController.selection.baseOffset.clamp(
+                    0,
+                    currentText.length,
+                  );
+                  final template = "komet.color_#";
+                  final newText =
+                      currentText.substring(0, cursorPos) +
+                      template +
+                      currentText.substring(cursorPos);
+                  _textController.value = TextEditingValue(
+                    text: newText,
+                    selection: TextSelection.collapsed(
+                      offset: cursorPos + template.length - 2,
+                    ),
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+            _SpecialMessageButton(
+              label: 'Переливающийся текст',
+              template: "komet.cosmetic.galaxy' ваш текст '",
+              icon: Icons.auto_awesome,
+              onTap: () {
+                Navigator.pop(context);
+                Future.microtask(() {
+                  if (!mounted) return;
+                  final currentText = _textController.text;
+                  final cursorPos = _textController.selection.baseOffset.clamp(
+                    0,
+                    currentText.length,
+                  );
+                  final template = "komet.cosmetic.galaxy' ваш текст '";
+                  final newText =
+                      currentText.substring(0, cursorPos) +
+                      template +
+                      currentText.substring(cursorPos);
+                  _textController.value = TextEditingValue(
+                    text: newText,
+                    selection: TextSelection.collapsed(
+                      offset: cursorPos + template.length - 2,
+                    ),
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+            _SpecialMessageButton(
+              label: 'Пульсирующий текст',
+              template: "komet.cosmetic.pulse#",
+              icon: Icons.radio_button_checked,
+              onTap: () {
+                Navigator.pop(context);
+                Future.microtask(() {
+                  if (!mounted) return;
+                  final currentText = _textController.text;
+                  final cursorPos = _textController.selection.baseOffset.clamp(
+                    0,
+                    currentText.length,
+                  );
+                  final template = "komet.cosmetic.pulse#";
+                  final newText =
+                      currentText.substring(0, cursorPos) +
+                      template +
+                      currentText.substring(cursorPos);
+                  _textController.value = TextEditingValue(
+                    text: newText,
+                    selection: TextSelection.collapsed(
+                      offset: cursorPos + template.length,
+                    ),
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleTextChangedForKometColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    final autoCompleteEnabled =
+        prefs.getBool('komet_auto_complete_enabled') ?? false;
+
+    if (!autoCompleteEnabled) {
+      if (_showKometColorPicker) {
+        setState(() {
+          _showKometColorPicker = false;
+          _currentKometColorPrefix = null;
+        });
+      }
+      return;
+    }
+
+    final text = _textController.text;
+    final cursorPos = _textController.selection.baseOffset;
+    const prefix1 = 'komet.color_#';
+    const prefix2 = 'komet.cosmetic.pulse#';
+
+    // Ищем префикс в позиции курсора или перед ним
+    String? detectedPrefix;
+    int? prefixStartPos;
+
+    // Проверяем, находится ли курсор сразу после префикса
+    for (final prefix in [prefix1, prefix2]) {
+      // Ищем последнее вхождение префикса перед курсором
+      int searchStart = 0;
+      int lastFound = -1;
+      while (true) {
+        final found = text.indexOf(prefix, searchStart);
+        if (found == -1 || found > cursorPos) break;
+        if (found + prefix.length <= cursorPos) {
+          lastFound = found;
+        }
+        searchStart = found + 1;
+      }
+
+      if (lastFound != -1) {
+        final afterPrefix = text.substring(
+          lastFound + prefix.length,
+          cursorPos,
+        );
+        // Если после префикса до курсора ничего нет (или только пробелы) - показываем панель
+        if (afterPrefix.isEmpty || afterPrefix.trim().isEmpty) {
+          // Проверяем, что после курсора нет завершенного блока (нет HEX и кавычек)
+          final afterCursor = cursorPos < text.length
+              ? text.substring(cursorPos)
+              : '';
+          // Если после курсора сразу идет HEX код (6 символов) и кавычка - не показываем
+          if (afterCursor.length < 7 ||
+              !RegExp(r"^[0-9A-Fa-f]{6}'").hasMatch(afterCursor)) {
+            detectedPrefix = prefix;
+            prefixStartPos = lastFound;
+            break;
+          }
+        }
+      }
+    }
+
+    if (detectedPrefix != null && prefixStartPos != null) {
+      final after = text.substring(
+        prefixStartPos + detectedPrefix.length,
+        cursorPos,
+      );
+      // Если после # до курсора ничего нет — показываем панельку
+      if (after.isEmpty || after.trim().isEmpty) {
+        if (!_showKometColorPicker ||
+            _currentKometColorPrefix != detectedPrefix) {
+          setState(() {
+            _showKometColorPicker = true;
+            _currentKometColorPrefix = detectedPrefix;
+          });
+        }
+        return;
+      }
+    }
+
+    if (_showKometColorPicker) {
+      setState(() {
+        _showKometColorPicker = false;
+        _currentKometColorPrefix = null;
+      });
+    }
   }
 
   Future<void> _loadEncryptionConfig() async {
@@ -3350,82 +3563,145 @@ class _ChatScreenState extends State<ChatScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: Focus(
-                          focusNode:
-                              _textFocusNode, // 2. focusNode теперь здесь
-                          onKeyEvent: (node, event) {
-                            if (event is KeyDownEvent) {
-                              if (event.logicalKey ==
-                                  LogicalKeyboardKey.enter) {
-                                final bool isShiftPressed =
-                                    HardwareKeyboard.instance.logicalKeysPressed
-                                        .contains(
-                                          LogicalKeyboardKey.shiftLeft,
-                                        ) ||
-                                    HardwareKeyboard.instance.logicalKeysPressed
-                                        .contains(
-                                          LogicalKeyboardKey.shiftRight,
-                                        );
-
-                                if (!isShiftPressed) {
-                                  _sendMessage();
-                                  return KeyEventResult.handled;
-                                }
-                              }
-                            }
-                            return KeyEventResult.ignored;
-                          },
-
-                          child: TextField(
-                            controller: _textController,
-
-                            enabled: !isBlocked,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            minLines: 1,
-                            maxLines: 5,
-                            decoration: InputDecoration(
-                              hintText: isBlocked
-                                  ? 'Пользователь заблокирован'
-                                  : 'Сообщение...',
-                              filled: true,
-                              isDense: true,
-                              fillColor: isBlocked
-                                  ? Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withOpacity(0.25)
-                                  : Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withOpacity(0.4),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 18.0,
-                                vertical: 12.0,
+                      if (_specialMessagesEnabled)
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(24),
+                            onTap: isBlocked ? null : _showSpecialMessagesPanel,
+                            child: Padding(
+                              padding: const EdgeInsets.all(6.0),
+                              child: Icon(
+                                Icons.auto_fix_high,
+                                color: isBlocked
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(0.3)
+                                    : Theme.of(context).colorScheme.primary,
+                                size: 24,
                               ),
                             ),
-
-                            onChanged: isBlocked
-                                ? null
-                                : (v) {
-                                    if (v.isNotEmpty) {
-                                      _scheduleTypingPing();
-                                    }
-                                  },
                           ),
+                        ),
+                      if (_specialMessagesEnabled) const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_showKometColorPicker)
+                              _KometColorPickerBar(
+                                onColorSelected: (color) {
+                                  if (_currentKometColorPrefix == null) return;
+                                  final hex = color.value
+                                      .toRadixString(16)
+                                      .padLeft(8, '0')
+                                      .substring(2)
+                                      .toUpperCase();
+
+                                  String newText;
+                                  int cursorOffset;
+
+                                  if (_currentKometColorPrefix ==
+                                      'komet.color_#') {
+                                    newText =
+                                        '$_currentKometColorPrefix$hex\'ваш текст\'';
+                                    final textLength = newText.length;
+                                    cursorOffset = textLength - 12;
+                                  } else if (_currentKometColorPrefix ==
+                                      'komet.cosmetic.pulse#') {
+                                    newText =
+                                        '$_currentKometColorPrefix$hex\'ваш текст\'';
+                                    final textLength = newText.length;
+                                    cursorOffset = textLength - 12;
+                                  } else {
+                                    return;
+                                  }
+
+                                  _textController.text = newText;
+                                  _textController.selection = TextSelection(
+                                    baseOffset: cursorOffset,
+                                    extentOffset: newText.length - 1,
+                                  );
+                                },
+                              ),
+                            Focus(
+                              focusNode:
+                                  _textFocusNode, // 2. focusNode теперь здесь
+                              onKeyEvent: (node, event) {
+                                if (event is KeyDownEvent) {
+                                  if (event.logicalKey ==
+                                      LogicalKeyboardKey.enter) {
+                                    final bool isShiftPressed =
+                                        HardwareKeyboard
+                                            .instance
+                                            .logicalKeysPressed
+                                            .contains(
+                                              LogicalKeyboardKey.shiftLeft,
+                                            ) ||
+                                        HardwareKeyboard
+                                            .instance
+                                            .logicalKeysPressed
+                                            .contains(
+                                              LogicalKeyboardKey.shiftRight,
+                                            );
+
+                                    if (!isShiftPressed) {
+                                      _sendMessage();
+                                      return KeyEventResult.handled;
+                                    }
+                                  }
+                                }
+                                return KeyEventResult.ignored;
+                              },
+                              child: TextField(
+                                controller: _textController,
+                                enabled: !isBlocked,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                minLines: 1,
+                                maxLines: 5,
+                                decoration: InputDecoration(
+                                  hintText: isBlocked
+                                      ? 'Пользователь заблокирован'
+                                      : 'Сообщение...',
+                                  filled: true,
+                                  isDense: true,
+                                  fillColor: isBlocked
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withOpacity(0.25)
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withOpacity(0.4),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 18.0,
+                                    vertical: 12.0,
+                                  ),
+                                ),
+                                onChanged: isBlocked
+                                    ? null
+                                    : (v) {
+                                        if (v.isNotEmpty) {
+                                          _scheduleTypingPing();
+                                        }
+                                      },
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -3885,6 +4161,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _typingTimer?.cancel();
     _apiSubscription?.cancel();
+    _textController.removeListener(_handleTextChangedForKometColor);
     _textController.dispose();
     _textFocusNode.dispose();
     _searchController.dispose();
@@ -3999,6 +4276,193 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     }
+  }
+}
+
+class _SpecialMessageButton extends StatelessWidget {
+  final String label;
+  final String template;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _SpecialMessageButton({
+    required this.label,
+    required this.template,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: colors.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    template,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: colors.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KometColorPickerBar extends StatefulWidget {
+  final ValueChanged<Color> onColorSelected;
+
+  const _KometColorPickerBar({required this.onColorSelected});
+
+  @override
+  State<_KometColorPickerBar> createState() => _KometColorPickerBarState();
+}
+
+class _KometColorPickerBarState extends State<_KometColorPickerBar> {
+  Color _currentColor = Colors.red;
+
+  void _showColorPickerDialog(BuildContext context) {
+    Color pickedColor = _currentColor;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Выберите цвет'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: SingleChildScrollView(
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              return ColorPicker(
+                pickerColor: pickedColor,
+                onColorChanged: (color) {
+                  setState(() => pickedColor = color);
+                },
+                enableAlpha: false,
+                pickerAreaHeightPercent: 0.8,
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Отмена'),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+          TextButton(
+            child: const Text('Готово'),
+            onPressed: () {
+              widget.onColorSelected(pickedColor);
+              setState(() {
+                _currentColor = pickedColor;
+              });
+              Navigator.of(dialogContext).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    const double diameter = 32;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Выберите цвет для komet.color',
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              _showColorPickerDialog(context);
+            },
+            child: Container(
+              width: diameter,
+              height: diameter,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const SweepGradient(
+                  colors: [
+                    Colors.red,
+                    Colors.yellow,
+                    Colors.green,
+                    Colors.cyan,
+                    Colors.blue,
+                    Colors.purple,
+                    Colors.red,
+                  ],
+                ),
+              ),
+              child: Center(
+                child: Container(
+                  width: diameter - 12,
+                  height: diameter - 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _currentColor,
+                    border: Border.all(color: colors.surface, width: 1),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BypassScreen extends StatefulWidget {
   final bool isModal;
@@ -14,6 +15,42 @@ class BypassScreen extends StatefulWidget {
 class _BypassScreenState extends State<BypassScreen> {
   // 0 – обходы, 1 – фишки
   int _selectedTab = 0;
+  bool _kometAutoCompleteEnabled = false;
+  bool _specialMessagesEnabled = false;
+  bool _isLoadingSettings = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _kometAutoCompleteEnabled =
+          prefs.getBool('komet_auto_complete_enabled') ?? false;
+      _specialMessagesEnabled =
+          prefs.getBool('special_messages_enabled') ?? false;
+      _isLoadingSettings = false;
+    });
+  }
+
+  Future<void> _saveSpecialMessages(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('special_messages_enabled', value);
+    setState(() {
+      _specialMessagesEnabled = value;
+    });
+  }
+
+  Future<void> _saveKometAutoComplete(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('komet_auto_complete_enabled', value);
+    setState(() {
+      _kometAutoCompleteEnabled = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +243,7 @@ class _BypassScreenState extends State<BypassScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "В будущих версиях можно будет подсвечивать отдельные буквы и слова в нике с помощью простого синтаксиса.",
+                    "В будущих версиях можно будет подсвечивать отдельные буквы и слова в нике с помощью простого синтаксиса, а также добавлять визуальные эффекты к сообщениям.",
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: 14,
@@ -227,7 +264,7 @@ class _BypassScreenState extends State<BypassScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Простой пример:",
+                          "Простой пример (цветники):",
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: colors.onSurface,
@@ -260,6 +297,68 @@ class _BypassScreenState extends State<BypassScreen> {
                               style: TextStyle(color: colors.onSurfaceVariant),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Пример (пульсирующий текст):",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          "komet.cosmetic.pulse#FF0000'пульсирующий текст'",
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Отображение: текст «пульсирующий текст» в пузыре сообщения пульсирует указанным цветом (в данном случае красным).",
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Пример (переливающийся ч/б текст в сообщении):",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          "komet.cosmetic.galaxy'тестовое сообщение'",
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Отображение:",
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceVariant.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const _GalaxyDemoText(
+                            text: "тестовое сообщение",
+                          ),
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -361,6 +460,64 @@ class _BypassScreenState extends State<BypassScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 24),
+                  if (!_isLoadingSettings) ...[
+                    Consumer<ThemeProvider>(
+                      builder: (context, themeProvider, child) {
+                        return Card(
+                          child: SwitchListTile(
+                            title: const Text(
+                              'Авто-дополнение уникальных сообщений',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: const Text(
+                              'Показывать панель выбора цвета при вводе komet.color#',
+                            ),
+                            value: _kometAutoCompleteEnabled,
+                            onChanged: (value) {
+                              _saveKometAutoComplete(value);
+                            },
+                            secondary: Icon(
+                              _kometAutoCompleteEnabled
+                                  ? Icons.auto_awesome
+                                  : Icons.auto_awesome_outlined,
+                              color: _kometAutoCompleteEnabled
+                                  ? colors.primary
+                                  : colors.onSurfaceVariant,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Consumer<ThemeProvider>(
+                      builder: (context, themeProvider, child) {
+                        return Card(
+                          child: SwitchListTile(
+                            title: const Text(
+                              'Включить список особых сообщений',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: const Text(
+                              'Показывать кнопку для быстрой вставки шаблонов особых сообщений',
+                            ),
+                            value: _specialMessagesEnabled,
+                            onChanged: (value) {
+                              _saveSpecialMessages(value);
+                            },
+                            secondary: Icon(
+                              _specialMessagesEnabled
+                                  ? Icons.auto_fix_high
+                                  : Icons.auto_fix_high_outlined,
+                              color: _specialMessagesEnabled
+                                  ? colors.primary
+                                  : colors.onSurfaceVariant,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -502,6 +659,67 @@ class _BypassScreenState extends State<BypassScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _GalaxyDemoText extends StatefulWidget {
+  final String text;
+
+  const _GalaxyDemoText({required this.text});
+
+  @override
+  State<_GalaxyDemoText> createState() => _GalaxyDemoTextState();
+}
+
+class _GalaxyDemoTextState extends State<_GalaxyDemoText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        final color = Color.lerp(Colors.black, Colors.white, t)!;
+
+        return ShaderMask(
+          shaderCallback: (Rect bounds) {
+            return LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color,
+                Color.lerp(Colors.white, Colors.black, t)!,
+              ],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.srcIn,
+          child: Text(
+            widget.text,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
+      },
     );
   }
 }
