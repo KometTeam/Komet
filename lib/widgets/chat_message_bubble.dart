@@ -206,6 +206,8 @@ class ChatMessageBubble extends StatelessWidget {
   final bool isGrouped;
   final double avatarVerticalOffset;
   final int? chatId;
+  final bool isEncryptionPasswordSet;
+  final String? decryptedText;
 
   const ChatMessageBubble({
     super.key,
@@ -239,6 +241,8 @@ class ChatMessageBubble extends StatelessWidget {
     this.avatarVerticalOffset =
         -35.0, // выше ниже аватарку бля как хотите я жрать хочу
     this.chatId,
+    this.isEncryptionPasswordSet = false,
+    this.decryptedText,
   });
 
   String _formatMessageTime(BuildContext context, int timestamp) {
@@ -3843,7 +3847,39 @@ class ChatMessageBubble extends StatelessWidget {
           const SizedBox(height: 6),
         ],
         if (message.text.isNotEmpty) ...[
-          if (message.text.contains("welcome.saved.dialog.message"))
+          if (message.text.startsWith('kometSM.') &&
+              message.text.length > 'kometSM.'.length &&
+              !isEncryptionPasswordSet)
+            Text(
+              'это зашифрованное сообщение, для его отображение поставьте пароль шифрования на чат.',
+              style: TextStyle(
+                color: Colors.red,
+                fontStyle: FontStyle.italic,
+                fontSize: 14,
+              ),
+            )
+          else if (message.text.startsWith('kometSM.') &&
+              message.text.length > 'kometSM.'.length &&
+              isEncryptionPasswordSet &&
+              decryptedText == null)
+            Text(
+              'некорректный ключ расшифровки, пароль точно верен?',
+              style: TextStyle(
+                color: Colors.red,
+                fontStyle: FontStyle.italic,
+                fontSize: 14,
+              ),
+            )
+          else if (decryptedText != null)
+            Linkify(
+              text: decryptedText!,
+              style: defaultTextStyle,
+              linkStyle: linkStyle,
+              onOpen: onOpenLink,
+              options: const LinkifyOptions(humanize: false),
+              textAlign: TextAlign.left,
+            )
+          else if (message.text.contains("welcome.saved.dialog.message"))
             Linkify(
               text:
                   'Привет! Это твои избранные. Все написанное сюда попадёт прямиком к дяде Майору.',

@@ -27,6 +27,8 @@ import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'package:gwid/screens/chat_encryption_settings_screen.dart';
+import 'package:gwid/services/chat_encryption_service.dart';
 
 bool _debugShowExactDate = false;
 
@@ -117,6 +119,10 @@ class _ChatScreenState extends State<ChatScreen> {
   int? _actualMyId;
 
   bool _isIdReady = false;
+  bool _isEncryptionPasswordSetForCurrentChat =
+      false; // TODO: hook real state later
+  ChatEncryptionConfig? _encryptionConfigForCurrentChat;
+  bool _sendEncryptedForCurrentChat = false;
 
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
@@ -346,6 +352,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _pinnedMessage =
         null; // Будет установлено при получении CONTROL сообщения с event 'pin'
     _initializeChat();
+    _loadEncryptionConfig();
+  }
+
+  Future<void> _loadEncryptionConfig() async {
+    final cfg = await ChatEncryptionService.getConfigForChat(widget.chatId);
+    if (!mounted) return;
+    setState(() {
+      _encryptionConfigForCurrentChat = cfg;
+      _isEncryptionPasswordSetForCurrentChat =
+          cfg != null && cfg.password.isNotEmpty;
+      _sendEncryptedForCurrentChat = cfg?.sendEncrypted ?? false;
+    });
   }
 
   Future<void> _initializeChat() async {
@@ -1159,8 +1177,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    final text = _textController.text.trim();
-    if (text.isNotEmpty) {
+    final originalText = _textController.text.trim();
+    if (originalText.isNotEmpty) {
       final theme = context.read<ThemeProvider>();
       final isBlocked = _currentContact.isBlockedByMe && !theme.blockBypass;
 
@@ -1176,10 +1194,34 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
 
+      // Защита от "служебного" текста при включённом шифровании,
+      // чтобы не получить что-то вроде kometSM.kometSM.
+      if (_encryptionConfigForCurrentChat != null &&
+          _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+          _sendEncryptedForCurrentChat &&
+          (originalText == 'kometSM' || originalText == 'kometSM.')) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Нее, так нельзя)')));
+        return;
+      }
+
+      // Готовим текст с учётом возможного шифрования
+      String textToSend = originalText;
+      if (_encryptionConfigForCurrentChat != null &&
+          _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+          _sendEncryptedForCurrentChat &&
+          !originalText.startsWith(ChatEncryptionService.encryptedPrefix)) {
+        textToSend = ChatEncryptionService.encryptWithPassword(
+          _encryptionConfigForCurrentChat!.password,
+          originalText,
+        );
+      }
+
       final int tempCid = DateTime.now().millisecondsSinceEpoch;
       final tempMessageJson = {
         'id': 'local_$tempCid',
-        'text': text,
+        'text': textToSend,
         'time': tempCid,
         'sender': _actualMyId!,
         'cid': tempCid,
@@ -1211,7 +1253,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       ApiService.instance.sendMessage(
         widget.chatId,
-        text,
+        textToSend,
         replyToMessageId: _replyingToMessage?.id,
         cid: tempCid, // Передаем тот же CID в API
       );
@@ -2332,6 +2374,24 @@ class _ChatScreenState extends State<ChatScreen> {
                                             .read<ThemeProvider>()
                                             .animatePhotoMessages;
 
+                                    String? decryptedText;
+                                    if (_isEncryptionPasswordSetForCurrentChat &&
+                                        _encryptionConfigForCurrentChat !=
+                                            null &&
+                                        _encryptionConfigForCurrentChat!
+                                            .password
+                                            .isNotEmpty &&
+                                        item.message.text.startsWith(
+                                          ChatEncryptionService.encryptedPrefix,
+                                        )) {
+                                      decryptedText =
+                                          ChatEncryptionService.decryptWithPassword(
+                                            _encryptionConfigForCurrentChat!
+                                                .password,
+                                            item.message.text,
+                                          );
+                                    }
+
                                     final bubble = ChatMessageBubble(
                                       key: key,
                                       message: item.message,
@@ -2340,6 +2400,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                       deferImageLoading: deferImageLoading,
                                       myUserId: _actualMyId,
                                       chatId: widget.chatId,
+                                      isEncryptionPasswordSet:
+                                          _isEncryptionPasswordSetForCurrentChat,
+                                      decryptedText: decryptedText,
                                       onReply: widget.isChannel
                                           ? null
                                           : () => _replyToMessage(item.message),
@@ -2734,6 +2797,17 @@ class _ChatScreenState extends State<ChatScreen> {
               _showDeleteChatDialog();
             } else if (value == 'leave_group' || value == 'leave_channel') {
               _showLeaveGroupDialog();
+            } else if (value == 'encryption_password') {
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute(
+                      builder: (context) => ChatEncryptionSettingsScreen(
+                        chatId: widget.chatId,
+                        isPasswordSet: _isEncryptionPasswordSetForCurrentChat,
+                      ),
+                    ),
+                  )
+                  .then((_) => _loadEncryptionConfig());
             }
           },
           itemBuilder: (context) {
@@ -2749,7 +2823,34 @@ class _ChatScreenState extends State<ChatScreen> {
             }
             final bool canDeleteChat = !widget.isGroupChat || amIAdmin;
 
+            final bool isEncryptionPasswordSet =
+                _isEncryptionPasswordSetForCurrentChat;
+
             return [
+              PopupMenuItem(
+                value: 'encryption_password',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lock,
+                      color: isEncryptionPasswordSet
+                          ? Colors.green
+                          : Colors.red,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isEncryptionPasswordSet
+                          ? 'Пароль шифрования установлен'
+                          : 'Пароль от шифрования',
+                      style: TextStyle(
+                        color: isEncryptionPasswordSet
+                            ? Colors.green
+                            : Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'search',
                 child: Row(
