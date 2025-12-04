@@ -28,7 +28,6 @@ import 'package:gwid/utils/user_id_lookup_screen.dart';
 import 'package:gwid/screens/music_library_screen.dart';
 import 'package:gwid/widgets/message_preview_dialog.dart';
 import 'package:gwid/services/chat_read_settings_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:gwid/services/local_profile_manager.dart';
 import 'package:gwid/widgets/contact_name_widget.dart';
 import 'package:gwid/widgets/contact_avatar_widget.dart';
@@ -1851,23 +1850,6 @@ class _ChatsScreenState extends State<ChatsScreen>
       print('🌐 URL веб-приложения: $webUrl');
 
       if (!mounted) return;
-
-      // На десктопах WebView ведёт себя нестабильно (чёрный экран),
-      // поэтому открываем Сферум во внешнем браузере.
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        final uri = Uri.tryParse(webUrl);
-        if (uri != null && await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Не удалось открыть Сферум: $webUrl'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
 
       if (mounted) {
         _showSferumWebView(context, webUrl);
