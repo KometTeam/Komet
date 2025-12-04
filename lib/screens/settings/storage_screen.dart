@@ -3,6 +3,8 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:math';
 import 'package:gwid/api/api_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:gwid/utils/download_path_helper.dart';
 
 class StorageScreen extends StatefulWidget {
   final bool isModal;
@@ -33,6 +35,9 @@ class _StorageScreenState extends State<StorageScreen>
                 const SizedBox(height: 20),
 
                 _buildStorageDetails(colors),
+                const SizedBox(height: 20),
+
+                _buildDownloadFolderSetting(colors),
                 const SizedBox(height: 20),
 
                 _buildActionButtons(colors),
@@ -294,6 +299,10 @@ class _StorageScreenState extends State<StorageScreen>
 
                   const SizedBox(height: 32),
 
+                  _buildDownloadFolderSetting(colors),
+
+                  const SizedBox(height: 32),
+
                   _buildActionButtons(colors),
                 ],
               ),
@@ -378,6 +387,9 @@ class _StorageScreenState extends State<StorageScreen>
                                 const SizedBox(height: 20),
 
                                 _buildStorageDetails(colors),
+                                const SizedBox(height: 20),
+
+                                _buildDownloadFolderSetting(colors),
                                 const SizedBox(height: 20),
 
                                 _buildActionButtons(colors),
@@ -651,6 +663,202 @@ class _StorageScreenState extends State<StorageScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _selectDownloadFolder() async {
+    try {
+      String? selectedDirectory;
+      
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        // На десктопе используем getDirectoryPath
+        selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      } else {
+        // На мобильных платформах file_picker может не поддерживать выбор папки
+        // Используем диалог с текстовым вводом или просто показываем сообщение
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Выбор папки доступен только на десктопных платформах'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (selectedDirectory != null && selectedDirectory.isNotEmpty) {
+        await DownloadPathHelper.setDownloadDirectory(selectedDirectory);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Папка загрузки установлена: $selectedDirectory'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          setState(() {}); // Обновляем UI
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при выборе папки: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _resetDownloadFolder() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Сбросить папку загрузки'),
+        content: const Text(
+          'Вернуть папку загрузки к значению по умолчанию?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Сбросить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await DownloadPathHelper.setDownloadDirectory(null);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Папка загрузки сброшена к значению по умолчанию'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        setState(() {}); // Обновляем UI
+      }
+    }
+  }
+
+  Widget _buildDownloadFolderSetting(ColorScheme colors) {
+    return FutureBuilder<String>(
+      future: DownloadPathHelper.getDisplayPath(),
+      builder: (context, snapshot) {
+        final currentPath = snapshot.data ?? 'Загрузка...';
+        final isCustom = snapshot.hasData && 
+            currentPath != 'Не указано' &&
+            !currentPath.contains('Downloads') &&
+            !currentPath.contains('Download');
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colors.outline.withOpacity(0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.folder_outlined,
+                    color: colors.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Папка загрузки файлов',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Текущая папка:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            currentPath,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: colors.onSurface,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isCustom)
+                      Icon(
+                        Icons.check_circle,
+                        color: colors.primary,
+                        size: 20,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _selectDownloadFolder,
+                      icon: const Icon(Icons.folder_open),
+                      label: const Text('Выбрать папку'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  if (isCustom) ...[
+                    const SizedBox(width: 12),
+                    OutlinedButton(
+                      onPressed: _resetDownloadFolder,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      ),
+                      child: const Icon(Icons.refresh),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

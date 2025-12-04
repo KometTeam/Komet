@@ -59,6 +59,115 @@ class DateSeparatorItem extends ChatItem {
   DateSeparatorItem(this.date);
 }
 
+class _EmptyChatWidget extends StatelessWidget {
+  final Map<String, dynamic>? sticker;
+  final VoidCallback? onStickerTap;
+
+  const _EmptyChatWidget({this.sticker, this.onStickerTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    
+    print('🎨 _EmptyChatWidget.build: sticker=${sticker != null ? "есть" : "null"}');
+    if (sticker != null) {
+      print('🎨 Стикер данные: ${sticker}');
+    }
+    
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (sticker != null) ...[
+            // Показываем стикер (LOTTIE или обычное изображение) с возможностью нажатия
+            GestureDetector(
+              onTap: onStickerTap,
+              child: _buildSticker(sticker!),
+            ),
+            const SizedBox(height: 24),
+          ] else ...[
+            // Показываем индикатор загрузки, пока стикер не загружен
+            const SizedBox(
+              width: 170,
+              height: 170,
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+          Text(
+            'Сообщений пока нет, напишите первым или отправьте этот стикер',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: colors.onSurface.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSticker(Map<String, dynamic> sticker) {
+    final url = sticker['url'] as String?;
+    final lottieUrl = sticker['lottieUrl'] as String?;
+    final width = (sticker['width'] as num?)?.toDouble() ?? 170.0;
+    final height = (sticker['height'] as num?)?.toDouble() ?? 170.0;
+
+    print('🎨 _buildSticker: url=$url, lottieUrl=$lottieUrl, width=$width, height=$height');
+
+    // Для отображения используем обычный url (статичное изображение)
+    // lottieUrl - это для анимации, но пока используем статичное изображение
+    // Если есть url, используем его, иначе пробуем lottieUrl
+    final imageUrl = url ?? lottieUrl;
+    
+    print('🎨 Используемый URL для стикера: $imageUrl');
+    
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return SizedBox(
+        width: width,
+        height: height,
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              print('✅ Стикер успешно загружен');
+              return child;
+            }
+            print('⏳ Загрузка стикера: ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}');
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            print('❌ Ошибка загрузки стикера: $error');
+            print('❌ StackTrace: $stackTrace');
+            return Icon(
+              Icons.emoji_emotions,
+              size: width,
+              color: Colors.grey,
+            );
+          },
+        ),
+      );
+    }
+
+    print('❌ URL стикера пустой или null');
+    return Icon(
+      Icons.emoji_emotions,
+      size: width,
+      color: Colors.grey,
+    );
+  }
+}
+
 class ChatScreen extends StatefulWidget {
   final int chatId;
   final Contact contact;
@@ -97,6 +206,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final Set<String> _animatedMessageIds = {};
 
   bool _isLoadingHistory = true;
+  Map<String, dynamic>? _emptyChatSticker;
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
   StreamSubscription? _apiSubscription;
@@ -872,6 +982,11 @@ class _ChatScreenState extends State<ChatScreen> {
         _isLoadingHistory = false;
       });
       _updatePinnedMessage();
+      
+      // Если чат пустой, загружаем стикер для пустого состояния
+      if (_messages.isEmpty && !widget.isChannel) {
+        _loadEmptyChatSticker();
+      }
     }
 
     try {
@@ -957,6 +1072,11 @@ class _ChatScreenState extends State<ChatScreen> {
         _isLoadingHistory = false;
       });
       _updatePinnedMessage();
+      
+      // Если чат пустой, загружаем стикер для пустого состояния
+      if (_messages.isEmpty && !widget.isChannel) {
+        _loadEmptyChatSticker();
+      }
     } catch (e) {
       print("❌ Ошибка при загрузке с сервера: $e");
       if (mounted) {
@@ -1145,6 +1265,66 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (keysToRemove.isNotEmpty) {
       print('📜 Очищено ${keysToRemove.length} ключей для удаленных сообщений');
+    }
+  }
+
+  Future<void> _loadEmptyChatSticker() async {
+    try {
+      // Список доступных ID стикеров для пустого чата
+      final availableStickerIds = [272821, 295349, 13571];
+      // Выбираем случайный ID
+      final random = DateTime.now().millisecondsSinceEpoch % availableStickerIds.length;
+      final selectedStickerId = availableStickerIds[random];
+      
+      print('🎨 Загружаем стикер для пустого чата (ID: $selectedStickerId)...');
+      final seq = ApiService.instance.sendRawRequest(28, {
+        "type": "STICKER",
+        "ids": [selectedStickerId],
+      });
+
+      if (seq == -1) {
+        print('❌ Не удалось отправить запрос на получение стикера');
+        return;
+      }
+
+      final response = await ApiService.instance.messages
+          .firstWhere(
+            (msg) => msg['seq'] == seq && msg['opcode'] == 28,
+            orElse: () => <String, dynamic>{},
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw TimeoutException(
+              'Превышено время ожидания ответа от сервера',
+            ),
+          );
+
+      if (response.isEmpty || response['payload'] == null) {
+        print('❌ Не получен ответ от сервера для стикера');
+        return;
+      }
+
+      final stickers = response['payload']['stickers'] as List?;
+      print('🎨 Получен ответ со стикерами: ${stickers?.length ?? 0}');
+      if (stickers != null && stickers.isNotEmpty) {
+        final sticker = stickers.first as Map<String, dynamic>;
+        // Сохраняем также stickerId для отправки
+        final stickerId = sticker['id'] as int?;
+        print('🎨 Данные стикера: id=$stickerId, url=${sticker['url']}, lottieUrl=${sticker['lottieUrl']}, width=${sticker['width']}, height=${sticker['height']}');
+        if (mounted) {
+          setState(() {
+            _emptyChatSticker = {
+              ...sticker,
+              'stickerId': stickerId, // Сохраняем ID для отправки
+            };
+          });
+          print('✅ Стикер для пустого чата загружен и сохранен (ID: $stickerId)');
+        }
+      } else {
+        print('❌ Стикеры не найдены в ответе');
+      }
+    } catch (e) {
+      print('❌ Ошибка при загрузке стикера для пустого чата: $e');
     }
   }
 
@@ -1465,6 +1645,51 @@ class _ChatScreenState extends State<ChatScreen> {
       ApiService.instance.clearCacheForChat(widget.chatId);
       _buildChatItems();
       setState(() {});
+    }
+  }
+
+  Future<void> _sendEmptyChatSticker() async {
+    if (_emptyChatSticker == null) {
+      print('❌ Стикер не загружен, невозможно отправить');
+      return;
+    }
+
+    final stickerId = _emptyChatSticker!['stickerId'] as int?;
+    if (stickerId == null) {
+      print('❌ ID стикера не найден');
+      return;
+    }
+
+    try {
+      print('🎨 Отправляем стикер (ID: $stickerId) в чат ${widget.chatId}');
+      final cid = DateTime.now().millisecondsSinceEpoch;
+      
+      final payload = {
+        "chatId": widget.chatId,
+        "message": {
+          "cid": cid,
+          "attaches": [
+            {
+              "_type": "STICKER",
+              "stickerId": stickerId,
+            }
+          ],
+        },
+        "notify": true,
+      };
+
+      ApiService.instance.sendRawRequest(64, payload);
+      print('✅ Стикер отправлен (opcode 64, cid: $cid)');
+    } catch (e) {
+      print('❌ Ошибка при отправке стикера: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при отправке стикера: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -2499,16 +2724,21 @@ class _ChatScreenState extends State<ChatScreen> {
                               key: ValueKey('loading'),
                               child: CircularProgressIndicator(),
                             )
-                          : AnimatedPadding(
-                              key: const ValueKey('chat_list'),
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOutCubic,
-                              padding: EdgeInsets.only(
-                                bottom: MediaQuery.of(
-                                  context,
-                                ).viewInsets.bottom,
-                              ),
-                              child: ScrollablePositionedList.builder(
+                          : _messages.isEmpty && !widget.isChannel
+                              ? _EmptyChatWidget(
+                                  sticker: _emptyChatSticker,
+                                  onStickerTap: _sendEmptyChatSticker,
+                                )
+                              : AnimatedPadding(
+                                  key: const ValueKey('chat_list'),
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeInOutCubic,
+                                  padding: EdgeInsets.only(
+                                    bottom: MediaQuery.of(
+                                      context,
+                                    ).viewInsets.bottom,
+                                  ),
+                                  child: ScrollablePositionedList.builder(
                                 itemScrollController: _itemScrollController,
                                 itemPositionsListener: _itemPositionsListener,
                                 reverse: true,

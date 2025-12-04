@@ -27,6 +27,7 @@ import 'package:gwid/services/cache_service.dart';
 import 'package:video_player/video_player.dart';
 import 'package:gwid/services/music_player_service.dart';
 import 'package:platform_info/platform_info.dart';
+import 'package:gwid/utils/download_path_helper.dart';
 
 bool _currentIsDark = false;
 
@@ -3297,24 +3298,8 @@ class ChatMessageBubble extends StatelessWidget {
     FileDownloadProgressService().updateProgress(fileId, 0.0);
 
     try {
-      // Get Downloads directory
-      io.Directory? downloadDir;
-
-      if (io.Platform.isAndroid) {
-        downloadDir = await getExternalStorageDirectory();
-      } else if (io.Platform.isIOS) {
-        final directory = await getApplicationDocumentsDirectory();
-        downloadDir = directory;
-      } else if (io.Platform.isWindows || io.Platform.isLinux) {
-        // For desktop platforms, use Downloads directory
-        final homeDir =
-            io.Platform.environment['HOME'] ??
-            io.Platform.environment['USERPROFILE'] ??
-            '';
-        downloadDir = io.Directory('$homeDir/Downloads');
-      } else {
-        downloadDir = await getApplicationDocumentsDirectory();
-      }
+      // Get Downloads directory using helper
+      final downloadDir = await DownloadPathHelper.getDownloadDirectory();
 
       if (downloadDir == null || !await downloadDir.exists()) {
         throw Exception('Downloads directory not found');
@@ -5477,33 +5462,8 @@ class _FullScreenPhotoViewerState extends State<FullScreenPhotoViewer> {
     if (widget.attach == null) return;
 
     try {
-      // Get Downloads directory
-      io.Directory? downloadDir;
-
-      if (io.Platform.isAndroid) {
-        final directory = await getExternalStorageDirectory();
-        if (directory != null) {
-          downloadDir = io.Directory(
-            '${directory.path.split('Android')[0]}Download',
-          );
-          if (!await downloadDir.exists()) {
-            downloadDir = io.Directory(
-              '${directory.path.split('Android')[0]}Downloads',
-            );
-          }
-        }
-      } else if (io.Platform.isIOS) {
-        final directory = await getApplicationDocumentsDirectory();
-        downloadDir = directory;
-      } else if (io.Platform.isWindows || io.Platform.isLinux) {
-        final homeDir =
-            io.Platform.environment['HOME'] ??
-            io.Platform.environment['USERPROFILE'] ??
-            '';
-        downloadDir = io.Directory('$homeDir/Downloads');
-      } else {
-        downloadDir = await getApplicationDocumentsDirectory();
-      }
+      // Get Downloads directory using helper
+      final downloadDir = await DownloadPathHelper.getDownloadDirectory();
 
       if (downloadDir == null || !await downloadDir.exists()) {
         throw Exception('Downloads directory not found');
