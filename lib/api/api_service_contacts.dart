@@ -248,52 +248,16 @@ extension ApiServiceContacts on ApiService {
   }
 
   Future<int?> getChatIdByUserId(int userId) async {
-    await waitUntilOnline();
-
-    final payload = {
-      "chatIds": [userId],
-    };
-    final int seq = _sendMessage(48, payload);
-    print('Запрашиваем информацию о чате для userId: $userId (seq: $seq)');
-
-    try {
-      final response = await messages
-          .firstWhere((msg) => msg['seq'] == seq)
-          .timeout(const Duration(seconds: 10));
-
-      if (response['cmd'] == 3) {
-        final errorPayload = response['payload'] ?? {};
-        final errorMessage =
-            errorPayload['localizedMessage'] ??
-            errorPayload['message'] ??
-            'Неизвестная ошибка';
-        print('Ошибка получения информации о чате: $errorMessage');
-        return null;
-      }
-
-      if (response['cmd'] == 1 && response['payload'] != null) {
-        final chats = response['payload']['chats'] as List<dynamic>?;
-        if (chats != null && chats.isNotEmpty) {
-          final chat = chats[0] as Map<String, dynamic>;
-          final chatId = chat['id'] as int?;
-          final chatType = chat['type'] as String?;
-
-          if (chatType == 'DIALOG' && chatId != null) {
-            print('Получен chatId для диалога с userId $userId: $chatId');
-            return chatId;
-          }
-        }
-      }
-
-      print('Не удалось найти chatId для userId: $userId');
-      return null;
-    } on TimeoutException {
-      print('Таймаут ожидания ответа на getChatIdByUserId (seq: $seq)');
-      return null;
-    } catch (e) {
-      print('Ошибка при получении chatId для userId $userId: $e');
+    // Используем формулу: chatId = userId1 ^ userId2
+    // где userId1 - наш ID, userId2 - ID собеседника
+    if (_userId == null) {
+      print('⚠️ Не удалось вычислить chatId: наш userId не установлен');
       return null;
     }
+
+    final chatId = _userId! ^ userId;
+    print('✅ Вычислен chatId для диалога: наш userId=$_userId, собеседник userId=$userId, chatId=$chatId');
+    return chatId;
   }
 
   Future<List<Contact>> fetchContactsByIds(List<int> contactIds) async {
