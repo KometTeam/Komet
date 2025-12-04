@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/widgets/contact_name_widget.dart';
 import 'package:gwid/widgets/contact_avatar_widget.dart';
 import 'package:gwid/services/contact_local_names_service.dart';
+import 'package:gwid/api/api_service.dart';
+import 'package:gwid/models/contact.dart';
+import 'package:gwid/screens/chat_screen.dart';
 
 class UserProfilePanel extends StatefulWidget {
   final int userId;
@@ -39,6 +41,7 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
   final ScrollController _nameScrollController = ScrollController();
   String? _localDescription;
   StreamSubscription? _changesSubscription;
+  bool _isOpeningChat = false;
 
   String get _displayName {
     final displayName = getContactDisplayName(
@@ -243,8 +246,9 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
                     _buildActionButton(
                       icon: Icons.message,
                       label: 'Написать',
-                      onPressed: null,
+                      onPressed: _isOpeningChat ? null : _handleWriteMessage,
                       colors: colors,
+                      isLoading: _isOpeningChat,
                     ),
                   ],
                 ),
@@ -308,5 +312,78 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
         ),
       ],
     );
+  }
+
+  Future<void> _handleWriteMessage() async {
+    if (_isOpeningChat) return;
+
+    setState(() {
+      _isOpeningChat = true;
+    });
+
+    try {
+      // Сначала пробуем использовать dialogChatId, если он уже есть
+      int? chatId = widget.dialogChatId;
+
+      if (chatId == null || chatId == 0) {
+        // Если нет, считаем chatId по формуле chatId = userId1 ^ userId2
+        chatId = await ApiService.instance.getChatIdByUserId(widget.userId);
+      }
+
+      if (chatId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Не удалось открыть чат с пользователем'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Закрываем панель профиля
+      Navigator.of(context).pop();
+
+      // Открываем экран чата
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (ctx) => ChatScreen(
+            chatId: chatId!,
+            contact: Contact(
+              id: widget.userId,
+              name: widget.name ?? _displayName,
+              firstName: widget.firstName ?? '',
+              lastName: widget.lastName ?? '',
+              description: widget.description,
+              photoBaseUrl: widget.avatarUrl,
+              accountStatus: 0,
+              status: null,
+              options: const [],
+            ),
+            myId: widget.myId,
+            isGroupChat: false,
+            isChannel: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при открытии чата: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isOpeningChat = false;
+        });
+      }
+    }
   }
 }

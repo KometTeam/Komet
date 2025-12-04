@@ -59,6 +59,44 @@ class DateSeparatorItem extends ChatItem {
   DateSeparatorItem(this.date);
 }
 
+class UnreadSeparatorItem extends ChatItem {}
+
+class _UnreadSeparatorChip extends StatelessWidget {
+  const _UnreadSeparatorChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(thickness: 1)),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: colors.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              'НЕПРОЧИТАННЫЕ СООБЩЕНИЯ',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.6,
+                color: colors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Expanded(child: Divider(thickness: 1)),
+        ],
+      ),
+    );
+  }
+}
+
 class _EmptyChatWidget extends StatelessWidget {
   final Map<String, dynamic>? sticker;
   final VoidCallback? onStickerTap;
@@ -68,12 +106,14 @@ class _EmptyChatWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    
-    print('🎨 _EmptyChatWidget.build: sticker=${sticker != null ? "есть" : "null"}');
+
+    print(
+      '🎨 _EmptyChatWidget.build: sticker=${sticker != null ? "есть" : "null"}',
+    );
     if (sticker != null) {
       print('🎨 Стикер данные: ${sticker}');
     }
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -90,9 +130,7 @@ class _EmptyChatWidget extends StatelessWidget {
             const SizedBox(
               width: 170,
               height: 170,
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: Center(child: CircularProgressIndicator()),
             ),
             const SizedBox(height: 24),
           ],
@@ -115,15 +153,17 @@ class _EmptyChatWidget extends StatelessWidget {
     final width = (sticker['width'] as num?)?.toDouble() ?? 170.0;
     final height = (sticker['height'] as num?)?.toDouble() ?? 170.0;
 
-    print('🎨 _buildSticker: url=$url, lottieUrl=$lottieUrl, width=$width, height=$height');
+    print(
+      '🎨 _buildSticker: url=$url, lottieUrl=$lottieUrl, width=$width, height=$height',
+    );
 
     // Для отображения используем обычный url (статичное изображение)
     // lottieUrl - это для анимации, но пока используем статичное изображение
     // Если есть url, используем его, иначе пробуем lottieUrl
     final imageUrl = url ?? lottieUrl;
-    
+
     print('🎨 Используемый URL для стикера: $imageUrl');
-    
+
     if (imageUrl != null && imageUrl.isNotEmpty) {
       return SizedBox(
         width: width,
@@ -136,12 +176,14 @@ class _EmptyChatWidget extends StatelessWidget {
               print('✅ Стикер успешно загружен');
               return child;
             }
-            print('⏳ Загрузка стикера: ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}');
+            print(
+              '⏳ Загрузка стикера: ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}',
+            );
             return Center(
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
                     ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
+                          loadingProgress.expectedTotalBytes!
                     : null,
               ),
             );
@@ -149,22 +191,14 @@ class _EmptyChatWidget extends StatelessWidget {
           errorBuilder: (context, error, stackTrace) {
             print('❌ Ошибка загрузки стикера: $error');
             print('❌ StackTrace: $stackTrace');
-            return Icon(
-              Icons.emoji_emotions,
-              size: width,
-              color: Colors.grey,
-            );
+            return Icon(Icons.emoji_emotions, size: width, color: Colors.grey);
           },
         ),
       );
     }
 
     print('❌ URL стикера пустой или null');
-    return Icon(
-      Icons.emoji_emotions,
-      size: width,
-      color: Colors.grey,
-    );
+    return Icon(Icons.emoji_emotions, size: width, color: Colors.grey);
   }
 }
 
@@ -182,6 +216,7 @@ class ChatScreen extends StatefulWidget {
   final bool isChannel;
   final int? participantCount;
   final bool isDesktopMode;
+  final int initialUnreadCount;
 
   const ChatScreen({
     super.key,
@@ -194,6 +229,7 @@ class ChatScreen extends StatefulWidget {
     this.isChannel = false,
     this.participantCount,
     this.isDesktopMode = false,
+    this.initialUnreadCount = 0,
   });
 
   @override
@@ -225,7 +261,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final Map<int, Contact> _contactDetailsCache = {};
   final Set<int> _loadingContactIds = {};
 
-  final Map<String, String> _lastReadMessageIdByParticipant = {};
+  String?
+  _lastReadMessageId; // последнее прочитанное нами сообщение в этом чате
+  int _initialUnreadCount = 0;
+  bool _hasUnreadSeparator = false;
 
   int? _actualMyId;
 
@@ -463,6 +502,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _initialUnreadCount = widget.initialUnreadCount;
     _currentContact = widget.contact;
     _pinnedMessage =
         null; // Будет установлено при получении CONTROL сообщения с event 'pin'
@@ -781,17 +821,37 @@ class _ChatScreenState extends State<ChatScreen> {
         _isUserAtBottom = isAtBottom;
         _showScrollToBottomNotifier.value = !isAtBottom;
 
+        // Если мы внизу и была плашка непрочитанных — считаем, что всё прочитано:
+        // сбрасываем lastRead и просто скрываем саму плашку (без изменения списка).
+        if (isAtBottom && _hasUnreadSeparator) {
+          _lastReadMessageId = null;
+          _hasUnreadSeparator = false;
+          if (mounted) {
+            setState(() {});
+          }
+        }
+
         // Проверяем, доскроллил ли пользователь до самого старого сообщения (вверх)
         // При reverse: true, последний визуальный элемент (самый большой index) = самое старое сообщение
         if (positions.isNotEmpty && _chatItems.isNotEmpty) {
-          final maxIndex = positions.map((p) => p.index).reduce((a, b) => a > b ? a : b);
+          final maxIndex = positions
+              .map((p) => p.index)
+              .reduce((a, b) => a > b ? a : b);
           // При reverse: true, когда maxIndex близок к _chatItems.length - 1, мы вверху (старые сообщения)
-          final threshold = _chatItems.length > 5 ? 3 : 1; // Загружаем когда осталось 3 элемента до верха
+          final threshold = _chatItems.length > 5
+              ? 3
+              : 1; // Загружаем когда осталось 3 элемента до верха
           final isNearTop = maxIndex >= _chatItems.length - threshold;
-          
+
           // Если доскроллили близко к верху и есть еще сообщения, загружаем
-          if (isNearTop && _hasMore && !_isLoadingMore && _messages.isNotEmpty && _oldestLoadedTime != null) {
-            print('📜 Пользователь доскроллил близко к верху (maxIndex: $maxIndex, total: ${_chatItems.length}), загружаем старые сообщения...');
+          if (isNearTop &&
+              _hasMore &&
+              !_isLoadingMore &&
+              _messages.isNotEmpty &&
+              _oldestLoadedTime != null) {
+            print(
+              '📜 Пользователь доскроллил близко к верху (maxIndex: $maxIndex, total: ${_chatItems.length}), загружаем старые сообщения...',
+            );
             // Вызываем после build фазы, чтобы избежать setState() во время build
             Future.microtask(() {
               if (mounted && _hasMore && !_isLoadingMore) {
@@ -964,13 +1024,15 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       _messages.clear();
       _messages.addAll(cachedMessages);
-      
+
       // Устанавливаем _oldestLoadedTime и _hasMore для кэшированных сообщений
       if (_messages.isNotEmpty) {
         _oldestLoadedTime = _messages.first.time;
         // Предполагаем, что могут быть еще сообщения (будет обновлено после загрузки с сервера)
         _hasMore = true;
-        print('📜 Загружено из кэша: ${_messages.length} сообщений, _oldestLoadedTime=$_oldestLoadedTime');
+        print(
+          '📜 Загружено из кэша: ${_messages.length} сообщений, _oldestLoadedTime=$_oldestLoadedTime',
+        );
       }
 
       if (widget.isGroupChat) {
@@ -982,7 +1044,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _isLoadingHistory = false;
       });
       _updatePinnedMessage();
-      
+
       // Если чат пустой, загружаем стикер для пустого состояния
       if (_messages.isEmpty && !widget.isChannel) {
         _loadEmptyChatSticker();
@@ -1066,13 +1128,38 @@ class _ChatScreenState extends State<ChatScreen> {
         _oldestLoadedTime = _messages.isNotEmpty ? _messages.first.time : null;
         // Если получили максимальное количество сообщений (1000), возможно есть еще
         // Также проверяем, есть ли сообщения старше самого старого загруженного
-        _hasMore = allMessages.length >= 1000 || allMessages.length > _messages.length;
-        print('📜 Первая загрузка: загружено ${allMessages.length} сообщений, показано ${_messages.length}, _hasMore=$_hasMore, _oldestLoadedTime=$_oldestLoadedTime');
+        _hasMore =
+            allMessages.length >= 1000 || allMessages.length > _messages.length;
+        print(
+          '📜 Первая загрузка: загружено ${allMessages.length} сообщений, показано ${_messages.length}, _hasMore=$_hasMore, _oldestLoadedTime=$_oldestLoadedTime',
+        );
+
+        // Если есть непрочитанные, пытаемся вычислить последнее прочитанное сообщение
+        // очень грубо: берём N сообщений перед концом списка (N = initialUnreadCount),
+        // и считаем последним прочитанным то, что стоит ровно перед ними.
+        if (widget.initialUnreadCount > 0 &&
+            allMessages.length > widget.initialUnreadCount) {
+          final lastReadGlobalIndex =
+              allMessages.length - widget.initialUnreadCount - 1;
+          final lastReadMessage = allMessages[lastReadGlobalIndex];
+          _lastReadMessageId = lastReadMessage.id;
+        } else {
+          _lastReadMessageId = null;
+        }
+
         _buildChatItems();
         _isLoadingHistory = false;
       });
+
+      // После первой загрузки истории скроллим к последнему прочитанному
+      if (_lastReadMessageId != null) {
+        _scrollToLastReadMessage();
+      } else {
+        // Если нечего читать (нет lastRead), просто остаёмся внизу
+        _scrollToBottom();
+      }
       _updatePinnedMessage();
-      
+
       // Если чат пустой, загружаем стикер для пустого состояния
       if (_messages.isEmpty && !widget.isChannel) {
         _loadEmptyChatSticker();
@@ -1105,15 +1192,21 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMore() async {
-    print('📜 _loadMore() вызвана: _isLoadingMore=$_isLoadingMore, _hasMore=$_hasMore, _oldestLoadedTime=$_oldestLoadedTime');
-    
+    print(
+      '📜 _loadMore() вызвана: _isLoadingMore=$_isLoadingMore, _hasMore=$_hasMore, _oldestLoadedTime=$_oldestLoadedTime',
+    );
+
     if (_isLoadingMore || !_hasMore) {
-      print('📜 _loadMore() пропущена: _isLoadingMore=$_isLoadingMore, _hasMore=$_hasMore');
+      print(
+        '📜 _loadMore() пропущена: _isLoadingMore=$_isLoadingMore, _hasMore=$_hasMore',
+      );
       return;
     }
-    
+
     if (_messages.isEmpty || _oldestLoadedTime == null) {
-      print('📜 _loadMore() пропущена: _messages.isEmpty=${_messages.isEmpty}, _oldestLoadedTime=$_oldestLoadedTime');
+      print(
+        '📜 _loadMore() пропущена: _messages.isEmpty=${_messages.isEmpty}, _oldestLoadedTime=$_oldestLoadedTime',
+      );
       _hasMore = false;
       return;
     }
@@ -1122,14 +1215,17 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
 
     try {
-      print('📜 Загружаем старые сообщения для chatId=${widget.chatId}, fromTimestamp=$_oldestLoadedTime');
-      // Загружаем старые сообщения начиная с timestamp самого старого загруженного сообщения
-      final olderMessages = await ApiService.instance.loadOlderMessagesByTimestamp(
-        widget.chatId,
-        _oldestLoadedTime!,
-        backward: 30,
+      print(
+        '📜 Загружаем старые сообщения для chatId=${widget.chatId}, fromTimestamp=$_oldestLoadedTime',
       );
-      
+      // Загружаем старые сообщения начиная с timestamp самого старого загруженного сообщения
+      final olderMessages = await ApiService.instance
+          .loadOlderMessagesByTimestamp(
+            widget.chatId,
+            _oldestLoadedTime!,
+            backward: 30,
+          );
+
       print('📜 Получено ${olderMessages.length} старых сообщений');
 
       if (!mounted) return;
@@ -1144,8 +1240,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
       // Фильтруем дубликаты - оставляем только те сообщения, которых еще нет в списке
       final existingMessageIds = _messages.map((m) => m.id).toSet();
-      final newMessages = olderMessages.where((m) => !existingMessageIds.contains(m.id)).toList();
-      
+      final newMessages = olderMessages
+          .where((m) => !existingMessageIds.contains(m.id))
+          .toList();
+
       if (newMessages.isEmpty) {
         // Все сообщения уже есть в списке
         _hasMore = false;
@@ -1154,7 +1252,9 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
 
-      print('📜 Добавляем ${newMessages.length} новых старых сообщений (отфильтровано ${olderMessages.length - newMessages.length} дубликатов)');
+      print(
+        '📜 Добавляем ${newMessages.length} новых старых сообщений (отфильтровано ${olderMessages.length - newMessages.length} дубликатов)',
+      );
 
       // Добавляем старые сообщения в начало списка
       _messages.insertAll(0, newMessages);
@@ -1207,6 +1307,16 @@ class _ChatScreenState extends State<ChatScreen> {
     final List<ChatItem> items = [];
     final source = _messages;
 
+    // Находим индекс последнего прочитанного сообщения (если оно есть)
+    int? lastReadIndex;
+    if (_lastReadMessageId != null) {
+      lastReadIndex = source.indexWhere((m) => m.id == _lastReadMessageId);
+      if (lastReadIndex == -1) {
+        lastReadIndex = null;
+      }
+    }
+    _hasUnreadSeparator = false;
+
     for (int i = 0; i < source.length; i++) {
       final currentMessage = source[i];
       final previousMessage = (i > 0) ? source[i - 1] : null;
@@ -1254,12 +1364,20 @@ class _ChatScreenState extends State<ChatScreen> {
           isGrouped: isGrouped,
         ),
       );
+
+      // Если это последнее прочитанное сообщение, сразу после него вставляем разделитель
+      if (lastReadIndex != null && i == lastReadIndex) {
+        items.add(UnreadSeparatorItem());
+        _hasUnreadSeparator = true;
+      }
     }
     _chatItems = items;
-    
+
     // Очищаем ключи для сообщений, которых больше нет в списке
     final currentMessageIds = _messages.map((m) => m.id).toSet();
-    final keysToRemove = _messageKeys.keys.where((id) => !currentMessageIds.contains(id)).toList();
+    final keysToRemove = _messageKeys.keys
+        .where((id) => !currentMessageIds.contains(id))
+        .toList();
     for (final id in keysToRemove) {
       _messageKeys.remove(id);
     }
@@ -1273,9 +1391,10 @@ class _ChatScreenState extends State<ChatScreen> {
       // Список доступных ID стикеров для пустого чата
       final availableStickerIds = [272821, 295349, 13571];
       // Выбираем случайный ID
-      final random = DateTime.now().millisecondsSinceEpoch % availableStickerIds.length;
+      final random =
+          DateTime.now().millisecondsSinceEpoch % availableStickerIds.length;
       final selectedStickerId = availableStickerIds[random];
-      
+
       print('🎨 Загружаем стикер для пустого чата (ID: $selectedStickerId)...');
       final seq = ApiService.instance.sendRawRequest(28, {
         "type": "STICKER",
@@ -1310,7 +1429,9 @@ class _ChatScreenState extends State<ChatScreen> {
         final sticker = stickers.first as Map<String, dynamic>;
         // Сохраняем также stickerId для отправки
         final stickerId = sticker['id'] as int?;
-        print('🎨 Данные стикера: id=$stickerId, url=${sticker['url']}, lottieUrl=${sticker['lottieUrl']}, width=${sticker['width']}, height=${sticker['height']}');
+        print(
+          '🎨 Данные стикера: id=$stickerId, url=${sticker['url']}, lottieUrl=${sticker['lottieUrl']}, width=${sticker['width']}, height=${sticker['height']}',
+        );
         if (mounted) {
           setState(() {
             _emptyChatSticker = {
@@ -1318,7 +1439,9 @@ class _ChatScreenState extends State<ChatScreen> {
               'stickerId': stickerId, // Сохраняем ID для отправки
             };
           });
-          print('✅ Стикер для пустого чата загружен и сохранен (ID: $stickerId)');
+          print(
+            '✅ Стикер для пустого чата загружен и сохранен (ID: $stickerId)',
+          );
         }
       } else {
         print('❌ Стикеры не найдены в ответе');
@@ -1389,6 +1512,35 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // ScrollablePositionedList используется с reverse:true,
     // поэтому визуальный индекс считается от конца списка
+    final visualIndex = _chatItems.length - 1 - targetChatItemIndex;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_itemScrollController.isAttached) {
+        _itemScrollController.scrollTo(
+          index: visualIndex,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+    });
+  }
+
+  void _scrollToLastReadMessage() {
+    final lastReadId = _lastReadMessageId;
+    if (lastReadId == null) return;
+
+    int? targetChatItemIndex;
+    for (int i = 0; i < _chatItems.length; i++) {
+      final item = _chatItems[i];
+      if (item is MessageItem && item.message.id == lastReadId) {
+        targetChatItemIndex = i;
+        break;
+      }
+    }
+
+    if (targetChatItemIndex == null) return;
+    if (!_itemScrollController.isAttached) return;
+
     final visualIndex = _chatItems.length - 1 - targetChatItemIndex;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1663,16 +1815,13 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       print('🎨 Отправляем стикер (ID: $stickerId) в чат ${widget.chatId}');
       final cid = DateTime.now().millisecondsSinceEpoch;
-      
+
       final payload = {
         "chatId": widget.chatId,
         "message": {
           "cid": cid,
           "attaches": [
-            {
-              "_type": "STICKER",
-              "stickerId": stickerId,
-            }
+            {"_type": "STICKER", "stickerId": stickerId},
           ],
         },
         "notify": true,
@@ -1988,12 +2137,31 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         subtitle = '${participants.length} участников';
       } else {
-        final otherParticipantId = participants.keys
-            .map((id) => int.parse(id))
-            .firstWhere((id) => id != _actualMyId, orElse: () => 0);
+        // Обычный диалог «1 на 1»
+        final participantIds = participants.keys
+            .map((id) => int.tryParse(id) ?? 0)
+            .toList();
 
+        int otherParticipantId = 0;
+        if (participantIds.isNotEmpty) {
+          // Пытаемся найти участника, отличного от нашего собственного ID
+          otherParticipantId = participantIds.firstWhere(
+            (id) => _actualMyId == null || id != _actualMyId,
+            orElse: () => participantIds.first,
+          );
+        }
+
+        // Пытаемся взять контакт из локального кэша;
+        // если его нет — загружаем в фоне.
         final contact = _contactDetailsCache[otherParticipantId];
-        chatName = contact?.name ?? chatTitle ?? 'Чат $chatId';
+        if (contact == null && otherParticipantId != 0) {
+          _loadContactIfNeeded(otherParticipantId);
+        }
+
+        // Для личных чатов никогда не используем server title вида
+        // «пользователь {id}» — вместо этого показываем имя контакта
+        // либо хотя бы «ID {userId}».
+        chatName = contact?.name ?? 'ID $otherParticipantId';
 
         final avatarUrl = contact?.photoBaseUrl;
 
@@ -2001,7 +2169,7 @@ class _ChatScreenState extends State<ChatScreen> {
           avatarUrl,
           userId: otherParticipantId,
           size: 48,
-          fallbackText: contact?.name ?? chatTitle ?? 'Чат $chatId',
+          fallbackText: chatName,
           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         );
 
@@ -2725,20 +2893,20 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: CircularProgressIndicator(),
                             )
                           : _messages.isEmpty && !widget.isChannel
-                              ? _EmptyChatWidget(
-                                  sticker: _emptyChatSticker,
-                                  onStickerTap: _sendEmptyChatSticker,
-                                )
-                              : AnimatedPadding(
-                                  key: const ValueKey('chat_list'),
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOutCubic,
-                                  padding: EdgeInsets.only(
-                                    bottom: MediaQuery.of(
-                                      context,
-                                    ).viewInsets.bottom,
-                                  ),
-                                  child: ScrollablePositionedList.builder(
+                          ? _EmptyChatWidget(
+                              sticker: _emptyChatSticker,
+                              onStickerTap: _sendEmptyChatSticker,
+                            )
+                          : AnimatedPadding(
+                              key: const ValueKey('chat_list'),
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOutCubic,
+                              padding: EdgeInsets.only(
+                                bottom: MediaQuery.of(
+                                  context,
+                                ).viewInsets.bottom,
+                              ),
+                              child: ScrollablePositionedList.builder(
                                 itemScrollController: _itemScrollController,
                                 itemPositionsListener: _itemPositionsListener,
                                 reverse: true,
@@ -3069,6 +3237,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                     return finalMessageWidget;
                                   } else if (item is DateSeparatorItem) {
                                     return _DateSeparatorChip(date: item.date);
+                                  } else if (item is UnreadSeparatorItem) {
+                                    return _hasUnreadSeparator
+                                        ? const _UnreadSeparatorChip()
+                                        : const SizedBox.shrink();
                                   }
                                   if (isLastVisual && _isLoadingMore) {
                                     return TweenAnimationBuilder<double>(

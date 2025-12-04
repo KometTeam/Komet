@@ -17,6 +17,7 @@ import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:gwid/screens/chat_screen.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
+import 'package:gwid/widgets/user_profile_panel.dart';
 import 'package:gwid/api/api_service.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -479,117 +480,152 @@ class ChatMessageBubble extends StatelessWidget {
       }
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: textColor.withOpacity(0.08 * messageTextOpacity),
-        border: Border(
-          left: BorderSide(
-            color: textColor.withOpacity(0.3 * messageTextOpacity),
-            width: 3, // Делаем рамку жирнее для отличия от ответа
+    // Пытаемся определить userId оригинального отправителя для открытия панели профиля
+    int? originalSenderId;
+    if (forwardedMessage['sender'] is int) {
+      originalSenderId = forwardedMessage['sender'] as int;
+    }
+
+    void handleTap() {
+      final myId = myUserId ?? 0;
+      if (originalSenderId == null || myId == 0) {
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => UserProfilePanel(
+          userId: originalSenderId!,
+          name: forwardedSenderName,
+          firstName: null,
+          lastName: null,
+          avatarUrl: forwardedSenderAvatarUrl,
+          description: null,
+          myId: myId,
+          currentChatId: chatId,
+          contactData: null,
+          dialogChatId: null,
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: handleTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: textColor.withOpacity(0.08 * messageTextOpacity),
+          border: Border(
+            left: BorderSide(
+              color: textColor.withOpacity(0.3 * messageTextOpacity),
+              width: 3, // Делаем рамку жирнее для отличия от ответа
+            ),
           ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // "Заголовок" с именем автора и аватаркой
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.forward,
-                size: 14,
-                color: textColor.withOpacity(0.6 * messageTextOpacity),
-              ),
-              const SizedBox(width: 6),
-              if (forwardedSenderAvatarUrl != null)
-                Container(
-                  width: 20,
-                  height: 20,
-                  margin: const EdgeInsets.only(right: 6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: textColor.withOpacity(0.2 * messageTextOpacity),
-                      width: 1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // "Заголовок" с именем автора и аватаркой
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.forward,
+                  size: 14,
+                  color: textColor.withOpacity(0.6 * messageTextOpacity),
+                ),
+                const SizedBox(width: 6),
+                if (forwardedSenderAvatarUrl != null)
+                  Container(
+                    width: 20,
+                    height: 20,
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: textColor.withOpacity(0.2 * messageTextOpacity),
+                        width: 1,
+                      ),
                     ),
-                  ),
-                  child: ClipOval(
-                    child: Image.network(
-                      forwardedSenderAvatarUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: textColor.withOpacity(
-                            0.1 * messageTextOpacity,
-                          ),
-                          child: Icon(
-                            Icons.person,
-                            size: 12,
+                    child: ClipOval(
+                      child: Image.network(
+                        forwardedSenderAvatarUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
                             color: textColor.withOpacity(
-                              0.5 * messageTextOpacity,
+                              0.1 * messageTextOpacity,
                             ),
-                          ),
-                        );
-                      },
+                            child: Icon(
+                              Icons.person,
+                              size: 12,
+                              color: textColor.withOpacity(
+                                0.5 * messageTextOpacity,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 20,
+                    height: 20,
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: textColor.withOpacity(0.1 * messageTextOpacity),
+                      border: Border.all(
+                        color: textColor.withOpacity(0.2 * messageTextOpacity),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      size: 12,
+                      color: textColor.withOpacity(0.5 * messageTextOpacity),
                     ),
                   ),
-                )
-              else
-                Container(
-                  width: 20,
-                  height: 20,
-                  margin: const EdgeInsets.only(right: 6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: textColor.withOpacity(0.1 * messageTextOpacity),
-                    border: Border.all(
-                      color: textColor.withOpacity(0.2 * messageTextOpacity),
-                      width: 1,
+                Flexible(
+                  child: Text(
+                    forwardedSenderName,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: textColor.withOpacity(0.9 * messageTextOpacity),
                     ),
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    size: 12,
-                    color: textColor.withOpacity(0.5 * messageTextOpacity),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              Flexible(
-                child: Text(
-                  forwardedSenderName,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: textColor.withOpacity(0.9 * messageTextOpacity),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Содержимое пересланного сообщения (фото и/или текст)
-          if (attaches.isNotEmpty) ...[
-            ..._buildPhotosWithCaption(
-              context,
-              attaches, // Передаем вложения из вложенного сообщения
-              textColor,
-              isUltraOptimized,
-              messageTextOpacity,
+              ],
             ),
             const SizedBox(height: 6),
-          ],
-          if (text.isNotEmpty)
-            Text(
-              text,
-              style: TextStyle(
-                color: textColor.withOpacity(0.9 * messageTextOpacity),
-                fontSize: 14,
+
+            // Содержимое пересланного сообщения (фото и/или текст)
+            if (attaches.isNotEmpty) ...[
+              ..._buildPhotosWithCaption(
+                context,
+                attaches, // Передаем вложения из вложенного сообщения
+                textColor,
+                isUltraOptimized,
+                messageTextOpacity,
               ),
-            ),
-        ],
+              const SizedBox(height: 6),
+            ],
+            if (text.isNotEmpty)
+              Text(
+                text,
+                style: TextStyle(
+                  color: textColor.withOpacity(0.9 * messageTextOpacity),
+                  fontSize: 14,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1207,7 +1243,12 @@ class ChatMessageBubble extends StatelessWidget {
         !message.isReply &&
         !message.isForwarded;
 
-    final bubbleColor = _getBubbleColor(isMe, themeProvider, messageOpacity, context);
+    final bubbleColor = _getBubbleColor(
+      isMe,
+      themeProvider,
+      messageOpacity,
+      context,
+    );
     final textColor = _getTextColor(
       isMe,
       bubbleColor,
@@ -1774,7 +1815,12 @@ class ChatMessageBubble extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isUltraOptimized = themeProvider.ultraOptimizeChats;
     final messageOpacity = themeProvider.messageBubbleOpacity;
-    final bubbleColor = _getBubbleColor(isMe, themeProvider, messageOpacity, context);
+    final bubbleColor = _getBubbleColor(
+      isMe,
+      themeProvider,
+      messageOpacity,
+      context,
+    );
     final textColor = _getTextColor(
       isMe,
       bubbleColor,
@@ -3879,7 +3925,8 @@ class ChatMessageBubble extends StatelessWidget {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final baseColor = isMe
         ? (themeProvider.myBubbleColor ?? const Color(0xFF2b5278))
-        : (themeProvider.theirBubbleColor ?? (isDark ? const Color(0xFF182533) : const Color(0xFF464646)));
+        : (themeProvider.theirBubbleColor ??
+              (isDark ? const Color(0xFF182533) : const Color(0xFF464646)));
     return baseColor.withOpacity(1.0 - messageOpacity);
   }
 
@@ -5146,7 +5193,31 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
   }
 
   void _onCopy() {
-    Clipboard.setData(ClipboardData(text: widget.message.text));
+    String textToCopy = widget.message.text;
+
+    // Для пересланных сообщений пробуем взять текст оригинального сообщения
+    if (textToCopy.isEmpty &&
+        widget.message.isForwarded &&
+        widget.message.link is Map<String, dynamic>) {
+      final link = widget.message.link as Map<String, dynamic>;
+      final forwardedMessage = link['message'] as Map<String, dynamic>?;
+      final forwardedText = forwardedMessage?['text'] as String? ?? '';
+      textToCopy = forwardedText;
+    }
+
+    if (textToCopy.isEmpty) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нет текста для копирования'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    Clipboard.setData(ClipboardData(text: textToCopy));
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -5294,7 +5365,9 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.message.text.isNotEmpty)
+        // Для пересланных сообщений разрешаем копирование даже при пустом text,
+        // т.к. текст может быть внутри link['message'].
+        if (widget.message.text.isNotEmpty || widget.message.isForwarded)
           _buildActionButton(
             icon: Icons.copy_rounded,
             text: 'Копировать',

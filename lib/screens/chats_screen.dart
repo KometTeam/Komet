@@ -4334,6 +4334,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 isGroupChat: isGroupChat,
                 isChannel: isChannel,
                 participantCount: participantCount,
+                initialUnreadCount: chat.newMessages,
                 onChatRemoved: () {
                   _removeChatLocally(chat.id);
                 },
