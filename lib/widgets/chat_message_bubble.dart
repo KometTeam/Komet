@@ -30,6 +30,8 @@ import 'package:gwid/services/music_player_service.dart';
 import 'package:platform_info/platform_info.dart';
 import 'package:gwid/utils/download_path_helper.dart';
 import 'package:gwid/services/chat_encryption_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:typed_data';
 
 bool _currentIsDark = false;
 
@@ -609,14 +611,57 @@ class ChatMessageBubble extends StatelessWidget {
             ),
             const SizedBox(height: 6),
 
-            // Содержимое пересланного сообщения (фото и/или текст)
+            // Содержимое пересланного сообщения (вложения и/или текст)
             if (attaches.isNotEmpty) ...[
-              ..._buildPhotosWithCaption(
+              ..._buildCallsWithCaption(
                 context,
-                attaches, // Передаем вложения из вложенного сообщения
+                attaches,
                 textColor,
                 isUltraOptimized,
                 messageTextOpacity,
+              ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                onLongPress: () {},
+                child: Column(
+                  children: _buildAudioWithCaption(
+                    context,
+                    attaches,
+                    textColor,
+                    isUltraOptimized,
+                    messageTextOpacity,
+                  ),
+                ),
+              ),
+              ..._buildPhotosWithCaption(
+                context,
+                attaches,
+                textColor,
+                isUltraOptimized,
+                messageTextOpacity,
+              ),
+              ..._buildVideosWithCaption(
+                context,
+                attaches,
+                textColor,
+                isUltraOptimized,
+                messageTextOpacity,
+              ),
+              ..._buildStickersWithCaption(
+                context,
+                attaches,
+                textColor,
+                isUltraOptimized,
+                messageTextOpacity,
+              ),
+              ..._buildFilesWithCaption(
+                context,
+                attaches,
+                textColor,
+                isUltraOptimized,
+                messageTextOpacity,
+                chatId,
               ),
               const SizedBox(height: 6),
             ],
@@ -4100,12 +4145,25 @@ class ChatMessageBubble extends StatelessWidget {
               ),
             )
           else if (decryptedText != null)
-            _buildMixedMessageContent(
-              decryptedText!,
-              defaultTextStyle,
-              linkStyle,
-              onOpenLink,
-              elements: message.elements,
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 6.0, top: 2.0),
+                  child: Icon(
+                    Icons.lock,
+                    size: 14,
+                    color: textColor.withOpacity(0.7),
+                  ),
+                ),
+                _buildMixedMessageContent(
+                  decryptedText!,
+                  defaultTextStyle,
+                  linkStyle,
+                  onOpenLink,
+                  elements: message.elements,
+                ),
+              ],
             )
           else if (message.text.contains("welcome.saved.dialog.message"))
             Linkify(
@@ -5293,6 +5351,187 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
     super.dispose();
   }
 
+  bool _hasAudioOrVideoCircle() {
+    final attaches = widget.message.attaches;
+    
+    final hasAudio = attaches.any((a) => a['_type'] == 'AUDIO');
+    final hasVideoCircle = attaches.any(
+      (a) => a['_type'] == 'VIDEO' && (a['videoType'] as int?) == 1,
+    );
+    
+    if (hasAudio || hasVideoCircle) {
+      return true;
+    }
+    
+    if (widget.message.isForwarded && widget.message.link is Map<String, dynamic>) {
+      final link = widget.message.link as Map<String, dynamic>;
+      final forwardedMessage = link['message'] as Map<String, dynamic>?;
+      if (forwardedMessage != null) {
+        final forwardedAttaches = (forwardedMessage['attaches'] as List?)
+                ?.map((e) => (e as Map).cast<String, dynamic>())
+                .toList() ??
+            [];
+        
+        final forwardedHasAudio = forwardedAttaches.any((a) => a['_type'] == 'AUDIO');
+        final forwardedHasVideoCircle = forwardedAttaches.any(
+          (a) => a['_type'] == 'VIDEO' && (a['videoType'] as int?) == 1,
+        );
+        
+        return forwardedHasAudio || forwardedHasVideoCircle;
+      }
+    }
+    
+    return false;
+  }
+
+  Future<void> _onSaveToDevice() async {
+    Navigator.of(context).pop();
+    
+    try {
+      List<Map<String, dynamic>> attaches = widget.message.attaches;
+      
+      if (widget.message.isForwarded && widget.message.link is Map<String, dynamic>) {
+        final link = widget.message.link as Map<String, dynamic>;
+        final forwardedMessage = link['message'] as Map<String, dynamic>?;
+        if (forwardedMessage != null) {
+          attaches = (forwardedMessage['attaches'] as List?)
+                  ?.map((e) => (e as Map).cast<String, dynamic>())
+                  .toList() ??
+              [];
+        }
+      }
+      
+      final audioAttach = attaches.firstWhere(
+        (a) => a['_type'] == 'AUDIO',
+        orElse: () => <String, dynamic>{},
+      );
+      
+      final videoCircleAttach = attaches.firstWhere(
+        (a) => a['_type'] == 'VIDEO' && (a['videoType'] as int?) == 1,
+        orElse: () => <String, dynamic>{},
+      );
+      
+      String? fileUrl;
+      String fileName;
+      Uint8List? fileBytes;
+      
+      if (audioAttach.isNotEmpty) {
+        fileUrl = audioAttach['url'] as String?;
+        final audioId = audioAttach['audioId'] as int?;
+        fileName = 'audio_${audioId ?? DateTime.now().millisecondsSinceEpoch}.m4a';
+        
+        if (fileUrl != null && fileUrl.isNotEmpty) {
+          final cacheService = CacheService();
+          final cachedFile = await cacheService.getCachedAudioFile(
+            fileUrl,
+            customKey: audioId?.toString(),
+          );
+          
+          if (cachedFile != null && await cachedFile.exists()) {
+            fileBytes = await cachedFile.readAsBytes();
+          }
+        }
+      } else if (videoCircleAttach.isNotEmpty) {
+        final videoId = videoCircleAttach['videoId'] as int?;
+        final chatId = widget.message.cid;
+        
+        if (videoId != null && chatId != null) {
+          try {
+            fileUrl = await ApiService.instance.getVideoUrl(
+              videoId,
+              chatId,
+              widget.message.id,
+            );
+            fileName = 'video_${videoId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Не удалось получить URL видео: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return;
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Не удалось определить параметры видео'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        return;
+      }
+      
+      if (fileUrl == null || fileUrl.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('URL файла не найден'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      String? savedPath;
+      
+      if (fileBytes != null) {
+        savedPath = await FilePicker.platform.saveFile(
+          dialogTitle: 'Сохранить файл',
+          fileName: fileName,
+          bytes: fileBytes,
+        );
+      } else {
+        final response = await http.get(Uri.parse(fileUrl));
+        if (response.statusCode == 200) {
+          final bytes = response.bodyBytes;
+          savedPath = await FilePicker.platform.saveFile(
+            dialogTitle: 'Сохранить файл',
+            fileName: fileName,
+            bytes: Uint8List.fromList(bytes),
+          );
+        } else {
+          throw Exception('Failed to download: ${response.statusCode}');
+        }
+      }
+      
+      if (savedPath != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Файл сохранен: $savedPath'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Сохранение отменено'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при сохранении: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   void _onCopy() {
     String textToCopy = widget.message.text;
 
@@ -5535,6 +5774,12 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
               Navigator.pop(context);
               widget.onDeleteForAll!();
             },
+          ),
+        if (_hasAudioOrVideoCircle())
+          _buildActionButton(
+            icon: Icons.download_rounded,
+            text: 'Сохранить на устройстве',
+            onTap: _onSaveToDevice,
           ),
         if (widget.onComplain != null)
           _buildActionButton(
@@ -5980,39 +6225,50 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
               print('Using cached audio file: ${cachedFile.path}');
               await _audioPlayer.setFilePath(cachedFile.path);
             } else {
-              print('Audio not cached, playing from URL: ${widget.url}');
-              try {
-                await _audioPlayer.setUrl(widget.url);
+              print('Audio not cached, checking if already downloading...');
+              final hasCached = await cacheService.hasCachedAudioFile(
+                widget.url,
+                customKey: widget.audioId?.toString(),
+              );
+              
+              if (!hasCached) {
+                print('Audio not cached, playing from URL: ${widget.url}');
+                try {
+                  await _audioPlayer.setUrl(widget.url);
 
-                cacheService
-                    .cacheAudioFile(
-                      widget.url,
-                      customKey: widget.audioId?.toString(),
-                    )
-                    .then((cachedPath) {
-                      if (cachedPath != null) {
-                        print('Audio cached in background: $cachedPath');
-                      } else {
-                        print('Failed to cache audio in background');
-                      }
-                    })
-                    .catchError((e) {
-                      print('Error caching audio in background: $e');
-                    });
-              } catch (e) {
-                print('Error setting audio URL: $e');
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Не удалось загрузить аудио: ${e.toString()}',
+                  cacheService
+                      .cacheAudioFile(
+                        widget.url,
+                        customKey: widget.audioId?.toString(),
+                      )
+                      .then((cachedPath) {
+                        if (cachedPath != null) {
+                          print('Audio cached in background: $cachedPath');
+                        } else {
+                          print('Failed to cache audio in background');
+                        }
+                      })
+                      .catchError((e) {
+                        print('Error caching audio in background: $e');
+                      });
+                } catch (e) {
+                  print('Error setting audio URL: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Не удалось загрузить аудио: ${e.toString()}',
+                        ),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 3),
                       ),
-                      backgroundColor: Colors.red,
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
+                    );
+                  }
+                  return;
                 }
-                return;
+              } else {
+                print('Audio is being cached, playing from URL: ${widget.url}');
+                await _audioPlayer.setUrl(widget.url);
               }
             }
           }
@@ -6032,6 +6288,21 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   }
 
   Future<void> _seek(Duration position) async {
+    if (_audioPlayer.processingState == ProcessingState.idle) {
+      if (widget.url.isNotEmpty) {
+        final cacheService = CacheService();
+        var cachedFile = await cacheService.getCachedAudioFile(
+          widget.url,
+          customKey: widget.audioId?.toString(),
+        );
+
+        if (cachedFile != null && await cachedFile.exists()) {
+          await _audioPlayer.setFilePath(cachedFile.path);
+        } else {
+          await _audioPlayer.setUrl(widget.url);
+        }
+      }
+    }
     await _audioPlayer.seek(position);
     if (mounted) {
       setState(() {
@@ -6058,18 +6329,22 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
         ? _position.inMilliseconds / _totalDuration.inMilliseconds
         : 0.0;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: widget.textColor.withOpacity(0.05),
-        borderRadius: widget.borderRadius,
-        border: Border.all(color: widget.textColor.withOpacity(0.1), width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: _togglePlayPause,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      onLongPress: () {},
+      child: Container(
+        decoration: BoxDecoration(
+          color: widget.textColor.withOpacity(0.05),
+          borderRadius: widget.borderRadius,
+          border: Border.all(color: widget.textColor.withOpacity(0.1), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: _togglePlayPause,
               child: Container(
                 width: 40,
                 height: 40,
@@ -6112,19 +6387,22 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                             0.9 * widget.messageTextOpacity,
                           ),
                         ),
-                        child: GestureDetector(
-                          onTapDown: (details) {
-                            final RenderBox box =
-                                context.findRenderObject() as RenderBox;
-                            final localPosition = details.localPosition;
-                            final tapProgress =
-                                localPosition.dx / box.size.width;
-                            final newPosition = Duration(
-                              milliseconds:
-                                  (_totalDuration.inMilliseconds * tapProgress)
-                                      .round(),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTapDown: (details) {
+                                final tapProgress = details.localPosition.dx / constraints.maxWidth;
+                                final clampedProgress = tapProgress.clamp(0.0, 1.0);
+                                final newPosition = Duration(
+                                  milliseconds:
+                                      (_totalDuration.inMilliseconds * clampedProgress)
+                                          .round(),
+                                );
+                                _seek(newPosition);
+                              },
+                              onLongPress: () {},
                             );
-                            _seek(newPosition);
                           },
                         ),
                       ),
@@ -6174,6 +6452,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
