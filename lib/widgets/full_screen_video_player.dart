@@ -6,8 +6,7 @@ import 'dart:async';
 class FullScreenVideoPlayer extends StatefulWidget {
   final String videoUrl;
 
-  const FullScreenVideoPlayer({Key? key, required this.videoUrl})
-      : super(key: key);
+  const FullScreenVideoPlayer({super.key, required this.videoUrl});
 
   @override
   State<FullScreenVideoPlayer> createState() => _FullScreenVideoPlayerState();
@@ -236,42 +235,41 @@ class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer>
                 _showControlsUI();
               }
             },
-        onDoubleTapDown: (details) {
-          final screenWidth = MediaQuery.of(context).size.width;
-          if (details.globalPosition.dx < screenWidth / 2) {
-            final newPosition = _clampDuration(
-              _currentPosition - const Duration(seconds: 10),
-              Duration.zero,
-              _totalDuration,
-            );
-            _seekTo(newPosition);
-            _showControlsUI();
-          } else {
-            final newPosition = _clampDuration(
-              _currentPosition + const Duration(seconds: 10),
-              Duration.zero,
-              _totalDuration,
-            );
-            _seekTo(newPosition);
-            _showControlsUI();
-          }
-        },
+            onDoubleTapDown: (details) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              if (details.globalPosition.dx < screenWidth / 2) {
+                final newPosition = _clampDuration(
+                  _currentPosition - const Duration(seconds: 10),
+                  Duration.zero,
+                  _totalDuration,
+                );
+                _seekTo(newPosition);
+                _showControlsUI();
+              } else {
+                final newPosition = _clampDuration(
+                  _currentPosition + const Duration(seconds: 10),
+                  Duration.zero,
+                  _totalDuration,
+                );
+                _seekTo(newPosition);
+                _showControlsUI();
+              }
+            },
             child: Stack(
               children: [
                 Center(
                   child: _isLoading
-                      ? CircularProgressIndicator(
-                          color: colorScheme.primary,
-                        )
+                      ? CircularProgressIndicator(color: colorScheme.primary)
                       : _hasError
-                          ? _ErrorWidget(colorScheme: colorScheme)
-                          : _videoPlayerController != null &&
-                                  _videoPlayerController!.value.isInitialized
-                              ? AspectRatio(
-                                  aspectRatio: _videoPlayerController!.value.aspectRatio,
-                                  child: VideoPlayer(_videoPlayerController!),
-                                )
-                              : const SizedBox(),
+                      ? _ErrorWidget(colorScheme: colorScheme)
+                      : _videoPlayerController != null &&
+                            _videoPlayerController!.value.isInitialized
+                      ? AspectRatio(
+                          aspectRatio:
+                              _videoPlayerController!.value.aspectRatio,
+                          child: VideoPlayer(_videoPlayerController!),
+                        )
+                      : const SizedBox(),
                 ),
 
                 if (_isBuffering)
@@ -459,7 +457,10 @@ class _VideoControls extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.black.withOpacity(0.5),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -513,17 +514,11 @@ class _VideoControls extends StatelessWidget {
                       ),
                       const Text(
                         ' / ',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
                       ),
                       Text(
                         formatDuration(totalDuration),
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
                       ),
                     ],
                   ),
@@ -705,12 +700,12 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
         final position = _getPositionFromLocalPosition(localPosition, box.size);
         widget.onSeekEnd(position);
       },
-      child: Container(
+      child: SizedBox(
         height: 48,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final containerWidth = constraints.maxWidth;
-            
+
             return Stack(
               children: [
                 Center(
@@ -724,15 +719,24 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
                 ),
                 if (widget.totalDuration.inMilliseconds > 0)
                   ...widget.bufferedRanges.map((range) {
-                    final startProgress = (range.start.inMilliseconds / widget.totalDuration.inMilliseconds).clamp(0.0, 1.0);
-                    final endProgress = (range.end.inMilliseconds / widget.totalDuration.inMilliseconds).clamp(0.0, 1.0);
-                    final bufferedWidth = (endProgress - startProgress).clamp(0.0, 1.0);
-                    
+                    final startProgress =
+                        (range.start.inMilliseconds /
+                                widget.totalDuration.inMilliseconds)
+                            .clamp(0.0, 1.0);
+                    final endProgress =
+                        (range.end.inMilliseconds /
+                                widget.totalDuration.inMilliseconds)
+                            .clamp(0.0, 1.0);
+                    final bufferedWidth = (endProgress - startProgress).clamp(
+                      0.0,
+                      1.0,
+                    );
+
                     if (bufferedWidth <= 0) return const SizedBox.shrink();
-                    
+
                     final leftOffset = startProgress * containerWidth;
                     final bufferedWidthPx = bufferedWidth * containerWidth;
-                    
+
                     return Positioned(
                       left: leftOffset,
                       top: 22,
@@ -745,43 +749,43 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
                         ),
                       ),
                     );
-                  }).toList(),
-            Center(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: progress,
-                  child: Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: widget.colorScheme.primary,
-                      borderRadius: BorderRadius.circular(2),
+                  }),
+                Center(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: progress,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: widget.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            // Ползунок
-            Center(
-              child: Align(
-                alignment: Alignment(progress * 2 - 1, 0),
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: widget.colorScheme.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                // Ползунок
+                Center(
+                  child: Align(
+                    alignment: Alignment(progress * 2 - 1, 0),
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: widget.colorScheme.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
               ],
             );
           },
@@ -858,7 +862,7 @@ class _SpeedBottomSheet extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: isSelected
                             ? colorScheme.primaryContainer
-                            : colorScheme.surfaceVariant,
+                            : colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -868,7 +872,9 @@ class _SpeedBottomSheet extends StatelessWidget {
                               ? colorScheme.onPrimaryContainer
                               : colorScheme.onSurfaceVariant,
                           fontSize: 16,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -922,10 +928,7 @@ class _ErrorWidget extends StatelessWidget {
             Text(
               'Проверьте подключение к интернету\nили попробуйте позже',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],
         ),

@@ -197,15 +197,13 @@ extension ApiServiceChats on ApiService {
     try {
       // Если кэш ещё не инициализирован (например, сразу после запуска),
       // создаём минимальную структуру, чтобы новый чат тоже оказался в ней.
-      if (_lastChatsPayload == null) {
-        _lastChatsPayload = {
-          'chats': <dynamic>[],
-          'contacts': <dynamic>[],
-          'profile': null,
-          'presence': null,
-          'config': null,
-        };
-      }
+      _lastChatsPayload ??= {
+        'chats': <dynamic>[],
+        'contacts': <dynamic>[],
+        'profile': null,
+        'presence': null,
+        'config': null,
+      };
 
       final chats = _lastChatsPayload!['chats'] as List<dynamic>;
 

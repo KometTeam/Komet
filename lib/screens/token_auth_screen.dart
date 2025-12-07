@@ -1,5 +1,3 @@
-
-
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -9,14 +7,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/screens/home_screen.dart';
 import 'package:gwid/utils/proxy_service.dart';
 import 'package:gwid/utils/proxy_settings.dart';
 import 'package:gwid/screens/settings/qr_scanner_screen.dart';
 import 'package:gwid/screens/settings/session_spoofing_screen.dart';
-
 
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:crypto/crypto.dart' as crypto;
@@ -38,7 +34,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
     super.dispose();
   }
 
-
   Future<void> _processLogin({
     required String token,
     Map<String, dynamic>? spoofData,
@@ -50,7 +45,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
 
     try {
       if (spoofData != null && spoofData.isNotEmpty) {
-
         messenger.showSnackBar(
           const SnackBar(
             content: Text('Настройки анонимности из файла применены!'),
@@ -87,8 +81,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
     }
   }
 
-
-
   void _loginWithToken() {
     final token = _tokenController.text.trim();
     if (token.isEmpty) {
@@ -101,10 +93,9 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
   }
 
   Future<void> _loadSessionFile() async {
-
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['json','ksession'],
+      allowedExtensions: ['json', 'ksession'],
     );
     if (result == null || result.files.single.path == null) return;
     final filePath = result.files.single.path!;
@@ -135,8 +126,9 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
       }
       final Map<String, dynamic> sessionData = json.decode(finalJsonPayload);
       final String? token = sessionData['token'];
-      if (token == null || token.isEmpty)
+      if (token == null || token.isEmpty) {
         throw Exception('Файл сессии не содержит токена.');
+      }
       await _processLogin(
         token: token,
         spoofData: sessionData['spoof_data'] is Map<String, dynamic>
@@ -155,7 +147,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
   }
 
   Future<void> _processQrData(String qrData) async {
-
     if (!mounted) return;
     setState(() => _isLoading = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -163,26 +154,21 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
     try {
       final decoded = jsonDecode(qrData) as Map<String, dynamic>;
 
-
       if (decoded['type'] != 'komet_auth_v1' ||
           decoded['token'] == null ||
           decoded['timestamp'] == null) {
         throw Exception("Неверный формат QR-кода.");
       }
 
-
       final int qrTimestamp = decoded['timestamp'];
       final String token = decoded['token'];
-
 
       final int now = DateTime.now().millisecondsSinceEpoch;
       const int oneMinuteInMillis = 60 * 1000; // 60 секунд
 
       if ((now - qrTimestamp) > oneMinuteInMillis) {
-
         throw Exception("QR-код устарел. Пожалуйста, сгенерируйте новый.");
       }
-
 
       await _processLogin(token: token);
     } catch (e) {
@@ -193,7 +179,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
         ),
       );
     } finally {
-
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -254,7 +239,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
   }
 
   Future<String?> _showPasswordDialog() {
-
     final passwordController = TextEditingController();
     bool isPasswordVisible = false;
     return showDialog<String>(
@@ -305,7 +289,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
           ListView(
             padding: const EdgeInsets.all(16),
             children: [
-
               _AuthCard(
                 icon: Icons.qr_code_scanner_rounded,
                 title: 'Вход по QR-коду',
@@ -316,7 +299,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
               ),
 
               const SizedBox(height: 20),
-
 
               _AuthCard(
                 icon: Icons.file_open_outlined,
@@ -329,7 +311,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
               ),
 
               const SizedBox(height: 20),
-
 
               _AuthCard(
                 icon: Icons.vpn_key_outlined,
@@ -361,7 +342,6 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
     );
   }
 }
-
 
 class _AuthCard extends StatelessWidget {
   final IconData icon;

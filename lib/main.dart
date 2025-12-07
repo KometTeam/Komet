@@ -66,10 +66,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
-    
+
     // Отключаем анимации при включенной оптимизации
     if (themeProvider.optimization) {
-      timeDilation = 0.001; // Практически отключаем анимации (минимальное значение)
+      timeDilation =
+          0.001; // Практически отключаем анимации (минимальное значение)
     } else {
       timeDilation = 1.0; // Восстанавливаем нормальную скорость
     }
@@ -80,9 +81,10 @@ class MyApp extends StatelessWidget {
             (themeProvider.appTheme == AppTheme.system && lightDynamic != null)
             ? lightDynamic.primary
             : themeProvider.accentColor;
-        
+
         // Создаем PageTransitionsTheme в зависимости от оптимизации
-        final PageTransitionsTheme pageTransitionsTheme = themeProvider.optimization
+        final PageTransitionsTheme pageTransitionsTheme =
+            themeProvider.optimization
             ? const PageTransitionsTheme(
                 builders: {
                   TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
@@ -97,7 +99,7 @@ class MyApp extends StatelessWidget {
                   TargetPlatform.android: CupertinoPageTransitionsBuilder(),
                 },
               );
-        
+
         final ThemeData baseLightTheme = ThemeData(
           colorScheme: ColorScheme.fromSeed(
             seedColor: accentColor,
@@ -108,7 +110,9 @@ class MyApp extends StatelessWidget {
           pageTransitionsTheme: pageTransitionsTheme,
           // Отключаем тени и эффекты при оптимизации для экономии энергии
           shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization ? NoSplash.splashFactory : null,
+          splashFactory: themeProvider.optimization
+              ? NoSplash.splashFactory
+              : null,
           appBarTheme: AppBarTheme(
             titleTextStyle: TextStyle(
               fontSize: 16,
@@ -131,7 +135,9 @@ class MyApp extends StatelessWidget {
           pageTransitionsTheme: pageTransitionsTheme,
           // Отключаем тени и эффекты при оптимизации для экономии энергии
           shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization ? NoSplash.splashFactory : null,
+          splashFactory: themeProvider.optimization
+              ? NoSplash.splashFactory
+              : null,
           appBarTheme: AppBarTheme(
             titleTextStyle: TextStyle(
               fontSize: 16,
@@ -153,8 +159,8 @@ class MyApp extends StatelessWidget {
           navigationBarTheme: NavigationBarThemeData(
             backgroundColor: Colors.black,
             indicatorColor: accentColor.withOpacity(0.4),
-            labelTextStyle: MaterialStateProperty.resolveWith((states) {
-              if (states.contains(MaterialState.selected)) {
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
                 return TextStyle(
                   color: accentColor,
                   fontSize: 12,
@@ -163,8 +169,8 @@ class MyApp extends StatelessWidget {
               }
               return const TextStyle(color: Colors.grey, fontSize: 12);
             }),
-            iconTheme: MaterialStateProperty.resolveWith((states) {
-              if (states.contains(MaterialState.selected)) {
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
                 return IconThemeData(color: accentColor);
               }
               return const IconThemeData(color: Colors.grey);
@@ -181,7 +187,9 @@ class MyApp extends StatelessWidget {
           title: 'Komet',
           navigatorKey: navigatorKey,
           builder: (context, child) {
-            final showHud = themeProvider.debugShowPerformanceOverlay || themeProvider.showFpsOverlay;
+            final showHud =
+                themeProvider.debugShowPerformanceOverlay ||
+                themeProvider.showFpsOverlay;
             return SizedBox.expand(
               child: Stack(
                 children: [

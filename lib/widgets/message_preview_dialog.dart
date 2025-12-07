@@ -39,7 +39,7 @@ class ControlMessageChip extends StatelessWidget {
     final isMe = message.senderId == myId;
     final senderDisplayName = isMe ? 'Вы' : senderName;
 
-    String _formatUserList(List<int> userIds) {
+    String formatUserList(List<int> userIds) {
       if (userIds.isEmpty) {
         return '';
       }
@@ -76,7 +76,7 @@ class ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return 'К чату присоединились новые участники';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return 'К чату присоединились новые участники';
         }
@@ -90,7 +90,7 @@ class ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName удалил(а) участников из чата';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName удалил(а) участников из чата';
         }
@@ -128,7 +128,7 @@ class ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName назначил(а) администраторов';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName назначил(а) администраторов';
         }
@@ -145,7 +145,7 @@ class ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName снял(а) администраторов';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName снял(а) администраторов';
         }
@@ -162,7 +162,7 @@ class ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName заблокировал(а) участников';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName заблокировал(а) участников';
         }
@@ -179,7 +179,7 @@ class ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName разблокировал(а) участников';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName разблокировал(а) участников';
         }
@@ -544,7 +544,7 @@ class MessagePreviewDialog {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: colors.surfaceVariant,
+                                        color: colors.surfaceContainerHighest,
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(

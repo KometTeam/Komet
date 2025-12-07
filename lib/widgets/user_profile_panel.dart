@@ -112,9 +112,7 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
   }
 
   Future<void> _loadLocalDescription() async {
-    final localData = await ContactLocalNamesService().getContactData(
-      widget.userId,
-    );
+    final localData = ContactLocalNamesService().getContactData(widget.userId);
     if (mounted) {
       setState(() {
         _localDescription = localData?['notes'] as String?;

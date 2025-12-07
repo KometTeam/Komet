@@ -370,8 +370,9 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                           value: theme.messageBubbleType,
                           underline: const SizedBox.shrink(),
                           onChanged: (value) {
-                            if (value != null)
+                            if (value != null) {
                               theme.setMessageBubbleType(value);
+                            }
                           },
                           items: MessageBubbleType.values.map((type) {
                             return DropdownMenuItem(
@@ -1471,7 +1472,7 @@ class _ThemeButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? colors.primaryContainer
-              : colors.surfaceVariant.withOpacity(0.3),
+              : colors.surfaceContainerHighest.withOpacity(0.3),
           border: Border.all(
             color: isSelected ? colors.primary : Colors.transparent,
             width: 2,
@@ -1630,7 +1631,7 @@ class _MessagePreviewSection extends StatelessWidget {
                                 child: Container(
                                   height: 24,
                                   decoration: BoxDecoration(
-                                    color: colors.surfaceVariant,
+                                    color: colors.surfaceContainerHighest,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
@@ -1949,7 +1950,7 @@ class _MessageBubblesPreview extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colors.surfaceVariant.withOpacity(0.3),
+        color: colors.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -1992,7 +1993,7 @@ class _DialogPreview extends StatelessWidget {
       height: 120,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.surfaceVariant.withOpacity(0.3),
+        color: colors.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ClipRRect(
@@ -2054,7 +2055,7 @@ class _PanelsPreview extends StatelessWidget {
     return Container(
       height: 100,
       decoration: BoxDecoration(
-        color: colors.surfaceVariant.withOpacity(0.3),
+        color: colors.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ClipRRect(
@@ -2156,7 +2157,7 @@ class _PanelsPreview extends StatelessWidget {
                               child: Container(
                                 height: 20,
                                 decoration: BoxDecoration(
-                                  color: colors.surfaceVariant,
+                                  color: colors.surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
@@ -2180,7 +2181,7 @@ class _PanelsPreview extends StatelessWidget {
                           child: Container(
                             height: 20,
                             decoration: BoxDecoration(
-                              color: colors.surfaceVariant,
+                              color: colors.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),

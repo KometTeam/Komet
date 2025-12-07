@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
 import 'dart:io' show Platform;
@@ -16,7 +14,6 @@ class NotificationSettingsScreen extends StatefulWidget {
 
 class _NotificationSettingsScreenState
     extends State<NotificationSettingsScreen> {
-
   String _chatsPushNotification = 'ON';
   bool _mCallPushNotification = true;
   bool _pushDetails = true;
@@ -26,7 +23,6 @@ class _NotificationSettingsScreenState
 
   Widget buildModalContent(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
 
     final isDesktopOrIOS =
         Platform.isWindows ||
@@ -161,8 +157,6 @@ class _NotificationSettingsScreenState
     setState(() => _isLoading = false);
   }
 
-
-
   Future<void> _updateNotificationSetting({
     bool? chatsPush,
     bool? mCallPush,
@@ -179,8 +173,9 @@ class _NotificationSettingsScreenState
         pushSound: pushSound,
       );
 
-      if (chatsPush != null)
+      if (chatsPush != null) {
         setState(() => _chatsPushNotification = chatsPush ? 'ON' : 'OFF');
+      }
       if (mCallPush != null) setState(() => _mCallPushNotification = mCallPush);
       if (pushDetails != null) setState(() => _pushDetails = pushDetails);
       if (chatsSound != null) setState(() => _chatsPushSound = chatsSound);
@@ -205,8 +200,6 @@ class _NotificationSettingsScreenState
       }
     }
   }
-
-
 
   void _showSoundDialog(
     String title,
@@ -259,7 +252,6 @@ class _NotificationSettingsScreenState
     if (widget.isModal) {
       return buildModalContent(context);
     }
-
 
     final isDesktopOrIOS =
         Platform.isWindows ||
@@ -398,7 +390,6 @@ class _NotificationSettingsScreenState
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: Container(
@@ -407,7 +398,6 @@ class _NotificationSettingsScreenState
               color: Colors.black.withOpacity(0.3),
             ),
           ),
-
 
           Center(
             child: Container(
@@ -427,7 +417,6 @@ class _NotificationSettingsScreenState
               ),
               child: Column(
                 children: [
-
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -461,7 +450,6 @@ class _NotificationSettingsScreenState
                       ],
                     ),
                   ),
-
 
                   Expanded(
                     child: _isLoading

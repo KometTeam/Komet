@@ -532,45 +532,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                     ),
                   );
                 }
-
-  Future<void> _createInviteLink() async {
-    try {
-      final link = await ApiService.instance.createGroupInviteLink(
-        widget.chatId,
-        revokePrivateLink: true,
-      );
-
-      if (!mounted) return;
-
-      if (link == null || link.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Не удалось получить пригласительную ссылку'),
-          ),
-        );
-        return;
-      }
-
-      await Clipboard.setData(ClipboardData(text: link));
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ссылка скопирована: $link'),
-          action: SnackBarAction(
-            label: 'OK',
-            onPressed: () {},
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка при создании ссылки: $e'),
-            ),
-          );
-        }
-  }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -595,6 +556,28 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
   Future<void> _createInviteLink() async {
     try {
+      // Сначала проверяем кеш на наличие существующей ссылки
+      final currentChat = _getCurrentGroupChat();
+      String? cachedLink;
+      
+      if (currentChat != null) {
+        cachedLink = currentChat['link'] as String?;
+        if (cachedLink != null && cachedLink.isNotEmpty) {
+          // Ссылка уже есть в кеше, показываем её
+          await Clipboard.setData(ClipboardData(text: cachedLink));
+          
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ссылка скопирована: $cachedLink'),
+              action: SnackBarAction(label: 'OK', onPressed: () {}),
+            ),
+          );
+          return;
+        }
+      }
+
+      // Если ссылки нет в кеше, создаём новую
       final link = await ApiService.instance.createGroupInviteLink(
         widget.chatId,
         revokePrivateLink: true,
@@ -611,24 +594,22 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         return;
       }
 
+      // Ссылка автоматически сохраняется в кеш через updateChatInCacheFromJson
+      // в методе createGroupInviteLink ApiService
+      
       await Clipboard.setData(ClipboardData(text: link));
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Ссылка скопирована: $link'),
-          action: SnackBarAction(
-            label: 'OK',
-            onPressed: () {},
-          ),
+          action: SnackBarAction(label: 'OK', onPressed: () {}),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка при создании ссылки: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка при создании ссылки: $e')));
     }
   }
 
@@ -753,16 +734,100 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     bool amIAdmin = false;
+    bool canSeeLink = false;
     final currentChat = _getCurrentGroupChat();
     if (currentChat != null) {
       final admins = currentChat['admins'] as List<dynamic>? ?? [];
       amIAdmin = admins.contains(widget.myId);
+      
+      // Проверяем, может ли участник видеть приватную ссылку
+      final options = currentChat['options'] as Map<String, dynamic>?;
+      final membersCanSeeLink = options?['MEMBERS_CAN_SEE_PRIVATE_LINK'] as bool? ?? false;
+      canSeeLink = amIAdmin || membersCanSeeLink;
     }
 
     return SliverPadding(
       padding: const EdgeInsets.all(16.0),
       sliver: SliverList(
         delegate: SliverChildListDelegate.fixed([
+          // Кнопка "Пригласить по ссылке" для всех, кто может видеть ссылку
+          if (canSeeLink) ...[
+            Builder(
+              builder: (context) {
+                final currentChat = _getCurrentGroupChat();
+                final existingLink = currentChat?['link'] as String?;
+                
+                if (existingLink != null && existingLink.isNotEmpty) {
+                  // Показываем существующую ссылку
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceVariant.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: colorScheme.outline.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Текущая ссылка:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              existingLink,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _createInviteLink,
+                          icon: const Icon(Icons.copy),
+                          label: const Text('Скопировать ссылку'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                } else {
+                  // Показываем кнопку создания ссылки
+                  return SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _createInviteLink,
+                      icon: const Icon(Icons.link),
+                      label: const Text('Пригласить по ссылке'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+          ],
+          
           if (amIAdmin) ...[
             SizedBox(
               width: double.infinity,
@@ -811,18 +876,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                 icon: const Icon(Icons.admin_panel_settings),
                 label: const Text('Назначить администратором'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _createInviteLink,
-                icon: const Icon(Icons.link),
-                label: const Text('Создать пригласительную ссылку'),
-                style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),

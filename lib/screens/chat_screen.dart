@@ -29,6 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:gwid/screens/chat_encryption_settings_screen.dart';
+import 'package:gwid/screens/chat_media_screen.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:gwid/services/chat_encryption_service.dart';
 import 'package:lottie/lottie.dart';
@@ -79,7 +80,7 @@ class _EmptyChatWidget extends StatelessWidget {
       '🎨 _EmptyChatWidget.build: sticker=${sticker != null ? "есть" : "null"}',
     );
     if (sticker != null) {
-      print('🎨 Стикер данные: ${sticker}');
+      print('🎨 Стикер данные: $sticker');
     }
 
     return Center(
@@ -315,13 +316,17 @@ class _ChatScreenState extends State<ChatScreen> {
                           onPressed: () async {
                             final isEncryptionActive =
                                 _encryptionConfigForCurrentChat != null &&
-                                _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+                                _encryptionConfigForCurrentChat!
+                                    .password
+                                    .isNotEmpty &&
                                 _sendEncryptedForCurrentChat;
                             if (isEncryptionActive) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Нельзя отправлять медиа при включенном шифровании'),
+                                    content: Text(
+                                      'Нельзя отправлять медиа при включенном шифровании',
+                                    ),
                                     backgroundColor: Colors.orange,
                                   ),
                                 );
@@ -365,13 +370,17 @@ class _ChatScreenState extends State<ChatScreen> {
                           onPressed: () async {
                             final isEncryptionActive =
                                 _encryptionConfigForCurrentChat != null &&
-                                _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+                                _encryptionConfigForCurrentChat!
+                                    .password
+                                    .isNotEmpty &&
                                 _sendEncryptedForCurrentChat;
                             if (isEncryptionActive) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Нельзя отправлять медиа при включенном шифровании'),
+                                    content: Text(
+                                      'Нельзя отправлять медиа при включенном шифровании',
+                                    ),
                                     backgroundColor: Colors.orange,
                                   ),
                                 );
@@ -415,7 +424,9 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Нельзя отправлять медиа при включенном шифровании'),
+              content: Text(
+                'Нельзя отправлять медиа при включенном шифровании',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -461,7 +472,9 @@ class _ChatScreenState extends State<ChatScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Нельзя отправлять медиа при включенном шифровании'),
+                content: Text(
+                  'Нельзя отправлять медиа при включенном шифровании',
+                ),
                 backgroundColor: Colors.orange,
               ),
             );
@@ -486,7 +499,9 @@ class _ChatScreenState extends State<ChatScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Нельзя отправлять медиа при включенном шифровании'),
+                content: Text(
+                  'Нельзя отправлять медиа при включенном шифровании',
+                ),
                 backgroundColor: Colors.orange,
               ),
             );
@@ -540,17 +555,17 @@ class _ChatScreenState extends State<ChatScreen> {
   void _scrollToBottom() {
     // Плавный скролл — используем только по явному действию (кнопка "вниз" и т.п.)
     if (!_itemScrollController.isAttached) return;
-    
+
     // СКРЫВАЕМ стрелочку при нажатии СРАЗУ и блокируем её показ
     _isScrollingToBottom = true;
     _showScrollToBottomNotifier.value = false;
-    
+
     _itemScrollController.scrollTo(
       index: 0,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
     );
-    
+
     // После завершения скролла проверяем позицию
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) {
@@ -561,8 +576,8 @@ class _ChatScreenState extends State<ChatScreen> {
             orElse: () => positions.first,
           );
           final isBottomItemVisible = bottomItemPosition.index == 0;
-          final isAtBottom = isBottomItemVisible && 
-                           bottomItemPosition.itemTrailingEdge >= 0.9;
+          final isAtBottom =
+              isBottomItemVisible && bottomItemPosition.itemTrailingEdge >= 0.9;
           if (isAtBottom) {
             _isScrollingToBottom = false;
             _showScrollToBottomNotifier.value = false;
@@ -1023,7 +1038,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (contactProfile != null &&
         contactProfile['id'] != null &&
         contactProfile['id'] != 0) {
-      String? idStr = await prefs.getString("userId");
+      String? idStr = prefs.getString("userId");
       _actualMyId = idStr!.isNotEmpty ? int.parse(idStr) : contactProfile['id'];
       print(
         '✅ [_initializeChat] ID пользователя получен из ApiService: $_actualMyId',
@@ -1042,8 +1057,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } else if (_actualMyId == null) {
       final prefs = await SharedPreferences.getInstance();
-      _actualMyId = int.parse(await prefs.getString('userId')!);
-      ;
+      _actualMyId = int.parse(prefs.getString('userId')!);
       print(
         '⚠️ [_initializeChat] ID не найден, используется из виджета: $_actualMyId',
       );
@@ -1085,8 +1099,13 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       if (contact.id == _currentContact.id && mounted) {
         ApiService.instance.updateCachedContact(contact);
-        setState(() {
-          _currentContact = contact;
+        // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+        Future.microtask(() {
+          if (mounted) {
+            setState(() {
+              _currentContact = contact;
+            });
+          }
         });
       }
     });
@@ -1100,20 +1119,20 @@ class _ChatScreenState extends State<ChatScreen> {
           (p) => p.index == 0,
           orElse: () => positions.first,
         );
-        
+
         // Мы внизу, если элемент с index 0 виден и очень близок к низу экрана
         // Используем мягкое условие (0.9) чтобы стрелка появлялась ОЧЕНЬ РАНЬШЕ
         final isBottomItemVisible = bottomItemPosition.index == 0;
-        final isAtBottom = isBottomItemVisible && 
-                         bottomItemPosition.itemTrailingEdge >= 0.9;
-        
+        final isAtBottom =
+            isBottomItemVisible && bottomItemPosition.itemTrailingEdge >= 0.9;
+
         _isUserAtBottom = isAtBottom;
-        
+
         // Если мы внизу, сбрасываем флаг блокировки
         if (isAtBottom) {
           _isScrollingToBottom = false;
         }
-        
+
         // Показываем стрелочку только если:
         // 1. Мы не в самом низу (trailingEdge < 0.95)
         // 2. И не происходит программный скролл к низу (не нажали на стрелочку)
@@ -1155,9 +1174,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _searchController.addListener(() {
       if (_searchController.text.isEmpty && _searchResults.isNotEmpty) {
-        setState(() {
-          _searchResults.clear();
-          _currentResultIndex = -1;
+        // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+        Future.microtask(() {
+          if (mounted) {
+            setState(() {
+              _searchResults.clear();
+              _currentResultIndex = -1;
+            });
+          }
         });
       } else if (_searchController.text.isNotEmpty) {
         _performSearch(_searchController.text);
@@ -1206,22 +1230,29 @@ class _ChatScreenState extends State<ChatScreen> {
           print(
             'Получено подтверждение (Opcode 64) для cid: ${newMessage.cid}. Обновляем сообщение.',
           );
-          _updateMessage(
-            newMessage,
-          ); // Обновляем временное сообщение на настоящее
+          // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+          Future.microtask(() {
+            if (mounted) {
+              _updateMessage(newMessage);
+            }
+          });
         }
       } else if (opcode == 128) {
         if (chatIdNormalized == widget.chatId) {
           final newMessage = Message.fromJson(payload['message']);
-          final hasSameId = _messages.any((m) => m.id == newMessage.id);
-          final hasSameCid =
-              newMessage.cid != null &&
-              _messages.any((m) => m.cid != null && m.cid == newMessage.cid);
-          if (hasSameId || hasSameCid) {
-            _updateMessage(newMessage);
-          } else {
-            _addMessage(newMessage);
-          }
+          // Откладываем проверку и обновление, чтобы избежать ошибки во время обновления устройства мыши
+          Future.microtask(() {
+            if (!mounted) return;
+            final hasSameId = _messages.any((m) => m.id == newMessage.id);
+            final hasSameCid =
+                newMessage.cid != null &&
+                _messages.any((m) => m.cid != null && m.cid == newMessage.cid);
+            if (hasSameId || hasSameCid) {
+              _updateMessage(newMessage);
+            } else {
+              _addMessage(newMessage);
+            }
+          });
         }
       } else if (opcode == 129) {
         if (chatIdNormalized == widget.chatId) {
@@ -1252,32 +1283,48 @@ class _ChatScreenState extends State<ChatScreen> {
                 'Обновлен presence для пользователя $cid: online=$isOnline, seen=$currentTime',
               );
 
-              if (mounted) {
-                setState(() {});
-              }
+              // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+              Future.microtask(() {
+                if (mounted) {
+                  setState(() {});
+                }
+              });
             }
           }
         }
       } else if (opcode == 67) {
         if (chatIdNormalized == widget.chatId) {
           final editedMessage = Message.fromJson(payload['message']);
-          _updateMessage(editedMessage);
+          // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+          Future.microtask(() {
+            if (mounted) {
+              _updateMessage(editedMessage);
+            }
+          });
         }
       } else if (opcode == 66) {
         if (chatIdNormalized == widget.chatId) {
           final deletedMessageIds = List<String>.from(
             payload['messageIds'] ?? [],
           );
-          _removeMessages(deletedMessageIds);
+          // Откладываем удаление, чтобы избежать ошибки во время обновления устройства мыши
+          Future.microtask(() {
+            if (mounted) {
+              _removeMessages(deletedMessageIds);
+            }
+          });
         }
       } else if (opcode == 178) {
         // cmd == 1: это ACK на отправку реакции, без messageId — просто снимаем флаг "отправляется"
         if (cmd == 1) {
           if (_sendingReactions.isNotEmpty) {
             _sendingReactions.clear();
-            if (mounted) {
-              setState(() {});
-            }
+            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            Future.microtask(() {
+              if (mounted) {
+                setState(() {});
+              }
+            });
           }
         }
         // cmd == 0: широковещательное обновление реакций с messageId и reactionInfo
@@ -1285,7 +1332,12 @@ class _ChatScreenState extends State<ChatScreen> {
           final messageId = payload['messageId'] as String?;
           final reactionInfo = payload['reactionInfo'] as Map<String, dynamic>?;
           if (messageId != null && reactionInfo != null) {
-            _updateMessageReaction(messageId, reactionInfo);
+            // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+            Future.microtask(() {
+              if (mounted) {
+                _updateMessageReaction(messageId, reactionInfo);
+              }
+            });
           }
         }
       } else if (opcode == 179) {
@@ -1293,8 +1345,22 @@ class _ChatScreenState extends State<ChatScreen> {
           final messageId = payload['messageId'] as String?;
           final reactionInfo = payload['reactionInfo'] as Map<String, dynamic>?;
           if (messageId != null) {
-            _updateMessageReaction(messageId, reactionInfo ?? {});
+            // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+            Future.microtask(() {
+              if (mounted) {
+                _updateMessageReaction(messageId, reactionInfo ?? {});
+              }
+            });
           }
+        }
+      } else if (opcode == 50) {
+        // Opcode 50: обновление непрочитанных сообщений или отметка прочтения
+        // Игнорируем, чтобы избежать проблем с обновлением состояния
+        // Это обрабатывается на уровне списка чатов
+        if (chatIdNormalized == widget.chatId) {
+          print(
+            'Получен opcode 50 для чата ${widget.chatId}, игнорируем в ChatScreen',
+          );
         }
       }
     });
@@ -1340,8 +1406,13 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       _buildChatItems();
-      setState(() {
-        _isLoadingHistory = false;
+      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            _isLoadingHistory = false;
+          });
+        }
       });
       _updatePinnedMessage();
 
@@ -1422,20 +1493,28 @@ class _ChatScreenState extends State<ChatScreen> {
           ? allMessages.sublist(allMessages.length - page)
           : allMessages;
 
-      setState(() {
-        _messages.clear();
-        _messages.addAll(slice);
-        _oldestLoadedTime = _messages.isNotEmpty ? _messages.first.time : null;
-        // Если получили максимальное количество сообщений (1000), возможно есть еще
-        // Также проверяем, есть ли сообщения старше самого старого загруженного
-        _hasMore =
-            allMessages.length >= 1000 || allMessages.length > _messages.length;
-        print(
-          '📜 Первая загрузка: загружено ${allMessages.length} сообщений, показано ${_messages.length}, _hasMore=$_hasMore, _oldestLoadedTime=$_oldestLoadedTime',
-        );
+      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            _messages.clear();
+            _messages.addAll(slice);
+            _oldestLoadedTime = _messages.isNotEmpty
+                ? _messages.first.time
+                : null;
+            // Если получили максимальное количество сообщений (1000), возможно есть еще
+            // Также проверяем, есть ли сообщения старше самого старого загруженного
+            _hasMore =
+                allMessages.length >= 1000 ||
+                allMessages.length > _messages.length;
+            print(
+              '📜 Первая загрузка: загружено ${allMessages.length} сообщений, показано ${_messages.length}, _hasMore=$_hasMore, _oldestLoadedTime=$_oldestLoadedTime',
+            );
 
-        _buildChatItems();
-        _isLoadingHistory = false;
+            _buildChatItems();
+            _isLoadingHistory = false;
+          });
+        }
       });
 
       // Функция "перейти к последнему непрочитанному" отключена.
@@ -1842,18 +1921,21 @@ class _ChatScreenState extends State<ChatScreen> {
       _animatedMessageIds.add(message.id);
     }
 
-    if (mounted) {
-      setState(() {});
+    // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+    Future.microtask(() {
+      if (mounted) {
+        setState(() {});
 
-      if ((wasAtBottom || isMyMessage || forceScroll) &&
-          _itemScrollController.isAttached) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_itemScrollController.isAttached) {
-            _itemScrollController.jumpTo(index: 0);
-          }
-        });
+        if ((wasAtBottom || isMyMessage || forceScroll) &&
+            _itemScrollController.isAttached) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_itemScrollController.isAttached) {
+              _itemScrollController.jumpTo(index: 0);
+            }
+          });
+        }
       }
-    }
+    });
   }
 
   void _updateMessageReaction(
@@ -1877,9 +1959,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
       print('Обновлена реакция для сообщения $messageId: $reactionInfo');
 
-      if (mounted) {
-        setState(() {});
-      }
+      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     }
   }
 
@@ -1978,9 +2063,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
         print('Оптимистично удалена реакция с сообщения $messageId');
 
-        if (mounted) {
-          setState(() {});
-        }
+        // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+        Future.microtask(() {
+          if (mounted) {
+            setState(() {});
+          }
+        });
       }
     }
   }
@@ -2002,7 +2090,12 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages[index] = finalMessage;
       ApiService.instance.clearCacheForChat(widget.chatId);
       _buildChatItems();
-      setState(() {});
+      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     } else {
       print(
         'Сообщение ${updatedMessage.id} не найдено для обновления. Запрашиваем свежую историю...',
@@ -2015,7 +2108,12 @@ class _ChatScreenState extends State<ChatScreen> {
               ..clear()
               ..addAll(fresh);
             _buildChatItems();
-            setState(() {});
+            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            Future.microtask(() {
+              if (mounted) {
+                setState(() {});
+              }
+            });
           })
           .catchError((_) {});
     }
@@ -2031,7 +2129,12 @@ class _ChatScreenState extends State<ChatScreen> {
     if (actuallyRemoved > 0) {
       ApiService.instance.clearCacheForChat(widget.chatId);
       _buildChatItems();
-      setState(() {});
+      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     }
   }
 
@@ -3082,7 +3185,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (contact.id == widget.myId && _actualMyId == null) {
           final prefs = await SharedPreferences.getInstance();
 
-          _actualMyId = int.parse(await prefs.getString('userId')!);
+          _actualMyId = int.parse(prefs.getString('userId')!);
           print(
             '✅ [_loadCachedContacts] Собственный ID восстановлен из глобального кэша: $_actualMyId (${contact.name})',
           );
@@ -3784,6 +3887,19 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   )
                   .then((_) => _loadEncryptionConfig());
+            } else if (value == 'media') {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ChatMediaScreen(
+                    chatId: widget.chatId,
+                    chatTitle: _currentContact.name,
+                    messages: _messages,
+                    onGoToMessage: (messageId) {
+                      _scrollToMessage(messageId);
+                    },
+                  ),
+                ),
+              );
             }
           },
           itemBuilder: (context) {
@@ -3834,6 +3950,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     Icon(Icons.search),
                     SizedBox(width: 8),
                     Text('Поиск'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'media',
+                child: Row(
+                  children: [
+                    Icon(Icons.photo_library),
+                    SizedBox(width: 8),
+                    Text('Медиа, файлы и ссылки'),
                   ],
                 ),
               ),
@@ -4651,616 +4777,653 @@ class _ChatScreenState extends State<ChatScreen> {
       return ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: theme.optimization
-          ? Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12.0,
-                vertical: 8.0,
-              ),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: SafeArea(
-                top: false,
-                bottom: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_replyingToMessage != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primaryContainer.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border(
-                            left: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 3,
+            ? Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12.0,
+                  vertical: 8.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_replyingToMessage != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 3,
+                              ),
                             ),
                           ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.reply_rounded,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ответ на сообщение',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _replyingToMessage!.text.isNotEmpty
+                                          ? _replyingToMessage!.text
+                                          : (_replyingToMessage!.hasFileAttach
+                                                ? 'Файл'
+                                                : 'Фото'),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () {
+                                  setState(() {
+                                    _replyingToMessage = null;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.reply_rounded,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
+                        const SizedBox(height: 8),
+                      ],
+                      if (isBlocked) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.errorContainer.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(context).colorScheme.error,
+                                width: 3,
+                              ),
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
+                                  Icon(
+                                    Icons.block_rounded,
+                                    color: Theme.of(context).colorScheme.error,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
                                   Text(
-                                    'Ответ на сообщение',
+                                    'Пользователь заблокирован',
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.primary,
+                                      ).colorScheme.error,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    _replyingToMessage!.text.isNotEmpty
-                                        ? _replyingToMessage!.text
-                                        : (_replyingToMessage!.hasFileAttach
-                                              ? 'Файл'
-                                              : 'Фото'),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: () {
-                                setState(() {
-                                  _replyingToMessage = null;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    if (isBlocked) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.errorContainer.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border(
-                            left: BorderSide(
-                              color: Theme.of(context).colorScheme.error,
-                              width: 3,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.block_rounded,
-                                  color: Theme.of(context).colorScheme.error,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Пользователь заблокирован',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.error,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Разблокируйте пользователя для отправки сообщений',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onErrorContainer,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'или включите block_bypass',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onErrorContainer.withOpacity(0.7),
-                                fontSize: 11,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _textController,
-                            enabled: !isBlocked,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            minLines: 1,
-                            maxLines: 5,
-                            decoration: InputDecoration(
-                              hintText: isBlocked
-                                  ? 'Пользователь заблокирован'
-                                  : 'Сообщение...',
-                              filled: true,
-                              isDense: true,
-                              fillColor: isBlocked
-                                  ? Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withOpacity(0.25)
-                                  : Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withOpacity(0.4),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 18.0,
-                                vertical: 12.0,
-                              ),
-                            ),
-                            onChanged: isBlocked
-                                ? null
-                                : (v) {
-                                    if (v.isNotEmpty) {
-                                      _scheduleTypingPing();
-                                    }
-                                  },
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Builder(
-                          builder: (context) {
-                            final isEncryptionActive =
-                                _encryptionConfigForCurrentChat != null &&
-                                _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-                                _sendEncryptedForCurrentChat;
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(24),
-                                onTap: (isBlocked || isEncryptionActive)
-                                    ? null
-                                    : () async {
-                                        final result = await _pickPhotosFlow(context);
-                                        if (result != null &&
-                                            result.paths.isNotEmpty) {
-                                          await ApiService.instance.sendPhotoMessages(
-                                            widget.chatId,
-                                            localPaths: result.paths,
-                                            caption: result.caption,
-                                            senderId: _actualMyId,
-                                          );
-                                        }
-                                      },
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: (isBlocked || isEncryptionActive)
-                                        ? Theme.of(context)
-                                              .colorScheme
-                                              .surfaceContainerHighest
-                                              .withOpacity(0.25)
-                                        : Theme.of(context).colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.photo_camera_outlined,
-                                    color: (isBlocked || isEncryptionActive)
-                                        ? Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant
-                                              .withOpacity(0.5)
-                                        : Theme.of(context).colorScheme.onPrimary,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 4),
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: (isBlocked ||
-                                    _textController.text.trim().isEmpty)
-                                ? null
-                                : _sendMessage,
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: (isBlocked ||
-                                        _textController.text.trim().isEmpty)
-                                    ? Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest
-                                          .withOpacity(0.25)
-                                    : Theme.of(context).colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.send_rounded,
-                                color: (isBlocked ||
-                                        _textController.text.trim().isEmpty)
-                                    ? Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant
-                                          .withOpacity(0.5)
-                                    : Theme.of(context).colorScheme.onPrimary,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface.withOpacity(
-                0.85,
-              ), // Прозрачный фон для эффекта стекла
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_replyingToMessage != null) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border(
-                          left: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.reply_rounded,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Ответ на сообщение',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  _replyingToMessage!.text.isNotEmpty
-                                      ? _replyingToMessage!.text
-                                      : (_replyingToMessage!.hasFileAttach
-                                            ? 'Файл'
-                                            : 'Фото'),
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.7),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: _cancelReply,
-                              child: Padding(
-                                padding: const EdgeInsets.all(6.0),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: 18,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (isBlocked) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.errorContainer.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border(
-                          left: BorderSide(
-                            color: Theme.of(context).colorScheme.error,
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.block_rounded,
-                                color: Theme.of(context).colorScheme.error,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 10),
+                              const SizedBox(height: 6),
                               Text(
-                                'Пользователь заблокирован',
+                                'Разблокируйте пользователя для отправки сообщений',
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
                                   fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'или включите block_bypass',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer
+                                      .withOpacity(0.7),
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Разблокируйте пользователя для отправки сообщений',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer,
-                              fontSize: 13,
+                        ),
+                      ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _textController,
+                              enabled: !isBlocked,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                              minLines: 1,
+                              maxLines: 5,
+                              decoration: InputDecoration(
+                                hintText: isBlocked
+                                    ? 'Пользователь заблокирован'
+                                    : 'Сообщение...',
+                                filled: true,
+                                isDense: true,
+                                fillColor: isBlocked
+                                    ? Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withOpacity(0.25)
+                                    : Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withOpacity(0.4),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 18.0,
+                                  vertical: 12.0,
+                                ),
+                              ),
+                              onChanged: isBlocked
+                                  ? null
+                                  : (v) {
+                                      if (v.isNotEmpty) {
+                                        _scheduleTypingPing();
+                                      }
+                                    },
                             ),
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'или включите block_bypass',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer.withOpacity(0.7),
-                              fontSize: 11,
-                              fontStyle: FontStyle.italic,
+                          const SizedBox(width: 4),
+                          Builder(
+                            builder: (context) {
+                              final isEncryptionActive =
+                                  _encryptionConfigForCurrentChat != null &&
+                                  _encryptionConfigForCurrentChat!
+                                      .password
+                                      .isNotEmpty &&
+                                  _sendEncryptedForCurrentChat;
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(24),
+                                  onTap: (isBlocked || isEncryptionActive)
+                                      ? null
+                                      : () async {
+                                          final result = await _pickPhotosFlow(
+                                            context,
+                                          );
+                                          if (result != null &&
+                                              result.paths.isNotEmpty) {
+                                            await ApiService.instance
+                                                .sendPhotoMessages(
+                                                  widget.chatId,
+                                                  localPaths: result.paths,
+                                                  caption: result.caption,
+                                                  senderId: _actualMyId,
+                                                );
+                                          }
+                                        },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: (isBlocked || isEncryptionActive)
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withOpacity(0.25)
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.photo_camera_outlined,
+                                      color: (isBlocked || isEncryptionActive)
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant
+                                                .withOpacity(0.5)
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimary,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 4),
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(24),
+                              onTap:
+                                  (isBlocked ||
+                                      _textController.text.trim().isEmpty)
+                                  ? null
+                                  : _sendMessage,
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color:
+                                      (isBlocked ||
+                                          _textController.text.trim().isEmpty)
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withOpacity(0.25)
+                                      : Theme.of(context).colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.send_rounded,
+                                  color:
+                                      (isBlocked ||
+                                          _textController.text.trim().isEmpty)
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant
+                                            .withOpacity(0.5)
+                                      : Theme.of(context).colorScheme.onPrimary,
+                                  size: 20,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _textController,
-                          enabled: !isBlocked,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          minLines: 1,
-                          maxLines: 5,
-                          decoration: InputDecoration(
-                            hintText: isBlocked
-                                ? 'Пользователь заблокирован'
-                                : 'Сообщение...',
-                            filled: true,
-                            isDense: true,
-                            fillColor: isBlocked
-                                ? Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withOpacity(0.25)
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withOpacity(0.4),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 18.0,
-                              vertical: 12.0,
-                            ),
-                          ),
-                          onChanged: isBlocked
-                              ? null
-                              : (v) {
-                                  if (v.isNotEmpty) {
-                                    _scheduleTypingPing();
-                                  }
-                                },
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Builder(
-                        builder: (context) {
-                          final isEncryptionActive =
-                              _encryptionConfigForCurrentChat != null &&
-                              _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-                              _sendEncryptedForCurrentChat;
-                          return Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(24),
-                              onTap: (isBlocked || isEncryptionActive)
-                                  ? null
-                                  : () async {
-                                      final result = await _pickPhotosFlow(context);
-                                      if (result != null &&
-                                          result.paths.isNotEmpty) {
-                                        await ApiService.instance.sendPhotoMessages(
-                                          widget.chatId,
-                                          localPaths: result.paths,
-                                          caption: result.caption,
-                                          senderId: _actualMyId,
-                                        );
-                                      }
-                                    },
-                              child: Padding(
-                                padding: const EdgeInsets.all(6.0),
-                                child: Icon(
-                                  Icons.photo_library_outlined,
-                                  color: (isBlocked || isEncryptionActive)
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface.withOpacity(0.3)
-                                      : Theme.of(context).colorScheme.primary,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      if (context.watch<ThemeProvider>().messageTransition ==
-                          TransitionOption.slide)
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: isBlocked ? null : _testSlideAnimation,
-                            child: Padding(
-                              padding: const EdgeInsets.all(6.0),
-                              child: Icon(
-                                Icons.animation,
-                                color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.3)
-                                    : Colors.orange,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 4),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isBlocked
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withOpacity(0.2)
-                              : Theme.of(context).colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: isBlocked ? null : _sendMessage,
-                            child: Padding(
-                              padding: const EdgeInsets.all(6.0),
-                              child: Icon(
-                                Icons.send_rounded,
-                                color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.5)
-                                    : Theme.of(context).colorScheme.onPrimary,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
+                    ],
+                  ),
+                ),
+              )
+            : BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface.withOpacity(
+                      0.85,
+                    ), // Прозрачный фон для эффекта стекла
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                ],
+                  child: SafeArea(
+                    top: false,
+                    bottom: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_replyingToMessage != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border(
+                                left: BorderSide(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.reply_rounded,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Ответ на сообщение',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        _replyingToMessage!.text.isNotEmpty
+                                            ? _replyingToMessage!.text
+                                            : (_replyingToMessage!.hasFileAttach
+                                                  ? 'Файл'
+                                                  : 'Фото'),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withOpacity(0.7),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap: _cancelReply,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(6.0),
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        size: 18,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (isBlocked) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.errorContainer.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border(
+                                left: BorderSide(
+                                  color: Theme.of(context).colorScheme.error,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.block_rounded,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Пользователь заблокирован',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Разблокируйте пользователя для отправки сообщений',
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onErrorContainer,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'или включите block_bypass',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer
+                                        .withOpacity(0.7),
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _textController,
+                                enabled: !isBlocked,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                minLines: 1,
+                                maxLines: 5,
+                                decoration: InputDecoration(
+                                  hintText: isBlocked
+                                      ? 'Пользователь заблокирован'
+                                      : 'Сообщение...',
+                                  filled: true,
+                                  isDense: true,
+                                  fillColor: isBlocked
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withOpacity(0.25)
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withOpacity(0.4),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 18.0,
+                                    vertical: 12.0,
+                                  ),
+                                ),
+                                onChanged: isBlocked
+                                    ? null
+                                    : (v) {
+                                        if (v.isNotEmpty) {
+                                          _scheduleTypingPing();
+                                        }
+                                      },
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Builder(
+                              builder: (context) {
+                                final isEncryptionActive =
+                                    _encryptionConfigForCurrentChat != null &&
+                                    _encryptionConfigForCurrentChat!
+                                        .password
+                                        .isNotEmpty &&
+                                    _sendEncryptedForCurrentChat;
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(24),
+                                    onTap: (isBlocked || isEncryptionActive)
+                                        ? null
+                                        : () async {
+                                            final result =
+                                                await _pickPhotosFlow(context);
+                                            if (result != null &&
+                                                result.paths.isNotEmpty) {
+                                              await ApiService.instance
+                                                  .sendPhotoMessages(
+                                                    widget.chatId,
+                                                    localPaths: result.paths,
+                                                    caption: result.caption,
+                                                    senderId: _actualMyId,
+                                                  );
+                                            }
+                                          },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(6.0),
+                                      child: Icon(
+                                        Icons.photo_library_outlined,
+                                        color: (isBlocked || isEncryptionActive)
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withOpacity(0.3)
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            if (context
+                                    .watch<ThemeProvider>()
+                                    .messageTransition ==
+                                TransitionOption.slide)
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(24),
+                                  onTap: isBlocked ? null : _testSlideAnimation,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6.0),
+                                    child: Icon(
+                                      Icons.animation,
+                                      color: isBlocked
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withOpacity(0.3)
+                                          : Colors.orange,
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(width: 4),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: isBlocked
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(0.2)
+                                    : Theme.of(context).colorScheme.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(24),
+                                  onTap: isBlocked ? null : _sendMessage,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6.0),
+                                    child: Icon(
+                                      Icons.send_rounded,
+                                      color: isBlocked
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withOpacity(0.5)
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimary,
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
       );
     }
   }
@@ -5379,30 +5542,38 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToMessage(String messageId) {
-    final itemIndex = _chatItems.indexWhere(
-      (item) => item is MessageItem && item.message.id == messageId,
-    );
+    // Используем addPostFrameCallback, чтобы избежать ошибок во время layout
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-    if (itemIndex != -1) {
-      final viewIndex = _chatItems.length - 1 - itemIndex;
-
-      _itemScrollController.scrollTo(
-        index: viewIndex,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-        alignment: 0.5,
+      final itemIndex = _chatItems.indexWhere(
+        (item) => item is MessageItem && item.message.id == messageId,
       );
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Исходное сообщение не найдено (возможно, оно в старой истории)',
+
+      if (itemIndex != -1) {
+        final viewIndex = _chatItems.length - 1 - itemIndex;
+
+        if (_itemScrollController.isAttached) {
+          _itemScrollController.scrollTo(
+            index: viewIndex,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut,
+            alignment:
+                0.2, // Прокручиваем чуть пониже (0.2 = 20% от верха экрана)
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Исходное сообщение не найдено (возможно, оно в старой истории)',
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
-    }
+    });
   }
 }
 
@@ -5684,16 +5855,25 @@ class _ContactPresenceSubtitleState extends State<_ContactPresenceSubtitle> {
               ? incomingChatId
               : int.tryParse(incomingChatId?.toString() ?? '');
           if (cid == widget.chatId) {
-            setState(() => _status = 'печатает…');
+            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            Future.microtask(() {
+              if (mounted) {
+                setState(() => _status = 'печатает…');
+              }
+            });
             _typingDecayTimer?.cancel();
             _typingDecayTimer = Timer(const Duration(seconds: 11), () {
               if (!mounted) return;
               if (_status == 'печатает…') {
-                setState(() {
-                  if (_isOnline) {
-                    _status = 'онлайн';
-                  } else {
-                    _status = _formatLastSeen(_lastSeen);
+                Future.microtask(() {
+                  if (mounted) {
+                    setState(() {
+                      if (_isOnline) {
+                        _status = 'онлайн';
+                      } else {
+                        _status = _formatLastSeen(_lastSeen);
+                      }
+                    });
                   }
                 });
               }
@@ -5708,21 +5888,26 @@ class _ContactPresenceSubtitleState extends State<_ContactPresenceSubtitle> {
             final bool isOnline = payload['online'] == true;
             if (!mounted) return;
             _isOnline = isOnline;
-            setState(() {
-              if (_status != 'печатает…') {
-                if (_isOnline) {
-                  _status = 'онлайн';
-                } else {
-                  final updatedLastSeen = ApiService.instance.getLastSeen(
-                    widget.userId,
-                  );
-                  if (updatedLastSeen != null) {
-                    _lastSeen = updatedLastSeen;
-                  } else {
-                    _lastSeen = DateTime.now();
+            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            Future.microtask(() {
+              if (mounted) {
+                setState(() {
+                  if (_status != 'печатает…') {
+                    if (_isOnline) {
+                      _status = 'онлайн';
+                    } else {
+                      final updatedLastSeen = ApiService.instance.getLastSeen(
+                        widget.userId,
+                      );
+                      if (updatedLastSeen != null) {
+                        _lastSeen = updatedLastSeen;
+                      } else {
+                        _lastSeen = DateTime.now();
+                      }
+                      _status = _formatLastSeen(_lastSeen);
+                    }
                   }
-                  _status = _formatLastSeen(_lastSeen);
-                }
+                });
               }
             });
           }
@@ -6189,7 +6374,7 @@ extension BrightnessExtension on Brightness {
 class GroupProfileDraggableDialog extends StatelessWidget {
   final Contact contact;
 
-  const GroupProfileDraggableDialog({required this.contact});
+  const GroupProfileDraggableDialog({super.key, required this.contact});
 
   @override
   Widget build(BuildContext context) {
@@ -6327,7 +6512,7 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
   }
 
   Future<void> _loadLocalDescription() async {
-    final localData = await ContactLocalNamesService().getContactData(
+    final localData = ContactLocalNamesService().getContactData(
       widget.contact.id,
     );
     if (mounted) {
@@ -6543,7 +6728,9 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                                       null;
                                   if (isInContacts) {
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
                                           content: Text('Уже в контактах'),
                                           behavior: SnackBarBehavior.floating,
@@ -6563,7 +6750,9 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                                         ]);
 
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
                                           content: Text(
                                             'Запрос на добавление в контакты отправлен',
@@ -6574,7 +6763,9 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                                     }
                                   } catch (e) {
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text(
                                             'Ошибка при добавлении в контакты: $e',
@@ -7030,7 +7221,7 @@ class _ControlMessageChip extends StatelessWidget {
     final isMe = message.senderId == myId;
     final senderDisplayName = isMe ? 'Вы' : senderName;
 
-    String _formatUserList(List<int> userIds) {
+    String formatUserList(List<int> userIds) {
       if (userIds.isEmpty) {
         return '';
       }
@@ -7067,7 +7258,7 @@ class _ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return 'К чату присоединились новые участники';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return 'К чату присоединились новые участники';
         }
@@ -7081,7 +7272,7 @@ class _ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName удалил(а) участников из чата';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName удалил(а) участников из чата';
         }
@@ -7119,7 +7310,7 @@ class _ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName назначил(а) администраторов';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName назначил(а) администраторов';
         }
@@ -7137,7 +7328,7 @@ class _ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName снял(а) администраторов';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName снял(а) администраторов';
         }
@@ -7154,7 +7345,7 @@ class _ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName заблокировал(а) участников';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName заблокировал(а) участников';
         }
@@ -7171,7 +7362,7 @@ class _ControlMessageChip extends StatelessWidget {
         if (userIds.isEmpty) {
           return '$senderDisplayName разблокировал(а) участников';
         }
-        final userNames = _formatUserList(userIds);
+        final userNames = formatUserList(userIds);
         if (userNames.isEmpty) {
           return '$senderDisplayName разблокировал(а) участников';
         }

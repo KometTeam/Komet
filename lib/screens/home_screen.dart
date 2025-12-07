@@ -1110,7 +1110,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _DesktopLayout extends StatefulWidget {
-  const _DesktopLayout({super.key});
+  const _DesktopLayout();
 
   @override
   State<_DesktopLayout> createState() => _DesktopLayoutState();

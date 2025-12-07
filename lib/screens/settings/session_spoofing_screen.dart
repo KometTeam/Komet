@@ -656,7 +656,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _selectedDeviceType,
+              initialValue: _selectedDeviceType,
               decoration: _inputDecoration(
                 'Тип устройства',
                 Icons.devices_other_outlined,

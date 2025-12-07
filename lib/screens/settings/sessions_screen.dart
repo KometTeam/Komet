@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
 import 'dart:async';
-import 'package:intl/intl.dart';
 
 class Session {
   final String client;

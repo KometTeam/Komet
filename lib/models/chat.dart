@@ -100,7 +100,7 @@ class Chat {
       title: title ?? this.title,
       type: type ?? this.type,
       baseIconUrl: baseIconUrl ?? this.baseIconUrl,
-      description: description ?? this.description,
+      description: description ?? description,
       participantsCount: participantsCount,
       pinnedMessage: pinnedMessage ?? this.pinnedMessage,
     );

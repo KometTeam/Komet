@@ -72,7 +72,7 @@ class ChatsScreen extends StatefulWidget {
 class _ChatsScreenState extends State<ChatsScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   late Future<Map<String, dynamic>> _chatsFuture;
-  bool _showChannelsRail = false;
+  final bool _showChannelsRail = false;
   List<Channel> _channels = [];
   bool _channelsLoaded = false;
   StreamSubscription? _apiSubscription;
@@ -326,12 +326,15 @@ class _ChatsScreenState extends State<ChatsScreen>
         final profileData = payload['profile'];
         if (profileData != null) {
           print('🔄 ChatsScreen: Получен профиль из opcode 19, обновляем UI');
-          if (mounted) {
-            setState(() {
-              _myProfile = Profile.fromJson(profileData);
-              _isProfileLoading = false;
-            });
-          }
+          // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+          Future.microtask(() {
+            if (mounted) {
+              setState(() {
+                _myProfile = Profile.fromJson(profileData);
+                _isProfileLoading = false;
+              });
+            }
+          });
         }
       }
 
@@ -649,7 +652,9 @@ class _ChatsScreenState extends State<ChatsScreen>
         if (chatJson != null) {
           final chatType = chatJson['type'] as String?;
           if (chatType == 'CHAT') {
-            print('Получен ответ на присоединение к группе (opcode 89): $payload');
+            print(
+              'Получен ответ на присоединение к группе (opcode 89): $payload',
+            );
             final newChat = Chat.fromJson(chatJson);
 
             ApiService.instance.updateChatInCacheFromJson(chatJson);
@@ -2071,7 +2076,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                       bottom: 16.0,
                     ),
                     decoration: () {
-                      if (themeProvider.drawerBackgroundType == DrawerBackgroundType.gradient) {
+                      if (themeProvider.drawerBackgroundType ==
+                          DrawerBackgroundType.gradient) {
                         return BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -2082,12 +2088,15 @@ class _ChatsScreenState extends State<ChatsScreen>
                             end: Alignment.bottomCenter,
                           ),
                         );
-                      } else if (themeProvider.drawerBackgroundType == DrawerBackgroundType.image &&
+                      } else if (themeProvider.drawerBackgroundType ==
+                              DrawerBackgroundType.image &&
                           themeProvider.drawerImagePath != null &&
                           themeProvider.drawerImagePath!.isNotEmpty) {
                         return BoxDecoration(
                           image: DecorationImage(
-                            image: FileImage(File(themeProvider.drawerImagePath!)),
+                            image: FileImage(
+                              File(themeProvider.drawerImagePath!),
+                            ),
                             fit: BoxFit.cover,
                           ),
                         );
@@ -2108,7 +2117,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                                   _isProfileLoading ||
                                       _myProfile?.photoBaseUrl == null
                                   ? null
-                                  : CachedNetworkImageProvider(_myProfile!.photoBaseUrl!),
+                                  : CachedNetworkImageProvider(
+                                      _myProfile!.photoBaseUrl!,
+                                    ),
                               child: _isProfileLoading
                                   ? const SizedBox(
                                       width: 20,
@@ -2216,10 +2227,12 @@ class _ChatsScreenState extends State<ChatsScreen>
                                         radius: 20,
                                         backgroundColor: isCurrent
                                             ? colors.primary
-                                            : colors.surfaceVariant,
+                                            : colors.surfaceContainerHighest,
                                         backgroundImage:
                                             account.avatarUrl != null
-                                            ? CachedNetworkImageProvider(account.avatarUrl!)
+                                            ? CachedNetworkImageProvider(
+                                                account.avatarUrl!,
+                                              )
                                             : null,
                                         child: account.avatarUrl == null
                                             ? Text(
@@ -2316,15 +2329,19 @@ class _ChatsScreenState extends State<ChatsScreen>
                                               }
                                             },
                                     );
-                                  }).toList(),
+                                  }),
 
                                 Container(
-                                  decoration: themeProvider.useGradientForAddAccountButton
+                                  decoration:
+                                      themeProvider
+                                          .useGradientForAddAccountButton
                                       ? BoxDecoration(
                                           gradient: LinearGradient(
                                             colors: [
-                                              themeProvider.addAccountButtonGradientColor1,
-                                              themeProvider.addAccountButtonGradientColor2,
+                                              themeProvider
+                                                  .addAccountButtonGradientColor1,
+                                              themeProvider
+                                                  .addAccountButtonGradientColor2,
                                             ],
                                             begin: Alignment.centerLeft,
                                             end: Alignment.centerRight,
@@ -2332,7 +2349,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                                         )
                                       : null,
                                   child: ListTile(
-                                    leading: const Icon(Icons.add_circle_outline),
+                                    leading: const Icon(
+                                      Icons.add_circle_outline,
+                                    ),
                                     title: const Text('Добавить аккаунт'),
                                     onTap: () {
                                       Navigator.pop(context);
@@ -2439,98 +2458,100 @@ class _ChatsScreenState extends State<ChatsScreen>
                         }
                       } finally {
                         if (mounted) {
-                        setState(() {
-                          _isReconnecting = false;
-                        });
+                          setState(() {
+                            _isReconnecting = false;
+                          });
+                        }
                       }
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.settings_outlined),
-                  title: const Text('Настройки'),
-                  onTap: () {
-                    Navigator.pop(context); // Закрыть Drawer
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.settings_outlined),
+                    title: const Text('Настройки'),
+                    onTap: () {
+                      Navigator.pop(context); // Закрыть Drawer
 
-                    final screenSize = MediaQuery.of(context).size;
-                    final screenWidth = screenSize.width;
-                    final screenHeight = screenSize.height;
-                    final isDesktopOrTablet =
-                        screenWidth >= 600 &&
-                        screenHeight >= 800; // Планшеты и десктопы
+                      final screenSize = MediaQuery.of(context).size;
+                      final screenWidth = screenSize.width;
+                      final screenHeight = screenSize.height;
+                      final isDesktopOrTablet =
+                          screenWidth >= 600 &&
+                          screenHeight >= 800; // Планшеты и десктопы
 
-                    print(
-                      'Screen size: ${screenWidth}x${screenHeight}, isDesktopOrTablet: $isDesktopOrTablet',
-                    );
-
-                    if (isDesktopOrTablet) {
-                      showDialog(
-                        context: context,
-                        barrierDismissible: true,
-                        builder: (context) => SettingsScreen(
-                          showBackToChats: true,
-                          onBackToChats: () => Navigator.of(context).pop(),
-                          myProfile: _myProfile,
-                          isModal: true, // Включаем модальный режим
-                        ),
+                      print(
+                        'Screen size: ${screenWidth}x$screenHeight, isDesktopOrTablet: $isDesktopOrTablet',
                       );
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
+
+                      if (isDesktopOrTablet) {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: true,
                           builder: (context) => SettingsScreen(
                             showBackToChats: true,
                             onBackToChats: () => Navigator.of(context).pop(),
                             myProfile: _myProfile,
-                            isModal: false, // Отключаем модальный режим
+                            isModal: true, // Включаем модальный режим
                           ),
-                        ),
-                      );
-                    }
-                  },
-                ),
-                const Spacer(),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: Icon(Icons.logout, color: colors.error),
-                  title: Text('Выйти', style: TextStyle(color: colors.error)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showLogoutDialog();
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
-            );
+                        );
+                      } else {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => SettingsScreen(
+                              showBackToChats: true,
+                              onBackToChats: () => Navigator.of(context).pop(),
+                              myProfile: _myProfile,
+                              isModal: false, // Отключаем модальный режим
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  const Spacer(),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  ListTile(
+                    leading: Icon(Icons.logout, color: colors.error),
+                    title: Text('Выйти', style: TextStyle(color: colors.error)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showLogoutDialog();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              );
 
-            if (themeProvider.drawerBackgroundType == DrawerBackgroundType.gradient) {
-              return Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      themeProvider.drawerGradientColor2,
-                      themeProvider.drawerGradientColor1,
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+              if (themeProvider.drawerBackgroundType ==
+                  DrawerBackgroundType.gradient) {
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        themeProvider.drawerGradientColor2,
+                        themeProvider.drawerGradientColor1,
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
                   ),
-                ),
-                child: menuColumn,
-              );
-            } else if (themeProvider.drawerBackgroundType == DrawerBackgroundType.image &&
-                themeProvider.drawerImagePath != null &&
-                themeProvider.drawerImagePath!.isNotEmpty) {
-              return Container(
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: FileImage(File(themeProvider.drawerImagePath!)),
-                    fit: BoxFit.cover,
+                  child: menuColumn,
+                );
+              } else if (themeProvider.drawerBackgroundType ==
+                      DrawerBackgroundType.image &&
+                  themeProvider.drawerImagePath != null &&
+                  themeProvider.drawerImagePath!.isNotEmpty) {
+                return Container(
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: FileImage(File(themeProvider.drawerImagePath!)),
+                      fit: BoxFit.cover,
+                    ),
                   ),
-                ),
-                child: menuColumn,
-              );
-            }
-            return menuColumn;
-          }(),
+                  child: menuColumn,
+                );
+              }
+              return menuColumn;
+            }(),
           ),
         ],
       ),
@@ -2888,7 +2909,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                               backgroundColor: colors.primaryContainer,
                               backgroundImage:
                                   isGroupChat && chat.baseIconUrl != null
-                                  ? CachedNetworkImageProvider(chat.baseIconUrl ?? '')
+                                  ? CachedNetworkImageProvider(
+                                      chat.baseIconUrl ?? '',
+                                    )
                                   : null,
                               child:
                                   isSavedMessages ||
@@ -3030,21 +3053,22 @@ class _ChatsScreenState extends State<ChatsScreen>
         buildChatListItem: _buildChatListItem,
         isSavedMessages: _isSavedMessages,
       ),
-      ..._folders.map((folder) => _ChatsListPage(
-        key: ValueKey('folder_${folder.id}'),
-        folder: folder,
-        allChats: _allChats,
-        contacts: _contacts,
-        searchQuery: _searchController.text,
-        buildChatListItem: _buildChatListItem,
-        isSavedMessages: _isSavedMessages,
-        chatBelongsToFolder: _chatBelongsToFolder,
-      )),
+      ..._folders.map(
+        (folder) => _ChatsListPage(
+          key: ValueKey('folder_${folder.id}'),
+          folder: folder,
+          allChats: _allChats,
+          contacts: _contacts,
+          searchQuery: _searchController.text,
+          buildChatListItem: _buildChatListItem,
+          isSavedMessages: _isSavedMessages,
+          chatBelongsToFolder: _chatBelongsToFolder,
+        ),
+      ),
     ];
 
     return pages;
   }
-
 
   Widget _buildFolderTabs() {
     if (_folderTabController.length <= 1) {
@@ -3085,9 +3109,10 @@ class _ChatsScreenState extends State<ChatsScreen>
     ];
 
     final themeProvider = context.watch<ThemeProvider>();
-    
+
     BoxDecoration? folderTabsDecoration;
-    if (themeProvider.folderTabsBackgroundType == FolderTabsBackgroundType.gradient) {
+    if (themeProvider.folderTabsBackgroundType ==
+        FolderTabsBackgroundType.gradient) {
       folderTabsDecoration = BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -3101,7 +3126,8 @@ class _ChatsScreenState extends State<ChatsScreen>
           bottom: BorderSide(color: colors.outline.withOpacity(0.2), width: 1),
         ),
       );
-    } else if (themeProvider.folderTabsBackgroundType == FolderTabsBackgroundType.image &&
+    } else if (themeProvider.folderTabsBackgroundType ==
+            FolderTabsBackgroundType.image &&
         themeProvider.folderTabsImagePath != null &&
         themeProvider.folderTabsImagePath!.isNotEmpty) {
       folderTabsDecoration = BoxDecoration(
@@ -3117,11 +3143,15 @@ class _ChatsScreenState extends State<ChatsScreen>
 
     return Container(
       height: 48,
-      decoration: folderTabsDecoration ??
+      decoration:
+          folderTabsDecoration ??
           BoxDecoration(
             color: colors.surface,
             border: Border(
-              bottom: BorderSide(color: colors.outline.withOpacity(0.2), width: 1),
+              bottom: BorderSide(
+                color: colors.outline.withOpacity(0.2),
+                width: 1,
+              ),
             ),
           ),
       child: Stack(
@@ -3846,7 +3876,8 @@ class _ChatsScreenState extends State<ChatsScreen>
           end: Alignment.bottomRight,
         ),
       );
-    } else if (themeProvider.appBarBackgroundType == AppBarBackgroundType.image &&
+    } else if (themeProvider.appBarBackgroundType ==
+            AppBarBackgroundType.image &&
         themeProvider.appBarImagePath != null &&
         themeProvider.appBarImagePath!.isNotEmpty) {
       appBarDecoration = BoxDecoration(
@@ -5398,7 +5429,8 @@ class _ChatsScreenScaffold extends StatelessWidget {
               end: Alignment.bottomCenter,
             ),
           );
-        } else if (theme.chatsListBackgroundType == ChatsListBackgroundType.image &&
+        } else if (theme.chatsListBackgroundType ==
+                ChatsListBackgroundType.image &&
             theme.chatsListImagePath != null &&
             theme.chatsListImagePath!.isNotEmpty) {
           chatsListDecoration = BoxDecoration(
@@ -5463,7 +5495,7 @@ class _ChatsListPageState extends State<_ChatsListPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     List<Chat> chatsForFolder = widget.allChats;
 
     if (widget.folder != null && widget.chatBelongsToFolder != null) {
@@ -5525,7 +5557,11 @@ class _ChatsListPageState extends State<_ChatsListPage>
         itemExtent: 72.0, // Фиксированная высота для оптимизации
         cacheExtent: 500.0, // Кеш для плавной прокрутки
         itemBuilder: (context, index) {
-          return widget.buildChatListItem(chatsForFolder[index], index, widget.folder);
+          return widget.buildChatListItem(
+            chatsForFolder[index],
+            index,
+            widget.folder,
+          );
         },
       ),
     );

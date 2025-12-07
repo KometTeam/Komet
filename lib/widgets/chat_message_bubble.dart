@@ -300,9 +300,11 @@ class _PulseAnimatedTextState extends State<_PulseAnimatedText>
     }
 
     if (hexClean.length == 3) {
-      hexClean = '${hexClean[0]}${hexClean[0]}${hexClean[1]}${hexClean[1]}${hexClean[2]}${hexClean[2]}';
+      hexClean =
+          '${hexClean[0]}${hexClean[0]}${hexClean[1]}${hexClean[1]}${hexClean[2]}${hexClean[2]}';
     } else if (hexClean.length == 4) {
-      hexClean = '${hexClean[0]}${hexClean[0]}${hexClean[1]}${hexClean[1]}${hexClean[2]}${hexClean[2]}${hexClean[3]}${hexClean[3]}';
+      hexClean =
+          '${hexClean[0]}${hexClean[0]}${hexClean[1]}${hexClean[1]}${hexClean[2]}${hexClean[2]}${hexClean[3]}${hexClean[3]}';
     } else if (hexClean.length == 5) {
       hexClean = '0$hexClean';
     } else if (hexClean.length < 6) {
@@ -781,7 +783,9 @@ class ChatMessageBubble extends StatelessWidget {
                 (highQualityUrl != null && highQualityUrl.isNotEmpty) ||
                         (lowQualityBytes != null)
                     ? _ProgressiveNetworkImage(
-                        key: ValueKey('video_preview_image_${messageId}_$videoId'),
+                        key: ValueKey(
+                          'video_preview_image_${messageId}_$videoId',
+                        ),
                         url: highQualityUrl ?? '',
                         previewBytes: lowQualityBytes,
                         width: 220,
@@ -1267,6 +1271,7 @@ class ChatMessageBubble extends StatelessWidget {
     );
   }
 
+  @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isUltraOptimized = themeProvider.ultraOptimizeChats;
@@ -1370,7 +1375,7 @@ class ChatMessageBubble extends StatelessWidget {
       decorationColor: linkColor,
     );
 
-    Future<void> _onOpenLink(LinkableElement link) async {
+    Future<void> onOpenLink(LinkableElement link) async {
       final uri = Uri.parse(link.url);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1383,7 +1388,7 @@ class ChatMessageBubble extends StatelessWidget {
       }
     }
 
-    void _onSenderNameTap() {
+    void onSenderNameTap() {
       openUserProfileById(context, message.senderId);
     }
 
@@ -1395,8 +1400,8 @@ class ChatMessageBubble extends StatelessWidget {
       linkStyle,
       defaultTextStyle,
       messageBorderRadius,
-      _onOpenLink,
-      _onSenderNameTap,
+      onOpenLink,
+      onSenderNameTap,
     );
 
     Widget messageContent = _buildMessageContentInner(
@@ -2068,7 +2073,9 @@ class ChatMessageBubble extends StatelessWidget {
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 300),
                               child: RepaintBoundary(
-                                key: ValueKey('video_preview_${message.id}_$videoId'),
+                                key: ValueKey(
+                                  'video_preview_${message.id}_$videoId',
+                                ),
                                 child: _buildVideoPreview(
                                   context: context,
                                   videoId: videoId,
@@ -2102,7 +2109,7 @@ class ChatMessageBubble extends StatelessWidget {
                 ),
               ],
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -3558,18 +3565,25 @@ class ChatMessageBubble extends StatelessWidget {
     bool isUltraOptimized,
   ) {
     final borderRadius = BorderRadius.circular(isUltraOptimized ? 4 : 12);
+    
+    // Получаем максимальную доступную ширину для фотографий
+    // Учитываем, что сообщение ограничено 65% ширины экрана, минус отступы
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxMessageWidth = screenWidth * 0.65;
+    // Вычитаем горизонтальные отступы сообщения (12px с каждой стороны = 24px)
+    final maxPhotoWidth = maxMessageWidth - 24;
 
     switch (photos.length) {
       case 1:
-        return _buildSinglePhoto(context, photos[0], borderRadius);
+        return _buildSinglePhoto(context, photos[0], borderRadius, maxPhotoWidth);
       case 2:
-        return _buildTwoPhotos(context, photos, borderRadius);
+        return _buildTwoPhotos(context, photos, borderRadius, maxPhotoWidth);
       case 3:
-        return _buildThreePhotos(context, photos, borderRadius);
+        return _buildThreePhotos(context, photos, borderRadius, maxPhotoWidth);
       case 4:
-        return _buildFourPhotos(context, photos, borderRadius);
+        return _buildFourPhotos(context, photos, borderRadius, maxPhotoWidth);
       default:
-        return _buildManyPhotos(context, photos, borderRadius);
+        return _buildManyPhotos(context, photos, borderRadius, maxPhotoWidth);
     }
   }
 
@@ -3577,6 +3591,7 @@ class ChatMessageBubble extends StatelessWidget {
     BuildContext context,
     Map<String, dynamic> photo,
     BorderRadius borderRadius,
+    double maxWidth,
   ) {
     return RepaintBoundary(
       child: GestureDetector(
@@ -3584,7 +3599,10 @@ class ChatMessageBubble extends StatelessWidget {
         child: ClipRRect(
           borderRadius: borderRadius,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 250),
+            constraints: BoxConstraints(
+              maxHeight: 180,
+              maxWidth: maxWidth.clamp(100.0, double.infinity),
+            ),
             child: _buildPhotoWidget(context, photo),
           ),
         ),
@@ -3596,9 +3614,13 @@ class ChatMessageBubble extends StatelessWidget {
     BuildContext context,
     List<Map<String, dynamic>> photos,
     BorderRadius borderRadius,
+    double maxWidth,
   ) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 180),
+      constraints: BoxConstraints(
+        maxHeight: 180,
+        maxWidth: maxWidth,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -3633,9 +3655,13 @@ class ChatMessageBubble extends StatelessWidget {
     BuildContext context,
     List<Map<String, dynamic>> photos,
     BorderRadius borderRadius,
+    double maxWidth,
   ) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 180),
+      constraints: BoxConstraints(
+        maxHeight: 180,
+        maxWidth: maxWidth,
+      ),
       child: Row(
         children: [
           // Левая большая фотка
@@ -3692,9 +3718,13 @@ class ChatMessageBubble extends StatelessWidget {
     BuildContext context,
     List<Map<String, dynamic>> photos,
     BorderRadius borderRadius,
+    double maxWidth,
   ) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 180),
+      constraints: BoxConstraints(
+        maxHeight: 180,
+        maxWidth: maxWidth,
+      ),
       child: Column(
         children: [
           // Верхний ряд
@@ -3767,13 +3797,21 @@ class ChatMessageBubble extends StatelessWidget {
     BuildContext context,
     List<Map<String, dynamic>> photos,
     BorderRadius borderRadius,
+    double maxWidth,
   ) {
     // Для 5+ фотографий показываем сетку 2x2 + счетчик
+    // Используем фиксированную высоту для каждой строки, чтобы избежать проблем с unbounded constraints
+    const double rowHeight = 89.0; // 180 / 2 - 2 (spacing)
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 180),
+      constraints: BoxConstraints(
+        maxHeight: 180,
+        maxWidth: maxWidth,
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
+          SizedBox(
+            height: rowHeight,
             child: Row(
               children: [
                 Expanded(
@@ -3803,7 +3841,8 @@ class ChatMessageBubble extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Expanded(
+          SizedBox(
+            height: rowHeight,
             child: Row(
               children: [
                 Expanded(
@@ -3832,18 +3871,21 @@ class ChatMessageBubble extends StatelessWidget {
                       ),
                       if (photos.length > 4)
                         Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              borderRadius: borderRadius,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '+${photos.length - 3}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                          child: GestureDetector(
+                            onTap: () => _openPhotoGallery(context, photos, 3),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                borderRadius: borderRadius,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '+${photos.length - 3}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
@@ -3915,6 +3957,29 @@ class ChatMessageBubble extends StatelessWidget {
           return FullScreenPhotoViewer(imageChild: child, attach: attach);
         },
         // Добавляем плавное появление
+        transitionsBuilder: (_, animation, __, page) {
+          return FadeTransition(opacity: animation, child: page);
+        },
+      ),
+    );
+  }
+
+  void _openPhotoGallery(
+    BuildContext context,
+    List<Map<String, dynamic>> photos,
+    int initialIndex,
+  ) {
+    // Используем навигатор для перехода на новый полноэкранный виджет с галереей
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (BuildContext context, _, __) {
+          return FullScreenPhotoGallery(
+            photos: photos,
+            initialIndex: initialIndex,
+          );
+        },
         transitionsBuilder: (_, animation, __, page) {
           return FadeTransition(opacity: animation, child: page);
         },
@@ -4388,11 +4453,7 @@ class ChatMessageBubble extends StatelessWidget {
             segments.add(
               _KometSegment(segmentText, _KometSegmentType.pulse, color: color),
             );
-            index =
-                nextMarker +
-                prefix.length +
-                secondQuote +
-                2;
+            index = nextMarker + prefix.length + secondQuote + 2;
             continue;
           }
         }
@@ -4574,7 +4635,7 @@ class ChatMessageBubble extends StatelessWidget {
     final spans = <TextSpan>[];
     int start = 0;
 
-    TextStyle _styleForIndex(int i) {
+    TextStyle styleForIndex(int i) {
       var s = baseStyle;
       if (bold[i]) s = s.copyWith(fontWeight: FontWeight.w600);
       if (italic[i]) s = s.copyWith(fontStyle: FontStyle.italic);
@@ -4589,8 +4650,8 @@ class ChatMessageBubble extends StatelessWidget {
 
     while (start < text.length) {
       int end = start + 1;
-      final style = _styleForIndex(start);
-      while (end < text.length && _styleForIndex(end) == style) {
+      final style = styleForIndex(start);
+      while (end < text.length && styleForIndex(end) == style) {
         end++;
       }
       spans.add(TextSpan(text: text.substring(start, end), style: style));
@@ -4662,7 +4723,8 @@ class ChatMessageBubble extends StatelessWidget {
     if (hex.length == 3) {
       hex = '${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}';
     } else if (hex.length == 4) {
-      hex = '${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}';
+      hex =
+          '${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}';
     } else if (hex.length == 5) {
       hex = '0$hex';
     } else if (hex.length == 6) {
@@ -4781,7 +4843,8 @@ class _LongPressContextMenuWrapper extends StatefulWidget {
 class _LongPressContextMenuWrapperState
     extends State<_LongPressContextMenuWrapper> {
   static const Duration _longPressDuration = Duration(milliseconds: 700);
-  static const double _maxMovementDistance = 15.0; // Максимальное расстояние для открытия панели
+  static const double _maxMovementDistance =
+      15.0; // Максимальное расстояние для открытия панели
 
   Timer? _timer;
   Offset? _initialPosition;
@@ -5400,80 +5463,87 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
 
   bool _hasAudioOrVideoCircle() {
     final attaches = widget.message.attaches;
-    
+
     final hasAudio = attaches.any((a) => a['_type'] == 'AUDIO');
     final hasVideoCircle = attaches.any(
       (a) => a['_type'] == 'VIDEO' && (a['videoType'] as int?) == 1,
     );
-    
+
     if (hasAudio || hasVideoCircle) {
       return true;
     }
-    
-    if (widget.message.isForwarded && widget.message.link is Map<String, dynamic>) {
+
+    if (widget.message.isForwarded &&
+        widget.message.link is Map<String, dynamic>) {
       final link = widget.message.link as Map<String, dynamic>;
       final forwardedMessage = link['message'] as Map<String, dynamic>?;
       if (forwardedMessage != null) {
-        final forwardedAttaches = (forwardedMessage['attaches'] as List?)
+        final forwardedAttaches =
+            (forwardedMessage['attaches'] as List?)
                 ?.map((e) => (e as Map).cast<String, dynamic>())
                 .toList() ??
             [];
-        
-        final forwardedHasAudio = forwardedAttaches.any((a) => a['_type'] == 'AUDIO');
+
+        final forwardedHasAudio = forwardedAttaches.any(
+          (a) => a['_type'] == 'AUDIO',
+        );
         final forwardedHasVideoCircle = forwardedAttaches.any(
           (a) => a['_type'] == 'VIDEO' && (a['videoType'] as int?) == 1,
         );
-        
+
         return forwardedHasAudio || forwardedHasVideoCircle;
       }
     }
-    
+
     return false;
   }
 
   Future<void> _onSaveToDevice() async {
     Navigator.of(context).pop();
-    
+
     try {
       List<Map<String, dynamic>> attaches = widget.message.attaches;
-      
-      if (widget.message.isForwarded && widget.message.link is Map<String, dynamic>) {
+
+      if (widget.message.isForwarded &&
+          widget.message.link is Map<String, dynamic>) {
         final link = widget.message.link as Map<String, dynamic>;
         final forwardedMessage = link['message'] as Map<String, dynamic>?;
         if (forwardedMessage != null) {
-          attaches = (forwardedMessage['attaches'] as List?)
+          attaches =
+              (forwardedMessage['attaches'] as List?)
                   ?.map((e) => (e as Map).cast<String, dynamic>())
                   .toList() ??
               [];
         }
       }
-      
+
       final audioAttach = attaches.firstWhere(
         (a) => a['_type'] == 'AUDIO',
         orElse: () => <String, dynamic>{},
       );
-      
+
       final videoCircleAttach = attaches.firstWhere(
         (a) => a['_type'] == 'VIDEO' && (a['videoType'] as int?) == 1,
         orElse: () => <String, dynamic>{},
       );
-      
+
       String? fileUrl;
       String fileName;
       Uint8List? fileBytes;
-      
+
       if (audioAttach.isNotEmpty) {
         fileUrl = audioAttach['url'] as String?;
         final audioId = audioAttach['audioId'] as int?;
-        fileName = 'audio_${audioId ?? DateTime.now().millisecondsSinceEpoch}.m4a';
-        
+        fileName =
+            'audio_${audioId ?? DateTime.now().millisecondsSinceEpoch}.m4a';
+
         if (fileUrl != null && fileUrl.isNotEmpty) {
           final cacheService = CacheService();
           final cachedFile = await cacheService.getCachedAudioFile(
             fileUrl,
             customKey: audioId?.toString(),
           );
-          
+
           if (cachedFile != null && await cachedFile.exists()) {
             fileBytes = await cachedFile.readAsBytes();
           }
@@ -5481,7 +5551,7 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
       } else if (videoCircleAttach.isNotEmpty) {
         final videoId = videoCircleAttach['videoId'] as int?;
         final chatId = widget.message.cid;
-        
+
         if (videoId != null && chatId != null) {
           try {
             fileUrl = await ApiService.instance.getVideoUrl(
@@ -5489,7 +5559,8 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
               chatId,
               widget.message.id,
             );
-            fileName = 'video_${videoId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+            fileName =
+                'video_${videoId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -5515,7 +5586,7 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
       } else {
         return;
       }
-      
+
       if (fileUrl == null || fileUrl.isEmpty) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -5527,9 +5598,9 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
         }
         return;
       }
-      
+
       String? savedPath;
-      
+
       if (fileBytes != null) {
         savedPath = await FilePicker.platform.saveFile(
           dialogTitle: 'Сохранить файл',
@@ -5549,7 +5620,7 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
           throw Exception('Failed to download: ${response.statusCode}');
         }
       }
-      
+
       if (savedPath != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -6054,6 +6125,290 @@ class _FullScreenPhotoViewerState extends State<FullScreenPhotoViewer> {
   }
 }
 
+class FullScreenPhotoGallery extends StatefulWidget {
+  final List<Map<String, dynamic>> photos;
+  final int initialIndex;
+
+  const FullScreenPhotoGallery({
+    super.key,
+    required this.photos,
+    this.initialIndex = 0,
+  });
+
+  @override
+  State<FullScreenPhotoGallery> createState() => _FullScreenPhotoGalleryState();
+}
+
+class _FullScreenPhotoGalleryState extends State<FullScreenPhotoGallery> {
+  late PageController _pageController;
+  late int _currentIndex;
+  bool _showControls = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex.clamp(0, widget.photos.length - 1);
+    _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildPhotoWidget(Map<String, dynamic> attach) {
+    final url = attach['url'] ?? attach['baseUrl'];
+    final preview = attach['previewData'];
+
+    Widget child;
+    if (url is String && url.isNotEmpty) {
+      if (url.startsWith('file://')) {
+        final path = url.replaceFirst('file://', '');
+        child = Image.file(
+          File(path),
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        );
+      } else {
+        String fullQualityUrl = url;
+        if (!url.contains('?')) {
+          fullQualityUrl = '$url?size=original&quality=high&format=original';
+        } else {
+          fullQualityUrl = '$url&size=original&quality=high&format=original';
+        }
+        child = Image.network(
+          fullQualityUrl,
+          width: MediaQuery.of(context).size.width,
+          height: MediaQuery.of(context).size.height,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+                color: Colors.white,
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return _imagePlaceholder();
+          },
+        );
+      }
+    } else if (preview is String && preview.startsWith('data:')) {
+      final idx = preview.indexOf('base64,');
+      if (idx != -1) {
+        final b64 = preview.substring(idx + 7);
+        try {
+          final bytes = base64Decode(b64);
+          child = Image.memory(bytes, fit: BoxFit.contain);
+        } catch (_) {
+          child = _imagePlaceholder();
+        }
+      } else {
+        child = _imagePlaceholder();
+      }
+    } else {
+      child = _imagePlaceholder();
+    }
+
+    return InteractiveViewer(
+      minScale: 0.5,
+      maxScale: 4.0,
+      child: child,
+    );
+  }
+
+  Widget _imagePlaceholder() {
+    return Container(
+      color: Colors.grey[300],
+      child: Center(
+        child: Icon(
+          Icons.image_not_supported,
+          size: 64,
+          color: Colors.grey[600],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadPhoto() async {
+    if (_currentIndex < 0 || _currentIndex >= widget.photos.length) return;
+    
+    final attach = widget.photos[_currentIndex];
+
+    try {
+      // Get Downloads directory using helper
+      final downloadDir = await DownloadPathHelper.getDownloadDirectory();
+
+      if (downloadDir == null || !await downloadDir.exists()) {
+        throw Exception('Downloads directory not found');
+      }
+
+      // Get photo URL
+      final url = attach['url'] ?? attach['baseUrl'];
+      if (url == null || url.isEmpty) {
+        throw Exception('Photo URL not found');
+      }
+
+      // Extract file extension from URL or use .jpg as default
+      String extension = 'jpg';
+      final uri = Uri.tryParse(url);
+      if (uri != null && uri.pathSegments.isNotEmpty) {
+        final lastSegment = uri.pathSegments.last;
+        final extMatch = RegExp(r'\.([a-zA-Z0-9]+)$').firstMatch(lastSegment);
+        if (extMatch != null) {
+          extension = extMatch.group(1)!;
+        }
+      }
+
+      // Generate filename with timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'photo_$timestamp.$extension';
+      final filePath = '${downloadDir.path}/$fileName';
+      final file = io.File(filePath);
+
+      // Download the image
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        await file.writeAsBytes(response.bodyBytes);
+
+        // Save to SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        final List<String> downloadedFiles =
+            prefs.getStringList('downloaded_files') ?? [];
+        if (!downloadedFiles.contains(filePath)) {
+          downloadedFiles.add(filePath);
+          await prefs.setStringList('downloaded_files', downloadedFiles);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Фото сохранено: $fileName'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        throw Exception('Failed to download photo: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при скачивании фото: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Галерея фотографий с возможностью свайпа
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            itemCount: widget.photos.length,
+            itemBuilder: (context, index) {
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showControls = !_showControls;
+                  });
+                },
+                child: Center(
+                  child: _buildPhotoWidget(widget.photos[index]),
+                ),
+              );
+            },
+          ),
+          // Кнопка закрытия
+          if (_showControls)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 8,
+              child: SafeArea(
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
+          // Индикатор текущей фотографии и кнопка скачать
+          if (_showControls)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 8,
+              child: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Индикатор текущей фотографии
+                    if (widget.photos.length > 1)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${_currentIndex + 1} / ${widget.photos.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    // Кнопка скачать
+                    if (widget.photos.length > 1)
+                      const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                      icon: const Icon(Icons.download, size: 20),
+                      label: const Text(
+                        'Скачать',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: _downloadPhoto,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RotatingIcon extends StatefulWidget {
   final IconData icon;
   final double size;
@@ -6277,7 +6632,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                 widget.url,
                 customKey: widget.audioId?.toString(),
               );
-              
+
               if (!hasCached) {
                 print('Audio not cached, playing from URL: ${widget.url}');
                 try {
@@ -6384,7 +6739,10 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
         decoration: BoxDecoration(
           color: widget.textColor.withOpacity(0.05),
           borderRadius: widget.borderRadius,
-          border: Border.all(color: widget.textColor.withOpacity(0.1), width: 1),
+          border: Border.all(
+            color: widget.textColor.withOpacity(0.1),
+            width: 1,
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -6392,114 +6750,120 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
             children: [
               GestureDetector(
                 onTap: _togglePlayPause,
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: widget.textColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        _isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: widget.textColor.withOpacity(
-                          0.8 * widget.messageTextOpacity,
-                        ),
-                        size: 24,
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_waveformData != null && _waveformData!.isNotEmpty)
-                    SizedBox(
-                      height: 30,
-                      child: CustomPaint(
-                        painter: _WaveformPainter(
-                          waveform: _waveformData!,
-                          progress: progress,
-                          color: widget.textColor.withOpacity(
-                            0.6 * widget.messageTextOpacity,
-                          ),
-                          progressColor: widget.textColor.withOpacity(
-                            0.9 * widget.messageTextOpacity,
-                          ),
-                        ),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTapDown: (details) {
-                                final tapProgress = details.localPosition.dx / constraints.maxWidth;
-                                final clampedProgress = tapProgress.clamp(0.0, 1.0);
-                                final newPosition = Duration(
-                                  milliseconds:
-                                      (_totalDuration.inMilliseconds * clampedProgress)
-                                          .round(),
-                                );
-                                _seek(newPosition);
-                              },
-                              onLongPress: () {},
-                            );
-                          },
-                        ),
-                      ),
-                    )
-                  else
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        backgroundColor: widget.textColor.withOpacity(0.1),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          widget.textColor.withOpacity(
-                            0.6 * widget.messageTextOpacity,
-                          ),
-                        ),
-                        minHeight: 3,
-                      ),
-                    ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _formatDuration(_position),
-                        style: TextStyle(
-                          color: widget.textColor.withOpacity(
-                            0.7 * widget.messageTextOpacity,
-                          ),
-                          fontSize: 12,
-                        ),
-                      ),
-                      Text(
-                        _totalDuration.inMilliseconds > 0
-                            ? _formatDuration(_totalDuration)
-                            : widget.durationText,
-                        style: TextStyle(
-                          color: widget.textColor.withOpacity(
-                            0.7 * widget.messageTextOpacity,
-                          ),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: widget.textColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
                   ),
-                ],
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: widget.textColor.withOpacity(
+                            0.8 * widget.messageTextOpacity,
+                          ),
+                          size: 24,
+                        ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_waveformData != null && _waveformData!.isNotEmpty)
+                      SizedBox(
+                        height: 30,
+                        child: CustomPaint(
+                          painter: _WaveformPainter(
+                            waveform: _waveformData!,
+                            progress: progress,
+                            color: widget.textColor.withOpacity(
+                              0.6 * widget.messageTextOpacity,
+                            ),
+                            progressColor: widget.textColor.withOpacity(
+                              0.9 * widget.messageTextOpacity,
+                            ),
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTapDown: (details) {
+                                  final tapProgress =
+                                      details.localPosition.dx /
+                                      constraints.maxWidth;
+                                  final clampedProgress = tapProgress.clamp(
+                                    0.0,
+                                    1.0,
+                                  );
+                                  final newPosition = Duration(
+                                    milliseconds:
+                                        (_totalDuration.inMilliseconds *
+                                                clampedProgress)
+                                            .round(),
+                                  );
+                                  _seek(newPosition);
+                                },
+                                onLongPress: () {},
+                              );
+                            },
+                          ),
+                        ),
+                      )
+                    else
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          backgroundColor: widget.textColor.withOpacity(0.1),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            widget.textColor.withOpacity(
+                              0.6 * widget.messageTextOpacity,
+                            ),
+                          ),
+                          minHeight: 3,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(_position),
+                          style: TextStyle(
+                            color: widget.textColor.withOpacity(
+                              0.7 * widget.messageTextOpacity,
+                            ),
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          _totalDuration.inMilliseconds > 0
+                              ? _formatDuration(_totalDuration)
+                              : widget.durationText,
+                          style: TextStyle(
+                            color: widget.textColor.withOpacity(
+                              0.7 * widget.messageTextOpacity,
+                            ),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

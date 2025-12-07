@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class FormattedTextController extends TextEditingController {
   final List<Map<String, dynamic>> elements = [];
 
-  FormattedTextController({String? text}) : super(text: text);
+  FormattedTextController({super.text});
 
   @override
   TextSpan buildTextSpan({

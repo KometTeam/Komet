@@ -56,21 +56,16 @@ class _NetworkScreenState extends State<NetworkScreen>
   }
 
   Future<NetworkStats> _getNetworkStats() async {
-
     final stats = await ApiService.instance.getNetworkStatistics();
 
-
     final totalDailyTraffic = stats['totalTraffic'] as double;
-
 
     final messagesTraffic = stats['messagesTraffic'] as double;
     final mediaTraffic = stats['mediaTraffic'] as double;
     final syncTraffic = stats['syncTraffic'] as double;
     final otherTraffic = stats['otherTraffic'] as double;
 
-
     final currentSpeed = stats['currentSpeed'] as double;
-
 
     final hourlyData = stats['hourlyStats'] as List<dynamic>;
     final hourlyStats = List.generate(24, (index) {
@@ -159,16 +154,19 @@ class _NetworkScreenState extends State<NetworkScreen>
   String _formatBytes(double bytes) {
     if (bytes < 1024) return '${bytes.toStringAsFixed(0)} B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
+    if (bytes < 1024 * 1024 * 1024) {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
   String _formatSpeed(double bytesPerSecond) {
-    if (bytesPerSecond < 1024)
+    if (bytesPerSecond < 1024) {
       return '${bytesPerSecond.toStringAsFixed(0)} B/s';
-    if (bytesPerSecond < 1024 * 1024)
+    }
+    if (bytesPerSecond < 1024 * 1024) {
       return '${(bytesPerSecond / 1024).toStringAsFixed(1)} KB/s';
+    }
     return '${(bytesPerSecond / (1024 * 1024)).toStringAsFixed(1)} MB/s';
   }
 
@@ -225,31 +223,25 @@ class _NetworkScreenState extends State<NetworkScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   _buildConnectionStatus(colors),
 
                   const SizedBox(height: 24),
-
 
                   _buildNetworkChart(colors),
 
                   const SizedBox(height: 24),
 
-
                   _buildCurrentSpeed(colors),
 
                   const SizedBox(height: 24),
-
 
                   _buildTrafficDetails(colors),
 
                   const SizedBox(height: 24),
 
-
                   _buildHourlyChart(colors),
 
                   const SizedBox(height: 24),
-
 
                   _buildActionButtons(colors),
                 ],
@@ -366,7 +358,6 @@ class _NetworkScreenState extends State<NetworkScreen>
           ),
           const SizedBox(height: 24),
 
-
           AnimatedBuilder(
             animation: _animation,
             builder: (context, child) {
@@ -375,7 +366,6 @@ class _NetworkScreenState extends State<NetworkScreen>
                 height: 200,
                 child: Stack(
                   children: [
-
                     Container(
                       width: 200,
                       height: 200,
@@ -385,7 +375,6 @@ class _NetworkScreenState extends State<NetworkScreen>
                       ),
                     ),
 
-
                     CustomPaint(
                       size: const Size(200, 200),
                       painter: NetworkChartPainter(
@@ -393,7 +382,6 @@ class _NetworkScreenState extends State<NetworkScreen>
                         colors: colors,
                       ),
                     ),
-
 
                     Center(
                       child: Column(
@@ -424,7 +412,6 @@ class _NetworkScreenState extends State<NetworkScreen>
           ),
 
           const SizedBox(height: 24),
-
 
           Wrap(
             spacing: 16,
@@ -844,10 +831,8 @@ class NetworkChartPainter extends CustomPainter {
       ..strokeWidth = 16
       ..strokeCap = StrokeCap.round;
 
-
     paint.color = colors.surfaceContainerHighest;
     canvas.drawCircle(center, radius, paint);
-
 
     paint.color = colors.primary;
     final sweepAngle = 2 * pi * progress;

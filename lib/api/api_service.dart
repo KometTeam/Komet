@@ -1,4 +1,4 @@
-library api_service;
+library;
 
 import 'dart:async';
 import 'dart:convert';

@@ -41,18 +41,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   DateTime? _lastTapTime;
   bool _isReconnecting = false;
 
-
   String _currentModalScreen = 'main';
 
   @override
   void initState() {
     super.initState();
     if (widget.myProfile != null) {
-
       _myProfile = widget.myProfile;
       _isProfileLoading = false;
     } else {
-
       _loadMyProfile();
     }
   }
@@ -60,7 +57,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadMyProfile() async {
     if (!mounted) return;
     setState(() => _isProfileLoading = true);
-
 
     final cachedProfileData = ApiService.instance.lastChatsPayload?['profile'];
     if (cachedProfileData != null && mounted) {
@@ -70,7 +66,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
       return; // Нашли в кеше, выходим
     }
-
 
     try {
       final result = await ApiService.instance.getChatsAndContacts(force: true);
@@ -201,16 +196,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     return Scaffold(
-          appBar: AppBar(
-            title: const Text("Настройки"),
-            /*leading: widget.showBackToChats
+      appBar: AppBar(
+        title: const Text("Настройки"),
+        /*leading: widget.showBackToChats
                 ? IconButton(
                     icon: const Icon(Icons.arrow_back),
                     onPressed: widget.onBackToChats,
                   )
                 : null,*/
-          ),
-          body: _buildSettingsContent(),
+      ),
+      body: _buildSettingsContent(),
     );
   }
 
@@ -225,127 +220,125 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       body: SafeArea(
         child: Stack(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: Colors.black.withValues(alpha: 0.3),
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: Colors.black.withValues(alpha: 0.3),
+              ),
             ),
-          ),
 
-          Center(
-            child: isSmallScreen
-                ? Container(
-                    width: double.infinity,
-                    height: double.infinity,
-                    decoration: BoxDecoration(color: colors.surface),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: colors.surface),
-                          child: Row(
-                            children: [
-                              if (_currentModalScreen != 'main')
-                                IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _currentModalScreen = 'main';
-                                    });
-                                  },
-                                  icon: const Icon(Icons.arrow_back),
-                                  tooltip: 'Назад',
-                                ),
-                              Expanded(
-                                child: Text(
-                                  _getModalTitle(),
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
+            Center(
+              child: isSmallScreen
+                  ? Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration: BoxDecoration(color: colors.surface),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: colors.surface),
+                            child: Row(
+                              children: [
+                                if (_currentModalScreen != 'main')
+                                  IconButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _currentModalScreen = 'main';
+                                      });
+                                    },
+                                    icon: const Icon(Icons.arrow_back),
+                                    tooltip: 'Назад',
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    _getModalTitle(),
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              IconButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                icon: const Icon(Icons.close),
-                                tooltip: 'Закрыть',
-                              ),
-                            ],
-                          ),
-                        ),
-
-
-                        Expanded(child: _buildModalContent()),
-                      ],
-                    ),
-                  )
-                : Container(
-                    width: 400,
-                    height: 900,
-                    margin: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: colors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: colors.surface,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(16),
-                              topRight: Radius.circular(16),
+                                IconButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Закрыть',
+                                ),
+                              ],
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              if (_currentModalScreen != 'main')
-                                IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _currentModalScreen = 'main';
-                                    });
-                                  },
-                                  icon: const Icon(Icons.arrow_back),
-                                  tooltip: 'Назад',
-                                ),
-                              Expanded(
-                                child: Text(
-                                  _getModalTitle(),
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
+
+                          Expanded(child: _buildModalContent()),
+                        ],
+                      ),
+                    )
+                  : Container(
+                      width: 400,
+                      height: 900,
+                      margin: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: colors.surface,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(16),
+                                topRight: Radius.circular(16),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                if (_currentModalScreen != 'main')
+                                  IconButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _currentModalScreen = 'main';
+                                      });
+                                    },
+                                    icon: const Icon(Icons.arrow_back),
+                                    tooltip: 'Назад',
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    _getModalTitle(),
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              IconButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                icon: const Icon(Icons.close),
-                                tooltip: 'Закрыть',
-                              ),
-                            ],
+                                IconButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Закрыть',
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
 
-
-                        Expanded(child: _buildModalContent()),
-                      ],
+                          Expanded(child: _buildModalContent()),
+                        ],
+                      ),
                     ),
-                  ),
-          ),
-        ],
-      )),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -606,11 +599,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: () {
           if (widget.isModal) {
-
             String screenKey = '';
-            if (screen is NotificationSettingsScreen)
+            if (screen is NotificationSettingsScreen) {
               screenKey = 'notifications';
-            else if (screen is AppearanceSettingsScreen)
+            } else if (screen is AppearanceSettingsScreen)
               screenKey = 'appearance';
             else if (screen is PrivacySecurityScreen)
               screenKey = 'privacy';
@@ -631,7 +623,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _currentModalScreen = screenKey;
             });
           } else {
-
             Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (context) => screen));
@@ -642,13 +633,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-enum _SettingsItemType {
-  profile,
-  spacer,
-  reconnection,
-  category,
-  version,
-}
+enum _SettingsItemType { profile, spacer, reconnection, category, version }
 
 class _SettingsItem {
   final _SettingsItemType type;
@@ -667,4 +652,3 @@ class _SettingsItem {
     this.screen,
   });
 }
-

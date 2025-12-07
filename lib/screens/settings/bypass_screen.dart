@@ -353,7 +353,9 @@ class _BypassScreenState extends State<BypassScreen> {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: colors.surfaceVariant.withOpacity(0.6),
+                            color: colors.surfaceContainerHighest.withOpacity(
+                              0.6,
+                            ),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const _GalaxyDemoText(
@@ -704,19 +706,13 @@ class _GalaxyDemoTextState extends State<_GalaxyDemoText>
             return LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color,
-                Color.lerp(Colors.white, Colors.black, t)!,
-              ],
+              colors: [color, Color.lerp(Colors.white, Colors.black, t)!],
             ).createShader(bounds);
           },
           blendMode: BlendMode.srcIn,
           child: Text(
             widget.text,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
         );
       },
