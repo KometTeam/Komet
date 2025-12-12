@@ -100,7 +100,7 @@ class _CacheManagementScreenState extends State<CacheManagementScreen> {
         await avatarService.initialize();
 
         await cacheService.clear();
-        // Небольшая задержка между операциями очистки
+        
         await Future.delayed(const Duration(milliseconds: 100));
         await avatarService.clearAvatarCache();
         await Future.delayed(const Duration(milliseconds: 100));
@@ -157,7 +157,7 @@ class _CacheManagementScreenState extends State<CacheManagementScreen> {
 
         await avatarService.initialize();
         await avatarService.clearAvatarCache();
-        // Небольшая задержка перед загрузкой статистики
+        
         await Future.delayed(const Duration(milliseconds: 50));
         await _loadCacheStats();
 

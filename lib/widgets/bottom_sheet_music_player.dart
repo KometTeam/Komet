@@ -99,19 +99,19 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
     HapticFeedback.lightImpact();
     setState(() {
       if (_currentState == _PlayerState.collapsed) {
-        // Tap on collapsed opens directly to fullscreen
+        
         _currentState = _PlayerState.fullscreen;
         _animationController.forward();
         BottomSheetMusicPlayer.isExpandedNotifier.value = true;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = true;
       } else if (_currentState == _PlayerState.fullscreen) {
-        // From fullscreen, go to collapsed
+        
         _currentState = _PlayerState.collapsed;
         _animationController.reverse();
         BottomSheetMusicPlayer.isExpandedNotifier.value = false;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = false;
       } else {
-        // From expanded, go to collapsed
+        
         _currentState = _PlayerState.collapsed;
         _animationController.reverse();
         BottomSheetMusicPlayer.isExpandedNotifier.value = false;
@@ -125,12 +125,12 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
     setState(() {
       if (_currentState == _PlayerState.fullscreen) {
         _currentState = _PlayerState.expanded;
-        // Keep animation at 1.0 for expanded state
+        
         _animationController.value = 1.0;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = false;
       } else {
-        // Transitioning from expanded to fullscreen
-        // Animation is already at 1.0, we'll use AnimatedContainer for smooth transition
+        
+        
         _currentState = _PlayerState.fullscreen;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = true;
       }
@@ -178,7 +178,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
           targetHeight = collapsedHeight;
         }
 
-        // Interpolate between collapsed and target height
+        
         final currentHeight =
             collapsedHeight +
             (targetHeight - collapsedHeight) * _heightAnimation.value;
@@ -446,7 +446,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                   const SizedBox(height: 8),
-                  // Album art with hero animation
+                  
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final maxWidth = constraints.maxWidth;
@@ -503,7 +503,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                     },
                   ),
                   const SizedBox(height: 32),
-                  // Track info
+                  
                   Text(
                     track.title,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -549,7 +549,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                     ),
                   ],
                   const SizedBox(height: 40),
-                  // Progress slider
+                  
                   Column(
                     children: [
                       SliderTheme(
@@ -613,7 +613,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Control buttons
+                  
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -707,7 +707,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                     ],
                   ),
                   const SizedBox(height: 32),
-                  // Volume control
+                  
                   Row(
                     children: [
                       Icon(

@@ -30,7 +30,7 @@ class ProxySettings {
     switch (protocol) {
       case ProxyProtocol.http:
       case ProxyProtocol.https:
-        protocolString = 'PROXY'; // HttpClient ожидает 'PROXY' для HTTP и HTTPS
+        protocolString = 'PROXY'; 
         break;
       case ProxyProtocol.socks4:
 

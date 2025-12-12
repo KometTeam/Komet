@@ -143,7 +143,7 @@ extension ApiServiceAuth on ApiService {
 
     await getChatsAndContacts(force: true);
 
-    // Обновляем профиль аккаунта из свежих данных
+    
     final profileJson = _lastChatsPayload?['profile'];
     if (profileJson != null) {
       final profileObj = Profile.fromJson(profileJson);
@@ -163,21 +163,21 @@ extension ApiServiceAuth on ApiService {
       if (currentAccount != null) {
         authToken = currentAccount.token;
         userId = currentAccount.userId;
-        // print(
-        //   "Токен загружен из AccountManager: ${authToken!.substring(0, 20)}...",
-        // );
+        
+        
+        
       } else {
         final prefs = await SharedPreferences.getInstance();
         authToken = prefs.getString('authToken');
         userId = prefs.getString('userId');
-        // if (authToken != null) {
-        //   print(
-        //     "Токен загружен из SharedPreferences: ${authToken!.substring(0, 20)}...",
-        //   );
-        //   if (userId != null) {
-        //     print("UserID загружен из SharedPreferences: $userId");
-        //   }
-        // }
+        
+        
+        
+        
+        
+        
+        
+        
       }
     }
     return authToken != null;
@@ -230,7 +230,7 @@ extension ApiServiceAuth on ApiService {
 
   Future<void> logout() async {
     try {
-      // Удаляем текущий аккаунт из AccountManager / prefs
+      
       final accountManager = AccountManager();
       await accountManager.initialize();
       final currentAccount = accountManager.currentAccount;
@@ -260,7 +260,7 @@ extension ApiServiceAuth on ApiService {
         await prefs.remove('current_account_id');
       }
 
-      // Чистим in-memory состояние и разрываем соединение
+      
       authToken = null;
       userId = null;
       _messageCache.clear();
@@ -314,7 +314,7 @@ extension ApiServiceAuth on ApiService {
     }
   }
 
-  // Registration methods
+  
   Future<String> startRegistration(String phoneNumber) async {
     if (_channel == null) {
       print('WebSocket не подключен, подключаемся...');
@@ -333,7 +333,7 @@ extension ApiServiceAuth on ApiService {
       "language": "ru",
     };
 
-    // Listen for the response
+    
     final completer = Completer<Map<String, dynamic>>();
     final subscription = messages.listen((message) {
       if (message['opcode'] == 17 && !completer.isCompleted) {

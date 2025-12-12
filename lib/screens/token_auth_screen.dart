@@ -164,7 +164,7 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
       final String token = decoded['token'];
 
       final int now = DateTime.now().millisecondsSinceEpoch;
-      const int oneMinuteInMillis = 60 * 1000; // 60 секунд
+      const int oneMinuteInMillis = 60 * 1000; 
 
       if ((now - qrTimestamp) > oneMinuteInMillis) {
         throw Exception("QR-код устарел. Пожалуйста, сгенерируйте новый.");

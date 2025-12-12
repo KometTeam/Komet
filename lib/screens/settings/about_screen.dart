@@ -87,7 +87,7 @@ class AboutScreen extends StatelessWidget {
 
 
           Card(
-            clipBehavior: Clip.antiAlias, // для скругления углов InkWell
+            clipBehavior: Clip.antiAlias, 
             child: ListTile(
               leading: const Icon(Icons.description_outlined),
               title: const Text("Пользовательское соглашение"),

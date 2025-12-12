@@ -456,7 +456,7 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
   Widget _buildStatsTab() {
     return FutureBuilder<Map<String, dynamic>>(
       future: ApiService.instance
-          .getStatistics(), // Указываем Future, который нужно ожидать
+          .getStatistics(), 
       builder: (context, snapshot) {
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -476,7 +476,7 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
         }
 
 
-        final stats = snapshot.data!; // Теперь это точно Map<String, dynamic>
+        final stats = snapshot.data!; 
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [

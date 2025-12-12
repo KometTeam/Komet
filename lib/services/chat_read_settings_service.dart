@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ChatReadSettings {
-  final bool readOnAction; // Чтение при отправке сообщения
-  final bool readOnEnter; // Чтение при входе в чат
-  final bool disabled; // Отключено чтение вообще
+  final bool readOnAction; 
+  final bool readOnEnter; 
+  final bool disabled; 
 
   ChatReadSettings({
     this.readOnAction = true,
@@ -57,8 +57,8 @@ class ChatReadSettingsService {
     }
   }
 
-  /// Получить настройки чтения для чата
-  /// Если настроек нет, возвращает null (значит использовать глобальные)
+  
+  
   Future<ChatReadSettings?> getSettings(int chatId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -77,7 +77,7 @@ class ChatReadSettingsService {
     }
   }
 
-  /// Сохранить настройки чтения для чата
+  
   Future<void> saveSettings(int chatId, ChatReadSettings settings) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -89,7 +89,7 @@ class ChatReadSettingsService {
     }
   }
 
-  /// Удалить настройки для чата (вернуть к значениям по умолчанию)
+  
   Future<void> resetSettings(int chatId) async {
     try {
       final prefs = await SharedPreferences.getInstance();

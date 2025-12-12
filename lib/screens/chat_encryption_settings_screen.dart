@@ -46,7 +46,7 @@ class _ChatEncryptionSettingsScreenState
 
   Future<void> _savePassword() async {
     final password = _passwordController.text;
-    // Если пароль пустой — сбрасываем флаг шифрованной отправки
+    
     final effectiveSendEncrypted =
         password.isNotEmpty ? _sendEncrypted : false;
 

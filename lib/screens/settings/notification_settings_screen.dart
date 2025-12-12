@@ -153,7 +153,7 @@ class _NotificationSettingsScreenState
 
     await Future.delayed(
       const Duration(milliseconds: 500),
-    ); // Имитация загрузки
+    ); 
     setState(() => _isLoading = false);
   }
 

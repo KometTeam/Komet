@@ -183,7 +183,7 @@ class _ResourceStatsWidgetState extends State<_ResourceStatsWidget> {
           });
         }
       } catch (e) {
-        // Игнорируем ошибки получения информации о батарее
+        
       }
     }
   }

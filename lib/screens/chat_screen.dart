@@ -63,8 +63,8 @@ class DateSeparatorItem extends ChatItem {
   DateSeparatorItem(this.date);
 }
 
-// Раньше здесь были классы для разделителя "НЕПРОЧИТАННЫЕ СООБЩЕНИЯ".
-// Функция отключена по требованию, поэтому доп. элементы не используем.
+
+
 
 class _EmptyChatWidget extends StatelessWidget {
   final Map<String, dynamic>? sticker;
@@ -88,14 +88,14 @@ class _EmptyChatWidget extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (sticker != null) ...[
-            // Показываем стикер (LOTTIE или обычное изображение) с возможностью нажатия
+            
             GestureDetector(
               onTap: onStickerTap,
               child: _buildSticker(sticker!),
             ),
             const SizedBox(height: 24),
           ] else ...[
-            // Показываем индикатор загрузки, пока стикер не загружен
+            
             const SizedBox(
               width: 170,
               height: 170,
@@ -126,7 +126,7 @@ class _EmptyChatWidget extends StatelessWidget {
       '🎨 _buildSticker: url=$url, lottieUrl=$lottieUrl, width=$width, height=$height',
     );
 
-    // Если есть Lottie-анимация — пытаемся показать её (особенно актуально на телефоне)
+    
     if (lottieUrl != null && lottieUrl.isNotEmpty) {
       print('🎨 Пытаемся показать Lottie-анимацию: $lottieUrl');
       return SizedBox(
@@ -138,7 +138,7 @@ class _EmptyChatWidget extends StatelessWidget {
           errorBuilder: (context, error, stackTrace) {
             print('❌ Ошибка загрузки Lottie: $error');
             print('❌ StackTrace Lottie: $stackTrace');
-            // Фоллбек: пробуем статичное изображение по url
+            
             if (url != null && url.isNotEmpty) {
               return Image.network(url, fit: BoxFit.contain);
             }
@@ -148,7 +148,7 @@ class _EmptyChatWidget extends StatelessWidget {
       );
     }
 
-    // Иначе показываем статичную картинку по обычному url
+    
     final imageUrl = url;
 
     print('🎨 Используемый URL для статичного стикера: $imageUrl');
@@ -196,10 +196,10 @@ class ChatScreen extends StatefulWidget {
   final Contact contact;
   final int myId;
 
-  /// Колбэк для мягких обновлений списка чатов (например, после редактирования сообщения).
+  
   final VoidCallback? onChatUpdated;
 
-  /// Колбэк, который вызывается, когда чат нужно убрать из списка (удаление / выход из группы).
+  
   final VoidCallback? onChatRemoved;
   final bool isGroupChat;
   final bool isChannel;
@@ -251,16 +251,16 @@ class _ChatScreenState extends State<ChatScreen> {
   final Map<int, Contact> _contactDetailsCache = {};
   final Set<int> _loadingContactIds = {};
 
-  // Локальный счётчик непрочитанных (используется только для первичной инициализации).
+  
   int _initialUnreadCount = 0;
 
-  // Сообщения, для которых сейчас "отправляется" реакция (показываем часы на реакции).
+  
   final Set<String> _sendingReactions = {};
 
-  // ======================= Attachments helpers =======================
+  
 
   Future<void> _onAttachPressed() async {
-    // Мобильные платформы — плашка снизу
+    
     if (Platform.isAndroid || Platform.isIOS) {
       if (!mounted) return;
       final colors = Theme.of(context).colorScheme;
@@ -520,7 +520,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _isIdReady = false;
   bool _isEncryptionPasswordSetForCurrentChat =
-      false; // TODO: hook real state later
+      false; 
   ChatEncryptionConfig? _encryptionConfigForCurrentChat;
   bool _sendEncryptedForCurrentChat = true;
   bool _specialMessagesEnabled = true;
@@ -555,10 +555,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToBottom() {
-    // Плавный скролл — используем только по явному действию (кнопка "вниз" и т.п.)
+    
     if (!_itemScrollController.isAttached) return;
 
-    // СКРЫВАЕМ стрелочку при нажатии СРАЗУ и блокируем её показ
+    
     _isScrollingToBottom = true;
     _showScrollToBottomNotifier.value = false;
 
@@ -567,10 +567,10 @@ class _ChatScreenState extends State<ChatScreen> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
       alignment:
-          1.0, // Прокручиваем к самому низу (1.0 = внизу видимой области для reverse списка)
+          1.0, 
     );
 
-    // После завершения скролла проверяем позицию
+    
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) {
         final positions = _itemPositionsListener.itemPositions.value;
@@ -586,7 +586,7 @@ class _ChatScreenState extends State<ChatScreen> {
             _isScrollingToBottom = false;
             _showScrollToBottomNotifier.value = false;
           } else {
-            // Если не внизу, флаг будет сброшен в listener когда пользователь начнет скроллить
+            
             _isScrollingToBottom = false;
           }
         }
@@ -595,8 +595,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _jumpToBottom() {
-    // Мгновенный прыжок в самый низ — используем при входе в чат,
-    // чтобы не было "подпрыгивания" списка из-за анимации.
+    
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_itemScrollController.isAttached) {
         _itemScrollController.jumpTo(index: 0);
@@ -801,7 +801,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _initialUnreadCount = widget.initialUnreadCount;
     _currentContact = widget.contact;
     _pinnedMessage =
-        null; // Будет установлено при получении CONTROL сообщения с event 'pin'
+        null; 
     _initializeChat();
     _loadEncryptionConfig();
     _loadSpecialMessagesSetting();
@@ -960,13 +960,13 @@ class _ChatScreenState extends State<ChatScreen> {
     const prefix1 = 'komet.color_#';
     const prefix2 = 'komet.cosmetic.pulse#';
 
-    // Ищем префикс в позиции курсора или перед ним
+    
     String? detectedPrefix;
     int? prefixStartPos;
 
-    // Проверяем, находится ли курсор сразу после префикса
+    
     for (final prefix in [prefix1, prefix2]) {
-      // Ищем последнее вхождение префикса перед курсором
+      
       int searchStart = 0;
       int lastFound = -1;
       while (true) {
@@ -983,13 +983,13 @@ class _ChatScreenState extends State<ChatScreen> {
           lastFound + prefix.length,
           cursorPos,
         );
-        // Если после префикса до курсора ничего нет (или только пробелы) - показываем панель
+        
         if (afterPrefix.isEmpty || afterPrefix.trim().isEmpty) {
-          // Проверяем, что после курсора нет завершенного блока (нет HEX и кавычек)
+          
           final afterCursor = cursorPos < text.length
               ? text.substring(cursorPos)
               : '';
-          // Если после курсора сразу идет HEX код (6 символов) и кавычка - не показываем
+          
           if (afterCursor.length < 7 ||
               !RegExp(r"^[0-9A-Fa-f]{6}'").hasMatch(afterCursor)) {
             detectedPrefix = prefix;
@@ -1005,7 +1005,7 @@ class _ChatScreenState extends State<ChatScreen> {
         prefixStartPos + detectedPrefix.length,
         cursorPos,
       );
-      // Если после # до курсора ничего нет — показываем панельку
+      
       if (after.isEmpty || after.trim().isEmpty) {
         if (!_showKometColorPicker ||
             _currentKometColorPrefix != detectedPrefix) {
@@ -1115,7 +1115,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       if (contact.id == _currentContact.id && mounted) {
         ApiService.instance.updateCachedContact(contact);
-        // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+        
         Future.microtask(() {
           if (mounted) {
             setState(() {
@@ -1129,46 +1129,46 @@ class _ChatScreenState extends State<ChatScreen> {
     _itemPositionsListener.itemPositions.addListener(() {
       final positions = _itemPositionsListener.itemPositions.value;
       if (positions.isNotEmpty) {
-        // При reverse: true, index 0 - это самый нижний элемент (новейшее сообщение)
-        // Проверяем, виден ли нижний элемент (index 0)
+        
+        
         final bottomItemPosition = positions.firstWhere(
           (p) => p.index == 0,
           orElse: () => positions.first,
         );
 
-        // Мы внизу, если элемент с index 0 виден и очень близок к низу экрана
-        // Используем мягкое условие (0.9) чтобы стрелка появлялась ОЧЕНЬ РАНЬШЕ
+        
+        
         final isBottomItemVisible = bottomItemPosition.index == 0;
         final isAtBottom =
             isBottomItemVisible && bottomItemPosition.itemTrailingEdge >= 0.9;
 
         _isUserAtBottom = isAtBottom;
 
-        // Если мы внизу, сбрасываем флаг блокировки
+        
         if (isAtBottom) {
           _isScrollingToBottom = false;
         }
 
-        // Показываем стрелочку только если:
-        // 1. Мы не в самом низу (trailingEdge < 0.95)
-        // 2. И не происходит программный скролл к низу (не нажали на стрелочку)
-        // Флаг _isScrollingToBottom сбрасывается только после завершения скролла в _scrollToBottom()
+        
+        
+        
+        
         final shouldShowArrow = !isAtBottom && !_isScrollingToBottom;
         _showScrollToBottomNotifier.value = shouldShowArrow;
 
-        // Проверяем, доскроллил ли пользователь до самого старого сообщения (вверх)
-        // При reverse: true, последний визуальный элемент (самый большой index) = самое старое сообщение
+        
+        
         if (positions.isNotEmpty && _chatItems.isNotEmpty) {
           final maxIndex = positions
               .map((p) => p.index)
               .reduce((a, b) => a > b ? a : b);
-          // При reverse: true, когда maxIndex близок к _chatItems.length - 1, мы вверху (старые сообщения)
+          
           final threshold = _chatItems.length > 5
               ? 3
-              : 1; // Загружаем когда осталось 3 элемента до верха
+              : 1; 
           final isNearTop = maxIndex >= _chatItems.length - threshold;
 
-          // Если доскроллили близко к верху и есть еще сообщения, загружаем
+          
           if (isNearTop &&
               _hasMore &&
               !_isLoadingMore &&
@@ -1177,7 +1177,7 @@ class _ChatScreenState extends State<ChatScreen> {
             print(
               '📜 Пользователь доскроллил близко к верху (maxIndex: $maxIndex, total: ${_chatItems.length}), загружаем старые сообщения...',
             );
-            // Вызываем после build фазы, чтобы избежать setState() во время build
+            
             Future.microtask(() {
               if (mounted && _hasMore && !_isLoadingMore) {
                 _loadMore();
@@ -1190,7 +1190,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _searchController.addListener(() {
       if (_searchController.text.isEmpty && _searchResults.isNotEmpty) {
-        // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+        
         Future.microtask(() {
           if (mounted) {
             setState(() {
@@ -1246,7 +1246,7 @@ class _ChatScreenState extends State<ChatScreen> {
           print(
             'Получено подтверждение (Opcode 64) для cid: ${newMessage.cid}. Обновляем сообщение.',
           );
-          // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+          
           Future.microtask(() {
             if (mounted) {
               _updateMessage(newMessage);
@@ -1256,7 +1256,7 @@ class _ChatScreenState extends State<ChatScreen> {
       } else if (opcode == 128) {
         if (chatIdNormalized == widget.chatId) {
           final newMessage = Message.fromJson(payload['message']);
-          // Откладываем проверку и обновление, чтобы избежать ошибки во время обновления устройства мыши
+          
           Future.microtask(() {
             if (!mounted) return;
             final hasSameId = _messages.any((m) => m.id == newMessage.id);
@@ -1299,7 +1299,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 'Обновлен presence для пользователя $cid: online=$isOnline, seen=$currentTime',
               );
 
-              // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+              
               Future.microtask(() {
                 if (mounted) {
                   setState(() {});
@@ -1311,7 +1311,7 @@ class _ChatScreenState extends State<ChatScreen> {
       } else if (opcode == 67) {
         if (chatIdNormalized == widget.chatId) {
           final editedMessage = Message.fromJson(payload['message']);
-          // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+          
           Future.microtask(() {
             if (mounted) {
               _updateMessage(editedMessage);
@@ -1323,7 +1323,7 @@ class _ChatScreenState extends State<ChatScreen> {
           final deletedMessageIds = List<String>.from(
             payload['messageIds'] ?? [],
           );
-          // Откладываем удаление, чтобы избежать ошибки во время обновления устройства мыши
+          
           Future.microtask(() {
             if (mounted) {
               _removeMessages(deletedMessageIds);
@@ -1331,11 +1331,11 @@ class _ChatScreenState extends State<ChatScreen> {
           });
         }
       } else if (opcode == 178) {
-        // cmd == 1: это ACK на отправку реакции, без messageId — просто снимаем флаг "отправляется"
+        
         if (cmd == 1) {
           if (_sendingReactions.isNotEmpty) {
             _sendingReactions.clear();
-            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            
             Future.microtask(() {
               if (mounted) {
                 setState(() {});
@@ -1343,12 +1343,12 @@ class _ChatScreenState extends State<ChatScreen> {
             });
           }
         }
-        // cmd == 0: широковещательное обновление реакций с messageId и reactionInfo
+        
         if (cmd == 0 && chatIdNormalized == widget.chatId) {
           final messageId = payload['messageId'] as String?;
           final reactionInfo = payload['reactionInfo'] as Map<String, dynamic>?;
           if (messageId != null && reactionInfo != null) {
-            // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+            
             Future.microtask(() {
               if (mounted) {
                 _updateMessageReaction(messageId, reactionInfo);
@@ -1361,7 +1361,7 @@ class _ChatScreenState extends State<ChatScreen> {
           final messageId = payload['messageId'] as String?;
           final reactionInfo = payload['reactionInfo'] as Map<String, dynamic>?;
           if (messageId != null) {
-            // Откладываем обновление, чтобы избежать ошибки во время обновления устройства мыши
+            
             Future.microtask(() {
               if (mounted) {
                 _updateMessageReaction(messageId, reactionInfo ?? {});
@@ -1370,9 +1370,9 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         }
       } else if (opcode == 50) {
-        // Opcode 50: обновление непрочитанных сообщений или отметка прочтения
-        // Игнорируем, чтобы избежать проблем с обновлением состояния
-        // Это обрабатывается на уровне списка чатов
+        
+        
+        
         if (chatIdNormalized == widget.chatId) {
           print(
             'Получен opcode 50 для чата ${widget.chatId}, игнорируем в ChatScreen',
@@ -1407,10 +1407,10 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages.clear();
       _messages.addAll(cachedMessages);
 
-      // Устанавливаем _oldestLoadedTime и _hasMore для кэшированных сообщений
+      
       if (_messages.isNotEmpty) {
         _oldestLoadedTime = _messages.first.time;
-        // Предполагаем, что могут быть еще сообщения (будет обновлено после загрузки с сервера)
+        
         _hasMore = true;
         print(
           '📜 Загружено из кэша: ${_messages.length} сообщений, _oldestLoadedTime=$_oldestLoadedTime',
@@ -1422,7 +1422,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       _buildChatItems();
-      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      
       Future.microtask(() {
         if (mounted) {
           setState(() {
@@ -1432,7 +1432,7 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       _updatePinnedMessage();
 
-      // Если чат пустой, загружаем стикер для пустого состояния
+      
       if (_messages.isEmpty && !widget.isChannel) {
         _loadEmptyChatSticker();
       }
@@ -1458,7 +1458,7 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         }
       }
-      senderIds.remove(0); // Удаляем системный ID, если он есть
+      senderIds.remove(0); 
 
       final idsToFetch = senderIds
           .where((id) => !_contactDetailsCache.containsKey(id))
@@ -1509,7 +1509,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ? allMessages.sublist(allMessages.length - page)
           : allMessages;
 
-      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      
       Future.microtask(() {
         if (mounted) {
           setState(() {
@@ -1518,8 +1518,8 @@ class _ChatScreenState extends State<ChatScreen> {
             _oldestLoadedTime = _messages.isNotEmpty
                 ? _messages.first.time
                 : null;
-            // Если получили максимальное количество сообщений (1000), возможно есть еще
-            // Также проверяем, есть ли сообщения старше самого старого загруженного
+            
+            
             _hasMore =
                 allMessages.length >= 1000 ||
                 allMessages.length > _messages.length;
@@ -1533,12 +1533,12 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       });
 
-      // Функция "перейти к последнему непрочитанному" отключена.
-      // Всегда стартуем с низа истории без анимации, чтобы не было подпрыгиваний.
+      
+      
       _jumpToBottom();
       _updatePinnedMessage();
 
-      // Если чат пустой, загружаем стикер для пустого состояния
+      
       if (_messages.isEmpty && !widget.isChannel) {
         _loadEmptyChatSticker();
       }
@@ -1548,7 +1548,7 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           _isLoadingHistory = false;
         });
-        // Не показываем всплывающее сообщение "Не удалось обновить историю чата".
+        
       }
     }
 
@@ -1594,7 +1594,7 @@ class _ChatScreenState extends State<ChatScreen> {
       print(
         '📜 Загружаем старые сообщения для chatId=${widget.chatId}, fromTimestamp=$_oldestLoadedTime',
       );
-      // Загружаем старые сообщения начиная с timestamp самого старого загруженного сообщения
+      
       final olderMessages = await ApiService.instance
           .loadOlderMessagesByTimestamp(
             widget.chatId,
@@ -1607,21 +1607,21 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
 
       if (olderMessages.isEmpty) {
-        // Больше нет старых сообщений
+        
         _hasMore = false;
         _isLoadingMore = false;
         setState(() {});
         return;
       }
 
-      // Фильтруем дубликаты - оставляем только те сообщения, которых еще нет в списке
+      
       final existingMessageIds = _messages.map((m) => m.id).toSet();
       final newMessages = olderMessages
           .where((m) => !existingMessageIds.contains(m.id))
           .toList();
 
       if (newMessages.isEmpty) {
-        // Все сообщения уже есть в списке
+        
         _hasMore = false;
         _isLoadingMore = false;
         setState(() {});
@@ -1632,11 +1632,11 @@ class _ChatScreenState extends State<ChatScreen> {
         '📜 Добавляем ${newMessages.length} новых старых сообщений (отфильтровано ${olderMessages.length - newMessages.length} дубликатов)',
       );
 
-      // Добавляем старые сообщения в начало списка
+      
       _messages.insertAll(0, newMessages);
       _oldestLoadedTime = _messages.first.time;
 
-      // Проверяем, есть ли еще сообщения (если получили меньше 30, значит это последние)
+      
       _hasMore = olderMessages.length >= 30;
 
       _buildChatItems();
@@ -1719,7 +1719,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     _chatItems = items;
 
-    // Очищаем ключи для сообщений, которых больше нет в списке
+    
     final currentMessageIds = _messages.map((m) => m.id).toSet();
     final keysToRemove = _messageKeys.keys
         .where((id) => !currentMessageIds.contains(id))
@@ -1734,9 +1734,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadEmptyChatSticker() async {
     try {
-      // Список доступных ID стикеров для пустого чата
+      
       final availableStickerIds = [272821, 295349, 13571];
-      // Выбираем случайный ID
+      
       final random =
           DateTime.now().millisecondsSinceEpoch % availableStickerIds.length;
       final selectedStickerId = availableStickerIds[random];
@@ -1773,7 +1773,7 @@ class _ChatScreenState extends State<ChatScreen> {
       print('🎨 Получен ответ со стикерами: ${stickers?.length ?? 0}');
       if (stickers != null && stickers.isNotEmpty) {
         final sticker = stickers.first as Map<String, dynamic>;
-        // Сохраняем также stickerId для отправки
+        
         final stickerId = sticker['id'] as int?;
         print(
           '🎨 Данные стикера: id=$stickerId, url=${sticker['url']}, lottieUrl=${sticker['lottieUrl']}, width=${sticker['width']}, height=${sticker['height']}',
@@ -1782,7 +1782,7 @@ class _ChatScreenState extends State<ChatScreen> {
           setState(() {
             _emptyChatSticker = {
               ...sticker,
-              'stickerId': stickerId, // Сохраняем ID для отправки
+              'stickerId': stickerId, 
             };
           });
           print(
@@ -1835,7 +1835,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final pinned = _pinnedMessage;
     if (pinned == null) return;
 
-    // Находим индекс элемента в _chatItems, который соответствует закрепленному сообщению
+    
     int? targetChatItemIndex;
     for (int i = 0; i < _chatItems.length; i++) {
       final item = _chatItems[i];
@@ -1850,14 +1850,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (targetChatItemIndex == null) {
-      // Сообщение может быть вне загруженной истории
+      
       return;
     }
 
     if (!_itemScrollController.isAttached) return;
 
-    // ScrollablePositionedList используется с reverse:true,
-    // поэтому визуальный индекс считается от конца списка
+    
+    
     final visualIndex = _chatItems.length - 1 - targetChatItemIndex;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1927,7 +1927,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     _chatItems.add(messageItem);
 
-    // Обновляем закрепленное сообщение
+    
     _updatePinnedMessage();
 
     final theme = context.read<ThemeProvider>();
@@ -1937,7 +1937,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _animatedMessageIds.add(message.id);
     }
 
-    // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+    
     Future.microtask(() {
       if (mounted) {
         setState(() {});
@@ -1964,7 +1964,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final updatedMessage = message.copyWith(reactionInfo: reactionInfo);
       _messages[messageIndex] = updatedMessage;
 
-      // Снимаем флаг "отправляется" для этой реакции (если был)
+      
       if (_sendingReactions.remove(messageId)) {
         print(
           '✅ Реакция для сообщения $messageId успешно подтверждена сервером',
@@ -1975,7 +1975,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       print('Обновлена реакция для сообщения $messageId: $reactionInfo');
 
-      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      
       Future.microtask(() {
         if (mounted) {
           setState(() {});
@@ -2019,7 +2019,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       _messages[messageIndex] = updatedMessage;
 
-      // Помечаем, что реакция для этого сообщения сейчас отправляется
+      
       _sendingReactions.add(messageId);
 
       _buildChatItems();
@@ -2072,14 +2072,14 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         _messages[messageIndex] = updatedMessage;
 
-        // Помечаем, что удаление реакции сейчас отправляется
+        
         _sendingReactions.add(messageId);
 
         _buildChatItems();
 
         print('Оптимистично удалена реакция с сообщения $messageId');
 
-        // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+        
         Future.microtask(() {
           if (mounted) {
             setState(() {});
@@ -2106,7 +2106,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages[index] = finalMessage;
       ApiService.instance.clearCacheForChat(widget.chatId);
       _buildChatItems();
-      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      
       Future.microtask(() {
         if (mounted) {
           setState(() {});
@@ -2124,7 +2124,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ..clear()
               ..addAll(fresh);
             _buildChatItems();
-            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            
             Future.microtask(() {
               if (mounted) {
                 setState(() {});
@@ -2145,7 +2145,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (actuallyRemoved > 0) {
       ApiService.instance.clearCacheForChat(widget.chatId);
       _buildChatItems();
-      // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+      
       Future.microtask(() {
         if (mounted) {
           setState(() {});
@@ -2278,8 +2278,8 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
 
-      // Защита от "служебного" текста при включённом шифровании,
-      // чтобы не получить что-то вроде kometSM.kometSM.
+      
+      
       if (_encryptionConfigForCurrentChat != null &&
           _encryptionConfigForCurrentChat!.password.isNotEmpty &&
           _sendEncryptedForCurrentChat &&
@@ -2290,7 +2290,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
 
-      // Готовим текст с учётом возможного шифрования
+      
       String textToSend = originalText;
       if (_encryptionConfigForCurrentChat != null &&
           _encryptionConfigForCurrentChat!.password.isNotEmpty &&
@@ -2331,7 +2331,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   'cid': _replyingToMessage!.cid,
                   'attaches': _replyingToMessage!.attaches,
                 },
-                'chatId': 0, // Не используется, но нужно для парсинга
+                'chatId': 0, 
               }
             : null,
       };
@@ -2346,7 +2346,7 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.chatId,
         textToSend,
         replyToMessageId: _replyingToMessage?.id,
-        cid: tempCid, // Передаем тот же CID в API
+        cid: tempCid, 
         elements: tempElements,
       );
 
@@ -2477,7 +2477,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final availableChats = chats
         .where(
           (chat) => chat['id'] != widget.chatId || chat['id'] == 0,
-        ) //шелуха обработка избранного
+        ) 
         .toList();
 
     if (availableChats.isEmpty) {
@@ -2534,7 +2534,7 @@ class _ChatScreenState extends State<ChatScreen> {
   ) {
     final chatId = chat['id'] as int;
     final chatTitle = chat['title'] as String?;
-    // шелуха отдельная для избранного
+    
     String chatName;
     Widget avatar;
     String subtitle = '';
@@ -2564,30 +2564,30 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         subtitle = '${participants.length} участников';
       } else {
-        // Обычный диалог «1 на 1»
+        
         final participantIds = participants.keys
             .map((id) => int.tryParse(id) ?? 0)
             .toList();
 
         int otherParticipantId = 0;
         if (participantIds.isNotEmpty) {
-          // Пытаемся найти участника, отличного от нашего собственного ID
+          
           otherParticipantId = participantIds.firstWhere(
             (id) => _actualMyId == null || id != _actualMyId,
             orElse: () => participantIds.first,
           );
         }
 
-        // Пытаемся взять контакт из локального кэша;
-        // если его нет — загружаем в фоне.
+        
+        
         final contact = _contactDetailsCache[otherParticipantId];
         if (contact == null && otherParticipantId != 0) {
           _loadContactIfNeeded(otherParticipantId);
         }
 
-        // Для личных чатов никогда не используем server title вида
-        // «пользователь {id}» — вместо этого показываем имя контакта
-        // либо хотя бы «ID {userId}».
+        
+        
+        
         chatName = contact?.name ?? 'ID $otherParticipantId';
 
         final avatarUrl = contact?.photoBaseUrl;
@@ -3017,13 +3017,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   onPressed: () async {
                     Navigator.of(context).pop();
                     try {
-                      // Удаляем историю чата (opcode 54)
+                      
                       await ApiService.instance.clearChatHistory(
                         widget.chatId,
                         forAll: forAll,
                       );
 
-                      // Отписываемся от чата (opcode 75)
+                      
                       await ApiService.instance.subscribeToChat(
                         widget.chatId,
                         false,
@@ -3211,12 +3211,7 @@ class _ChatScreenState extends State<ChatScreen> {
       for (final contact in chatContacts) {
         _contactDetailsCache[contact.id] = contact;
 
-        /*if (contact.id == widget.myId && _actualMyId == null) {
-          //_actualMyId = contact.id;
-          print(
-            '✅ [_loadCachedContacts] Собственный ID восстановлен из кэша: $_actualMyId (${contact.name})',
-          );
-        }*/
+         
       }
       print(
         '✅ Загружено ${_contactDetailsCache.length} контактов из кэша чата ${widget.chatId}',
@@ -3224,7 +3219,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    // Если нет кэша чата, загружаем глобальный кэш
+    
     final cachedContacts = await ChatCacheService().getCachedContacts();
     if (cachedContacts != null && cachedContacts.isNotEmpty) {
       for (final contact in cachedContacts) {
@@ -3351,8 +3346,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                   final isLastVisual =
                                       index == _chatItems.length - 1;
 
-                                  // Убрали вызов _loadMore() отсюда - он вызывается из _itemPositionsListener
-                                  // чтобы избежать setState() во время build фазы
+                                  
+                                  
 
                                   if (item is MessageItem) {
                                     final message = item.message;
@@ -3592,7 +3587,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       isLastInGroup: item.isLastInGroup,
                                       isGrouped: item.isGrouped,
                                       avatarVerticalOffset:
-                                          -8.0, // Смещение аватарки вверх на 8px
+                                          -8.0, 
                                       onComplain: () =>
                                           _showComplaintDialog(item.message.id),
                                     );
@@ -3612,9 +3607,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                         curve: Curves.easeInOut,
                                         builder: (context, value, child) {
                                           return Container(
-                                            // ОТСТУПЫ МЕЖДУ СООБЩЕНИЯМИ (для выделенных) - можно менять здесь
+                                            
                                             margin: const EdgeInsets.symmetric(
-                                              vertical: 1, // Было: 2
+                                              vertical: 1, 
                                             ),
                                             decoration: BoxDecoration(
                                               color: Theme.of(context)
@@ -3637,7 +3632,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       );
                                     }
 
-                                    // Плавное появление новых сообщений
+                                    
                                     if (isNew && !_anyOptimize) {
                                       return TweenAnimationBuilder<double>(
                                         duration: const Duration(
@@ -3856,7 +3851,7 @@ class _ChatScreenState extends State<ChatScreen> {
             )
           : null,
       leading: widget.isDesktopMode
-          ? null // В десктопном режиме нет кнопки "Назад"
+          ? null 
           : IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => Navigator.of(context).pop(),
@@ -4083,12 +4078,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
               if (widget.isChannel)
                 const PopupMenuItem(
-                  value: 'leave_channel', // Новое значение
+                  value: 'leave_channel', 
                   child: Row(
                     children: [
                       Icon(Icons.exit_to_app, color: Colors.red),
                       SizedBox(width: 8),
-                      Text('Покинуть канал'), // Другой текст
+                      Text('Покинуть канал'), 
                     ],
                   ),
                 ),
@@ -4191,7 +4186,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
                   const SizedBox(height: 2),
                   if (widget.isGroupChat ||
-                      widget.isChannel) // Объединенное условие
+                      widget.isChannel) 
                     Text(
                       widget.isChannel
                           ? "${widget.participantCount ?? 0} подписчиков"
@@ -4319,7 +4314,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildTextInput() {
     if (widget.isChannel) {
-      return const SizedBox.shrink(); // Возвращаем пустой виджет для каналов
+      return const SizedBox.shrink(); 
     }
     final theme = context.watch<ThemeProvider>();
     final isBlocked = _currentContact.isBlockedByMe && !theme.blockBypass;
@@ -4564,7 +4559,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             Focus(
                               focusNode:
-                                  _textFocusNode, // 2. focusNode теперь здесь
+                                  _textFocusNode, 
                               onKeyEvent: (node, event) {
                                 if (event is KeyDownEvent) {
                                   if (event.logicalKey ==
@@ -5115,7 +5110,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface.withOpacity(
                       0.85,
-                    ), // Прозрачный фон для эффекта стекла
+                    ), 
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
@@ -5563,7 +5558,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToMessage(String messageId) {
-    // Используем addPostFrameCallback, чтобы избежать ошибок во время layout
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
@@ -5580,7 +5575,7 @@ class _ChatScreenState extends State<ChatScreen> {
             duration: const Duration(milliseconds: 400),
             curve: Curves.easeInOut,
             alignment:
-                0.2, // Прокручиваем чуть пониже (0.2 = 20% от верха экрана)
+                0.2, 
           );
         }
       } else {
@@ -5876,7 +5871,7 @@ class _ContactPresenceSubtitleState extends State<_ContactPresenceSubtitle> {
               ? incomingChatId
               : int.tryParse(incomingChatId?.toString() ?? '');
           if (cid == widget.chatId) {
-            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            
             Future.microtask(() {
               if (mounted) {
                 setState(() => _status = 'печатает…');
@@ -5909,7 +5904,7 @@ class _ContactPresenceSubtitleState extends State<_ContactPresenceSubtitle> {
             final bool isOnline = payload['online'] == true;
             if (!mounted) return;
             _isOnline = isOnline;
-            // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+            
             Future.microtask(() {
               if (mounted) {
                 setState(() {
@@ -6391,7 +6386,7 @@ extension BrightnessExtension on Brightness {
   bool get isDark => this == Brightness.dark;
 }
 
-//note: unused
+
 class GroupProfileDraggableDialog extends StatelessWidget {
   final Contact contact;
 
@@ -6460,7 +6455,7 @@ class GroupProfileDraggableDialog extends StatelessWidget {
                           MaterialPageRoute(
                             builder: (context) => GroupSettingsScreen(
                               chatId: -contact
-                                  .id, // Convert back to positive chatId
+                                  .id, 
                               initialContact: contact,
                               myId: 0,
                             ),
@@ -6522,7 +6517,7 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
     super.initState();
     _loadLocalDescription();
 
-    // Подписываемся на изменения
+    
     _changesSubscription = ContactLocalNamesService().changes.listen((
       contactId,
     ) {
@@ -6672,7 +6667,7 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                               fontSize: 14,
                             ),
                             linkStyle: TextStyle(
-                              color: colors.primary, // Цвет ссылки
+                              color: colors.primary, 
                               fontSize: 14,
                               decoration: TextDecoration.underline,
                             ),
@@ -6814,8 +6809,8 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                               width: double.infinity,
                               child: FilledButton.icon(
                                 onPressed: () {
-                                  // Уже в этом чате — просто закрываем панель,
-                                  // чтобы пользователь мог сразу написать.
+                                  
+                                  
                                   Navigator.of(context).pop();
                                 },
                                 icon: const Icon(Icons.message),
@@ -7215,7 +7210,7 @@ class _PromoteAdminDialog extends StatelessWidget {
 
 class _ControlMessageChip extends StatelessWidget {
   final Message message;
-  final Map<int, Contact> contacts; // We need this to get user names by ID
+  final Map<int, Contact> contacts; 
   final int myId;
 
   const _ControlMessageChip({
@@ -7408,7 +7403,7 @@ class _ControlMessageChip extends StatelessWidget {
       default:
         final eventTypeStr = eventType?.toString() ?? 'неизвестное';
 
-        // Особые человеко-понятные формулировки
+        
         if (eventTypeStr.toLowerCase() == 'system') {
           return 'Стартовое событие, не обращайте внимания.';
         }

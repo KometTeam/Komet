@@ -100,7 +100,7 @@ class ChatCacheService {
     return null;
   }
 
-  // Кэширование контактов для конкретного чата
+  
   Future<void> cacheChatContacts(int chatId, List<Contact> contacts) async {
     try {
       final key = 'chat_contacts_$chatId';

@@ -6,12 +6,12 @@ class Chat {
   final Message lastMessage;
   final List<int> participantIds;
   final int newMessages;
-  final String? title; // Название группы
-  final String? type; // Тип чата (DIALOG, CHAT)
-  final String? baseIconUrl; // URL иконки группы
+  final String? title; 
+  final String? type; 
+  final String? baseIconUrl; 
   final String? description;
   final int? participantsCount;
-  final Message? pinnedMessage; // Закрепленное сообщение
+  final Message? pinnedMessage; 
 
   Chat({
     required this.id,
@@ -71,7 +71,7 @@ class Chat {
 
   List<int> get groupParticipantIds => participantIds;
 
-  int get onlineParticipantsCount => participantIds.length; // Упрощенная версия
+  int get onlineParticipantsCount => participantIds.length; 
 
   String get displayTitle {
     if (title != null && title!.isNotEmpty) {

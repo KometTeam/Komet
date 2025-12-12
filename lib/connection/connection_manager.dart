@@ -100,7 +100,7 @@ class ConnectionManager {
 
 
     _cleanup();
-    _stopMonitoring(); // Убедимся, что все таймеры точно остановлены
+    _stopMonitoring(); 
 
 
     _currentUrlIndex = 0;

@@ -66,7 +66,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         });
       }
 
-      // Обработка успешной подписки на канал (opcode 57)
+      
       if (message['cmd'] == 1 && message['opcode'] == 57) {
         setState(() {
           _isLoading = false;
@@ -96,7 +96,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         });
       }
 
-      // Обработка ошибки подписки на канал (opcode 57)
+      
       if (message['cmd'] == 3 && message['opcode'] == 57) {
         setState(() {
           _isLoading = false;
@@ -130,7 +130,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   String _normalizeLink(String inputLink) {
     String link = inputLink.trim();
 
-    // Поддержка формата @https://max.ru/...
+    
     if (link.startsWith('@')) {
       link = link.substring(1).trim();
     }
@@ -191,7 +191,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       return;
     }
 
-    // Сначала пытаемся распознать ссылку на канал (https://max.ru/id...)
+    
     if (_isChannelLink(inputLink)) {
       setState(() {
         _isLoading = true;
@@ -204,7 +204,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           _isLoading = false;
         });
 
-        // Показываем диалог подписки на канал
+        
         _showChannelSubscribeDialog(chatInfo, inputLink);
       } catch (e) {
         if (!mounted) return;
@@ -226,7 +226,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       return;
     }
 
-    // Иначе считаем, что это ссылка на группу с "join/"
+    
     final processedLink = _extractJoinLink(inputLink);
 
     if (!processedLink.contains('join/')) {

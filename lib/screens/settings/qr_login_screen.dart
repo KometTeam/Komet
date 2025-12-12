@@ -20,10 +20,10 @@ class _QrLoginScreenState extends State<QrLoginScreen> {
   bool _isQrVisible = false;
   String? _error;
 
-  Timer? _qrRefreshTimer; // Таймер для регенерации QR-кода (1 раз в минуту)
+  Timer? _qrRefreshTimer; 
   Timer?
-  _countdownTimer; // 👈 1. Таймер для обратного отсчета (1 раз в секунду)
-  int _countdownSeconds = 60; // 👈 2. Переменная для хранения секунд
+  _countdownTimer; 
+  int _countdownSeconds = 60; 
 
   @override
   void initState() {
@@ -34,7 +34,7 @@ class _QrLoginScreenState extends State<QrLoginScreen> {
   @override
   void dispose() {
     _qrRefreshTimer?.cancel();
-    _countdownTimer?.cancel(); // 👈 3. Не забываем отменить второй таймер
+    _countdownTimer?.cancel(); 
     super.dispose();
   }
 
@@ -53,7 +53,7 @@ class _QrLoginScreenState extends State<QrLoginScreen> {
 
       if (mounted) {
         _token = token;
-        _regenerateQrData(); // Первичная генерация
+        _regenerateQrData(); 
 
 
         _qrRefreshTimer?.cancel();
@@ -87,7 +87,7 @@ class _QrLoginScreenState extends State<QrLoginScreen> {
     if (mounted) {
       setState(() {
         _qrData = jsonEncode(data);
-        _countdownSeconds = 60; // Сбрасываем счетчик на 60
+        _countdownSeconds = 60; 
       });
     }
   }

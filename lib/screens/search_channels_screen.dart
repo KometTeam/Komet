@@ -553,7 +553,7 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
   String _extractChannelLink(String inputLink) {
     String link = inputLink.trim();
 
-    // Поддержка формата @https://max.ru/...
+    
     if (link.startsWith('@')) {
       link = link.substring(1).trim();
     }

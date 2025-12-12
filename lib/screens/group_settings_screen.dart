@@ -70,7 +70,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           ? _loadedMembers.last['id'] as int?
           : null;
       _hasMoreMembers =
-          _loadedMembers.length >= 50; // Если 50+ из кэша - есть пагинация
+          _loadedMembers.length >= 50; 
       _isLoadingMembers = false;
       print(
         'DEBUG: Участники загружены из кэша, marker: $_lastMarker, hasMore: $_hasMoreMembers',
@@ -286,7 +286,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                   );
                 });
 
-                widget.onChatUpdated?.call(); // Уведомляем список чатов
+                widget.onChatUpdated?.call(); 
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Название группы изменено')),
@@ -515,7 +515,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           ),
           FilledButton(
             onPressed: () {
-              Navigator.of(dialogContext).pop(); // Закрываем диалог
+              Navigator.of(dialogContext).pop(); 
               try {
                 ApiService.instance.leaveGroup(widget.chatId);
 
@@ -556,14 +556,14 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
   Future<void> _createInviteLink() async {
     try {
-      // Сначала проверяем кеш на наличие существующей ссылки
+      
       final currentChat = _getCurrentGroupChat();
       String? cachedLink;
       
       if (currentChat != null) {
         cachedLink = currentChat['link'] as String?;
         if (cachedLink != null && cachedLink.isNotEmpty) {
-          // Ссылка уже есть в кеше, показываем её
+          
           await Clipboard.setData(ClipboardData(text: cachedLink));
           
           if (!mounted) return;
@@ -577,7 +577,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         }
       }
 
-      // Если ссылки нет в кеше, создаём новую
+      
       final link = await ApiService.instance.createGroupInviteLink(
         widget.chatId,
         revokePrivateLink: true,
@@ -594,8 +594,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         return;
       }
 
-      // Ссылка автоматически сохраняется в кеш через updateChatInCacheFromJson
-      // в методе createGroupInviteLink ApiService
+      
+      
       
       await Clipboard.setData(ClipboardData(text: link));
 
@@ -740,7 +740,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       final admins = currentChat['admins'] as List<dynamic>? ?? [];
       amIAdmin = admins.contains(widget.myId);
       
-      // Проверяем, может ли участник видеть приватную ссылку
+      
       final options = currentChat['options'] as Map<String, dynamic>?;
       final membersCanSeeLink = options?['MEMBERS_CAN_SEE_PRIVATE_LINK'] as bool? ?? false;
       canSeeLink = amIAdmin || membersCanSeeLink;
@@ -750,7 +750,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       padding: const EdgeInsets.all(16.0),
       sliver: SliverList(
         delegate: SliverChildListDelegate.fixed([
-          // Кнопка "Пригласить по ссылке" для всех, кто может видеть ссылку
+          
           if (canSeeLink) ...[
             Builder(
               builder: (context) {
@@ -758,7 +758,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                 final existingLink = currentChat?['link'] as String?;
                 
                 if (existingLink != null && existingLink.isNotEmpty) {
-                  // Показываем существующую ссылку
+                  
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -808,7 +808,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                     ],
                   );
                 } else {
-                  // Показываем кнопку создания ссылки
+                  
                   return SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(

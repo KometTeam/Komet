@@ -7,7 +7,7 @@ import 'package:ffi/ffi.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 import 'package:uuid/uuid.dart';
 
-// FFI типы для LZ4 block decompress
+
 typedef Lz4DecompressFunction =
     Int32 Function(
       Pointer<Uint8> src,
@@ -32,9 +32,9 @@ class RegistrationService {
   final _uuid = const Uuid();
   Timer? _pingTimer;
   StreamSubscription? _socketSubscription;
-  // LZ4 через es_compression/FFI сейчас не работает на Windows из‑за отсутствия
-  // eslz4-win64.dll, поэтому ниже реализован свой чистый декодер LZ4 block.
-  // Поля для LZ4 через FFI оставлены на будущее, если появится корректная DLL.
+  
+  
+  
   DynamicLibrary? _lz4Lib;
   Lz4Decompress? _lz4BlockDecompress;
 
@@ -43,12 +43,12 @@ class RegistrationService {
 
     try {
       if (Platform.isWindows) {
-        // Пробуем загрузить eslz4-win64.dll
+        
         final dllPath = 'eslz4-win64.dll';
         print('📦 Загрузка LZ4 DLL для block decompress: $dllPath');
         _lz4Lib = DynamicLibrary.open(dllPath);
 
-        // Ищем функцию LZ4_decompress_safe (block format)
+        
         try {
           _lz4BlockDecompress = _lz4Lib!
               .lookup<NativeFunction<Lz4DecompressFunction>>(
@@ -60,7 +60,7 @@ class RegistrationService {
           print(
             '⚠️  Функция LZ4_decompress_safe не найдена, пробуем альтернативные имена...',
           );
-          // Пробуем другие возможные имена
+          
           try {
             _lz4BlockDecompress = _lz4Lib!
                 .lookup<NativeFunction<Lz4DecompressFunction>>(
@@ -82,13 +82,13 @@ class RegistrationService {
   Future<void> connect() async {
     if (_isConnected) return;
 
-    // Инициализируем LZ4 block decompress
+    
     _initLz4BlockDecompress();
 
     try {
       print('🌐 Подключаемся к api.oneme.ru:443...');
 
-      // Создаем SSL контекст
+      
       final securityContext = SecurityContext.defaultContext;
 
       print('🔒 Создаем TCP соединение...');
@@ -109,10 +109,10 @@ class RegistrationService {
       _isConnected = true;
       print('✅ SSL соединение установлено');
 
-      // Запускаем ping loop
+      
       _startPingLoop();
 
-      // Слушаем ответы
+      
       _socketSubscription = _socket!.listen(
         _handleData,
         onError: (error) {
@@ -147,29 +147,29 @@ class RegistrationService {
   }
 
   void _handleData(Uint8List data) {
-    // Обрабатываем данные по частям - сначала заголовок, потом payload
+    
     _processIncomingData(data);
   }
 
   Uint8List? _buffer = Uint8List(0);
 
   void _processIncomingData(Uint8List newData) {
-    // Добавляем новые данные в буфер
+    
     _buffer = Uint8List.fromList([..._buffer!, ...newData]);
 
     while (_buffer!.length >= 10) {
-      // Читаем заголовок
+      
       final header = _buffer!.sublist(0, 10);
       final payloadLen =
           ByteData.view(header.buffer, 6, 4).getUint32(0, Endian.big) &
           0xFFFFFF;
 
       if (_buffer!.length < 10 + payloadLen) {
-        // Недостаточно данных, ждем еще
+        
         break;
       }
 
-      // Полный пакет готов
+      
       final fullPacket = _buffer!.sublist(0, 10 + payloadLen);
       _buffer = _buffer!.sublist(10 + payloadLen);
 
@@ -179,7 +179,7 @@ class RegistrationService {
 
   void _processPacket(Uint8List packet) {
     try {
-      // Разбираем заголовок
+      
       final ver = packet[0];
       final cmd = ByteData.view(packet.buffer).getUint16(1, Endian.big);
       final seq = packet[3];
@@ -190,7 +190,7 @@ class RegistrationService {
         4,
       ).getUint32(0, Endian.big);
 
-      // Проверяем флаг сжатия (как в packet_framer.dart)
+      
       final compFlag = packedLen >> 24;
       final payloadLen = packedLen & 0x00FFFFFF;
 
@@ -216,7 +216,7 @@ class RegistrationService {
       print('═══════════════════════════════════════════════════════════');
       print('');
 
-      // Находим completer по seq
+      
       final completer = _pending[seq];
       if (completer != null && !completer.isCompleted) {
         completer.complete(payload);
@@ -323,27 +323,27 @@ class RegistrationService {
       dynamic payload = msgpack.deserialize(data);
       print('✅ Msgpack десериализация успешна');
 
-      // Иногда сервер шлёт FFI‑токены в виде "отрицательное число + настоящий объект"
-      // в одном msgpack‑буфере. msgpack_dart в таком случае возвращает только первое
-      // значение (например, -16 или -13), а остальное игнорирует.
-      //
-      // Паттерны из логов:
-      //  - F0 56 84 ... → -16 и дальше полноценная map
-      //  - F3 A7 85 ... → -13 и дальше полноценная map
-      //
-      // Если мы увидели отрицательный fixint и в буфере есть ещё данные,
-      // пробуем повторно распарсить "хвост" как настоящий payload.
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       if (payload is int &&
           data.length > 1 &&
           payload <= -1 &&
           payload >= -32) {
         final marker = data[0];
 
-        // Для разных FFI‑токенов offset до реального msgpack может отличаться.
-        // Вместо жёсткой привязки пробуем несколько вариантов подряд.
+        
+        
         final candidateOffsets = <int>[1, 2, 3, 4];
 
-        // Сохраним сюда первый успешно распарсенный payload.
+        
         dynamic recovered;
 
         for (final offset in candidateOffsets) {
@@ -378,8 +378,8 @@ class RegistrationService {
         }
       }
 
-      // После базовой (и возможной повторной) десериализации дополнительно
-      // разбираем "block"-объекты — структуры с lz4‑сжатыми данными.
+      
+      
       final decoded = _decodeBlockTokens(payload);
       return decoded;
     } catch (e) {
@@ -388,18 +388,18 @@ class RegistrationService {
     }
   }
 
-  /// Рекурсивно обходит структуру ответа и декодирует блоки вида:
-  /// {"type": "block", "data": <bytes>, "uncompressed_size": N}
-  /// Такие блоки используются FFI для передачи lz4‑сжатых кусков данных.
+  
+  
+  
   dynamic _decodeBlockTokens(dynamic value) {
     if (value is Map) {
-      // Пытаемся декодировать саму map как block‑токен
+      
       final maybeDecoded = _tryDecodeSingleBlock(value);
       if (maybeDecoded != null) {
         return maybeDecoded;
       }
 
-      // Если это обычная map — обходим все поля рекурсивно
+      
       final result = <dynamic, dynamic>{};
       value.forEach((k, v) {
         result[k] = _decodeBlockTokens(v);
@@ -412,8 +412,8 @@ class RegistrationService {
     return value;
   }
 
-  /// Пробует интерпретировать map как блок вида "block".
-  /// Если структура не похожа на блок, возвращает null.
+  
+  
   dynamic _tryDecodeSingleBlock(Map value) {
     try {
       if (value['type'] != 'block') {
@@ -425,8 +425,8 @@ class RegistrationService {
         return null;
       }
 
-      // Пробуем вытащить ожидаемый размер распакованных данных.
-      // Название поля может отличаться, поэтому проверяем несколько вариантов.
+      
+      
       final uncompressedSize =
           (value['uncompressed_size'] ??
                   value['uncompressedSize'] ??
@@ -437,7 +437,7 @@ class RegistrationService {
           ? rawData
           : Uint8List.fromList(List<int>.from(rawData as List));
 
-      // Если FFI‑функция доступна — используем её (LZ4_decompress_safe).
+      
       if (_lz4BlockDecompress != null && uncompressedSize != null) {
         print(
           '📦 Декодируем block‑токен через LZ4 FFI: '
@@ -481,15 +481,15 @@ class RegistrationService {
             '$srcSize → ${decompressed.length} байт',
           );
 
-          // Пытаемся интерпретировать результат как msgpack — многие блоки
-          // содержат внутри ещё один msgpack‑объект.
+          
+          
           final nested = _deserializeMsgpack(decompressed);
           if (nested != null) {
             return nested;
           }
 
-          // Если это не msgpack — вернём просто байты, вызывающий код сам решит,
-          // что с ними делать.
+          
+          
           return decompressed;
         } finally {
           malloc.free(srcPtr);
@@ -497,11 +497,11 @@ class RegistrationService {
         }
       }
 
-      // FFI недоступен — пробуем наш чистый Dart‑декодер LZ4 block.
+      
       try {
         final decompressed = _lz4DecompressBlockPure(
           compressedBytes,
-          500000 /* max */,
+          500000  ,
         );
         print(
           '✅ block‑токен декомпрессирован через чистый LZ4 block: '
@@ -532,8 +532,8 @@ class RegistrationService {
     }
 
     try {
-      // Сначала пробуем LZ4 block‑декомпрессию так же, как делает register.py
-      // (lz4.block.decompress(payload_bytes, uncompressed_size=99999)).
+      
+      
       Uint8List decompressedBytes = payloadBytes;
 
       try {
@@ -544,7 +544,7 @@ class RegistrationService {
           '${payloadBytes.length} → ${decompressedBytes.length} байт',
         );
       } catch (lz4Error) {
-        // Как и в Python‑скрипте: если lz4 не сработал, просто используем сырые байты.
+        
         print('⚠️  LZ4 block‑декомпрессия не применена: $lz4Error');
         print('📦 Используем сырые данные без распаковки...');
         decompressedBytes = payloadBytes;
@@ -558,11 +558,11 @@ class RegistrationService {
     }
   }
 
-  /// Простейшая реализация LZ4 block‑декомпрессии на Dart.
-  /// Поддерживает стандартный формат блоков без фрейм‑заголовка.
-  /// Используется как аналог lz4.block.decompress из Python‑скрипта.
+  
+  
+  
   Uint8List _lz4DecompressBlockPure(Uint8List src, int maxOutputSize) {
-    // Алгоритм основан на официальной спецификации LZ4.
+    
     final dst = BytesBuilder(copy: false);
     int srcPos = 0;
 
@@ -571,7 +571,7 @@ class RegistrationService {
       final token = src[srcPos++];
       var literalLen = token >> 4;
 
-      // Дополнительная длина литералов
+      
       if (literalLen == 15) {
         while (srcPos < src.length) {
           final b = src[srcPos++];
@@ -580,7 +580,7 @@ class RegistrationService {
         }
       }
 
-      // Копируем литералы
+      
       if (literalLen > 0) {
         if (srcPos + literalLen > src.length) {
           throw StateError(
@@ -597,12 +597,12 @@ class RegistrationService {
         }
       }
 
-      // Конец блока — нет места даже на offset
+      
       if (srcPos >= src.length) {
         break;
       }
 
-      // Читаем offset
+      
       if (srcPos + 1 >= src.length) {
         throw StateError('LZ4: неполный offset в потоке');
       }
@@ -615,7 +615,7 @@ class RegistrationService {
 
       var matchLen = (token & 0x0F) + 4;
 
-      // Дополнительная длина match‑а
+      
       if ((token & 0x0F) == 0x0F) {
         while (srcPos < src.length) {
           final b = src[srcPos++];
@@ -624,7 +624,7 @@ class RegistrationService {
         }
       }
 
-      // Копируем match из уже записанных данных
+      
       final dstBytes = dst.toBytes();
       final dstLen = dstBytes.length;
       final matchPos = dstLen - offset;
@@ -671,7 +671,7 @@ class RegistrationService {
   Future<String> startRegistration(String phoneNumber) async {
     await connect();
 
-    // Генерируем случайные идентификаторы и данные устройства
+    
     final mtInstanceId = _uuid.v4();
     final deviceId = _uuid.v4();
     final possibleDeviceNames = <String>[
@@ -692,7 +692,7 @@ class RegistrationService {
     final deviceName =
         possibleDeviceNames[_random.nextInt(possibleDeviceNames.length)];
 
-    // Отправляем handshake
+    
     final handshakePayload = {
       "mt_instanceid": mtInstanceId,
       "userAgent": {
@@ -719,7 +719,7 @@ class RegistrationService {
     print('📨 Ответ от handshake:');
     print(_formatPayload(handshakeResponse));
 
-    // Проверяем ошибки
+    
     if (handshakeResponse is Map) {
       final err = handshakeResponse['payload']?['error'];
       if (err != null) {
@@ -727,7 +727,7 @@ class RegistrationService {
       }
     }
 
-    // Отправляем START_AUTH
+    
     final authPayload = {"type": "START_AUTH", "phone": phoneNumber};
     print('🚀 Отправляем START_AUTH (opcode=17)...');
     print('📦 START_AUTH payload:');
@@ -737,14 +737,14 @@ class RegistrationService {
     print('📨 Ответ от START_AUTH:');
     print(_formatPayload(response));
 
-    // Проверяем ошибки
+    
     if (response is Map) {
-      // Проверяем ошибку в payload или в корне ответа
+      
       final payload = response['payload'] ?? response;
       final err = payload['error'] ?? response['error'];
 
       if (err != null) {
-        // Обрабатываем конкретную ошибку limit.violate
+        
         if (err.toString().contains('limit.violate') ||
             err.toString().contains('error.limit.violate')) {
           throw Exception(
@@ -752,7 +752,7 @@ class RegistrationService {
           );
         }
 
-        // Для других ошибок используем сообщение от сервера или общее
+        
         final message =
             payload['localizedMessage'] ??
             payload['message'] ??
@@ -762,7 +762,7 @@ class RegistrationService {
       }
     }
 
-    // Извлекаем токен из ответа (как в register.py)
+    
     if (response is Map) {
       final payload = response['payload'] ?? response;
       final token = payload['token'] ?? response['token'];
@@ -789,21 +789,21 @@ class RegistrationService {
     print('📨 Ответ от CHECK_CODE:');
     print(_formatPayload(response));
 
-    // Проверяем ошибки
+    
     if (response is Map) {
-      // Проверяем ошибку в payload или в корне ответа
+      
       final payload = response['payload'] ?? response;
       final err = payload['error'] ?? response['error'];
 
       if (err != null) {
-        // Обрабатываем конкретную ошибку неправильного кода
+        
         if (err.toString().contains('verify.code.wrong') ||
             err.toString().contains('wrong.code') ||
             err.toString().contains('code.wrong')) {
           throw Exception('Неверный код');
         }
 
-        // Для других ошибок используем сообщение от сервера или общее
+        
         final message =
             payload['localizedMessage'] ??
             payload['message'] ??
@@ -813,12 +813,12 @@ class RegistrationService {
       }
     }
 
-    // Извлекаем register токен (как в register.py)
+    
     if (response is Map) {
       final tokenSrc = response['payload'] ?? response;
       final tokenAttrs = tokenSrc['tokenAttrs'];
 
-      // Проверяем, есть ли LOGIN токен - значит аккаунт уже существует
+      
       if (tokenAttrs is Map && tokenAttrs['LOGIN'] is Map) {
         throw Exception('ACCOUNT_EXISTS');
       }
@@ -850,14 +850,14 @@ class RegistrationService {
     print('📨 Ответ от REGISTER:');
     print(_formatPayload(response));
 
-    // Проверяем ошибки
+    
     if (response is Map) {
       final err = response['payload']?['error'];
       if (err != null) {
         throw Exception('Ошибка REGISTER: $err');
       }
 
-      // Извлекаем финальный токен
+      
       final payload = response['payload'] ?? response;
       final finalToken = payload['token'] ?? response['token'];
       if (finalToken != null) {

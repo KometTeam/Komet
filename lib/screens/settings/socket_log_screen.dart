@@ -104,7 +104,7 @@ class _SocketLogScreenState extends State<SocketLogScreen> {
     _applyFiltersAndSearch();
     setState(
       () {},
-    ); // Однократное обновление UI после загрузки всех кэшированных логов
+    ); 
   }
 
   void _subscribeToNewLogs() {
@@ -332,7 +332,7 @@ class _SocketLogScreenState extends State<SocketLogScreen> {
                 8,
                 8,
                 80,
-              ), // Оставляем место для FAB
+              ), 
               itemCount: _filteredLogEntries.length,
               itemBuilder: (context, index) {
                 return LogEntryCard(

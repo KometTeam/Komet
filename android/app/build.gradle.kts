@@ -38,8 +38,6 @@ android {
         }
     }
 
-    // keystore properties теперь лежат в android/key.properties
-    // rootProject указывает на каталог android/, поэтому путь должен быть именно "key.properties"
     val keyPropertiesFile = rootProject.file("key.properties")
     val keyProperties = Properties()
     
@@ -69,7 +67,6 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Only use release signing if keys are available
             if (file(keyPropertiesFile).exists() || 
                 System.getenv("RELEASE_STORE_FILE") != null) {
                 signingConfig = signingConfigs.getByName("release")

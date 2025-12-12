@@ -67,12 +67,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
 
-    // Отключаем анимации при включенной оптимизации
+    
     if (themeProvider.optimization) {
       timeDilation =
-          0.001; // Практически отключаем анимации (минимальное значение)
+          0.001; 
     } else {
-      timeDilation = 1.0; // Восстанавливаем нормальную скорость
+      timeDilation = 1.0; 
     }
 
     return DynamicColorBuilder(
@@ -82,7 +82,7 @@ class MyApp extends StatelessWidget {
             ? lightDynamic.primary
             : themeProvider.accentColor;
 
-        // Создаем PageTransitionsTheme в зависимости от оптимизации
+        
         final PageTransitionsTheme pageTransitionsTheme =
             themeProvider.optimization
             ? const PageTransitionsTheme(
@@ -108,7 +108,7 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
           pageTransitionsTheme: pageTransitionsTheme,
-          // Отключаем тени и эффекты при оптимизации для экономии энергии
+          
           shadowColor: themeProvider.optimization ? Colors.transparent : null,
           splashFactory: themeProvider.optimization
               ? NoSplash.splashFactory
@@ -133,7 +133,7 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
           pageTransitionsTheme: pageTransitionsTheme,
-          // Отключаем тени и эффекты при оптимизации для экономии энергии
+          
           shadowColor: themeProvider.optimization ? Colors.transparent : null,
           splashFactory: themeProvider.optimization
               ? NoSplash.splashFactory
@@ -145,7 +145,7 @@ class MyApp extends StatelessWidget {
               color: ColorScheme.fromSeed(
                 seedColor: accentColor,
                 brightness: Brightness.dark,
-              ).onSurface, // ← Используем цвет onSurface из цветовой схемы
+              ).onSurface, 
             ),
           ),
         );

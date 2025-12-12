@@ -485,7 +485,7 @@ class _VideoControls extends StatelessWidget {
             ),
             const Spacer(),
 
-            // Прогресс-бар
+            
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -540,7 +540,7 @@ class _VideoControls extends StatelessWidget {
                         isPrimary: true,
                       ),
                       const SizedBox(width: 12),
-                      // Кнопка перемотки вперед
+                      
                       _MaterialYouControlButton(
                         icon: Icons.forward_10,
                         onTap: onForward,
@@ -765,7 +765,7 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
                     ),
                   ),
                 ),
-                // Ползунок
+                
                 Center(
                   child: Align(
                     alignment: Alignment(progress * 2 - 1, 0),

@@ -190,13 +190,13 @@ extension ApiServiceChats on ApiService {
     print('Переименовываем группу $chatId в: $newName');
   }
 
-  /// Обновляет/добавляет чат в локный кэш `_lastChatsPayload['chats']`,
-  /// чтобы остальные экраны (настройки группы, экран чата и т.п.) сразу
-  /// видели новые поля (admins, options, participants и т.д.).
+  
+  
+  
   void updateChatInCacheFromJson(Map<String, dynamic> chatJson) {
     try {
-      // Если кэш ещё не инициализирован (например, сразу после запуска),
-      // создаём минимальную структуру, чтобы новый чат тоже оказался в ней.
+      
+      
       _lastChatsPayload ??= {
         'chats': <dynamic>[],
         'contacts': <dynamic>[],
@@ -224,10 +224,10 @@ extension ApiServiceChats on ApiService {
     }
   }
 
-  /// Создает/перегенерирует пригласительную ссылку для группы.
-  /// Сервер ожидает payload вида:
-  /// {"chatId": -69330645868731, "revokePrivateLink": true}
-  /// В ответ приходит объект с обновленным chat, где есть поле "link".
+  
+  
+  
+  
   Future<String?> createGroupInviteLink(
     int chatId, {
     bool revokePrivateLink = true,
@@ -262,7 +262,7 @@ extension ApiServiceChats on ApiService {
         return null;
       }
 
-      // Обновим кэш чатов, если сервер вернул полный объект чата
+      
       if (chat != null) {
         updateChatInCacheFromJson(chat);
       }
@@ -324,20 +324,20 @@ extension ApiServiceChats on ApiService {
   }
 
   Future<Map<String, dynamic>> getChatsOnly({bool force = false}) async {
-    // Эта функция теперь НЕ делает специальных запросов к серверу
-    // (вроде opcode 48 с chatIds:[0]) и не "ломает" глобальный кэш чатов.
-    //
-    // Использование:
-    // - без force: просто возвращаем последний снапшот, который уже
-    //   был получен через getChatsAndContacts / кэш;
-    // - с force: пробрасываем запрос в getChatsAndContacts(force: true),
-    //   чтобы получить полный список чатов.
+    
+    
+    
+    
+    
+    
+    
+    
 
     if (!force && _lastChatsPayload != null) {
       return _lastChatsPayload!;
     }
 
-    // Если нужно именно "обновить" — вызываем полноценную синхронизацию.
+    
     return getChatsAndContacts(force: true);
   }
 
@@ -724,9 +724,9 @@ extension ApiServiceChats on ApiService {
     }
   }
 
-  /// Загружает старые сообщения начиная с указанного timestamp
-  /// [fromTimestamp] - timestamp в миллисекундах самого старого загруженного сообщения
-  /// [backward] - количество сообщений для загрузки (по умолчанию 30)
+  
+  
+  
   Future<List<Message>> loadOlderMessagesByTimestamp(
     int chatId,
     int fromTimestamp, {

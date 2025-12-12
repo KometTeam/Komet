@@ -9,7 +9,7 @@ import 'package:gwid/utils/proxy_service.dart';
 import 'package:gwid/screens/registration_screen.dart';
 import 'package:gwid/screens/settings/auth_settings_screen.dart';
 import 'package:gwid/screens/token_auth_screen.dart';
-import 'package:gwid/screens/tos_screen.dart'; // Импорт экрана ToS
+import 'package:gwid/screens/tos_screen.dart'; 
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -111,7 +111,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
       code: '',
       flag: '',
       mask: '',
-      digits: 0, // Без ограничения
+      digits: 0, 
     ),
   ];
 
@@ -123,8 +123,8 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
   bool _hasProxyConfigured = false;
   StreamSubscription? _apiSubscription;
   bool _showContent = false;
-  bool _isTosAccepted = false; // Состояние для отслеживания принятия соглашения
-  String _customPrefix = ''; // Для "Свой префикс"
+  bool _isTosAccepted = false; 
+  String _customPrefix = ''; 
 
   late final AnimationController _animationController;
   late final Animation<Alignment> _topAlignmentAnimation;
@@ -204,7 +204,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
 
   void _initializeMaskFormatter() {
     if (_selectedCountry.mask.isEmpty) {
-      // Для "Свой префикс" - без маски, только цифры
+      
       _maskFormatter = MaskTextInputFormatter(
         mask: '',
         filter: {"#": RegExp(r'[0-9]')},
@@ -237,7 +237,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
       }
     }
 
-    // Для "Свой префикс" проверяем минимальную длину (например, 5 цифр)
+    
     final isFull = _selectedCountry.mask.isEmpty
         ? _maskFormatter.getUnmaskedText().length >= 5
         : _maskFormatter.getUnmaskedText().length == _selectedCountry.digits;
@@ -268,11 +268,11 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
 
   void _onCountryChanged(Country? country) async {
     if (country != null && country != _selectedCountry) {
-      // Если выбран "Свой префикс", показываем диалог для ввода префикса
+      
       if (country.mask.isEmpty) {
         final prefix = await _showCustomPrefixDialog();
         if (prefix == null || prefix.isEmpty) {
-          return; // Отменено
+          return; 
         }
         setState(() {
           _selectedCountry = country;

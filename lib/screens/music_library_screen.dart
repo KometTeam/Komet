@@ -101,7 +101,7 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
   Future<void> _playTrack(MusicTrack track) async {
     final musicPlayer = MusicPlayerService();
     await musicPlayer.playTrack(track, playlist: _musicTracks);
-    // Автоматически разворачиваем плеер при запуске трека
+    
     BottomSheetMusicPlayer.isExpandedNotifier.value = true;
     BottomSheetMusicPlayer.isFullscreenNotifier.value = true;
   }

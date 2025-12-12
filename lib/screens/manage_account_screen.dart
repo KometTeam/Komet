@@ -28,7 +28,7 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
   }
 
   Future<void> _initializeProfileData() async {
-    // Берём только серверный профиль без локальных оверрайдов
+    
     _actualProfile = widget.myProfile;
 
     _firstNameController = TextEditingController(
@@ -56,7 +56,7 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
       final lastName = _lastNameController.text.trim();
       final description = _descriptionController.text.trim();
 
-      // Отправляем изменения сразу на сервер (opcode 16)
+      
       final updatedProfile = await ApiService.instance.updateProfileText(
         firstName,
         lastName,
@@ -151,7 +151,7 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
       final firstName = _firstNameController.text.trim();
       final lastName = _lastNameController.text.trim();
 
-      // Полный серверный флоу: opcode 80 (url) + загрузка + opcode 16 (photoToken)
+      
       final updatedProfile =
           await ApiService.instance.updateProfilePhoto(firstName, lastName);
 
@@ -234,22 +234,22 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
                       const SizedBox(height: 20),
                       TextFormField(
                         controller: _firstNameController,
-                        maxLength: 60, // Ограничение по символам
+                        maxLength: 60, 
                         decoration: _buildInputDecoration(
                           "Имя",
                           Icons.person_outline,
-                        ).copyWith(counterText: ""), // Скрываем счетчик
+                        ).copyWith(counterText: ""), 
                         validator: (value) =>
                             value!.isEmpty ? 'Введите ваше имя' : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _lastNameController,
-                        maxLength: 60, // Ограничение по символам
+                        maxLength: 60, 
                         decoration: _buildInputDecoration(
                           "Фамилия",
                           Icons.person_outline,
-                        ).copyWith(counterText: ""), // Скрываем счетчик
+                        ).copyWith(counterText: ""), 
                       ),
                     ],
                   ),
@@ -664,7 +664,7 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
   }) {
     final prefixIcon = (label == "О себе")
         ? Padding(
-            padding: const EdgeInsets.only(bottom: 60), // Смещаем иконку вверх
+            padding: const EdgeInsets.only(bottom: 60), 
             child: Icon(icon),
           )
         : Icon(icon);

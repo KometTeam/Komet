@@ -248,7 +248,7 @@ extension ApiServiceContacts on ApiService {
   }
 
   Future<int?> getChatIdByUserId(int userId) async {
-    // ПИДОРИСТИЧЕСКАЯ ФОРМУЛА ОТ ДЕДА chatId = userId1 ^ userId2
+    
     if (_userId == null) {
       return null;
     }

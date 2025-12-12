@@ -244,7 +244,7 @@ class _ExportSessionScreenState extends State<ExportSessionScreen> {
                 onChanged: (bool? value) =>
                     setState(() => _saveProxySettings = value ?? false),
                 controlAffinity:
-                    ListTileControlAffinity.leading, // Чекбокс слева
+                    ListTileControlAffinity.leading, 
               ),
             ),
             const SizedBox(height: 32),

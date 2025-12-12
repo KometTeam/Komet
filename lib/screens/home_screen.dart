@@ -121,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ) async {
     await showDialog(
       context: context,
-      barrierDismissible: false, // Зачем давать им выбор оло
+      barrierDismissible: false, 
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Доступно обновление'),
@@ -263,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     String fullLink = uri.toString();
 
-    // На всякий случай убираем возможный префикс '@' перед ссылкой
+    
     if (fullLink.startsWith('@')) {
       fullLink = fullLink.substring(1);
     }

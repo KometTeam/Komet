@@ -1,4 +1,4 @@
-# Flutter-специфичные правила (у вас уже должны быть)
+# Flutter-специфичные правила
 -keep class io.flutter.app.** { *; }
 -keep class io.flutter.plugin.** { *; }
 -keep class io.flutter.util.** { *; }
@@ -35,7 +35,7 @@
     @androidx.media3.common.util.UnknownNull *;
 }
 
-# Правила для chewie (если используется)
+# Правила для chewie
 -keep class com.brianegan.chewie.** { *; }
 -dontwarn com.brianegan.chewie.**
 
@@ -57,11 +57,11 @@
     @androidx.annotation.Keep *;
 }
 
-# Правила для Apache Tika (используется некоторыми плагинами)
+# Правила для Apache Tika
 -dontwarn javax.xml.stream.XMLStreamException
 -dontwarn javax.xml.stream.**
 -dontwarn org.apache.tika.**
 
-# Игнорировать предупреждения о недостающих классах XML (не включены в Android)
+# Игнорировать предупреждения о недостающих классах XML
 -dontwarn javax.xml.**
 -dontwarn org.w3c.dom.**

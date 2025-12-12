@@ -38,7 +38,7 @@ class _CustomRequestScreenState extends State<CustomRequestScreen> {
     const encoder = JsonEncoder.withIndent('  ');
     final formattedResponse = encoder.convert(message);
 
-    if (!mounted) return; // Убедимся, что виджет все еще существует
+    if (!mounted) return; 
 
     setState(() {
       _response = formattedResponse;
@@ -49,7 +49,7 @@ class _CustomRequestScreenState extends State<CustomRequestScreen> {
       _history.insert(
         0,
         RequestHistoryItem(
-          request: originalRequest, // Используем переданный запрос
+          request: originalRequest, 
           response: formattedResponse,
           timestamp: DateTime.now(),
         ),
@@ -91,7 +91,7 @@ class _CustomRequestScreenState extends State<CustomRequestScreen> {
 
 
       timeoutTimer = Timer(const Duration(seconds: 15), () {
-        subscription?.cancel(); // Прекращаем слушать стрим
+        subscription?.cancel(); 
         if (mounted && _isLoading) {
           setState(() {
             _error = 'Ошибка: Превышено время ожидания ответа (15с).';
@@ -104,9 +104,9 @@ class _CustomRequestScreenState extends State<CustomRequestScreen> {
       subscription = ApiService.instance.messages.listen((message) {
 
         if (message['seq'] == sentSeq) {
-          timeoutTimer?.cancel(); // Отменяем таймер
-          subscription?.cancel(); // Отменяем подписку
-          _handleResponse(message, requestText); // Обрабатываем ответ
+          timeoutTimer?.cancel(); 
+          subscription?.cancel(); 
+          _handleResponse(message, requestText); 
         }
       });
     } catch (e) {

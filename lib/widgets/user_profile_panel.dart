@@ -366,11 +366,11 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
     });
 
     try {
-      // Сначала пробуем использовать dialogChatId, если он уже есть
+      
       int? chatId = widget.dialogChatId;
 
       if (chatId == null || chatId == 0) {
-        // Если нет, считаем chatId по формуле chatId = userId1 ^ userId2
+        
         chatId = await ApiService.instance.getChatIdByUserId(widget.userId);
       }
 
@@ -388,10 +388,10 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
 
       if (!mounted) return;
 
-      // Закрываем панель профиля
+      
       Navigator.of(context).pop();
 
-      // Открываем экран чата
+      
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (ctx) => ChatScreen(
@@ -439,10 +439,10 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
     });
 
     try {
-      // Отправляем opcode=34 с action="ADD"
+      
       await ApiService.instance.addContact(widget.userId);
 
-      // Пытаемся сразу подтянуть обновлённые данные контакта
+      
       await ApiService.instance.requestContactsByIds([widget.userId]);
 
       await _checkIfInContacts();

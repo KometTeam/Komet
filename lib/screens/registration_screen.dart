@@ -177,7 +177,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           _selectedCountry.code + _maskFormatter.getUnmaskedText();
       print('📞 Номер телефона: $fullPhoneNumber');
 
-      // Запускаем процесс регистрации
+      
       final token = await _registrationService.startRegistration(
         fullPhoneNumber,
       );
@@ -213,13 +213,13 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     try {
       print('🔐 Код подтверждения: $code');
 
-      // Проверяем код и получаем токен регистрации
+      
       final registerToken = await _registrationService.verifyCode(
         _registrationToken!,
         code,
       );
 
-      // Завершаем регистрацию
+      
       await _registrationService.completeRegistration(registerToken);
 
       print('✅ Регистрация завершена успешно!');
@@ -238,7 +238,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       if (mounted) {
         setState(() => _isLoading = false);
 
-        // Проверяем, существует ли уже аккаунт
+        
         if (e.toString().contains('ACCOUNT_EXISTS')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -248,7 +248,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
               backgroundColor: Colors.orange,
             ),
           );
-          // Закрываем экран регистрации
+          
           Navigator.of(context).pop();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(

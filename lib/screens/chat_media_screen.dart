@@ -35,7 +35,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
   bool _isLoading = true;
   String _error = '';
 
-  // Отфильтрованные списки
+  
   List<Message> _mediaMessages = [];
   List<Message> _fileMessages = [];
   List<Message> _audioMessages = [];
@@ -55,13 +55,13 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
   }
 
   void _processMessages() {
-    // Используем уже загруженные сообщения
+    
     final allMessages = List<Message>.from(widget.messages);
     
-    // Сортируем по времени (от новых к старым)
+    
     allMessages.sort((a, b) => b.time.compareTo(a.time));
 
-    // Фильтруем по типам
+    
     _filterMessages(allMessages);
 
     if (mounted) {
@@ -78,7 +78,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
     _linkMessages.clear();
 
     for (final message in messages) {
-      // Медиа (фото, видео)
+      
       final hasMedia = message.attaches.any((attach) {
         final type = attach['_type'] as String?;
         return type == 'PHOTO' || type == 'VIDEO';
@@ -87,7 +87,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
         _mediaMessages.add(message);
       }
 
-      // Файлы
+      
       final hasFile = message.attaches.any((attach) {
         final type = attach['_type'] as String?;
         return type == 'FILE';
@@ -96,7 +96,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
         _fileMessages.add(message);
       }
 
-      // Голосовые сообщения
+      
       final hasAudio = message.attaches.any((attach) {
         final type = attach['_type'] as String?;
         return type == 'AUDIO' || type == 'VOICE';
@@ -105,17 +105,17 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
         _audioMessages.add(message);
       }
 
-      // Ссылки (из текста или элементов)
+      
       bool hasLink = false;
       if (message.text.isNotEmpty) {
-        // Проверяем элементы на наличие ссылок
+        
         for (final element in message.elements) {
           if (element['type'] == 'LINK' || element['attributes']?['url'] != null) {
             hasLink = true;
             break;
           }
         }
-        // Простая проверка на URL в тексте
+        
         if (!hasLink) {
           final urlPattern = RegExp(
             r'https?://[^\s]+',
@@ -131,11 +131,11 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
   }
 
   void _goToMessage(String messageId) {
-    // Закрываем экран медиа и возвращаемся в чат
+    
     Navigator.of(context).pop();
-    // Вызываем callback для прокрутки к сообщению
+    
     if (widget.onGoToMessage != null) {
-      // Увеличиваем задержку, чтобы экран успел полностью закрыться и layout завершился
+      
       Future.delayed(const Duration(milliseconds: 500), () {
         widget.onGoToMessage!(messageId);
       });
@@ -212,13 +212,13 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
   }
 
   void _playAudio(Message message, Map<String, dynamic> attach) {
-    // Для проигрывания аудио просто переходим к сообщению
-    // Аудио проигрыватель встроен в сообщение
+    
+    
     _goToMessage(message.id);
   }
 
   void _viewMedia(Message message, Map<String, dynamic> attach) {
-    // Открываем просмотрщик медиа используя существующий метод
+    
     final url = attach['url'] ?? attach['baseUrl'];
     final preview = attach['previewData'];
 
@@ -257,7 +257,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
     }
 
     if (imageChild != null) {
-      // Используем навигатор для перехода на полноэкранный просмотр
+      
       Navigator.of(context).push(
         PageRouteBuilder(
           opaque: false,
@@ -289,13 +289,13 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
   }
 
   String _extractLinkFromMessage(Message message) {
-    // Сначала проверяем элементы
+    
     for (final element in message.elements) {
       if (element['type'] == 'LINK') {
         return element['attributes']?['url'] as String? ?? '';
       }
     }
-    // Затем ищем в тексте
+    
     final urlPattern = RegExp(
       r'https?://[^\s]+',
       caseSensitive: false,
@@ -314,7 +314,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
     final url = attach['url'] ?? attach['baseUrl'] as String?;
     final type = attach['_type'] as String?;
 
-    // Декодируем base64 превью, если есть
+    
     Uint8List? previewBytes;
     if (previewData != null && previewData.startsWith('data:')) {
       final idx = previewData.indexOf('base64,');
@@ -323,12 +323,12 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
         try {
           previewBytes = base64Decode(b64);
         } catch (_) {
-          // Ошибка декодирования
+          
         }
       }
     }
 
-    // Формируем URL для превью
+    
     String? previewUrl;
     if (url != null && url.isNotEmpty) {
       if (!url.contains('?')) {
@@ -375,7 +375,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
       );
     }
 
-    // Если это видео, добавляем иконку воспроизведения
+    
     if (type == 'VIDEO') {
       return Stack(
         fit: StackFit.expand,
@@ -438,7 +438,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Превью медиа
+              
               Container(
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
@@ -446,7 +446,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
                 ),
                 child: _buildMediaPreview(mediaAttach),
               ),
-              // Кнопка действий
+              
               Positioned(
                 bottom: 4,
                 right: 4,
@@ -730,7 +730,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen>
   }
 }
 
-// Простой полноэкранный просмотрщик фото
+
 class _FullScreenPhotoViewer extends StatelessWidget {
   final Widget imageChild;
   final Map<String, dynamic> attach;

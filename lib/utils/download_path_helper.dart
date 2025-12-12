@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class DownloadPathHelper {
   static const String _downloadPathKey = 'custom_download_path';
 
-  /// Получить папку для загрузки файлов
-  /// Сначала проверяет сохраненный путь, если его нет - использует дефолтный
+  
+  
   static Future<io.Directory?> getDownloadDirectory() async {
     final prefs = await SharedPreferences.getInstance();
     final customPath = prefs.getString(_downloadPathKey);
@@ -18,16 +18,16 @@ class DownloadPathHelper {
       }
     }
 
-    // Используем дефолтную папку
+    
     return _getDefaultDownloadDirectory();
   }
 
-  /// Получить дефолтную папку для загрузки
+  
   static Future<io.Directory?> _getDefaultDownloadDirectory() async {
     if (io.Platform.isAndroid) {
       final directory = await getExternalStorageDirectory();
       if (directory != null) {
-        // Пробуем найти папку Download/Downloads
+        
         var downloadDir = io.Directory(
           '${directory.path.split('Android')[0]}Download',
         );
@@ -58,11 +58,11 @@ class DownloadPathHelper {
       }
     }
 
-    // Fallback
+    
     return await getApplicationDocumentsDirectory();
   }
 
-  /// Сохранить выбранную пользователем папку
+  
   static Future<void> setDownloadDirectory(String? path) async {
     final prefs = await SharedPreferences.getInstance();
     if (path != null && path.isNotEmpty) {
@@ -72,13 +72,13 @@ class DownloadPathHelper {
     }
   }
 
-  /// Получить текущий сохраненный путь (может быть null)
+  
   static Future<String?> getSavedDownloadPath() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_downloadPathKey);
   }
 
-  /// Получить путь для отображения (сохраненный или дефолтный)
+  
   static Future<String> getDisplayPath() async {
     final savedPath = await getSavedDownloadPath();
     if (savedPath != null && savedPath.isNotEmpty) {

@@ -277,9 +277,7 @@ class _ChatsScreenState extends State<ChatsScreen>
 
   void _navigateToLogin() {
     print('Перенаправляем на экран входа из-за недействительного токена');
-    /*Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
-    );*/
+     
   }
 
   void _showTokenExpiredDialog(String message) {
@@ -326,7 +324,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         final profileData = payload['profile'];
         if (profileData != null) {
           print('🔄 ChatsScreen: Получен профиль из opcode 19, обновляем UI');
-          // Откладываем setState, чтобы избежать ошибки во время обновления устройства мыши
+          
           Future.microtask(() {
             if (mounted) {
               setState(() {
@@ -342,14 +340,14 @@ class _ChatsScreenState extends State<ChatsScreen>
       final chatIdValue = payload['chatId'];
       final int? chatId = chatIdValue != null ? chatIdValue as int? : null;
 
-      // Для части опкодов (48, 55, 135, 272, 274) нам не нужен явный chatId в корне
-      // payload, поэтому не отбрасываем их, даже если chatId == null.
+      
+      
       if (opcode == 272 ||
           opcode == 274 ||
           opcode == 48 ||
           opcode == 55 ||
           opcode == 135) {
-        // продолжаем обработку ниже
+        
       } else if (chatId == null) {
         return;
       }
@@ -358,15 +356,15 @@ class _ChatsScreenState extends State<ChatsScreen>
         _setTypingForChat(chatId);
       }
 
-      // Ответ на отправку сообщения (opcode 64).
-      // Если сервер прислал в payload полный объект chat (как при создании группы
-      // через CONTROL new), добавляем/обновляем чат локально.
+      
+      
+      
       if (opcode == 64 && cmd == 1 && payload['chat'] is Map<String, dynamic>) {
         final chatJson = payload['chat'] as Map<String, dynamic>;
         final newChat = Chat.fromJson(chatJson);
 
-        // Обновляем также глобальный кэш ApiService, чтобы настройки группы и
-        // другие экраны сразу видели корректные права/админов/опции.
+        
+        
         ApiService.instance.updateChatInCacheFromJson(chatJson);
 
         if (mounted) {
@@ -388,9 +386,9 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
       }
 
-      // Новый входящий месседж (opcode 128) — обновляем последний месседж и
-      // двигаем чат вверх БЕЗ полного рефреша с сервера. Если такого чата ещё нет
-      // (нам написал новый пользователь), создаём его на основе payload.chat.
+      
+      
+      
       if (opcode == 128 && chatId != null) {
         final newMessage = Message.fromJson(payload['message']);
         ApiService.instance.clearCacheForChat(chatId);
@@ -429,12 +427,12 @@ class _ChatsScreenState extends State<ChatsScreen>
             _filterChats();
           });
         } else if (payload['chat'] is Map<String, dynamic>) {
-          // Чат ещё не известен клиенту — создаём его на основе payload.chat.
+          
           final chatJson = payload['chat'] as Map<String, dynamic>;
           final newChat = Chat.fromJson(chatJson);
 
-          // Обновляем глобальный кэш ApiService, чтобы дальше во всех экранах
-          // был один и тот же объект чата.
+          
+          
           ApiService.instance.updateChatInCacheFromJson(chatJson);
 
           setState(() {
@@ -523,7 +521,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           if (cid != null) {
             final currentTime =
                 DateTime.now().millisecondsSinceEpoch ~/
-                1000; // Конвертируем в секунды
+                1000; 
             final userPresence = {
               'seen': currentTime,
               'on': isOnline ? 'ON' : 'OFF',
@@ -598,15 +596,15 @@ class _ChatsScreenState extends State<ChatsScreen>
         if (mounted) setState(() {});
       }
 
-      // Создание/обновление группы (opcode 48) — стараемся обновить список чатов
-      // локально по объекту chat из payload, без повторного getChatsAndContacts.
+      
+      
       if (opcode == 48) {
         print('Получен ответ на создание/обновление группы: $payload');
 
         final chatJson = payload['chat'] as Map<String, dynamic>?;
         final chatsJson = payload['chats'] as List<dynamic>?;
 
-        // Приоритет: одиночный chat, дальше — первый из списка chats.
+        
         Map<String, dynamic>? effectiveChatJson = chatJson;
         if (effectiveChatJson == null &&
             chatsJson != null &&
@@ -620,7 +618,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         if (effectiveChatJson != null) {
           final newChat = Chat.fromJson(effectiveChatJson);
 
-          // Синхронизируем объект чата и в глобальном кэше ApiService.
+          
           ApiService.instance.updateChatInCacheFromJson(effectiveChatJson);
           if (mounted) {
             setState(() {
@@ -631,7 +629,7 @@ class _ChatsScreenState extends State<ChatsScreen>
               if (existingIndex != -1) {
                 _allChats[existingIndex] = newChat;
               } else {
-                // Вставляем новый чат сразу после "Избранного", если оно есть.
+                
                 final savedIndex = _allChats.indexWhere(_isSavedMessages);
                 final insertIndex = savedIndex >= 0 ? savedIndex + 1 : 0;
                 _allChats.insert(insertIndex, newChat);
@@ -641,12 +639,12 @@ class _ChatsScreenState extends State<ChatsScreen>
             });
           }
         } else {
-          // Fallback: если сервер не прислал chat, обновляемся старым способом.
+          
           _refreshChats();
         }
       }
 
-      // Присоединение к группе по ссылке (opcode 89, cmd 1) — добавляем чат в список
+      
       if (opcode == 89 && cmd == 1) {
         final chatJson = payload['chat'] as Map<String, dynamic>?;
         if (chatJson != null) {
@@ -679,15 +677,15 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
       }
 
-      // Изменение параметров чата (rename, invite‑link и т.п.) приходит с opcode 55.
-      // В payload обычно лежит обновленный объект chat.
+      
+      
       if (opcode == 55 && cmd == 1) {
         final chatJson = payload['chat'] as Map<String, dynamic>?;
         if (chatJson != null) {
           final updatedChat = Chat.fromJson(chatJson);
 
-          // Обновляем глобальный кэш ApiService, чтобы настройки группы и др.
-          // сразу видели новые права/линки/название.
+          
+          
           ApiService.instance.updateChatInCacheFromJson(chatJson);
           if (mounted) {
             setState(() {
@@ -709,9 +707,9 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
       }
 
-      // Выход из группы: сервер сначала шлёт opcode 135 с chat.status = REMOVED,
-      // а уже потом opcode 58 с CONTROL-сообщением "leave". Для обновления списка
-      // чатов нам важен именно 135.
+      
+      
+      
       if (opcode == 135 && payload['chat'] is Map<String, dynamic>) {
         final removedChat = payload['chat'] as Map<String, dynamic>;
         final int? removedChatId = removedChat['id'] as int?;
@@ -948,18 +946,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     fontSize: 16,
                   ),
                 ),
-                /*const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.search, size: 20),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const ChannelsListScreen(),
-                      ),
-                    );
-                  },
-                  tooltip: 'Поиск каналов',
-                ),*/
+                 
               ],
             ),
           ),
@@ -1198,27 +1185,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 },
               ),
 
-              /*ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.tertiaryContainer,
-                  child: Icon(
-                    Icons.broadcast_on_personal,
-                    color: Theme.of(context).colorScheme.onTertiaryContainer,
-                  ),
-                ),
-                title: const Text('Каналы'),
-                subtitle: const Text('Просмотр и подписка на каналы'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const ChannelsListScreen(),
-                    ),
-                  );
-                },
-              ),*/
+               
               ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(
@@ -1353,7 +1320,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 if (nameController.text.trim().isNotEmpty) {
                   ApiService.instance.createGroupWithMessage(
                     nameController.text.trim(),
-                    selectedContacts, // Будет [] если никого не выбрали
+                    selectedContacts, 
                   );
                   Navigator.of(context).pop();
                 }
@@ -1544,14 +1511,14 @@ class _ChatsScreenState extends State<ChatsScreen>
         _filteredChats.sort((a, b) {
           final aIsSaved = _isSavedMessages(a);
           final bIsSaved = _isSavedMessages(b);
-          if (aIsSaved && !bIsSaved) return -1; // Избранное в начало
-          if (!aIsSaved && bIsSaved) return 1; // Избранное в начало
+          if (aIsSaved && !bIsSaved) return -1; 
+          if (!aIsSaved && bIsSaved) return 1; 
 
           if (aIsSaved && bIsSaved) {
             if (a.id == 0) return -1;
             if (b.id == 0) return 1;
           }
-          return 0; // Остальные чаты сохраняют порядок
+          return 0; 
         });
       } else if (_searchFocusNode.hasFocus && query.isEmpty) {
         _filteredChats = [];
@@ -1724,8 +1691,8 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   void _loadChatsAndContacts() {
-    // Берём актуальный снапшот чатов, если он уже есть (_lastChatsPayload),
-    // а если нет — ApiService сам дёрнет opcode 19.
+    
+    
     final future = ApiService.instance.getChatsOnly();
 
     setState(() {
@@ -2001,9 +1968,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                   });
                 });
               }
-              // Если чаты есть, но текущий фильтр/папка не даёт ни одного результата
-              // (например, после переподключения или некорректного фильтра),
-              // то по умолчанию показываем все чаты, а не пустой экран.
+              
+              
+              
               if (_filteredChats.isEmpty && _allChats.isNotEmpty) {
                 _filteredChats = List.from(_allChats);
               }
@@ -2111,7 +2078,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             CircleAvatar(
-                              radius: 30, // Чуть крупнее
+                              radius: 30, 
                               backgroundColor: colors.primary,
                               backgroundImage:
                                   _isProfileLoading ||
@@ -2140,7 +2107,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                 : '?',
                                             style: TextStyle(
                                               color: colors.onPrimary,
-                                              fontSize: 28, // Крупнее
+                                              fontSize: 28, 
                                             ),
                                           )
                                         : null),
@@ -2149,7 +2116,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                               icon: Icon(
                                 isDarkMode
                                     ? Icons.brightness_7
-                                    : Icons.brightness_4, // Солнце / Луна
+                                    : Icons.brightness_4, 
                                 color: colors.onPrimaryContainer,
                                 size: 26,
                               ),
@@ -2278,7 +2245,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                   account,
                                                   accountManager,
                                                   () {
-                                                    // Обновляем список аккаунтов
+                                                    
                                                     setState(() {});
                                                   },
                                                 );
@@ -2469,14 +2436,14 @@ class _ChatsScreenState extends State<ChatsScreen>
                     leading: const Icon(Icons.settings_outlined),
                     title: const Text('Настройки'),
                     onTap: () {
-                      Navigator.pop(context); // Закрыть Drawer
+                      Navigator.pop(context); 
 
                       final screenSize = MediaQuery.of(context).size;
                       final screenWidth = screenSize.width;
                       final screenHeight = screenSize.height;
                       final isDesktopOrTablet =
                           screenWidth >= 600 &&
-                          screenHeight >= 800; // Планшеты и десктопы
+                          screenHeight >= 800; 
 
                       print(
                         'Screen size: ${screenWidth}x$screenHeight, isDesktopOrTablet: $isDesktopOrTablet',
@@ -2490,7 +2457,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                             showBackToChats: true,
                             onBackToChats: () => Navigator.of(context).pop(),
                             myProfile: _myProfile,
-                            isModal: true, // Включаем модальный режим
+                            isModal: true, 
                           ),
                         );
                       } else {
@@ -2500,7 +2467,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                               showBackToChats: true,
                               onBackToChats: () => Navigator.of(context).pop(),
                               myProfile: _myProfile,
-                              isModal: false, // Отключаем модальный режим
+                              isModal: false, 
                             ),
                           ),
                         );
@@ -2843,8 +2810,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                 } else if (chat.title?.isNotEmpty == true) {
                   title = chat.title!;
                 } else {
-                  // Контакт ещё не загружен — показываем плейсхолдер и
-                  // параллельно запускаем загрузку.
+                  
+                  
                   title = "Данные загружаются...";
                   if (otherParticipantId != null && otherParticipantId != 0) {
                     _loadMissingContact(otherParticipantId);
@@ -3656,12 +3623,12 @@ class _ChatsScreenState extends State<ChatsScreen>
   void _showAddChatsToFolderDialog(ChatFolder folder) {
     final currentInclude = folder.include ?? [];
 
-    // Получаем все чаты, кроме "Избранного" (chat.id == 0)
+    
     final allAvailableChats = _allChats.where((chat) {
       return chat.id != 0;
     }).toList();
 
-    // Сортируем: сначала чаты, которые уже в папке, затем остальные
+    
     final sortedChats = List<Chat>.from(allAvailableChats);
     sortedChats.sort((a, b) {
       final aInFolder = currentInclude.contains(a.id);
@@ -3692,10 +3659,10 @@ class _ChatsScreenState extends State<ChatsScreen>
     final currentInclude = folder.include ?? [];
     final selectedChatIds = selectedChats.map((chat) => chat.id).toSet();
 
-    // Создаем новый список include только с выбранными чатами
+    
     final newInclude = selectedChatIds.toList();
 
-    // Подсчитываем изменения
+    
     final addedCount = newInclude
         .where((id) => !currentInclude.contains(id))
         .length;
@@ -4368,7 +4335,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       } else if (chat.title?.isNotEmpty == true) {
         title = chat.title!;
       } else {
-        // Контакт ещё не загружен — плейсхолдер и асинхронная подзагрузка.
+        
         title = "Данные загружаются...";
         _loadMissingContact(otherParticipantId);
       }
@@ -5398,7 +5365,7 @@ class _ReadSettingsDialogContentState
   }
 }
 
-// Оптимизированный виджет для Scaffold с кешированием декорации
+
 class _ChatsScreenScaffold extends StatelessWidget {
   final Widget bodyContent;
   final PreferredSizeWidget Function(BuildContext) buildAppBar;
@@ -5416,7 +5383,7 @@ class _ChatsScreenScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, theme, _) {
-        // Кешируем декорацию только при изменении настроек
+        
         BoxDecoration? chatsListDecoration;
         if (theme.chatsListBackgroundType == ChatsListBackgroundType.gradient) {
           chatsListDecoration = BoxDecoration(
@@ -5462,7 +5429,7 @@ class _ChatsScreenScaffold extends StatelessWidget {
   }
 }
 
-// Оптимизированный виджет для страницы папки с AutomaticKeepAliveClientMixin
+
 class _ChatsListPage extends StatefulWidget {
   final ChatFolder? folder;
   final List<Chat> allChats;
@@ -5554,8 +5521,8 @@ class _ChatsListPageState extends State<_ChatsListPage>
       ),
       child: ListView.builder(
         itemCount: chatsForFolder.length,
-        itemExtent: 72.0, // Фиксированная высота для оптимизации
-        cacheExtent: 500.0, // Кеш для плавной прокрутки
+        itemExtent: 72.0, 
+        cacheExtent: 500.0, 
         itemBuilder: (context, index) {
           return widget.buildChatListItem(
             chatsForFolder[index],

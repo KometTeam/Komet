@@ -675,7 +675,7 @@ class ThemeProvider with ChangeNotifier {
   bool _optimization = false;
   bool _showFpsOverlay = false;
   
-  // Сохраненное состояние перед включением оптимизации
+  
   CustomThemePreset? _savedThemeBeforeOptimization;
 
   AppTheme get appTheme => _activeTheme.appTheme;
@@ -976,10 +976,10 @@ class ThemeProvider with ChangeNotifier {
       _savedThemes.add(newPreset);
       await _saveThemeListToPrefs();
       notifyListeners();
-      return true; // Успех
+      return true; 
     } catch (e) {
       debugPrint("Ошибка импорта темы: $e");
-      return false; // Неудача
+      return false; 
     }
   }
 
@@ -1045,8 +1045,8 @@ class ThemeProvider with ChangeNotifier {
       myLightLight,
     ).toColor();
 
-    // Для светлой темы используем RGB(70, 70, 70) по умолчанию
-    final Color theirColorLight = const Color(0xFF464646); // RGB(70, 70, 70)
+    
+    final Color theirColorLight = const Color(0xFF464646); 
 
     if (_myBubbleColorLight == myColorLight &&
         _theirBubbleColorLight == theirColorLight &&
@@ -1468,20 +1468,20 @@ class ThemeProvider with ChangeNotifier {
 
   Future<void> setOptimization(bool value) async {
     if (value && !_optimization) {
-      // Включаем оптимизацию - сохраняем текущее состояние
+      
       _savedThemeBeforeOptimization = _activeTheme;
       
-      // Применяем оптимизированные настройки
+      
       _activeTheme = _activeTheme.copyWith(
-        // Отключаем все анимации
+        
         chatTransition: TransitionOption.systemDefault,
         tabTransition: TransitionOption.systemDefault,
         messageTransition: TransitionOption.systemDefault,
         extraTransition: TransitionOption.systemDefault,
         animatePhotoMessages: false,
-        // Отключаем glass panels
+        
         useGlassPanels: false,
-        // Сбрасываем настройки кастомизации к дефолтным
+        
         useCustomChatWallpaper: false,
         chatsListBackgroundType: ChatsListBackgroundType.none,
         drawerBackgroundType: DrawerBackgroundType.none,
@@ -1492,25 +1492,25 @@ class ThemeProvider with ChangeNotifier {
         useGradientForAppBar: false,
         useGradientForFolderTabs: false,
         useGradientForAddAccountButton: false,
-        // Сбрасываем размытия и прозрачности
+        
         topBarBlur: 0.0,
         bottomBarBlur: 0.0,
         profileDialogBlur: 0.0,
         messageMenuBlur: 0.0,
         chatWallpaperImageBlur: 0.0,
         messageBackgroundBlur: 0.0,
-        // Сбрасываем прозрачности к более непрозрачным значениям
+        
         topBarOpacity: 1.0,
         bottomBarOpacity: 1.0,
         profileDialogOpacity: 1.0,
         messageMenuOpacity: 1.0,
-        messageBubbleOpacity: 0.0, // Полностью непрозрачные
+        messageBubbleOpacity: 0.0, 
         messageTextOpacity: 1.0,
       );
       
       await _saveActiveTheme();
     } else if (!value && _optimization) {
-      // Выключаем оптимизацию - восстанавливаем сохраненное состояние
+      
       if (_savedThemeBeforeOptimization != null) {
         _activeTheme = _savedThemeBeforeOptimization!;
         _savedThemeBeforeOptimization = null;

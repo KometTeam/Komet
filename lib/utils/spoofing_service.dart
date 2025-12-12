@@ -9,7 +9,7 @@ class SpoofingService {
     final isEnabled = prefs.getBool('spoofing_enabled') ?? false;
 
     if (!isEnabled) {
-      return null; // Если подмена выключена, возвращаем null
+      return null; 
     }
 
 

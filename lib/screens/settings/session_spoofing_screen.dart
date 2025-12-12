@@ -326,7 +326,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()), // Показываем ошибку из VersionChecker
+            content: Text(e.toString()), 
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -650,7 +650,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
                             icon: const Icon(Icons.cloud_sync_outlined),
                             tooltip: 'Проверить последнюю версию',
                             onPressed:
-                                _handleVersionCheck, // Вот здесь вызывается ваша функция
+                                _handleVersionCheck, 
                           ),
                   ),
             ),

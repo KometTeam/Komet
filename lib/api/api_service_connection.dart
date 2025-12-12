@@ -293,7 +293,7 @@ extension ApiServiceConnection on ApiService {
       return;
     }
 
-    // Если уже есть активная подписка на текущий канал, не создаём вторую.
+    
     if (_streamSubscription != null) {
       return;
     }

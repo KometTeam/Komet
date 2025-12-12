@@ -99,7 +99,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
         : Colors.blue.shade100;
     final Color theirBubbleFallback = isCurrentlyDark
         ? const Color(0xFF182533)
-        : const Color(0xFF464646); // RGB(70, 70, 70)
+        : const Color(0xFF464646); 
 
     return Scaffold(
       appBar: AppBar(
@@ -274,11 +274,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
           _ModernSection(
             title: "Сообщения",
             children: [
-              // Предпросмотр баблов
+              
               const _MessageBubblesPreview(),
               const SizedBox(height: 16),
 
-              // Прозрачность (сворачиваемый, по умолчанию свернут)
+              
               _ExpandableSection(
                 title: "Прозрачность",
                 initiallyExpanded: false,
@@ -343,7 +343,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Вид (сворачиваемый)
+              
               _ExpandableSection(
                 title: "Вид",
                 initiallyExpanded: false,
@@ -476,11 +476,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
           _ModernSection(
             title: "Всплывающие окна",
             children: [
-              // Предпросмотр всплывающего окна
+              
               _DialogPreview(),
               const SizedBox(height: 16),
 
-              // Развернуть настройки
+              
               _ExpandableSection(
                 title: "Настройки",
                 initiallyExpanded: false,
@@ -846,11 +846,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
           _ModernSection(
             title: "Панели чата",
             children: [
-              // Предпросмотр панелей
+              
               _PanelsPreview(),
               const SizedBox(height: 16),
 
-              // Галочка включения эффекта стекла
+              
               _CustomSettingTile(
                 icon: Icons.tune,
                 title: "Эффект стекла для панелей",
@@ -862,7 +862,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Развернуть настройки
+              
               _ExpandableSection(
                 title: "Настройки",
                 initiallyExpanded: false,
@@ -2000,7 +2000,7 @@ class _DialogPreview extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Stack(
           children: [
-            // Фон с размытием
+            
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -2013,7 +2013,7 @@ class _DialogPreview extends StatelessWidget {
                 ),
               ),
             ),
-            // Размытие фона
+            
             if (theme.profileDialogBlur > 0)
               BackdropFilter(
                 filter: ImageFilter.blur(
@@ -2022,7 +2022,7 @@ class _DialogPreview extends StatelessWidget {
                 ),
                 child: Container(color: Colors.transparent),
               ),
-            // Всплывающее окно
+            
             Center(
               child: Container(
                 width: 200,
@@ -2062,13 +2062,13 @@ class _PanelsPreview extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Stack(
           children: [
-            // Фон - градиент от беловатого к серому для лучшей видимости эффекта стекла
+            
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.grey.shade300, // Беловатый сверху
-                    Colors.grey.shade600, // Серый снизу
+                    Colors.grey.shade300, 
+                    Colors.grey.shade600, 
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -2077,7 +2077,7 @@ class _PanelsPreview extends StatelessWidget {
             ),
             Column(
               children: [
-                // Верхняя панель
+                
                 if (theme.useGlassPanels)
                   ClipRect(
                     child: BackdropFilter(
@@ -2137,7 +2137,7 @@ class _PanelsPreview extends StatelessWidget {
                     ),
                   ),
                 const Spacer(),
-                // Нижняя панель
+                
                 if (theme.useGlassPanels)
                   ClipRect(
                     child: BackdropFilter(

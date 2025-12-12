@@ -183,7 +183,7 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
     final colors = Theme.of(context).colorScheme;
 
     return WillPopScope(
-      onWillPop: () async => false, // Блокируем кнопку "Назад"
+      onWillPop: () async => false, 
       child: Scaffold(
         backgroundColor: colors.surface,
         body: Container(

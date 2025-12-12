@@ -3,13 +3,13 @@ class Message {
   final String text;
   final int time;
   final int senderId;
-  final String? status; // EDITED, DELETED, etc.
-  final int? updateTime; // Время последнего редактирования
+  final String? status; 
+  final int? updateTime; 
   final List<Map<String, dynamic>> attaches;
-  final int? cid; // клиентский id (timestamp)
-  final Map<String, dynamic>? reactionInfo; // Информация о реакциях
-  final Map<String, dynamic>? link; // Информация об ответе на сообщение
-  final List<Map<String, dynamic>> elements; // Форматирование текста
+  final int? cid; 
+  final Map<String, dynamic>? reactionInfo; 
+  final Map<String, dynamic>? link; 
+  final List<Map<String, dynamic>> elements; 
 
   Message({
     required this.id,
@@ -46,7 +46,7 @@ class Message {
           'local_${DateTime.now().millisecondsSinceEpoch}',
       text: json['text'] ?? '',
       time: time,
-      senderId: senderId, // Use the new safe logic
+      senderId: senderId, 
       status: json['status'],
       updateTime: json['updateTime'],
       attaches:
@@ -104,7 +104,7 @@ class Message {
     if (isDeleted) return false;
     if (senderId != currentUserId) return false;
     if (attaches.isNotEmpty) {
-      return false; // Нельзя редактировать сообщения с вложениями
+      return false; 
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;

@@ -13,7 +13,7 @@ class BypassScreen extends StatefulWidget {
 }
 
 class _BypassScreenState extends State<BypassScreen> {
-  // 0 – обходы, 1 – фишки
+  
   int _selectedTab = 1;
   bool _kometAutoCompleteEnabled = false;
   bool _specialMessagesEnabled = true;
@@ -65,7 +65,7 @@ class _BypassScreenState extends State<BypassScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Переключатель вкладок (как между папками)
+          
           LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 480;
@@ -82,9 +82,9 @@ class _BypassScreenState extends State<BypassScreen> {
                     Expanded(
                       child: GestureDetector(
                         onTap: () {
-                          //if (_selectedTab != 0) {
-                          //  setState(() => _selectedTab = 0);
-                          //}
+                          
+                          
+                          
                         },
                         child: _SegmentButton(
                           selected: _selectedTab == 0,
@@ -217,7 +217,7 @@ class _BypassScreenState extends State<BypassScreen> {
               ),
             ),
           ] else ...[
-            // Новый экран "фишек" (контент пока статичный)
+            
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -289,7 +289,7 @@ class _BypassScreenState extends State<BypassScreen> {
                               "привет",
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFFFF0000), // красный #FF0000
+                                color: Color(0xFFFF0000), 
                               ),
                             ),
                             Text(
@@ -647,7 +647,7 @@ class _BypassScreenState extends State<BypassScreen> {
                               subtitle: const Text(
                                 "Активировать функции обхода ограничений",
                               ),
-                              value: false, // Временно отключено
+                              value: false, 
                               onChanged: (value) {},
                             );
                           },

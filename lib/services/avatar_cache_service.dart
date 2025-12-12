@@ -214,20 +214,20 @@ class AvatarCacheService {
 
   Future<void> _clearDirectoryContents(Directory directory) async {
     try {
-      // Очищаем содержимое директории, удаляя файлы по одному
+      
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
           try {
             await entity.delete();
-            // Небольшая задержка между удалениями для избежания конфликтов
+            
             await Future.delayed(const Duration(milliseconds: 5));
           } catch (fileError) {
-            // Игнорируем ошибки удаления отдельных файлов
+            
             print('Не удалось удалить файл ${entity.path}: $fileError');
           }
         } else if (entity is Directory) {
           try {
-            // Рекурсивно очищаем поддиректории
+            
             await _clearDirectoryContents(entity);
             try {
               await entity.delete();

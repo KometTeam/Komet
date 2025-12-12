@@ -124,7 +124,7 @@ class MusicPlayerService extends ChangeNotifier {
   double get volume => _volume;
 
   Future<void> initialize() async {
-    // Загружаем сохраненную громкость
+    
     final prefs = await SharedPreferences.getInstance();
     _volume = prefs.getDouble('music_volume') ?? 1.0;
     await _audioPlayer.setVolume(_volume);
@@ -146,7 +146,7 @@ class MusicPlayerService extends ChangeNotifier {
           state.processingState == ProcessingState.loading ||
           state.processingState == ProcessingState.buffering;
 
-      // Detect track completion and auto-play next track
+      
       if (state.processingState == ProcessingState.completed && !wasCompleted) {
         _wasCompleted = true;
         _autoPlayNext();

@@ -64,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _myProfile = Profile.fromJson(cachedProfileData);
         _isProfileLoading = false;
       });
-      return; // Нашли в кеше, выходим
+      return; 
     }
 
     try {
@@ -198,12 +198,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Настройки"),
-        /*leading: widget.showBackToChats
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: widget.onBackToChats,
-                  )
-                : null,*/
+         
       ),
       body: _buildSettingsContent(),
     );

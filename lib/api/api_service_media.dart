@@ -1,8 +1,8 @@
 part of 'api_service.dart';
 
 extension ApiServiceMedia on ApiService {
-  /// Обновляет имя/фамилию/описание профиля через сервер (opcode 16)
-  /// и возвращает обновленный профиль из ответа.
+  
+  
   Future<Profile?> updateProfileText(
     String firstName,
     String lastName,
@@ -22,7 +22,7 @@ extension ApiServiceMedia on ApiService {
       final int seq = _sendMessage(16, payload);
       _log('➡️ SEND: opcode=16, payload=$payload');
 
-      // Ждем ответ именно на этот seq с opcode 16
+      
       final response = await messages.firstWhere(
         (msg) => msg['seq'] == seq && msg['opcode'] == 16,
       );
@@ -34,7 +34,7 @@ extension ApiServiceMedia on ApiService {
         throw Exception('Пустой ответ сервера на изменение профиля');
       }
 
-      // Обработка ошибок вида { error, localizedMessage, message, title }
+      
       if (respPayload.containsKey('error')) {
         final humanMessage = respPayload['localizedMessage'] ??
             respPayload['message'] ??
@@ -45,8 +45,8 @@ extension ApiServiceMedia on ApiService {
 
       final profileJson = respPayload['profile'];
       if (profileJson is Map<String, dynamic>) {
-        // Обновляем глобальный снапшот чатов/профиля,
-        // чтобы все экраны сразу видели новые данные.
+        
+        
         _lastChatsPayload ??= {
           'chats': <dynamic>[],
           'contacts': <dynamic>[],
@@ -64,8 +64,8 @@ extension ApiServiceMedia on ApiService {
     return null;
   }
 
-  /// Загружает фото и привязывает его к профилю через opcode 80 + 16.
-  /// Возвращает обновленный профиль из ответа opcode 16.
+  
+  
   Future<Profile?> updateProfilePhoto(String firstName, String lastName) async {
     try {
       final picker = ImagePicker();
@@ -102,7 +102,7 @@ extension ApiServiceMedia on ApiService {
       final int seq16 = _sendMessage(16, payload);
       print("Запрос на смену аватара отправлен.");
 
-      // Ждем ответ opcode 16 с обновленным профилем
+      
       final resp16 = await messages.firstWhere(
         (msg) => msg['seq'] == seq16 && msg['opcode'] == 16,
       );
@@ -143,9 +143,9 @@ extension ApiServiceMedia on ApiService {
     return null;
   }
 
-  /// Загружает список заготовленных аватаров (opcode 25).
-  /// Возвращает payload вида:
-  /// { currentPresetId: int, presetAvatars: [ { name, avatars: [ {url,id}, ...] }, ... ] }
+  
+  
+  
   Future<Map<String, dynamic>> fetchPresetAvatars() async {
     await waitUntilOnline();
 
@@ -160,8 +160,8 @@ extension ApiServiceMedia on ApiService {
     return payload ?? <String, dynamic>{};
   }
 
-  /// Выбирает один из заготовленных аватаров (PRESET_AVATAR) через opcode 16.
-  /// firstName / lastName – текущие значения профиля (как в примерах сервера).
+  
+  
   Future<Profile?> setPresetAvatar({
     required String firstName,
     required String lastName,
@@ -397,7 +397,7 @@ extension ApiServiceMedia on ApiService {
 
       await waitUntilOnline();
 
-      // Показываем локальное сообщение с файлом сразу, как отправляется
+      
       final int cid = DateTime.now().millisecondsSinceEpoch;
       _emitLocal({
         'ver': 11,
@@ -425,7 +425,7 @@ extension ApiServiceMedia on ApiService {
         },
       });
 
-      // Запрашиваем URL для загрузки файла
+      
       final int seq87 = _sendMessage(87, {"count": 1});
       final resp87 = await messages.firstWhere((m) => m['seq'] == seq87);
 
@@ -442,7 +442,7 @@ extension ApiServiceMedia on ApiService {
 
       print('Получен fileId: $fileId, token: $token и URL: $uploadUrl');
 
-      // Начинаем heartbeat каждые 5 секунд
+      
       Timer? heartbeatTimer;
       heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (_) {
         _sendMessage(65, {"chatId": chatId, "type": "FILE"});
@@ -450,7 +450,7 @@ extension ApiServiceMedia on ApiService {
       });
 
       try {
-        // Загружаем файл
+        
         var request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
         request.files.add(await http.MultipartFile.fromPath('file', filePath));
         var streamed = await request.send();
@@ -463,7 +463,7 @@ extension ApiServiceMedia on ApiService {
 
         print('Файл успешно загружен на сервер. Ожидаем подтверждение...');
 
-        // Ждем уведомления о завершении загрузки (opcode 136)
+        
         final uploadCompleteMsg = await messages
             .timeout(const Duration(seconds: 30))
             .firstWhere(
@@ -475,7 +475,7 @@ extension ApiServiceMedia on ApiService {
           'Получено подтверждение загрузки файла: ${uploadCompleteMsg['payload']}',
         );
 
-        // Останавливаем heartbeat
+        
         heartbeatTimer.cancel();
 
         final payload = {
@@ -496,7 +496,7 @@ extension ApiServiceMedia on ApiService {
         _sendMessage(64, payload);
         print('Сообщение о файле (Opcode 64) отправлено.');
       } finally {
-        // Гарантированно останавливаем heartbeat в случае ошибки
+        
         heartbeatTimer.cancel();
       }
     } catch (e) {

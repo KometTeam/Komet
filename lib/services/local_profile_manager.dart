@@ -16,8 +16,8 @@ class LocalProfileManager {
   }
 
   Future<Profile?> getActualProfile(Profile? serverProfile) async {
-    // Полностью отключаем локальные оверрайды профиля:
-    // всегда используем только данные с сервера.
+    
+    
     return serverProfile;
   }
 
