@@ -41,14 +41,28 @@ class WhitelistService {
 
       _allowedPhoneNumbers.clear();
       if (json['phoneNumbers'] != null) {
-        final phones = (json['phoneNumbers'] as List)
-            .map((e) => e.toString().trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
-        _allowedPhoneNumbers.addAll(phones);
+        final phonesList = json['phoneNumbers'] as List;
+        for (var phoneEntry in phonesList) {
+          final phoneStr = phoneEntry.toString().trim();
+          if (phoneStr.isNotEmpty) {
+            if (phoneStr.contains(',')) {
+              final splitPhones = phoneStr.split(',');
+              for (var splitPhone in splitPhones) {
+                final normalizedSplit = _normalizePhone(splitPhone.trim());
+                if (normalizedSplit.isNotEmpty) {
+                  _allowedPhoneNumbers.add(normalizedSplit);
+                }
+              }
+            } else {
+              final normalized = _normalizePhone(phoneStr);
+              if (normalized.isNotEmpty) {
+                _allowedPhoneNumbers.add(normalized);
+              }
+            }
+          }
+        }
       }
     } catch (e) {
-      print('Ошибка загрузки whitelist: $e');
       _enabled = false;
       _allowedUserIds.clear();
       _allowedPhoneNumbers.clear();
@@ -56,11 +70,14 @@ class WhitelistService {
   }
 
   Future<File> _getWhitelistFile() async {
-    return File('whitelist.json');
+    final file = File('whitelist.json');
+    return file;
   }
 
   bool isAllowed(int? userId, String? phoneNumber) {
-    if (!_enabled) return true;
+    if (!_enabled) {
+      return true;
+    }
 
     if (userId != null && _allowedUserIds.contains(userId)) {
       return true;
