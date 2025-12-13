@@ -870,68 +870,13 @@ class ChatMessageBubble extends StatelessWidget {
       );
     }
 
-    return RepaintBoundary(
-      key: ValueKey('video_preview_boundary_${messageId}_$videoId'),
-      child: GestureDetector(
-        onTap: openFullScreenVideo,
-        child: AspectRatio(
-          aspectRatio: 16 / 9,
-          child: ClipRRect(
-            borderRadius: showNameHeader
-                ? const BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  )
-                : BorderRadius.circular(12),
-            child: Stack(
-              alignment: Alignment.center,
-              fit: StackFit.expand,
-              children: [
-                (highQualityUrl != null && highQualityUrl.isNotEmpty) ||
-                        (lowQualityBytes != null)
-                    ? _ProgressiveNetworkImage(
-                        key: ValueKey(
-                          'video_preview_image_${messageId}_$videoId',
-                        ),
-                        url: highQualityUrl ?? '',
-                        previewBytes: lowQualityBytes,
-                        width: 220,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        keepAlive: true,
-                      )
-                    : Container(
-                        color: Colors.black26,
-                        child: const Center(
-                          child: Icon(
-                            Icons.video_library_outlined,
-                            color: Colors.white,
-                            size: 40,
-                          ),
-                        ),
-                      ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.15),
-                  ),
-                  child: Icon(
-                    Icons.play_circle_filled_outlined,
-                    color: Colors.white.withOpacity(0.95),
-                    size: 50,
-                    shadows: const [
-                      Shadow(
-                        color: Colors.black38,
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return _VideoPreviewWidget(
+      videoId: videoId,
+      messageId: messageId,
+      highQualityUrl: highQualityUrl,
+      lowQualityBytes: lowQualityBytes,
+      showNameHeader: showNameHeader,
+      onTap: openFullScreenVideo,
     );
   }
 
@@ -4947,6 +4892,104 @@ class GlobalImageStore {
   }
 }
 
+class _VideoPreviewWidget extends StatefulWidget {
+  final int videoId;
+  final String messageId;
+  final String? highQualityUrl;
+  final Uint8List? lowQualityBytes;
+  final bool showNameHeader;
+  final Function() onTap;
+
+  const _VideoPreviewWidget({
+    required this.videoId,
+    required this.messageId,
+    this.highQualityUrl,
+    this.lowQualityBytes,
+    this.showNameHeader = false,
+    required this.onTap,
+  });
+
+  @override
+  State<_VideoPreviewWidget> createState() => _VideoPreviewWidgetState();
+}
+
+class _VideoPreviewWidgetState extends State<_VideoPreviewWidget>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return RepaintBoundary(
+      key: ValueKey(
+        'video_preview_boundary_${widget.messageId}_${widget.videoId}',
+      ),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ClipRRect(
+            borderRadius: widget.showNameHeader
+                ? const BorderRadius.only(
+                    bottomLeft: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                  )
+                : BorderRadius.circular(12),
+            child: Stack(
+              alignment: Alignment.center,
+              fit: StackFit.expand,
+              children: [
+                (widget.highQualityUrl != null &&
+                            widget.highQualityUrl!.isNotEmpty) ||
+                        (widget.lowQualityBytes != null)
+                    ? _ProgressiveNetworkImage(
+                        key: ValueKey(
+                          'video_preview_image_${widget.messageId}_${widget.videoId}',
+                        ),
+                        url: widget.highQualityUrl ?? '',
+                        previewBytes: widget.lowQualityBytes,
+                        width: 220,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        keepAlive: true,
+                      )
+                    : Container(
+                        color: Colors.black26,
+                        child: const Center(
+                          child: Icon(
+                            Icons.video_library_outlined,
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.15),
+                  ),
+                  child: Icon(
+                    Icons.play_circle_filled_outlined,
+                    color: Colors.white.withOpacity(0.95),
+                    size: 50,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black38,
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProgressiveNetworkImage extends StatefulWidget {
   final String url;
   final Uint8List? previewBytes;
@@ -4987,25 +5030,29 @@ class _ProgressiveNetworkImageState extends State<_ProgressiveNetworkImage>
       return;
     }
 
-    final cached = GlobalImageStore.getData(widget.url);
-    if (cached != null) {
-      _fullBytes = cached;
-    }
-
     if (_memoryCache.containsKey(widget.url)) {
       _fullBytes = _memoryCache[widget.url];
-    }
-    if (widget.startDownloadNextFrame) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _tryLoadFromDiskThenDownload();
-      });
     } else {
-      _tryLoadFromDiskThenDownload();
+      final cached = GlobalImageStore.getData(widget.url);
+      if (cached != null) {
+        _fullBytes = cached;
+        _memoryCache[widget.url] = cached;
+      }
+    }
+
+    if (_fullBytes == null) {
+      if (widget.startDownloadNextFrame) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _tryLoadFromDiskThenDownload();
+        });
+      } else {
+        _tryLoadFromDiskThenDownload();
+      }
     }
   }
 
   Future<void> _tryLoadFromDiskThenDownload() async {
-    if (widget.url.isEmpty) {
+    if (widget.url.isEmpty || _fullBytes != null) {
       return;
     }
 
@@ -5019,14 +5066,21 @@ class _ProgressiveNetworkImageState extends State<_ProgressiveNetworkImage>
         final data = await f.readAsBytes();
         _memoryCache[widget.url] = data;
         GlobalImageStore.setData(widget.url, data);
-        if (mounted) setState(() => _fullBytes = data);
+        if (mounted && _fullBytes == null) {
+          setState(() => _fullBytes = data);
+        }
         return;
       }
     } catch (_) {}
-    await _download();
+    if (_fullBytes == null) {
+      await _download();
+    }
   }
 
   Future<void> _download() async {
+    if (_fullBytes != null) {
+      return;
+    }
     try {
       final req = http.Request('GET', Uri.parse(widget.url));
       req.headers['User-Agent'] =
@@ -5034,7 +5088,7 @@ class _ProgressiveNetworkImageState extends State<_ProgressiveNetworkImage>
 
       final resp = await req.send();
       if (resp.statusCode != 200) {
-        setState(() => _error = true);
+        if (mounted) setState(() => _error = true);
         return;
       }
       final contentLength = resp.contentLength ?? 0;
@@ -5060,7 +5114,9 @@ class _ProgressiveNetworkImageState extends State<_ProgressiveNetworkImage>
           await f.writeAsBytes(data, flush: true);
         }
       } catch (_) {}
-      if (mounted) setState(() => _fullBytes = data);
+      if (mounted && _fullBytes == null) {
+        setState(() => _fullBytes = data);
+      }
     } catch (_) {
       if (mounted) setState(() => _error = true);
     }
@@ -5086,6 +5142,17 @@ class _ProgressiveNetworkImageState extends State<_ProgressiveNetworkImage>
       );
     }
 
+    final hasPreview = widget.previewBytes != null;
+    final hasFullImage = _fullBytes != null;
+
+    if (!hasPreview && !hasFullImage) {
+      return SizedBox(
+        width: width,
+        height: height,
+        child: Container(color: Colors.black12),
+      );
+    }
+
     return RepaintBoundary(
       child: SizedBox(
         width: width,
@@ -5095,20 +5162,19 @@ class _ProgressiveNetworkImageState extends State<_ProgressiveNetworkImage>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (widget.previewBytes != null)
-                Image.memory(
-                  widget.previewBytes!,
-                  fit: widget.fit,
-                  filterQuality: FilterQuality.none,
-                )
-              else
-                Container(color: Colors.black12),
-
-              if (_fullBytes != null)
+              if (hasFullImage)
                 Image.memory(
                   _fullBytes!,
                   fit: widget.fit,
                   filterQuality: FilterQuality.high,
+                  key: ValueKey('full_${widget.url}'),
+                )
+              else if (hasPreview)
+                Image.memory(
+                  widget.previewBytes!,
+                  fit: widget.fit,
+                  filterQuality: FilterQuality.none,
+                  key: ValueKey('preview_${widget.url}'),
                 ),
             ],
           ),
@@ -5124,6 +5190,21 @@ class _ProgressiveNetworkImageState extends State<_ProgressiveNetworkImage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.keepAlive != widget.keepAlive) {
       updateKeepAlive();
+    }
+    if (oldWidget.url != widget.url) {
+      _fullBytes = null;
+      _error = false;
+      _progress = 0.0;
+      final cached = GlobalImageStore.getData(widget.url);
+      if (cached != null) {
+        _fullBytes = cached;
+      }
+      if (_memoryCache.containsKey(widget.url)) {
+        _fullBytes = _memoryCache[widget.url];
+      }
+      if (widget.url.isNotEmpty && _fullBytes == null) {
+        _tryLoadFromDiskThenDownload();
+      }
     }
   }
 }
