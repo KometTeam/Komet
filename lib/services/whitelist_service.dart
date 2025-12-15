@@ -34,6 +34,19 @@ class WhitelistService {
     return File('whitelist.json');
   }
 
+  Future<void> validateCurrentUserIfNeeded() async {
+    if (!_enabled) return;
+
+    final idStr = ApiService.instance.userId;
+    final int? id = idStr != null ? int.tryParse(idStr) : null;
+
+    if (id == null) {
+      return;
+    }
+
+    await checkAndValidate(id);
+  }
+
   Future<bool> checkAndValidate(int? userId) async {
     if (!_enabled) return true;
 
@@ -42,7 +55,7 @@ class WhitelistService {
     }
 
     try {
-      final url = Uri.parse('${AppUrls.whitelistCheckUrl}?userid=$userId');
+      final url = Uri.parse('${AppUrls.whitelistCheckUrl}?id=$userId');
       final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {

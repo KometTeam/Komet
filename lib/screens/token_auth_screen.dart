@@ -94,6 +94,15 @@ class _TokenAuthScreenState extends State<TokenAuthScreen> {
         return;
       }
 
+      if (mounted && whitelistService.isEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('проверка на ивана пройдена, успешно'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const HomeScreen()),

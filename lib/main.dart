@@ -53,8 +53,14 @@ Future<void> main() async {
   print("При запуске приложения токен ${hasToken ? 'найден' : 'не найден'}");
 
   if (hasToken) {
-    print("Инициируем подключение к WebSocket при запуске...");
-    ApiService.instance.connect();
+    await WhitelistService().validateCurrentUserIfNeeded();
+
+    if (await ApiService.instance.hasToken()) {
+      print("Инициируем подключение к WebSocket при запуске...");
+      ApiService.instance.connect();
+    } else {
+      print("Токен удалён после проверки вайтлиста, автологин отключён");
+    }
   }
 
   runApp(

@@ -29,5 +29,5 @@ class AppUrls {
 
   ///проверка вайтлиста для тестерских билдов
   ///Крякнуть как нехуй делать но кому не похуй??
-  static const String whitelistCheckUrl = 'https://gomet.nyako.tk/wl';
+  static const String whitelistCheckUrl = 'https://wl.liarts.ru/wl';
 }

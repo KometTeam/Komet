@@ -119,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final isAllowed = await whitelistService.checkAndValidate(
           loadedProfile.id,
         );
-        
+
         if (!isAllowed) {
           if (mounted) {
             Navigator.of(context).pushAndRemoveUntil(
@@ -137,6 +137,13 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
           return;
+        } else if (mounted && whitelistService.isEnabled) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('проверка на ивана пройдена, успешно'),
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
       }
     } catch (e) {
