@@ -189,8 +189,19 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          Navigator.of(context).pop(_actualProfile);
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(_actualProfile),
+        ),
         title: const Text("Изменить профиль"),
         centerTitle: true,
         scrolledUnderElevation: 0,
@@ -334,6 +345,7 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 

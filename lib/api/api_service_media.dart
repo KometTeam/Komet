@@ -19,7 +19,7 @@ extension ApiServiceMedia on ApiService {
         payload["description"] = description;
       }
 
-      final int seq = _sendMessage(16, payload);
+      final int seq = await _sendMessage(16, payload);
       _log('➡️ SEND: opcode=16, payload=$payload');
 
       
@@ -73,7 +73,7 @@ extension ApiServiceMedia on ApiService {
       if (image == null) return null;
 
       print("Запрашиваем URL для загрузки фото...");
-      final int seq = _sendMessage(80, {"count": 1});
+      final int seq = await _sendMessage(80, {"count": 1});
       final response = await messages.firstWhere((msg) => msg['seq'] == seq);
       final String uploadUrl = response['payload']['url'];
       print("URL получен: $uploadUrl");
@@ -99,7 +99,7 @@ extension ApiServiceMedia on ApiService {
         "photoToken": photoToken,
         "avatarType": "USER_AVATAR",
       };
-      final int seq16 = _sendMessage(16, payload);
+      final int seq16 = await _sendMessage(16, payload);
       print("Запрос на смену аватара отправлен.");
 
       
@@ -149,7 +149,7 @@ extension ApiServiceMedia on ApiService {
   Future<Map<String, dynamic>> fetchPresetAvatars() async {
     await waitUntilOnline();
 
-    final int seq = _sendMessage(25, {});
+    final int seq = await _sendMessage(25, {});
     _log('➡️ SEND: opcode=25, payload={}');
 
     final resp = await messages.firstWhere(
@@ -177,7 +177,7 @@ extension ApiServiceMedia on ApiService {
         "avatarType": "PRESET_AVATAR",
       };
 
-      final int seq16 = _sendMessage(16, payload);
+      final int seq16 = await _sendMessage(16, payload);
       _log('➡️ SEND: opcode=16 (PRESET_AVATAR), payload=$payload');
 
       final resp16 = await messages.firstWhere(
@@ -237,7 +237,7 @@ extension ApiServiceMedia on ApiService {
 
       await waitUntilOnline();
 
-      final int seq80 = _sendMessage(80, {"count": 1});
+      final int seq80 = await _sendMessage(80, {"count": 1});
       final resp80 = await messages.firstWhere((m) => m['seq'] == seq80);
       final String uploadUrl = resp80['payload']['url'];
 
@@ -335,7 +335,7 @@ extension ApiServiceMedia on ApiService {
 
       final List<Map<String, String>> photoTokens = [];
       for (final path in localPaths) {
-        final int seq80 = _sendMessage(80, {"count": 1});
+        final int seq80 = await _sendMessage(80, {"count": 1});
         final resp80 = await messages.firstWhere((m) => m['seq'] == seq80);
         final String uploadUrl = resp80['payload']['url'];
 
@@ -426,7 +426,7 @@ extension ApiServiceMedia on ApiService {
       });
 
       
-      final int seq87 = _sendMessage(87, {"count": 1});
+      final int seq87 = await _sendMessage(87, {"count": 1});
       final resp87 = await messages.firstWhere((m) => m['seq'] == seq87);
 
       if (resp87['payload'] == null ||
@@ -513,7 +513,7 @@ extension ApiServiceMedia on ApiService {
       "messageId": messageId,
     };
 
-    final int seq = _sendMessage(83, payload);
+    final int seq = await _sendMessage(83, payload);
     print('Запрашиваем URL для videoId: $videoId (seq: $seq)');
 
     try {

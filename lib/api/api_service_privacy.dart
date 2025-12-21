@@ -75,19 +75,11 @@ extension ApiServicePrivacy on ApiService {
   ) async {
     await waitUntilOnline();
 
-    final message = {
-      "ver": 11,
-      "cmd": 0,
-      "seq": seq,
-      "opcode": 22,
-      "payload": {
+    final payload = {
         "settings": {"user": setting},
-      },
     };
 
-    final encodedMessage = jsonEncode(message);
-    _channel?.sink.add(encodedMessage);
-    _log('SEND: $encodedMessage');
+    _sendMessage(22, payload);
     print('');
   }
 

@@ -15,24 +15,16 @@ extension ApiServiceAuth on ApiService {
     _connectionStatusController.add("disconnected");
   }
 
-  Future<void> requestOtp(String phoneNumber) async {
-    if (_channel == null) {
-      print('WebSocket не подключен, подключаемся...');
-      try {
+  Future<void> requestOtp(String phoneNumber, {bool resend = false}) async {
+    if (!_socketConnected || _socket == null) {
         await connect();
-        await waitUntilOnline();
-      } catch (e) {
-        print('Ошибка подключения к WebSocket: $e');
-        throw Exception('Не удалось подключиться к серверу: $e');
-      }
     }
 
     final payload = {
       "phone": phoneNumber,
-      "type": "START_AUTH",
-      "language": "ru",
+      "type": resend ? "RESEND" : "START_AUTH",
     };
-    _sendMessage(17, payload);
+    await _sendMessage(17, payload);
   }
 
   void requestSessions() {
@@ -48,25 +40,16 @@ extension ApiServiceAuth on ApiService {
     _currentPasswordHint = null;
     _currentPasswordEmail = null;
 
-    if (_channel == null) {
-      print('WebSocket не подключен, подключаемся...');
-      try {
+    if (!_socketConnected || _socket == null) {
         await connect();
-        await waitUntilOnline();
-      } catch (e) {
-        print('Ошибка подключения к WebSocket: $e');
-        throw Exception('Не удалось подключиться к серверу: $e');
-      }
     }
 
     final payload = {
-      'token': token,
-      'verifyCode': code,
-      'authTokenType': 'CHECK_CODE',
+      "verifyCode": code,
+      "token": token,
+      "authTokenType": "CHECK_CODE",
     };
-
-    _sendMessage(18, payload);
-    print('Код верификации отправлен с payload: $payload');
+    await _sendMessage(18, payload);
   }
 
   Future<void> sendPassword(String trackId, String password) async {
@@ -278,8 +261,9 @@ extension ApiServiceAuth on ApiService {
       _lastChatsPayload = null;
       _chatsFetchedInThisSession = false;
       _pingTimer?.cancel();
-      await _channel?.sink.close(status.goingAway);
-      _channel = null;
+      _socket?.close();
+      _socket = null;
+      _socketConnected = false;
 
       clearAllCaches();
 
@@ -306,8 +290,9 @@ extension ApiServiceAuth on ApiService {
       await prefs.clear();
 
       _pingTimer?.cancel();
-      await _channel?.sink.close();
-      _channel = null;
+      _socket?.close();
+      _socket = null;
+      _socketConnected = false;
 
       _isSessionOnline = false;
       _isSessionReady = false;
@@ -327,15 +312,9 @@ extension ApiServiceAuth on ApiService {
 
   
   Future<String> startRegistration(String phoneNumber) async {
-    if (_channel == null) {
-      print('WebSocket не подключен, подключаемся...');
-      try {
+    if (!_socketConnected || _socket == null) {
         await connect();
         await waitUntilOnline();
-      } catch (e) {
-        print('Ошибка подключения к WebSocket: $e');
-        throw Exception('Не удалось подключиться к серверу: $e');
-      }
     }
 
     final payload = {

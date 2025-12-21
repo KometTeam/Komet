@@ -953,7 +953,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ? incomingChatId
           : int.tryParse(incomingChatId?.toString() ?? '');
 
-      if (opcode == 64 && cmd == 1) {
+      if (opcode == 64 && (cmd == 0x100 || cmd == 256)) {
         if (chatIdNormalized == widget.chatId) {
           final newMessage = Message.fromJson(payload['message']);
           Future.microtask(() {
@@ -1026,7 +1026,7 @@ class _ChatScreenState extends State<ChatScreen> {
           });
         }
       } else if (opcode == 178) {
-        if (cmd == 1) {
+        if (cmd == 0x100 || cmd == 256) {
           if (_sendingReactions.isNotEmpty) {
             _sendingReactions.clear();
 
@@ -1374,7 +1374,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final random =
           DateTime.now().millisecondsSinceEpoch % availableStickerIds.length;
       final selectedStickerId = availableStickerIds[random];
-      final seq = ApiService.instance.sendRawRequest(28, {
+      final seq = await ApiService.instance.sendRawRequest(28, {
         "type": "STICKER",
         "ids": [selectedStickerId],
       });
@@ -1798,7 +1798,7 @@ class _ChatScreenState extends State<ChatScreen> {
         "notify": true,
       };
 
-      ApiService.instance.sendRawRequest(64, payload);
+      unawaited(ApiService.instance.sendRawRequest(64, payload));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

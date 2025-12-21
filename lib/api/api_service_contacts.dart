@@ -50,7 +50,7 @@ extension ApiServiceContacts on ApiService {
 
     final payload = {'link': link};
 
-    final int seq = _sendMessage(89, payload);
+    final int seq = await _sendMessage(89, payload);
     print('Запрашиваем информацию о чате (seq: $seq) по ссылке: $link');
 
     try {
@@ -88,17 +88,19 @@ extension ApiServiceContacts on ApiService {
     }
   }
 
-  void markMessageAsRead(int chatId, String messageId) {
+  void markMessageAsRead(int chatId, dynamic messageId) {
     waitUntilOnline().then((_) {
+      // messageId должен быть int для сервера
+      final int messageIdInt = messageId is String ? int.tryParse(messageId) ?? 0 : (messageId as int);
       final payload = {
         "type": "READ_MESSAGE",
         "chatId": chatId,
-        "messageId": messageId,
+        "messageId": messageIdInt,
         "mark": DateTime.now().millisecondsSinceEpoch,
       };
       _sendMessage(50, payload);
       print(
-        'Отправляем отметку о прочтении для сообщения $messageId в чате $chatId',
+        'Отправляем отметку о прочтении для сообщения $messageIdInt в чате $chatId',
       );
     });
   }
@@ -177,7 +179,7 @@ extension ApiServiceContacts on ApiService {
 
     final payload = {'link': link};
 
-    final int seq = _sendMessage(57, payload);
+    final int seq = await _sendMessage(57, payload);
     print('Отправляем запрос на присоединение (seq: $seq) по ссылке: $link');
 
     try {
@@ -263,7 +265,7 @@ extension ApiServiceContacts on ApiService {
     }
 
     try {
-      final int contactSeq = _sendMessage(32, {"contactIds": contactIds});
+      final int contactSeq = await _sendMessage(32, {"contactIds": contactIds});
 
       final contactResponse = await messages
           .firstWhere((msg) => msg['seq'] == contactSeq)

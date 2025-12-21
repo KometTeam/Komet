@@ -577,7 +577,9 @@ class ChatMessageBubble extends StatelessWidget {
 
     final replyText = replyMessage['text'] as String? ?? '';
     final replySenderId = replyMessage['sender'] as int?;
-    final replyMessageId = replyMessage['id'] as String?;
+    // id может быть int или String
+    final rawId = replyMessage['id'];
+    final replyMessageId = rawId is int ? rawId.toString() : (rawId as String?);
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -1279,11 +1281,14 @@ class ChatMessageBubble extends StatelessWidget {
   Widget _buildVideoCircleOnlyMessage(BuildContext context) {
     final video = message.attaches.firstWhere((a) => a['_type'] == 'VIDEO');
     final videoId = video['videoId'] as int?;
-    final previewData = video['previewData'] as String?;
+    final previewDataRaw = video['previewData'];
+    final previewData = previewDataRaw is String ? previewDataRaw : null;
     final thumbnailUrl = video['url'] ?? video['baseUrl'] as String?;
 
     Uint8List? previewBytes;
-    if (previewData != null && previewData.startsWith('data:')) {
+    if (previewDataRaw is List<int>) {
+      previewBytes = Uint8List.fromList(previewDataRaw);
+    } else if (previewData != null && previewData.startsWith('data:')) {
       final idx = previewData.indexOf('base64,');
       if (idx != -1) {
         final b64 = previewData.substring(idx + 7);
@@ -1934,11 +1939,11 @@ class ChatMessageBubble extends StatelessWidget {
     for (final video in videos) {
       final videoId = video['videoId'] as int?;
       final videoType = video['videoType'] as int?;
-      final previewData = video['previewData'] as String?;
+      final previewData = video['previewData'];
       final thumbnailUrl = video['url'] ?? video['baseUrl'] as String?;
 
       Uint8List? previewBytes;
-      if (previewData != null && previewData.startsWith('data:')) {
+      if (previewData is String && previewData.startsWith('data:')) {
         final idx = previewData.indexOf('base64,');
         if (idx != -1) {
           final b64 = previewData.substring(idx + 7);
@@ -1946,6 +1951,10 @@ class ChatMessageBubble extends StatelessWidget {
             previewBytes = base64Decode(b64);
           } catch (_) {}
         }
+      } else if (previewData is List<dynamic>) {
+        try {
+          previewBytes = Uint8List.fromList(List<int>.from(previewData));
+        } catch (_) {}
       }
 
       String? highQualityThumbnailUrl;
@@ -3045,7 +3054,7 @@ class ChatMessageBubble extends StatelessWidget {
     try {
       final messageId = message.id;
 
-      final seq = ApiService.instance.sendRawRequest(88, {
+      final seq = await ApiService.instance.sendRawRequest(88, {
         "fileId": fileId,
         "chatId": chatId,
         "messageId": messageId,

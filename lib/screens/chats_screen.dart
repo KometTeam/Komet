@@ -319,7 +319,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       final cmd = message['cmd'];
       final payload = message['payload'];
 
-      if (opcode == 19 && cmd == 1 && payload != null) {
+      if (opcode == 19 && (cmd == 0x100 || cmd == 256) && payload != null) {
         final profileData = payload['profile'];
         if (profileData != null) {
           print('🔄 ChatsScreen: Получен профиль из opcode 19, обновляем UI');
@@ -352,7 +352,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         _setTypingForChat(chatId);
       }
 
-      if (opcode == 64 && cmd == 1 && payload['chat'] is Map<String, dynamic>) {
+      if (opcode == 64 && (cmd == 0x100 || cmd == 256) && payload['chat'] is Map<String, dynamic>) {
         final chatJson = payload['chat'] as Map<String, dynamic>;
         final newChat = Chat.fromJson(chatJson);
 
@@ -621,7 +621,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
       }
 
-      if (opcode == 89 && cmd == 1) {
+      if (opcode == 89 && (cmd == 0x100 || cmd == 256)) {
         final chatJson = payload['chat'] as Map<String, dynamic>?;
         if (chatJson != null) {
           final chatType = chatJson['type'] as String?;
@@ -653,7 +653,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
       }
 
-      if (opcode == 55 && cmd == 1) {
+      if (opcode == 55 && (cmd == 0x100 || cmd == 256)) {
         final chatJson = payload['chat'] as Map<String, dynamic>?;
         if (chatJson != null) {
           final updatedChat = Chat.fromJson(chatJson);
@@ -703,7 +703,12 @@ class _ChatsScreenState extends State<ChatsScreen>
             if (foldersJson != null) {
               final folders = foldersJson
                   .map(
-                    (json) => ChatFolder.fromJson(json as Map<String, dynamic>),
+                    (json) {
+                      final jsonMap = json is Map<String, dynamic> 
+                          ? json 
+                          : Map<String, dynamic>.from(json as Map);
+                      return ChatFolder.fromJson(jsonMap);
+                    },
                   )
                   .toList();
 
@@ -726,7 +731,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
       }
 
-      if (opcode == 274 && cmd == 1) {
+      if (opcode == 274 && (cmd == 0x100 || cmd == 256)) {
         print('Получен ответ на создание/обновление папки: $payload');
 
         try {
@@ -775,7 +780,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         }
       }
 
-      if (opcode == 276 && cmd == 1) {
+      if (opcode == 276 && (cmd == 0x100 || cmd == 256)) {
         print('Получен ответ на удаление папки: $payload');
 
         try {
@@ -855,11 +860,11 @@ class _ChatsScreenState extends State<ChatsScreen>
 
         _allChats = chats
             .where((json) => json != null)
-            .map((json) => Chat.fromJson(json))
+            .map((json) => Chat.fromJson((json as Map).cast<String, dynamic>()))
             .toList();
         _contacts.clear();
         for (final contactJson in contacts) {
-          final contact = Contact.fromJson(contactJson);
+          final contact = Contact.fromJson((contactJson as Map).cast<String, dynamic>());
           _contacts[contact.id] = contact;
         }
 
@@ -1669,14 +1674,26 @@ class _ChatsScreenState extends State<ChatsScreen>
       final profileData = data['profile'];
 
       setState(() {
-        _allChats = chats
+        final newChats = chats
             .where((json) => json != null)
-            .map((json) => Chat.fromJson(json))
+            .map((json) => Chat.fromJson((json as Map).cast<String, dynamic>()))
             .toList();
 
-        _contacts.clear();
+        final newChatIds = newChats.map((c) => c.id).toSet();
+
+        for (final newChat in newChats) {
+          final existingIndex = _allChats.indexWhere((c) => c.id == newChat.id);
+          if (existingIndex != -1) {
+            _allChats[existingIndex] = newChat;
+          } else {
+            _allChats.add(newChat);
+          }
+        }
+
+        _allChats.removeWhere((chat) => !newChatIds.contains(chat.id) && chat.id != 0);
+
         for (final contactJson in contacts) {
-          final contact = Contact.fromJson(contactJson);
+          final contact = Contact.fromJson((contactJson as Map).cast<String, dynamic>());
           _contacts[contact.id] = contact;
         }
 
@@ -1756,7 +1773,7 @@ class _ChatsScreenState extends State<ChatsScreen>
   Future<void> _openSferum() async {
     try {
       await ApiService.instance.waitUntilOnline();
-      final seq32 = ApiService.instance.sendAndTrackFullJsonRequest(
+      final seq32 = await ApiService.instance.sendAndTrackFullJsonRequest(
         jsonEncode({
           "ver": 11,
           "cmd": 0,
@@ -1791,7 +1808,7 @@ class _ChatsScreenState extends State<ChatsScreen>
 
       print('🔍 Найден chatId для бота Сферума: ${chatId ?? "не найден"}');
 
-      final seq160 = ApiService.instance.sendAndTrackFullJsonRequest(
+      final seq160 = await ApiService.instance.sendAndTrackFullJsonRequest(
         jsonEncode({
           "ver": 11,
           "cmd": 0,
@@ -1902,10 +1919,10 @@ class _ChatsScreenState extends State<ChatsScreen>
                 final chatListJson = snapshot.data!['chats'] as List;
                 final contactListJson = snapshot.data!['contacts'] as List;
                 _allChats = chatListJson
-                    .map((json) => Chat.fromJson(json))
+                    .map((json) => Chat.fromJson((json as Map).cast<String, dynamic>()))
                     .toList();
                 final contacts = contactListJson.map(
-                  (json) => Contact.fromJson(json),
+                  (json) => Contact.fromJson((json as Map).cast<String, dynamic>()),
                 );
                 _contacts = {for (var c in contacts) c.id: c};
 
@@ -3729,8 +3746,9 @@ class _ChatsScreenState extends State<ChatsScreen>
   Widget _buildCurrentTitleWidget() {
     final colors = Theme.of(context).colorScheme;
     final onSurfaceVariant = colors.onSurfaceVariant;
+    final isActuallyConnected = ApiService.instance.isActuallyConnected;
 
-    if (_connectionStatus == 'connecting') {
+    if (_connectionStatus == 'connecting' && !isActuallyConnected) {
       return _buildStatusRow(
         key: const ValueKey('status_connecting'),
         text: 'Подключение...',
@@ -3741,7 +3759,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       );
     }
 
-    if (_connectionStatus == 'authorizing') {
+    if (_connectionStatus == 'authorizing' && !isActuallyConnected) {
       return _buildStatusRow(
         key: const ValueKey('status_authorizing'),
         text: 'Авторизация...',
@@ -3969,13 +3987,18 @@ class _ChatsScreenState extends State<ChatsScreen>
     );
   }
 
-  void _navigateToProfileEdit() {
+  void _navigateToProfileEdit() async {
     if (_myProfile != null) {
-      Navigator.of(context).push(
+      final updatedProfile = await Navigator.of(context).push<Profile?>(
         MaterialPageRoute(
           builder: (context) => ManageAccountScreen(myProfile: _myProfile!),
         ),
       );
+      if (updatedProfile != null && mounted) {
+        setState(() {
+          _myProfile = updatedProfile;
+        });
+      }
     } else {
       ScaffoldMessenger.of(
         context,

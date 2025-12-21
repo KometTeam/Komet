@@ -85,7 +85,7 @@ class _CustomRequestScreenState extends State<CustomRequestScreen> {
     Timer? timeoutTimer;
 
     try {
-      final int sentSeq = ApiService.instance.sendAndTrackFullJsonRequest(
+      final int sentSeq = await ApiService.instance.sendAndTrackFullJsonRequest(
         jsonEncode(requestJson),
       );
 

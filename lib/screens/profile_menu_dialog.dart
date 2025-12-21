@@ -10,8 +10,9 @@ import 'package:gwid/api/api_service.dart';
 
 class ProfileMenuDialog extends StatefulWidget {
   final Profile? myProfile;
+  final void Function(Profile updatedProfile)? onProfileUpdated;
 
-  const ProfileMenuDialog({super.key, this.myProfile});
+  const ProfileMenuDialog({super.key, this.myProfile, this.onProfileUpdated});
 
   @override
   State<ProfileMenuDialog> createState() => _ProfileMenuDialogState();
@@ -141,14 +142,18 @@ class _ProfileMenuDialogState extends State<ProfileMenuDialog> {
                                   ),
                                   onPressed: () {
                                     Navigator.of(context).pop();
-                                    Navigator.of(context).push(
+                                    Navigator.of(context).push<Profile?>(
                                       MaterialPageRoute(
                                         builder: (context) =>
                                             ManageAccountScreen(
                                               myProfile: myProfile,
                                             ),
                                       ),
-                                    );
+                                    ).then((updatedProfile) {
+                                      if (updatedProfile != null && widget.onProfileUpdated != null) {
+                                        widget.onProfileUpdated!(updatedProfile);
+                                      }
+                                    });
                                   },
                                   child: const Text("Управление аккаунтом"),
                                 ),

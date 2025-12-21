@@ -590,12 +590,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
         trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: () {
-          Navigator.of(context).push(
+        onTap: () async {
+          final updatedProfile = await Navigator.of(context).push<Profile?>(
             MaterialPageRoute(
               builder: (context) => ManageAccountScreen(myProfile: _myProfile!),
             ),
           );
+          if (updatedProfile != null && mounted) {
+            setState(() {
+              _myProfile = updatedProfile;
+            });
+          }
         },
       ),
     );

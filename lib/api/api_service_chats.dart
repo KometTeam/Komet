@@ -23,6 +23,8 @@ extension ApiServiceChats on ApiService {
         await prefs.setString('spoof_deviceid', deviceId);
       }
 
+      final userAgentPayload = await _buildUserAgentPayload();
+      
       final payload = {
         "chatsCount": 100,
         "chatsSync": 0,
@@ -31,6 +33,7 @@ extension ApiServiceChats on ApiService {
         "interactive": true,
         "presenceSync": 0,
         "token": authToken,
+        "userAgent": userAgentPayload,
       };
 
       if (userId != null) {
@@ -38,12 +41,12 @@ extension ApiServiceChats on ApiService {
       }
 
       print("Автоматически отправляем opcode 19 для авторизации...");
-      final int chatSeq = _sendMessage(19, payload);
+      final int chatSeq = await _sendMessage(19, payload);
       final chatResponse = await messages.firstWhere(
         (msg) => msg['seq'] == chatSeq,
       );
 
-      if (chatResponse['cmd'] == 1) {
+      if (chatResponse['cmd'] == 0x100 || chatResponse['cmd'] == 256) {
         print("✅ Авторизация (opcode 19) успешна. Сессия ГОТОВА.");
         _isSessionReady = true;
 
@@ -76,7 +79,10 @@ extension ApiServiceChats on ApiService {
             await accountManager.initialize();
             final currentAccount = accountManager.currentAccount;
             if (currentAccount != null && currentAccount.token == authToken) {
-              final profileObj = Profile.fromJson(profile);
+              final profileMap = profile is Map<String, dynamic> 
+                  ? profile 
+                  : Map<String, dynamic>.from(profile as Map);
+              final profileObj = Profile.fromJson(profileMap);
               await accountManager.updateAccountProfile(
                 currentAccount.id,
                 profileObj,
@@ -236,7 +242,7 @@ extension ApiServiceChats on ApiService {
 
     print('Создаем пригласительную ссылку для группы $chatId: $payload');
 
-    final int seq = _sendMessage(55, payload);
+    final int seq = await _sendMessage(55, payload);
 
     try {
       final response = await messages
@@ -411,6 +417,7 @@ extension ApiServiceChats on ApiService {
 
       if (!_chatsFetchedInThisSession) {
         opcode = 19;
+        final userAgentPayload = await _buildUserAgentPayload();
         payload = {
           "chatsCount": 100,
           "chatsSync": 0,
@@ -419,6 +426,7 @@ extension ApiServiceChats on ApiService {
           "interactive": true,
           "presenceSync": 0,
           "token": authToken,
+          "userAgent": userAgentPayload,
         };
 
         if (userId != null) {
@@ -428,10 +436,10 @@ extension ApiServiceChats on ApiService {
         return await getChatsOnly(force: force);
       }
 
-      final int chatSeq = _sendMessage(opcode, payload);
+      final int chatSeq = await _sendMessage(opcode, payload);
       chatResponse = await messages.firstWhere((msg) => msg['seq'] == chatSeq);
 
-      if (opcode == 19 && chatResponse['cmd'] == 1) {
+      if (opcode == 19 && (chatResponse['cmd'] == 0x100 || chatResponse['cmd'] == 256)) {
         print("✅ Авторизация (opcode 19) успешна. Сессия ГОТОВА.");
         _isSessionReady = true;
 
@@ -481,7 +489,10 @@ extension ApiServiceChats on ApiService {
           await accountManager.initialize();
           final currentAccount = accountManager.currentAccount;
           if (currentAccount != null && currentAccount.token == authToken) {
-            final profileObj = Profile.fromJson(profile);
+            final profileMap = profile is Map<String, dynamic> 
+                ? profile 
+                : Map<String, dynamic>.from(profile as Map);
+            final profileObj = Profile.fromJson(profileMap);
             await accountManager.updateAccountProfile(
               currentAccount.id,
               profileObj,
@@ -531,7 +542,7 @@ extension ApiServiceChats on ApiService {
         }
 
         if (contactIds.isNotEmpty) {
-          final int contactSeq = _sendMessage(32, {
+          final int contactSeq = await _sendMessage(32, {
             "contactIds": contactIds.toList(),
           });
           final contactResponse = await messages.firstWhere(
@@ -583,18 +594,8 @@ extension ApiServiceChats on ApiService {
 
   Future<void> _sendInitialSetupRequests() async {
     print("Запускаем отправку единичных запросов при старте...");
-
-    if (!_isSessionOnline || !_isSessionReady) {
-      print("Сессия еще не готова, ждем...");
-      await waitUntilOnline();
-    }
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (!_isSessionOnline || !_isSessionReady) {
-      print("Сессия не готова для отправки запросов, пропускаем");
-      return;
-    }
+    // После handshake сразу шлем первичные запросы, не блокируемся на флагах.
+    await Future.delayed(const Duration(seconds: 1));
 
     _sendMessage(272, {"folderSync": 0});
     await Future.delayed(const Duration(milliseconds: 500));
@@ -650,7 +651,7 @@ extension ApiServiceChats on ApiService {
     };
 
     try {
-      final int seq = _sendMessage(49, payload);
+      final int seq = await _sendMessage(49, payload);
       final response = await messages
           .firstWhere((msg) => msg['seq'] == seq)
           .timeout(const Duration(seconds: 15));
@@ -702,7 +703,7 @@ extension ApiServiceChats on ApiService {
     };
 
     try {
-      final int seq = _sendMessage(49, payload);
+      final int seq = await _sendMessage(49, payload);
       final response = await messages
           .firstWhere((msg) => msg['seq'] == seq)
           .timeout(const Duration(seconds: 15));
@@ -739,7 +740,7 @@ extension ApiServiceChats on ApiService {
     };
 
     try {
-      final int seq = _sendMessage(49, payload);
+      final int seq = await _sendMessage(49, payload);
       final response = await messages
           .firstWhere((msg) => msg['seq'] == seq)
           .timeout(const Duration(seconds: 15));
@@ -964,9 +965,7 @@ extension ApiServiceChats on ApiService {
         'message_queue_length': _messageQueue.length,
       },
       'connection': {
-        'current_url': _currentUrlIndex < _wsUrls.length
-            ? _wsUrls[_currentUrlIndex]
-            : null,
+        'current_url': _currentServerUrl ?? 'api.oneme.ru:443',
         'reconnect_attempts': _reconnectAttempts,
         'last_action_time': _lastActionTime,
       },
@@ -1040,7 +1039,7 @@ extension ApiServiceChats on ApiService {
     clearChatsCache();
 
     if (_isSessionOnline) {
-      _sendMessage(64, payload);
+      unawaited(_sendMessage(64, payload));
     } else {
       print("Сессия не онлайн. Сообщение добавлено в очередь.");
       _messageQueue.add({'opcode': 64, 'payload': payload});
@@ -1091,7 +1090,7 @@ extension ApiServiceChats on ApiService {
 
     Future<bool> sendOnce() async {
       try {
-        final int seq = _sendMessage(67, payload);
+        final int seq = await _sendMessage(67, payload);
         final response = await messages
             .firstWhere((msg) => msg['seq'] == seq)
             .timeout(const Duration(seconds: 10));
@@ -1119,7 +1118,7 @@ extension ApiServiceChats on ApiService {
           return false;
         }
 
-        return response['cmd'] == 1;
+        return response['cmd'] == 0x100 || response['cmd'] == 256;
       } catch (e) {
         print('Ошибка при редактировании сообщения: $e');
         return false;
@@ -1170,7 +1169,7 @@ extension ApiServiceChats on ApiService {
 
     Future<bool> sendOnce() async {
       try {
-        final int seq = _sendMessage(66, payload);
+        final int seq = await _sendMessage(66, payload);
         final response = await messages
             .firstWhere((msg) => msg['seq'] == seq)
             .timeout(const Duration(seconds: 10));
@@ -1188,7 +1187,7 @@ extension ApiServiceChats on ApiService {
           return false;
         }
 
-        return response['cmd'] == 1;
+        return response['cmd'] == 0x100 || response['cmd'] == 256;
       } catch (e) {
         print('Ошибка при удалении сообщения: $e');
         return false;
