@@ -10,6 +10,9 @@ import 'package:gwid/widgets/chat_message_bubble.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
 import 'package:video_player/video_player.dart';
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 void _showColorPicker(
   BuildContext context, {
@@ -22,7 +25,8 @@ void _showColorPicker(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text("Выберите цвет"),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
       content: SingleChildScrollView(
         child: StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
@@ -42,12 +46,12 @@ void _showColorPicker(
           child: const Text('Отмена'),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        TextButton(
-          child: const Text('Готово'),
+        FilledButton(
           onPressed: () {
             onColorChanged(pickedColor);
             Navigator.of(context).pop();
           },
+          child: const Text('Готово'),
         ),
       ],
     ),
@@ -105,17 +109,19 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
         title: const Text("Персонализация"),
         surfaceTintColor: Colors.transparent,
         backgroundColor: colors.surface,
+        elevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         children: [
           const _MessagePreviewSection(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           const _ThemeManagementSection(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _ModernSection(
             title: "Тема приложения",
             children: [
+              const SizedBox(height: 8),
               AppThemeSelector(
                 selectedTheme: theme.appTheme,
                 onChanged: (appTheme) => theme.setTheme(appTheme),
@@ -137,10 +143,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               // ),
               //],
               //),
-              const SizedBox(height: 24),
+              const SizedBox(height: 8),
               _ModernSection(
                 title: "Обои чата",
                 children: [
+                  const SizedBox(height: 8),
                   _CustomSettingTile(
                     icon: Icons.wallpaper,
                     title: "Использовать свои обои",
@@ -197,12 +204,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                       ),
                     ],
                     if (theme.chatWallpaperType == ChatWallpaperType.image) ...[
-                      const Divider(height: 24),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.photo_library_outlined),
-                        title: const Text("Выбрать изображение"),
-                        trailing: const Icon(Icons.chevron_right),
+                      const Divider(height: 16),
+                      _ActionTile(
+                        icon: Icons.photo_library_outlined,
+                        title: "Выбрать изображение",
                         onTap: () async {
                           final picker = ImagePicker();
                           final image = await picker.pickImage(
@@ -226,27 +231,19 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                           displayValue: theme.chatWallpaperImageBlur
                               .toStringAsFixed(1),
                         ),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                          ),
-                          title: const Text(
-                            "Удалить изображение",
-                            style: TextStyle(color: Colors.redAccent),
-                          ),
+                        _ActionTile(
+                          icon: Icons.delete_outline,
+                          title: "Удалить изображение",
+                          isDestructive: true,
                           onTap: () => theme.setChatWallpaperImagePath(null),
                         ),
                       ],
                     ],
                     if (theme.chatWallpaperType == ChatWallpaperType.video) ...[
-                      const Divider(height: 24),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.video_library_outlined),
-                        title: const Text("Выбрать видео"),
-                        trailing: const Icon(Icons.chevron_right),
+                      const Divider(height: 16),
+                      _ActionTile(
+                        icon: Icons.video_library_outlined,
+                        title: "Выбрать видео",
                         onTap: () async {
                           final result = await FilePicker.platform.pickFiles(
                             type: FileType.video,
@@ -260,16 +257,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                         },
                       ),
                       if (theme.chatWallpaperVideoPath?.isNotEmpty == true) ...[
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                          ),
-                          title: const Text(
-                            "Удалить видео",
-                            style: TextStyle(color: Colors.redAccent),
-                          ),
+                        _ActionTile(
+                          icon: Icons.delete_outline,
+                          title: "Удалить видео",
+                          isDestructive: true,
                           onTap: () => theme.setChatWallpaperVideoPath(null),
                         ),
                       ],
@@ -277,10 +268,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   ],
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 8),
               _ModernSection(
                 title: "Сообщения",
                 children: [
+                  const SizedBox(height: 8),
                   _ExpandableSection(
                     title: "Прозрачность",
                     initiallyExpanded: false,
@@ -473,10 +465,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _ModernSection(
             title: "Всплывающие окна",
             children: [
+              const SizedBox(height: 8),
               _ExpandableSection(
                 title: "Настройки",
                 initiallyExpanded: false,
@@ -506,14 +499,15 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _ModernSection(
-            title: "Режим ПK",
+            title: "Режим ПК",
             children: [
+              const SizedBox(height: 8),
               _CustomSettingTile(
                 icon: Icons.desktop_windows,
-                title: "Режим ПК(не работает на телефонах)",
-                subtitle: "Discord reference?",
+                title: "Режим ПК",
+                subtitle: "Не работает на телефонах",
                 child: Switch(
                   value: theme.useDesktopLayout,
                   onChanged: (value) => theme.setUseDesktopLayout(value),
@@ -521,11 +515,12 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _ExpandableSection(
             title: "Кастомизация+",
             initiallyExpanded: false,
             children: [
+              const SizedBox(height: 8),
               _CustomSettingTile(
                 icon: Icons.format_color_fill,
                 title: "Фон списка чатов",
@@ -565,12 +560,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ],
               if (theme.chatsListBackgroundType ==
                   ChatsListBackgroundType.image) ...[
-                const Divider(height: 24),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text("Выбрать изображение"),
-                  trailing: const Icon(Icons.chevron_right),
+                const Divider(height: 16),
+                _ActionTile(
+                  icon: Icons.photo_library_outlined,
+                  title: "Выбрать изображение",
                   onTap: () async {
                     final picker = ImagePicker();
                     final image = await picker.pickImage(
@@ -582,16 +575,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   },
                 ),
                 if (theme.chatsListImagePath?.isNotEmpty == true) ...[
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
-                    ),
-                    title: const Text(
-                      "Удалить изображение",
-                      style: TextStyle(color: Colors.redAccent),
-                    ),
+                  _ActionTile(
+                    icon: Icons.delete_outline,
+                    title: "Удалить изображение",
+                    isDestructive: true,
                     onTap: () => theme.setChatsListImagePath(null),
                   ),
                 ],
@@ -635,12 +622,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 ),
               ],
               if (theme.drawerBackgroundType == DrawerBackgroundType.image) ...[
-                const Divider(height: 24),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text("Выбрать изображение"),
-                  trailing: const Icon(Icons.chevron_right),
+                const Divider(height: 16),
+                _ActionTile(
+                  icon: Icons.photo_library_outlined,
+                  title: "Выбрать изображение",
                   onTap: () async {
                     final picker = ImagePicker();
                     final image = await picker.pickImage(
@@ -652,16 +637,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   },
                 ),
                 if (theme.drawerImagePath?.isNotEmpty == true) ...[
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
-                    ),
-                    title: const Text(
-                      "Удалить изображение",
-                      style: TextStyle(color: Colors.redAccent),
-                    ),
+                  _ActionTile(
+                    icon: Icons.delete_outline,
+                    title: "Удалить изображение",
+                    isDestructive: true,
                     onTap: () => theme.setDrawerImagePath(null),
                   ),
                 ],
@@ -734,12 +713,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 ),
               ],
               if (theme.appBarBackgroundType == AppBarBackgroundType.image) ...[
-                const Divider(height: 24),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text("Выбрать изображение"),
-                  trailing: const Icon(Icons.chevron_right),
+                const Divider(height: 16),
+                _ActionTile(
+                  icon: Icons.photo_library_outlined,
+                  title: "Выбрать изображение",
                   onTap: () async {
                     final picker = ImagePicker();
                     final image = await picker.pickImage(
@@ -751,16 +728,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   },
                 ),
                 if (theme.appBarImagePath?.isNotEmpty == true) ...[
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
-                    ),
-                    title: const Text(
-                      "Удалить изображение",
-                      style: TextStyle(color: Colors.redAccent),
-                    ),
+                  _ActionTile(
+                    icon: Icons.delete_outline,
+                    title: "Удалить изображение",
+                    isDestructive: true,
                     onTap: () => theme.setAppBarImagePath(null),
                   ),
                 ],
@@ -805,12 +776,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ],
               if (theme.folderTabsBackgroundType ==
                   FolderTabsBackgroundType.image) ...[
-                const Divider(height: 24),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text("Выбрать изображение"),
-                  trailing: const Icon(Icons.chevron_right),
+                const Divider(height: 16),
+                _ActionTile(
+                  icon: Icons.photo_library_outlined,
+                  title: "Выбрать изображение",
                   onTap: () async {
                     final picker = ImagePicker();
                     final image = await picker.pickImage(
@@ -822,26 +791,21 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   },
                 ),
                 if (theme.folderTabsImagePath?.isNotEmpty == true) ...[
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
-                    ),
-                    title: const Text(
-                      "Удалить изображение",
-                      style: TextStyle(color: Colors.redAccent),
-                    ),
+                  _ActionTile(
+                    icon: Icons.delete_outline,
+                    title: "Удалить изображение",
+                    isDestructive: true,
                     onTap: () => theme.setFolderTabsImagePath(null),
                   ),
                 ],
               ],
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _ModernSection(
             title: "Панели чата",
             children: [
+              const SizedBox(height: 8),
               _CustomSettingTile(
                 icon: Icons.tune,
                 title: "Эффект стекла для панелей",
@@ -852,7 +816,6 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-
               _ExpandableSection(
                 title: "Настройки",
                 initiallyExpanded: false,
@@ -926,7 +889,7 @@ class _ThemeManagementSection extends StatelessWidget {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text("Отмена"),
             ),
-            TextButton(
+            FilledButton(
               onPressed: () {
                 theme.saveCurrentThemeAs(controller.text);
                 Navigator.of(context).pop();
@@ -955,12 +918,15 @@ class _ThemeManagementSection extends StatelessWidget {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text("Отмена"),
             ),
-            TextButton(
+            FilledButton(
               onPressed: () {
                 theme.deleteTheme(preset.id);
                 Navigator.of(context).pop();
               },
-              child: const Text("Удалить", style: TextStyle(color: Colors.red)),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: const Text("Удалить"),
             ),
           ],
         );
@@ -994,7 +960,7 @@ class _ThemeManagementSection extends StatelessWidget {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text("Отмена"),
             ),
-            TextButton(
+            FilledButton(
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
                   theme.renameTheme(preset.id, controller.text);
@@ -1018,26 +984,62 @@ class _ThemeManagementSection extends StatelessWidget {
       final String jsonString = jsonEncode(preset.toJson());
       final String fileName =
           '${preset.name.replaceAll(RegExp(r'[\\/*?:"<>|]'), '_')}.ktheme';
+      final Uint8List bytes = utf8.encode(jsonString);
 
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Сохранить тему...',
-        fileName: fileName,
-        allowedExtensions: ['ktheme'],
-        type: FileType.custom,
-      );
+      final bool isMobile = Platform.isAndroid || Platform.isIOS;
 
-      if (outputFile != null) {
-        if (!outputFile.endsWith('.ktheme')) {
-          outputFile += '.ktheme';
-        }
+      if (isMobile) {
+        String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Сохранить тему...',
+          fileName: fileName,
+          allowedExtensions: ['ktheme'],
+          type: FileType.custom,
+          bytes: bytes,
+        );
 
-        final file = File(outputFile);
-        await file.writeAsString(jsonString);
-
-        if (context.mounted) {
+        if (outputFile != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Тема "${preset.name}" экспортирована.')),
           );
+        } else if (outputFile == null && context.mounted) {
+          final tempDir = await getTemporaryDirectory();
+          final tempFile = File('${tempDir.path}/$fileName');
+          await tempFile.writeAsBytes(bytes);
+          
+          final result = await Share.shareXFiles(
+            [XFile(tempFile.path)],
+            text: 'Экспорт темы: ${preset.name}',
+          );
+
+          if (context.mounted) {
+            if (result.status == ShareResultStatus.success) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Тема "${preset.name}" экспортирована.')),
+              );
+            }
+          }
+        }
+      } else {
+        String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Сохранить тему...',
+          fileName: fileName,
+          allowedExtensions: ['ktheme'],
+          type: FileType.custom,
+        );
+
+        if (outputFile != null) {
+          if (!outputFile.endsWith('.ktheme')) {
+            outputFile += '.ktheme';
+          }
+
+          final file = File(outputFile);
+          await file.writeAsBytes(bytes);
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Тема "${preset.name}" экспортирована.')),
+            );
+          }
         }
       }
     } catch (e) {
@@ -1093,67 +1095,109 @@ class _ThemeManagementSection extends StatelessWidget {
       children: [
         ...theme.savedThemes.map((preset) {
           final bool isActive = theme.activeTheme.id == preset.id;
-          return ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            leading: Icon(
-              isActive ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: isActive ? colors.primary : colors.onSurfaceVariant,
-            ),
-            title: Text(
-              preset.name,
-              style: TextStyle(
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            elevation: 0,
+            color: isActive
+                ? colors.primaryContainer.withOpacity(0.3)
+                : colors.surfaceContainerHighest.withOpacity(0.2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: isActive
+                    ? colors.primary.withOpacity(0.5)
+                    : Colors.transparent,
+                width: 2,
               ),
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (preset.id != 'default')
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    tooltip: "Переименовать",
-                    onPressed: () => _showRenameDialog(context, theme, preset),
-                  ),
-
-                IconButton(
-                  icon: const Icon(Icons.file_upload_outlined),
-                  tooltip: "Экспорт",
-                  onPressed: () => _doExport(context, theme, preset),
-                ),
-                if (preset.id != 'default')
-                  IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
+            child: InkWell(
+              onTap: () {
+                if (!isActive) {
+                  theme.applyTheme(preset.id);
+                }
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      isActive ? Icons.check_circle : Icons.radio_button_unchecked,
+                      color: isActive ? colors.primary : colors.onSurfaceVariant,
+                      size: 24,
                     ),
-                    tooltip: "Удалить",
-                    onPressed: () =>
-                        _showConfirmDeleteDialog(context, theme, preset),
-                  ),
-              ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        preset.name,
+                        style: TextStyle(
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                          fontSize: 15,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (preset.id != 'default')
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            tooltip: "Переименовать",
+                            onPressed: () => _showRenameDialog(context, theme, preset),
+                            style: IconButton.styleFrom(
+                              padding: const EdgeInsets.all(8),
+                            ),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.file_upload_outlined, size: 20),
+                          tooltip: "Экспорт",
+                          onPressed: () => _doExport(context, theme, preset),
+                          style: IconButton.styleFrom(
+                            padding: const EdgeInsets.all(8),
+                          ),
+                        ),
+                        if (preset.id != 'default')
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            tooltip: "Удалить",
+                            onPressed: () =>
+                                _showConfirmDeleteDialog(context, theme, preset),
+                            style: IconButton.styleFrom(
+                              padding: const EdgeInsets.all(8),
+                            ),
+                            color: colors.error,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
-            onTap: () {
-              if (!isActive) {
-                theme.applyTheme(preset.id);
-              }
-            },
           );
         }),
-        const Divider(),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            TextButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text("Сохранить"),
-              onPressed: () => _showSaveThemeDialog(context, theme),
-            ),
-            TextButton.icon(
-              icon: const Icon(Icons.file_download_outlined),
-              label: const Text("Импорт"),
-              onPressed: () => _doImport(context, theme),
-            ),
-          ],
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text("Сохранить"),
+                  onPressed: () => _showSaveThemeDialog(context, theme),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.file_download_outlined, size: 20),
+                  label: const Text("Импорт"),
+                  onPressed: () => _doImport(context, theme),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1173,28 +1217,32 @@ class _ModernSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 16.0, bottom: 12.0),
+          padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
           child: Text(
             title.toUpperCase(),
             style: TextStyle(
               color: colors.primary,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              letterSpacing: 0.8,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              letterSpacing: 0.5,
             ),
           ),
         ),
         Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: colors.outlineVariant.withOpacity(0.3)),
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: colors.outlineVariant.withOpacity(0.2),
+              width: 1,
+            ),
           ),
           clipBehavior: Clip.antiAlias,
+          color: colors.surfaceContainerHighest.withOpacity(0.3),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
-              vertical: 8.0,
+              vertical: 12.0,
             ),
             child: Column(children: children),
           ),
@@ -1219,34 +1267,54 @@ class _CustomSettingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 16,
-                ),
-              ),
-              if (subtitle != null)
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: colors.primaryContainer.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: colors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  subtitle!,
+                  title,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    color: colors.onSurface,
                   ),
                 ),
-            ],
+                if (subtitle != null && subtitle!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2.0),
+                    child: Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurfaceVariant,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        child,
-      ],
+          child,
+        ],
+      ),
     );
   }
 }
@@ -1266,18 +1334,30 @@ class _ColorPickerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () => _showColorPicker(
         context,
         initialColor: color,
         onColorChanged: onColorChanged,
       ),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         child: Row(
           children: [
-            const Icon(Icons.color_lens_outlined),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: colors.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.color_lens_outlined,
+                color: colors.primary,
+                size: 20,
+              ),
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -1285,30 +1365,40 @@ class _ColorPickerTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w500,
-                      fontSize: 16,
+                      fontSize: 15,
+                      color: colors.onSurface,
                     ),
                   ),
                   Text(
                     subtitle,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: colors.onSurfaceVariant,
+                      height: 1.2,
                     ),
                   ),
                 ],
               ),
             ),
             Container(
-              width: 32,
-              height: 32,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                  color: colors.outline.withOpacity(0.3),
+                  width: 2,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1341,8 +1431,9 @@ class _SliderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1351,32 +1442,45 @@ class _SliderTile extends StatelessWidget {
               if (icon != null) ...[
                 Icon(
                   icon,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  size: 18,
+                  color: colors.onSurfaceVariant,
                 ),
                 const SizedBox(width: 12),
               ],
               Expanded(
-                child: Text(label, style: const TextStyle(fontSize: 14)),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: colors.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-              Text(
-                displayValue,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  displayValue,
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
           ),
-          SizedBox(
-            height: 30,
-            child: Slider(
-              value: value,
-              min: min,
-              max: max,
-              divisions: divisions,
-              onChanged: onChanged,
-            ),
+          const SizedBox(height: 8),
+          Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
           ),
         ],
       ),
@@ -1396,109 +1500,33 @@ class AppThemeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ThemeButton(
-            theme: AppTheme.light,
-            selectedTheme: selectedTheme,
-            onChanged: onChanged,
-            icon: Icons.light_mode_outlined,
-            label: "Светлая",
-          ),
+    return SegmentedButton<AppTheme>(
+      segments: const [
+        ButtonSegment<AppTheme>(
+          value: AppTheme.light,
+          icon: Icon(Icons.light_mode_outlined, size: 20),
+          label: Text('Светлая'),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _ThemeButton(
-            theme: AppTheme.dark,
-            selectedTheme: selectedTheme,
-            onChanged: onChanged,
-            icon: Icons.dark_mode_outlined,
-            label: "Тёмная",
-          ),
+        ButtonSegment<AppTheme>(
+          value: AppTheme.dark,
+          icon: Icon(Icons.dark_mode_outlined, size: 20),
+          label: Text('Тёмная'),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _ThemeButton(
-            theme: AppTheme.black,
-            selectedTheme: selectedTheme,
-            onChanged: onChanged,
-            icon: Icons.dark_mode,
-            label: "OLED",
-          ),
+        ButtonSegment<AppTheme>(
+          value: AppTheme.black,
+          icon: Icon(Icons.dark_mode, size: 20),
+          label: Text('OLED'),
         ),
       ],
+      selected: {selectedTheme},
+      onSelectionChanged: (Set<AppTheme> newSelection) {
+        onChanged(newSelection.first);
+      },
+      multiSelectionEnabled: false,
     );
   }
 }
 
-class _ThemeButton extends StatelessWidget {
-  final AppTheme theme;
-  final AppTheme selectedTheme;
-  final ValueChanged<AppTheme> onChanged;
-  final IconData icon;
-  final String label;
-
-  const _ThemeButton({
-    required this.theme,
-    required this.selectedTheme,
-    required this.onChanged,
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final isSelected = selectedTheme == theme;
-
-    return GestureDetector(
-      onTap: () => onChanged(theme),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 72,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? colors.primaryContainer
-              : colors.surfaceContainerHighest.withOpacity(0.3),
-          border: Border.all(
-            color: isSelected ? colors.primary : Colors.transparent,
-            width: 2,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isSelected
-                  ? colors.onPrimaryContainer
-                  : colors.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                  color: isSelected
-                      ? colors.onPrimaryContainer
-                      : colors.onSurfaceVariant,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _MessagePreviewSection extends StatelessWidget {
   const _MessagePreviewSection();
@@ -1540,11 +1568,14 @@ class _MessagePreviewSection extends StatelessWidget {
         Container(
           height: 250,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colors.outlineVariant.withOpacity(0.3)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: colors.outlineVariant.withOpacity(0.2),
+              width: 1,
+            ),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(19),
             child: Stack(
               children: [
                 const _ChatWallpaperPreview(),
@@ -1702,7 +1733,7 @@ class _ChatWallpaperPreview extends StatelessWidget {
           );
         }
       case ChatWallpaperType.video:
-        if (Platform.isWindows) {
+        if (Platform.operatingSystem == 'windows') {
           return Container(
             color: isDarkTheme ? Colors.grey[850] : Colors.grey[200],
             child: Center(
@@ -1870,22 +1901,54 @@ class _ExpandableSection extends StatefulWidget {
   State<_ExpandableSection> createState() => _ExpandableSectionState();
 }
 
-class _ExpandableSectionState extends State<_ExpandableSection> {
+class _ExpandableSectionState extends State<_ExpandableSection>
+    with SingleTickerProviderStateMixin {
   late bool _isExpanded;
+  late AnimationController _controller;
+  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
     _isExpanded = widget.initiallyExpanded;
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    );
+    if (_isExpanded) {
+      _controller.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _toggleExpanded() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (_isExpanded) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         InkWell(
-          onTap: () => setState(() => _isExpanded = !_isExpanded),
-          borderRadius: BorderRadius.circular(8),
+          onTap: _toggleExpanded,
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               vertical: 12.0,
@@ -1895,22 +1958,99 @@ class _ExpandableSectionState extends State<_ExpandableSection> {
               children: [
                 Text(
                   widget.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colors.onSurface,
                   ),
                 ),
                 const Spacer(),
-                Icon(
-                  _isExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                AnimatedRotation(
+                  turns: _isExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.expand_more,
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        if (_isExpanded) ...[const SizedBox(height: 8), ...widget.children],
+        SizeTransition(
+          sizeFactor: _animation,
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              ...widget.children,
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textColor = isDestructive ? colors.error : colors.onSurface;
+    final iconColor = isDestructive ? colors.error : colors.primary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (isDestructive
+                        ? colors.errorContainer
+                        : colors.primaryContainer)
+                    .withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: colors.onSurfaceVariant,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
