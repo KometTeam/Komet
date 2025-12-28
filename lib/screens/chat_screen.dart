@@ -18,6 +18,7 @@ import 'package:gwid/services/chat_cache_service.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/services/chat_read_settings_service.dart';
 import 'package:gwid/services/contact_local_names_service.dart';
+import 'package:gwid/services/notification_service.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:gwid/screens/group_settings_screen.dart';
@@ -558,6 +559,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _initializeChat();
     _loadEncryptionConfig();
     _loadSpecialMessagesSetting();
+    
+    // Очищаем накопленные уведомления для этого чата
+    NotificationService().clearNotificationMessagesForChat(widget.chatId);
 
     _textController.addListener(() {
       _handleTextChangedForKometColor();

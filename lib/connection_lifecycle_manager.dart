@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/api/api_service.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'utils/theme_provider.dart';
 
 class ConnectionLifecycleManager extends StatefulWidget {
@@ -24,6 +25,9 @@ class _ConnectionLifecycleManagerState extends State<ConnectionLifecycleManager>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Включаем WakeLock для предотвращения засыпания устройства
+    WakelockPlus.enable();
+
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -39,6 +43,8 @@ class _ConnectionLifecycleManagerState extends State<ConnectionLifecycleManager>
   void dispose() {
     _animationController.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    // Отключаем WakeLock при закрытии
+    WakelockPlus.disable();
     super.dispose();
   }
 

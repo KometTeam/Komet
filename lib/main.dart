@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'dart:io';
 import 'screens/home_screen.dart';
 import 'screens/phone_entry_screen.dart';
 import 'utils/theme_provider.dart';
@@ -17,6 +18,7 @@ import 'services/contact_local_names_service.dart';
 import 'services/account_manager.dart';
 import 'services/music_player_service.dart';
 import 'services/whitelist_service.dart';
+import 'services/notification_service.dart';
 import 'plugins/plugin_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -48,6 +50,18 @@ Future<void> main() async {
   print("Инициализируем WhitelistService...");
   await WhitelistService().loadWhitelist();
   print("WhitelistService инициализирован");
+
+  print("Инициализируем NotificationService...");
+  await NotificationService().initialize();
+  NotificationService().setNavigatorKey(navigatorKey);
+  print("NotificationService инициализирован");
+
+  // Запуск фонового сервиса только для Android
+  if (Platform.isAndroid) {
+    print("Инициализируем фоновый сервис для Android...");
+    await initializeBackgroundService();
+    print("Фоновый сервис инициализирован");
+  }
 
   final hasToken = await ApiService.instance.hasToken();
   print("При запуске приложения токен ${hasToken ? 'найден' : 'не найден'}");

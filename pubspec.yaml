@@ -81,12 +81,14 @@ dependencies:
 
   flutter_timezone: ^5.0.0
 
-  timezone: ^0.9.2
+  timezone: ^0.10.1
 
 
   file_picker: ^10.3.3
 
   permission_handler: ^11.3.1
+
+  image: ^4.1.7
 
   encrypt: ^5.0.3
 
@@ -97,6 +99,8 @@ dependencies:
   url_launcher: 6.3.2
 
   flutter_background_service: ^5.0.1
+  flutter_local_notifications: ^19.5.0
+  wakelock_plus: ^1.2.8
 
   flutter_markdown: ^0.7.7
 

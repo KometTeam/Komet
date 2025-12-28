@@ -195,7 +195,6 @@ class ApiService {
     String category = 'API',
     Map<String, dynamic>? data,
   }) {
-    print(message);
     _connectionLogCache.add(message);
     if (!_connectionLogController.isClosed) {
       _connectionLogController.add(message);

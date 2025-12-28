@@ -51,5 +51,16 @@
 	<string>Приложению необходим доступ к галерее для выбора и просмотра фотографий</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Приложению необходим доступ к галерее для сохранения фотографий</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>remote-notification</string>
+		<string>audio</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.komet.app.refresh</string>
+	</array>
 </dict>
 </plist>

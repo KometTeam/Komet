@@ -48,6 +48,23 @@ class ChatCacheService {
     return null;
   }
 
+  /// Получить чат из кэша по ID
+  Future<Map<String, dynamic>?> getChatById(int chatId) async {
+    try {
+      final chats = await getCachedChats();
+      if (chats != null) {
+        for (final chat in chats) {
+          if (chat['id'] == chatId) {
+            return chat;
+          }
+        }
+      }
+    } catch (e) {
+      print('Ошибка поиска чата в кэше: $e');
+    }
+    return null;
+  }
+
   Future<void> cacheContacts(List<Contact> contacts) async {
     try {
       final contactsData = contacts

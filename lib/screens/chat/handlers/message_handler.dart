@@ -6,6 +6,8 @@ import 'package:gwid/models/contact.dart';
 import 'package:gwid/models/message.dart';
 import 'package:gwid/models/profile.dart';
 import 'package:gwid/models/chat_folder.dart';
+import 'package:gwid/services/notification_service.dart';
+import 'package:gwid/services/chat_cache_service.dart';
 
 class MessageHandler {
   final void Function(VoidCallback) setState;
@@ -26,6 +28,10 @@ class MessageHandler {
   final Function(String) showTokenExpiredDialog;
   final bool Function(Chat) isSavedMessages;
 
+  // Дедупликация сообщений - храним ID последних обработанных сообщений
+  static final Set<String> _processedMessageIds = {};
+  static const int _maxProcessedMessages = 100;
+
   MessageHandler({
     required this.setState,
     required this.getContext,
@@ -45,6 +51,100 @@ class MessageHandler {
     required this.showTokenExpiredDialog,
     required this.isSavedMessages,
   });
+
+  /// Получить текстовое представление вложения для уведомления
+  String _getAttachmentPreviewText(Message message) {
+    if (message.attaches.isEmpty) {
+      return message.text;
+    }
+
+    // Если есть текст - возвращаем его
+    if (message.text.isNotEmpty) {
+      return message.text;
+    }
+
+    // Анализируем вложения
+    for (final attach in message.attaches) {
+      final type = attach['_type'] ?? attach['type'];
+      
+      switch (type) {
+        case 'STICKER':
+          return '🎭 Стикер';
+        case 'PHOTO':
+        case 'IMAGE':
+          final count = message.attaches.where((a) => 
+            (a['_type'] ?? a['type']) == 'PHOTO' || (a['_type'] ?? a['type']) == 'IMAGE'
+          ).length;
+          return count > 1 ? '🖼 Фото ($count)' : '🖼 Фото';
+        case 'VIDEO':
+          final videoType = attach['videoType'] as int?;
+          if (videoType == 1) {
+            // Кружочек (видеосообщение)
+            return '📹 Видеосообщение';
+          }
+          final count = message.attaches.where((a) => 
+            (a['_type'] ?? a['type']) == 'VIDEO'
+          ).length;
+          return count > 1 ? '🎬 Видео ($count)' : '🎬 Видео';
+        case 'VOICE':
+          return '🎤 Голосовое сообщение';
+        case 'AUDIO':
+          final title = attach['title'] as String? ?? attach['name'] as String?;
+          if (title != null && title.isNotEmpty) {
+            return '🎵 $title';
+          }
+          return '🎵 Аудио';
+        case 'FILE':
+          final fileName = attach['name'] as String?;
+          if (fileName != null && fileName.isNotEmpty) {
+            return '📎 $fileName';
+          }
+          return '📎 Файл';
+        case 'DOCUMENT':
+          final docName = attach['name'] as String?;
+          if (docName != null && docName.isNotEmpty) {
+            return '📄 $docName';
+          }
+          return '📄 Документ';
+        case 'GIF':
+          return '🎞 GIF';
+        case 'LOCATION':
+        case 'GEO':
+          return '📍 Местоположение';
+        case 'CONTACT':
+          final contactName = attach['name'] as String? ?? attach['firstName'] as String?;
+          if (contactName != null && contactName.isNotEmpty) {
+            return '👤 Контакт: $contactName';
+          }
+          return '👤 Контакт';
+        case 'POLL':
+          final question = attach['question'] as String?;
+          if (question != null && question.isNotEmpty) {
+            return '📊 $question';
+          }
+          return '📊 Опрос';
+        case 'CALL':
+        case 'call':
+          final callType = attach['callType'] as String? ?? 'AUDIO';
+          final hangupType = attach['hangupType'] as String? ?? '';
+          if (hangupType == 'MISSED') {
+            return callType == 'VIDEO' ? '📵 Пропущенный видеозвонок' : '📵 Пропущенный звонок';
+          } else if (hangupType == 'CANCELED') {
+            return callType == 'VIDEO' ? '📵 Видеозвонок отменён' : '📵 Звонок отменён';
+          } else if (hangupType == 'REJECTED') {
+            return callType == 'VIDEO' ? '📵 Видеозвонок отклонён' : '📵 Звонок отклонён';
+          }
+          return callType == 'VIDEO' ? '📹 Видеозвонок' : '📞 Звонок';
+        case 'FORWARD':
+          return 'Пересланное сообщение';
+        case 'REPLY':
+          return message.text.isNotEmpty ? message.text : 'Ответ';
+      }
+    }
+
+    // Если тип не распознан - возвращаем generic
+    return '📎 Вложение';
+  }
 
   StreamSubscription? listen() {
     return ApiService.instance.messages.listen((message) {
@@ -151,12 +251,52 @@ class MessageHandler {
 
   void _handleNewMessage(int chatId, Map<String, dynamic> payload) {
     final newMessage = Message.fromJson(payload['message']);
+    
+    // Дедупликация
+    final messageId = newMessage.id;
+    if (_processedMessageIds.contains(messageId)) return;
+    
+    _processedMessageIds.add(messageId);
+    if (_processedMessageIds.length > _maxProcessedMessages) {
+      _processedMessageIds.remove(_processedMessageIds.first);
+    }
+    
     ApiService.instance.clearCacheForChat(chatId);
 
+    // Получаем myId из профиля
+    int? myId;
+    final lastPayload = ApiService.instance.lastChatsPayload;
+    if (lastPayload != null) {
+      final profileData = lastPayload['profile'] as Map<String, dynamic>?;
+      final contactProfile = profileData?['contact'] as Map<String, dynamic>?;
+      myId = contactProfile?['id'] as int?;
+    }
+
+    // Не показываем уведомление для своих сообщений
+    bool shouldShowNotification = myId == null || newMessage.senderId != myId;
+    
     final int chatIndex = allChats.indexWhere((chat) => chat.id == chatId);
+    if (shouldShowNotification && chatIndex != -1) {
+      final oldChat = allChats[chatIndex];
+      if (newMessage.senderId == oldChat.ownerId) {
+        shouldShowNotification = false;
+      }
+    }
+
+    if (shouldShowNotification) {
+      final contact = contacts[newMessage.senderId];
+      final chatFromPayload = payload['chat'] as Map<String, dynamic>?;
+      
+      if (contact == null) {
+        _loadAndShowNotification(chatId, newMessage, newMessage.senderId, chatFromPayload);
+      } else {
+        _showNotificationWithContact(chatId, newMessage, contact, chatFromPayload);
+      }
+    }
 
     if (chatIndex != -1) {
       final oldChat = allChats[chatIndex];
+      
       final updatedChat = oldChat.copyWith(
         lastMessage: newMessage,
         newMessages: newMessage.senderId != oldChat.ownerId
@@ -522,5 +662,82 @@ class MessageHandler {
       allChats.insert(insertIndex, chat);
     }
   }
-}
 
+  /// Показать уведомление с известным контактом
+  void _showNotificationWithContact(int chatId, Message message, Contact contact, [Map<String, dynamic>? chatFromPayload]) async {
+    // Получаем данные чата
+    final effectiveChat = await _getEffectiveChat(chatId, chatFromPayload);
+
+    // Группы: chatId < 0 ИЛИ type='CHAT' ИЛИ isGroup
+    final isGroupChat = chatId < 0 || (effectiveChat != null && (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
+    final groupTitle = effectiveChat?.title ?? effectiveChat?.displayTitle ?? (isGroupChat ? 'Группа' : null);
+    final avatarUrl = isGroupChat 
+        ? (effectiveChat?.baseIconUrl ?? contact.photoBaseUrl)
+        : contact.photoBaseUrl;
+    
+    NotificationService().showMessageNotification(
+      chatId: chatId,
+      senderName: contact.name,
+      messageText: _getAttachmentPreviewText(message),
+      avatarUrl: avatarUrl,
+      isGroupChat: isGroupChat,
+      groupTitle: groupTitle,
+    );
+  }
+
+  /// Загрузить контакт и показать уведомление
+  void _loadAndShowNotification(int chatId, Message message, int userId, [Map<String, dynamic>? chatFromPayload]) {
+    ApiService.instance.fetchContactsByIds([userId]).then((contactsList) {
+      if (contactsList.isNotEmpty) {
+        final contact = contactsList.first;
+        contacts[userId] = contact;
+        _showNotificationWithContact(chatId, message, contact, chatFromPayload);
+      } else {
+        _showNotificationWithoutContact(chatId, message, userId, chatFromPayload);
+      }
+    }).catchError((_) {
+      _showNotificationWithoutContact(chatId, message, userId, chatFromPayload);
+    });
+  }
+
+  /// Показать уведомление без информации о контакте
+  void _showNotificationWithoutContact(int chatId, Message message, int userId, [Map<String, dynamic>? chatFromPayload]) async {
+    final effectiveChat = await _getEffectiveChat(chatId, chatFromPayload);
+
+    final isGroupChat = chatId < 0 || (effectiveChat != null && (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
+    final groupTitle = effectiveChat?.title ?? effectiveChat?.displayTitle ?? (isGroupChat ? 'Группа' : null);
+    final avatarUrl = isGroupChat ? effectiveChat?.baseIconUrl : null;
+    
+    NotificationService().showMessageNotification(
+      chatId: chatId,
+      senderName: 'Пользователь $userId',
+      messageText: _getAttachmentPreviewText(message),
+      avatarUrl: avatarUrl,
+      isGroupChat: isGroupChat,
+      groupTitle: groupTitle,
+    );
+  }
+
+  /// Получить данные чата из разных источников
+  Future<Chat?> _getEffectiveChat(int chatId, [Map<String, dynamic>? chatFromPayload]) async {
+    // Ищем в allChats
+    try {
+      return allChats.firstWhere((c) => c.id == chatId);
+    } catch (_) {}
+    
+    // Из payload
+    if (chatFromPayload != null) {
+      return Chat.fromJson(chatFromPayload);
+    }
+    
+    // Из кэша
+    try {
+      final cachedChatJson = await ChatCacheService().getChatById(chatId);
+      if (cachedChatJson != null) {
+        return Chat.fromJson(cachedChatJson);
+      }
+    } catch (_) {}
+    
+    return null;
+  }
+}
