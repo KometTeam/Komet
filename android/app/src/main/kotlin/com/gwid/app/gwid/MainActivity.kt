@@ -70,6 +70,13 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         }
                     }
+                    "updateForegroundServiceNotification" -> {
+                        // Обновить уведомление фонового сервиса с кнопкой действия
+                        val title = call.argument<String>("title") ?: "Komet"
+                        val content = call.argument<String>("content") ?: "Активно"
+                        notificationHelper.updateForegroundServiceNotification(title, content)
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }

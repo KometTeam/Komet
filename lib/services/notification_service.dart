@@ -27,6 +27,26 @@ class NotificationService {
 
   // MethodChannel для нативных уведомлений Android
   static const _nativeChannel = MethodChannel('com.gwid.app/notifications');
+  
+  static Future<void> updateForegroundServiceNotification({
+    String title = 'Komet',
+    String content = 'Активно',
+  }) async {
+    if (Platform.isAndroid) {
+      try {
+        await _nativeChannel.invokeMethod(
+          'updateForegroundServiceNotification',
+          {
+            'title': title,
+            'content': content,
+          },
+        );
+        print("✅ Уведомление фонового сервиса обновлено с кнопкой действия");
+      } catch (e) {
+        print("⚠️ Ошибка обновления уведомления фонового сервиса: $e");
+      }
+    }
+  }
 
   bool _initialized = false;
   GlobalKey<NavigatorState>? _navigatorKey;
@@ -1065,6 +1085,11 @@ Future<void> initializeBackgroundService() async {
       onBackground: onIosBackground,
     ),
   );
+  
+  if (Platform.isAndroid) {
+    await Future.delayed(const Duration(seconds: 1));
+    await NotificationService.updateForegroundServiceNotification();
+  }
 
   print("✅ Фоновый сервис настроен");
 }
@@ -1094,10 +1119,14 @@ void onStart(ServiceInstance service) async {
   Timer.periodic(const Duration(minutes: 5), (timer) async {
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
-        service.setForegroundNotificationInfo(
-          title: "Komet",
-          content: "Активно",
-        );
+        if (Platform.isAndroid) {
+          await NotificationService.updateForegroundServiceNotification();
+        } else {
+          service.setForegroundNotificationInfo(
+            title: "Komet",
+            content: "Активно",
+          );
+        }
       }
     }
 

@@ -14,6 +14,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
@@ -37,6 +38,11 @@ class NotificationHelper(private val context: Context) {
         const val CHANNEL_NAME = "Сообщения чатов"
         const val CHANNEL_DESC = "Уведомления о новых сообщениях"
         
+        const val BACKGROUND_SERVICE_CHANNEL_ID = "background_service"
+        const val BACKGROUND_SERVICE_CHANNEL_NAME = "Фоновый сервис"
+        const val BACKGROUND_SERVICE_CHANNEL_DESC = "Поддерживает приложение активным в фоне"
+        const val BACKGROUND_SERVICE_NOTIFICATION_ID = 888
+        
         // Хранилище сообщений для каждого чата (chatId -> список сообщений)
         private val chatMessages = mutableMapOf<Long, MutableList<MessageData>>()
         // Хранилище Person для каждого отправителя (senderKey -> Person)
@@ -45,6 +51,7 @@ class NotificationHelper(private val context: Context) {
 
     init {
         createNotificationChannel()
+        createBackgroundServiceChannel()
     }
 
     private fun createNotificationChannel() {
@@ -54,6 +61,21 @@ class NotificationHelper(private val context: Context) {
                 description = CHANNEL_DESC
                 enableVibration(true)
                 setShowBadge(true)
+            }
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+    
+    private fun createBackgroundServiceChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val importance = NotificationManager.IMPORTANCE_MIN
+            val channel = NotificationChannel(BACKGROUND_SERVICE_CHANNEL_ID, BACKGROUND_SERVICE_CHANNEL_NAME, importance).apply {
+                description = BACKGROUND_SERVICE_CHANNEL_DESC
+                enableVibration(false)
+                setShowBadge(false)
+                setSound(null, null)
+                enableLights(false)
             }
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
@@ -231,5 +253,59 @@ class NotificationHelper(private val context: Context) {
         canvas.drawBitmap(bitmap, srcRect, rect, paint)
 
         return output
+    }
+    
+    // Обновить уведомление фонового сервиса с кнопкой действия
+    fun updateForegroundServiceNotification(title: String, content: String) {
+        try {
+            // Создаём Intent для открытия настроек конкретного канала уведомлений
+            val settingsIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // Используем ACTION_CHANNEL_NOTIFICATION_SETTINGS для открытия настроек конкретного канала
+                Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    putExtra(Settings.EXTRA_CHANNEL_ID, BACKGROUND_SERVICE_CHANNEL_ID)
+                }
+            } else {
+                // Для старых версий Android открываем общие настройки приложения
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.parse("package:${context.packageName}")
+                }
+            }
+            
+            val settingsPendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                settingsIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            val compactTitle = "$title активен" // "Komet активен" 
+            
+            val expandedStyle = NotificationCompat.BigTextStyle()
+                .bigText("Нажмите, чтобы отключить это уведомление")
+                .setSummaryText(null)
+            
+            val builder = NotificationCompat.Builder(context, BACKGROUND_SERVICE_CHANNEL_ID)
+                .setSmallIcon(R.drawable.notification_icon)
+                .setContentTitle(compactTitle) // "Komet Активно" 
+                .setStyle(expandedStyle)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setOngoing(true) // Уведомление нельзя смахнуть
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setShowWhen(false) 
+                .setOnlyAlertOnce(true) 
+                .setContentIntent(settingsPendingIntent) // При нажатии на уведомление открываем настройки канала
+            
+            // Показываем уведомление
+            NotificationManagerCompat.from(context).notify(
+                BACKGROUND_SERVICE_NOTIFICATION_ID,
+                builder.build()
+            )
+            
+            android.util.Log.d("NotificationHelper", "Уведомление фонового сервиса обновлено с кнопкой действия")
+        } catch (e: Exception) {
+            android.util.Log.e("NotificationHelper", "Ошибка обновления уведомления фонового сервиса: ${e.message}")
+            e.printStackTrace()
+        }
     }
 }
