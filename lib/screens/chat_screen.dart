@@ -427,7 +427,7 @@ class _ChatScreenState extends State<ChatScreen> {
           );
           final isBottomItemVisible = bottomItemPosition.index == 0;
           final isAtBottom =
-              isBottomItemVisible && bottomItemPosition.itemTrailingEdge >= 0.9;
+              isBottomItemVisible && bottomItemPosition.itemLeadingEdge <= 0.25;
           if (isAtBottom) {
             _isScrollingToBottom = false;
             _showScrollToBottomNotifier.value = false;
@@ -559,6 +559,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _initializeChat();
     _loadEncryptionConfig();
     _loadSpecialMessagesSetting();
+    
+    ApiService.instance.currentActiveChatId = widget.chatId;
     
     // Очищаем накопленные уведомления для этого чата
     NotificationService().clearNotificationMessagesForChat(widget.chatId);
@@ -874,7 +876,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
         final isBottomItemVisible = bottomItemPosition.index == 0;
         final isAtBottom =
-            isBottomItemVisible && bottomItemPosition.itemTrailingEdge >= 0.9;
+            isBottomItemVisible && bottomItemPosition.itemLeadingEdge <= 0.25;
 
         _isUserAtBottom = isAtBottom;
 
@@ -3335,42 +3337,45 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             ),
                     ),
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 100),
-                      curve: Curves.easeOutQuad,
-                      right: 16,
-                      bottom:
-                          MediaQuery.of(context).viewInsets.bottom +
-                          MediaQuery.of(context).padding.bottom +
-                          80,
-                      child: AnimatedScale(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOutBack,
-                        scale: _showScrollToBottomNotifier.value ? 1.0 : 0.0,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 150),
-                          opacity: _showScrollToBottomNotifier.value
-                              ? 1.0
-                              : 0.0,
-                          child: Material(
-                            color: Colors.grey[800],
-                            shape: const CircleBorder(),
-                            elevation: 4,
-                            child: InkWell(
-                              onTap: _scrollToBottom,
-                              borderRadius: BorderRadius.circular(28),
-                              child: const SizedBox(
-                                width: 56,
-                                height: 56,
-                                child: Icon(
-                                  Icons.arrow_downward_rounded,
-                                  color: Colors.white,
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _showScrollToBottomNotifier,
+                      builder: (context, showArrow, child) {
+                        return AnimatedPositioned(
+                          duration: const Duration(milliseconds: 100),
+                          curve: Curves.easeOutQuad,
+                          right: 16,
+                          bottom:
+                              MediaQuery.of(context).viewInsets.bottom +
+                              MediaQuery.of(context).padding.bottom +
+                              80,
+                          child: AnimatedScale(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutBack,
+                            scale: showArrow ? 1.0 : 0.0,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 150),
+                              opacity: showArrow ? 1.0 : 0.0,
+                              child: Material(
+                                color: Colors.grey[800],
+                                shape: const CircleBorder(),
+                                elevation: 4,
+                                child: InkWell(
+                                  onTap: _scrollToBottom,
+                                  borderRadius: BorderRadius.circular(28),
+                                  child: const SizedBox(
+                                    width: 56,
+                                    height: 56,
+                                    child: Icon(
+                                      Icons.arrow_downward_rounded,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -5105,6 +5110,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    if (ApiService.instance.currentActiveChatId == widget.chatId) {
+      ApiService.instance.currentActiveChatId = null;
+    }
     _typingTimer?.cancel();
     _stopSelectionCheck();
     _apiSubscription?.cancel();

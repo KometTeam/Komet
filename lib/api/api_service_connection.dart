@@ -225,7 +225,11 @@ extension ApiServiceConnection on ApiService {
       conn_state.ConnectionState.connecting,
       message: 'Инициализация подключения',
     );
-    await _connectWithFallback();
+    try {
+      await _connectWithFallback();
+    } catch (e) {
+      _reconnect();
+    }
   }
 
   Future<void> reconnect() async {
@@ -233,7 +237,11 @@ extension ApiServiceConnection on ApiService {
     _currentUrlIndex = 0;
 
     _connectionStatusController.add("connecting");
-    await _connectWithFallback();
+    try {
+      await _connectWithFallback();
+    } catch (e) {
+      _reconnect();
+    }
   }
 
   Future<void> sendFullJsonRequest(String jsonString) async {
@@ -395,6 +403,7 @@ extension ApiServiceConnection on ApiService {
             _isSessionOnline = true;
             _isSessionReady = false;
             _reconnectDelaySeconds = 2;
+            _reconnectAttempts = 0;
             _connectionStatusController.add("authorizing");
             _updateConnectionState(
               conn_state.ConnectionState.connected,
@@ -688,14 +697,24 @@ extension ApiServiceConnection on ApiService {
     final jitter = (DateTime.now().millisecondsSinceEpoch % 1000) / 1000.0;
     final delay = Duration(seconds: _reconnectDelaySeconds + jitter.round());
 
-    _reconnectTimer = Timer(delay, () {
+    _reconnectTimer = Timer(delay, () async {
       _isReconnecting = false;
       _updateConnectionState(
         conn_state.ConnectionState.reconnecting,
         attemptNumber: _reconnectAttempts,
         reconnectDelay: delay,
       );
-      _connectWithFallback();
+      try {
+        await _connectWithFallback();
+      } catch (e) {
+        print('Ошибка при автоматическом переподключении: $e');
+        // Если подключение не удалось, _reconnect будет вызван снова через Timer
+        // Но так как _connectWithFallback уже сбросил _isConnecting в false,
+        // мы можем просто вызвать _reconnect() еще раз, если сокет все еще не подключен.
+        if (!_socketConnected) {
+          _reconnect();
+        }
+      }
     });
   }
 

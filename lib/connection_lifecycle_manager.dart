@@ -59,10 +59,13 @@ class _ConnectionLifecycleManagerState extends State<ConnectionLifecycleManager>
         _checkAndReconnectIfNeeded();
         break;
       case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
         ApiService.instance.setAppInForeground(false);
-        ApiService.instance.sendNavEvent('GO', screenTo: 1, screenFrom: 150);
-        break;
-      default:
+        if (state == AppLifecycleState.paused) {
+          ApiService.instance.sendNavEvent('GO', screenTo: 1, screenFrom: 150);
+        }
         break;
     }
   }

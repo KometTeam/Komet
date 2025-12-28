@@ -178,10 +178,12 @@ class ApiService {
 
   int _reconnectDelaySeconds = 2;
   int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 10;
+  static const int _maxReconnectAttempts = 1000;
   Timer? _reconnectTimer;
   bool _isReconnecting = false;
   bool _isConnecting = false;
+
+  int? currentActiveChatId;
 
   bool get isConnecting {
     if (_isConnecting || _isReconnecting) return true;
@@ -259,6 +261,8 @@ class ApiService {
       };
     }
   }
+
+  bool get isAppInForeground => _isAppInForeground;
 
   void setAppInForeground(bool isForeground) {
     _isAppInForeground = isForeground;

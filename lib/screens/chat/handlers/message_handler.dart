@@ -273,7 +273,14 @@ class MessageHandler {
     }
 
     // Не показываем уведомление для своих сообщений
-    bool shouldShowNotification = myId == null || newMessage.senderId != myId;
+    bool shouldShowNotification = (myId == null || newMessage.senderId != myId);
+    
+    // Если мы в приложении и в этом чате - не показываем уведомление
+    if (shouldShowNotification && 
+        ApiService.instance.isAppInForeground && 
+        ApiService.instance.currentActiveChatId == chatId) {
+      shouldShowNotification = false;
+    }
     
     final int chatIndex = allChats.indexWhere((chat) => chat.id == chatId);
     if (shouldShowNotification && chatIndex != -1) {
