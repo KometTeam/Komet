@@ -5674,7 +5674,6 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
   }
 
   void _logMenuBoxGeometry() {
-    if (!kDebugMode) return;
     final box = _menuKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
 
@@ -5683,10 +5682,11 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
     _lastLoggedSize = size;
 
     final offset = box.localToGlobal(Offset.zero);
+    
     debugPrint(
-      '[CtxMenuBox] pos=(${offset.dx.toStringAsFixed(1)},'
-      '${offset.dy.toStringAsFixed(1)}) size='
-      '(${size.width.toStringAsFixed(1)}x${size.height.toStringAsFixed(1)})',
+      '[CtxMenuBox] ACTUAL: pos=(${offset.dx.toStringAsFixed(1)},${offset.dy.toStringAsFixed(1)}) '
+      'size=(${size.width.toStringAsFixed(1)}x${size.height.toStringAsFixed(1)}) '
+      'safeBounds=(L:$_safeLeft, R:$_safeRight, T:$_safeTop, B:$_safeBottom)'
     );
 
     // Если меню вышло за границы, повторно спозиционируем с учетом фактического размера.
@@ -5711,6 +5711,7 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
     }
 
     if (needsAdjust) {
+      debugPrint('[CtxMenuBox] ADJUSTING to: ($newLeft, $newTop)');
       setState(() {
         _overrideLeft = newLeft;
         _overrideTop = newTop;
@@ -5961,9 +5962,8 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
 
     final double estimatedMenuHeight = widget.isPending
       ? 180.0
-      : (_isEmojiListExpanded ? 340.0 : 260.0);
+      : (_isEmojiListExpanded ? 550.0 : 480.0);
 
-    // Начальное позиционирование — по оценочной высоте, а затем корректировка после реального измерения.
     final double menuHeightForPosition =
       estimatedMenuHeight.clamp(180.0, maxMenuHeight);
 
@@ -5971,63 +5971,45 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
     double top;
 
     if (widget.isPending) {
-      // For pending messages keep the compact menu centered near the tap point.
       left = widget.position.dx - (menuWidth / 2);
       top = widget.position.dy - (menuHeightForPosition / 2);
     } else {
-      left = widget.position.dx - (menuWidth / 4);
-      top = widget.position.dy;
+      // Если тап в правой части экрана, меню открывается влево от тапа
+      if (widget.position.dx > screenSize.width / 2) {
+        left = widget.position.dx - menuWidth + 10;
+      } else {
+        // Если в левой — вправо
+        left = widget.position.dx - 10;
+      }
+      top = widget.position.dy - 40;
     }
 
-    _safeLeft = viewPadding.left + padding;
-    _safeRight = screenSize.width - viewPadding.right - padding;
-    if (left + menuWidth > _safeRight) {
-      left = _safeRight - menuWidth;
-    }
-    if (left < _safeLeft) {
-      left = _safeLeft;
-    }
-
+    _safeLeft = padding;
+    _safeRight = screenSize.width - padding;
     _safeTop = viewPadding.top + padding;
-    _safeBottom =
-        screenSize.height - viewInsets.bottom - viewPadding.bottom - padding;
-    if (top + menuHeightForPosition > _safeBottom) {
-      top = _safeBottom - menuHeightForPosition;
-    }
-    if (top < _safeTop) {
-      top = _safeTop;
-    }
+    _safeBottom = screenSize.height - viewInsets.bottom - viewPadding.bottom - padding - 30;
 
-    if (_overrideLeft != null) {
-      left = _overrideLeft!;
-    }
-    if (_overrideTop != null) {
-      top = _overrideTop!;
-    }
+    if (left + menuWidth > _safeRight) left = _safeRight - menuWidth;
+    if (left < _safeLeft) left = _safeLeft;
+    if (top + menuHeightForPosition > _safeBottom) top = _safeBottom - menuHeightForPosition;
+    if (top < _safeTop) top = _safeTop;
 
-    if (kDebugMode) {
-      debugPrint(
-        '[CtxMenu] tap=(${widget.position.dx.toStringAsFixed(1)},'
-        '${widget.position.dy.toStringAsFixed(1)}) '
-        'pos=(${left.toStringAsFixed(1)},${top.toStringAsFixed(1)}) '
-        'size=(${menuWidth.toStringAsFixed(0)}x${menuHeightForPosition.toStringAsFixed(1)}) '
-        'screen=${screenSize.width.toStringAsFixed(1)}x${screenSize.height.toStringAsFixed(1)} '
-        'insets=${viewInsets.left},${viewInsets.top},${viewInsets.right},${viewInsets.bottom} '
-        'padding=${viewPadding.left},${viewPadding.top},${viewPadding.right},${viewPadding.bottom} '
-        'safeH=${availableHeight.toStringAsFixed(1)} maxH=${maxMenuHeight.toStringAsFixed(1)}',
-      );
-    }
+    if (_overrideLeft != null) left = _overrideLeft!;
+    if (_overrideTop != null) top = _overrideTop!;
+
+    debugPrint('[CtxMenu] CALC: tap=${widget.position.dx.toInt()},${widget.position.dy.toInt()} pos=${left.toInt()},${top.toInt()}');
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _logMenuBoxGeometry());
 
-    return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.1),
-      body: Stack(
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
         children: [
           Positioned.fill(
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () => Navigator.of(context).pop(),
-              child: Container(color: Colors.transparent),
+              child: Container(color: Colors.black.withOpacity(0.1)),
             ),
           ),
           Positioned(
@@ -6035,27 +6017,30 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
             left: left,
             child: ScaleTransition(
               scale: _scaleAnimation,
-              alignment: Alignment.topCenter,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: themeProvider.messageMenuBlur,
-                    sigmaY: themeProvider.messageMenuBlur,
-                  ),
-                  child: Card(
-                    key: _menuKey,
-                    elevation: 8,
-                    color: theme.colorScheme.surface.withOpacity(
-                      themeProvider.messageMenuOpacity,
+              alignment: widget.position.dx > screenSize.width / 2 
+                  ? Alignment.topRight 
+                  : Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: menuWidth,
+                  maxHeight: maxMenuHeight,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: themeProvider.messageMenuBlur,
+                      sigmaY: themeProvider.messageMenuBlur,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: menuWidth,
-                        maxHeight: maxMenuHeight,
+                    child: Card(
+                      key: _menuKey,
+                      elevation: 8,
+                      margin: EdgeInsets.zero,
+                      color: theme.colorScheme.surface.withOpacity(
+                        themeProvider.messageMenuOpacity,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(8.0),
