@@ -78,7 +78,9 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
         ? (isMaterialYou ? colors.primaryContainer : theme.myBubbleColorDark)
         : (isMaterialYou ? colors.primaryContainer : theme.myBubbleColorLight);
     final Color? theirBubbleColorToShow = isCurrentlyDark
-        ? (isMaterialYou ? colors.secondaryContainer : theme.theirBubbleColorDark)
+        ? (isMaterialYou
+              ? colors.secondaryContainer
+              : theme.theirBubbleColorDark)
         : (isMaterialYou
               ? colors.secondaryContainer
               : theme.theirBubbleColorLight);
@@ -130,8 +132,9 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 child: Opacity(
                   opacity: isMaterialYou ? 0.5 : 1.0,
                   child: AppThemeSelector(
-                    selectedTheme:
-                        isMaterialYou ? theme.lastNonSystemTheme : theme.appTheme,
+                    selectedTheme: isMaterialYou
+                        ? theme.lastNonSystemTheme
+                        : theme.appTheme,
                     onChanged: (appTheme) => theme.setTheme(appTheme),
                   ),
                 ),
@@ -171,7 +174,8 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                       icon: Icons.image,
                       title: "Тип обоев",
                       child: DropdownButton<ChatWallpaperType>(
-                        value: theme.chatWallpaperType == ChatWallpaperType.komet
+                        value:
+                            theme.chatWallpaperType == ChatWallpaperType.komet
                             ? ChatWallpaperType.solid
                             : theme.chatWallpaperType,
                         underline: const SizedBox.shrink(),
@@ -181,11 +185,12 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                         items: ChatWallpaperType.values
                             .where((type) => type != ChatWallpaperType.komet)
                             .map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Text(type.displayName),
-                          );
-                        }).toList(),
+                              return DropdownMenuItem(
+                                value: type,
+                                child: Text(type.displayName),
+                              );
+                            })
+                            .toList(),
                       ),
                     ),
                     if (theme.chatWallpaperType == ChatWallpaperType.solid ||
@@ -366,26 +371,26 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                       _CustomSettingTile(
                         icon: Icons.format_color_fill,
                         title: "Тип отображения",
-                    child: IgnorePointer(
-                      ignoring: isMaterialYou,
-                      child: Opacity(
-                        opacity: isMaterialYou ? 0.5 : 1.0,
-                        child: DropdownButton<MessageBubbleType>(
-                          value: theme.messageBubbleType,
-                          underline: const SizedBox.shrink(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              theme.setMessageBubbleType(value);
-                            }
-                          },
-                          items: MessageBubbleType.values.map((type) {
-                            return DropdownMenuItem(
-                              value: type,
-                              child: Text(type.displayName),
-                            );
-                          }).toList(),
-                        ),
-                      ),
+                        child: IgnorePointer(
+                          ignoring: isMaterialYou,
+                          child: Opacity(
+                            opacity: isMaterialYou ? 0.5 : 1.0,
+                            child: DropdownButton<MessageBubbleType>(
+                              value: theme.messageBubbleType,
+                              underline: const SizedBox.shrink(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  theme.setMessageBubbleType(value);
+                                }
+                              },
+                              items: MessageBubbleType.values.map((type) {
+                                return DropdownMenuItem(
+                                  value: type,
+                                  child: Text(type.displayName),
+                                );
+                              }).toList(),
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -394,28 +399,29 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   _CustomSettingTile(
                     icon: Icons.palette,
                     title: "Цвет моих сообщений",
-                child: IgnorePointer(
-                  ignoring: isMaterialYou,
-                  child: Opacity(
-                    opacity: isMaterialYou ? 0.5 : 1.0,
-                    child: GestureDetector(
-                      onTap: () async {
-                        final initial = myBubbleColorToShow ?? myBubbleFallback;
-                        _showColorPicker(
-                          context,
-                          initialColor: initial,
-                          onColorChanged: (color) => myBubbleSetter(color),
-                        );
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: myBubbleColorToShow ?? myBubbleFallback,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey),
-                        ),
-                      ),
+                    child: IgnorePointer(
+                      ignoring: isMaterialYou,
+                      child: Opacity(
+                        opacity: isMaterialYou ? 0.5 : 1.0,
+                        child: GestureDetector(
+                          onTap: () async {
+                            final initial =
+                                myBubbleColorToShow ?? myBubbleFallback;
+                            _showColorPicker(
+                              context,
+                              initialColor: initial,
+                              onColorChanged: (color) => myBubbleSetter(color),
+                            );
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: myBubbleColorToShow ?? myBubbleFallback,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -424,29 +430,31 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   _CustomSettingTile(
                     icon: Icons.palette_outlined,
                     title: "Цвет сообщений собеседника",
-                child: IgnorePointer(
-                  ignoring: isMaterialYou,
-                  child: Opacity(
-                    opacity: isMaterialYou ? 0.5 : 1.0,
-                    child: GestureDetector(
-                      onTap: () async {
-                        final initial =
-                            theirBubbleColorToShow ?? theirBubbleFallback;
-                        _showColorPicker(
-                          context,
-                          initialColor: initial,
-                          onColorChanged: (color) => theirBubbleSetter(color),
-                        );
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: theirBubbleColorToShow ?? theirBubbleFallback,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey),
-                        ),
-                      ),
+                    child: IgnorePointer(
+                      ignoring: isMaterialYou,
+                      child: Opacity(
+                        opacity: isMaterialYou ? 0.5 : 1.0,
+                        child: GestureDetector(
+                          onTap: () async {
+                            final initial =
+                                theirBubbleColorToShow ?? theirBubbleFallback;
+                            _showColorPicker(
+                              context,
+                              initialColor: initial,
+                              onColorChanged: (color) =>
+                                  theirBubbleSetter(color),
+                            );
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color:
+                                  theirBubbleColorToShow ?? theirBubbleFallback,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -506,6 +514,62 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                     displayValue: theme.profileDialogBlur.toStringAsFixed(1),
                   ),
                 ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _ModernSection(
+            title: "Чаты",
+            children: [
+              const SizedBox(height: 8),
+              _CustomSettingTile(
+                icon: Icons.chat_outlined,
+                title: "Превью в списке чатов",
+                subtitle: "Отображение имен отправителей в превью сообщений",
+                child: Builder(
+                  builder: (context) {
+                    final localColors = Theme.of(context).colorScheme;
+                    final theme = context.watch<ThemeProvider>();
+                    return DropdownButton<ChatPreviewMode>(
+                      value: theme.chatPreviewMode,
+                      onChanged: (ChatPreviewMode? value) {
+                        if (value != null) {
+                          theme.setChatPreviewMode(value);
+                        }
+                      },
+                      items: ChatPreviewMode.values.map((mode) {
+                        String text;
+                        String subtitle;
+                        switch (mode) {
+                          case ChatPreviewMode.twoLine:
+                            text = "Двустрочно";
+                            subtitle = "Имя чата + Имя: сообщение";
+                            break;
+                          case ChatPreviewMode.threeLine:
+                            text = "Трехстрочно";
+                            subtitle = "Имя чата\nИмя отправителя\nСообщение";
+                            break;
+                          case ChatPreviewMode.noNicknames:
+                            text = "Без имен";
+                            subtitle = "Показывать только имя чата";
+                            break;
+                        }
+                        return DropdownMenuItem(
+                          value: mode,
+                          child: Text(
+                            text,
+                            style: TextStyle(color: localColors.onSurface),
+                          ),
+                        );
+                      }).toList(),
+                      underline: const SizedBox(),
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: localColors.onSurfaceVariant,
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -1015,16 +1079,17 @@ class _ThemeManagementSection extends StatelessWidget {
           final tempDir = await getTemporaryDirectory();
           final tempFile = File('${tempDir.path}/$fileName');
           await tempFile.writeAsBytes(bytes);
-          
-          final result = await Share.shareXFiles(
-            [XFile(tempFile.path)],
-            text: 'Экспорт темы: ${preset.name}',
-          );
+
+          final result = await Share.shareXFiles([
+            XFile(tempFile.path),
+          ], text: 'Экспорт темы: ${preset.name}');
 
           if (context.mounted) {
             if (result.status == ShareResultStatus.success) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Тема "${preset.name}" экспортирована.')),
+                SnackBar(
+                  content: Text('Тема "${preset.name}" экспортирована.'),
+                ),
               );
             }
           }
@@ -1128,12 +1193,19 @@ class _ThemeManagementSection extends StatelessWidget {
               },
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     Icon(
-                      isActive ? Icons.check_circle : Icons.radio_button_unchecked,
-                      color: isActive ? colors.primary : colors.onSurfaceVariant,
+                      isActive
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      color: isActive
+                          ? colors.primary
+                          : colors.onSurfaceVariant,
                       size: 24,
                     ),
                     const SizedBox(width: 16),
@@ -1141,7 +1213,9 @@ class _ThemeManagementSection extends StatelessWidget {
                       child: Text(
                         preset.name,
                         style: TextStyle(
-                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight: isActive
+                              ? FontWeight.w600
+                              : FontWeight.w500,
                           fontSize: 15,
                           color: colors.onSurface,
                         ),
@@ -1154,13 +1228,17 @@ class _ThemeManagementSection extends StatelessWidget {
                           IconButton(
                             icon: const Icon(Icons.edit_outlined, size: 20),
                             tooltip: "Переименовать",
-                            onPressed: () => _showRenameDialog(context, theme, preset),
+                            onPressed: () =>
+                                _showRenameDialog(context, theme, preset),
                             style: IconButton.styleFrom(
                               padding: const EdgeInsets.all(8),
                             ),
                           ),
                         IconButton(
-                          icon: const Icon(Icons.file_upload_outlined, size: 20),
+                          icon: const Icon(
+                            Icons.file_upload_outlined,
+                            size: 20,
+                          ),
                           tooltip: "Экспорт",
                           onPressed: () => _doExport(context, theme, preset),
                           style: IconButton.styleFrom(
@@ -1171,8 +1249,11 @@ class _ThemeManagementSection extends StatelessWidget {
                           IconButton(
                             icon: const Icon(Icons.delete_outline, size: 20),
                             tooltip: "Удалить",
-                            onPressed: () =>
-                                _showConfirmDeleteDialog(context, theme, preset),
+                            onPressed: () => _showConfirmDeleteDialog(
+                              context,
+                              theme,
+                              preset,
+                            ),
                             style: IconButton.styleFrom(
                               padding: const EdgeInsets.all(8),
                             ),
@@ -1288,11 +1369,7 @@ class _CustomSettingTile extends StatelessWidget {
               color: colors.primaryContainer.withOpacity(0.3),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: colors.primary,
-              size: 20,
-            ),
+            child: Icon(icon, color: colors.primary, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -1450,11 +1527,7 @@ class _SliderTile extends StatelessWidget {
           Row(
             children: [
               if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: 18,
-                  color: colors.onSurfaceVariant,
-                ),
+                Icon(icon, size: 18, color: colors.onSurfaceVariant),
                 const SizedBox(width: 12),
               ],
               Expanded(
@@ -1468,7 +1541,10 @@ class _SliderTile extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: colors.primaryContainer.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(12),
@@ -1537,7 +1613,6 @@ class AppThemeSelector extends StatelessWidget {
   }
 }
 
-
 class _MessagePreviewSection extends StatelessWidget {
   const _MessagePreviewSection();
 
@@ -1599,7 +1674,9 @@ class _MessagePreviewSection extends StatelessWidget {
                         ),
                         child: Container(
                           height: 40,
-                          color: colors.surface.withOpacity(theme.topBarOpacity),
+                          color: colors.surface.withOpacity(
+                            theme.topBarOpacity,
+                          ),
                           child: Row(
                             children: [
                               const SizedBox(width: 16),
@@ -1651,8 +1728,9 @@ class _MessagePreviewSection extends StatelessWidget {
                         ),
                         child: Container(
                           height: 40,
-                          color:
-                              colors.surface.withOpacity(theme.bottomBarOpacity),
+                          color: colors.surface.withOpacity(
+                            theme.bottomBarOpacity,
+                          ),
                           child: Row(
                             children: [
                               const SizedBox(width: 16),
@@ -1925,10 +2003,7 @@ class _ExpandableSectionState extends State<_ExpandableSection>
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     if (_isExpanded) {
       _controller.value = 1.0;
     }
@@ -1990,10 +2065,7 @@ class _ExpandableSectionState extends State<_ExpandableSection>
         SizeTransition(
           sizeFactor: _animation,
           child: Column(
-            children: [
-              const SizedBox(height: 8),
-              ...widget.children,
-            ],
+            children: [const SizedBox(height: 8), ...widget.children],
           ),
         ),
       ],
@@ -2030,17 +2102,14 @@ class _ActionTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: (isDestructive
-                        ? colors.errorContainer
-                        : colors.primaryContainer)
-                    .withOpacity(0.3),
+                color:
+                    (isDestructive
+                            ? colors.errorContainer
+                            : colors.primaryContainer)
+                        .withOpacity(0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                icon,
-                color: iconColor,
-                size: 20,
-              ),
+              child: Icon(icon, color: iconColor, size: 20),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -2053,11 +2122,7 @@ class _ActionTile extends StatelessWidget {
                 ),
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: colors.onSurfaceVariant,
-              size: 20,
-            ),
+            Icon(Icons.chevron_right, color: colors.onSurfaceVariant, size: 20),
           ],
         ),
       ),

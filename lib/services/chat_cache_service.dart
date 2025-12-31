@@ -407,4 +407,61 @@ class ChatCacheService {
       return false;
     }
   }
+
+  /// Модель для состояния ввода чата
+  static const String _chatInputStateKey = 'chat_input_state';
+
+  Future<void> saveChatInputState(int chatId, {
+    required String text,
+    required List<Map<String, dynamic>> elements,
+    Map<String, dynamic>? replyingToMessage,
+  }) async {
+    try {
+      final key = '$_chatInputStateKey$chatId';
+      final state = {
+        'text': text,
+        'elements': elements,
+        'replyingToMessage': replyingToMessage,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+
+      // Если текст пустой, удаляем состояние
+      if (text.trim().isEmpty) {
+        await _cacheService.remove(key);
+        print('Состояние ввода для чата $chatId очищено (пустой текст)');
+      } else {
+        await _cacheService.set(key, state, ttl: const Duration(days: 7));
+        print('Состояние ввода сохранено для чата $chatId');
+      }
+    } catch (e) {
+      print('Ошибка сохранения состояния ввода для чата $chatId: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getChatInputState(int chatId) async {
+    try {
+      final key = '$_chatInputStateKey$chatId';
+      final cached = await _cacheService.get<Map<String, dynamic>>(
+        key,
+        ttl: const Duration(days: 7),
+      );
+      if (cached != null) {
+        print('Загружено состояние ввода для чата $chatId');
+        return cached;
+      }
+    } catch (e) {
+      print('Ошибка загрузки состояния ввода для чата $chatId: $e');
+    }
+    return null;
+  }
+
+  Future<void> clearChatInputState(int chatId) async {
+    try {
+      final key = '$_chatInputStateKey$chatId';
+      await _cacheService.remove(key);
+      print('Состояние ввода для чата $chatId очищено');
+    } catch (e) {
+      print('Ошибка очистки состояния ввода для чата $chatId: $e');
+    }
+  }
 }

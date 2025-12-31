@@ -20,6 +20,8 @@ enum UIMode { both, burgerOnly, panelOnly }
 
 enum MessageBubbleType { solid }
 
+enum ChatPreviewMode { twoLine, threeLine, noNicknames }
+
 extension MessageBubbleTypeExtension on MessageBubbleType {
   String get displayName {
     switch (this) {
@@ -683,6 +685,7 @@ class ThemeProvider with ChangeNotifier {
 
   bool _blockBypass = false;
   bool _highQualityPhotos = true;
+  ChatPreviewMode _chatPreviewMode = ChatPreviewMode.twoLine;
   bool _optimization = false;
   bool _showFpsOverlay = false;
   int _maxFrameRate = 60;
@@ -822,6 +825,7 @@ class ThemeProvider with ChangeNotifier {
   Color get folderTabsGradientColor2 => _activeTheme.folderTabsGradientColor2;
   bool get highQualityPhotos => _highQualityPhotos;
   bool get blockBypass => _blockBypass;
+  ChatPreviewMode get chatPreviewMode => _chatPreviewMode;
   bool get optimization => _optimization;
   bool get showFpsOverlay => _showFpsOverlay;
   int get maxFrameRate => _maxFrameRate;
@@ -911,6 +915,7 @@ class ThemeProvider with ChangeNotifier {
     _debugReadOnAction = prefs.getBool('debug_read_on_action') ?? true;
     _highQualityPhotos = prefs.getBool('high_quality_photos') ?? true;
     _blockBypass = prefs.getBool('block_bypass') ?? false;
+    _chatPreviewMode = ChatPreviewMode.values[prefs.getInt('chat_preview_mode') ?? 0];
     _optimization = prefs.getBool('optimization') ?? false;
     _showFpsOverlay = prefs.getBool('show_fps_overlay') ?? false;
     _maxFrameRate = prefs.getInt('max_frame_rate') ?? 60;
@@ -1512,6 +1517,13 @@ class ThemeProvider with ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('block_bypass', _blockBypass);
+  }
+
+  Future<void> setChatPreviewMode(ChatPreviewMode value) async {
+    _chatPreviewMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('chat_preview_mode', _chatPreviewMode.index);
   }
 
   Future<void> setShowFpsOverlay(bool value) async {

@@ -305,9 +305,7 @@ extension ApiServiceConnection on ApiService {
     final packet = _packPacket(10, 0, seq, opcode, payload);
 
     _log('📤 ОТПРАВКА: ver=10, cmd=0, seq=$seq, opcode=$opcode');
-    if (opcode != 19) {
       _log('📤 PAYLOAD: ${truncatePayloadObjectForLog(payload)}');
-    }
     _log('📤 Размер пакета: ${packet.length} байт');
 
     try {
@@ -446,7 +444,7 @@ extension ApiServiceConnection on ApiService {
 
             if (error != null && error['error'] == 'proto.state') {
               print('⚠️ Ошибка proto.state: сессия не готова для этого запроса');
-              // Если это ошибка отправки сообщения - возвращаем в очередь
+             
               if (decodedMessage['opcode'] == 64) {
                 final messagePayload = decodedMessage['payload'];
                 if (messagePayload != null && messagePayload['message'] != null) {

@@ -3435,7 +3435,7 @@ class _ChatsScreenState extends State<ChatsScreen>
   Widget _buildLastMessagePreview(Chat chat) {
     final message = chat.lastMessage;
     final colors = Theme.of(context).colorScheme;
-    
+
     // Проверяем, наше ли последнее сообщение
     final isMyMessage = _myProfile != null && message.senderId == _myProfile!.id;
 
@@ -3450,7 +3450,26 @@ class _ChatsScreenState extends State<ChatsScreen>
 
     Widget messagePreview;
     if (message.text.isEmpty && message.attaches.isNotEmpty) {
-      messagePreview = Text('Вложение', maxLines: 1, overflow: TextOverflow.ellipsis);
+      // Проверяем, есть ли фото или контакты среди вложений
+      final hasPhoto = message.attaches.any((attach) => attach['_type'] == 'PHOTO');
+      final hasContact = message.attaches.any((attach) => attach['_type'] == 'CONTACT');
+
+      if (hasPhoto) {
+        messagePreview = _buildPhotoAttachmentPreview(message);
+      } else if (hasContact) {
+        messagePreview = _buildContactAttachmentPreview(message);
+      } else {
+        final attachmentText = _getAttachmentTypeText(message.attaches);
+        messagePreview = Text(attachmentText, maxLines: 1, overflow: TextOverflow.ellipsis);
+      }
+    } else if (message.attaches.isNotEmpty) {
+      // Есть и текст и вложения - проверяем фото
+      final hasPhoto = message.attaches.any((attach) => attach['_type'] == 'PHOTO');
+      if (hasPhoto) {
+        messagePreview = _buildPhotoWithCaptionPreview(message);
+      } else {
+        messagePreview = Text(message.text, maxLines: 1, overflow: TextOverflow.ellipsis);
+      }
     } else {
       messagePreview = Text(message.text, maxLines: 1, overflow: TextOverflow.ellipsis);
     }
@@ -3475,6 +3494,332 @@ class _ChatsScreenState extends State<ChatsScreen>
     return messagePreview;
   }
 
+  Widget _buildPhotoAttachmentPreview(Message message) {
+    final photoUrl = _extractFirstPhotoUrl(message.attaches);
+    if (photoUrl == null) {
+      return Text('Вложение', maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CachedNetworkImage(
+              imageUrl: photoUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: Icon(
+                  Icons.photo,
+                  size: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: Icon(
+                  Icons.photo,
+                  size: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Вложение',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContactAttachmentPreview(Message message) {
+    final contactData = _extractFirstContactData(message.attaches);
+    if (contactData == null) {
+      return Text('Контакт', maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
+
+    final name = contactData['name']!;
+    final photoUrl = contactData['photoUrl'];
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: photoUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: photoUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      child: Icon(
+                        Icons.person,
+                        size: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      child: Icon(
+                        Icons.person,
+                        size: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : Container(
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    child: Icon(
+                      Icons.person,
+                      size: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface, // Белый цвет вместо серого
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhotoWithCaptionPreview(Message message) {
+    final photoUrl = _extractFirstPhotoUrl(message.attaches);
+    if (photoUrl == null) {
+      return Text(message.text, maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CachedNetworkImage(
+              imageUrl: photoUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: Icon(
+                  Icons.photo,
+                  size: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: Icon(
+                  Icons.photo,
+                  size: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            message.text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _extractFirstPhotoUrl(List<Map<String, dynamic>> attaches) {
+    for (final attach in attaches) {
+      if (attach['_type'] == 'PHOTO') {
+        final dynamic url = attach['url'] ?? attach['baseUrl'];
+        if (url is String && url.isNotEmpty) {
+          return url;
+        }
+      }
+    }
+    return null;
+  }
+
+  Map<String, String?>? _extractFirstContactData(List<Map<String, dynamic>> attaches) {
+    for (final attach in attaches) {
+      if (attach['_type'] == 'CONTACT') {
+        final name = attach['name'] as String?;
+        final firstName = attach['firstName'] as String?;
+        final lastName = attach['lastName'] as String?;
+        final photoUrl = attach['photoUrl'] as String? ?? attach['baseUrl'] as String?;
+
+        // Формируем отображаемое имя
+        String displayName;
+        if (name != null && name.isNotEmpty) {
+          displayName = name;
+        } else if (firstName != null && lastName != null) {
+          displayName = '$firstName $lastName';
+        } else if (firstName != null) {
+          displayName = firstName;
+        } else {
+          displayName = 'Контакт';
+        }
+
+        return {
+          'name': displayName,
+          'photoUrl': photoUrl,
+        };
+      }
+    }
+    return null;
+  }
+
+  String _getAttachmentTypeText(List<Map<String, dynamic>> attaches) {
+    // Проверяем типы вложений в порядке приоритета
+    // Контакты обрабатываются отдельно с превью
+    if (attaches.any((attach) => attach['_type'] == 'VIDEO')) {
+      return 'Видео';
+    }
+    if (attaches.any((attach) => attach['_type'] == 'AUDIO')) {
+      return 'Аудио';
+    }
+    if (attaches.any((attach) => attach['_type'] == 'MUSIC')) {
+      return 'Музыка';
+    }
+    if (attaches.any((attach) => attach['_type'] == 'STICKER')) {
+      return 'Стикер';
+    }
+    if (attaches.any((attach) => attach['_type'] == 'CONTACT')) {
+      return 'Контакт';
+    }
+    if (attaches.any((attach) => attach['_type'] == 'FILE')) {
+      return 'Файл';
+    }
+    if (attaches.any((attach) => attach['_type'] == 'INLINE_KEYBOARD')) {
+      return 'Кнопки';
+    }
+
+    // Если есть другие типы или ничего не найдено
+    return 'Вложение';
+  }
+
+  String _getSenderDisplayName(Chat chat, Message message) {
+    // Если это наша группа или канал, показываем имя отправителя
+    final isGroupChat = _isGroupChat(chat);
+    final isChannel = chat.type == 'CHANNEL';
+
+    if (!isGroupChat && !isChannel) {
+      // В личных чатах не показываем имя отправителя
+      return '';
+    }
+
+    // Получаем контакт отправителя
+    final contact = _contacts[message.senderId];
+    if (contact != null) {
+      return getContactDisplayName(
+        contactId: contact.id,
+        originalName: contact.name,
+        originalFirstName: contact.firstName,
+        originalLastName: contact.lastName,
+      );
+    }
+
+    // Если не нашли контакт, возвращаем пустую строку
+    return '';
+  }
+
+  Widget _buildChatSubtitle(Chat chat) {
+    final theme = context.watch<ThemeProvider>();
+    final colors = Theme.of(context).colorScheme;
+
+    if (chat.lastMessage.text.contains("welcome.saved.dialog.message")) {
+      return _buildWelcomeMessage();
+    }
+
+    final message = chat.lastMessage;
+    final senderName = _getSenderDisplayName(chat, message);
+
+    switch (theme.chatPreviewMode) {
+      case ChatPreviewMode.twoLine:
+        // Двустрочно: имя отправителя + сообщение (если есть имя)
+        if (senderName.isNotEmpty) {
+          final messagePreview = _buildLastMessagePreview(chat);
+          if (messagePreview is Text) {
+            return RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$senderName: ',
+                    style: TextStyle(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  TextSpan(
+                    text: messagePreview.data ?? '',
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+        // Если нет имени отправителя, показываем обычное превью
+        return _buildLastMessagePreview(chat);
+
+      case ChatPreviewMode.threeLine:
+        // Трехстрочно: имя чата + имя отправителя + сообщение
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (senderName.isNotEmpty)
+              Text(
+                senderName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.onSurface,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            _buildLastMessagePreview(chat),
+          ],
+        );
+
+      case ChatPreviewMode.noNicknames:
+        // Без имен: только сообщение
+        return _buildLastMessagePreview(chat);
+    }
+  }
+
   Widget _buildSearchMessagePreview(Chat chat, String matchedText) {
     final message = chat.lastMessage;
 
@@ -3490,9 +3835,21 @@ class _ChatsScreenState extends State<ChatsScreen>
     }
 
     if (message.text.isEmpty && message.attaches.isNotEmpty) {
-      return Text('Вложение', maxLines: 1, overflow: TextOverflow.ellipsis);
+      // Проверяем, есть ли фото или контакты среди вложений
+      final hasPhoto = message.attaches.any((attach) => attach['_type'] == 'PHOTO');
+      final hasContact = message.attaches.any((attach) => attach['_type'] == 'CONTACT');
+
+      if (hasPhoto) {
+        return _buildPhotoAttachmentPreview(message);
+      } else if (hasContact) {
+        return _buildContactAttachmentPreview(message);
+      } else {
+        final attachmentText = _getAttachmentTypeText(message.attaches);
+        return Text(attachmentText, maxLines: 1, overflow: TextOverflow.ellipsis);
+      }
     }
 
+    // Для поиска выделяем найденный текст
     return _buildHighlightedText(message.text, matchedText);
   }
 
@@ -3754,9 +4111,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           ),
         ],
       ),
-      subtitle: chat.lastMessage.text.contains("welcome.saved.dialog.message")
-          ? _buildWelcomeMessage()
-          : _buildLastMessagePreview(chat),
+      subtitle: _buildChatSubtitle(chat),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,

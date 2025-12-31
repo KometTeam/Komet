@@ -235,7 +235,7 @@ class _AuthSettingsScreenState extends State<AuthSettingsScreen>
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Text(
-                                  'Эти настройки помогут вам безопасно и анонимно использовать приложение',
+                                  'Иногда, забавные вещи могут быть наказуемы',
                                   style: GoogleFonts.manrope(
                                     textStyle: textTheme.bodyMedium,
                                     color: colors.onSurfaceVariant,

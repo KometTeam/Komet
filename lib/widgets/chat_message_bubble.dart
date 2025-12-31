@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:io' show File;
 import 'dart:convert' show base64Decode, jsonDecode, jsonEncode;
 import 'package:http/http.dart' as http;
@@ -40,6 +41,49 @@ import 'package:gwid/widgets/message_bubble/widgets/media/audio_player_widget.da
 import 'package:gwid/widgets/message_bubble/utils/user_color_helper.dart';
 import 'package:gwid/widgets/message_bubble/widgets/dialogs/custom_emoji_dialog.dart';
 
+class DomainLinkifier extends Linkifier {
+  const DomainLinkifier();
+
+  @override
+  List<LinkifyElement> parse(List<LinkifyElement> elements, LinkifyOptions options) {
+    final List<LinkifyElement> list = [];
+
+    for (final element in elements) {
+      if (element is TextElement) {
+        final text = element.text;
+        final matches = RegExp(r'\b([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\b')
+            .allMatches(text);
+
+        if (matches.isNotEmpty) {
+          var lastIndex = 0;
+          for (final match in matches) {
+            if (match.start > lastIndex) {
+              list.add(TextElement(text.substring(lastIndex, match.start)));
+            }
+
+            final url = text.substring(match.start, match.end);
+            final fullUrl = url.startsWith('http') ? url : 'https://$url';
+            list.add(LinkableElement(url, fullUrl));
+
+            lastIndex = match.end;
+          }
+
+          // Добавляем оставшийся текст
+          if (lastIndex < text.length) {
+            list.add(TextElement(text.substring(lastIndex)));
+          }
+        } else {
+          list.add(element);
+        }
+      } else {
+        list.add(element);
+      }
+    }
+
+    return list;
+  }
+}
+
 bool isMobile =
     Platform.instance.operatingSystem.iOS ||
     Platform.instance.operatingSystem.android;
@@ -58,6 +102,8 @@ class ChatMessageBubble extends StatelessWidget {
   final VoidCallback? onReply;
   final VoidCallback? onForward;
   final VoidCallback? onComplain;
+  final VoidCallback? onRetrySend;
+  final VoidCallback? onCancelSend;
   final int? myUserId;
   final bool? canEditMessage;
   final bool isGroupChat;
@@ -96,6 +142,8 @@ class ChatMessageBubble extends StatelessWidget {
     this.onReply,
     this.onForward,
     this.onComplain,
+    this.onRetrySend,
+    this.onCancelSend,
     this.myUserId,
     this.canEditMessage,
     this.isGroupChat = false,
@@ -672,29 +720,46 @@ class ChatMessageBubble extends StatelessWidget {
   }
 
   void _showMessageContextMenu(BuildContext context, Offset tapPosition) {
-    final hasUserReaction = message.reactionInfo?['yourReaction'] != null;
+    final isSending = message.id.startsWith('local_');
 
-    showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (context) {
-        return _MessageContextMenu(
-          message: message,
-          position: tapPosition,
-          onReply: onReply,
-          onEdit: onEdit,
-          onDeleteForMe: onDeleteForMe,
-          onDeleteForAll: onDeleteForAll,
-          onReaction: onReaction,
-          onRemoveReaction: onRemoveReaction,
-          onForward: onForward,
-          onComplain: onComplain,
-          canEditMessage: canEditMessage ?? false,
-          hasUserReaction: hasUserReaction,
-          isChannel: isChannel,
-        );
-      },
-    );
+    if (isSending) {
+      showDialog(
+        context: context,
+        barrierColor: Colors.transparent,
+        builder: (context) {
+          return _SendingMessageContextMenu(
+            message: message,
+            position: tapPosition,
+            onRetrySend: onRetrySend,
+            onCancelSend: onCancelSend,
+          );
+        },
+      );
+    } else {
+      final hasUserReaction = message.reactionInfo?['yourReaction'] != null;
+
+      showDialog(
+        context: context,
+        barrierColor: Colors.transparent,
+        builder: (context) {
+          return _MessageContextMenu(
+            message: message,
+            position: tapPosition,
+            onReply: onReply,
+            onEdit: onEdit,
+            onDeleteForMe: onDeleteForMe,
+            onDeleteForAll: onDeleteForAll,
+            onReaction: onReaction,
+            onRemoveReaction: onRemoveReaction,
+            onForward: onForward,
+            onComplain: onComplain,
+            canEditMessage: canEditMessage ?? false,
+            hasUserReaction: hasUserReaction,
+            isChannel: isChannel,
+          );
+        },
+      );
+    }
   }
 
   Widget _buildReactionsWidget(BuildContext context, Color textColor) {
@@ -4295,6 +4360,7 @@ class ChatMessageBubble extends StatelessWidget {
               linkStyle: linkStyle,
               onOpen: onOpenLink,
               options: const LinkifyOptions(humanize: false),
+              linkifiers: const [UrlLinkifier(), EmailLinkifier(), DomainLinkifier()],
               textAlign: TextAlign.left,
             )
           else if (message.text.contains("komet.cosmetic.") ||
@@ -4588,6 +4654,7 @@ class ChatMessageBubble extends StatelessWidget {
                 linkStyle: linkStyle,
                 onOpen: onOpenLink,
                 options: const LinkifyOptions(humanize: false),
+                linkifiers: const [UrlLinkifier(), EmailLinkifier(), DomainLinkifier()],
               );
             } else {
               return _buildFormattedRichText(seg.text, baseForSeg, elements);
@@ -4800,6 +4867,182 @@ class ChatMessageBubble extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SendingMessageContextMenu extends StatefulWidget {
+  final Message message;
+  final Offset position;
+  final VoidCallback? onRetrySend;
+  final VoidCallback? onCancelSend;
+
+  const _SendingMessageContextMenu({
+    required this.message,
+    required this.position,
+    this.onRetrySend,
+    this.onCancelSend,
+  });
+
+  @override
+  State<_SendingMessageContextMenu> createState() => _SendingMessageContextMenuState();
+}
+
+class _SendingMessageContextMenuState extends State<_SendingMessageContextMenu> {
+  Timer? _statusCheckTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkMessageStatus();
+    });
+
+    _statusCheckTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      _checkMessageStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusCheckTimer?.cancel();
+    super.dispose();
+  }
+
+  void _checkMessageStatus() {
+    // Если сообщение больше не в состоянии sending, закрываем диалог
+    if (!widget.message.id.startsWith('local_') && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Дополнительная проверка при каждом rebuild
+    if (!widget.message.id.startsWith('local_')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      });
+      return const SizedBox.shrink();
+    }
+    final screenSize = MediaQuery.of(context).size;
+
+    double left = widget.position.dx - 75;
+    if (left + 150 > screenSize.width - 10) {
+      left = screenSize.width - 160;
+    }
+    if (left < 10) {
+      left = 10;
+    }
+
+    double top = widget.position.dy - 60;
+    if (top < 10) {
+      top = widget.position.dy + 20;
+    }
+    if (top + 100 > screenSize.height - 10) {
+      top = screenSize.height - 110;
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.1),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          Positioned(
+            top: top,
+            left: left,
+            child: Container(
+              width: 150,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      widget.onRetrySend?.call();
+                    },
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.refresh,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Повторить',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Divider(height: 1, color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+                  InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      widget.onCancelSend?.call();
+                    },
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.close,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Отменить',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5657,10 +5900,13 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
     final theme = Theme.of(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final screenSize = MediaQuery.of(context).size;
+    final viewInsets = MediaQuery.of(context).viewInsets;
 
     const menuWidth = 250.0;
     final double estimatedMenuHeight = _isEmojiListExpanded ? 320.0 : 250.0;
     const padding = 10.0;
+
+    final availableHeight = screenSize.height - viewInsets.bottom - padding;
 
     double left = widget.position.dx - (menuWidth / 4);
     if (left + menuWidth > screenSize.width - padding) {
@@ -5671,14 +5917,14 @@ class _MessageContextMenuState extends State<_MessageContextMenu>
     }
 
     double top = widget.position.dy;
-    if (top + estimatedMenuHeight > screenSize.height - padding) {
+    if (top + estimatedMenuHeight > availableHeight) {
       top = widget.position.dy - estimatedMenuHeight - 10;
     }
     if (top < padding) {
       top = padding;
     }
-    if (top + estimatedMenuHeight > screenSize.height - padding) {
-      top = screenSize.height - estimatedMenuHeight - padding;
+    if (top + estimatedMenuHeight > availableHeight) {
+      top = availableHeight - estimatedMenuHeight;
     }
 
     return Scaffold(

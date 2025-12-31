@@ -58,7 +58,7 @@ Future<void> main() async {
   NotificationService().setNavigatorKey(navigatorKey);
   print("NotificationService инициализирован");
 
-  // Запуск фонового сервиса только для Android
+
   if (Platform.isAndroid) {
     print("Инициализируем фоновый сервис для Android...");
     await initializeBackgroundService();

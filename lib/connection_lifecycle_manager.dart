@@ -25,7 +25,6 @@ class _ConnectionLifecycleManagerState extends State<ConnectionLifecycleManager>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Включаем WakeLock для предотвращения засыпания устройства
     WakelockPlus.enable();
 
     _animationController = AnimationController(
@@ -43,7 +42,6 @@ class _ConnectionLifecycleManagerState extends State<ConnectionLifecycleManager>
   void dispose() {
     _animationController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    // Отключаем WakeLock при закрытии
     WakelockPlus.disable();
     super.dispose();
   }

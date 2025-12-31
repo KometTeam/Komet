@@ -229,7 +229,6 @@ extension ApiServiceChats on ApiService {
         chats.insert(0, chatJson);
       }
       
-      // Отправляем событие обновления чата для UI
       _emitLocal({
         'ver': 11,
         'cmd': 1,
@@ -693,7 +692,6 @@ extension ApiServiceChats on ApiService {
           messagesJson.map((json) => Message.fromJson(json)).toList()
             ..sort((a, b) => a.time.compareTo(b.time));
 
-      // Обработка контактов в сообщениях
       final contactIds = <int>[];
       for (final message in messagesList) {
         for (final attach in message.attaches) {
@@ -705,7 +703,7 @@ extension ApiServiceChats on ApiService {
                     ? int.tryParse(contactIdValue) 
                     : null);
             if (contactId != null) {
-              // Проверяем, есть ли контакт в кэше перед добавлением в список для запроса
+          
               final cachedContact = getCachedContact(contactId);
               if (cachedContact == null && !contactIds.contains(contactId)) {
                 contactIds.add(contactId);
@@ -721,7 +719,7 @@ extension ApiServiceChats on ApiService {
       _messageCache[chatId] = messagesList;
       _preloadMessageImages(messagesList);
       
-      // Обновляем кеш сообщений (оптимизированно - только если данные новее)
+       
       unawaited(_updateMessagesCacheIfNewer(chatId, messagesList));
 
       return messagesList;
@@ -1131,7 +1129,7 @@ extension ApiServiceChats on ApiService {
 
     clearChatsCache();
 
-    // Отправляем локальное сообщение для немедленного отображения
+  
     final myId = _userId ?? (userId != null ? int.tryParse(userId!) : null) ?? 0;
     final localMessage = {
       'id': 'local_$clientMessageId',
@@ -1156,7 +1154,7 @@ extension ApiServiceChats on ApiService {
       },
     });
     
-    // Локально обновляем список чатов - ПРЯМО ЗДЕСЬ
+  
     
 
     final queueItem = QueueItem(

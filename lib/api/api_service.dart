@@ -315,7 +315,6 @@ class ApiService {
         'timezone': spoofedData['timezone'] as String? ?? 'Europe/Moscow',
       };
     } else {
-      // При первом входе генерируем случайный спуфинг
       await _generateAndSaveRandomSpoofing();
       final generatedData = await SpoofingService.getSpoofedSessionData();
       
@@ -333,7 +332,6 @@ class ApiService {
         };
       }
       
-      // Fallback на дефолтные значения, если что-то пошло не так
       return {
         'deviceType': 'ANDROID',
         'locale': 'ru',
@@ -352,25 +350,25 @@ class ApiService {
   Future<void> _generateAndSaveRandomSpoofing() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // Проверяем, не был ли уже сгенерирован спуфинг
+
     if (prefs.getBool('spoofing_enabled') == true) {
       return;
     }
     
-    // Фильтруем пресеты, исключая WEB
+
     final availablePresets = devicePresets
-        .where((p) => p.deviceType != 'WEB')
+        .where((p) => p.deviceType != 'WEB') //✖️✖️✖️✖️✖️ ЗАПРЕТ НЕЛЬЗЯ АЛО ✖️✖️✖️✖️
         .toList();
     
     if (availablePresets.isEmpty) {
       return;
     }
     
-    // Выбираем случайный пресет
+  
     final random = Random();
     final preset = availablePresets[random.nextInt(availablePresets.length)];
     
-    // Получаем реальный timezone и locale для частичного спуфинга
+   
     String timezone;
     try {
       final timezoneInfo = await FlutterTimezone.getLocalTimezone();
@@ -381,10 +379,8 @@ class ApiService {
     
     final locale = Platform.localeName.split('_').first;
     
-    // Генерируем deviceId
     final deviceId = generateRandomDeviceId();
     
-    // Сохраняем в SharedPreferences
     await prefs.setBool('spoofing_enabled', true);
     await prefs.setString('spoof_useragent', preset.userAgent);
     await prefs.setString('spoof_devicename', preset.deviceName);

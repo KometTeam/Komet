@@ -626,12 +626,13 @@ class _ChatScreenState extends State<ChatScreen> {
     
     ApiService.instance.currentActiveChatId = widget.chatId;
     
-    // Очищаем накопленные уведомления для этого чата
+   
     NotificationService().clearNotificationMessagesForChat(widget.chatId);
 
     _textController.addListener(() {
       _handleTextChangedForKometColor();
       _updateTextSelectionState();
+      _saveInputState();
     });
 
     _textFocusNode.addListener(() {
@@ -659,6 +660,66 @@ class _ChatScreenState extends State<ChatScreen> {
         _connectionStatus = status;
       });
     });
+
+    _loadInputState();
+  }
+
+  Future<void> _loadInputState() async {
+    try {
+      final state = await ChatCacheService().getChatInputState(widget.chatId);
+      if (state != null && mounted) {
+        final text = state['text'] as String? ?? '';
+        final elements = (state['elements'] as List<dynamic>?)
+            ?.map((e) => e as Map<String, dynamic>)
+            .toList() ?? [];
+        final replyingToMessageData = state['replyingToMessage'] as Map<String, dynamic>?;
+
+        _textController.text = text;
+        _textController.elements.clear();
+        _textController.elements.addAll(elements);
+        if (replyingToMessageData != null) {
+          try {
+            final message = Message.fromJson(replyingToMessageData);
+            setState(() {
+              _replyingToMessage = message;
+            });
+          } catch (e) {
+            print('Ошибка восстановления сообщения для ответа: $e');
+          }
+        }
+      }
+    } catch (e) {
+      print('Ошибка загрузки состояния ввода: $e');
+    }
+  }
+
+  Future<void> _saveInputState() async {
+    try {
+      final text = _textController.text;
+      final elements = _textController.elements;
+
+      Map<String, dynamic>? replyingToMessageData;
+      if (_replyingToMessage != null) {
+        replyingToMessageData = {
+          'id': _replyingToMessage!.id,
+          'sender': _replyingToMessage!.senderId,
+          'text': _replyingToMessage!.text,
+          'time': _replyingToMessage!.time,
+          'type': 'USER',
+          'cid': _replyingToMessage!.cid,
+          'attaches': _replyingToMessage!.attaches,
+        };
+      }
+
+      await ChatCacheService().saveChatInputState(
+        widget.chatId,
+        text: text,
+        elements: elements,
+        replyingToMessage: replyingToMessageData,
+      );
+    } catch (e) {
+      print('Ошибка сохранения состояния ввода: $e');
+    }
   }
 
   Future<void> _loadSpecialMessagesSetting() async {
@@ -2178,6 +2239,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _replyingToMessage = null;
         _textController.elements.clear();
       });
+
+      await ChatCacheService().clearChatInputState(widget.chatId);
     }
   }
 
@@ -2262,12 +2325,32 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _replyingToMessage = message;
     });
-    _textController.clear();
-    FocusScope.of(context).requestFocus(FocusNode());
+    _saveInputState();
   }
 
   void _forwardMessage(Message message) {
     _showForwardDialog(message);
+  }
+
+  void _retrySendMessage(Message message) {
+    final cid = message.cid ?? DateTime.now().millisecondsSinceEpoch;
+    ApiService.instance.sendMessage(
+      widget.chatId,
+      message.text,
+      replyToMessageId: message.link?['messageId'],
+      cid: cid,
+      elements: message.elements,
+    );
+  }
+
+  void _cancelSendMessage(Message message) {
+    // Удаляем сообщение из списка с анимацией
+    _removeMessages([message.id]);
+
+    // Очищаем очередь для этого cid если он есть
+    if (message.cid != null) {
+      MessageQueueService().removeFromQueue('send_message_${message.cid}');
+    }
   }
 
   void _showForwardDialog(Message message) async {
@@ -3108,8 +3191,15 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Stack(
         children: [
           Positioned.fill(child: _buildChatWallpaper(theme)),
-          Column(
-            children: [
+          Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) {
+              if (_textFocusNode.hasFocus) {
+                _textFocusNode.unfocus();
+              }
+            },
+            child: Column(
+              children: [
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
                 switchInCurve: Curves.easeInOutCubic,
@@ -3462,6 +3552,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                           _showComplaintDialog(item.message.id),
                                       allPhotos: _cachedAllPhotos,
                                       onGoToMessage: _scrollToMessage,
+                                      onRetrySend: () => _retrySendMessage(item.message),
+                                      onCancelSend: () => _cancelSendMessage(item.message),
                                     );
 
                                     Widget finalMessageWidget = RepaintBoundary(
@@ -3615,6 +3707,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ],
+          ),
           ),
           AnimatedPositioned(
             duration: const Duration(milliseconds: 100),
@@ -4804,6 +4897,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   setState(() {
                                     _replyingToMessage = null;
                                   });
+                                  _saveInputState();
                                 },
                               ),
                             ],
