@@ -14,7 +14,7 @@ import 'package:gwid/screens/settings/about_screen.dart';
 import 'package:gwid/screens/debug_screen.dart';
 import 'package:gwid/screens/settings/komet_misc_screen.dart';
 import 'package:gwid/screens/settings/optimization_screen.dart';
-import 'package:gwid/screens/settings/plugins_screen.dart';
+// import 'package:gwid/screens/settings/plugins_screen.dart';
 import 'package:gwid/screens/settings/plugin_section_screen.dart';
 import 'package:gwid/plugins/plugin_service.dart';
 import 'package:gwid/utils/theme_provider.dart';
@@ -497,13 +497,13 @@ class _SettingsScreenState extends State<SettingsScreen>
         subtitle: "Команда, соглашение",
         screen: const AboutScreen(),
       ),
-      _SettingsItem(
-        type: _SettingsItemType.category,
-        icon: Icons.extension,
-        title: "Plugins(WIP)",
-        subtitle: "Плагины(WIP)",
-        screen: const PluginsScreen(),
-      ),
+      // _SettingsItem(
+      //   type: _SettingsItemType.category,
+      //   icon: Icons.extension,
+      //   title: "Plugins(WIP)",
+      //   subtitle: "Плагины(WIP)",
+      //   screen: const PluginsScreen(),
+      // ),
     ];
 
     final pluginSections = PluginService().getAllPluginSections();

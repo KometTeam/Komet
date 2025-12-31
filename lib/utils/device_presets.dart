@@ -222,6 +222,187 @@ final List<DevicePreset> devicePresets = [
     timezone: 'Europe/Amsterdam',
     locale: 'nl-NL',
   ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Samsung Galaxy S24',
+    osVersion: 'Android 14',
+    screen: '1440x3120 2.8x',
+    timezone: 'America/Vancouver',
+    locale: 'en-CA',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; M2101K6C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Poco F3 GT',
+    osVersion: 'Android 13',
+    screen: '1080x2400 2.6x',
+    timezone: 'Asia/Kolkata',
+    locale: 'en-IN',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 14; V29) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Vivo V29',
+    osVersion: 'Android 14',
+    screen: '1440x3200 2.9x',
+    timezone: 'Asia/Bangkok',
+    locale: 'th-TH',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; K30 Ultra) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Xiaomi K30 Ultra',
+    osVersion: 'Android 13',
+    screen: '1440x3200 2.8x',
+    timezone: 'Asia/Shanghai',
+    locale: 'zh-CN',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 14; P80) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Oppo Find N3',
+    osVersion: 'Android 14',
+    screen: '1440x3168 2.7x',
+    timezone: 'Europe/Paris',
+    locale: 'fr-FR',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; SM-G916B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Samsung Galaxy S20 FE',
+    osVersion: 'Android 13',
+    screen: '1080x2400 2.5x',
+    timezone: 'Europe/Berlin',
+    locale: 'de-DE',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 12; CPH2135) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    deviceName: 'OnePlus 8 Pro',
+    osVersion: 'Android 12',
+    screen: '1440x3168 2.8x',
+    timezone: 'America/New_York',
+    locale: 'en-US',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 14; S24E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Samsung Galaxy S24 Edge',
+    osVersion: 'Android 14',
+    screen: '1440x3200 2.9x',
+    timezone: 'Asia/Tokyo',
+    locale: 'ja-JP',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; LE2120) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+    deviceName: 'OnePlus 9 Pro',
+    osVersion: 'Android 13',
+    screen: '1440x3216 2.9x',
+    timezone: 'America/Toronto',
+    locale: 'en-CA',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 14; A14 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Google Pixel 9 Pro',
+    osVersion: 'Android 14',
+    screen: '1344x2992 2.7x',
+    timezone: 'Europe/London',
+    locale: 'en-GB',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; 21091116AC) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Xiaomi 12T',
+    osVersion: 'Android 13',
+    screen: '1440x3200 2.9x',
+    timezone: 'Europe/Rome',
+    locale: 'it-IT',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 12; SM-F711B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Samsung Galaxy Z Flip 3',
+    osVersion: 'Android 12',
+    screen: '1080x2640 2.3x',
+    timezone: 'America/Mexico_City',
+    locale: 'es-MX',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; XT2201-3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Motorola Edge 40',
+    osVersion: 'Android 13',
+    screen: '1080x2400 2.5x',
+    timezone: 'Asia/Dubai',
+    locale: 'ar-AE',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 14; 23088RA9AC) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Xiaomi 14 Ultra',
+    osVersion: 'Android 14',
+    screen: '1440x3200 2.8x',
+    timezone: 'Europe/Moscow',
+    locale: 'ru-RU',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; CPH2487) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
+    deviceName: 'OnePlus 11',
+    osVersion: 'Android 13',
+    screen: '1440x3216 2.8x',
+    timezone: 'Australia/Sydney',
+    locale: 'en-AU',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 12; M2004J19C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Xiaomi Mi 10T Pro',
+    osVersion: 'Android 12',
+    screen: '1440x3200 2.9x',
+    timezone: 'America/Sao_Paulo',
+    locale: 'pt-BR',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Samsung Galaxy A55',
+    osVersion: 'Android 14',
+    screen: '1440x3200 2.9x',
+    timezone: 'Europe/Madrid',
+    locale: 'es-ES',
+  ),
+  DevicePreset(
+    deviceType: 'ANDROID',
+    userAgent:
+        'Mozilla/5.0 (Linux; Android 13; RMX3761) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+    deviceName: 'Realme GT Neo 3',
+    osVersion: 'Android 13',
+    screen: '1440x3200 2.9x',
+    timezone: 'Asia/Hong_Kong',
+    locale: 'zh-HK',
+  ),
+
 
 
   DevicePreset(
@@ -293,6 +474,176 @@ final List<DevicePreset> devicePresets = [
     screen: '1640x2360 2.0x',
     timezone: 'America/Toronto',
     locale: 'en-CA',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 15 Pro',
+    osVersion: 'iOS 17.5',
+    screen: '1179x2556 3.0x',
+    timezone: 'Asia/Singapore',
+    locale: 'en-SG',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 14',
+    osVersion: 'iOS 17.4',
+    screen: '1170x2532 3.0x',
+    timezone: 'Europe/Stockholm',
+    locale: 'sv-SE',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 12 Pro Max',
+    osVersion: 'iOS 16.6',
+    screen: '1284x2778 3.0x',
+    timezone: 'Asia/Bangkok',
+    locale: 'th-TH',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 15_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 11 Pro',
+    osVersion: 'iOS 15.7',
+    screen: '1125x2436 3.0x',
+    timezone: 'Europe/Istanbul',
+    locale: 'tr-TR',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPad Mini 6th Gen',
+    osVersion: 'iPadOS 17.5',
+    screen: '1488x2266 2.0x',
+    timezone: 'America/Mexico_City',
+    locale: 'es-MX',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPad; CPU OS 16_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.7 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPad 10th Gen',
+    osVersion: 'iPadOS 16.7',
+    screen: '1620x2160 2.0x',
+    timezone: 'Asia/Hong_Kong',
+    locale: 'zh-HK',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 13 Pro',
+    osVersion: 'iOS 17.3',
+    screen: '1170x2532 3.0x',
+    timezone: 'Europe/Dublin',
+    locale: 'en-IE',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 12',
+    osVersion: 'iOS 16.5',
+    screen: '1125x2436 3.0x',
+    timezone: 'Asia/Mumbai',
+    locale: 'en-IN',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPad; CPU OS 15_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPad Pro 12.9-inch',
+    osVersion: 'iPadOS 15.8',
+    screen: '2048x2732 2.0x',
+    timezone: 'Europe/Vienna',
+    locale: 'de-AT',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 14_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone XS Max',
+    osVersion: 'iOS 14.8',
+    screen: '1125x2436 3.0x',
+    timezone: 'America/Los_Angeles',
+    locale: 'en-US',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 13 mini',
+    osVersion: 'iOS 17.2',
+    screen: '1080x2340 3.0x',
+    timezone: 'America/Miami',
+    locale: 'en-US',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPad; CPU OS 14_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPad Air 4th Gen',
+    osVersion: 'iPadOS 14.8',
+    screen: '1640x2360 2.0x',
+    timezone: 'Europe/Zurich',
+    locale: 'de-CH',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 11',
+    osVersion: 'iOS 16.4',
+    screen: '828x1792 2.0x',
+    timezone: 'America/Argentina/Buenos_Aires',
+    locale: 'es-AR',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone 12 mini',
+    osVersion: 'iOS 17.1',
+    screen: '1080x2340 3.0x',
+    timezone: 'Europe/Brussels',
+    locale: 'nl-BE',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPad Air Pro 11-inch',
+    osVersion: 'iPadOS 17.4',
+    screen: '2388x1668 2.0x',
+    timezone: 'Asia/Bangkok',
+    locale: 'en-TH',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 13_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.3 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPhone XR',
+    osVersion: 'iOS 13.7',
+    screen: '828x1792 2.0x',
+    timezone: 'Europe/Lisbon',
+    locale: 'pt-PT',
+  ),
+  DevicePreset(
+    deviceType: 'IOS',
+    userAgent:
+        'Mozilla/5.0 (iPad; CPU OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',
+    deviceName: 'iPad (9th generation)',
+    osVersion: 'iPadOS 17.3',
+    screen: '1620x2160 2.0x',
+    timezone: 'Europe/Prague',
+    locale: 'cs-CZ',
   ),
 
 
