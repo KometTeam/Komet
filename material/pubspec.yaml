@@ -1,0 +1,23 @@
+name: material
+description: "A new Flutter package project."
+version: 1.0.0
+homepage: https://github.com/deminearchiver/dart-flutter-packages
+repository: https://github.com/deminearchiver/dart-flutter-packages/tree/main/packages/material
+issue_tracker: https://github.com/deminearchiver/dart-flutter-packages/issues
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  androidx_graphics_shapes: ^1.2.0
+  meta: ^1.17.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  deminearchiver_lints: ^1.1.1

@@ -18,7 +18,14 @@ environment:
   # Поддерживаются версии Flutter от 3.38.
   flutter: ">=3.38.0"
 
+workspace:
+  - material
+
 dependencies:
+  # Workspace зависимости
+  material:
+    path: material
+
   # SDK зависимости
   flutter:
     sdk: flutter
