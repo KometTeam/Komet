@@ -226,6 +226,13 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
     }
   }
 
+  /// Extracts the bounding rectangle from a QR code's corner points.
+  ///
+  /// The mobile_scanner package's [Barcode] API exposes corner coordinates
+  /// through either 'corners' or 'cornerPoints' properties (depending on version).
+  /// This method handles both variants dynamically to maintain compatibility.
+  ///
+  /// Returns null if corners cannot be extracted or are invalid.
   Rect? _extractBounds(Barcode barcode) {
     final dynamic b = barcode;
     final List<dynamic>? corners = (b.corners ?? b.cornerPoints) as List<dynamic>?;
@@ -252,15 +259,40 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
     return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
+  /// Converts various coordinate representations to [Offset].
+  ///
+  /// Handles multiple formats from mobile_scanner package (v7.x):
+  /// - [Offset]: Direct Flutter offset (dx, dy properties)
+  /// - [Point]: Dart math Point class (x, y properties)
+  /// - Dynamic objects with either dx/dy or x/y numeric properties
+  ///
+  /// The mobile_scanner package's Barcode.corners/cornerPoints API can return
+  /// different types depending on the platform and package version. This method
+  /// provides a flexible conversion that works across these variations without
+  /// requiring explicit type dependencies on internal package types.
+  ///
+  /// Returns null if the value cannot be converted to a valid coordinate.
   Offset? _asOffset(dynamic value) {
+    // Handle standard Flutter Offset type
     if (value is Offset) return value;
+    
+    // Handle dart:math Point type
     if (value is Point) return Offset(value.x.toDouble(), value.y.toDouble());
 
-    final dynamic dxDynamic = (value as dynamic).dx ?? (value as dynamic).x;
-    final dynamic dyDynamic = (value as dynamic).dy ?? (value as dynamic).y;
+    // Handle dynamic objects with coordinate properties
+    // Try to extract numeric values from either dx/dy or x/y properties
+    try {
+      final dynamic dxDynamic = (value as dynamic).dx ?? (value as dynamic).x;
+      final dynamic dyDynamic = (value as dynamic).dy ?? (value as dynamic).y;
 
-    if (dxDynamic is num && dyDynamic is num) {
-      return Offset(dxDynamic.toDouble(), dyDynamic.toDouble());
+      if (dxDynamic is num && dyDynamic is num) {
+        return Offset(dxDynamic.toDouble(), dyDynamic.toDouble());
+      }
+    } catch (e) {
+      // If property access fails, return null
+      // Log for debugging coordinate conversion issues
+      debugPrint('Failed to convert coordinate to Offset: $e');
+      return null;
     }
 
     return null;
