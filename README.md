@@ -4,7 +4,7 @@
 Альтернативный FOSS клиент для мессенджера MAX
 
 ## Установка
-[Последний релиз](https://github.com/KometTeam/Komet/releases/latest) / [Telegram Канал](https://t.me/TeamKomet)
+[Последний релиз](https://github.com/KometTeam/Komet/releases/latest) / [Telegram Канал](https://t.me/TeamKomet) 
 
 ## Сборка из исходного кода
 ```console
