@@ -204,7 +204,7 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
       final cy = (center.dy / imageSize.height) * 2 - 1;
 
       final targetSide =
-          (bounds.width / imageSize.width) * (_screenWidth == 0 ? MediaQuery.of(context).size.width : _screenWidth) * 1.1;
+          (bounds.width / imageSize.width) * _screenWidth * 1.1;
 
       _targetFrameAlignment = Alignment(
         cx.clamp(-1.0, 1.0),
