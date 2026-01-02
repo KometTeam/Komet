@@ -347,7 +347,19 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
       if (timestamp is int) {
         qrTimestamp = timestamp;
       } else if (timestamp is String) {
-        qrTimestamp = int.tryParse(timestamp) ?? 0;
+        final parsed = int.tryParse(timestamp);
+        if (parsed == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Неверный формат временной метки в QR-коде.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return false;
+        }
+        qrTimestamp = parsed;
       } else if (timestamp is double) {
         qrTimestamp = timestamp.toInt();
       } else {
