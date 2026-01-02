@@ -60,8 +60,9 @@ Future<void> _generateInitialAndroidSpoof() async {
     try {
       final timezoneInfo = await FlutterTimezone.getLocalTimezone();
       timezone = timezoneInfo.identifier;
-    } catch (_) {
-      timezone = 'Europe/Moscow';
+    } on Exception catch (e, stackTrace) {
+      print('Failed to get local timezone, defaulting to UTC: $e');
+      timezone = 'UTC';
     }
     
     final locale = Platform.localeName.split('_').first;
