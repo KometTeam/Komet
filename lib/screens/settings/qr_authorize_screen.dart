@@ -301,14 +301,12 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
       // Parse the QR link as JSON
       final decoded = jsonDecode(qrLink) as Map<String, dynamic>;
 
-      // Validate required fields and format
-      if (decoded['type'] != 'komet_auth_v1' ||
-          decoded['token'] == null ||
-          decoded['timestamp'] == null) {
+      // Validate type field
+      if (decoded['type'] != 'komet_auth_v1') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Неверный формат QR-кода. Используйте только коды, сгенерированные приложением Komet.'),
+              content: Text('Неверный тип QR-кода. Используйте только коды, сгенерированные приложением Komet.'),
               backgroundColor: Colors.red,
             ),
           );
@@ -316,8 +314,54 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
         return false;
       }
 
-      // Validate timestamp freshness (within 60 seconds)
-      final int qrTimestamp = decoded['timestamp'];
+      // Validate token field
+      final token = decoded['token'];
+      if (token == null || (token is String && token.isEmpty)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('QR-код не содержит токен авторизации. Пожалуйста, сгенерируйте новый код.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      // Validate timestamp field
+      final timestamp = decoded['timestamp'];
+      if (timestamp == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('QR-код не содержит временную метку. Пожалуйста, сгенерируйте новый код.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      // Parse and validate timestamp freshness (within 60 seconds)
+      int qrTimestamp;
+      if (timestamp is int) {
+        qrTimestamp = timestamp;
+      } else if (timestamp is String) {
+        qrTimestamp = int.tryParse(timestamp) ?? 0;
+      } else if (timestamp is double) {
+        qrTimestamp = timestamp.toInt();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Неверный формат временной метки в QR-коде.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
       final int now = DateTime.now().millisecondsSinceEpoch;
       const int oneMinuteInMillis = 60 * 1000;
 
