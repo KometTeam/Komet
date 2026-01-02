@@ -1,12 +1,6 @@
 name: Build and Release Komet
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths-ignore:
-      - '**.md'
-  pull_request:
-    branches: [ main, develop ]
   workflow_dispatch:
 
 jobs:
@@ -131,4 +125,3 @@ jobs:
           name: komet-linux
           path: build/linux/x64/release/bundle/
           retention-days: 30
-
