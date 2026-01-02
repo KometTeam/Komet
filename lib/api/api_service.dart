@@ -37,6 +37,9 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
+// ignore: implementation_imports
+import 'package:lz4_ffi/src/ffi_bindings.dart' as fb;
+
 part 'api_service_connection.dart';
 part 'api_service_auth.dart';
 part 'api_service_contacts.dart';
@@ -44,21 +47,6 @@ part 'api_service_chats.dart';
 part 'api_service_media.dart';
 part 'api_service_privacy.dart';
 part 'api_service_complaints.dart';
-
-typedef Lz4DecompressFunction =
-    Int32 Function(
-      Pointer<Uint8> src,
-      Pointer<Uint8> dst,
-      Int32 compressedSize,
-      Int32 dstCapacity,
-    );
-typedef Lz4Decompress =
-    int Function(
-      Pointer<Uint8> src,
-      Pointer<Uint8> dst,
-      int compressedSize,
-      int dstCapacity,
-    );
 
 class ApiService {
   ApiService._privateConstructor();
@@ -81,8 +69,6 @@ class ApiService {
   final Map<int, Completer<dynamic>> _pending = {};
   bool _socketConnected = false;
   Uint8List? _buffer = Uint8List(0);
-  DynamicLibrary? _lz4Lib;
-  Lz4Decompress? _lz4BlockDecompress;
 
   final StreamController<Contact> _contactUpdatesController =
       StreamController<Contact>.broadcast();
@@ -456,32 +442,6 @@ class ApiService {
     _messageController.close();
   }
 
-  void _initLz4BlockDecompress() {
-    if (_lz4BlockDecompress != null) return;
-
-    try {
-      if (Platform.isWindows) {
-        final dllPath = 'eslz4-win64.dll';
-        _lz4Lib = DynamicLibrary.open(dllPath);
-        try {
-          _lz4BlockDecompress = _lz4Lib!
-              .lookup<NativeFunction<Lz4DecompressFunction>>(
-                'LZ4_decompress_safe',
-              )
-              .asFunction();
-        } catch (e) {
-          try {
-            _lz4BlockDecompress = _lz4Lib!
-                .lookup<NativeFunction<Lz4DecompressFunction>>(
-                  'LZ4_decompress_fast',
-                )
-                .asFunction();
-          } catch (e2) {}
-        }
-      }
-    } catch (e) {}
-  }
-
   void _handleSocketData(Uint8List data) {
     _processIncomingData(data);
   }
@@ -611,7 +571,7 @@ class ApiService {
           ? rawData
           : Uint8List.fromList(List<int>.from(rawData as List));
 
-      if (_lz4BlockDecompress != null && uncompressedSize != null) {
+      if (uncompressedSize != null) {
         if (uncompressedSize <= 0 || uncompressedSize > 10 * 1024 * 1024) {
           return null;
         }
@@ -624,9 +584,9 @@ class ApiService {
           final srcList = srcPtr.asTypedList(srcSize);
           srcList.setAll(0, compressedBytes);
 
-          final result = _lz4BlockDecompress!(
-            srcPtr,
-            dstPtr,
+          final result = fb.LZ4_decompress_safe(
+            srcPtr.cast(),
+            dstPtr.cast(),
             srcSize,
             uncompressedSize,
           );

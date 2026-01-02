@@ -71,8 +71,6 @@ extension ApiServiceConnection on ApiService {
 
     _connectionStatusController.add('connecting');
 
-    _initLz4BlockDecompress();
-
     try {
       final securityContext = SecurityContext.defaultContext;
       final rawSocket = await Socket.connect('api.oneme.ru', 443);

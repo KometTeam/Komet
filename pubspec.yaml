@@ -88,6 +88,7 @@ dependencies:
   smart_auth: ^3.2.0
   freezed_annotation: ^3.1.0
   json_annotation: ^4.9.0
+  lz4_ffi: ^1.0.0-dev.2
 
 dev_dependencies:
   # SDK зависимости
@@ -99,6 +100,12 @@ dev_dependencies:
   freezed: ^3.2.4
   json_serializable: ^6.11.3
   build_runner: ^2.10.4
+
+dependency_overrides:
+  es_compression:
+    git:
+      url: https://github.com/deminearchiver/es_compression.git
+      ref: master
 
 # Конфигурация Flutter.
 flutter:

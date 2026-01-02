@@ -8,20 +8,8 @@ import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 import 'package:uuid/uuid.dart';
 import 'package:gwid/utils/log_utils.dart';
 
-typedef Lz4DecompressFunction =
-    Int32 Function(
-      Pointer<Uint8> src,
-      Pointer<Uint8> dst,
-      Int32 compressedSize,
-      Int32 dstCapacity,
-    );
-typedef Lz4Decompress =
-    int Function(
-      Pointer<Uint8> src,
-      Pointer<Uint8> dst,
-      int compressedSize,
-      int dstCapacity,
-    );
+// ignore: implementation_imports
+import 'package:lz4_ffi/src/ffi_bindings.dart' as fb;
 
 class RegistrationService {
   Socket? _socket;
@@ -33,52 +21,8 @@ class RegistrationService {
   Timer? _pingTimer;
   StreamSubscription? _socketSubscription;
 
-  DynamicLibrary? _lz4Lib;
-  Lz4Decompress? _lz4BlockDecompress;
-
-  void _initLz4BlockDecompress() {
-    if (_lz4BlockDecompress != null) return;
-
-    try {
-      if (Platform.isWindows) {
-        final dllPath = 'eslz4-win64.dll';
-        print('📦 Загрузка LZ4 DLL для block decompress: $dllPath');
-        _lz4Lib = DynamicLibrary.open(dllPath);
-
-        try {
-          _lz4BlockDecompress = _lz4Lib!
-              .lookup<NativeFunction<Lz4DecompressFunction>>(
-                'LZ4_decompress_safe',
-              )
-              .asFunction();
-          print('✅ LZ4 block decompress функция загружена');
-        } catch (e) {
-          print(
-            '⚠️  Функция LZ4_decompress_safe не найдена, пробуем альтернативные имена...',
-          );
-
-          try {
-            _lz4BlockDecompress = _lz4Lib!
-                .lookup<NativeFunction<Lz4DecompressFunction>>(
-                  'LZ4_decompress_fast',
-                )
-                .asFunction();
-            print('✅ LZ4 block decompress функция загружена (fast)');
-          } catch (e2) {
-            print('❌ Не удалось найти LZ4 block decompress функцию: $e2');
-          }
-        }
-      }
-    } catch (e) {
-      print('⚠️  Не удалось загрузить LZ4 DLL для block decompress: $e');
-      print('📦 Будем использовать только frame format (es_compression)');
-    }
-  }
-
   Future<void> connect() async {
     if (_isConnected) return;
-
-    _initLz4BlockDecompress();
 
     try {
       print('🌐 Подключаемся к api.oneme.ru:443...');
@@ -397,7 +341,7 @@ class RegistrationService {
           ? rawData
           : Uint8List.fromList(List<int>.from(rawData as List));
 
-      if (_lz4BlockDecompress != null && uncompressedSize != null) {
+      if (uncompressedSize != null) {
         print(
           '📦 Декодируем block‑токен через LZ4 FFI: '
           'compressed=${compressedBytes.length}, uncompressed=$uncompressedSize',
@@ -419,9 +363,9 @@ class RegistrationService {
           final srcList = srcPtr.asTypedList(srcSize);
           srcList.setAll(0, compressedBytes);
 
-          final result = _lz4BlockDecompress!(
-            srcPtr,
-            dstPtr,
+          final result = fb.LZ4_decompress_safe(
+            srcPtr.cast(),
+            dstPtr.cast(),
             srcSize,
             uncompressedSize,
           );

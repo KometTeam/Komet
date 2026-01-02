@@ -22,26 +22,17 @@ android {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDirs("src/main/jniLibs")
-        }
-    }
-
     defaultConfig {
         applicationId = "com.gwid.app.gwid"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // ndk {
-        //     abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-        // }
     }
 
     val keyPropertiesFile = rootProject.file("key.properties")
     val keyProperties = Properties()
-    
+
     signingConfigs {
         create("release") {
             val envStoreFile = System.getenv("RELEASE_STORE_FILE")
@@ -49,7 +40,7 @@ android {
             val envKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
             val envKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
 
-            if (envStoreFile != null && envStorePassword != null && 
+            if (envStoreFile != null && envStorePassword != null &&
                 envKeyAlias != null && envKeyPassword != null) {
                 storeFile = file(envStoreFile)
                 storePassword = envStorePassword
@@ -62,20 +53,20 @@ android {
                 keyAlias = keyProperties["keyAlias"] as String? ?: ""
                 keyPassword = keyProperties["keyPassword"] as String? ?: ""
             }
-            
+
         }
     }
 
     buildTypes {
         getByName("release") {
-            if (file(keyPropertiesFile).exists() || 
+            if (file(keyPropertiesFile).exists() ||
                 System.getenv("RELEASE_STORE_FILE") != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), 
+                getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
