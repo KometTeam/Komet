@@ -63,9 +63,11 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
     final dtSeconds = (elapsed - last).inMicroseconds / 1e6;
     if (dtSeconds <= 0) return;
 
-    // Exponential smoothing (time-based) for stable motion regardless of FPS.
-    const double timeConstant = 0.12; // seconds; smaller = snappier
-    final t = 1 - exp(-dtSeconds / timeConstant);
+    // Exponential smoothing time constant (in seconds). This controls how quickly
+    // the frame reacts to target changes: smaller = more responsive but jittery,
+    // larger = smoother but laggier. 0.12s is tuned to feel smooth yet responsive.
+    const double frameSmoothingTimeConstantSeconds = 0.12;
+    final t = 1 - exp(-dtSeconds / frameSmoothingTimeConstantSeconds);
 
     final nextAlignment = Alignment.lerp(_frameAlignment, _targetFrameAlignment, t) ??
         _targetFrameAlignment;
