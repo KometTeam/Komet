@@ -451,9 +451,9 @@ class _KometMiscScreenState extends State<KometMiscScreen>
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: colors.surfaceContainerHighest.withOpacity(0.5),
+            color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colors.outline.withOpacity(0.2)),
+            border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
           ),
           child: Row(
             children: [
@@ -524,7 +524,7 @@ class _SettingCard extends StatelessWidget {
             gradient: gradient,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: colors.outline.withOpacity(0.2),
+              color: colors.outline.withValues(alpha: 0.2),
               width: 1,
             ),
           ),
@@ -537,7 +537,7 @@ class _SettingCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: colors.primaryContainer.withOpacity(0.5),
+                      color: colors.primaryContainer.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(icon, color: colors.primary, size: 24),
@@ -549,7 +549,7 @@ class _SettingCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
+                      color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -647,7 +647,10 @@ class _ToggleCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: gradient,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.outline.withOpacity(0.2), width: 1),
+        border: Border.all(
+          color: colors.outline.withValues(alpha: 0.2),
+          width: 1,
+        ),
       ),
       child: Material(
         color: Colors.transparent,
@@ -664,8 +667,8 @@ class _ToggleCard extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: value
-                        ? colors.primaryContainer.withOpacity(0.7)
-                        : colors.primaryContainer.withOpacity(0.3),
+                        ? colors.primaryContainer.withValues(alpha: 0.7)
+                        : colors.primaryContainer.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -692,8 +695,8 @@ class _ToggleCard extends StatelessWidget {
                         description,
                         style: GoogleFonts.manrope(
                           textStyle: textTheme.bodySmall,
-                          color: colors.onSurfaceVariant.withOpacity(
-                            isDisabled ? 0.5 : 1,
+                          color: colors.onSurfaceVariant.withValues(
+                            alpha: isDisabled ? 0.5 : 1,
                           ),
                           height: 1.3,
                         ),
@@ -707,7 +710,7 @@ class _ToggleCard extends StatelessWidget {
                 Switch(
                   value: value,
                   onChanged: isDisabled ? null : onChanged,
-                  activeColor: colors.primary,
+                  activeThumbColor: colors.primary,
                   inactiveThumbColor: colors.outlineVariant,
                 ),
               ],

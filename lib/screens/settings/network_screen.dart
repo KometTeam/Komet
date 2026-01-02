@@ -200,13 +200,13 @@ class _NetworkScreenState extends State<NetworkScreen>
                   Icon(
                     Icons.wifi_off,
                     size: 64,
-                    color: colors.onSurface.withOpacity(0.3),
+                    color: colors.onSurface.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Не удалось загрузить статистику сети',
                     style: TextStyle(
-                      color: colors.onSurface.withOpacity(0.6),
+                      color: colors.onSurface.withValues(alpha: 0.6),
                       fontSize: 16,
                     ),
                   ),
@@ -259,7 +259,7 @@ class _NetworkScreenState extends State<NetworkScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -268,8 +268,8 @@ class _NetworkScreenState extends State<NetworkScreen>
             height: 60,
             decoration: BoxDecoration(
               color: stats.isConnected
-                  ? colors.primary.withOpacity(0.1)
-                  : colors.error.withOpacity(0.1),
+                  ? colors.primary.withValues(alpha: 0.1)
+                  : colors.error.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -296,7 +296,7 @@ class _NetworkScreenState extends State<NetworkScreen>
                   stats.connectionType,
                   style: TextStyle(
                     fontSize: 14,
-                    color: colors.onSurface.withOpacity(0.7),
+                    color: colors.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
                 if (stats.isConnected) ...[
@@ -313,7 +313,7 @@ class _NetworkScreenState extends State<NetworkScreen>
                         '${stats.signalStrength}%',
                         style: TextStyle(
                           fontSize: 12,
-                          color: colors.onSurface.withOpacity(0.6),
+                          color: colors.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -344,7 +344,7 @@ class _NetworkScreenState extends State<NetworkScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -399,7 +399,7 @@ class _NetworkScreenState extends State<NetworkScreen>
                             'использовано',
                             style: TextStyle(
                               fontSize: 12,
-                              color: colors.onSurface.withOpacity(0.7),
+                              color: colors.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         ],
@@ -477,7 +477,7 @@ class _NetworkScreenState extends State<NetworkScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -511,7 +511,7 @@ class _NetworkScreenState extends State<NetworkScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.1),
+                  color: colors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -539,7 +539,7 @@ class _NetworkScreenState extends State<NetworkScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,7 +607,7 @@ class _NetworkScreenState extends State<NetworkScreen>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -630,7 +630,7 @@ class _NetworkScreenState extends State<NetworkScreen>
                   size,
                   style: TextStyle(
                     fontSize: 12,
-                    color: colors.onSurface.withOpacity(0.6),
+                    color: colors.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -671,7 +671,7 @@ class _NetworkScreenState extends State<NetworkScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -705,7 +705,7 @@ class _NetworkScreenState extends State<NetworkScreen>
                       Container(
                         height: height * 100,
                         decoration: BoxDecoration(
-                          color: colors.primary.withOpacity(0.7),
+                          color: colors.primary.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -714,7 +714,7 @@ class _NetworkScreenState extends State<NetworkScreen>
                         '${hourStats.hour}',
                         style: TextStyle(
                           fontSize: 10,
-                          color: colors.onSurface.withOpacity(0.6),
+                          color: colors.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     ],

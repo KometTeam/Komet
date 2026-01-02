@@ -372,7 +372,7 @@ class _SocketLogScreenState extends State<SocketLogScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.2),
+                  color: Colors.blue.withValues(alpha: 0.2),
                   border: Border(
                     bottom: BorderSide(color: Colors.blue, width: 2),
                   ),
@@ -423,7 +423,7 @@ class _SocketLogScreenState extends State<SocketLogScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
+                  color: Colors.green.withValues(alpha: 0.2),
                   border: Border(
                     bottom: BorderSide(color: Colors.green, width: 2),
                   ),
@@ -490,7 +490,9 @@ class _SocketLogScreenState extends State<SocketLogScreen>
               "[${DateFormat('HH:mm:ss.SSS').format(entry.timestamp)}] ${entry.message}",
         )
         .join('\n\n');
-    await Share.share(logText, subject: 'Gwid Connection Log');
+    await SharePlus.instance.share(
+      ShareParams(text: logText, subject: 'Gwid Connection Log'),
+    );
   }
 
   Future<void> _exportLogsToFile() async {
@@ -516,7 +518,9 @@ class _SocketLogScreenState extends State<SocketLogScreen>
             content: Text('Логи сохранены: ${file.path}'),
             action: SnackBarAction(
               label: 'Открыть',
-              onPressed: () => Share.shareXFiles([XFile(file.path)]),
+              onPressed: () => SharePlus.instance.share(
+                ShareParams(files: [XFile(file.path)]),
+              ),
             ),
           ),
         );
@@ -840,7 +844,7 @@ class _SocketLogScreenState extends State<SocketLogScreen>
           if (_isPaused)
             Container(
               width: double.infinity,
-              color: Colors.orange.withOpacity(0.2),
+              color: Colors.orange.withValues(alpha: 0.2),
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -861,7 +865,7 @@ class _SocketLogScreenState extends State<SocketLogScreen>
               _userScrolledUp &&
               _viewMode != ViewMode.split)
             Material(
-              color: Colors.blue.withOpacity(0.2),
+              color: Colors.blue.withValues(alpha: 0.2),
               child: InkWell(
                 onTap: _toggleAutoScroll,
                 child: Container(
@@ -992,39 +996,39 @@ class _AnimatedLogEntryCardState extends State<AnimatedLogEntryCard>
         return (
           Icons.arrow_upward_rounded,
           theme.colorScheme.primary,
-          theme.colorScheme.primary.withOpacity(0.1),
+          theme.colorScheme.primary.withValues(alpha: 0.1),
         );
       case LogType.receive:
         return (
           Icons.arrow_downward_rounded,
           Colors.green,
-          Colors.green.withOpacity(0.1),
+          Colors.green.withValues(alpha: 0.1),
         );
       case LogType.pingpong:
         return (
           Icons.sync_alt_rounded,
           Colors.grey,
-          Colors.grey.withOpacity(0.1),
+          Colors.grey.withValues(alpha: 0.1),
         );
       case LogType.status:
         if (message.startsWith('✅')) {
           return (
             Icons.check_circle_rounded,
             Colors.green,
-            Colors.green.withOpacity(0.1),
+            Colors.green.withValues(alpha: 0.1),
           );
         }
         if (message.startsWith('❌')) {
           return (
             Icons.error_rounded,
             theme.colorScheme.error,
-            theme.colorScheme.error.withOpacity(0.1),
+            theme.colorScheme.error.withValues(alpha: 0.1),
           );
         }
         return (
           Icons.info_rounded,
           Colors.orange.shade600,
-          Colors.orange.withOpacity(0.1),
+          Colors.orange.withValues(alpha: 0.1),
         );
     }
   }
@@ -1163,7 +1167,7 @@ class _AnimatedLogEntryCardState extends State<AnimatedLogEntryCard>
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.2),
+                          color: color.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(icon, color: color, size: 20),
@@ -1193,7 +1197,7 @@ class _AnimatedLogEntryCardState extends State<AnimatedLogEntryCard>
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: color.withOpacity(0.2),
+                                        color: color.withValues(alpha: 0.2),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
@@ -1212,7 +1216,7 @@ class _AnimatedLogEntryCardState extends State<AnimatedLogEntryCard>
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: color.withOpacity(0.2),
+                                        color: color.withValues(alpha: 0.2),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(

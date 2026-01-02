@@ -401,7 +401,9 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: colors.primaryContainer.withOpacity(0.5),
+                            color: colors.primaryContainer.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                           child: const Image(
                             image: AssetImage('assets/images/komet_512.png'),
@@ -522,7 +524,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
               ),
               if (_isLoading)
                 Container(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -586,7 +588,10 @@ class _PhoneInputCard extends StatelessWidget {
           colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.outline.withOpacity(0.2), width: 1),
+        border: Border.all(
+          color: colors.outline.withValues(alpha: 0.2),
+          width: 1,
+        ),
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -736,9 +741,9 @@ class _TosCheckbox extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withOpacity(0.5),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
@@ -828,8 +833,8 @@ class _SettingsButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: hasAnySettings
-                  ? colors.primary.withOpacity(0.3)
-                  : colors.outline.withOpacity(0.2),
+                  ? colors.primary.withValues(alpha: 0.3)
+                  : colors.outline.withValues(alpha: 0.2),
               width: hasAnySettings ? 2 : 1,
             ),
           ),
@@ -843,7 +848,7 @@ class _SettingsButton extends StatelessWidget {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: hasAnySettings
-                          ? colors.primary.withOpacity(0.15)
+                          ? colors.primary.withValues(alpha: 0.15)
                           : colors.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -881,7 +886,7 @@ class _SettingsButton extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.1),
+                    color: colors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -973,7 +978,7 @@ class _FooterText extends StatelessWidget {
       TextSpan(
         style: GoogleFonts.manrope(
           textStyle: textTheme.bodySmall,
-          color: colors.onSurfaceVariant.withOpacity(0.7),
+          color: colors.onSurfaceVariant.withValues(alpha: 0.7),
         ),
         children: [
           const TextSpan(

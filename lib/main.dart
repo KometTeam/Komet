@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -21,6 +22,65 @@ import 'services/whitelist_service.dart';
 import 'services/notification_service.dart';
 import 'services/message_queue_service.dart';
 import 'plugins/plugin_service.dart';
+import 'package:material/material_color_utilities.dart' as mcu;
+
+extension on mcu.DynamicScheme {
+  ColorScheme _toColorScheme() => ColorScheme(
+    brightness: isDark ? .dark : .light,
+    // ignore: deprecated_member_use
+    background: Color(background),
+    // ignore: deprecated_member_use
+    onBackground: Color(onBackground),
+    surface: Color(surface),
+    surfaceDim: Color(surfaceDim),
+    surfaceBright: Color(surfaceBright),
+    surfaceContainerLowest: Color(surfaceContainerLowest),
+    surfaceContainerLow: Color(surfaceContainerLow),
+    surfaceContainer: Color(surfaceContainer),
+    surfaceContainerHigh: Color(surfaceContainerHigh),
+    surfaceContainerHighest: Color(surfaceContainerHighest),
+    onSurface: Color(onSurface),
+    // ignore: deprecated_member_use
+    surfaceVariant: Color(surfaceVariant),
+    onSurfaceVariant: Color(onSurfaceVariant),
+    outline: Color(outline),
+    outlineVariant: Color(outlineVariant),
+    inverseSurface: Color(inverseSurface),
+    onInverseSurface: Color(inverseOnSurface),
+    shadow: Color(shadow),
+    scrim: Color(scrim),
+    surfaceTint: Color(surfaceTint),
+    primary: Color(primary),
+    onPrimary: Color(onPrimary),
+    primaryContainer: Color(primaryContainer),
+    onPrimaryContainer: Color(onPrimaryContainer),
+    primaryFixed: Color(primaryFixed),
+    primaryFixedDim: Color(primaryFixedDim),
+    onPrimaryFixed: Color(onPrimaryFixed),
+    onPrimaryFixedVariant: Color(onPrimaryFixedVariant),
+    inversePrimary: Color(inversePrimary),
+    secondary: Color(secondary),
+    onSecondary: Color(onSecondary),
+    secondaryContainer: Color(secondaryContainer),
+    onSecondaryContainer: Color(onSecondaryContainer),
+    secondaryFixed: Color(secondaryFixed),
+    secondaryFixedDim: Color(secondaryFixedDim),
+    onSecondaryFixed: Color(onSecondaryFixed),
+    onSecondaryFixedVariant: Color(onSecondaryFixedVariant),
+    tertiary: Color(tertiary),
+    onTertiary: Color(onTertiary),
+    tertiaryContainer: Color(tertiaryContainer),
+    onTertiaryContainer: Color(onTertiaryContainer),
+    tertiaryFixed: Color(tertiaryFixed),
+    tertiaryFixedDim: Color(tertiaryFixedDim),
+    onTertiaryFixed: Color(onTertiaryFixed),
+    onTertiaryFixedVariant: Color(onTertiaryFixedVariant),
+    error: Color(error),
+    onError: Color(onError),
+    errorContainer: Color(errorContainer),
+    onErrorContainer: Color(onErrorContainer),
+  );
+}
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -94,6 +154,64 @@ class MyApp extends StatelessWidget {
 
   const MyApp({super.key, required this.hasToken});
 
+  ThemeData _createTheme({
+    required ThemeProvider themeProvider,
+    required ColorScheme colorScheme,
+  }) {
+    final PageTransitionsTheme pageTransitionsTheme = themeProvider.optimization
+        ? PageTransitionsTheme(
+            builders: {
+              for (final value in TargetPlatform.values)
+                value: const FadeUpwardsPageTransitionsBuilder(),
+            },
+          )
+        : const PageTransitionsTheme(
+            builders: {
+              // TODO(deminearchiver): добавить поддержку Predictive Back на Android
+              //  когда https://github.com/flutter/flutter/pull/174337 будет в stable
+              .android: FadeForwardsPageTransitionsBuilder(),
+              .fuchsia: OpenUpwardsPageTransitionsBuilder(),
+              .iOS: CupertinoPageTransitionsBuilder(),
+              .linux: FadeForwardsPageTransitionsBuilder(),
+              .macOS: CupertinoPageTransitionsBuilder(),
+              .windows: OpenUpwardsPageTransitionsBuilder(),
+            },
+          );
+    return ThemeData(
+      colorScheme: colorScheme,
+      pageTransitionsTheme: pageTransitionsTheme,
+      shadowColor: themeProvider.optimization ? Colors.transparent : null,
+      splashFactory: themeProvider.optimization
+          ? NoSplash.splashFactory
+          : InkSparkle.splashFactory,
+      appBarTheme: AppBarTheme(
+        titleTextStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: colorScheme.onSurface,
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colorScheme.primary
+              : colorScheme.surfaceContainerHighest,
+        ),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colorScheme.primary
+              : colorScheme.outline,
+        ),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colorScheme.onPrimary
+              : colorScheme.outline,
+        ),
+        trackOutlineWidth: const WidgetStatePropertyAll(2.0),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
@@ -111,107 +229,84 @@ class MyApp extends StatelessWidget {
             lightDynamic != null &&
             darkDynamic != null;
 
-        final Color accentColor = useMaterialYou
+        final accentColor = useMaterialYou
             ? lightDynamic.primary
             : themeProvider.accentColor;
 
-        final PageTransitionsTheme pageTransitionsTheme =
-            themeProvider.optimization
-            ? const PageTransitionsTheme(
-                builders: {
-                  TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-                },
-              )
-            : PageTransitionsTheme(
-                builders: {
-                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-                },
-              );
-
-        final ColorScheme lightScheme = useMaterialYou
+        final lightScheme = useMaterialYou
             ? lightDynamic
-            : ColorScheme.fromSeed(
-                seedColor: accentColor,
-                brightness: Brightness.light,
-                dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-              );
+            : mcu.DynamicScheme.fromPalettesOrKeyColors(
+                isDark: false,
+                sourceColorHct: mcu.Hct.fromInt(accentColor.toARGB32()),
+                variant: .tonalSpot,
+                specVersion: .spec2025,
+                platform: .phone,
+              )._toColorScheme();
 
-        final ThemeData baseLightTheme = ThemeData(
+        final baseLightTheme = _createTheme(
+          themeProvider: themeProvider,
           colorScheme: lightScheme,
-          useMaterial3: true,
-          pageTransitionsTheme: pageTransitionsTheme,
-          shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization
-              ? NoSplash.splashFactory
-              : null,
-          appBarTheme: AppBarTheme(
-            titleTextStyle: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: lightScheme.onSurface,
-            ),
-          ),
         );
 
-        final ColorScheme darkScheme = useMaterialYou
+        final darkScheme = useMaterialYou
             ? darkDynamic
-            : ColorScheme.fromSeed(
-                seedColor: accentColor,
-                brightness: Brightness.dark,
-                dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-              );
+            : mcu.DynamicScheme.fromPalettesOrKeyColors(
+                isDark: true,
+                sourceColorHct: mcu.Hct.fromInt(accentColor.toARGB32()),
+                variant: .tonalSpot,
+                specVersion: .spec2025,
+                platform: .phone,
+              )._toColorScheme();
 
-        final ThemeData baseDarkTheme = ThemeData(
+        final baseDarkTheme = _createTheme(
+          themeProvider: themeProvider,
           colorScheme: darkScheme,
-          useMaterial3: true,
-          pageTransitionsTheme: pageTransitionsTheme,
-          shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization
-              ? NoSplash.splashFactory
-              : null,
-          appBarTheme: AppBarTheme(
-            titleTextStyle: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: darkScheme.onSurface,
-            ),
-          ),
-        );
-        final ThemeData oledTheme = baseDarkTheme.copyWith(
-          scaffoldBackgroundColor: Colors.black,
-          colorScheme: baseDarkTheme.colorScheme.copyWith(
-            surface: Colors.black,
-            surfaceContainerLowest: Colors.black,
-            surfaceContainerLow: Colors.black,
-          ),
-          navigationBarTheme: NavigationBarThemeData(
-            backgroundColor: Colors.black,
-            indicatorColor: accentColor.withOpacity(0.4),
-            labelTextStyle: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return TextStyle(
-                  color: accentColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                );
-              }
-              return const TextStyle(color: Colors.grey, fontSize: 12);
-            }),
-            iconTheme: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return IconThemeData(color: accentColor);
-              }
-              return const IconThemeData(color: Colors.grey);
-            }),
-          ),
         );
 
-        final ThemeData activeDarkTheme =
-            themeProvider.appTheme == AppTheme.black
+        final oledScheme = useMaterialYou
+            ? darkDynamic
+            : mcu.DynamicScheme.fromPalettesOrKeyColors(
+                isDark: true,
+                sourceColorHct: mcu.Hct.fromInt(accentColor.toARGB32()),
+                variant: .tonalSpot,
+                specVersion: .spec2025,
+                platform: .watch,
+              )._toColorScheme();
+
+        final oledTheme =
+            _createTheme(
+              themeProvider: themeProvider,
+              colorScheme: oledScheme,
+            ).copyWith(
+              // scaffoldBackgroundColor: Colors.black,
+              // colorScheme: baseDarkTheme.colorScheme.copyWith(
+              //   surface: Colors.black,
+              //   surfaceContainerLowest: Colors.black,
+              //   surfaceContainerLow: Colors.black,
+              // ),
+              // navigationBarTheme: NavigationBarThemeData(
+              //   backgroundColor: Colors.black,
+              //   indicatorColor: accentColor.withValues(alpha: 0.4),
+              //   labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              //     if (states.contains(WidgetState.selected)) {
+              //       return TextStyle(
+              //         color: accentColor,
+              //         fontSize: 12,
+              //         fontWeight: FontWeight.bold,
+              //       );
+              //     }
+              //     return const TextStyle(color: Colors.grey, fontSize: 12);
+              //   }),
+              //   iconTheme: WidgetStateProperty.resolveWith((states) {
+              //     if (states.contains(WidgetState.selected)) {
+              //       return IconThemeData(color: accentColor);
+              //     }
+              //     return const IconThemeData(color: Colors.grey);
+              //   }),
+              // ),
+            );
+
+        final ThemeData activeDarkTheme = themeProvider.appTheme == .black
             ? oledTheme
             : baseDarkTheme;
 
@@ -299,10 +394,10 @@ class _MiniFpsHudState extends State<_MiniFpsHud> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.surface.withOpacity(0.85),
+        color: theme.surface.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8),
         ],
       ),
       child: DefaultTextStyle(

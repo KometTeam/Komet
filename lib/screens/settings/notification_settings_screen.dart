@@ -393,7 +393,7 @@ class _NotificationSettingsScreenState
             child: Container(
               width: double.infinity,
               height: double.infinity,
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
             ),
           ),
 
@@ -407,7 +407,7 @@ class _NotificationSettingsScreenState
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -568,7 +568,7 @@ class _OutlinedSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: colors.outline.withOpacity(0.3)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: child,

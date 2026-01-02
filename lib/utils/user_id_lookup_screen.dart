@@ -223,7 +223,7 @@ class _UserIdLookupScreenState extends State<UserIdLookupScreen> {
         style: TextStyle(
           color: hasData
               ? colors.onSurfaceVariant
-              : colors.onSurfaceVariant.withOpacity(0.7),
+              : colors.onSurfaceVariant.withValues(alpha: 0.7),
           fontStyle: hasData ? FontStyle.normal : FontStyle.italic,
         ),
       ),
@@ -241,7 +241,11 @@ class _UserIdLookupScreenState extends State<UserIdLookupScreen> {
       key: key,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 64, color: colors.onSurfaceVariant.withOpacity(0.5)),
+        Icon(
+          icon,
+          size: 64,
+          color: colors.onSurfaceVariant.withValues(alpha: 0.5),
+        ),
         const SizedBox(height: 16),
         Text(
           title,
@@ -253,7 +257,7 @@ class _UserIdLookupScreenState extends State<UserIdLookupScreen> {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: colors.onSurfaceVariant.withOpacity(0.7),
+            color: colors.onSurfaceVariant.withValues(alpha: 0.7),
           ),
           textAlign: TextAlign.center,
         ),

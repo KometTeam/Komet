@@ -157,7 +157,7 @@ class AboutScreen extends StatelessWidget {
                 'Версия $appVersion',
                 style: TextStyle(
                   fontSize: 16,
-                  color: colors.onSurface.withOpacity(0.7),
+                  color: colors.onSurface.withValues(alpha: 0.7),
                 ),
               ),
             ],
@@ -167,7 +167,7 @@ class AboutScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest.withOpacity(0.3),
+              color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -185,7 +185,7 @@ class AboutScreen extends StatelessWidget {
                 Text(
                   'Мы — команда энтузиастов, создавшая Komet. Нас объединила страсть к технологиям и желание дать пользователям свободу выбора.',
                   style: TextStyle(
-                    color: colors.onSurface.withOpacity(0.8),
+                    color: colors.onSurface.withValues(alpha: 0.8),
                     height: 1.5,
                   ),
                 ),
@@ -266,7 +266,7 @@ class AboutScreen extends StatelessWidget {
                 Text(
                   'Мы верим в открытость, прозрачность и право пользователей на выбор. Komet — это наш ответ излишним ограничениям.',
                   style: TextStyle(
-                    color: colors.onSurface.withOpacity(0.8),
+                    color: colors.onSurface.withValues(alpha: 0.8),
                     height: 1.5,
                   ),
                 ),
@@ -279,7 +279,7 @@ class AboutScreen extends StatelessWidget {
                     child: RichText(
                       text: TextSpan(
                         style: TextStyle(
-                          color: colors.onSurface.withOpacity(0.8),
+                          color: colors.onSurface.withValues(alpha: 0.8),
                           height: 1.5,
                         ),
                         children: [
@@ -305,7 +305,7 @@ class AboutScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest.withOpacity(0.3),
+              color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(

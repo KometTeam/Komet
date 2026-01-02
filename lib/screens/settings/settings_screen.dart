@@ -171,8 +171,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     final isDesktop = themeProvider.useDesktopLayout;
-    final colors = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final padding = MediaQuery.paddingOf(context);
 
     if (widget.isModal || isDesktop) {
       return _buildModalSettings(context);
@@ -185,9 +186,9 @@ class _SettingsScreenState extends State<SettingsScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color.lerp(colors.surface, colors.primary, 0.05)!,
-              colors.surface,
-              Color.lerp(colors.surface, colors.tertiary, 0.05)!,
+              Color.lerp(colorScheme.surface, colorScheme.primary, 0.05)!,
+              colorScheme.surface,
+              Color.lerp(colorScheme.surface, colorScheme.tertiary, 0.05)!,
             ],
           ),
         ),
@@ -203,7 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         icon: const Icon(Icons.arrow_back),
                         onPressed: () => Navigator.of(context).pop(),
                         style: IconButton.styleFrom(
-                          backgroundColor: colors.surfaceContainerHighest,
+                          backgroundColor: colorScheme.surfaceContainerHighest,
                         ),
                       ),
                     if (Navigator.canPop(context)) const SizedBox(width: 16),
@@ -222,7 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                             'Управление аккаунтом и приложением',
                             style: GoogleFonts.manrope(
                               textStyle: textTheme.bodyMedium,
-                              color: colors.onSurfaceVariant,
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -248,7 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildModalSettings(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final screenSize = MediaQuery.of(context).size;
     final screenWidth = screenSize.width;
     final screenHeight = screenSize.height;
@@ -267,18 +268,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                 color: Colors.black.withValues(alpha: 0.3),
               ),
             ),
-
             Center(
               child: isSmallScreen
                   ? Container(
                       width: double.infinity,
                       height: double.infinity,
-                      decoration: BoxDecoration(color: colors.surface),
+                      decoration: BoxDecoration(color: colorScheme.surface),
                       child: Column(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: colors.surface),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                            ),
                             child: Row(
                               children: [
                                 if (_currentModalScreen != 'main')
@@ -318,7 +320,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       height: 900,
                       margin: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: colors.surface,
+                        color: colorScheme.surface,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -333,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: colors.surface,
+                              color: colorScheme.surface,
                               borderRadius: const BorderRadius.only(
                                 topLeft: Radius.circular(16),
                                 topRight: Radius.circular(16),
@@ -368,7 +370,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                               ],
                             ),
                           ),
-
                           Expanded(child: _buildModalContent()),
                         ],
                       ),
@@ -700,8 +701,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                 boxShadow: expansionProgress > 0
                     ? [
                         BoxShadow(
-                          color: colors.shadow.withOpacity(
-                            0.2 * expansionProgress,
+                          color: colors.shadow.withValues(
+                            alpha: 0.2 * expansionProgress,
                           ),
                           blurRadius: 20 * expansionProgress,
                           offset: Offset(0, 8 * expansionProgress),
@@ -755,7 +756,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               'ID: ${_myProfile!.id}',
               style: GoogleFonts.manrope(
                 textStyle: textTheme.bodyMedium,
-                color: colors.onSurfaceVariant.withOpacity(0.7),
+                color: colors.onSurfaceVariant.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),
@@ -787,12 +788,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: colors.primary.withOpacity(0.3),
+                    color: colors.primary.withValues(alpha: 0.3),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: colors.primary.withOpacity(0.1),
+                      color: colors.primary.withValues(alpha: 0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),
@@ -884,7 +885,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: colors.outline.withOpacity(0.2),
+                color: colors.outline.withValues(alpha: 0.2),
                 width: 1,
               ),
             ),
@@ -894,7 +895,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: colors.primaryContainer.withOpacity(0.5),
+                    color: colors.primaryContainer.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: colors.primary, size: 24),

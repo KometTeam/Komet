@@ -380,7 +380,9 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
   Widget _buildInfoCard() {
     return Card(
-      color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+      color: Theme.of(
+        context,
+      ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.all(12.0),

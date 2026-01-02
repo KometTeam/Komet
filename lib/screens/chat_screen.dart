@@ -175,7 +175,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             elevation: 0,
-                            backgroundColor: colors.primary.withOpacity(0.10),
+                            backgroundColor: colors.primary.withValues(
+                              alpha: 0.10,
+                            ),
                             foregroundColor: colors.primary,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
@@ -3134,7 +3136,7 @@ class _ChatScreenState extends State<ChatScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.surface.withOpacity(0.92),
+        color: colors.surface.withValues(alpha: 0.92),
         border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
       child: Row(
@@ -3632,7 +3634,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .primaryContainer
-                                                .withOpacity(0.5),
+                                                .withValues(alpha: 0.5),
                                             borderRadius: BorderRadius.circular(
                                               16,
                                             ),
@@ -3848,7 +3850,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Container(
                   color: Theme.of(
                     context,
-                  ).colorScheme.surface.withOpacity(theme.topBarOpacity),
+                  ).colorScheme.surface.withValues(alpha: theme.topBarOpacity),
                 ),
               ),
             )
@@ -4164,10 +4166,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: theme.ultraOptimizeChats
-                                ? Colors.red.withOpacity(0.7)
+                                ? Colors.red.withValues(alpha: 0.7)
                                 : theme.optimizeChats
-                                ? Colors.orange.withOpacity(0.7)
-                                : Colors.blue.withOpacity(0.7),
+                                ? Colors.orange.withValues(alpha: 0.7)
+                                : Colors.blue.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -4284,7 +4286,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   sigmaX: provider.chatWallpaperBlurSigma,
                   sigmaY: provider.chatWallpaperBlurSigma,
                 ),
-                child: Container(color: Colors.black.withOpacity(0.0)),
+                child: Container(color: Colors.black.withValues(alpha: 0.0)),
               ),
           ],
         );
@@ -4298,7 +4300,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 style: TextStyle(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withOpacity(0.6),
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -4343,11 +4345,11 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: BoxDecoration(
               color: Theme.of(
                 context,
-              ).colorScheme.surface.withOpacity(theme.bottomBarOpacity),
+              ).colorScheme.surface.withValues(alpha: theme.bottomBarOpacity),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
@@ -4367,7 +4369,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       decoration: BoxDecoration(
                         color: Theme.of(
                           context,
-                        ).colorScheme.primaryContainer.withOpacity(0.4),
+                        ).colorScheme.primaryContainer.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(12),
                         border: Border(
                           left: BorderSide(
@@ -4407,9 +4409,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                             : 'Фото'),
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.7),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.7),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -4444,7 +4447,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       decoration: BoxDecoration(
                         color: Theme.of(
                           context,
-                        ).colorScheme.errorContainer.withOpacity(0.4),
+                        ).colorScheme.errorContainer.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(12),
                         border: Border(
                           left: BorderSide(
@@ -4488,9 +4491,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           Text(
                             'или включите block_bypass',
                             style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer.withOpacity(0.7),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onErrorContainer
+                                  .withValues(alpha: 0.7),
                               fontSize: 11,
                               fontStyle: FontStyle.italic,
                             ),
@@ -4513,9 +4517,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: Icon(
                                 Icons.auto_fix_high,
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.3)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.3)
                                     : Theme.of(context).colorScheme.primary,
                                 size: 24,
                               ),
@@ -4534,7 +4537,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     onColorSelected: (color) {
                                       if (_currentKometColorPrefix == null)
                                         return;
-                                      final hex = color.value
+                                      final hex = color
+                                          .toARGB32()
                                           .toRadixString(16)
                                           .padLeft(8, '0')
                                           .substring(2)
@@ -4682,11 +4686,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .surfaceContainerHighest
-                                                .withOpacity(0.25)
+                                                .withValues(alpha: 0.25)
                                           : Theme.of(context)
                                                 .colorScheme
                                                 .surfaceContainerHighest
-                                                .withOpacity(0.4),
+                                                .withValues(alpha: 0.4),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(24),
                                         borderSide: BorderSide.none,
@@ -4796,9 +4800,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             child: Icon(
                               Icons.attach_file,
                               color: isBlocked
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.3)
+                                  ? Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.3)
                                   : Theme.of(context).colorScheme.primary,
                               size: 24,
                             ),
@@ -4817,9 +4820,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: Icon(
                                 Icons.animation,
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.3)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.3)
                                     : Colors.orange,
                                 size: 24,
                               ),
@@ -4832,7 +4834,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           color: isBlocked
                               ? Theme.of(
                                   context,
-                                ).colorScheme.onSurface.withOpacity(0.2)
+                                ).colorScheme.onSurface.withValues(alpha: 0.2)
                               : Theme.of(context).colorScheme.primary,
                           shape: BoxShape.circle,
                         ),
@@ -4846,9 +4848,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: Icon(
                                 Icons.send_rounded,
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.5)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.5)
                                     : Theme.of(context).colorScheme.onPrimary,
                                 size: 24,
                               ),
@@ -4890,9 +4891,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           padding: const EdgeInsets.all(10),
                           margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer.withOpacity(0.4),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(12),
                             border: Border(
                               left: BorderSide(
@@ -4964,7 +4966,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           decoration: BoxDecoration(
                             color: Theme.of(
                               context,
-                            ).colorScheme.errorContainer.withOpacity(0.4),
+                            ).colorScheme.errorContainer.withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(12),
                             border: Border(
                               left: BorderSide(
@@ -5013,7 +5015,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   color: Theme.of(context)
                                       .colorScheme
                                       .onErrorContainer
-                                      .withOpacity(0.7),
+                                      .withValues(alpha: 0.7),
                                   fontSize: 11,
                                   fontStyle: FontStyle.italic,
                                 ),
@@ -5045,11 +5047,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                         ? Theme.of(context)
                                               .colorScheme
                                               .surfaceContainerHighest
-                                              .withOpacity(0.25)
+                                              .withValues(alpha: 0.25)
                                         : Theme.of(context)
                                               .colorScheme
                                               .surfaceContainerHighest
-                                              .withOpacity(0.4),
+                                              .withValues(alpha: 0.4),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(24),
                                       borderSide: BorderSide.none,
@@ -5200,7 +5202,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .surfaceContainerHighest
-                                                .withOpacity(0.25)
+                                                .withValues(alpha: 0.25)
                                           : Theme.of(
                                               context,
                                             ).colorScheme.primary,
@@ -5212,7 +5214,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .onSurfaceVariant
-                                                .withOpacity(0.5)
+                                                .withValues(alpha: 0.5)
                                           : Theme.of(
                                               context,
                                             ).colorScheme.onPrimary,
@@ -5242,7 +5244,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ? Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest
-                                            .withOpacity(0.25)
+                                            .withValues(alpha: 0.25)
                                       : Theme.of(context).colorScheme.primary,
                                   shape: BoxShape.circle,
                                 ),
@@ -5254,7 +5256,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ? Theme.of(context)
                                             .colorScheme
                                             .onSurfaceVariant
-                                            .withOpacity(0.5)
+                                            .withValues(alpha: 0.5)
                                       : Theme.of(context).colorScheme.onPrimary,
                                   size: 20,
                                 ),
@@ -5277,11 +5279,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(
                       context,
-                    ).colorScheme.surface.withOpacity(0.85),
+                    ).colorScheme.surface.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
@@ -5299,9 +5301,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             padding: const EdgeInsets.all(10),
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer.withOpacity(0.4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(12),
                               border: Border(
                                 left: BorderSide(
@@ -5345,7 +5348,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           color: Theme.of(context)
                                               .colorScheme
                                               .onSurface
-                                              .withOpacity(0.7),
+                                              .withValues(alpha: 0.7),
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -5380,9 +5383,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             padding: const EdgeInsets.all(12),
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.errorContainer.withOpacity(0.4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .errorContainer
+                                  .withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(12),
                               border: Border(
                                 left: BorderSide(
@@ -5433,7 +5437,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onErrorContainer
-                                        .withOpacity(0.7),
+                                        .withValues(alpha: 0.7),
                                     fontSize: 11,
                                     fontStyle: FontStyle.italic,
                                   ),
@@ -5463,11 +5467,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ? Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest
-                                            .withOpacity(0.25)
+                                            .withValues(alpha: 0.25)
                                       : Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest
-                                            .withOpacity(0.4),
+                                            .withValues(alpha: 0.4),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(24),
                                     borderSide: BorderSide.none,
@@ -5531,7 +5535,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             ? Theme.of(context)
                                                   .colorScheme
                                                   .onSurface
-                                                  .withOpacity(0.3)
+                                                  .withValues(alpha: 0.3)
                                             : Theme.of(
                                                 context,
                                               ).colorScheme.primary,
@@ -5559,7 +5563,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
-                                                .withOpacity(0.3)
+                                                .withValues(alpha: 0.3)
                                           : Colors.orange,
                                       size: 24,
                                     ),
@@ -5570,9 +5574,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             Container(
                               decoration: BoxDecoration(
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.2)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.2)
                                     : Theme.of(context).colorScheme.primary,
                                 shape: BoxShape.circle,
                               ),
@@ -5589,7 +5592,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
-                                                .withOpacity(0.5)
+                                                .withValues(alpha: 0.5)
                                           : Theme.of(
                                               context,
                                             ).colorScheme.onPrimary,
@@ -5967,11 +5970,11 @@ class _KometColorPickerBarState extends State<_KometColorPickerBar> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withOpacity(0.9),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -6617,7 +6620,7 @@ class _DateSeparatorChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: Theme.of(
               context,
-            ).colorScheme.primaryContainer.withOpacity(0.5),
+            ).colorScheme.primaryContainer.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -6663,7 +6666,7 @@ class GroupProfileDraggableDialog extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colors.onSurfaceVariant.withOpacity(0.3),
+                  color: colors.onSurfaceVariant.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -6826,7 +6829,9 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                   sigmaY: theme.profileDialogBlur,
                 ),
                 child: Container(
-                  color: Colors.black.withOpacity(theme.profileDialogOpacity),
+                  color: Colors.black.withValues(
+                    alpha: theme.profileDialogOpacity,
+                  ),
                 ),
               ),
             ),
@@ -6882,7 +6887,7 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, -8),
                         ),
@@ -7678,7 +7683,7 @@ class _ControlMessageChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: Theme.of(
               context,
-            ).colorScheme.primaryContainer.withOpacity(0.5),
+            ).colorScheme.primaryContainer.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -7878,7 +7883,7 @@ class _VideoWallpaperBackgroundState extends State<_VideoWallpaperBackground> {
           ),
         ),
 
-        Container(color: Colors.black.withOpacity(0.3)),
+        Container(color: Colors.black.withValues(alpha: 0.3)),
       ],
     );
   }

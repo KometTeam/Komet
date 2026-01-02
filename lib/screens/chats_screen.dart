@@ -1422,8 +1422,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                               child: Text(
                                 _myProfile?.formattedPhone ?? '',
                                 style: TextStyle(
-                                  color: colors.onPrimaryContainer.withOpacity(
-                                    0.8,
+                                  color: colors.onPrimaryContainer.withValues(
+                                    alpha: 0.8,
                                   ),
                                   fontSize: 14,
                                 ),
@@ -1824,14 +1824,14 @@ class _ChatsScreenState extends State<ChatsScreen>
                   Icon(
                     Icons.search,
                     size: 64,
-                    color: colors.onSurfaceVariant.withOpacity(0.5),
+                    color: colors.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Начните вводить для поиска',
                     style: TextStyle(
                       fontSize: 18,
-                      color: colors.onSurfaceVariant.withOpacity(0.7),
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.7),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1839,7 +1839,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     'Или выберите чат из списка выше',
                     style: TextStyle(
                       fontSize: 14,
-                      color: colors.onSurfaceVariant.withOpacity(0.5),
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.5),
                     ),
                   ),
                 ],
@@ -1858,14 +1858,14 @@ class _ChatsScreenState extends State<ChatsScreen>
             Icon(
               Icons.search_off,
               size: 64,
-              color: colors.onSurfaceVariant.withOpacity(0.5),
+              color: colors.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
               'Ничего не найдено',
               style: TextStyle(
                 fontSize: 18,
-                color: colors.onSurfaceVariant.withOpacity(0.7),
+                color: colors.onSurfaceVariant.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 8),
@@ -1873,7 +1873,7 @@ class _ChatsScreenState extends State<ChatsScreen>
               'Попробуйте изменить поисковый запрос',
               style: TextStyle(
                 fontSize: 14,
-                color: colors.onSurfaceVariant.withOpacity(0.5),
+                color: colors.onSurfaceVariant.withValues(alpha: 0.5),
               ),
             ),
           ],
@@ -2367,7 +2367,10 @@ class _ChatsScreenState extends State<ChatsScreen>
           end: Alignment.bottomRight,
         ),
         border: Border(
-          bottom: BorderSide(color: colors.outline.withOpacity(0.2), width: 1),
+          bottom: BorderSide(
+            color: colors.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
         ),
       );
     } else if (themeProvider.folderTabsBackgroundType ==
@@ -2380,7 +2383,10 @@ class _ChatsScreenState extends State<ChatsScreen>
           fit: BoxFit.cover,
         ),
         border: Border(
-          bottom: BorderSide(color: colors.outline.withOpacity(0.2), width: 1),
+          bottom: BorderSide(
+            color: colors.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
         ),
       );
     }
@@ -2393,7 +2399,7 @@ class _ChatsScreenState extends State<ChatsScreen>
             color: colors.surface,
             border: Border(
               bottom: BorderSide(
-                color: colors.outline.withOpacity(0.2),
+                color: colors.outline.withValues(alpha: 0.2),
                 width: 1,
               ),
             ),
@@ -2549,7 +2555,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: colors.onSurfaceVariant.withOpacity(0.4),
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -2561,7 +2567,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: colors.outline.withOpacity(0.2),
+                          color: colors.outline.withValues(alpha: 0.2),
                           width: 1,
                         ),
                       ),
@@ -2814,7 +2820,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colors.onSurfaceVariant.withOpacity(0.4),
+                  color: colors.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -2988,7 +2994,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: Material(
-              color: colors.surface.withOpacity(0.95),
+              color: colors.surface.withValues(alpha: 0.95),
               elevation: 6,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
@@ -3294,7 +3300,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           hintText: 'Поиск в чатах...',
           hintStyle: TextStyle(color: colors.onSurfaceVariant),
           filled: true,
-          fillColor: colors.surfaceContainerHighest.withOpacity(0.3),
+          fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.3),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20),
             borderSide: BorderSide.none,
@@ -3702,7 +3708,7 @@ class _ChatsScreenState extends State<ChatsScreen>
               imageUrl: photoUrl,
               fit: BoxFit.cover,
               placeholder: (context, url) => Container(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: Icon(
                   Icons.photo,
                   size: 12,
@@ -3710,7 +3716,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 ),
               ),
               errorWidget: (context, url, error) => Container(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: Icon(
                   Icons.photo,
                   size: 12,
@@ -3756,7 +3762,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                     imageUrl: photoUrl,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
-                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
                       child: Icon(
                         Icons.person,
                         size: 12,
@@ -3764,7 +3772,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                       ),
                     ),
                     errorWidget: (context, url, error) => Container(
-                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
                       child: Icon(
                         Icons.person,
                         size: 12,
@@ -3773,7 +3783,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                     ),
                   )
                 : Container(
-                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     child: Icon(
                       Icons.person,
                       size: 12,
@@ -3817,7 +3829,7 @@ class _ChatsScreenState extends State<ChatsScreen>
               imageUrl: photoUrl,
               fit: BoxFit.cover,
               placeholder: (context, url) => Container(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: Icon(
                   Icons.photo,
                   size: 12,
@@ -3825,7 +3837,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 ),
               ),
               errorWidget: (context, url, error) => Container(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: Icon(
                   Icons.photo,
                   size: 12,

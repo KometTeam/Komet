@@ -276,10 +276,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
       onLongPress: () {},
       child: Container(
         decoration: BoxDecoration(
-          color: widget.textColor.withOpacity(0.05),
+          color: widget.textColor.withValues(alpha: 0.05),
           borderRadius: widget.borderRadius,
           border: Border.all(
-            color: widget.textColor.withOpacity(0.1),
+            color: widget.textColor.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
@@ -293,7 +293,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: widget.textColor.withOpacity(0.1),
+                    color: widget.textColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: _isLoading
@@ -304,8 +304,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                         )
                       : Icon(
                           _isPlaying ? Icons.pause : Icons.play_arrow,
-                          color: widget.textColor.withOpacity(
-                            0.8 * widget.messageTextOpacity,
+                          color: widget.textColor.withValues(
+                            alpha: 0.8 * widget.messageTextOpacity,
                           ),
                           size: 24,
                         ),
@@ -324,11 +324,11 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                           painter: WaveformPainter(
                             waveform: _waveformData!,
                             progress: progress,
-                            color: widget.textColor.withOpacity(
-                              0.6 * widget.messageTextOpacity,
+                            color: widget.textColor.withValues(
+                              alpha: 0.6 * widget.messageTextOpacity,
                             ),
-                            progressColor: widget.textColor.withOpacity(
-                              0.9 * widget.messageTextOpacity,
+                            progressColor: widget.textColor.withValues(
+                              alpha: 0.9 * widget.messageTextOpacity,
                             ),
                           ),
                           child: LayoutBuilder(
@@ -360,14 +360,16 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                     else
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          activeTrackColor: widget.textColor.withOpacity(
-                            0.8 * widget.messageTextOpacity,
+                          activeTrackColor: widget.textColor.withValues(
+                            alpha: 0.8 * widget.messageTextOpacity,
                           ),
-                          inactiveTrackColor: widget.textColor.withOpacity(0.1),
-                          thumbColor: widget.textColor.withOpacity(
-                            0.9 * widget.messageTextOpacity,
+                          inactiveTrackColor: widget.textColor.withValues(
+                            alpha: 0.1,
                           ),
-                          overlayColor: widget.textColor.withOpacity(0.1),
+                          thumbColor: widget.textColor.withValues(
+                            alpha: 0.9 * widget.messageTextOpacity,
+                          ),
+                          overlayColor: widget.textColor.withValues(alpha: 0.1),
                           thumbShape: const RoundSliderThumbShape(
                             enabledThumbRadius: 6,
                           ),
@@ -392,8 +394,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                         Text(
                           _formatDuration(_position),
                           style: TextStyle(
-                            color: widget.textColor.withOpacity(
-                              0.7 * widget.messageTextOpacity,
+                            color: widget.textColor.withValues(
+                              alpha: 0.7 * widget.messageTextOpacity,
                             ),
                             fontSize: 12,
                           ),
@@ -403,8 +405,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                               ? _formatDuration(_totalDuration)
                               : widget.durationText,
                           style: TextStyle(
-                            color: widget.textColor.withOpacity(
-                              0.7 * widget.messageTextOpacity,
+                            color: widget.textColor.withValues(
+                              alpha: 0.7 * widget.messageTextOpacity,
                             ),
                             fontSize: 12,
                           ),

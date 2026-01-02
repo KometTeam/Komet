@@ -190,7 +190,7 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: colors.onSurfaceVariant.withOpacity(0.4),
+              color: colors.onSurfaceVariant.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),

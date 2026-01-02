@@ -177,7 +177,7 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
         body: Container(
           width: double.infinity,
           height: double.infinity,
-          color: colors.surface.withOpacity(0.95),
+          color: colors.surface.withValues(alpha: 0.95),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -255,7 +255,9 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colors.outline.withOpacity(0.3)),
+                  border: Border.all(
+                    color: colors.outline.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [

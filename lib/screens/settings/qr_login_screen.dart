@@ -173,7 +173,7 @@ class _QrLoginScreenState extends State<QrLoginScreen> {
             Icon(
               Icons.qr_code_scanner_rounded,
               size: 150,
-              color: colors.onSurface.withOpacity(0.3),
+              color: colors.onSurface.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
@@ -201,7 +201,7 @@ class _QrLoginScreenState extends State<QrLoginScreen> {
               borderRadius: BorderRadius.circular(24.0),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   spreadRadius: 2,
                   blurRadius: 15,
                   offset: const Offset(0, 4),
@@ -261,7 +261,7 @@ class _QrLoginScreenState extends State<QrLoginScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: colors.errorContainer.withOpacity(0.3),
+                color: colors.errorContainer.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Row(

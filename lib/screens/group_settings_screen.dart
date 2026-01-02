@@ -710,8 +710,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withOpacity(0.1),
-                    Colors.black.withOpacity(0.5),
+                    Colors.black.withValues(alpha: 0.1),
+                    Colors.black.withValues(alpha: 0.5),
                   ],
                   stops: const [0.5, 0.7, 1.0],
                 ),
@@ -756,10 +756,12 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: colorScheme.surfaceVariant.withOpacity(0.5),
+                          color: colorScheme.surfaceContainerHighest.withValues(
+                            alpha: 0.5,
+                          ),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: colorScheme.outline.withOpacity(0.3),
+                            color: colorScheme.outline.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Column(

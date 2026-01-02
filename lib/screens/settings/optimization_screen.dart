@@ -162,7 +162,7 @@ class _OutlinedSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: colors.outline.withOpacity(0.3)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: child,

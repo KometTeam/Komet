@@ -64,7 +64,7 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: colors.onSurfaceVariant.withOpacity(0.3),
+              color: colors.onSurfaceVariant.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -73,7 +73,9 @@ class _GroupManagementPanelState extends State<GroupManagementPanel> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: colors.outline.withOpacity(0.2)),
+                bottom: BorderSide(
+                  color: colors.outline.withValues(alpha: 0.2),
+                ),
               ),
             ),
             child: Row(

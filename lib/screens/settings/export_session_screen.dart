@@ -251,7 +251,7 @@ class _ExportSessionScreenState extends State<ExportSessionScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: colors.errorContainer.withOpacity(0.3),
+                color: colors.errorContainer.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(

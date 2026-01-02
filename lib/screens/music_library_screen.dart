@@ -162,14 +162,16 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                                 Icon(
                                   Icons.music_off,
                                   size: 64,
-                                  color: colorScheme.onSurface.withOpacity(0.5),
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.5,
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Нет музыки',
                                   style: theme.textTheme.titleLarge?.copyWith(
-                                    color: colorScheme.onSurface.withOpacity(
-                                      0.7,
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.7,
                                     ),
                                   ),
                                 ),
@@ -177,8 +179,8 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                                 Text(
                                   'Скачайте музыку из чатов',
                                   style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurface.withOpacity(
-                                      0.5,
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.5,
                                     ),
                                   ),
                                 ),
@@ -202,8 +204,8 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 color: isCurrentTrack
-                                    ? colorScheme.primaryContainer.withOpacity(
-                                        0.3,
+                                    ? colorScheme.primaryContainer.withValues(
+                                        alpha: 0.3,
                                       )
                                     : null,
                                 child: ListTile(
@@ -256,7 +258,7 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                                         style: theme.textTheme.bodyMedium
                                             ?.copyWith(
                                               color: colorScheme.onSurface
-                                                  .withOpacity(0.7),
+                                                  .withValues(alpha: 0.7),
                                             ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -268,7 +270,7 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
                                                 color: colorScheme.onSurface
-                                                    .withOpacity(0.5),
+                                                    .withValues(alpha: 0.5),
                                               ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -283,7 +285,7 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                                               style: theme.textTheme.bodySmall
                                                   ?.copyWith(
                                                     color: colorScheme.onSurface
-                                                        .withOpacity(0.5),
+                                                        .withValues(alpha: 0.5),
                                                   ),
                                             ),
                                             const SizedBox(width: 8),
@@ -292,7 +294,7 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                                               style: theme.textTheme.bodySmall
                                                   ?.copyWith(
                                                     color: colorScheme.onSurface
-                                                        .withOpacity(0.5),
+                                                        .withValues(alpha: 0.5),
                                                   ),
                                             ),
                                             const SizedBox(width: 8),
@@ -314,7 +316,9 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                                                         ?.copyWith(
                                                           color: colorScheme
                                                               .onSurface
-                                                              .withOpacity(0.5),
+                                                              .withValues(
+                                                                alpha: 0.5,
+                                                              ),
                                                         ),
                                                   );
                                                 }
