@@ -24,7 +24,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.38.0'
           channel: 'stable'
       
       - name: Get dependencies
@@ -58,7 +58,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.38.0'
           channel: 'stable'
       
       - name: Get dependencies
@@ -82,7 +82,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.38.0'
           channel: 'stable'
       
       - name: Get dependencies
@@ -106,7 +106,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.38.0'
           channel: 'stable'
       
       - name: Install Linux dependencies
@@ -135,7 +135,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.38.0'
           channel: 'stable'
       
       - name: Get dependencies
