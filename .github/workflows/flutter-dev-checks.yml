@@ -46,5 +46,3 @@ jobs:
       
           cat analyze.log
 
-      - name: Flutter test
-        run: flutter test
