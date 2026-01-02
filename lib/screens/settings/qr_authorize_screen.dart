@@ -307,11 +307,12 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
         const SnackBar(content: Text('Запрос авторизации отправлен')),
       );
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('Failed to send authorization request: $e\n$stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Не удалось отправить запрос: $e'),
+          const SnackBar(
+            content: Text('Не удалось отправить запрос. Попробуйте ещё раз.'),
             backgroundColor: Colors.red,
           ),
         );
