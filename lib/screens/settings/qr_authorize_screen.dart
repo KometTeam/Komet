@@ -21,6 +21,16 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
     facing: CameraFacing.back,
   );
 
+  /// Duration to wait for a QR code to remain stable in the camera view
+  /// before confirming it. This prevents accidental scans when the camera
+  /// briefly passes over a QR code.
+  static const Duration _qrStabilityDuration = Duration(milliseconds: 1300);
+
+  /// Maximum time threshold between the last seen timestamp and confirmation
+  /// attempt. If the QR code hasn't been seen within this timeframe, it's
+  /// considered to have left the camera view and confirmation is cancelled.
+  static const Duration _qrVisibilityThreshold = Duration(milliseconds: 320);
+
   bool _isSheetOpen = false;
   bool _isFinishing = false;
   String? _candidateCode;
@@ -109,7 +119,7 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
       _candidateCode = code;
       _stabilityTimer?.cancel();
       _stabilityTimer = Timer(
-        const Duration(milliseconds: 1300),
+        _qrStabilityDuration,
         _tryConfirmCandidate,
       );
     }
@@ -262,7 +272,7 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
     }
 
     final now = DateTime.now();
-    if (now.difference(lastSeen) > const Duration(milliseconds: 320)) {
+    if (now.difference(lastSeen) > _qrVisibilityThreshold) {
       // QR ушёл из кадра, не подтверждаем.
       _candidateCode = null;
       return;
