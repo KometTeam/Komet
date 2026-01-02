@@ -417,9 +417,11 @@ class _OTPScreenState extends State<OTPScreen>
                                       inputFormatters: [
                                         FilteringTextInputFormatter.digitsOnly,
                                       ],
-                                      androidSmsAutofillMethod:
-                                          AndroidSmsAutofillMethod
-                                              .smsUserConsentApi,
+                                      // TODO(deminearchiver): smart_auth
+                                      //  https://github.com/Tkko/Flutter_PinPut/blob/master/MIGRATION.md
+                                      // androidSmsAutofillMethod:
+                                      //     AndroidSmsAutofillMethod
+                                      //         .smsUserConsentApi,
                                       defaultPinTheme: defaultPinTheme,
                                       focusedPinTheme: defaultPinTheme.copyWith(
                                         decoration: defaultPinTheme.decoration!

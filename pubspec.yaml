@@ -33,58 +33,59 @@ dependencies:
     sdk: flutter
 
   # Hosted зависимости
-  dynamic_color: ^1.7.0
-  pinput: ^4.0.0
+  dynamic_color: ^1.8.1
+  pinput: ^6.0.1
   mask_text_input_formatter: ^2.9.0
-  web_socket_channel: ^2.4.0
-  uuid: ^4.4.0
-  device_info_plus: ^10.1.0
-  package_info_plus: ^8.0.0
-  battery_plus: ^6.0.2
-  shared_preferences: ^2.2.3
+  web_socket_channel: ^3.0.3
+  uuid: ^4.5.2
+  device_info_plus: ^12.3.0
+  package_info_plus: ^9.0.0
+  battery_plus: ^7.0.0
+  shared_preferences: ^2.5.4
   intl: ^0.20.2
-  provider: ^6.1.2
+  provider: ^6.1.5+1
   flutter_colorpicker: ^1.1.0
-  http: ^1.5.0
-  image_picker: ^1.1.2
+  http: ^1.6.0
+  image_picker: ^1.2.1
   path_provider: ^2.1.5
-  path: ^1.9.0
-  crypto: ^3.0.3
-  cached_network_image: ^3.3.1
+  path: ^1.9.1
+  crypto: ^3.0.7
+  cached_network_image: ^3.4.1
   scrollable_positioned_list: ^0.3.8
   socks5_proxy: ^2.1.1
   flutter_launcher_icons: ^0.14.4
-  flutter_timezone: ^5.0.0
+  flutter_timezone: ^5.0.1
   timezone: ^0.10.1
-  file_picker: ^10.3.3
-  permission_handler: ^11.3.1
-  image: ^4.1.7
+  file_picker: ^10.3.8
+  permission_handler: ^12.0.1
+  image: ^4.7.2
   encrypt: ^5.0.3
-  google_fonts: ^6.2.1
-  share_plus: ^12.0.0
+  google_fonts: ^6.3.3
+  share_plus: ^12.0.1
   url_launcher: ^6.3.2
-  flutter_background_service: ^5.0.1
+  flutter_background_service: ^5.1.0
   flutter_local_notifications: ^19.5.0
-  wakelock_plus: ^1.2.8
-  video_player: ^2.9.2
+  wakelock_plus: ^1.4.0
+  video_player: ^2.10.1
   qr_flutter: ^4.1.0
-  mobile_scanner: ^7.1.2
-  es_compression: ^2.0.14
+  mobile_scanner: ^7.1.4
+  es_compression: ^2.0.15
   msgpack_dart: ^1.0.1
-  ffi: ^2.1.0
+  ffi: ^2.1.4
   disable_battery_optimization: ^1.1.2
   flutter_highlight: ^0.7.0
   flutter_linkify: ^6.0.0
-  app_links: ^6.4.1
-  open_file: ^3.5.2
-  flutter_secure_storage: ^9.2.4
+  app_links: ^7.0.0
+  open_file: ^3.5.10
+  flutter_secure_storage: ^10.0.0
   flutter_inappwebview: ^6.1.5
-  lottie: ^3.1.2
-  flutter_svg: ^2.0.10+1
-  chewie: ^1.7.5
-  just_audio: ^0.9.40
+  lottie: ^3.3.2
+  flutter_svg: ^2.2.3
+  chewie: ^1.13.0
+  just_audio: ^0.10.5
   platform_info: ^5.0.0
   flutter_markdown_plus: ^1.0.7
+  smart_auth: ^3.2.0
 
 dev_dependencies:
   # SDK зависимости
