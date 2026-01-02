@@ -279,6 +279,8 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
       }
     } catch (e) {
       // If property access fails, return null
+      // Log for debugging coordinate conversion issues
+      debugPrint('Failed to convert coordinate to Offset: $e');
       return null;
     }
 
