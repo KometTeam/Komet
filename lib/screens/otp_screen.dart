@@ -32,6 +32,7 @@ class _OTPScreenState extends State<OTPScreen>
   StreamSubscription? _apiSubscription;
   bool _isLoading = false;
   bool _isNavigating = false;
+  bool _isShowingError = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -206,7 +207,9 @@ class _OTPScreenState extends State<OTPScreen>
           SchedulerBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               setState(() => _isLoading = false);
-              _handleIncorrectCode();
+              if (!_isShowingError) {
+                _handleIncorrectCode();
+              }
             }
           });
         }
@@ -242,6 +245,8 @@ class _OTPScreenState extends State<OTPScreen>
   }
 
   void _handleIncorrectCode() {
+    if (_isShowingError) return;
+    _isShowingError = true;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Неверный код. Попробуйте снова.'),
@@ -250,7 +255,11 @@ class _OTPScreenState extends State<OTPScreen>
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(10),
       ),
-    );
+    ).closed.then((_) {
+      if (mounted) {
+        _isShowingError = false;
+      }
+    });
     _pinController.clear();
     _pinFocusNode.requestFocus();
   }
@@ -437,6 +446,11 @@ class _OTPScreenState extends State<OTPScreen>
                                             ),
                                       ),
                                       onCompleted: (pin) => _verifyCode(pin),
+                                      onChanged: (value) {
+                                        if (_isShowingError && value.isNotEmpty) {
+                                          _isShowingError = false;
+                                        }
+                                      },
                                     ),
                                   ),
                                 ],

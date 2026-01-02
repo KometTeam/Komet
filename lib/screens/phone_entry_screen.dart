@@ -116,6 +116,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
   bool _hasProxyConfigured = false;
   StreamSubscription? _apiSubscription;
   bool _isTosAccepted = false;
+  bool _isNavigatingToOtp = false;
   String _customPrefix = '';
 
   late final AnimationController _animationController;
@@ -152,7 +153,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
     _animationController.forward();
 
     _apiSubscription = ApiService.instance.messages.listen((message) {
-      if (message['opcode'] == 17 && mounted) {
+      if (message['opcode'] == 17 && mounted && !_isNavigatingToOtp) {
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (mounted) setState(() => _isLoading = false);
         });
@@ -164,6 +165,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
               : _selectedCountry.code;
           final String fullPhoneNumber =
               prefix + _maskFormatter.getUnmaskedText();
+          _isNavigatingToOtp = true;
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) =>

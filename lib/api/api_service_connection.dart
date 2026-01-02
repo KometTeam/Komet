@@ -404,7 +404,9 @@ extension ApiServiceConnection on ApiService {
           (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256) &&
           decodedMessage['payload'] != null &&
           decodedMessage['payload']['token'] != null) {
-        _handleSessionTerminated();
+        if (!_isTerminatingOtherSessions) {
+          _handleSessionTerminated();
+        }
         return;
       }
 

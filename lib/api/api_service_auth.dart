@@ -34,7 +34,11 @@ extension ApiServiceAuth on ApiService {
   }
 
   void terminateAllSessions() {
+    _isTerminatingOtherSessions = true;
     _sendMessage(97, {});
+    Future.delayed(const Duration(seconds: 2), () {
+      _isTerminatingOtherSessions = false;
+    });
   }
 
   Future<void> verifyCode(String token, String code) async {

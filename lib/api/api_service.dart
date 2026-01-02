@@ -135,6 +135,8 @@ class ApiService {
   bool _isSessionReady = false;
   bool get isSessionReady => _isSessionReady;
 
+  bool _isTerminatingOtherSessions = false;
+
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
 
