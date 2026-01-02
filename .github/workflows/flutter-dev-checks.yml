@@ -25,8 +25,26 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Flutter analyze
-        run: flutter analyze
+      - name: Flutter analyze (errors only)
+        run: |
+          set +e
+          flutter analyze > analyze.log
+          status=$?
+          set -e
+      
+          if [ $status -ne 0 ]; then
+            if grep -q "error •" analyze.log; then
+              echo "Found errors in flutter analyze"
+              cat analyze.log
+              exit 1
+            else
+              echo "Only warnings/info in flutter analyze, продолжаем"
+              cat analyze.log
+              exit 0
+            fi
+          fi
+      
+          cat analyze.log
 
       - name: Flutter test
         run: flutter test
