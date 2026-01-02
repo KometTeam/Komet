@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' show lerpDouble;
 
@@ -297,7 +298,120 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
     await _scannerController.start();
   }
 
+  bool _validateQrLink(String qrLink) {
+    try {
+      // Parse the QR link as JSON
+      final decoded = jsonDecode(qrLink) as Map<String, dynamic>;
+
+      // Validate type field
+      if (decoded['type'] != 'komet_auth_v1') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Неверный тип QR-кода. Используйте только коды, сгенерированные приложением Komet.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      // Validate token field
+      final token = decoded['token'];
+      if (token == null || (token is String && token.isEmpty)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('QR-код не содержит токен авторизации. Пожалуйста, сгенерируйте новый код.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      // Validate timestamp field
+      final timestamp = decoded['timestamp'];
+      if (timestamp == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('QR-код не содержит временную метку. Пожалуйста, сгенерируйте новый код.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      // Parse and validate timestamp freshness (within 60 seconds)
+      int qrTimestamp;
+      if (timestamp is int) {
+        qrTimestamp = timestamp;
+      } else if (timestamp is String) {
+        final parsed = int.tryParse(timestamp);
+        if (parsed == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Неверный формат временной метки в QR-коде.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return false;
+        }
+        qrTimestamp = parsed;
+      } else if (timestamp is double) {
+        qrTimestamp = timestamp.toInt();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Неверный формат временной метки в QR-коде.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      final int now = DateTime.now().millisecondsSinceEpoch;
+      const int oneMinuteInMillis = 60 * 1000;
+
+      if ((now - qrTimestamp) > oneMinuteInMillis) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('QR-код устарел. Пожалуйста, сгенерируйте новый на авторизуемом устройстве.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('QR link validation failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ошибка проверки QR-кода. Убедитесь, что код был сгенерирован правильно.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
   Future<bool> _sendAuthorization(String qrLink) async {
+    // Validate QR link before sending to API
+    if (!_validateQrLink(qrLink)) {
+      return false;
+    }
+
     try {
       final api = ApiService.instance;
 
