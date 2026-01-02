@@ -86,6 +86,8 @@ dependencies:
   platform_info: ^5.0.0
   flutter_markdown_plus: ^1.0.7
   smart_auth: ^3.2.0
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.9.0
 
 dev_dependencies:
   # SDK зависимости
@@ -94,6 +96,9 @@ dev_dependencies:
 
   # Hosted зависимости
   flutter_lints: ^6.0.0
+  freezed: ^3.2.4
+  json_serializable: ^6.11.3
+  build_runner: ^2.10.4
 
 # Конфигурация Flutter.
 flutter:
