@@ -8,6 +8,7 @@ import 'package:gwid/api/api_service.dart';
 import 'package:gwid/screens/phone_entry_screen.dart';
 import 'package:gwid/screens/custom_request_screen.dart';
 import 'dart:async';
+import 'package:gwid/app_sizes.dart';
 
 class DebugScreen extends StatelessWidget {
   const DebugScreen({super.key});
@@ -24,7 +25,7 @@ class DebugScreen extends StatelessWidget {
         foregroundColor: colors.onSurface,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(AppSpacing.xxl),
         children: [
           _OutlinedSection(
             child: Column(

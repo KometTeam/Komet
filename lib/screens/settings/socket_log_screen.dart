@@ -7,6 +7,7 @@ import 'package:gwid/api/api_service.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:gwid/app_sizes.dart';
 
 enum LogType { send, receive, status, pingpong }
 

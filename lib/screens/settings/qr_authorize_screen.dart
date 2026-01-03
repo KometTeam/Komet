@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:gwid/api/api_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class QrAuthorizeScreen extends StatefulWidget {
   const QrAuthorizeScreen({super.key});

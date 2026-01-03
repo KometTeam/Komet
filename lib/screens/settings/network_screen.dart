@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:gwid/api/api_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class NetworkScreen extends StatefulWidget {
   const NetworkScreen({super.key});

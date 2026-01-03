@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gwid/plugins/plugin_model.dart';
 import 'package:gwid/plugins/plugin_ui_builder.dart';
+import 'package:gwid/app_sizes.dart';
 
 class PluginSectionScreen extends StatelessWidget {
   final PluginSection section;
@@ -14,7 +15,7 @@ class PluginSectionScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(section.title)),
       body: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
         itemCount: section.items.length,
         itemBuilder: (context, index) {
           return builder.buildSettingsItem(section.items[index], context);

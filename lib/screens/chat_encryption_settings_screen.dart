@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gwid/services/chat_encryption_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ChatEncryptionSettingsScreen extends StatefulWidget {
   final int chatId;

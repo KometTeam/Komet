@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:gwid/plugins/plugin_model.dart';
 import 'package:gwid/plugins/plugin_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class PluginsScreen extends StatefulWidget {
   const PluginsScreen({super.key});

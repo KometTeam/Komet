@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:gwid/app_sizes.dart';
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});

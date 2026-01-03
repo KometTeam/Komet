@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gwid/utils/theme_provider.dart';
+import 'package:gwid/app_sizes.dart';
 
 /// Builder для AppBar экрана чатов
 class ChatsAppBarBuilder {

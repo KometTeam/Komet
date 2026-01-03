@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
+import 'package:gwid/app_sizes.dart';
 
 class AnimationsScreen extends StatelessWidget {
   const AnimationsScreen({super.key});
@@ -17,7 +18,7 @@ class AnimationsScreen extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.xxl, vertical: AppSpacing.xxl),
         children: [
           _ModernSection(
             title: "Анимации сообщений",

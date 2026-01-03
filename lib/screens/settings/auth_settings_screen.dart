@@ -4,6 +4,7 @@ import 'package:gwid/utils/proxy_service.dart';
 import 'package:gwid/screens/settings/proxy_settings_screen.dart';
 import 'package:gwid/screens/settings/session_spoofing_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gwid/app_sizes.dart';
 
 class AuthSettingsScreen extends StatefulWidget {
   const AuthSettingsScreen({super.key});

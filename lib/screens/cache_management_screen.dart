@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gwid/services/cache_service.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/services/chat_cache_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class CacheManagementScreen extends StatefulWidget {
   const CacheManagementScreen({super.key});
