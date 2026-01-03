@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gwid/screens/settings/privacy_settings_screen.dart';
 import 'package:gwid/screens/settings/security_settings_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class PrivacySecurityScreen extends StatefulWidget {
   final bool isModal;

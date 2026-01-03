@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:gwid/api/api_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:gwid/utils/download_path_helper.dart';
+import 'package:gwid/app_sizes.dart';
 
 class StorageScreen extends StatefulWidget {
   final bool isModal;
@@ -28,17 +29,17 @@ class _StorageScreenState extends State<StorageScreen>
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
         : SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(AppSpacing.xxl),
             child: Column(
               children: [
                 _buildStorageChart(colors),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.xxxl),
 
                 _buildStorageDetails(colors),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.xxxl),
 
                 _buildDownloadFolderSetting(colors),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.xxxl),
 
                 _buildActionButtons(colors),
               ],

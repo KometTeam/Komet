@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class JoinGroupScreen extends StatefulWidget {
   const JoinGroupScreen({super.key});
@@ -53,10 +54,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                   ),
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.mdBorder,
                   ),
                   behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.all(10),
+                  margin: EdgeInsets.all(AppSpacing.lg),
                 ),
               );
 
@@ -82,10 +83,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                   content: const Text('Успешно подписались на канал!'),
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.mdBorder,
                   ),
                   behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.all(10),
+                  margin: EdgeInsets.all(AppSpacing.lg),
                 ),
               );
 
@@ -117,10 +118,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
             content: Text(errorMessage),
             backgroundColor: Theme.of(context).colorScheme.error,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.mdBorder,
             ),
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(10),
+            margin: EdgeInsets.all(AppSpacing.lg),
           ),
         );
       }
@@ -181,10 +182,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           content: const Text('Введите ссылку'),
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
       return;
@@ -213,10 +214,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
             content: Text('Ошибка: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.mdBorder,
             ),
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(10),
+            margin: EdgeInsets.all(AppSpacing.lg),
           ),
         );
       }
@@ -233,10 +234,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           ),
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
       return;
@@ -267,10 +268,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                   ),
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.mdBorder,
                   ),
                   behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.all(10),
+                  margin: EdgeInsets.all(AppSpacing.lg),
                 ),
               );
               Navigator.of(context).pop();
@@ -309,10 +310,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                     ),
                     backgroundColor: Colors.green,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.mdBorder,
                     ),
                     behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.all(10),
+                    margin: EdgeInsets.all(AppSpacing.lg),
                   ),
                 );
                 Navigator.of(context).pop();
@@ -349,10 +350,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                     ),
                     backgroundColor: Colors.green,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.mdBorder,
                     ),
                     behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.all(10),
+                    margin: EdgeInsets.all(AppSpacing.lg),
                   ),
                 );
                 Navigator.of(context).pop();
@@ -375,10 +376,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           content: Text('Ошибка присоединения: ${e.toString()}'),
           backgroundColor: Theme.of(context).colorScheme.error,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
     }

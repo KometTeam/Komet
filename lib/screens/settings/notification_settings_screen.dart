@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
 import 'dart:io' show Platform;
+import 'package:gwid/app_sizes.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   final bool isModal;
@@ -32,25 +33,25 @@ class _NotificationSettingsScreenState
 
     if (isDesktopOrIOS) {
       return ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(AppSpacing.xxl),
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(AppSpacing.xxl),
               child: Column(
                 children: [
-                  Icon(Icons.info_outline, size: 48, color: colors.primary),
-                  const SizedBox(height: 16),
+                  Icon(Icons.info_outline, size: AppIconSize.xxl, color: colors.primary),
+                  const SizedBox(height: AppSpacing.xxl),
                   Text(
                     'Фоновые уведомления недоступны',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: AppFontSize.title,
                       fontWeight: FontWeight.bold,
                       color: colors.primary,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     Platform.isIOS
                         ? 'На iOS фоновые уведомления не поддерживаются системой.'

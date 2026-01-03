@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/screens/chat_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class SearchContactScreen extends StatefulWidget {
   const SearchContactScreen({super.key});
@@ -54,10 +55,10 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
               content: const Text('Контакт найден!'),
               backgroundColor: Colors.green,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppRadius.mdBorder,
               ),
               behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(10),
+              margin: EdgeInsets.all(AppSpacing.lg),
             ),
           );
         }
@@ -89,10 +90,10 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
             content: Text(errorMessage),
             backgroundColor: Colors.orange,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.mdBorder,
             ),
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(10),
+            margin: EdgeInsets.all(AppSpacing.lg),
           ),
         );
       }
@@ -108,10 +109,10 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
           content: const Text('Введите номер телефона'),
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
       return;
@@ -123,10 +124,10 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
           content: const Text('Введите номер телефона в формате +7XXXXXXXXXX'),
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
       return;
@@ -149,10 +150,10 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
           content: Text('Ошибка поиска контакта: ${e.toString()}'),
           backgroundColor: Theme.of(context).colorScheme.error,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
     }
@@ -173,10 +174,10 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
             content: const Text('Не удалось найти чат с этим контактом'),
             backgroundColor: Colors.orange,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.mdBorder,
             ),
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(10),
+            margin: EdgeInsets.all(AppSpacing.lg),
           ),
         );
         return;

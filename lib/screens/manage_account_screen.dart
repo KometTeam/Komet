@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/profile.dart';
 import 'package:gwid/screens/phone_entry_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ManageAccountScreen extends StatefulWidget {
   final Profile? myProfile;
