@@ -126,8 +126,8 @@ class _KometButtonState extends State<KometButton>
             children: [
               if (widget.isLoading) ...[
                 SizedBox(
-                  width: 18,
-                  height: 18,
+                  width: AppIconSize.sm,
+                  height: AppIconSize.sm,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
@@ -135,7 +135,7 @@ class _KometButtonState extends State<KometButton>
                 ),
                 const SizedBox(width: AppSpacing.md),
               ] else if (widget.icon != null) ...[
-                Icon(widget.icon, size: 20, color: foregroundColor),
+                Icon(widget.icon, size: AppIconSize.md, color: foregroundColor),
                 const SizedBox(width: AppSpacing.md),
               ],
               Text(
@@ -191,7 +191,7 @@ class KometTextButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 18, color: color),
+            Icon(icon, size: AppIconSize.sm, color: color),
             const SizedBox(width: AppSpacing.sm),
           ],
           Text(

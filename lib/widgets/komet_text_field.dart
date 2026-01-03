@@ -208,7 +208,7 @@ class _KometTextFieldState extends State<KometTextField> {
 }
 
 /// Search field variant
-class KometSearchField extends StatelessWidget {
+class KometSearchField extends StatefulWidget {
   final TextEditingController? controller;
   final String hintText;
   final ValueChanged<String>? onChanged;
@@ -229,9 +229,43 @@ class KometSearchField extends StatelessWidget {
   });
 
   @override
+  State<KometSearchField> createState() => _KometSearchFieldState();
+}
+
+class _KometSearchFieldState extends State<KometSearchField> {
+  late TextEditingController _controller;
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = widget.controller ?? TextEditingController();
+    _hasText = _controller.text.isNotEmpty;
+    _controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    if (widget.controller == null) {
+      _controller.dispose();
+    } else {
+      _controller.removeListener(_onTextChanged);
+    }
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final newHasText = _controller.text.isNotEmpty;
+    if (newHasText != _hasText) {
+      setState(() {
+        _hasText = newHasText;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final hasText = controller?.text.isNotEmpty ?? false;
 
     return Container(
       constraints: BoxConstraints(
@@ -253,17 +287,17 @@ class KometSearchField extends StatelessWidget {
           ),
           Expanded(
             child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              autofocus: autofocus,
-              onChanged: onChanged,
-              onSubmitted: onSubmitted,
+              controller: _controller,
+              focusNode: widget.focusNode,
+              autofocus: widget.autofocus,
+              onChanged: widget.onChanged,
+              onSubmitted: widget.onSubmitted,
               style: TextStyle(
                 fontSize: AppFontSize.lg,
                 color: colors.onSurface,
               ),
               decoration: InputDecoration(
-                hintText: hintText,
+                hintText: widget.hintText,
                 hintStyle: TextStyle(
                   color: colors.onSurfaceVariant.withOpacity(0.7),
                 ),
@@ -274,14 +308,14 @@ class KometSearchField extends StatelessWidget {
               ),
             ),
           ),
-          if (hasText && onClear != null)
+          if (_hasText && widget.onClear != null)
             IconButton(
               icon: Icon(
                 Icons.close,
                 size: AppIconSize.md,
                 color: colors.onSurfaceVariant,
               ),
-              onPressed: onClear,
+              onPressed: widget.onClear,
               constraints: AppAccessibility.touchTargetConstraints,
             ),
           const SizedBox(width: AppSpacing.sm),

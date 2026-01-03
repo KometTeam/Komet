@@ -154,12 +154,14 @@ class KometNavigationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    // Icon container size slightly smaller than min touch target (40dp)
+    const iconContainerSize = AppAccessibility.minTouchTarget - 4;
 
     return KometListTile(
       leading: icon != null
           ? Container(
-              width: 40,
-              height: 40,
+              width: iconContainerSize,
+              height: iconContainerSize,
               decoration: BoxDecoration(
                 color: colors.primaryContainer.withOpacity(0.5),
                 borderRadius: AppRadius.mdBorder,
@@ -203,12 +205,14 @@ class KometSwitchTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    // Icon container size slightly smaller than min touch target (40dp)
+    const iconContainerSize = AppAccessibility.minTouchTarget - 4;
 
     return KometListTile(
       leading: icon != null
           ? Container(
-              width: 40,
-              height: 40,
+              width: iconContainerSize,
+              height: iconContainerSize,
               decoration: BoxDecoration(
                 color: colors.primaryContainer.withOpacity(0.5),
                 borderRadius: AppRadius.mdBorder,

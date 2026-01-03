@@ -19,6 +19,7 @@ import 'package:gwid/screens/settings/plugin_section_screen.dart';
 import 'package:gwid/plugins/plugin_service.dart';
 import 'package:gwid/utils/theme_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:gwid/app_sizes.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool showBackToChats;
@@ -195,7 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: EdgeInsets.all(AppSpacing.xxl),
                 child: Row(
                   children: [
                     if (Navigator.canPop(context))
@@ -204,9 +205,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                         onPressed: () => Navigator.of(context).pop(),
                         style: IconButton.styleFrom(
                           backgroundColor: colors.surfaceContainerHighest,
+                          minimumSize: Size(AppAccessibility.iconButtonMinSize, AppAccessibility.iconButtonMinSize),
                         ),
                       ),
-                    if (Navigator.canPop(context)) const SizedBox(width: 16),
+                    if (Navigator.canPop(context)) const SizedBox(width: AppSpacing.xxl),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -531,7 +533,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(AppSpacing.xxl),
         itemCount: items.length,
         itemBuilder: (context, index) {
           final item = items[index];
@@ -552,7 +554,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               return GestureDetector(
                 onTap: _handleVersionTap,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),
                   child: Text(
                     appVersion,
                     textAlign: TextAlign.center,
@@ -560,7 +562,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       color: Theme.of(
                         context,
                       ).colorScheme.onSurface.withValues(alpha: 0.4),
-                      fontSize: 12,
+                      fontSize: AppFontSize.md,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -575,7 +577,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget _buildProfileSection() {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final screenWidth = MediaQuery.of(context).size.width - 48;
+    final screenWidth = MediaQuery.of(context).size.width - (AppSpacing.xxl * 2);
 
     final maxOverscroll = 200.0;
     final expansionProgress = (_overscrollOffset / maxOverscroll).clamp(
@@ -836,7 +838,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: AppSpacing.xl),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -871,8 +873,11 @@ class _SettingsScreenState extends State<SettingsScreen>
               ).push(MaterialPageRoute(builder: (context) => screen));
             }
           },
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: AppRadius.xlBorder,
           child: Container(
+            constraints: BoxConstraints(
+              minHeight: AppAccessibility.listTileMinHeight,
+            ),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -882,24 +887,24 @@ class _SettingsScreenState extends State<SettingsScreen>
                   colors.surfaceContainer,
                 ],
               ),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: AppRadius.xlBorder,
               border: Border.all(
                 color: colors.outline.withOpacity(0.2),
                 width: 1,
               ),
             ),
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(AppSpacing.xxxl),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: EdgeInsets.all(AppSpacing.lg),
                   decoration: BoxDecoration(
                     color: colors.primaryContainer.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.mdBorder,
                   ),
-                  child: Icon(icon, color: colors.primary, size: 24),
+                  child: Icon(icon, color: colors.primary, size: AppIconSize.lg),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: AppSpacing.xxl),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -911,7 +916,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.xs),
                       Text(
                         subtitle,
                         style: GoogleFonts.manrope(
@@ -925,11 +930,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.xl),
                 Icon(
                   Icons.arrow_forward,
                   color: colors.onSurfaceVariant,
-                  size: 20,
+                  size: AppIconSize.md,
                 ),
               ],
             ),
