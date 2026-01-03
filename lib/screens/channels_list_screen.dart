@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/channel.dart';
 import 'package:gwid/screens/search_channels_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ChannelsListScreen extends StatefulWidget {
   const ChannelsListScreen({super.key});

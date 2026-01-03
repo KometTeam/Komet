@@ -8,6 +8,7 @@ import 'package:gwid/utils/proxy_service.dart';
 import 'package:gwid/utils/spoofing_service.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:gwid/app_sizes.dart';
 
 class ExportSessionScreen extends StatefulWidget {
   const ExportSessionScreen({super.key});

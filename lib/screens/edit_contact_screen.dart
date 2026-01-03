@@ -4,6 +4,7 @@ import 'package:gwid/services/contact_local_names_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:gwid/app_sizes.dart';
 
 class EditContactScreen extends StatefulWidget {
   final int contactId;

@@ -5,6 +5,7 @@ import 'package:gwid/screens/settings/sessions_screen.dart';
 import 'package:gwid/screens/settings/export_session_screen.dart';
 import 'package:gwid/screens/settings/qr_authorize_screen.dart';
 import 'package:gwid/screens/settings/qr_login_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   final bool isModal;

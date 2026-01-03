@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gwid/models/chat.dart';
 import 'package:gwid/services/chat_read_settings_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ReadSettingsDialogContent extends StatefulWidget {
   final Chat chat;

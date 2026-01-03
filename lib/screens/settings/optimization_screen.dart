@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'dart:io' show Platform;
+import 'package:gwid/app_sizes.dart';
 
 class OptimizationScreen extends StatelessWidget {
   final bool isModal;
@@ -22,7 +23,7 @@ class OptimizationScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("Оптимизация")),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(AppSpacing.xxl),
         children: [
           _OutlinedSection(
             child: Column(
@@ -37,7 +38,7 @@ class OptimizationScreen extends StatelessWidget {
                   value: theme.optimization,
                   onChanged: (value) => theme.setOptimization(value),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.md),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   secondary: const Icon(Icons.monitor),
@@ -46,7 +47,7 @@ class OptimizationScreen extends StatelessWidget {
                   value: theme.showFpsOverlay,
                   onChanged: (value) => theme.setShowFpsOverlay(value),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.md),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.timeline),

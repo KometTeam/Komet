@@ -13,6 +13,7 @@ import 'package:video_player/video_player.dart';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:gwid/app_sizes.dart';
 
 void _showColorPicker(
   BuildContext context, {

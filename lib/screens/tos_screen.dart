@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:gwid/app_sizes.dart';
 
 class TosScreen extends StatelessWidget {
   const TosScreen({super.key});

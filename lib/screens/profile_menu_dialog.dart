@@ -6,6 +6,7 @@ import 'package:gwid/screens/phone_entry_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
 import 'package:gwid/api/api_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ProfileMenuDialog extends StatefulWidget {
   final Profile? myProfile;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:gwid/app_sizes.dart';
 
 class EmptyChatWidget extends StatelessWidget {
   final Map<String, dynamic>? sticker;
@@ -20,14 +21,14 @@ class EmptyChatWidget extends StatelessWidget {
               onTap: onStickerTap,
               child: _buildSticker(sticker!),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xxl),
           ] else ...[
             const SizedBox(
               width: 170,
               height: 170,
               child: Center(child: CircularProgressIndicator()),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xxl),
           ],
           Text(
             'Сообщений пока нет, напишите первым или отправьте этот стикер',

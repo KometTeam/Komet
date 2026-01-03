@@ -3,6 +3,7 @@ import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/widgets/contact_avatar_widget.dart';
 import 'package:gwid/widgets/contact_name_widget.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ContactSelectionScreen extends StatefulWidget {
   const ContactSelectionScreen({super.key});

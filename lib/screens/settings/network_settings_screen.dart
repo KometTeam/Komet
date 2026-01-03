@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:gwid/screens/settings/network_screen.dart';
 import 'package:gwid/screens/settings/proxy_settings_screen.dart';
 import 'package:gwid/screens/settings/socket_log_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class NetworkSettingsScreen extends StatefulWidget {
   final bool isModal;

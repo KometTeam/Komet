@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:disable_battery_optimization/disable_battery_optimization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' show Platform;
+import 'package:gwid/app_sizes.dart';
 
 class KometMiscScreen extends StatefulWidget {
   final bool isModal;

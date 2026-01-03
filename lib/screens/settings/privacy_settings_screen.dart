@@ -4,6 +4,7 @@ import 'package:gwid/utils/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gwid/screens/password_management_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});

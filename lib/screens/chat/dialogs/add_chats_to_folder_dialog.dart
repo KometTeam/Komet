@@ -4,6 +4,7 @@ import 'package:gwid/models/chat.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/models/chat_folder.dart';
 import 'package:gwid/widgets/contact_name_widget.dart';
+import 'package:gwid/app_sizes.dart';
 
 class AddChatsToFolderDialog extends StatefulWidget {
   final ChatFolder folder;

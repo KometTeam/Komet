@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/widgets/user_profile_panel.dart';
+import 'package:gwid/app_sizes.dart';
 
 class GroupSettingsScreen extends StatefulWidget {
   final int chatId;
