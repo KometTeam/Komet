@@ -60,6 +60,9 @@ class AppAccessibility {
   /// Chip minimum height
   static const double chipMinHeight = 32.0;
 
+  /// Icon container size (for leading icons in list tiles)
+  static const double iconContainerSize = 40.0;
+
   /// Constraint for minimum touch target
   static const BoxConstraints touchTargetConstraints = BoxConstraints(
     minWidth: minTouchTarget,

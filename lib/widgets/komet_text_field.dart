@@ -73,6 +73,7 @@ class _KometTextFieldState extends State<KometTextField> {
 
   @override
   void dispose() {
+    _focusNode.removeListener(_handleFocusChange);
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
