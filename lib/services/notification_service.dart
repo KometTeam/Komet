@@ -29,7 +29,7 @@ class NotificationService {
 
   // MethodChannel для нативных уведомлений Android
   static const _nativeChannel = MethodChannel('com.gwid.app/notifications');
-  
+
   // Константы паттернов вибрации
   static const List<int> _vibrationPatternNone = [0];
   static const List<int> _vibrationPatternShort = [0, 200, 100, 200];
@@ -162,8 +162,8 @@ class NotificationService {
         final args = call.arguments as Map<dynamic, dynamic>;
         // Handle both int and Long from Android
         final chatIdDynamic = args['chatId'];
-        final chatId = chatIdDynamic is int 
-            ? chatIdDynamic 
+        final chatId = chatIdDynamic is int
+            ? chatIdDynamic
             : (chatIdDynamic is num ? chatIdDynamic.toInt() : null);
         final text = args['text'] as String?;
 
@@ -179,7 +179,7 @@ class NotificationService {
               text,
             );
             print("✅ Сообщение из уведомления отправлено успешно");
-            
+
             // Отменяем уведомление после отправки
             await cancelNotificationForChat(chatId);
           } catch (e) {
