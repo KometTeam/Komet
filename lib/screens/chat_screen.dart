@@ -34,6 +34,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:gwid/screens/chat_encryption_settings_screen.dart';
 import 'package:gwid/screens/chat_media_screen.dart';
+import 'package:gwid/screens/settings/chat_notification_settings_dialog.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:gwid/services/chat_encryption_service.dart';
 import 'package:gwid/widgets/formatted_text_controller.dart';
@@ -2961,6 +2962,35 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
   }
 
+  void _showNotificationSettings() {
+    // Определяем название чата
+    String chatName;
+    if (widget.isGroupChat || widget.isChannel) {
+      // Для групп/каналов ищем в списке чатов
+      final chats = ApiService.instance.lastChatsPayload?['chats'] as List?;
+      if (chats != null) {
+        final chat = chats.firstWhere(
+          (c) => c['id'] == widget.chatId,
+          orElse: () => null,
+        );
+        chatName = chat?['title'] ?? chat?['displayTitle'] ?? 'Чат';
+      } else {
+        chatName = 'Чат';
+      }
+    } else {
+      // Для личных чатов используем имя контакта
+      chatName = widget.contact.name;
+    }
+
+    showChatNotificationSettings(
+      context: context,
+      chatId: widget.chatId,
+      chatName: chatName,
+      isGroupChat: widget.isGroupChat,
+      isChannel: widget.isChannel,
+    );
+  }
+
   void _showLeaveGroupDialog() {
     showGeneralDialog(
       context: context,
@@ -3936,6 +3966,8 @@ class _ChatScreenState extends State<ChatScreen> {
               _showWallpaperDialog();
             } else if (value == 'toggle_notifications') {
               _toggleNotifications();
+            } else if (value == 'notification_settings') {
+              _showNotificationSettings();
             } else if (value == 'clear_history') {
               _showClearHistoryDialog();
             } else if (value == 'delete_chat') {
@@ -4070,6 +4102,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     Icon(Icons.notifications),
                     SizedBox(width: 8),
                     Text('Выкл. уведомления'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'notification_settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.notifications_outlined),
+                    SizedBox(width: 8),
+                    Text('Настройки уведомлений'),
                   ],
                 ),
               ),
