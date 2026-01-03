@@ -1637,7 +1637,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                     ).showSnackBar(
                                                       SnackBar(
                                                         content: Text(
-                                                          'Аккаунт недействителен. Требуется повторной авторизации.',
+                                                          'Аккаунт недействителен. Требуется повторная авторизация.',
                                                         ),
                                                         backgroundColor:
                                                             colors.error,

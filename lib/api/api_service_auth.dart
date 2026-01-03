@@ -194,6 +194,8 @@ extension ApiServiceAuth on ApiService {
   Future<void> switchAccount(String accountId) async {
     print("Переключение на аккаунт: $accountId");
 
+    const invalidAccountError = 'invalid_token: Аккаунт недействителен';
+
     final accountManager = AccountManager();
     await accountManager.initialize();
     
@@ -236,14 +238,14 @@ extension ApiServiceAuth on ApiService {
           const Duration(seconds: 10),
           onTimeout: () {
             if (invalidTokenDetected) {
-              throw Exception('invalid_token: Аккаунт недействителен');
+              throw Exception(invalidAccountError);
             }
             throw TimeoutException('Таймаут подключения');
           },
         );
 
         if (invalidTokenDetected) {
-          throw Exception('invalid_token: Аккаунт недействителен');
+          throw Exception(invalidAccountError);
         }
 
         await getChatsAndContacts(force: true);
