@@ -13,6 +13,7 @@ import 'package:gwid/screens/settings/bypass_screen.dart';
 import 'package:gwid/screens/settings/about_screen.dart';
 import 'package:gwid/screens/debug_screen.dart';
 import 'package:gwid/screens/settings/komet_misc_screen.dart';
+import 'package:gwid/screens/settings/special_settings_screen.dart';
 import 'package:gwid/screens/settings/optimization_screen.dart';
 // import 'package:gwid/screens/settings/plugins_screen.dart';
 import 'package:gwid/screens/settings/plugin_section_screen.dart';
@@ -398,6 +399,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         return 'О приложении';
       case 'komet':
         return 'Komet Misc';
+      case 'special':
+        return 'Особые настройки';
       case 'optimization':
         return 'Оптимизация';
       default:
@@ -423,6 +426,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         return const AboutScreen(isModal: true);
       case 'komet':
         return const KometMiscScreen(isModal: true);
+      case 'special':
+        return const SpecialSettingsScreen(isModal: true);
       case 'optimization':
         return const OptimizationScreen(isModal: true);
       default:
@@ -440,6 +445,13 @@ class _SettingsScreenState extends State<SettingsScreen>
         title: "Komet Misc",
         subtitle: "Дополнительные настройки",
         screen: KometMiscScreen(isModal: widget.isModal),
+      ),
+      _SettingsItem(
+        type: _SettingsItemType.category,
+        icon: Icons.settings_suggest_outlined,
+        title: "Особые настройки",
+        subtitle: "Что то интересненькое...",
+        screen: SpecialSettingsScreen(isModal: widget.isModal),
       ),
       _SettingsItem(
         type: _SettingsItemType.category,
@@ -859,6 +871,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                 screenKey = 'about';
               else if (screen is KometMiscScreen)
                 screenKey = 'komet';
+              else if (screen is SpecialSettingsScreen)
+                screenKey = 'special';
               else if (screen is OptimizationScreen)
                 screenKey = 'optimization';
 

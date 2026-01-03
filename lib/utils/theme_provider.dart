@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:async';
 
 enum AppTheme { system, light, dark, black }
 
@@ -686,6 +687,14 @@ class CustomThemePreset {
 class ThemeProvider with ChangeNotifier {
   CustomThemePreset _activeTheme = CustomThemePreset.createDefault();
   List<CustomThemePreset> _savedThemes = [];
+  Timer? _showSecondsSaveTimer;
+  Timer? _useCustomChatWallpaperSaveTimer;
+  Timer? _useAutoReplyColorSaveTimer;
+  Timer? _useDesktopLayoutSaveTimer;
+  Timer? _useGradientForAddAccountButtonSaveTimer;
+  Timer? _useGlassPanelsSaveTimer;
+  Timer? _materialYouSaveTimer;
+  bool _showSeconds = false;
 
   Color? _myBubbleColorLight;
   Color? _theirBubbleColorLight;
@@ -750,7 +759,7 @@ class ThemeProvider with ChangeNotifier {
   double get profileDialogOpacity => _activeTheme.profileDialogOpacity;
 
   UIMode get uiMode => _activeTheme.uiMode;
-  bool get showSeconds => _activeTheme.showSeconds;
+  bool get showSeconds => _showSeconds;
   double get messageBubbleOpacity => _activeTheme.messageBubbleOpacity;
   String get messageStyle => _activeTheme.messageStyle;
   double get messageBackgroundBlur => _activeTheme.messageBackgroundBlur;
@@ -951,6 +960,9 @@ class ThemeProvider with ChangeNotifier {
     _showFpsOverlay = prefs.getBool('show_fps_overlay') ?? false;
     _maxFrameRate = prefs.getInt('max_frame_rate') ?? 60;
 
+    // Загружаем showSeconds отдельно для быстрого доступа
+    _showSeconds = prefs.getBool('show_seconds') ?? false;
+
     await loadChatSpecificWallpapers();
 
     notifyListeners();
@@ -1080,15 +1092,18 @@ class ThemeProvider with ChangeNotifier {
   }
 
   Future<void> setMaterialYouEnabled(bool enabled) async {
-    if (enabled) {
-      await setTheme(AppTheme.system);
-      return;
-    }
+    _materialYouSaveTimer?.cancel();
+    _materialYouSaveTimer = Timer(const Duration(milliseconds: 300), () async {
+      if (enabled) {
+        await setTheme(AppTheme.system);
+        return;
+      }
 
-    final fallback = (_lastNonSystemTheme == AppTheme.system)
-        ? AppTheme.dark
-        : _lastNonSystemTheme;
-    await setTheme(fallback);
+      final fallback = (_lastNonSystemTheme == AppTheme.system)
+          ? AppTheme.dark
+          : _lastNonSystemTheme;
+      await setTheme(fallback);
+    });
   }
 
   Future<void> setAccentColor(Color color) async {
@@ -1153,8 +1168,10 @@ class ThemeProvider with ChangeNotifier {
 
   Future<void> setUseGlassPanels(bool value) async {
     _activeTheme = _activeTheme.copyWith(useGlassPanels: value);
-    notifyListeners();
-    await _saveActiveTheme();
+    _useGlassPanelsSaveTimer?.cancel();
+    _useGlassPanelsSaveTimer = Timer(const Duration(milliseconds: 300), () async {
+      await _saveActiveTheme();
+    });
   }
 
   Future<void> setTopBarBlur(double value) async {
@@ -1229,8 +1246,10 @@ class ThemeProvider with ChangeNotifier {
 
   Future<void> setUseCustomChatWallpaper(bool value) async {
     _activeTheme = _activeTheme.copyWith(useCustomChatWallpaper: value);
-    notifyListeners();
-    await _saveActiveTheme();
+    _useCustomChatWallpaperSaveTimer?.cancel();
+    _useCustomChatWallpaperSaveTimer = Timer(const Duration(milliseconds: 300), () async {
+      await _saveActiveTheme();
+    });
   }
 
   Future<void> setChatWallpaperType(ChatWallpaperType type) async {
@@ -1368,9 +1387,13 @@ class ThemeProvider with ChangeNotifier {
   }
 
   Future<void> setShowSeconds(bool value) async {
-    _activeTheme = _activeTheme.copyWith(showSeconds: value);
-    notifyListeners();
-    await _saveActiveTheme();
+    if (_showSeconds == value) return;
+    _showSeconds = value;
+    _showSecondsSaveTimer?.cancel();
+    _showSecondsSaveTimer = Timer(const Duration(milliseconds: 300), () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('show_seconds', value);
+    });
   }
 
   Future<void> setMessageBubbleOpacity(double value) async {
@@ -1626,14 +1649,18 @@ class ThemeProvider with ChangeNotifier {
 
   Future<void> setUseDesktopLayout(bool value) async {
     _activeTheme = _activeTheme.copyWith(useDesktopLayout: value);
-    notifyListeners();
-    await _saveActiveTheme();
+    _useDesktopLayoutSaveTimer?.cancel();
+    _useDesktopLayoutSaveTimer = Timer(const Duration(milliseconds: 300), () async {
+      await _saveActiveTheme();
+    });
   }
 
   Future<void> setUseAutoReplyColor(bool value) async {
     _activeTheme = _activeTheme.copyWith(useAutoReplyColor: value);
-    notifyListeners();
-    await _saveActiveTheme();
+    _useAutoReplyColorSaveTimer?.cancel();
+    _useAutoReplyColorSaveTimer = Timer(const Duration(milliseconds: 300), () async {
+      await _saveActiveTheme();
+    });
   }
 
   Future<void> setCustomReplyColor(Color? color) async {
@@ -1704,8 +1731,10 @@ class ThemeProvider with ChangeNotifier {
 
   Future<void> setUseGradientForAddAccountButton(bool value) async {
     _activeTheme = _activeTheme.copyWith(useGradientForAddAccountButton: value);
-    notifyListeners();
-    await _saveActiveTheme();
+    _useGradientForAddAccountButtonSaveTimer?.cancel();
+    _useGradientForAddAccountButtonSaveTimer = Timer(const Duration(milliseconds: 300), () async {
+      await _saveActiveTheme();
+    });
   }
 
   Future<void> setAddAccountButtonGradientColor1(Color color) async {
