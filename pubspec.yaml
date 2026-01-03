@@ -18,19 +18,29 @@ environment:
   # Поддерживаются версии Flutter от 3.38.
   flutter: ">=3.38.0"
 
-workspace:
-  - material
+workspace: []
 
 dependencies:
   # Workspace зависимости
-  material:
-    path: material
+  # -
 
   # SDK зависимости
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+
+  # Git зависимости
+  layout:
+    git:
+      url: https://github.com/deminearchiver/dart-flutter-packages.git
+      ref: 748aa38be8bbc35d69f5e06e1a177544b73935d9
+      path: packages/layout
+  material:
+    git:
+      url: https://github.com/deminearchiver/dart-flutter-packages.git
+      ref: 748aa38be8bbc35d69f5e06e1a177544b73935d9
+      path: packages/material
 
   # Hosted зависимости
   dynamic_color: ^1.8.1
@@ -103,6 +113,7 @@ dev_dependencies:
   build_runner: ^2.10.4
 
 dependency_overrides:
+  # Git зависимости
   es_compression:
     git:
       url: https://github.com/deminearchiver/es_compression.git
