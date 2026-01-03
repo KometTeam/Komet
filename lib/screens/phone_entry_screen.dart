@@ -13,6 +13,8 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:gwid/app_urls.dart';
+import 'package:gwid/app_sizes.dart';
+import 'package:gwid/app_durations.dart';
 
 class Country {
   final String name;
@@ -395,12 +397,12 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
               Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(24.0),
+                    padding: EdgeInsets.all(AppSpacing.xxl),
                     child: Column(
                       children: [
-                        const SizedBox(height: 32),
+                        const SizedBox(height: AppSpacing.xxxl * 1.6),
                         Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(AppSpacing.xxl),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: colors.primaryContainer.withOpacity(0.5),
@@ -411,7 +413,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                             height: 64,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: AppSpacing.xxxl),
                         Text(
                           'Komet',
                           textAlign: TextAlign.center,
@@ -420,7 +422,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.md),
                         Text(
                           'Введите номер телефона для входа',
                           textAlign: TextAlign.center,
@@ -438,9 +440,9 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                       child: SlideTransition(
                         position: _slideAnimation,
                         child: ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          padding: EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
                           children: [
-                            const SizedBox(height: 8),
+                            const SizedBox(height: AppSpacing.md),
                             _PhoneInputCard(
                               phoneController: _phoneController,
                               maskFormatter: _maskFormatter,
@@ -449,35 +451,36 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                               onCountryChanged: _onCountryChanged,
                               customPrefix: _customPrefix,
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.xxl),
                             _TosCheckbox(
                               isTosAccepted: _isTosAccepted,
                               onChanged: (value) {
                                 setState(() => _isTosAccepted = value ?? false);
                               },
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.xxl),
                             FilledButton(
                               onPressed: _isButtonEnabled && _isTosAccepted
                                   ? _requestOtp
                                   : null,
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
+                                minimumSize: Size.fromHeight(AppAccessibility.buttonMinHeight),
+                                padding: EdgeInsets.symmetric(
+                                  vertical: AppSpacing.xxl,
                                 ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: AppRadius.lgBorder,
                                 ),
                               ),
                               child: Text(
                                 'Далее',
                                 style: GoogleFonts.manrope(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontSize: AppFontSize.xl,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: AppSpacing.xl),
                             OutlinedButton.icon(
                               onPressed: _isTosAccepted
                                   ? () => Navigator.of(context).push(
@@ -495,15 +498,16 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
+                                minimumSize: Size.fromHeight(AppAccessibility.buttonMinHeight),
+                                padding: EdgeInsets.symmetric(
+                                  vertical: AppSpacing.xxl,
                                 ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: AppRadius.lgBorder,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppSpacing.xxl),
                             _SettingsButton(
                               hasCustomAnonymity: _hasCustomAnonymity,
                               hasProxyConfigured: _hasProxyConfigured,
@@ -512,9 +516,9 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                                 _checkProxySettings();
                               },
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppSpacing.xxl),
                             _FooterText(),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppSpacing.xxl),
                           ],
                         ),
                       ),
@@ -530,7 +534,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const CircularProgressIndicator(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: AppSpacing.xxl),
                         Text(
                           'Отправляем код...',
                           style: GoogleFonts.manrope(
@@ -587,28 +591,28 @@ class _PhoneInputCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.xlBorder,
         border: Border.all(color: colors.outline.withOpacity(0.2), width: 1),
       ),
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(AppSpacing.xl),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppRadius.mdBorder,
                 ),
                 child: Icon(
                   Icons.phone_outlined,
                   color: colors.onSurfaceVariant,
-                  size: 28,
+                  size: AppIconSize.xl,
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSpacing.xxl),
               Expanded(
                 child: Text(
                   'Номер телефона',
@@ -620,7 +624,7 @@ class _PhoneInputCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.xxxl),
           TextFormField(
             controller: phoneController,
             inputFormatters: [maskFormatter],
@@ -638,7 +642,7 @@ class _PhoneInputCard extends StatelessWidget {
                 customPrefix: customPrefix,
               ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppRadius.lgBorder,
               ),
               filled: true,
               fillColor: colors.surfaceContainerHighest,
@@ -670,7 +674,7 @@ class _CountryPicker extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      margin: const EdgeInsets.only(left: 8),
+      margin: EdgeInsets.only(left: AppSpacing.md),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<Country>(
           value: selectedCountry,
@@ -682,7 +686,7 @@ class _CountryPicker extends StatelessWidget {
                   ? (customPrefix.isNotEmpty ? customPrefix : country.name)
                   : country.code;
               return Padding(
-                padding: const EdgeInsets.only(left: 8.0, right: 4.0),
+                padding: EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.xs),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -706,7 +710,7 @@ class _CountryPicker extends StatelessWidget {
                 children: [
                   if (country.flag.isNotEmpty) ...[
                     Text(country.flag, style: textTheme.titleMedium),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.md),
                   ],
                   Text(
                     country.code.isEmpty ? 'Свое' : country.code,
@@ -737,12 +741,15 @@ class _TosCheckbox extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
+      constraints: BoxConstraints(
+        minHeight: AppAccessibility.minTouchTarget,
+      ),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.lgBorder,
         border: Border.all(color: colors.outline.withOpacity(0.2)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -814,7 +821,7 @@ class _SettingsButton extends StatelessWidget {
           );
           onRefresh();
         },
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.xlBorder,
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -827,7 +834,7 @@ class _SettingsButton extends StatelessWidget {
                     ]
                   : [colors.surfaceContainerHighest, colors.surfaceContainer],
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadius.xlBorder,
             border: Border.all(
               color: hasAnySettings
                   ? colors.primary.withOpacity(0.3)
@@ -835,31 +842,31 @@ class _SettingsButton extends StatelessWidget {
               width: hasAnySettings ? 2 : 1,
             ),
           ),
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(AppSpacing.xl),
                     decoration: BoxDecoration(
                       color: hasAnySettings
                           ? colors.primary.withOpacity(0.15)
                           : colors.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.mdBorder,
                     ),
                     child: Icon(
                       Icons.tune_outlined,
                       color: hasAnySettings
                           ? colors.primary
                           : colors.onSurfaceVariant,
-                      size: 28,
+                      size: AppIconSize.xl,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               Text(
                 'Настройки',
                 style: GoogleFonts.manrope(
@@ -867,7 +874,7 @@ class _SettingsButton extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 hasAnySettings
                     ? 'Настроены дополнительные параметры'
@@ -879,12 +886,12 @@ class _SettingsButton extends StatelessWidget {
                 ),
               ),
               if (hasAnySettings) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.xxl),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(AppSpacing.xl),
                   decoration: BoxDecoration(
                     color: colors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.mdBorder,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -892,10 +899,10 @@ class _SettingsButton extends StatelessWidget {
                       if (hasCustomAnonymity) ...[
                         Icon(
                           Icons.verified_user,
-                          size: 18,
+                          size: AppIconSize.sm,
                           color: colors.primary,
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: AppSpacing.sm),
                         Text(
                           'Анонимность',
                           style: GoogleFonts.manrope(
@@ -906,7 +913,7 @@ class _SettingsButton extends StatelessWidget {
                         ),
                       ],
                       if (hasCustomAnonymity && hasProxyConfigured) ...[
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.xl),
                         Container(
                           width: 4,
                           height: 4,
@@ -915,11 +922,11 @@ class _SettingsButton extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.xl),
                       ],
                       if (hasProxyConfigured) ...[
-                        Icon(Icons.vpn_key, size: 18, color: colors.primary),
-                        const SizedBox(width: 6),
+                        Icon(Icons.vpn_key, size: AppIconSize.sm, color: colors.primary),
+                        const SizedBox(width: AppSpacing.sm),
                         Text(
                           'Прокси',
                           style: GoogleFonts.manrope(
@@ -933,7 +940,7 @@ class _SettingsButton extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               Row(
                 children: [
                   Text(
@@ -946,13 +953,13 @@ class _SettingsButton extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.md),
                   Icon(
                     Icons.arrow_forward,
                     color: hasAnySettings
                         ? colors.primary
                         : colors.onSurfaceVariant,
-                    size: 18,
+                    size: AppIconSize.sm,
                   ),
                 ],
               ),

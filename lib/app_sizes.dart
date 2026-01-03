@@ -38,6 +38,64 @@ class AppRadius {
   static BorderRadius get circleBorder => BorderRadius.circular(circle);
 }
 
+/// Accessibility constants (WCAG 2.1 compliance)
+class AppAccessibility {
+  AppAccessibility._();
+
+  /// Minimum touch target size (WCAG 2.1 AAA - 44x44 dp)
+  static const double minTouchTarget = 44.0;
+
+  /// Minimum interactive element size
+  static const double minInteractiveSize = 48.0;
+
+  /// Button minimum height
+  static const double buttonMinHeight = 48.0;
+
+  /// IconButton minimum size
+  static const double iconButtonMinSize = 48.0;
+
+  /// ListTile minimum height
+  static const double listTileMinHeight = 56.0;
+
+  /// Chip minimum height
+  static const double chipMinHeight = 32.0;
+
+  /// Constraint for minimum touch target
+  static const BoxConstraints touchTargetConstraints = BoxConstraints(
+    minWidth: minTouchTarget,
+    minHeight: minTouchTarget,
+  );
+
+  /// Constraint for interactive elements
+  static const BoxConstraints interactiveConstraints = BoxConstraints(
+    minWidth: minInteractiveSize,
+    minHeight: minInteractiveSize,
+  );
+}
+
+/// Elevation values (Material 3 elevation system)
+class AppElevation {
+  AppElevation._();
+
+  /// Level 0: no elevation
+  static const double level0 = 0.0;
+
+  /// Level 1: subtle elevation (cards, chips)
+  static const double level1 = 1.0;
+
+  /// Level 2: standard elevation (buttons, FAB resting)
+  static const double level2 = 3.0;
+
+  /// Level 3: raised elevation (app bar, navigation rail)
+  static const double level3 = 6.0;
+
+  /// Level 4: high elevation (navigation drawer)
+  static const double level4 = 8.0;
+
+  /// Level 5: highest elevation (dialogs, modals)
+  static const double level5 = 12.0;
+}
+
 /// отсуты и промежутки
 class AppSpacing {
   AppSpacing._();
