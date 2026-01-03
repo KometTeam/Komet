@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data' as typed_data;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -707,7 +708,10 @@ class NotificationService {
         category: AndroidNotificationCategory.message,
         showWhen: true,
         enableVibration: enableVibration,
-        vibrationPattern: enableVibration ? Int64List.fromList(vibrationPattern) : null,
+        vibrationPattern:
+            enableVibration
+                ? typed_data.Int64List.fromList(vibrationPattern)
+                : null,
         playSound: true,
         icon: 'notification_icon',
         styleInformation: BigTextStyleInformation(
