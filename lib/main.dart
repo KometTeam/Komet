@@ -133,6 +133,10 @@ Future<void> main() async {
     print("Фоновый сервис инициализирован");
   }
 
+  print("Очищаем сессионные значения...");
+  await ApiService.clearSessionValues();
+  print("Сессионные значения очищены");
+
   final hasToken = await ApiService.instance.hasToken();
   print("При запуске приложения токен ${hasToken ? 'найден' : 'не найден'}");
 

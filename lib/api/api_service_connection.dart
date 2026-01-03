@@ -157,7 +157,24 @@ extension ApiServiceConnection on ApiService {
       await prefs.setString('spoof_deviceid', deviceId);
     }
 
-    final payload = {'deviceId': deviceId, 'userAgent': userAgentPayload};
+    // Generate mt_instanceid and clientSessionId for each app launch
+    String mtInstanceId = prefs.getString('session_mt_instanceid') ?? '';
+    int clientSessionId = prefs.getInt('session_client_session_id') ?? 0;
+    
+    // If not set for this session, generate new ones
+    if (mtInstanceId.isEmpty || clientSessionId == 0) {
+      mtInstanceId = const Uuid().v4();
+      clientSessionId = Random().nextInt(100) + 1; // Random between 1-100
+      await prefs.setString('session_mt_instanceid', mtInstanceId);
+      await prefs.setInt('session_client_session_id', clientSessionId);
+    }
+
+    final payload = {
+      'mt_instanceid': mtInstanceId,
+      'clientSessionId': clientSessionId,
+      'deviceId': deviceId,
+      'userAgent': userAgentPayload,
+    };
 
     await _sendMessage(6, payload);
     _handshakeSent = true;

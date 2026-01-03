@@ -7,7 +7,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gwid/api/api_service.dart';
-import 'package:uuid/uuid.dart';
 import 'package:gwid/utils/device_presets.dart';
 
 enum SpoofingMethod { partial, full }
@@ -21,8 +20,6 @@ class SessionSpoofingScreen extends StatefulWidget {
 
 class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
   final _random = Random();
-  final _uuid = const Uuid();
-  final _userAgentController = TextEditingController();
   final _deviceNameController = TextEditingController();
   final _osVersionController = TextEditingController();
   final _screenController = TextEditingController();
@@ -30,8 +27,10 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
   final _localeController = TextEditingController();
   final _deviceIdController = TextEditingController();
   final _appVersionController = TextEditingController();
+  final _buildNumberController = TextEditingController();
 
   String _selectedDeviceType = 'ANDROID';
+  String _selectedArch = 'arm64-v8a';
   SpoofingMethod _selectedMethod = SpoofingMethod.partial;
   bool _isCheckingVersion = false;
   bool _isLoading = true;
@@ -42,13 +41,18 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     _loadInitialData();
   }
 
+  String _generateDeviceId() {
+    // Generate 16-character hex string (like f8268babd84e35a5)
+    final bytes = List<int>.generate(8, (_) => _random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     final isSpoofingEnabled = prefs.getBool('spoofing_enabled') ?? false;
 
     if (isSpoofingEnabled) {
-      _userAgentController.text = prefs.getString('spoof_useragent') ?? '';
       _deviceNameController.text = prefs.getString('spoof_devicename') ?? '';
       _osVersionController.text = prefs.getString('spoof_osversion') ?? '';
       _screenController.text = prefs.getString('spoof_screen') ?? '';
@@ -57,6 +61,9 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       _deviceIdController.text = prefs.getString('spoof_deviceid') ?? '';
       _appVersionController.text =
           prefs.getString('spoof_appversion') ?? '25.21.3';
+      _selectedArch = prefs.getString('spoof_arch') ?? 'arm64-v8a';
+      _buildNumberController.text =
+          prefs.getInt('spoof_buildnumber')?.toString() ?? '6498';
 
       String savedType = prefs.getString('spoof_devicetype') ?? 'ANDROID';
       if (savedType == 'WEB') {
@@ -79,9 +86,26 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
     _appVersionController.text = '25.21.3';
     _localeController.text = Platform.localeName.split('_').first;
+    
+    // Generate screen in Android format: "xxhdpi 420dpi 1080x2400"
+    final dpi = (160 * pixelRatio).round();
+    String densityBucket;
+    if (dpi >= 560) {
+      densityBucket = 'xxxhdpi';
+    } else if (dpi >= 380) {
+      densityBucket = 'xxhdpi';
+    } else if (dpi >= 280) {
+      densityBucket = 'xhdpi';
+    } else if (dpi >= 200) {
+      densityBucket = 'hdpi';
+    } else if (dpi >= 140) {
+      densityBucket = 'mdpi';
+    } else {
+      densityBucket = 'ldpi';
+    }
     _screenController.text =
-        '${size.width.round()}x${size.height.round()} ${pixelRatio.toStringAsFixed(1)}x';
-    _deviceIdController.text = _uuid.v4();
+        '$densityBucket ${dpi}dpi ${size.width.round()}x${size.height.round()}';
+    _deviceIdController.text = _generateDeviceId();
 
     try {
       final timezoneInfo = await FlutterTimezone.getLocalTimezone();
@@ -95,17 +119,19 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       _deviceNameController.text =
           '${androidInfo.manufacturer} ${androidInfo.model}';
       _osVersionController.text = 'Android ${androidInfo.version.release}';
-      _userAgentController.text =
-          'Mozilla/5.0 (Linux; Android ${androidInfo.version.release}; ${androidInfo.model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
       _selectedDeviceType = 'ANDROID';
+      _selectedArch = androidInfo.supportedAbis.isNotEmpty 
+          ? androidInfo.supportedAbis.first 
+          : 'arm64-v8a';
+      _buildNumberController.text = '6498';
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       _deviceNameController.text = iosInfo.name;
       _osVersionController.text =
           '${iosInfo.systemName} ${iosInfo.systemVersion}';
-      _userAgentController.text =
-          'Mozilla/5.0 (iPhone; CPU iPhone OS ${iosInfo.systemVersion.replaceAll('.', '_')} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
       _selectedDeviceType = 'IOS';
+      _selectedArch = 'arm64';
+      _buildNumberController.text = '6498';
     } else {
       await _applyGeneratedData();
     }
@@ -117,18 +143,14 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
   Future<void> _applyGeneratedData() async {
     final filteredPresets = devicePresets
-        .where(
-          (p) => p.deviceType != 'WEB' && p.deviceType == _selectedDeviceType,
-        )
+        .where((p) => p.deviceType != 'WEB' && p.deviceType == _selectedDeviceType)
         .toList();
 
     if (filteredPresets.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Нет доступных пресетов для типа устройства $_selectedDeviceType.',
-            ),
+            content: Text('Нет доступных пресетов для типа устройства $_selectedDeviceType.'),
           ),
         );
       }
@@ -141,14 +163,23 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
   Future<void> _applyPreset(DevicePreset preset) async {
     setState(() {
-      _userAgentController.text = preset.userAgent;
       _deviceNameController.text = preset.deviceName;
       _osVersionController.text = preset.osVersion;
       _screenController.text = preset.screen;
       _appVersionController.text = '25.21.3';
-      _deviceIdController.text = _uuid.v4();
+      _deviceIdController.text = _generateDeviceId();
 
       _selectedDeviceType = preset.deviceType;
+      
+      // Set arch based on device type
+      if (preset.deviceType == 'ANDROID') {
+        _selectedArch = 'arm64-v8a';
+      } else if (preset.deviceType == 'IOS') {
+        _selectedArch = 'arm64';
+      } else {
+        _selectedArch = 'x86_64';
+      }
+      _buildNumberController.text = '6498';
 
       if (_selectedMethod == SpoofingMethod.full) {
         _timezoneController.text = preset.timezone;
@@ -181,7 +212,6 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     final prefs = await SharedPreferences.getInstance();
 
     final oldValues = {
-      'user_agent': prefs.getString('spoof_useragent') ?? '',
       'device_name': prefs.getString('spoof_devicename') ?? '',
       'os_version': prefs.getString('spoof_osversion') ?? '',
       'screen': prefs.getString('spoof_screen') ?? '',
@@ -189,10 +219,11 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       'locale': prefs.getString('spoof_locale') ?? '',
       'device_id': prefs.getString('spoof_deviceid') ?? '',
       'device_type': prefs.getString('spoof_devicetype') ?? 'ANDROID',
+      'arch': prefs.getString('spoof_arch') ?? '',
+      'build_number': prefs.getInt('spoof_buildnumber')?.toString() ?? '',
     };
 
     final newValues = {
-      'user_agent': _userAgentController.text,
       'device_name': _deviceNameController.text,
       'os_version': _osVersionController.text,
       'screen': _screenController.text,
@@ -200,6 +231,8 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       'locale': _localeController.text,
       'device_id': _deviceIdController.text,
       'device_type': _selectedDeviceType,
+      'arch': _selectedArch,
+      'build_number': _buildNumberController.text,
     };
 
     final oldAppVersion = prefs.getString('spoof_appversion') ?? '25.21.3';
@@ -279,7 +312,6 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
   Future<void> _saveAllData(SharedPreferences prefs) async {
     await prefs.setBool('spoofing_enabled', true);
-    await prefs.setString('spoof_useragent', _userAgentController.text);
     await prefs.setString('spoof_devicename', _deviceNameController.text);
     await prefs.setString('spoof_osversion', _osVersionController.text);
     await prefs.setString('spoof_screen', _screenController.text);
@@ -288,6 +320,8 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     await prefs.setString('spoof_deviceid', _deviceIdController.text);
     await prefs.setString('spoof_devicetype', _selectedDeviceType);
     await prefs.setString('spoof_appversion', _appVersionController.text);
+    await prefs.setString('spoof_arch', _selectedArch);
+    await prefs.setInt('spoof_buildnumber', int.tryParse(_buildNumberController.text) ?? 6498);
   }
 
   Future<void> _handleVersionCheck() async {
@@ -299,12 +333,17 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     );
 
     try {
-      final latestVersion = await VersionChecker.getLatestVersion();
+      final info = await VersionChecker.getLatestVersionInfo();
       if (mounted) {
-        setState(() => _appVersionController.text = latestVersion);
+        setState(() {
+          _appVersionController.text = info['versionName'];
+          _buildNumberController.text = info['versionCode'].toString();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Найдена версия: $latestVersion'),
+            content: Text(
+              'Обновлено: ${info['versionName']} (Build ${info['versionCode']})',
+            ),
             backgroundColor: Colors.green.shade700,
           ),
         );
@@ -327,13 +366,12 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
   void _generateNewDeviceId() {
     setState(() {
-      _deviceIdController.text = _uuid.v4();
+      _deviceIdController.text = _generateDeviceId();
     });
   }
 
   @override
   void dispose() {
-    _userAgentController.dispose();
     _deviceNameController.dispose();
     _osVersionController.dispose();
     _screenController.dispose();
@@ -341,6 +379,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     _localeController.dispose();
     _deviceIdController.dispose();
     _appVersionController.dispose();
+    _buildNumberController.dispose();
     super.dispose();
   }
 
@@ -479,7 +518,10 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Тип устройства", style: theme.textTheme.titleMedium),
+            Text(
+              "Тип устройства",
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
             _buildDescriptionTile(
               icon: Icons.info_outline,
@@ -496,11 +538,10 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
               ),
               items: const [
                 DropdownMenuItem(value: 'ANDROID', child: Text('ANDROID')),
-                DropdownMenuItem(value: 'IOS', child: Text('IOS')),
-                DropdownMenuItem(value: 'DESKTOP', child: Text('DESKTOP')),
+                // DropdownMenuItem(value: 'IOS', child: Text('IOS')),
+                // DropdownMenuItem(value: 'DESKTOP', child: Text('DESKTOP')),
               ],
-              onChanged: (v) =>
-                  v != null ? setState(() => _selectedDeviceType = v) : null,
+              onChanged: null,
             ),
           ],
         ),
@@ -547,13 +588,6 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildSectionHeader(context, "Основные данные"),
-            TextField(
-              controller: _userAgentController,
-              decoration: _inputDecoration('User-Agent', Icons.http_outlined),
-              maxLines: 3,
-              minLines: 2,
-            ),
-            const SizedBox(height: 16),
             TextField(
               controller: _deviceNameController,
               decoration: _inputDecoration(
@@ -616,16 +650,23 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildSectionHeader(context, "Идентификаторы"),
+            _buildDescriptionTile(
+              icon: Icons.info_outline,
+              color: Theme.of(context).colorScheme.tertiary,
+              text:
+                  'mt_instanceid и clientSessionId генерируются автоматически при каждом запуске приложения. Изменить можно только Device ID.',
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _deviceIdController,
               decoration: _inputDecoration('ID Устройства', Icons.tag_outlined)
                   .copyWith(
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.autorenew_outlined),
-                      tooltip: 'Сгенерировать новый ID',
-                      onPressed: _generateNewDeviceId,
-                    ),
-                  ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.autorenew_outlined),
+                  tooltip: 'Сгенерировать новый ID',
+                  onPressed: _generateNewDeviceId,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -652,6 +693,53 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
                             onPressed: _handleVersionCheck,
                           ),
                   ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _buildNumberController,
+              keyboardType: TextInputType.number,
+              decoration:
+                  _inputDecoration(
+                    'Build Number',
+                    Icons.numbers_outlined,
+                  ).copyWith(
+                    suffixIcon: _isCheckingVersion
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.cloud_sync_outlined),
+                            tooltip: 'Обновить из RuStore',
+                            onPressed: _handleVersionCheck,
+                          ),
+                  ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedArch,
+              decoration: _inputDecoration(
+                'Архитектура',
+                Icons.memory_outlined,
+              ),
+              items: const [
+                DropdownMenuItem(value: 'arm64-v8a', child: Text('arm64-v8a (64-bit ARM)')),
+                DropdownMenuItem(value: 'armeabi-v7a', child: Text('armeabi-v7a (32-bit ARM)')),
+                DropdownMenuItem(value: 'x86', child: Text('x86 (32-bit Intel)')),
+                DropdownMenuItem(value: 'x86_64', child: Text('x86_64 (64-bit Intel)')),
+                DropdownMenuItem(value: 'arm64', child: Text('arm64 (iOS/Desktop)')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedArch = value);
+                }
+              },
             ),
           ],
         ),

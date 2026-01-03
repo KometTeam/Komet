@@ -9,6 +9,7 @@ import 'package:gwid/models/profile.dart';
 import 'package:gwid/screens/home_screen.dart';
 import 'package:gwid/screens/password_auth_screen.dart';
 import 'package:gwid/screens/phone_entry_screen.dart';
+import 'package:gwid/screens/registration_screen.dart';
 import 'package:gwid/services/whitelist_service.dart';
 
 class OTPScreen extends StatefulWidget {
@@ -90,11 +91,34 @@ class _OTPScreenState extends State<OTPScreen>
 
         String? finalToken;
         String? userId;
+        String? registerToken;
 
         if (payload != null) {
           final tokenAttrs = payload['tokenAttrs'];
           print('tokenAttrs: $tokenAttrs');
 
+          // Проверяем наличие REGISTER токена
+          if (tokenAttrs != null && tokenAttrs['REGISTER'] != null) {
+            registerToken = tokenAttrs['REGISTER']['token']?.toString();
+            print('Найден REGISTER токен: ${registerToken?.substring(0, 20)}...');
+            
+            SchedulerBinding.instance.addPostFrameCallback((_) {
+              if (mounted) { 
+                setState(() => _isLoading = false);
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => RegistrationScreen(
+                      registerToken: registerToken!,
+                      phoneNumber: widget.phoneNumber,
+                    ),
+                  ),
+                );
+              }
+            });
+            return;
+          }
+
+          // Проверяем наличие LOGIN токена
           if (tokenAttrs != null && tokenAttrs['LOGIN'] != null) {
             final loginToken = tokenAttrs['LOGIN']['token'];
             final loginUserId =

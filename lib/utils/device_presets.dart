@@ -1,3 +1,4 @@
+
 class DevicePreset {
   final String deviceType;
   final String userAgent;
@@ -18,14 +19,16 @@ class DevicePreset {
   });
 }
 
+
 final List<DevicePreset> devicePresets = [
+
   DevicePreset(
     deviceType: 'ANDROID',
     userAgent:
         'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy S24 Ultra',
     osVersion: 'Android 14',
-    screen: '1440x3120 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3120',
     timezone: 'Europe/Berlin',
     locale: 'de-DE',
   ),
@@ -35,7 +38,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36',
     deviceName: 'Google Pixel 8 Pro',
     osVersion: 'Android 14',
-    screen: '1344x2992 2.7x',
+    screen: 'xxhdpi 430dpi 1344x2992',
     timezone: 'America/New_York',
     locale: 'en-US',
   ),
@@ -45,7 +48,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; 23021RAA2Y) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     deviceName: 'Xiaomi 13 Pro',
     osVersion: 'Android 13',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'Asia/Shanghai',
     locale: 'zh-CN',
   ),
@@ -55,7 +58,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; CPH2521) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'OnePlus 12',
     osVersion: 'Android 14',
-    screen: '1440x3168 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3168',
     timezone: 'Asia/Kolkata',
     locale: 'en-IN',
   ),
@@ -65,7 +68,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy S21 Ultra',
     osVersion: 'Android 13',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'Europe/London',
     locale: 'en-GB',
   ),
@@ -75,7 +78,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     deviceName: 'Google Pixel 6',
     osVersion: 'Android 12',
-    screen: '1080x2400 2.6x',
+    screen: 'xxhdpi 420dpi 1080x2400',
     timezone: 'America/Chicago',
     locale: 'en-US',
   ),
@@ -85,7 +88,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; RMX3371) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
     deviceName: 'Realme GT Master Edition',
     osVersion: 'Android 13',
-    screen: '1080x2400 2.5x',
+    screen: 'xxhdpi 400dpi 1080x2400',
     timezone: 'Asia/Dubai',
     locale: 'ar-AE',
   ),
@@ -95,7 +98,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 11; M2101K6G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36',
     deviceName: 'Poco F3',
     osVersion: 'Android 11',
-    screen: '1080x2400 2.6x',
+    screen: 'xxhdpi 420dpi 1080x2400',
     timezone: 'Europe/Madrid',
     locale: 'es-ES',
   ),
@@ -105,7 +108,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; SO-51D) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36',
     deviceName: 'Sony Xperia 1 V',
     osVersion: 'Android 14',
-    screen: '1644x3840 3.5x',
+    screen: 'xxxhdpi 560dpi 1644x3840',
     timezone: 'Asia/Tokyo',
     locale: 'ja-JP',
   ),
@@ -115,7 +118,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; XT2201-2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     deviceName: 'Motorola Edge 30 Pro',
     osVersion: 'Android 13',
-    screen: '1080x2400 2.5x',
+    screen: 'xxhdpi 400dpi 1080x2400',
     timezone: 'America/Sao_Paulo',
     locale: 'pt-BR',
   ),
@@ -125,7 +128,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy A54',
     osVersion: 'Android 14',
-    screen: '1080x2340 2.5x',
+    screen: 'xxhdpi 400dpi 1080x2340',
     timezone: 'Australia/Sydney',
     locale: 'en-AU',
   ),
@@ -135,7 +138,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 12; 2201116SG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     deviceName: 'Redmi Note 11 Pro',
     osVersion: 'Android 12',
-    screen: '1080x2400 2.6x',
+    screen: 'xxhdpi 420dpi 1080x2400',
     timezone: 'Europe/Rome',
     locale: 'it-IT',
   ),
@@ -145,7 +148,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; ZS676KS) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
     deviceName: 'Asus ROG Phone 6',
     osVersion: 'Android 13',
-    screen: '1080x2448 2.6x',
+    screen: 'xxhdpi 420dpi 1080x2448',
     timezone: 'Asia/Taipei',
     locale: 'zh-TW',
   ),
@@ -155,7 +158,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 10; TA-1021) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36',
     deviceName: 'Nokia 8',
     osVersion: 'Android 10',
-    screen: '1440x2560 2.4x',
+    screen: 'xxhdpi 380dpi 1440x2560',
     timezone: 'Europe/Helsinki',
     locale: 'fi-FI',
   ),
@@ -165,7 +168,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; PGT-N19) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     deviceName: 'Huawei P60 Pro',
     osVersion: 'Android 13 (EMUI)',
-    screen: '1220x2700 2.7x',
+    screen: 'xxhdpi 430dpi 1220x2700',
     timezone: 'Europe/Paris',
     locale: 'fr-FR',
   ),
@@ -175,7 +178,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 9; LM-G710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36',
     deviceName: 'LG G7 ThinQ',
     osVersion: 'Android 9',
-    screen: '1440x3120 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3120',
     timezone: 'Asia/Seoul',
     locale: 'ko-KR',
   ),
@@ -185,7 +188,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; Nothing Phone (2)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Nothing Phone (2)',
     osVersion: 'Android 14',
-    screen: '1080x2412 2.5x',
+    screen: 'xxhdpi 400dpi 1080x2412',
     timezone: 'America/Toronto',
     locale: 'en-CA',
   ),
@@ -195,7 +198,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; SM-F936U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy Z Fold 4',
     osVersion: 'Android 13',
-    screen: '1812x2176 2.2x',
+    screen: 'xhdpi 350dpi 1812x2176',
     timezone: 'America/Denver',
     locale: 'en-US',
   ),
@@ -205,7 +208,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 12; LE2113) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
     deviceName: 'OnePlus 9',
     osVersion: 'Android 12',
-    screen: '1080x2400 2.6x',
+    screen: 'xxhdpi 420dpi 1080x2400',
     timezone: 'Europe/Stockholm',
     locale: 'sv-SE',
   ),
@@ -215,7 +218,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; Pixel 7a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36',
     deviceName: 'Google Pixel 7a',
     osVersion: 'Android 14',
-    screen: '1080x2400 2.5x',
+    screen: 'xxhdpi 400dpi 1080x2400',
     timezone: 'Europe/Amsterdam',
     locale: 'nl-NL',
   ),
@@ -225,7 +228,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy S24',
     osVersion: 'Android 14',
-    screen: '1440x3120 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3120',
     timezone: 'America/Vancouver',
     locale: 'en-CA',
   ),
@@ -235,7 +238,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; M2101K6C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
     deviceName: 'Poco F3 GT',
     osVersion: 'Android 13',
-    screen: '1080x2400 2.6x',
+    screen: 'xxhdpi 420dpi 1080x2400',
     timezone: 'Asia/Kolkata',
     locale: 'en-IN',
   ),
@@ -245,7 +248,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; V29) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Vivo V29',
     osVersion: 'Android 14',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'Asia/Bangkok',
     locale: 'th-TH',
   ),
@@ -255,7 +258,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; K30 Ultra) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
     deviceName: 'Xiaomi K30 Ultra',
     osVersion: 'Android 13',
-    screen: '1440x3200 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3200',
     timezone: 'Asia/Shanghai',
     locale: 'zh-CN',
   ),
@@ -265,7 +268,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; P80) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Oppo Find N3',
     osVersion: 'Android 14',
-    screen: '1440x3168 2.7x',
+    screen: 'xxhdpi 430dpi 1440x3168',
     timezone: 'Europe/Paris',
     locale: 'fr-FR',
   ),
@@ -275,7 +278,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; SM-G916B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy S20 FE',
     osVersion: 'Android 13',
-    screen: '1080x2400 2.5x',
+    screen: 'xxhdpi 400dpi 1080x2400',
     timezone: 'Europe/Berlin',
     locale: 'de-DE',
   ),
@@ -285,7 +288,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 12; CPH2135) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     deviceName: 'OnePlus 8 Pro',
     osVersion: 'Android 12',
-    screen: '1440x3168 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3168',
     timezone: 'America/New_York',
     locale: 'en-US',
   ),
@@ -295,7 +298,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; S24E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy S24 Edge',
     osVersion: 'Android 14',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'Asia/Tokyo',
     locale: 'ja-JP',
   ),
@@ -305,7 +308,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; LE2120) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     deviceName: 'OnePlus 9 Pro',
     osVersion: 'Android 13',
-    screen: '1440x3216 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3216',
     timezone: 'America/Toronto',
     locale: 'en-CA',
   ),
@@ -315,7 +318,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; A14 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Google Pixel 9 Pro',
     osVersion: 'Android 14',
-    screen: '1344x2992 2.7x',
+    screen: 'xxhdpi 430dpi 1344x2992',
     timezone: 'Europe/London',
     locale: 'en-GB',
   ),
@@ -325,7 +328,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; 21091116AC) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
     deviceName: 'Xiaomi 12T',
     osVersion: 'Android 13',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'Europe/Rome',
     locale: 'it-IT',
   ),
@@ -335,7 +338,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 12; SM-F711B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy Z Flip 3',
     osVersion: 'Android 12',
-    screen: '1080x2640 2.3x',
+    screen: 'xhdpi 370dpi 1080x2640',
     timezone: 'America/Mexico_City',
     locale: 'es-MX',
   ),
@@ -345,7 +348,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; XT2201-3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     deviceName: 'Motorola Edge 40',
     osVersion: 'Android 13',
-    screen: '1080x2400 2.5x',
+    screen: 'xxhdpi 400dpi 1080x2400',
     timezone: 'Asia/Dubai',
     locale: 'ar-AE',
   ),
@@ -355,7 +358,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; 23088RA9AC) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Xiaomi 14 Ultra',
     osVersion: 'Android 14',
-    screen: '1440x3200 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3200',
     timezone: 'Europe/Moscow',
     locale: 'ru-RU',
   ),
@@ -365,7 +368,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; CPH2487) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
     deviceName: 'OnePlus 11',
     osVersion: 'Android 13',
-    screen: '1440x3216 2.8x',
+    screen: 'xxhdpi 450dpi 1440x3216',
     timezone: 'Australia/Sydney',
     locale: 'en-AU',
   ),
@@ -375,7 +378,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 12; M2004J19C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
     deviceName: 'Xiaomi Mi 10T Pro',
     osVersion: 'Android 12',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'America/Sao_Paulo',
     locale: 'pt-BR',
   ),
@@ -385,7 +388,7 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
     deviceName: 'Samsung Galaxy A55',
     osVersion: 'Android 14',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'Europe/Madrid',
     locale: 'es-ES',
   ),
@@ -395,10 +398,12 @@ final List<DevicePreset> devicePresets = [
         'Mozilla/5.0 (Linux; Android 13; RMX3761) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     deviceName: 'Realme GT Neo 3',
     osVersion: 'Android 13',
-    screen: '1440x3200 2.9x',
+    screen: 'xxhdpi 460dpi 1440x3200',
     timezone: 'Asia/Hong_Kong',
     locale: 'zh-HK',
   ),
+
+
 
   DevicePreset(
     deviceType: 'IOS',
@@ -641,6 +646,7 @@ final List<DevicePreset> devicePresets = [
     locale: 'cs-CZ',
   ),
 
+
   DevicePreset(
     deviceType: 'DESKTOP',
     userAgent:
@@ -691,6 +697,8 @@ final List<DevicePreset> devicePresets = [
     timezone: 'America/Los_Angeles',
     locale: 'en-US',
   ),
+
+
 
   DevicePreset(
     deviceType: 'WEB',
@@ -743,6 +751,7 @@ final List<DevicePreset> devicePresets = [
     locale: 'es-ES',
   ),
 
+
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -774,6 +783,7 @@ final List<DevicePreset> devicePresets = [
     locale: 'pl-PL',
   ),
 
+
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -794,6 +804,7 @@ final List<DevicePreset> devicePresets = [
     timezone: 'America/Sao_Paulo',
     locale: 'pt-BR',
   ),
+
 
   DevicePreset(
     deviceType: 'WEB',
@@ -836,6 +847,7 @@ final List<DevicePreset> devicePresets = [
     locale: 'en-GB',
   ),
 
+
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -856,6 +868,7 @@ final List<DevicePreset> devicePresets = [
     timezone: 'Europe/Berlin',
     locale: 'de-DE',
   ),
+
 
   DevicePreset(
     deviceType: 'WEB',
@@ -887,6 +900,7 @@ final List<DevicePreset> devicePresets = [
     timezone: 'Asia/Tokyo',
     locale: 'ja-JP',
   ),
+
 
   DevicePreset(
     deviceType: 'WEB',
@@ -929,6 +943,7 @@ final List<DevicePreset> devicePresets = [
     locale: 'zh-CN',
   ),
 
+
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -959,6 +974,7 @@ final List<DevicePreset> devicePresets = [
     timezone: 'Asia/Dubai',
     locale: 'ar-AE',
   ),
+
 
   DevicePreset(
     deviceType: 'WEB',
