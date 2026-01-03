@@ -333,12 +333,17 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     );
 
     try {
-      final latestVersion = await VersionChecker.getLatestVersion();
+      final info = await VersionChecker.getLatestVersionInfo();
       if (mounted) {
-        setState(() => _appVersionController.text = latestVersion);
+        setState(() {
+          _appVersionController.text = info['versionName'];
+          _buildNumberController.text = info['versionCode'].toString();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Найдена версия: $latestVersion'),
+            content: Text(
+              'Обновлено: ${info['versionName']} (Build ${info['versionCode']})',
+            ),
             backgroundColor: Colors.green.shade700,
           ),
         );
@@ -693,10 +698,28 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
             TextField(
               controller: _buildNumberController,
               keyboardType: TextInputType.number,
-              decoration: _inputDecoration(
-                'Build Number',
-                Icons.numbers_outlined,
-              ),
+              decoration:
+                  _inputDecoration(
+                    'Build Number',
+                    Icons.numbers_outlined,
+                  ).copyWith(
+                    suffixIcon: _isCheckingVersion
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.cloud_sync_outlined),
+                            tooltip: 'Обновить из RuStore',
+                            onPressed: _handleVersionCheck,
+                          ),
+                  ),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
