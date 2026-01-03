@@ -1583,6 +1583,17 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                 if (mounted) {
                                                   setState(() {
                                                     _isAccountsExpanded = false;
+                                                    // Clear old account's data
+                                                    _allChats.clear();
+                                                    _filteredChats.clear();
+                                                    _contacts.clear();
+                                                    _folders.clear();
+                                                    _chatDrafts.clear();
+                                                    _searchResults.clear();
+                                                    _myProfile = null;
+                                                    _isProfileLoading = true;
+                                                    _chatsLoaded = false;
+                                                    
                                                     _loadMyProfile();
                                                     _chatsFuture = (() async {
                                                       try {
@@ -1603,17 +1614,36 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                 }
                                               } catch (e) {
                                                 if (mounted) {
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        'Ошибка переключения аккаунта: $e',
+                                                  final errorMessage = e.toString();
+                                                  // Check if this is an invalid token error
+                                                  if (errorMessage.contains('invalid_token') ||
+                                                      errorMessage.contains('недействительн') ||
+                                                      errorMessage.contains('FAIL_WRONG_PASSWORD')) {
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          'Аккаунт недействителен. Требуется повторной авторизации.',
+                                                        ),
+                                                        backgroundColor:
+                                                            colors.error,
+                                                        duration: Duration(seconds: 4),
                                                       ),
-                                                      backgroundColor:
-                                                          colors.error,
-                                                    ),
-                                                  );
+                                                    );
+                                                  } else {
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          'Ошибка переключения аккаунта: $e',
+                                                        ),
+                                                        backgroundColor:
+                                                            colors.error,
+                                                      ),
+                                                    );
+                                                  }
                                                 }
                                               }
                                             },
