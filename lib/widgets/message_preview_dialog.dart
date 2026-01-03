@@ -8,6 +8,7 @@ import 'package:gwid/api/api_service.dart';
 import 'package:gwid/widgets/chat_message_bubble.dart';
 import 'package:gwid/widgets/contact_name_widget.dart';
 import 'package:gwid/screens/chat/models/chat_item.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ControlMessageChip extends StatelessWidget {
   final Message message;

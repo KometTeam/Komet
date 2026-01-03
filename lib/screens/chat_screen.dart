@@ -18,6 +18,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:gwid/services/chat_cache_service.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/services/chat_read_settings_service.dart';
+import 'package:gwid/app_sizes.dart';
 import 'package:gwid/services/contact_local_names_service.dart';
 import 'package:gwid/services/notification_service.dart';
 import 'package:gwid/services/message_queue_service.dart';

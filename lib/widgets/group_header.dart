@@ -3,6 +3,7 @@ import 'package:gwid/models/chat.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/widgets/group_avatars.dart';
 import 'package:gwid/widgets/group_management_panel.dart';
+import 'package:gwid/app_sizes.dart';
 
 class GroupHeader extends StatelessWidget {
   final Chat chat;

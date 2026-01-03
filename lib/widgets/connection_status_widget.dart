@@ -4,6 +4,7 @@ import 'dart:async';
 import '../connection/connection_state.dart' as conn_state;
 import '../connection/health_monitor.dart';
 import 'package:gwid/api/api_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ConnectionStatusWidget extends StatefulWidget {
   final bool showDetails;

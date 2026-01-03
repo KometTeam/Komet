@@ -40,6 +40,7 @@ import 'package:gwid/widgets/message_bubble/widgets/komet_animated_texts.dart';
 import 'package:gwid/widgets/message_bubble/widgets/media/audio_player_widget.dart';
 import 'package:gwid/widgets/message_bubble/utils/user_color_helper.dart';
 import 'package:gwid/widgets/message_bubble/widgets/dialogs/custom_emoji_dialog.dart';
+import 'package:gwid/app_sizes.dart';
 
 class DomainLinkifier extends Linkifier {
   const DomainLinkifier();

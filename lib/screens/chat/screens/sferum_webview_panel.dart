@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:gwid/app_sizes.dart';
 
 class SferumWebViewPanel extends StatefulWidget {
   final String url;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gwid/app_sizes.dart';
 
 class GalaxyAnimatedText extends StatefulWidget {
   final String text;

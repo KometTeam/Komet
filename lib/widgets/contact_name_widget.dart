@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gwid/services/contact_local_names_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ContactNameWidget extends StatefulWidget {
   final int contactId;

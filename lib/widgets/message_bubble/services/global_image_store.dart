@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'package:gwid/app_sizes.dart';
 
 class GlobalImageStore {
   static final Map<String, Uint8List> _memory = {};

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gwid/models/message.dart';
 import 'package:gwid/models/contact.dart';
+import 'package:gwid/app_sizes.dart';
 
 class PinnedMessageWidget extends StatelessWidget {
   final Message pinnedMessage;

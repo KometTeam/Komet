@@ -18,6 +18,7 @@ import 'package:gwid/utils/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gwid/screens/join_group_screen.dart';
+import 'package:gwid/app_sizes.dart';
 import 'package:gwid/screens/search_contact_screen.dart';
 import 'package:gwid/screens/downloads_screen.dart';
 import 'package:gwid/utils/user_id_lookup_screen.dart';

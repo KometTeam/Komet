@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/music_player_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class BottomSheetMusicPlayer extends StatefulWidget {
   const BottomSheetMusicPlayer({super.key});

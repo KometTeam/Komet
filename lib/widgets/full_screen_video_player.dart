@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:async';
+import 'package:gwid/app_sizes.dart';
 
 class FullScreenVideoPlayer extends StatefulWidget {
   final String videoUrl;

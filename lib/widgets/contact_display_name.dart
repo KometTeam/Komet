@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gwid/screens/edit_contact_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ContactDisplayName extends StatefulWidget {
   final int contactId;

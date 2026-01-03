@@ -14,6 +14,7 @@ import 'package:gwid/screens/chat_screen.dart';
 import 'package:gwid/services/whitelist_service.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
+import 'package:gwid/app_sizes.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

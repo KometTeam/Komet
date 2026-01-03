@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gwid/models/complaint.dart';
 import 'package:gwid/api/api_service.dart';
 import 'dart:async';
+import 'package:gwid/app_sizes.dart';
 
 class ComplaintDialog extends StatefulWidget {
   final String messageId;

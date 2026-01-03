@@ -5,6 +5,7 @@ import '../connection/connection_logger.dart';
 import '../connection/connection_state.dart' as conn_state;
 import '../connection/health_monitor.dart';
 import 'package:gwid/api/api_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ConnectionDebugPanel extends StatefulWidget {
   final bool isVisible;

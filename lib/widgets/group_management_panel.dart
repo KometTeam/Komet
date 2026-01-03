@@ -3,6 +3,7 @@ import 'package:gwid/models/chat.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/screens/group_settings_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class GroupManagementPanel extends StatefulWidget {
   final Chat chat;

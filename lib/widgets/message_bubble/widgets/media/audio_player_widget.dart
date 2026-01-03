@@ -3,6 +3,7 @@ import 'package:just_audio/just_audio.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:gwid/services/cache_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class AudioPlayerWidget extends StatefulWidget {
   final String url;

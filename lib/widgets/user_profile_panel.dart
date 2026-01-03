@@ -6,6 +6,7 @@ import 'package:gwid/services/contact_local_names_service.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/screens/chat_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class UserProfilePanel extends StatefulWidget {
   final int userId;

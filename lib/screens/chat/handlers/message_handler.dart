@@ -9,6 +9,7 @@ import 'package:gwid/models/chat_folder.dart';
 import 'package:gwid/services/notification_service.dart';
 import 'package:gwid/services/message_queue_service.dart';
 import 'package:gwid/services/chat_cache_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class MessageHandler {
   final void Function(VoidCallback) setState;

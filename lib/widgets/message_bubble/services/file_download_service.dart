@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' as io;
+import 'package:gwid/app_sizes.dart';
 
 class FileDownloadProgressService {
   static final FileDownloadProgressService _instance =

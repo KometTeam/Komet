@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gwid/models/message.dart';
+import 'package:gwid/app_sizes.dart';
 
 class EditMessageDialog extends StatefulWidget {
   final Message message;
