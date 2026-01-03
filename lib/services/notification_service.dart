@@ -157,6 +157,32 @@ class NotificationService {
           }
         }
         return null;
+      case 'sendReplyFromNotification':
+        final args = call.arguments as Map<dynamic, dynamic>;
+        final chatId = args['chatId'] as int?;
+        final text = args['text'] as String?;
+
+        print(
+          "🔔 Получен ответ из уведомления: chatId=$chatId, text=$text",
+        );
+
+        if (chatId != null && text != null && text.isNotEmpty) {
+          try {
+            // Отправляем сообщение через API
+            await ApiService.instance.sendTextMessage(
+              chatId,
+              text,
+              senderId: ApiService.instance.currentUserId,
+            );
+            print("✅ Сообщение из уведомления отправлено успешно");
+            
+            // Отменяем уведомление после отправки
+            await cancelNotificationForChat(chatId);
+          } catch (e) {
+            print("❌ Ошибка отправки сообщения из уведомления: $e");
+          }
+        }
+        return null;
       default:
         return null;
     }
@@ -631,6 +657,9 @@ class NotificationService {
     final enableVibration = vibrationModeStr != 'none';
     final vibrationPattern = _getVibrationPattern(vibrationModeStr);
 
+    // Определяем, можно ли ответить (нельзя в каналах)
+    final canReply = !isChannel;
+
     // На Android используем нативный канал для стиля как в Telegram
     if (Platform.isAndroid) {
       try {
@@ -643,9 +672,10 @@ class NotificationService {
           'groupTitle': groupTitle,
           'enableVibration': enableVibration,
           'vibrationPattern': vibrationPattern,
+          'canReply': canReply,
         });
         print(
-          "🔔 Показано нативное уведомление Android: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText",
+          "🔔 Показано нативное уведомление Android: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText (canReply: $canReply)",
         );
         return;
       } catch (e) {

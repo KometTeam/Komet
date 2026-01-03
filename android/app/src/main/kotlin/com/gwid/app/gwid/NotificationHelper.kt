@@ -112,7 +112,8 @@ class NotificationHelper(private val context: Context) {
         isGroupChat: Boolean,
         groupTitle: String?,
         enableVibration: Boolean = true,
-        vibrationPattern: List<Long>? = null
+        vibrationPattern: List<Long>? = null,
+        canReply: Boolean = true
     ) {
         // Преобразуем Long в Int для notification ID (используем hashCode)
         val notificationId = chatId.hashCode()
@@ -229,6 +230,40 @@ class NotificationHelper(private val context: Context) {
             builder.setVibrate(vibrationPattern.toLongArray())
         } else if (!enableVibration) {
             builder.setVibrate(longArrayOf(0)) // Без вибрации
+        }
+
+        // Добавляем inline reply action, если чат позволяет отправлять сообщения
+        if (canReply) {
+            val replyLabel = "Ответить"
+            val remoteInput = androidx.core.app.RemoteInput.Builder("key_text_reply")
+                .setLabel(replyLabel)
+                .build()
+
+            val replyIntent = Intent(context, MainActivity::class.java).apply {
+                action = "com.gwid.app.REPLY_ACTION"
+                putExtra("chat_id", chatId)
+                putExtra("sender_name", senderName)
+                putExtra("is_group_chat", isGroupChat)
+                putExtra("group_title", groupTitle)
+            }
+
+            val replyPendingIntent = PendingIntent.getActivity(
+                context,
+                (chatId.hashCode() + 1),
+                replyIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            )
+
+            val replyAction = NotificationCompat.Action.Builder(
+                android.R.drawable.ic_menu_send,
+                replyLabel,
+                replyPendingIntent
+            )
+                .addRemoteInput(remoteInput)
+                .setAllowGeneratedReplies(true)
+                .build()
+
+            builder.addAction(replyAction)
         }
 
         // Показываем уведомление

@@ -33,6 +33,7 @@ class MainActivity : FlutterActivity() {
                         val enableVibration = call.argument<Boolean>("enableVibration") ?: true
                         val vibrationPattern = call.argument<List<Int>>("vibrationPattern")
                             ?.map { it.toLong() }
+                        val canReply = call.argument<Boolean>("canReply") ?: true
 
                         notificationHelper.showMessageNotification(
                             chatId = chatIdLong,
@@ -42,7 +43,8 @@ class MainActivity : FlutterActivity() {
                             isGroupChat = isGroupChat,
                             groupTitle = groupTitle,
                             enableVibration = enableVibration,
-                            vibrationPattern = vibrationPattern
+                            vibrationPattern = vibrationPattern,
+                            canReply = canReply
                         )
                         result.success(true)
                     }
@@ -104,6 +106,30 @@ class MainActivity : FlutterActivity() {
         intent?.let {
             android.util.Log.d("MainActivity", "Intent extras: ${it.extras}")
             android.util.Log.d("MainActivity", "Intent action: ${it.action}")
+            
+            // Обработка inline reply
+            if (it.action == "com.gwid.app.REPLY_ACTION") {
+                android.util.Log.d("MainActivity", "Обработка inline reply")
+                val remoteInput = androidx.core.app.RemoteInput.getResultsFromIntent(it)
+                if (remoteInput != null) {
+                    val replyText = remoteInput.getCharSequence("key_text_reply")?.toString()
+                    val chatId = it.getLongExtra("chat_id", 0L)
+                    
+                    android.util.Log.d("MainActivity", "Reply text: $replyText, chatId: $chatId")
+                    
+                    if (replyText != null && replyText.isNotEmpty() && chatId != 0L) {
+                        // Отправляем сообщение во Flutter
+                        methodChannel?.let { channel ->
+                            channel.invokeMethod("sendReplyFromNotification", mapOf(
+                                "chatId" to chatId,
+                                "text" to replyText
+                            ))
+                            android.util.Log.d("MainActivity", "Отправлен reply во Flutter")
+                        }
+                    }
+                }
+                return
+            }
             
             val payload = it.getStringExtra("payload")
             val chatId = it.getLongExtra("chat_id", 0L)
