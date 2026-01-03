@@ -169,10 +169,9 @@ class NotificationService {
         if (chatId != null && text != null && text.isNotEmpty) {
           try {
             // Отправляем сообщение через API
-            await ApiService.instance.sendTextMessage(
+            ApiService.instance.sendMessage(
               chatId,
               text,
-              senderId: ApiService.instance.currentUserId,
             );
             print("✅ Сообщение из уведомления отправлено успешно");
             
