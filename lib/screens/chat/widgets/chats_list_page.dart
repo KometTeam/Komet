@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:gwid/models/chat.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/models/chat_folder.dart';
+import 'package:gwid/app_sizes.dart';
 
 class ChatsListPage extends StatefulWidget {
   final ChatFolder? folder;
@@ -75,10 +76,15 @@ class _ChatsListPageState extends State<ChatsListPage>
 
     if (chatsForFolder.isEmpty) {
       return Center(
-        child: Text(
-          widget.folder == null ? 'Нет чатов' : 'В этой папке пока нет чатов',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.xxl),
+          child: Text(
+            widget.folder == null ? 'Нет чатов' : 'В этой папке пока нет чатов',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: AppFontSize.lg,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       );
@@ -95,7 +101,7 @@ class _ChatsListPageState extends State<ChatsListPage>
       ),
       child: ListView.builder(
         itemCount: chatsForFolder.length,
-        itemExtent: 72.0,
+        itemExtent: 72.0, // Keep fixed height for performance optimization
         cacheExtent: 500.0,
         itemBuilder: (context, index) {
           return widget.buildChatListItem(

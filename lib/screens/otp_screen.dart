@@ -10,6 +10,7 @@ import 'package:gwid/screens/home_screen.dart';
 import 'package:gwid/screens/password_auth_screen.dart';
 import 'package:gwid/screens/phone_entry_screen.dart';
 import 'package:gwid/services/whitelist_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class OTPScreen extends StatefulWidget {
   final String phoneNumber;
@@ -251,9 +252,9 @@ class _OTPScreenState extends State<OTPScreen>
       SnackBar(
         content: const Text('Неверный код. Попробуйте снова.'),
         backgroundColor: Theme.of(context).colorScheme.error,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(10),
+        margin: EdgeInsets.all(AppSpacing.lg),
       ),
     ).closed.then((_) {
       if (mounted) {
@@ -273,13 +274,13 @@ class _OTPScreenState extends State<OTPScreen>
       width: 56,
       height: 60,
       textStyle: GoogleFonts.manrope(
-        fontSize: 22,
+        fontSize: AppFontSize.title,
         color: colors.onSurface,
         fontWeight: FontWeight.w600,
       ),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.lgBorder,
         border: Border.all(color: colors.outline.withOpacity(0.2), width: 1),
       ),
     );
@@ -303,7 +304,7 @@ class _OTPScreenState extends State<OTPScreen>
               Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: EdgeInsets.all(AppSpacing.xxl),
                     child: Row(
                       children: [
                         IconButton(
@@ -311,9 +312,10 @@ class _OTPScreenState extends State<OTPScreen>
                           onPressed: () => Navigator.of(context).pop(),
                           style: IconButton.styleFrom(
                             backgroundColor: colors.surfaceContainerHighest,
+                            minimumSize: Size(AppAccessibility.iconButtonMinSize, AppAccessibility.iconButtonMinSize),
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: AppSpacing.xxl),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,9 +346,9 @@ class _OTPScreenState extends State<OTPScreen>
                       child: SlideTransition(
                         position: _slideAnimation,
                         child: ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          padding: EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
                           children: [
-                            const SizedBox(height: 20),
+                            const SizedBox(height: AppSpacing.xxxl),
                             Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -357,36 +359,34 @@ class _OTPScreenState extends State<OTPScreen>
                                     colors.surfaceContainer,
                                   ],
                                 ),
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: AppRadius.xlBorder,
                                 border: Border.all(
                                   color: colors.outline.withOpacity(0.2),
                                   width: 1,
                                 ),
                               ),
-                              padding: const EdgeInsets.all(24),
+                              padding: EdgeInsets.all(AppSpacing.xxl),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.all(12),
+                                        padding: EdgeInsets.all(AppSpacing.xl),
                                         decoration: BoxDecoration(
                                           color: colors.primaryContainer
                                               .withOpacity(0.5),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
+                                          borderRadius: AppRadius.mdBorder,
                                         ),
                                         child: Icon(
                                           Icons.mail_outline,
                                           color: colors.primary,
-                                          size: 28,
+                                          size: AppIconSize.xl,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: AppSpacing.xxl),
                                   Text(
                                     'Код отправлен',
                                     style: GoogleFonts.manrope(
@@ -394,7 +394,7 @@ class _OTPScreenState extends State<OTPScreen>
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: AppSpacing.md),
                                   Text(
                                     'Мы отправили 6-значный код на номер:',
                                     style: GoogleFonts.manrope(
@@ -403,7 +403,7 @@ class _OTPScreenState extends State<OTPScreen>
                                       height: 1.4,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: AppSpacing.md),
                                   Text(
                                     widget.phoneNumber,
                                     style: GoogleFonts.manrope(
@@ -412,7 +412,7 @@ class _OTPScreenState extends State<OTPScreen>
                                       color: colors.primary,
                                     ),
                                   ),
-                                  const SizedBox(height: 32),
+                                  const SizedBox(height: AppSpacing.xxxl * 1.5),
                                   Center(
                                     child: Pinput(
                                       length: 6,
@@ -456,13 +456,13 @@ class _OTPScreenState extends State<OTPScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppSpacing.xxl),
                             Container(
-                              padding: const EdgeInsets.all(20),
+                              padding: EdgeInsets.all(AppSpacing.xxxl),
                               decoration: BoxDecoration(
                                 color: colors.surfaceContainerHighest
                                     .withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: AppRadius.lgBorder,
                                 border: Border.all(
                                   color: colors.outline.withOpacity(0.2),
                                 ),
@@ -472,9 +472,9 @@ class _OTPScreenState extends State<OTPScreen>
                                   Icon(
                                     Icons.info_outline,
                                     color: colors.primary,
-                                    size: 24,
+                                    size: AppIconSize.lg,
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: AppSpacing.xxl),
                                   Expanded(
                                     child: Text(
                                       'Код действителен в течение 10 минут. Если код не пришёл, проверьте правильность номера.',
@@ -488,7 +488,7 @@ class _OTPScreenState extends State<OTPScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppSpacing.xxl),
                           ],
                         ),
                       ),
@@ -504,7 +504,7 @@ class _OTPScreenState extends State<OTPScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const CircularProgressIndicator(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: AppSpacing.xxl),
                         Text(
                           'Проверяем код...',
                           style: GoogleFonts.manrope(
