@@ -30,6 +30,9 @@ class MainActivity : FlutterActivity() {
                         val avatarPath = call.argument<String>("avatarPath")
                         val isGroupChat = call.argument<Boolean>("isGroupChat") ?: false
                         val groupTitle = call.argument<String>("groupTitle")
+                        val enableVibration = call.argument<Boolean>("enableVibration") ?: true
+                        val vibrationPattern = call.argument<List<Int>>("vibrationPattern")
+                            ?.map { it.toLong() }
 
                         notificationHelper.showMessageNotification(
                             chatId = chatIdLong,
@@ -37,7 +40,9 @@ class MainActivity : FlutterActivity() {
                             messageText = messageText,
                             avatarPath = avatarPath,
                             isGroupChat = isGroupChat,
-                            groupTitle = groupTitle
+                            groupTitle = groupTitle,
+                            enableVibration = enableVibration,
+                            vibrationPattern = vibrationPattern
                         )
                         result.success(true)
                     }

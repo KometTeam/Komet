@@ -110,7 +110,9 @@ class NotificationHelper(private val context: Context) {
         messageText: String,
         avatarPath: String?,
         isGroupChat: Boolean,
-        groupTitle: String?
+        groupTitle: String?,
+        enableVibration: Boolean = true,
+        vibrationPattern: List<Long>? = null
     ) {
         // Преобразуем Long в Int для notification ID (используем hashCode)
         val notificationId = chatId.hashCode()
@@ -202,6 +204,9 @@ class NotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Группировка уведомлений - используем chatId как groupKey
+        val groupKey = "chat_group_$chatId"
+
         // Строим уведомление
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.notification_icon)
@@ -211,17 +216,56 @@ class NotificationHelper(private val context: Context) {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setShortcutId(shortcutId)
+            .setGroup(groupKey) // Группировка по chatId
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
 
         // Добавляем largeIcon (показывается в свёрнутом виде)
         if (avatarBitmap != null) {
             builder.setLargeIcon(avatarBitmap)
         }
 
+        // Настройка вибрации
+        if (enableVibration && vibrationPattern != null && vibrationPattern.isNotEmpty()) {
+            builder.setVibrate(vibrationPattern.toLongArray())
+        } else if (!enableVibration) {
+            builder.setVibrate(longArrayOf(0)) // Без вибрации
+        }
+
         // Показываем уведомление
         try {
             NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+            
+            // Если есть несколько сообщений в этом чате, создаём summary notification
+            if (messages.size > 1) {
+                createGroupSummaryNotification(chatId, groupKey, messages.size, shortcutLabel)
+            }
         } catch (e: SecurityException) {
             // Нет разрешения на уведомления
+            e.printStackTrace()
+        }
+    }
+
+    // Создание summary notification для группы уведомлений
+    private fun createGroupSummaryNotification(
+        chatId: Long,
+        groupKey: String,
+        messageCount: Int,
+        chatTitle: String
+    ) {
+        val summaryNotificationId = (chatId.hashCode() + 1000000) // Уникальный ID для summary
+        
+        val summaryBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.notification_icon)
+            .setContentTitle(chatTitle)
+            .setContentText("$messageCount ${if (messageCount == 1) "сообщение" else if (messageCount < 5) "сообщения" else "сообщений"}")
+            .setGroup(groupKey)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+        
+        try {
+            NotificationManagerCompat.from(context).notify(summaryNotificationId, summaryBuilder.build())
+        } catch (e: SecurityException) {
             e.printStackTrace()
         }
     }

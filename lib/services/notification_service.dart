@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/services/chat_cache_service.dart';
+import 'package:gwid/services/notification_settings_service.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/screens/chat_screen.dart';
@@ -554,6 +555,7 @@ class NotificationService {
     String? avatarUrl,
     bool showPreview = true,
     bool isGroupChat = false,
+    bool isChannel = false,
     String? groupTitle,
   }) async {
     print("🔔 [NotificationService] showMessageNotification вызван:");
@@ -562,8 +564,29 @@ class NotificationService {
     print("   messageText: $messageText");
     print("   avatarUrl: $avatarUrl");
     print("   isGroupChat: $isGroupChat");
+    print("   isChannel: $isChannel");
     print("   groupTitle: $groupTitle");
     print("   showPreview: $showPreview");
+
+    // Проверяем новые настройки уведомлений
+    final settingsService = NotificationSettingsService();
+    final shouldShow = await settingsService.shouldShowNotification(
+      chatId: chatId,
+      isGroupChat: isGroupChat,
+      isChannel: isChannel,
+    );
+
+    if (!shouldShow) {
+      print("🔔 [NotificationService] Уведомления отключены для этого чата");
+      return;
+    }
+
+    // Получаем настройки для чата
+    final chatSettings = await settingsService.getSettingsForChat(
+      chatId: chatId,
+      isGroupChat: isGroupChat,
+      isChannel: isChannel,
+    );
 
     final prefs = await SharedPreferences.getInstance();
     final chatsPushEnabled = prefs.getString('chatsPushNotification') != 'OFF';
@@ -572,6 +595,7 @@ class NotificationService {
     print("🔔 [NotificationService] Настройки:");
     print("   chatsPushEnabled: $chatsPushEnabled");
     print("   pushDetails: $pushDetails");
+    print("   chatSettings: $chatSettings");
     print("   _initialized: $_initialized");
 
     if (!chatsPushEnabled) {
@@ -597,6 +621,11 @@ class NotificationService {
     // Пытаемся получить аватарку
     final avatarPath = await _ensureAvatarFile(avatarUrl, chatId);
 
+    // Получаем режим вибрации из настроек чата
+    final vibrationModeStr = chatSettings['vibration'] as String? ?? 'short';
+    final enableVibration = vibrationModeStr != 'none';
+    final vibrationPattern = _getVibrationPattern(vibrationModeStr);
+
     // На Android используем нативный канал для стиля как в Telegram
     if (Platform.isAndroid) {
       try {
@@ -607,6 +636,8 @@ class NotificationService {
           'avatarPath': avatarPath,
           'isGroupChat': isGroupChat,
           'groupTitle': groupTitle,
+          'enableVibration': enableVibration,
+          'vibrationPattern': vibrationPattern,
         });
         print(
           "🔔 Показано нативное уведомление Android: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText",
@@ -637,7 +668,8 @@ class NotificationService {
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
         showWhen: true,
-        enableVibration: true,
+        enableVibration: enableVibration,
+        vibrationPattern: enableVibration ? Int64List.fromList(vibrationPattern) : null,
         playSound: true,
         icon: 'notification_icon',
         styleInformation: BigTextStyleInformation(
@@ -665,6 +697,20 @@ class NotificationService {
     print(
       "🔔 Показано уведомление: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText",
     );
+  }
+
+  /// Получить паттерн вибрации в зависимости от режима
+  List<int> _getVibrationPattern(String mode) {
+    switch (mode) {
+      case 'none':
+        return [0]; // Без вибрации
+      case 'short':
+        return [0, 200, 100, 200]; // Короткая вибрация
+      case 'long':
+        return [0, 500, 200, 500]; // Длинная вибрация
+      default:
+        return [0, 200, 100, 200]; // По умолчанию короткая
+    }
   }
 
   /// Показывает один выбранный тестовый вариант (по номеру).
