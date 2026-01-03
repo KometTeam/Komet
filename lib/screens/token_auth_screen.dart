@@ -16,6 +16,7 @@ import 'package:gwid/utils/proxy_service.dart';
 import 'package:gwid/utils/proxy_settings.dart';
 import 'package:gwid/screens/settings/qr_scanner_screen.dart';
 import 'package:gwid/screens/settings/session_spoofing_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:crypto/crypto.dart' as crypto;
@@ -375,7 +376,7 @@ class _TokenAuthScreenState extends State<TokenAuthScreen>
               Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: EdgeInsets.all(AppSpacing.xxl),
                     child: Row(
                       children: [
                         IconButton(
@@ -383,9 +384,10 @@ class _TokenAuthScreenState extends State<TokenAuthScreen>
                           onPressed: () => Navigator.of(context).pop(),
                           style: IconButton.styleFrom(
                             backgroundColor: colors.surfaceContainerHighest,
+                            minimumSize: Size(AppAccessibility.iconButtonMinSize, AppAccessibility.iconButtonMinSize),
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: AppSpacing.xxl),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,7 +418,7 @@ class _TokenAuthScreenState extends State<TokenAuthScreen>
                       child: SlideTransition(
                         position: _slideAnimation,
                         child: ListView(
-                          padding: const EdgeInsets.all(24.0),
+                          padding: EdgeInsets.all(AppSpacing.xxl),
                           children: [
                             _AuthMethodCard(
                               icon: Icons.devices_other_outlined,
@@ -441,7 +443,7 @@ class _TokenAuthScreenState extends State<TokenAuthScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.xxl),
                             _AuthMethodCard(
                               icon: Icons.qr_code_scanner_rounded,
                               title: 'Вход по QR-коду',
@@ -463,7 +465,7 @@ class _TokenAuthScreenState extends State<TokenAuthScreen>
                               ),
                               hasWarning: true,
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.xxl),
                             _AuthMethodCard(
                               icon: Icons.file_open_outlined,
                               title: 'Вход по файлу сессии',
@@ -480,7 +482,7 @@ class _TokenAuthScreenState extends State<TokenAuthScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.xxl),
                             _TokenAuthCard(
                               controller: _tokenController,
                               onPressed: _loginWithToken,
@@ -533,33 +535,33 @@ class _AuthMethodCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.xlBorder,
         child: Container(
           decoration: BoxDecoration(
             gradient: gradient,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadius.xlBorder,
             border: Border.all(
               color: colors.outline.withOpacity(0.2),
               width: 1,
             ),
           ),
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(AppSpacing.xl),
                     decoration: BoxDecoration(
                       color: colors.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.mdBorder,
                     ),
-                    child: Icon(icon, color: colors.onSurfaceVariant, size: 28),
+                    child: Icon(icon, color: colors.onSurfaceVariant, size: AppIconSize.xl),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               Text(
                 title,
                 style: GoogleFonts.manrope(
@@ -567,7 +569,7 @@ class _AuthMethodCard extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 description,
                 style: GoogleFonts.manrope(
@@ -577,28 +579,28 @@ class _AuthMethodCard extends StatelessWidget {
                 ),
               ),
               if (hasWarning) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.xxl),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(AppSpacing.xl),
                   decoration: BoxDecoration(
                     color: colors.secondaryContainer.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.mdBorder,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.info_outline,
-                        size: 20,
+                        size: AppIconSize.md,
                         color: colors.onSecondaryContainer,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
                           'Токены привязаны к типу устройства. Перед входом убедитесь, что в настройках подмены сессии выбран правильный тип устройства (Android, iOS или Desktop), с которого был получен токен.',
                           style: GoogleFonts.manrope(
                             textStyle: TextStyle(
-                              fontSize: 13,
+                              fontSize: AppFontSize.body,
                               color: colors.onSecondaryContainer,
                             ),
                           ),
@@ -608,7 +610,7 @@ class _AuthMethodCard extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               Row(
                 children: [
                   Text(
@@ -619,11 +621,11 @@ class _AuthMethodCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.md),
                   Icon(
                     Icons.arrow_forward,
                     color: colors.onSurfaceVariant,
-                    size: 18,
+                    size: AppIconSize.sm,
                   ),
                 ],
               ),
@@ -650,7 +652,7 @@ class _TokenAuthCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: null,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.xlBorder,
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -658,33 +660,33 @@ class _TokenAuthCard extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadius.xlBorder,
             border: Border.all(
               color: colors.outline.withOpacity(0.2),
               width: 1,
             ),
           ),
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(AppSpacing.xl),
                     decoration: BoxDecoration(
                       color: colors.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.mdBorder,
                     ),
                     child: Icon(
                       Icons.vpn_key_outlined,
                       color: colors.onSurfaceVariant,
-                      size: 28,
+                      size: AppIconSize.xl,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               Text(
                 'Вход по токену',
                 style: GoogleFonts.manrope(
@@ -692,7 +694,7 @@ class _TokenAuthCard extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 'Введите токен авторизации (AUTH_TOKEN) вручную.',
                 style: GoogleFonts.manrope(
@@ -701,28 +703,28 @@ class _TokenAuthCard extends StatelessWidget {
                   height: 1.4,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(AppSpacing.xl),
                 decoration: BoxDecoration(
                   color: colors.secondaryContainer.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppRadius.mdBorder,
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
                       Icons.info_outline,
-                      size: 20,
+                      size: AppIconSize.md,
                       color: colors.onSecondaryContainer,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Text(
                         'Токены привязаны к типу устройства. Перед входом убедитесь, что в настройках подмены сессии выбран правильный тип устройства (Android, iOS или Desktop), с которого был получен токен.',
                         style: GoogleFonts.manrope(
                           textStyle: TextStyle(
-                            fontSize: 13,
+                            fontSize: AppFontSize.body,
                             color: colors.onSecondaryContainer,
                           ),
                         ),
@@ -731,25 +733,26 @@ class _TokenAuthCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               TextField(
                 controller: controller,
                 decoration: InputDecoration(
                   labelText: 'Токен',
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.lgBorder,
                   ),
                   filled: true,
                   fillColor: colors.surfaceContainerHighest,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               FilledButton(
                 onPressed: onPressed,
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  minimumSize: Size.fromHeight(AppAccessibility.buttonMinHeight),
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.lgBorder,
                   ),
                 ),
                 child: Row(

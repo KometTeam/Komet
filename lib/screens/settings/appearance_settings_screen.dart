@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
 import 'package:gwid/screens/settings/customization_screen.dart';
+import 'package:gwid/app_sizes.dart';
 
 class AppearanceSettingsScreen extends StatefulWidget {
   final bool isModal;
@@ -83,7 +84,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen>
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: EdgeInsets.all(AppSpacing.xxl),
                 child: Row(
                   children: [
                     if (Navigator.canPop(context))
@@ -92,9 +93,10 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen>
                         onPressed: () => Navigator.of(context).pop(),
                         style: IconButton.styleFrom(
                           backgroundColor: colors.surfaceContainerHighest,
+                          minimumSize: Size(AppAccessibility.iconButtonMinSize, AppAccessibility.iconButtonMinSize),
                         ),
                       ),
-                    if (Navigator.canPop(context)) const SizedBox(width: 16),
+                    if (Navigator.canPop(context)) const SizedBox(width: AppSpacing.xxl),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,10 +162,10 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen>
                 height: MediaQuery.of(context).size.height < 800
                     ? double.infinity
                     : null,
-                margin: const EdgeInsets.all(20),
+                margin: EdgeInsets.all(AppSpacing.xxxl),
                 decoration: BoxDecoration(
                   color: colors.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppRadius.lgBorder,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.3),
@@ -175,7 +177,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen>
                 child: Column(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(AppSpacing.xxl),
                       decoration: BoxDecoration(
                         color: colors.surface,
                         borderRadius: const BorderRadius.only(

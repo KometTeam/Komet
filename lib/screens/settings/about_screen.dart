@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gwid/screens/tos_screen.dart';
 import 'package:gwid/consts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:gwid/app_sizes.dart';
 
 class AboutScreen extends StatelessWidget {
   final bool isModal;
@@ -23,7 +24,7 @@ class AboutScreen extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
+      padding: EdgeInsets.only(bottom: AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -40,7 +41,7 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(left: 16.0, top: 2.0),
+            padding: EdgeInsets.only(left: AppSpacing.xxl, top: AppSpacing.xxs),
             child: Text(
               description,
               style: textTheme.bodySmall?.copyWith(
@@ -65,7 +66,7 @@ class AboutScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("О приложении")),
       body: ListView(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(AppSpacing.xxl),
         children: [
           Text(
             "Команда «Komet»",
@@ -73,12 +74,12 @@ class AboutScreen extends StatelessWidget {
               context,
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.xl),
           const Text(
             "Мы — команда энтузиастов, создавшая Komet. Нас объединила страсть к технологиям и желание дать пользователям свободу выбора.",
             style: TextStyle(fontSize: 16, height: 1.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xxl),
 
           Card(
             clipBehavior: Clip.antiAlias,
@@ -96,19 +97,19 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xxl),
           const Text(
             "Мы верим в открытость, прозрачность и право пользователей на выбор. Komet — это наш ответ излишним ограничениям.",
             style: TextStyle(fontSize: 16, height: 1.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xxl),
           const Divider(),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.xxl),
           InkWell(
             onTap: () => _launchUrl(AppUrls.telegramChannel),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppRadius.smBorder,
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
               child: RichText(
                 text: TextSpan(
                   style: Theme.of(
@@ -137,17 +138,17 @@ class AboutScreen extends StatelessWidget {
   Widget buildModalContent(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         children: [
           Column(
             children: [
               Image.asset('assets/icon/komet.png', width: 128, height: 128),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
               Text(
                 'Komet',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: AppFontSize.headline,
                   fontWeight: FontWeight.bold,
                   color: colors.primary,
                 ),

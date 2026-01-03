@@ -5,6 +5,7 @@ import 'package:gwid/models/profile.dart';
 import 'package:gwid/screens/home_screen.dart';
 import 'package:gwid/screens/phone_entry_screen.dart';
 import 'package:gwid/services/whitelist_service.dart';
+import 'package:gwid/app_sizes.dart';
 
 class PasswordAuthScreen extends StatefulWidget {
   const PasswordAuthScreen({super.key});
@@ -99,10 +100,10 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
                     content: const Text('Пароль верный! Вход выполнен.'),
                     backgroundColor: Colors.green,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.mdBorder,
                     ),
                     behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.all(10),
+                    margin: EdgeInsets.all(AppSpacing.lg),
                   ),
                 );
 
@@ -147,10 +148,10 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
             content: Text(errorMessage),
             backgroundColor: Theme.of(context).colorScheme.error,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.mdBorder,
             ),
             behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(10),
+            margin: EdgeInsets.all(AppSpacing.lg),
           ),
         );
       }
@@ -169,10 +170,10 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
           content: const Text('Введите пароль'),
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
       return;
@@ -187,10 +188,10 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
           content: const Text('Ошибка: отсутствует идентификатор сессии'),
           backgroundColor: Theme.of(context).colorScheme.error,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
       return;
@@ -211,10 +212,10 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
           content: Text('Ошибка отправки пароля: ${e.toString()}'),
           backgroundColor: Theme.of(context).colorScheme.error,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.mdBorder,
           ),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
+          margin: EdgeInsets.all(AppSpacing.lg),
         ),
       );
     }
@@ -234,16 +235,16 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
         children: [
           Center(
             child: Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (_email != null)
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(AppSpacing.xxl),
                       decoration: BoxDecoration(
                         color: colors.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppRadius.mdBorder,
                         border: Border.all(
                           color: colors.outline.withOpacity(0.2),
                         ),
@@ -255,24 +256,24 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
                             style: TextStyle(
                               color: colors.primary,
                               fontWeight: FontWeight.w600,
-                              fontSize: 16,
+                              fontSize: AppFontSize.xl,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: AppSpacing.md),
                           Text(
                             _email!,
                             style: TextStyle(
                               color: colors.onSurfaceVariant,
-                              fontSize: 14,
+                              fontSize: AppFontSize.lg,
                             ),
                           ),
                           if (_hint != null) ...[
-                            const SizedBox(height: 8),
+                            const SizedBox(height: AppSpacing.md),
                             Text(
                               'Подсказка: $_hint',
                               style: TextStyle(
                                 color: colors.onSurfaceVariant,
-                                fontSize: 14,
+                                fontSize: AppFontSize.lg,
                                 fontStyle: FontStyle.italic,
                               ),
                             ),
@@ -281,7 +282,7 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
                       ),
                     ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: AppSpacing.xxxl * 1.5),
 
                   TextField(
                     controller: _passwordController,
@@ -290,7 +291,7 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
                       labelText: 'Пароль',
                       hintText: 'Введите пароль от аккаунта',
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppRadius.mdBorder,
                       ),
                       prefixIcon: const Icon(Icons.lock),
                       filled: true,
@@ -299,23 +300,23 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
                     onSubmitted: (_) => _submitPassword(),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.xxl),
 
                   SizedBox(
                     width: double.infinity,
-                    height: 50,
+                    height: AppAccessibility.buttonMinHeight,
                     child: FilledButton(
                       onPressed: _isLoading ? null : _submitPassword,
                       style: FilledButton.styleFrom(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppRadius.mdBorder,
                         ),
                       ),
                       child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
+                          ? SizedBox(
+                              width: AppIconSize.md,
+                              height: AppIconSize.md,
+                              child: const CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
                                   Colors.white,
