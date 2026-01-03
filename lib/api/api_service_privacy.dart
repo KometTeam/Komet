@@ -76,7 +76,7 @@ extension ApiServicePrivacy on ApiService {
     await waitUntilOnline();
 
     final payload = {
-        "settings": {"user": setting},
+      "settings": {"user": setting},
     };
 
     _sendMessage(22, payload);
@@ -122,4 +122,3 @@ extension ApiServicePrivacy on ApiService {
     });
   }
 }
-

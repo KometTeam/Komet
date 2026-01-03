@@ -5,9 +5,6 @@ import '../connection/connection_state.dart' as conn_state;
 import '../connection/health_monitor.dart';
 import 'package:gwid/api/api_service.dart';
 
-
-
-
 class ConnectionStatusWidget extends StatefulWidget {
   final bool showDetails;
   final bool showHealthMetrics;
@@ -48,9 +45,7 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget> {
     });
 
     if (widget.showHealthMetrics) {
-      _healthSubscription = ApiService.instance.healthMetrics.listen((
-        health,
-      ) {
+      _healthSubscription = ApiService.instance.healthMetrics.listen((health) {
         if (mounted) {
           setState(() {
             _currentHealth = health;
@@ -204,7 +199,10 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget> {
       decoration: BoxDecoration(
         color: _getHealthColor().withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _getHealthColor().withValues(alpha: 0.3), width: 1),
+        border: Border.all(
+          color: _getHealthColor().withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,7 +329,6 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget> {
   }
 }
 
-
 class ConnectionIndicator extends StatefulWidget {
   final double size;
   final bool showPulse;
@@ -397,7 +394,6 @@ class _ConnectionIndicatorState extends State<ConnectionIndicator> {
         );
       },
       onEnd: () {
-
         if (mounted) {
           setState(() {});
         }

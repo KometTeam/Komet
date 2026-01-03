@@ -114,7 +114,7 @@ class _StorageScreenState extends State<StorageScreen>
       }
     } catch (e) {
       print('Ошибка при подсчете размера директории ${dir.path}: $e');
-      totalSize = 0; 
+      totalSize = 0;
     }
     return totalSize;
   }
@@ -671,8 +671,6 @@ class _StorageScreenState extends State<StorageScreen>
     try {
       String? selectedDirectory;
 
-      
-      
       selectedDirectory = await FilePicker.platform.getDirectoryPath();
 
       if (selectedDirectory != null && selectedDirectory.isNotEmpty) {
@@ -685,7 +683,7 @@ class _StorageScreenState extends State<StorageScreen>
               duration: const Duration(seconds: 3),
             ),
           );
-          setState(() {}); 
+          setState(() {});
         }
       }
     } catch (e) {
@@ -728,7 +726,7 @@ class _StorageScreenState extends State<StorageScreen>
             backgroundColor: Colors.green,
           ),
         );
-        setState(() {}); 
+        setState(() {});
       }
     }
   }

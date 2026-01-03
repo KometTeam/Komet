@@ -48,7 +48,9 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
             if (Navigator.of(context, rootNavigator: false).canPop()) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Успешно присоединились к группе "$chatTitle"!'),
+                  content: Text(
+                    'Успешно присоединились к группе "$chatTitle"!',
+                  ),
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -66,7 +68,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         });
       }
 
-      
       if (message['cmd'] == 1 && message['opcode'] == 57) {
         setState(() {
           _isLoading = false;
@@ -96,7 +97,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         });
       }
 
-      
       if (message['cmd'] == 3 && message['opcode'] == 57) {
         setState(() {
           _isLoading = false;
@@ -130,7 +130,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   String _normalizeLink(String inputLink) {
     String link = inputLink.trim();
 
-    
     if (link.startsWith('@')) {
       link = link.substring(1).trim();
     }
@@ -191,7 +190,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       return;
     }
 
-    
     if (_isChannelLink(inputLink)) {
       setState(() {
         _isLoading = true;
@@ -204,7 +202,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           _isLoading = false;
         });
 
-        
         _showChannelSubscribeDialog(chatInfo, inputLink);
       } catch (e) {
         if (!mounted) return;
@@ -226,7 +223,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
       return;
     }
 
-    
     final processedLink = _extractJoinLink(inputLink);
 
     if (!processedLink.contains('join/')) {
@@ -259,14 +255,16 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           _isLoading = false;
         });
         ApiService.instance.clearChatsCache();
-        
+
         Future.microtask(() {
           if (!mounted) return;
           try {
             if (Navigator.of(context, rootNavigator: false).canPop()) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: const Text('Присоединение выполнено. Обновите список чатов.'),
+                  content: const Text(
+                    'Присоединение выполнено. Обновите список чатов.',
+                  ),
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -285,7 +283,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     });
 
     StreamSubscription? tempSubscription;
-    
+
     tempSubscription = ApiService.instance.messages.listen((message) {
       if (message['type'] == 'group_join_success' && !successHandled) {
         successHandled = true;
@@ -299,14 +297,16 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           final chat = payload?['chat'];
           final chatTitle = chat?['title'] ?? 'Группа';
           ApiService.instance.clearChatsCache();
-          
+
           Future.microtask(() {
             if (!mounted) return;
             try {
               if (Navigator.of(context, rootNavigator: false).canPop()) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Успешно присоединились к группе "$chatTitle"!'),
+                    content: Text(
+                      'Успешно присоединились к группе "$chatTitle"!',
+                    ),
                     backgroundColor: Colors.green,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -327,7 +327,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
     try {
       await ApiService.instance.joinGroupByLink(processedLink);
-      
+
       if (!successHandled) {
         await Future.delayed(const Duration(seconds: 2));
         if (!successHandled && mounted) {
@@ -337,14 +337,16 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
             _isLoading = false;
           });
           ApiService.instance.clearChatsCache();
-          
+
           Future.microtask(() {
             if (!mounted) return;
             try {
               if (Navigator.of(context, rootNavigator: false).canPop()) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Присоединение выполнено. Обновите список чатов.'),
+                    content: const Text(
+                      'Присоединение выполнено. Обновите список чатов.',
+                    ),
                     backgroundColor: Colors.green,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

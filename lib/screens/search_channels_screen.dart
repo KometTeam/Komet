@@ -553,7 +553,6 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
   String _extractChannelLink(String inputLink) {
     String link = inputLink.trim();
 
-    
     if (link.startsWith('@')) {
       link = link.substring(1).trim();
     }

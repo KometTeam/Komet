@@ -27,7 +27,7 @@ class NotificationService {
 
   // MethodChannel для нативных уведомлений Android
   static const _nativeChannel = MethodChannel('com.gwid.app/notifications');
-  
+
   static Future<void> updateForegroundServiceNotification({
     String title = 'Komet',
     String content = 'Активно',
@@ -36,10 +36,7 @@ class NotificationService {
       try {
         await _nativeChannel.invokeMethod(
           'updateForegroundServiceNotification',
-          {
-            'title': title,
-            'content': content,
-          },
+          {'title': title, 'content': content},
         );
         print("✅ Уведомление фонового сервиса обновлено с кнопкой действия");
       } catch (e) {
@@ -62,7 +59,7 @@ class NotificationService {
 
     // Инициализация локальных уведомлений
     const androidSettings = AndroidInitializationSettings('notification_icon');
-    
+
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -95,30 +92,25 @@ class NotificationService {
     if (Platform.isIOS || Platform.isMacOS) {
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
 
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-              MacOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+            MacOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
     }
 
     // Запрос разрешений для Android 13+
     if (Platform.isAndroid) {
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
-      
+
       // Проверяем pending notification (если приложение было запущено из уведомления)
       _checkPendingNotification();
     }
@@ -129,23 +121,31 @@ class NotificationService {
 
   /// Обработка вызовов из нативного кода Android
   Future<dynamic> _handleNativeCall(MethodCall call) async {
-    print("🔔 [Native -> Flutter] Получен вызов: ${call.method}, args: ${call.arguments}");
-    
+    print(
+      "🔔 [Native -> Flutter] Получен вызов: ${call.method}, args: ${call.arguments}",
+    );
+
     switch (call.method) {
       case 'onNotificationTap':
         final args = call.arguments as Map<dynamic, dynamic>;
         final payload = args['payload'] as String?;
         final chatId = args['chatId'];
-        
-        print("🔔 Получен тап по уведомлению из нативного кода: payload=$payload, chatId=$chatId");
-        
+
+        print(
+          "🔔 Получен тап по уведомлению из нативного кода: payload=$payload, chatId=$chatId",
+        );
+
         if (payload != null && payload.startsWith('chat_')) {
-          final chatIdFromPayload = int.tryParse(payload.replaceFirst('chat_', ''));
+          final chatIdFromPayload = int.tryParse(
+            payload.replaceFirst('chat_', ''),
+          );
           print("🔔 chatIdFromPayload: $chatIdFromPayload");
           if (chatIdFromPayload != null) {
             // Добавляем небольшую задержку чтобы Flutter был готов
             Future.delayed(const Duration(milliseconds: 500), () {
-              print("🔔 Вызываем _openChatFromNotification($chatIdFromPayload)");
+              print(
+                "🔔 Вызываем _openChatFromNotification($chatIdFromPayload)",
+              );
               _openChatFromNotification(chatIdFromPayload);
             });
           }
@@ -155,25 +155,31 @@ class NotificationService {
         return null;
     }
   }
-  
+
   /// Проверка pending notification после запуска
   Future<void> _checkPendingNotification() async {
     try {
       // Ждём пока приложение полностью загрузится
       await Future.delayed(const Duration(milliseconds: 1000));
-      
+
       print("🔔 Проверяем pending notification...");
-      final result = await _nativeChannel.invokeMethod('getPendingNotification');
+      final result = await _nativeChannel.invokeMethod(
+        'getPendingNotification',
+      );
       print("🔔 getPendingNotification результат: $result");
-      
+
       if (result != null && result is Map) {
         final payload = result['payload'] as String?;
         final chatId = result['chatId'];
-        
-        print("🔔 Найден pending notification: payload=$payload, chatId=$chatId");
-        
+
+        print(
+          "🔔 Найден pending notification: payload=$payload, chatId=$chatId",
+        );
+
         if (payload != null && payload.startsWith('chat_')) {
-          final chatIdFromPayload = int.tryParse(payload.replaceFirst('chat_', ''));
+          final chatIdFromPayload = int.tryParse(
+            payload.replaceFirst('chat_', ''),
+          );
           if (chatIdFromPayload != null) {
             print("🔔 Открываем чат из pending: $chatIdFromPayload");
             _openChatFromNotification(chatIdFromPayload);
@@ -196,14 +202,14 @@ class NotificationService {
   /// Обработка нажатия на уведомление
   void _onNotificationTap(NotificationResponse response) {
     print("🔔 Нажатие на уведомление: ${response.payload}");
-    
+
     if (response.payload != null) {
       try {
         // Парсим payload формата 'chat_123'
         if (response.payload!.startsWith('chat_')) {
           final chatIdStr = response.payload!.replaceFirst('chat_', '');
           final chatId = int.tryParse(chatIdStr);
-          
+
           if (chatId != null) {
             _openChatFromNotification(chatId);
           }
@@ -217,7 +223,7 @@ class NotificationService {
   /// Открыть чат при нажатии на уведомление
   Future<void> _openChatFromNotification(int chatId) async {
     print("🔔 Открываем чат $chatId из уведомления");
-    
+
     if (_navigatorKey == null) {
       print("⚠️ NavigatorKey не установлен!");
       return;
@@ -258,7 +264,8 @@ class NotificationService {
           chatData = chat as Map<String, dynamic>;
           // Определяем тип чата
           final chatType = chat['type'] as String?;
-          isGroupChat = chatType == 'CHAT' || chat['isGroup'] == true || chatId < 0;
+          isGroupChat =
+              chatType == 'CHAT' || chat['isGroup'] == true || chatId < 0;
           isChannel = chat['isChannel'] == true;
           participantCount = chat['participantCount'] as int?;
           break;
@@ -272,7 +279,8 @@ class NotificationService {
         if (cachedChat != null) {
           chatData = cachedChat;
           final chatType = cachedChat['type'] as String?;
-          isGroupChat = chatType == 'CHAT' || cachedChat['isGroup'] == true || chatId < 0;
+          isGroupChat =
+              chatType == 'CHAT' || cachedChat['isGroup'] == true || chatId < 0;
           isChannel = cachedChat['isChannel'] == true;
           participantCount = cachedChat['participantCount'] as int?;
         } else {
@@ -285,7 +293,10 @@ class NotificationService {
       Contact contact;
       if (isGroupChat) {
         // Группа - создаём Contact из данных чата
-        final title = chatData['title'] as String? ?? chatData['displayTitle'] as String? ?? 'Группа';
+        final title =
+            chatData['title'] as String? ??
+            chatData['displayTitle'] as String? ??
+            'Группа';
         final baseIconUrl = chatData['baseIconUrl'] as String?;
         contact = Contact(
           id: chatId,
@@ -305,31 +316,38 @@ class NotificationService {
           // Контакт не в данных чата - пробуем загрузить через API
           print("! Контакт не найден в данных чата");
           print("🔔 chatData keys: ${chatData.keys.toList()}");
-          
+
           // Пробуем получить ID контакта из participants
           int? contactId;
           String? participantName;
           String? participantPhotoUrl;
-          
+
           final participantsRaw = chatData['participants'];
           final owner = chatData['owner'] as int?;
           print("🔔 participants type: ${participantsRaw.runtimeType}");
           print("🔔 owner: $owner, myId: $myId");
-          
+
           // participants может быть Map<String, dynamic> или List<dynamic>
           if (participantsRaw is Map<String, dynamic>) {
             // Это Map - ключи это ID участников
-            print("🔔 participants is Map with keys: ${participantsRaw.keys.toList()}");
+            print(
+              "🔔 participants is Map with keys: ${participantsRaw.keys.toList()}",
+            );
             for (final key in participantsRaw.keys) {
               final pId = int.tryParse(key.toString());
               if (pId != null && pId != myId && pId != owner) {
                 contactId = pId;
                 final pData = participantsRaw[key];
                 if (pData is Map<String, dynamic>) {
-                  participantName = pData['name'] as String? ?? pData['firstName'] as String?;
-                  participantPhotoUrl = pData['baseUrl'] as String? ?? pData['photoBaseUrl'] as String?;
+                  participantName =
+                      pData['name'] as String? ?? pData['firstName'] as String?;
+                  participantPhotoUrl =
+                      pData['baseUrl'] as String? ??
+                      pData['photoBaseUrl'] as String?;
                 }
-                print("🔔 Найден собеседник из Map: id=$contactId, name=$participantName");
+                print(
+                  "🔔 Найден собеседник из Map: id=$contactId, name=$participantName",
+                );
                 break;
               }
             }
@@ -341,21 +359,27 @@ class NotificationService {
                 print("🔔 Checking participant: id=$pId");
                 if (pId != null && pId != myId && pId != owner) {
                   contactId = pId;
-                  participantName = p['name'] as String? ?? p['firstName'] as String?;
-                  participantPhotoUrl = p['baseUrl'] as String? ?? p['photoBaseUrl'] as String?;
-                  print("🔔 Найден собеседник из List: id=$contactId, name=$participantName");
+                  participantName =
+                      p['name'] as String? ?? p['firstName'] as String?;
+                  participantPhotoUrl =
+                      p['baseUrl'] as String? ?? p['photoBaseUrl'] as String?;
+                  print(
+                    "🔔 Найден собеседник из List: id=$contactId, name=$participantName",
+                  );
                   break;
                 }
               } else if (p is int) {
                 if (p != myId && p != owner) {
                   contactId = p;
-                  print("🔔 Найден contactId из participants (int): $contactId");
+                  print(
+                    "🔔 Найден contactId из participants (int): $contactId",
+                  );
                   break;
                 }
               }
             }
           }
-          
+
           // Fallback на participantIds если participants не дал результата
           if (contactId == null) {
             final participantIds = chatData['participantIds'] as List<dynamic>?;
@@ -370,59 +394,78 @@ class NotificationService {
               print("🔔 Найден contactId из participantIds: $contactId");
             }
           }
-          
+
           // Если contactId найден - загружаем контакт
           if (contactId != null) {
             try {
-              final contacts = await ApiService.instance.fetchContactsByIds([contactId]);
+              final contacts = await ApiService.instance.fetchContactsByIds([
+                contactId,
+              ]);
               if (contacts.isNotEmpty) {
                 contact = contacts.first;
-                print("✅ Контакт загружен через API: ${contact.name}, фото: ${contact.photoBaseUrl}");
+                print(
+                  "✅ Контакт загружен через API: ${contact.name}, фото: ${contact.photoBaseUrl}",
+                );
               } else if (participantName != null) {
                 // API не вернул контакт, но у нас есть данные из participants
                 contact = Contact(
                   id: contactId,
                   name: participantName,
                   firstName: participantName.split(' ').first,
-                  lastName: participantName.split(' ').length > 1 ? participantName.split(' ').sublist(1).join(' ') : '',
+                  lastName: participantName.split(' ').length > 1
+                      ? participantName.split(' ').sublist(1).join(' ')
+                      : '',
                   photoBaseUrl: participantPhotoUrl,
                 );
                 print("✅ Контакт создан из participants: $participantName");
               } else {
                 // Создаём контакт из displayTitle
-                final displayTitle = chatData['displayTitle'] as String? ?? 'Контакт';
+                final displayTitle =
+                    chatData['displayTitle'] as String? ?? 'Контакт';
                 final baseIconUrl = chatData['baseIconUrl'] as String?;
                 contact = Contact(
                   id: contactId,
                   name: displayTitle,
                   firstName: displayTitle.split(' ').first,
-                  lastName: displayTitle.split(' ').length > 1 ? displayTitle.split(' ').sublist(1).join(' ') : '',
+                  lastName: displayTitle.split(' ').length > 1
+                      ? displayTitle.split(' ').sublist(1).join(' ')
+                      : '',
                   photoBaseUrl: baseIconUrl,
                 );
-                print("⚠️ Контакт не найден в API, создан из displayTitle: $displayTitle");
+                print(
+                  "⚠️ Контакт не найден в API, создан из displayTitle: $displayTitle",
+                );
               }
             } catch (e) {
               print("❌ Ошибка загрузки контакта: $e");
-              final displayTitle = chatData['displayTitle'] as String? ?? 'Контакт';
+              final displayTitle =
+                  chatData['displayTitle'] as String? ?? 'Контакт';
               final baseIconUrl = chatData['baseIconUrl'] as String?;
               contact = Contact(
                 id: contactId,
                 name: displayTitle,
                 firstName: displayTitle.split(' ').first,
-                lastName: displayTitle.split(' ').length > 1 ? displayTitle.split(' ').sublist(1).join(' ') : '',
+                lastName: displayTitle.split(' ').length > 1
+                    ? displayTitle.split(' ').sublist(1).join(' ')
+                    : '',
                 photoBaseUrl: baseIconUrl,
               );
             }
           } else {
             // participantIds не найден или пуст - используем displayTitle напрямую
-            final displayTitle = chatData['displayTitle'] as String? ?? 'Контакт';
+            final displayTitle =
+                chatData['displayTitle'] as String? ?? 'Контакт';
             final baseIconUrl = chatData['baseIconUrl'] as String?;
-            print("⚠️ participantIds не найден, используем displayTitle: $displayTitle");
+            print(
+              "⚠️ participantIds не найден, используем displayTitle: $displayTitle",
+            );
             contact = Contact(
               id: chatId,
               name: displayTitle,
               firstName: displayTitle.split(' ').first,
-              lastName: displayTitle.split(' ').length > 1 ? displayTitle.split(' ').sublist(1).join(' ') : '',
+              lastName: displayTitle.split(' ').length > 1
+                  ? displayTitle.split(' ').sublist(1).join(' ')
+                  : '',
               photoBaseUrl: baseIconUrl,
             );
           }
@@ -432,7 +475,7 @@ class NotificationService {
       // Отменяем уведомление перед открытием чата
       await cancelNotificationForChat(chatId);
       await clearNotificationMessagesForChat(chatId);
-      
+
       // Открываем ChatScreen
       if (_navigatorKey?.currentState != null) {
         print("🔔 Открываем ChatScreen через навигатор");
@@ -465,7 +508,7 @@ class NotificationService {
   /// Очистить накопленные сообщения для чата (вызывать при открытии чата)
   Future<void> clearNotificationMessagesForChat(int chatId) async {
     print("🔔 clearNotificationMessagesForChat вызван для chatId: $chatId");
-    
+
     if (Platform.isAndroid) {
       try {
         print("🔔 Вызываем clearNotificationMessages...");
@@ -477,12 +520,12 @@ class NotificationService {
         print("⚠️ Ошибка очистки уведомлений: $e");
       }
     }
-    
+
     // Также отменяем само уведомление
     print("🔔 Вызываем cancelNotificationForChat...");
     await cancelNotificationForChat(chatId);
   }
-  
+
   /// Отменить уведомление для конкретного чата
   Future<void> cancelNotificationForChat(int chatId) async {
     try {
@@ -502,6 +545,7 @@ class NotificationService {
       print("⚠️ Ошибка отмены уведомления: $e");
     }
   }
+
   /// Показать уведомление о новом сообщении
   Future<void> showMessageNotification({
     required int chatId,
@@ -520,7 +564,7 @@ class NotificationService {
     print("   isGroupChat: $isGroupChat");
     print("   groupTitle: $groupTitle");
     print("   showPreview: $showPreview");
-    
+
     final prefs = await SharedPreferences.getInstance();
     final chatsPushEnabled = prefs.getString('chatsPushNotification') != 'OFF';
     final pushDetails = prefs.getBool('pushDetails') ?? true;
@@ -536,15 +580,19 @@ class NotificationService {
     }
 
     if (!_initialized) {
-      print("⚠️ [NotificationService] Сервис не инициализирован! Инициализируем...");
+      print(
+        "⚠️ [NotificationService] Сервис не инициализирован! Инициализируем...",
+      );
       await initialize();
     }
 
     final displayText = showPreview && pushDetails
-      ? messageText
-      : 'Новое сообщение';
+        ? messageText
+        : 'Новое сообщение';
 
-    print("🔔 [NotificationService] Итоговый текст для уведомления: $displayText");
+    print(
+      "🔔 [NotificationService] Итоговый текст для уведомления: $displayText",
+    );
 
     // Пытаемся получить аватарку
     final avatarPath = await _ensureAvatarFile(avatarUrl, chatId);
@@ -560,10 +608,14 @@ class NotificationService {
           'isGroupChat': isGroupChat,
           'groupTitle': groupTitle,
         });
-        print("🔔 Показано нативное уведомление Android: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText");
+        print(
+          "🔔 Показано нативное уведомление Android: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText",
+        );
         return;
       } catch (e) {
-        print("⚠️ [NotificationService] Ошибка нативного уведомления, fallback: $e");
+        print(
+          "⚠️ [NotificationService] Ошибка нативного уведомления, fallback: $e",
+        );
         // Fallback на flutter_local_notifications
       }
     }
@@ -610,7 +662,9 @@ class NotificationService {
       payload: 'chat_$chatId',
     );
 
-    print("🔔 Показано уведомление: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText");
+    print(
+      "🔔 Показано уведомление: ${isGroupChat ? '[$groupTitle] ' : ''}$senderName - $displayText",
+    );
   }
 
   /// Показывает один выбранный тестовый вариант (по номеру).
@@ -634,7 +688,9 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     final chatsPushEnabled = prefs.getString('chatsPushNotification') != 'OFF';
     if (!chatsPushEnabled) {
-      print("⚠️ [NotificationService] debugShowAllNotificationVariants: уведомления выключены в настройках");
+      print(
+        "⚠️ [NotificationService] debugShowAllNotificationVariants: уведомления выключены в настройках",
+      );
       return;
     }
 
@@ -647,13 +703,17 @@ class NotificationService {
       final file = File(avatarPath);
       final exists = await file.exists();
       final size = exists ? await file.length() : 0;
-      print("🔔 [NotificationService] (debug) Bitmap: path=$avatarPath, exists=$exists, size=$size");
+      print(
+        "🔔 [NotificationService] (debug) Bitmap: path=$avatarPath, exists=$exists, size=$size",
+      );
 
       if (exists && size > 0) {
         try {
           avatarIcon = BitmapFilePathAndroidIcon(avatarPath);
           avatarBitmap = FilePathAndroidBitmap(avatarPath);
-          print("✅ [NotificationService] (debug) icon=${avatarIcon != null}, largeIcon=${avatarBitmap != null}");
+          print(
+            "✅ [NotificationService] (debug) icon=${avatarIcon != null}, largeIcon=${avatarBitmap != null}",
+          );
         } catch (e) {
           print("⚠️ [NotificationService] (debug) Ошибка создания Bitmap: $e");
         }
@@ -682,7 +742,11 @@ class NotificationService {
             groupKey: 'debug_1',
             tag: 'debug_tag_1',
           ),
-          iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
           macOS: const DarwinNotificationDetails(),
         );
         break;
@@ -700,7 +764,11 @@ class NotificationService {
             groupKey: 'debug_2',
             tag: 'debug_tag_2',
           ),
-          iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
           macOS: const DarwinNotificationDetails(),
         );
         break;
@@ -718,7 +786,11 @@ class NotificationService {
             groupKey: 'debug_3',
             tag: 'debug_tag_3',
           ),
-          iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
           macOS: const DarwinNotificationDetails(),
         );
         break;
@@ -736,7 +808,11 @@ class NotificationService {
             groupKey: 'debug_4',
             tag: 'debug_tag_4',
           ),
-          iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
           macOS: const DarwinNotificationDetails(),
         );
         break;
@@ -760,7 +836,11 @@ class NotificationService {
             setAsGroupSummary: false,
             groupAlertBehavior: GroupAlertBehavior.all,
           ),
-          iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
           macOS: const DarwinNotificationDetails(),
         );
         break;
@@ -792,7 +872,11 @@ class NotificationService {
             setAsGroupSummary: false,
             groupAlertBehavior: GroupAlertBehavior.all,
           ),
-          iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
           macOS: const DarwinNotificationDetails(),
         );
         break;
@@ -926,8 +1010,12 @@ class NotificationService {
       final pngFile = File(pngPath);
 
       print("🔔 [NotificationService] Путь для аватарки: $pngPath");
-      print("🔔 [NotificationService] Директория уведомлений существует: ${await notifDir.exists()}");
-      print("🔔 [NotificationService] Размер файла, если есть: ${await pngFile.exists() ? (await pngFile.length()) : 0} байт");
+      print(
+        "🔔 [NotificationService] Директория уведомлений существует: ${await notifDir.exists()}",
+      );
+      print(
+        "🔔 [NotificationService] Размер файла, если есть: ${await pngFile.exists() ? (await pngFile.length()) : 0} байт",
+      );
 
       if (await pngFile.exists()) {
         print("🔔 [NotificationService] PNG кэш найден: $pngPath");
@@ -935,7 +1023,9 @@ class NotificationService {
       } else {
         try {
           final files = notifDir.listSync();
-          print("🔔 [NotificationService] Удаляем старые аватарки для чата $chatId (всего файлов: ${files.length})");
+          print(
+            "🔔 [NotificationService] Удаляем старые аватарки для чата $chatId (всего файлов: ${files.length})",
+          );
           for (var file in files) {
             if (file is File && file.path.contains('avatar_$chatId')) {
               print("   Удаляем: ${file.path}");
@@ -949,44 +1039,67 @@ class NotificationService {
         try {
           print("🔔 [NotificationService] Скачиваем с URL...");
           final response = await http
-              .get(Uri.parse(avatarUrl), headers: {'User-Agent': 'gwid-app/1.0'})
+              .get(
+                Uri.parse(avatarUrl),
+                headers: {'User-Agent': 'gwid-app/1.0'},
+              )
               .timeout(const Duration(seconds: 10));
 
           print("🔔 [NotificationService] HTTP статус: ${response.statusCode}");
-          print("🔔 [NotificationService] Content-Type: ${response.headers['content-type']}");
-          print("🔔 [NotificationService] Длина bodyBytes: ${response.bodyBytes.length}");
+          print(
+            "🔔 [NotificationService] Content-Type: ${response.headers['content-type']}",
+          );
+          print(
+            "🔔 [NotificationService] Длина bodyBytes: ${response.bodyBytes.length}",
+          );
 
           if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
             try {
               final image = img.decodeImage(response.bodyBytes);
 
               if (image != null) {
-                print("🔔 [NotificationService] decodeImage успех: ${image.width}x${image.height}");
+                print(
+                  "🔔 [NotificationService] decodeImage успех: ${image.width}x${image.height}",
+                );
                 // Увеличиваем размер до 256x256 для лучшего качества
                 final resized = img.copyResize(image, width: 256, height: 256);
-                print("🔔 [NotificationService] resized: ${resized.width}x${resized.height}");
+                print(
+                  "🔔 [NotificationService] resized: ${resized.width}x${resized.height}",
+                );
 
                 // Обрезаем в круг для круглой аватарки
                 final circular = _makeCircular(resized);
-                print("🔔 [NotificationService] circular: ${circular.width}x${circular.height}");
+                print(
+                  "🔔 [NotificationService] circular: ${circular.width}x${circular.height}",
+                );
 
                 final pngBytes = img.encodePng(circular);
                 await pngFile.writeAsBytes(pngBytes);
-                print("✅ [NotificationService] Сохранено как круглый PNG: $pngPath (bytes: ${pngBytes.length})");
+                print(
+                  "✅ [NotificationService] Сохранено как круглый PNG: $pngPath (bytes: ${pngBytes.length})",
+                );
                 avatarPath = pngPath;
               } else {
                 await pngFile.writeAsBytes(response.bodyBytes);
                 avatarPath = pngPath;
-                print("⚠️ [NotificationService] decodeImage null, сохраняем RAW: $pngPath (bytes: ${response.bodyBytes.length})");
+                print(
+                  "⚠️ [NotificationService] decodeImage null, сохраняем RAW: $pngPath (bytes: ${response.bodyBytes.length})",
+                );
               }
             } catch (decodeError) {
-              print("⚠️ [NotificationService] Ошибка декодирования: $decodeError");
+              print(
+                "⚠️ [NotificationService] Ошибка декодирования: $decodeError",
+              );
               try {
                 await pngFile.writeAsBytes(response.bodyBytes);
                 avatarPath = pngPath;
-                print("💾 [NotificationService] Сохранено RAW без декодирования: $pngPath (bytes: ${response.bodyBytes.length})");
+                print(
+                  "💾 [NotificationService] Сохранено RAW без декодирования: $pngPath (bytes: ${response.bodyBytes.length})",
+                );
               } catch (saveError) {
-                print("❌ [NotificationService] Ошибка сохранения RAW: $saveError");
+                print(
+                  "❌ [NotificationService] Ошибка сохранения RAW: $saveError",
+                );
               }
             }
           }
@@ -1065,7 +1178,8 @@ Future<void> initializeBackgroundService() async {
 
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
   }
 
@@ -1085,7 +1199,7 @@ Future<void> initializeBackgroundService() async {
       onBackground: onIosBackground,
     ),
   );
-  
+
   if (Platform.isAndroid) {
     await Future.delayed(const Duration(seconds: 1));
     await NotificationService.updateForegroundServiceNotification();
@@ -1137,7 +1251,7 @@ void onStart(ServiceInstance service) async {
 Future<bool> onIosBackground(ServiceInstance service) async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
-  
+
   print("🍎 iOS фоновый режим активирован");
   return true;
 }

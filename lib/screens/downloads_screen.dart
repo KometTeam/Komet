@@ -49,11 +49,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       if (downloadDir != null && await downloadDir.exists()) {
         _downloadsPath = downloadDir.path;
 
-
         final prefs = await SharedPreferences.getInstance();
         final List<String> downloadedFilePaths =
             prefs.getStringList('downloaded_files') ?? [];
-
 
         final files =
             downloadedFilePaths
@@ -65,7 +63,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 final bStat = b.statSync();
                 return bStat.modified.compareTo(aStat.modified);
               });
-
 
         final existingPaths = files.map((f) => f.path).toSet();
         final cleanPaths = downloadedFilePaths
@@ -160,13 +157,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
     if (confirmed == true) {
       try {
-
         final prefs = await SharedPreferences.getInstance();
         final List<String> downloadedFilePaths =
             prefs.getStringList('downloaded_files') ?? [];
         downloadedFilePaths.remove(file.path);
         await prefs.setStringList('downloaded_files', downloadedFilePaths);
-
 
         await file.delete();
 

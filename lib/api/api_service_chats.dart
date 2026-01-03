@@ -24,7 +24,7 @@ extension ApiServiceChats on ApiService {
       }
 
       final userAgentPayload = await _buildUserAgentPayload();
-      
+
       final payload = {
         "chatsCount": 100,
         "chatsSync": 0,
@@ -84,8 +84,8 @@ extension ApiServiceChats on ApiService {
             await accountManager.initialize();
             final currentAccount = accountManager.currentAccount;
             if (currentAccount != null && currentAccount.token == authToken) {
-              final profileMap = profile is Map<String, dynamic> 
-                  ? profile 
+              final profileMap = profile is Map<String, dynamic>
+                  ? profile
                   : Map<String, dynamic>.from(profile as Map);
               final profileObj = Profile.fromJson(profileMap);
               await accountManager.updateAccountProfile(
@@ -201,9 +201,6 @@ extension ApiServiceChats on ApiService {
     print('Переименовываем группу $chatId в: $newName');
   }
 
-  
-  
-  
   void updateChatInCacheFromJson(Map<String, dynamic> chatJson) {
     try {
       _lastChatsPayload ??= {
@@ -228,34 +225,28 @@ extension ApiServiceChats on ApiService {
       } else {
         chats.insert(0, chatJson);
       }
-      
+
       _emitLocal({
         'ver': 11,
         'cmd': 1,
         'seq': -1,
         'opcode': 64,
-        'payload': {
-          'chatId': chatId,
-          'chat': chatJson,
-        },
+        'payload': {'chatId': chatId, 'chat': chatJson},
       });
     } catch (e) {
       print('Не удалось обновить кэш чатов из chatJson: $e');
     }
   }
 
-
-  
-  
-  
-  
   Future<String?> createGroupInviteLink(
     int chatId, {
     bool revokePrivateLink = true,
   }) async {
     final payload = {"chatId": chatId, "revokePrivateLink": revokePrivateLink};
 
-    print('Создаем пригласительную ссылку для группы $chatId: ${truncatePayloadObjectForLog(payload)}');
+    print(
+      'Создаем пригласительную ссылку для группы $chatId: ${truncatePayloadObjectForLog(payload)}',
+    );
 
     final int seq = await _sendMessage(55, payload);
 
@@ -283,7 +274,6 @@ extension ApiServiceChats on ApiService {
         return null;
       }
 
-      
       if (chat != null) {
         updateChatInCacheFromJson(chat);
       }
@@ -345,20 +335,10 @@ extension ApiServiceChats on ApiService {
   }
 
   Future<Map<String, dynamic>> getChatsOnly({bool force = false}) async {
-    
-    
-    
-    
-    
-    
-    
-    
-
     if (!force && _lastChatsPayload != null) {
       return _lastChatsPayload!;
     }
 
-    
     return getChatsAndContacts(force: true);
   }
 
@@ -454,7 +434,8 @@ extension ApiServiceChats on ApiService {
       final int chatSeq = await _sendMessage(opcode, payload);
       chatResponse = await messages.firstWhere((msg) => msg['seq'] == chatSeq);
 
-      if (opcode == 19 && (chatResponse['cmd'] == 0x100 || chatResponse['cmd'] == 256)) {
+      if (opcode == 19 &&
+          (chatResponse['cmd'] == 0x100 || chatResponse['cmd'] == 256)) {
         print("✅ Авторизация (opcode 19) успешна. Сессия ГОТОВА.");
         _isSessionReady = true;
         _processMessageQueue();
@@ -504,8 +485,8 @@ extension ApiServiceChats on ApiService {
           await accountManager.initialize();
           final currentAccount = accountManager.currentAccount;
           if (currentAccount != null && currentAccount.token == authToken) {
-            final profileMap = profile is Map<String, dynamic> 
-                ? profile 
+            final profileMap = profile is Map<String, dynamic>
+                ? profile
                 : Map<String, dynamic>.from(profile as Map);
             final profileObj = Profile.fromJson(profileMap);
             await accountManager.updateAccountProfile(
@@ -697,13 +678,12 @@ extension ApiServiceChats on ApiService {
         for (final attach in message.attaches) {
           if (attach['_type'] == 'CONTACT') {
             final contactIdValue = attach['contactId'];
-            final int? contactId = contactIdValue is int 
+            final int? contactId = contactIdValue is int
                 ? contactIdValue
-                : (contactIdValue is String 
-                    ? int.tryParse(contactIdValue) 
-                    : null);
+                : (contactIdValue is String
+                      ? int.tryParse(contactIdValue)
+                      : null);
             if (contactId != null) {
-          
               final cachedContact = getCachedContact(contactId);
               if (cachedContact == null && !contactIds.contains(contactId)) {
                 contactIds.add(contactId);
@@ -718,8 +698,7 @@ extension ApiServiceChats on ApiService {
 
       _messageCache[chatId] = messagesList;
       _preloadMessageImages(messagesList);
-      
-       
+
       unawaited(_updateMessagesCacheIfNewer(chatId, messagesList));
 
       return messagesList;
@@ -763,9 +742,6 @@ extension ApiServiceChats on ApiService {
     }
   }
 
-  
-  
-  
   Future<List<Message>> loadOlderMessagesByTimestamp(
     int chatId,
     int fromTimestamp, {
@@ -1041,18 +1017,21 @@ extension ApiServiceChats on ApiService {
     }
   }
 
-  Future<void> _updateMessagesCacheIfNewer(int chatId, List<Message> newMessages) async {
+  Future<void> _updateMessagesCacheIfNewer(
+    int chatId,
+    List<Message> newMessages,
+  ) async {
     try {
       final cached = await _chatCacheService.getCachedChatMessages(chatId);
-      
+
       if (cached == null || cached.isEmpty) {
         await _chatCacheService.cacheChatMessages(chatId, newMessages);
         return;
       }
-      
+
       final cachedIds = cached.map((m) => m.id).toSet();
       final newIds = newMessages.map((m) => m.id).toSet();
-      
+
       if (newIds.every((id) => cachedIds.contains(id))) {
         bool needsUpdate = false;
         for (final newMsg in newMessages) {
@@ -1060,7 +1039,7 @@ extension ApiServiceChats on ApiService {
             (m) => m.id == newMsg.id,
             orElse: () => newMsg,
           );
-          if (cachedMsg.id != newMsg.id || 
+          if (cachedMsg.id != newMsg.id ||
               cachedMsg.updateTime != newMsg.updateTime ||
               cachedMsg.text != newMsg.text) {
             needsUpdate = true;
@@ -1071,7 +1050,7 @@ extension ApiServiceChats on ApiService {
           return;
         }
       }
-      
+
       final Map<String, Message> messagesMap = {};
       for (final msg in cached) {
         messagesMap[msg.id] = msg;
@@ -1079,10 +1058,10 @@ extension ApiServiceChats on ApiService {
       for (final msg in newMessages) {
         messagesMap[msg.id] = msg;
       }
-      
+
       final mergedMessages = messagesMap.values.toList()
         ..sort((a, b) => a.time.compareTo(b.time));
-      
+
       await _chatCacheService.cacheChatMessages(chatId, mergedMessages);
     } catch (e) {
       print('Ошибка обновления кеша сообщений: $e');
@@ -1134,7 +1113,8 @@ extension ApiServiceChats on ApiService {
       replyLink = {
         "type": "REPLY",
         "messageId": parsedReplyId ?? replyToMessageId,
-        if (replyToMessage != null) "message": _mapMessageForLink(replyToMessage),
+        if (replyToMessage != null)
+          "message": _mapMessageForLink(replyToMessage),
         "chatId": chatId,
       };
     }
@@ -1154,8 +1134,8 @@ extension ApiServiceChats on ApiService {
 
     clearChatsCache();
 
-  
-    final myId = _userId ?? (userId != null ? int.tryParse(userId!) : null) ?? 0;
+    final myId =
+        _userId ?? (userId != null ? int.tryParse(userId!) : null) ?? 0;
     final localMessage = {
       'id': 'local_$clientMessageId',
       'sender': myId,
@@ -1166,20 +1146,14 @@ extension ApiServiceChats on ApiService {
       'attaches': [],
       if (replyLink != null) 'link': replyLink,
     };
-    
+
     _emitLocal({
       'ver': 11,
       'cmd': 1,
       'seq': -1,
       'opcode': 128,
-      'payload': {
-        'chatId': chatId,
-        'message': localMessage,
-      },
+      'payload': {'chatId': chatId, 'message': localMessage},
     });
-    
-  
-    
 
     final queueItem = QueueItem(
       id: 'msg_$clientMessageId',
@@ -1193,12 +1167,16 @@ extension ApiServiceChats on ApiService {
     );
 
     if (_isSessionOnline && _isSessionReady) {
-      unawaited(_sendMessage(64, payload).then((_) {
-        _queueService.removeFromQueue(queueItem.id);
-      }).catchError((e) {
-        print('Ошибка отправки сообщения: $e');
-        _queueService.addToQueue(queueItem);
-      }));
+      unawaited(
+        _sendMessage(64, payload)
+            .then((_) {
+              _queueService.removeFromQueue(queueItem.id);
+            })
+            .catchError((e) {
+              print('Ошибка отправки сообщения: $e');
+              _queueService.addToQueue(queueItem);
+            }),
+      );
     } else {
       print("Сессия не готова. Сообщение добавлено в очередь.");
       _queueService.addToQueue(queueItem);
@@ -1223,11 +1201,7 @@ extension ApiServiceChats on ApiService {
     };
     final payload = {
       "chatId": targetChatId,
-      "message": {
-        "cid": clientMessageId,
-        "link": linkPayload,
-        "attaches": [],
-      },
+      "message": {"cid": clientMessageId, "link": linkPayload, "attaches": []},
       "notify": true,
     };
 
@@ -1315,6 +1289,53 @@ extension ApiServiceChats on ApiService {
     print('Не удалось отредактировать сообщение $messageId после 3 попыток');
   }
 
+  Future<Message?> updateChatLastMessage(int chatId) async {
+    try {
+      final remainingMessages = await _chatCacheService.getCachedChatMessages(chatId);
+      final newLastMessage = remainingMessages != null && remainingMessages.isNotEmpty
+          ? (remainingMessages..sort((a, b) => b.time.compareTo(a.time))).first
+          : Message(
+              id: 'empty',
+              senderId: 0,
+              time: DateTime.now().millisecondsSinceEpoch,
+              text: '',
+              cid: null,
+              attaches: [],
+            );
+
+      final newLastMessageJson = newLastMessage.toJson();
+
+      final cachedChats = await _chatCacheService.getCachedChats();
+      if (cachedChats != null) {
+        for (var i = 0; i < cachedChats.length; i++) {
+          final chatJson = cachedChats[i];
+          if (chatJson['id'] == chatId) {
+            chatJson['lastMessage'] = newLastMessageJson;
+            await _chatCacheService.cacheChats(cachedChats);
+            break;
+          }
+        }
+      }
+
+      if (_lastChatsPayload != null) {
+        final chats = _lastChatsPayload!['chats'] as List<dynamic>;
+        for (var i = 0; i < chats.length; i++) {
+          final chatJson = chats[i] as Map<String, dynamic>;
+          if (chatJson['id'] == chatId) {
+            chatJson['lastMessage'] = newLastMessageJson;
+            break;
+          }
+        }
+      }
+
+      _lastChatsPayload = null;
+      return newLastMessage;
+    } catch (e) {
+      print('Ошибка обновления lastMessage чата: $e');
+      return null;
+    }
+  }
+
   Future<void> deleteMessage(
     int chatId,
     String messageId, {
@@ -1371,6 +1392,8 @@ extension ApiServiceChats on ApiService {
       if (ok) {
         print('Сообщение $messageId успешно удалено');
         await _chatCacheService.removeMessageFromCache(chatId, messageId);
+        await updateChatLastMessage(chatId);
+
         return;
       }
 

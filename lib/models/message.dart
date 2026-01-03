@@ -3,13 +3,15 @@ class Message {
   final String text;
   final int time;
   final int senderId;
-  final String? status; 
-  final int? updateTime; 
+  final String? status;
+  final int? updateTime;
   final List<Map<String, dynamic>> attaches;
-  final int? cid; 
-  final Map<String, dynamic>? reactionInfo; 
-  final Map<String, dynamic>? link; 
-  final List<Map<String, dynamic>> elements; 
+  final int? cid;
+  final Map<String, dynamic>? reactionInfo;
+  final Map<String, dynamic>? link;
+  final List<Map<String, dynamic>> elements;
+  final bool isDeleted;
+  final String? originalText;
 
   Message({
     required this.id,
@@ -23,6 +25,8 @@ class Message {
     this.reactionInfo,
     this.link,
     this.elements = const [],
+    this.isDeleted = false,
+    this.originalText,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -46,7 +50,7 @@ class Message {
           'local_${DateTime.now().millisecondsSinceEpoch}',
       text: json['text'] ?? '',
       time: time,
-      senderId: senderId, 
+      senderId: senderId,
       status: json['status'],
       updateTime: json['updateTime'],
       attaches:
@@ -62,6 +66,8 @@ class Message {
               ?.map((e) => (e as Map).cast<String, dynamic>())
               .toList() ??
           const [],
+      isDeleted: json['isDeleted'] ?? false,
+      originalText: json['originalText'] as String?,
     );
   }
 
@@ -77,6 +83,8 @@ class Message {
     Map<String, dynamic>? reactionInfo,
     Map<String, dynamic>? link,
     List<Map<String, dynamic>>? elements,
+    bool? isDeleted,
+    String? originalText,
   }) {
     return Message(
       id: id ?? this.id,
@@ -90,11 +98,12 @@ class Message {
       reactionInfo: reactionInfo ?? this.reactionInfo,
       link: link ?? this.link,
       elements: elements ?? this.elements,
+      isDeleted: isDeleted ?? this.isDeleted,
+      originalText: originalText ?? this.originalText,
     );
   }
 
   bool get isEdited => status == 'EDITED';
-  bool get isDeleted => status == 'DELETED';
   bool get isReply => link != null && link!['type'] == 'REPLY';
   bool get isForwarded => link != null && link!['type'] == 'FORWARD';
   bool get hasFileAttach =>
@@ -104,7 +113,7 @@ class Message {
     if (isDeleted) return false;
     if (senderId != currentUserId) return false;
     if (attaches.isNotEmpty) {
-      return false; 
+      return false;
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;

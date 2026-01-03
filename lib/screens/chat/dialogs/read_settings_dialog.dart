@@ -21,8 +21,7 @@ class ReadSettingsDialogContent extends StatefulWidget {
       _ReadSettingsDialogContentState();
 }
 
-class _ReadSettingsDialogContentState
-    extends State<ReadSettingsDialogContent> {
+class _ReadSettingsDialogContentState extends State<ReadSettingsDialogContent> {
   ChatReadSettings? _settings;
   bool _useDefault = true;
 
@@ -211,4 +210,3 @@ class _ReadSettingsDialogContentState
     );
   }
 }
-

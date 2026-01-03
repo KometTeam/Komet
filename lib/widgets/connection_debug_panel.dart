@@ -6,7 +6,6 @@ import '../connection/connection_state.dart' as conn_state;
 import '../connection/health_monitor.dart';
 import 'package:gwid/api/api_service.dart';
 
-
 class ConnectionDebugPanel extends StatefulWidget {
   final bool isVisible;
   final VoidCallback? onClose;
@@ -37,7 +36,6 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
   }
 
   void _setupSubscriptions() {
-
     _logsSubscription = Stream.periodic(const Duration(seconds: 1))
         .asyncMap((_) async => ApiService.instance.logs.take(100).toList())
         .listen((logs) {
@@ -47,7 +45,6 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
             });
           }
         });
-
 
     _stateSubscription = ApiService.instance.connectionState.listen((state) {
       if (mounted) {
@@ -59,7 +56,6 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
         });
       }
     });
-
 
     _healthSubscription = ApiService.instance.healthMetrics.listen((health) {
       if (mounted) {
@@ -455,14 +451,11 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
 
   Widget _buildStatsTab() {
     return FutureBuilder<Map<String, dynamic>>(
-      future: ApiService.instance
-          .getStatistics(), 
+      future: ApiService.instance.getStatistics(),
       builder: (context, snapshot) {
-
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
 
         if (snapshot.hasError) {
           return Center(
@@ -470,17 +463,14 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
           );
         }
 
-
         if (!snapshot.hasData || snapshot.data == null) {
           return const Center(child: Text('Нет данных для отображения'));
         }
 
-
-        final stats = snapshot.data!; 
+        final stats = snapshot.data!;
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-
             _buildStatsSection('API Service', stats['api_service']),
             const SizedBox(height: 16),
             _buildStatsSection('Connection', stats['connection']),
@@ -530,7 +520,6 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
       ),
     );
   }
-
 
   Color _getLogColor(LogLevel level) {
     switch (level) {
@@ -675,7 +664,5 @@ class _ConnectionDebugPanelState extends State<ConnectionDebugPanel>
     }
   }
 
-  void _exportLogs() {
-
-  }
+  void _exportLogs() {}
 }

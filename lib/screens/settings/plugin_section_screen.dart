@@ -10,11 +10,9 @@ class PluginSectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final builder = PluginUIBuilder();
-    
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(section.title),
-      ),
+      appBar: AppBar(title: Text(section.title)),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: section.items.length,
@@ -30,11 +28,7 @@ class PluginReplacementScreen extends StatelessWidget {
   final PluginScreen screen;
   final String? title;
 
-  const PluginReplacementScreen({
-    super.key, 
-    required this.screen,
-    this.title,
-  });
+  const PluginReplacementScreen({super.key, required this.screen, this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -42,4 +36,3 @@ class PluginReplacementScreen extends StatelessWidget {
     return builder.buildScreen(screen, context);
   }
 }
-

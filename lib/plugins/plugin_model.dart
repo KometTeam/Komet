@@ -5,12 +5,12 @@ class KometPlugin {
   final String? description;
   final String? author;
   final String filePath;
-  
+
   final Map<String, dynamic> overrideConstants;
   final List<PluginSection> settingsSections;
   final List<PluginSubsection> settingsSubsections;
   final Map<String, PluginScreen> replaceScreens;
-  
+
   bool isEnabled;
 
   KometPlugin({
@@ -35,15 +35,24 @@ class KometPlugin {
       description: json['description'],
       author: json['author'],
       filePath: filePath,
-      overrideConstants: Map<String, dynamic>.from(json['overrideConstants'] ?? {}),
-      settingsSections: (json['settingsSections'] as List?)
-          ?.map((e) => PluginSection.fromJson(e))
-          .toList() ?? [],
-      settingsSubsections: (json['settingsSubsections'] as List?)
-          ?.map((e) => PluginSubsection.fromJson(e))
-          .toList() ?? [],
-      replaceScreens: (json['replaceScreens'] as Map<String, dynamic>?)
-          ?.map((k, v) => MapEntry(k, PluginScreen.fromJson(v))) ?? {},
+      overrideConstants: Map<String, dynamic>.from(
+        json['overrideConstants'] ?? {},
+      ),
+      settingsSections:
+          (json['settingsSections'] as List?)
+              ?.map((e) => PluginSection.fromJson(e))
+              .toList() ??
+          [],
+      settingsSubsections:
+          (json['settingsSubsections'] as List?)
+              ?.map((e) => PluginSubsection.fromJson(e))
+              .toList() ??
+          [],
+      replaceScreens:
+          (json['replaceScreens'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, PluginScreen.fromJson(v)),
+          ) ??
+          {},
       isEnabled: json['isEnabled'] ?? true,
     );
   }
@@ -63,26 +72,28 @@ class KometPlugin {
 
   List<String> getSummary() {
     final summary = <String>[];
-    
+
     if (settingsSections.isNotEmpty) {
       final names = settingsSections.map((s) => s.title).join(', ');
       summary.add('Добавляет разделы: $names');
     }
-    
+
     if (settingsSubsections.isNotEmpty) {
-      final names = settingsSubsections.map((s) => '${s.title} в ${_getScreenDisplayName(s.parentSection)}').join(', ');
+      final names = settingsSubsections
+          .map((s) => '${s.title} в ${_getScreenDisplayName(s.parentSection)}')
+          .join(', ');
       summary.add('Добавляет подразделы: $names');
     }
-    
+
     if (replaceScreens.isNotEmpty) {
       final names = replaceScreens.keys.map(_getScreenDisplayName).join(', ');
       summary.add('Заменяет экраны: $names');
     }
-    
+
     if (overrideConstants.isNotEmpty) {
       summary.add('Изменяет ${overrideConstants.length} констант');
     }
-    
+
     return summary;
   }
 
@@ -120,9 +131,11 @@ class PluginSection {
       id: json['id'] ?? '',
       title: json['title'] ?? '',
       icon: json['icon'],
-      items: (json['items'] as List?)
-          ?.map((e) => PluginItem.fromJson(e))
-          .toList() ?? [],
+      items:
+          (json['items'] as List?)
+              ?.map((e) => PluginItem.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 
@@ -155,9 +168,11 @@ class PluginSubsection {
       parentSection: json['parentSection'] ?? '',
       title: json['title'] ?? '',
       icon: json['icon'],
-      items: (json['items'] as List?)
-          ?.map((e) => PluginItem.fromJson(e))
-          .toList() ?? [],
+      items:
+          (json['items'] as List?)
+              ?.map((e) => PluginItem.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 
@@ -213,7 +228,9 @@ class PluginItem {
       min: (json['min'] as num?)?.toDouble(),
       max: (json['max'] as num?)?.toDouble(),
       divisions: json['divisions'],
-      action: json['action'] != null ? PluginAction.fromJson(json['action']) : null,
+      action: json['action'] != null
+          ? PluginAction.fromJson(json['action'])
+          : null,
       children: (json['children'] as List?)
           ?.map((e) => PluginItem.fromJson(e))
           .toList(),
@@ -222,13 +239,20 @@ class PluginItem {
 
   static PluginItemType _parseType(String? type) {
     switch (type) {
-      case 'button': return PluginItemType.button;
-      case 'toggle': return PluginItemType.toggle;
-      case 'slider': return PluginItemType.slider;
-      case 'text': return PluginItemType.text;
-      case 'divider': return PluginItemType.divider;
-      case 'navigation': return PluginItemType.navigation;
-      default: return PluginItemType.text;
+      case 'button':
+        return PluginItemType.button;
+      case 'toggle':
+        return PluginItemType.toggle;
+      case 'slider':
+        return PluginItemType.slider;
+      case 'text':
+        return PluginItemType.text;
+      case 'divider':
+        return PluginItemType.divider;
+      case 'navigation':
+        return PluginItemType.navigation;
+      default:
+        return PluginItemType.text;
     }
   }
 
@@ -255,11 +279,7 @@ class PluginAction {
   final String target;
   final dynamic value;
 
-  PluginAction({
-    required this.type,
-    required this.target,
-    this.value,
-  });
+  PluginAction({required this.type, required this.target, this.value});
 
   factory PluginAction.fromJson(Map<String, dynamic> json) {
     return PluginAction(
@@ -271,11 +291,16 @@ class PluginAction {
 
   static PluginActionType _parseType(String? type) {
     switch (type) {
-      case 'setValue': return PluginActionType.setValue;
-      case 'callAction': return PluginActionType.callAction;
-      case 'openUrl': return PluginActionType.openUrl;
-      case 'navigate': return PluginActionType.navigate;
-      default: return PluginActionType.callAction;
+      case 'setValue':
+        return PluginActionType.setValue;
+      case 'callAction':
+        return PluginActionType.callAction;
+      case 'openUrl':
+        return PluginActionType.openUrl;
+      case 'navigate':
+        return PluginActionType.navigate;
+      default:
+        return PluginActionType.callAction;
     }
   }
 
@@ -290,17 +315,16 @@ class PluginScreen {
   final String? title;
   final List<PluginScreenWidget> widgets;
 
-  PluginScreen({
-    this.title,
-    this.widgets = const [],
-  });
+  PluginScreen({this.title, this.widgets = const []});
 
   factory PluginScreen.fromJson(Map<String, dynamic> json) {
     return PluginScreen(
       title: json['title'],
-      widgets: (json['widgets'] as List?)
-          ?.map((e) => PluginScreenWidget.fromJson(e))
-          .toList() ?? [],
+      widgets:
+          (json['widgets'] as List?)
+              ?.map((e) => PluginScreenWidget.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 
@@ -310,9 +334,18 @@ class PluginScreen {
   };
 }
 
-enum PluginWidgetType { 
-  text, button, image, container, column, row, 
-  list, card, divider, spacer, icon
+enum PluginWidgetType {
+  text,
+  button,
+  image,
+  container,
+  column,
+  row,
+  list,
+  card,
+  divider,
+  spacer,
+  icon,
 }
 
 class PluginScreenWidget {
@@ -335,24 +368,38 @@ class PluginScreenWidget {
       children: (json['children'] as List?)
           ?.map((e) => PluginScreenWidget.fromJson(e))
           .toList(),
-      onTap: json['onTap'] != null ? PluginAction.fromJson(json['onTap']) : null,
+      onTap: json['onTap'] != null
+          ? PluginAction.fromJson(json['onTap'])
+          : null,
     );
   }
 
   static PluginWidgetType _parseType(String? type) {
     switch (type) {
-      case 'text': return PluginWidgetType.text;
-      case 'button': return PluginWidgetType.button;
-      case 'image': return PluginWidgetType.image;
-      case 'container': return PluginWidgetType.container;
-      case 'column': return PluginWidgetType.column;
-      case 'row': return PluginWidgetType.row;
-      case 'list': return PluginWidgetType.list;
-      case 'card': return PluginWidgetType.card;
-      case 'divider': return PluginWidgetType.divider;
-      case 'spacer': return PluginWidgetType.spacer;
-      case 'icon': return PluginWidgetType.icon;
-      default: return PluginWidgetType.text;
+      case 'text':
+        return PluginWidgetType.text;
+      case 'button':
+        return PluginWidgetType.button;
+      case 'image':
+        return PluginWidgetType.image;
+      case 'container':
+        return PluginWidgetType.container;
+      case 'column':
+        return PluginWidgetType.column;
+      case 'row':
+        return PluginWidgetType.row;
+      case 'list':
+        return PluginWidgetType.list;
+      case 'card':
+        return PluginWidgetType.card;
+      case 'divider':
+        return PluginWidgetType.divider;
+      case 'spacer':
+        return PluginWidgetType.spacer;
+      case 'icon':
+        return PluginWidgetType.icon;
+      default:
+        return PluginWidgetType.text;
     }
   }
 
@@ -363,4 +410,3 @@ class PluginScreenWidget {
     'onTap': onTap?.toJson(),
   };
 }
-

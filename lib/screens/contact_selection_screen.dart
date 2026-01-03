@@ -34,7 +34,7 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
     try {
       final data = await ApiService.instance.getChatsAndContacts();
       final contactsJson = data['contacts'] as List<dynamic>;
-      
+
       final contacts = contactsJson
           .map((json) => Contact.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -76,9 +76,7 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Выберите контакт'),
-      ),
+      appBar: AppBar(title: const Text('Выберите контакт')),
       body: Column(
         children: [
           Padding(
@@ -96,35 +94,34 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredContacts.isEmpty
-                    ? const Center(
-                        child: Text('Контакты не найдены'),
-                      )
-                    : ListView.builder(
-                        itemCount: _filteredContacts.length,
-                        itemBuilder: (context, index) {
-                          final contact = _filteredContacts[index];
-                          return ListTile(
-                            leading: ContactAvatarWidget(
-                              contactId: contact.id,
-                              originalAvatarUrl: contact.photoBaseUrl,
-                              radius: 24,
-                            ),
-                            title: ContactNameWidget(
-                              contactId: contact.id,
-                              originalName: contact.name,
-                              originalFirstName: contact.firstName,
-                              originalLastName: contact.lastName,
-                            ),
-                            subtitle: contact.description != null &&
-                                    contact.description!.isNotEmpty
-                                ? Text(contact.description!)
-                                : null,
-                            onTap: () {
-                              Navigator.of(context).pop(contact.id);
-                            },
-                          );
+                ? const Center(child: Text('Контакты не найдены'))
+                : ListView.builder(
+                    itemCount: _filteredContacts.length,
+                    itemBuilder: (context, index) {
+                      final contact = _filteredContacts[index];
+                      return ListTile(
+                        leading: ContactAvatarWidget(
+                          contactId: contact.id,
+                          originalAvatarUrl: contact.photoBaseUrl,
+                          radius: 24,
+                        ),
+                        title: ContactNameWidget(
+                          contactId: contact.id,
+                          originalName: contact.name,
+                          originalFirstName: contact.firstName,
+                          originalLastName: contact.lastName,
+                        ),
+                        subtitle:
+                            contact.description != null &&
+                                contact.description!.isNotEmpty
+                            ? Text(contact.description!)
+                            : null,
+                        onTap: () {
+                          Navigator.of(context).pop(contact.id);
                         },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

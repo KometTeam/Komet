@@ -9,72 +9,55 @@ import 'connection_state.dart';
 import 'retry_strategy.dart';
 import 'health_monitor.dart';
 
-
 class ConnectionManager {
   static final ConnectionManager _instance = ConnectionManager._internal();
   factory ConnectionManager() => _instance;
   ConnectionManager._internal();
-
 
   final ConnectionLogger _logger = ConnectionLogger();
   final ConnectionStateManager _stateManager = ConnectionStateManager();
   final RetryManager _retryManager = RetryManager();
   final HealthMonitor _healthMonitor = HealthMonitor();
 
-
   IOWebSocketChannel? _channel;
   StreamSubscription? _messageSubscription;
-
 
   final List<String> _serverUrls = AppUrls.websocketUrls;
 
   int _currentUrlIndex = 0;
   String? _currentServerUrl;
 
-
   bool _isConnecting = false;
   bool _isDisposed = false;
   int _sequenceNumber = 0;
   String? _authToken;
 
-
   final List<Map<String, dynamic>> _messageQueue = [];
-
 
   Timer? _pingTimer;
   Timer? _reconnectTimer;
-
 
   final StreamController<Map<String, dynamic>> _messageController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<String> _connectionStatusController =
       StreamController<String>.broadcast();
 
-
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
-
 
   Stream<String> get connectionStatusStream =>
       _connectionStatusController.stream;
 
-
   Stream<ConnectionInfo> get stateStream => _stateManager.stateStream;
-
 
   Stream<LogEntry> get logStream => _logger.logStream;
 
-
   Stream<HealthMetrics> get healthMetricsStream => _healthMonitor.metricsStream;
-
 
   ConnectionInfo get currentState => _stateManager.currentInfo;
 
-
   bool get isConnected => currentState.isActive;
 
-
   bool get canSendMessages => currentState.canSendMessages;
-
 
   Future<void> initialize() async {
     if (_isDisposed) {
@@ -92,28 +75,22 @@ class ConnectionManager {
   Future<void> _fullReconnect() async {
     _logger.logConnection('Начинаем полное переподключение');
 
-
     _cleanup();
-    _stopMonitoring(); 
-
+    _stopMonitoring();
 
     _currentUrlIndex = 0;
     _sequenceNumber = 0;
     _messageQueue.clear();
-
 
     _stateManager.setState(
       ConnectionState.disconnected,
       message: 'Подготовка к переподключению',
     );
 
-
     await Future.delayed(const Duration(milliseconds: 250));
-
 
     await connect(authToken: _authToken);
   }
-
 
   Future<void> connect({String? authToken}) async {
     if (_isDisposed) {
@@ -156,7 +133,6 @@ class ConnectionManager {
       _isConnecting = false;
     }
   }
-
 
   Future<void> _connectWithFallback() async {
     final sessionId = 'connect_${DateTime.now().millisecondsSinceEpoch}';
@@ -222,7 +198,6 @@ class ConnectionManager {
       }
     }
 
-
     _logger.logError(
       'Все серверы недоступны',
       data: {'total_servers': _serverUrls.length},
@@ -236,7 +211,6 @@ class ConnectionManager {
     throw Exception('Не удалось подключиться ни к одному серверу');
   }
 
-
   Future<void> _connectToUrl(String url) async {
     final uri = Uri.parse(url);
 
@@ -244,7 +218,6 @@ class ConnectionManager {
       'Подключение к URL',
       data: {'host': uri.host, 'port': uri.port, 'scheme': uri.scheme},
     );
-
 
     final headers = <String, String>{
       'Origin': AppUrls.webOrigin,
@@ -263,7 +236,6 @@ class ConnectionManager {
     _startPingTimer();
   }
 
-
   void _setupMessageListener() {
     _messageSubscription?.cancel();
 
@@ -277,7 +249,6 @@ class ConnectionManager {
     _logger.logConnection('Слушатель сообщений настроен');
   }
 
-
   void _handleMessage(dynamic message) {
     if (message == null || (message is String && message.trim().isEmpty)) {
       return;
@@ -288,11 +259,9 @@ class ConnectionManager {
 
       final decodedMessage = message is String ? jsonDecode(message) : message;
 
-
       if (decodedMessage is Map && decodedMessage['opcode'] == 1) {
         _healthMonitor.onPongReceived();
       }
-
 
       if (decodedMessage is Map &&
           decodedMessage['opcode'] == 6 &&
@@ -301,12 +270,10 @@ class ConnectionManager {
         return;
       }
 
-
       if (decodedMessage is Map && decodedMessage['cmd'] == 3) {
         _handleServerError(Map<String, dynamic>.from(decodedMessage));
         return;
       }
-
 
       if (decodedMessage is Map &&
           decodedMessage['opcode'] == 97 &&
@@ -324,7 +291,6 @@ class ConnectionManager {
     }
   }
 
-
   void _handleHandshakeSuccess(Map<String, dynamic> message) {
     _logger.logConnection(
       'Handshake успешен',
@@ -338,7 +304,6 @@ class ConnectionManager {
 
     _processMessageQueue();
   }
-
 
   void _handleServerError(Map<String, dynamic> message) {
     final error = message['payload'];
@@ -355,7 +320,6 @@ class ConnectionManager {
     }
   }
 
-
   void _handleSessionTermination() {
     _logger.logConnection('Сессия завершена сервером');
     _stateManager.setState(
@@ -364,7 +328,6 @@ class ConnectionManager {
     );
     _clearAuthData();
   }
-
 
   void _handleInvalidToken() {
     _logger.logConnection('Обработка недействительного токена');
@@ -375,12 +338,10 @@ class ConnectionManager {
     );
   }
 
-
   void _clearAuthData() {
     _authToken = null;
     _logger.logConnection('Данные аутентификации очищены');
   }
-
 
   void _handleError(dynamic error) {
     _logger.logError('Ошибка WebSocket', error: error);
@@ -388,13 +349,11 @@ class ConnectionManager {
     _scheduleReconnect('Ошибка WebSocket: $error');
   }
 
-
   void _handleDisconnection() {
     _logger.logConnection('WebSocket соединение закрыто');
     _healthMonitor.onReconnect();
     _scheduleReconnect('Соединение закрыто');
   }
-
 
   void _scheduleReconnect(String reason) {
     if (_isDisposed) return;
@@ -427,7 +386,6 @@ class ConnectionManager {
 
     _reconnectTimer = Timer(delay, () async {
       try {
-
         await _fullReconnect();
       } catch (e) {
         _logger.logError('Ошибка во время полного переподключения', error: e);
@@ -436,7 +394,6 @@ class ConnectionManager {
       }
     });
   }
-
 
   Future<void> _sendHandshake() async {
     _logger.logConnection('Отправка handshake');
@@ -460,7 +417,6 @@ class ConnectionManager {
     _sendMessage(6, payload);
   }
 
-
   int _sendMessage(int opcode, Map<String, dynamic> payload) {
     if (_channel == null) {
       _logger.logError('WebSocket не подключен');
@@ -482,7 +438,6 @@ class ConnectionManager {
     return _sequenceNumber++;
   }
 
-
   int sendMessage(int opcode, Map<String, dynamic> payload) {
     if (!canSendMessages) {
       _logger.logConnection(
@@ -495,7 +450,6 @@ class ConnectionManager {
 
     return _sendMessage(opcode, payload);
   }
-
 
   void _processMessageQueue() {
     if (_messageQueue.isEmpty) return;
@@ -512,7 +466,6 @@ class ConnectionManager {
     _messageQueue.clear();
   }
 
-
   void _startPingTimer() {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
@@ -523,13 +476,11 @@ class ConnectionManager {
     });
   }
 
-
   String _generateDeviceId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = (timestamp % 1000000).toString().padLeft(6, '0');
     return "$timestamp$random";
   }
-
 
   ErrorType _getErrorType(dynamic error) {
     final errorString = error.toString().toLowerCase();
@@ -552,7 +503,6 @@ class ConnectionManager {
     return ErrorType.unknown;
   }
 
-
   Future<void> disconnect() async {
     _logger.logConnection('Отключение');
 
@@ -565,7 +515,6 @@ class ConnectionManager {
     _cleanup();
   }
 
-
   Future<void> forceReconnect() async {
     if (_isDisposed) {
       _logger.logError('Попытка переподключения после dispose');
@@ -574,29 +523,23 @@ class ConnectionManager {
 
     _logger.logConnection('Принудительное переподключение');
 
-
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
-
 
     _cleanup();
     _currentUrlIndex = 0;
     _sequenceNumber = 0;
     _messageQueue.clear();
 
-
     _stateManager.setState(
       ConnectionState.disconnected,
       message: 'Подготовка к переподключению',
     );
 
-
     await Future.delayed(const Duration(milliseconds: 500));
-
 
     await connect(authToken: _authToken);
   }
-
 
   void _stopMonitoring() {
     _pingTimer?.cancel();
@@ -605,7 +548,6 @@ class ConnectionManager {
     _healthMonitor.stopMonitoring();
   }
 
-
   void _cleanup() {
     _channel?.sink.close(status.goingAway);
     _channel = null;
@@ -613,7 +555,6 @@ class ConnectionManager {
     _currentUrlIndex = 0;
     _sequenceNumber = 0;
   }
-
 
   Map<String, dynamic> getStatistics() {
     return {
@@ -626,7 +567,6 @@ class ConnectionManager {
       'server_index': _currentUrlIndex,
     };
   }
-
 
   void dispose() {
     if (_isDisposed) return;

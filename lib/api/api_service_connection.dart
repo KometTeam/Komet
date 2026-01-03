@@ -157,24 +157,7 @@ extension ApiServiceConnection on ApiService {
       await prefs.setString('spoof_deviceid', deviceId);
     }
 
-    // Generate mt_instanceid and clientSessionId for each app launch
-    String mtInstanceId = prefs.getString('session_mt_instanceid') ?? '';
-    int clientSessionId = prefs.getInt('session_client_session_id') ?? 0;
-    
-    // If not set for this session, generate new ones
-    if (mtInstanceId.isEmpty || clientSessionId == 0) {
-      mtInstanceId = const Uuid().v4();
-      clientSessionId = Random().nextInt(100) + 1; // Random between 1-100
-      await prefs.setString('session_mt_instanceid', mtInstanceId);
-      await prefs.setInt('session_client_session_id', clientSessionId);
-    }
-
-    final payload = {
-      'mt_instanceid': mtInstanceId,
-      'clientSessionId': clientSessionId,
-      'deviceId': deviceId,
-      'userAgent': userAgentPayload,
-    };
+    final payload = {'deviceId': deviceId, 'userAgent': userAgentPayload};
 
     await _sendMessage(6, payload);
     _handshakeSent = true;
@@ -195,33 +178,36 @@ extension ApiServiceConnection on ApiService {
 
   void _startAnalyticsTimer() {
     _analyticsTimer?.cancel();
-    _analyticsTimer = Timer.periodic(Duration(seconds: 10 + (DateTime.now().millisecondsSinceEpoch % 41)), (timer) async {
-      if (_isSessionOnline && _isSessionReady && _userId != null) {
-        try {
-          final now = DateTime.now().millisecondsSinceEpoch;
-          final Map<String, dynamic> params = {
-            'session_id': _sessionId,
-            'action_id': _actionId++,
-            'screen_to': 150,
-          };
+    _analyticsTimer = Timer.periodic(
+      Duration(seconds: 10 + (DateTime.now().millisecondsSinceEpoch % 41)),
+      (timer) async {
+        if (_isSessionOnline && _isSessionReady && _userId != null) {
+          try {
+            final now = DateTime.now().millisecondsSinceEpoch;
+            final Map<String, dynamic> params = {
+              'session_id': _sessionId,
+              'action_id': _actionId++,
+              'screen_to': 150,
+            };
 
-          await _sendMessage(5, {
-            "events": [
-              {
-                "type": "NAV",
-                "event": "HEARTBEAT",
-                "userId": _userId,
-                "time": now,
-                "params": params,
-              },
-            ],
-          });
-          _log('📊 Отправлена периодическая аналитика (opcode=5)');
-        } catch (e) {
-          print('Ошибка отправки аналитики: $e');
+            await _sendMessage(5, {
+              "events": [
+                {
+                  "type": "NAV",
+                  "event": "HEARTBEAT",
+                  "userId": _userId,
+                  "time": now,
+                  "params": params,
+                },
+              ],
+            });
+            _log('📊 Отправлена периодическая аналитика (opcode=5)');
+          } catch (e) {
+            print('Ошибка отправки аналитики: $e');
+          }
         }
-      }
-    });
+      },
+    );
   }
 
   Future<void> connect() async {
@@ -269,7 +255,9 @@ extension ApiServiceConnection on ApiService {
       final decoded = jsonDecode(jsonString) as Map<String, dynamic>;
       final opcode = decoded['opcode'];
       final payload = decoded['payload'];
-      _log('➡️ SEND: opcode=$opcode, payload=${truncatePayloadObjectForLog(payload)}');
+      _log(
+        '➡️ SEND: opcode=$opcode, payload=${truncatePayloadObjectForLog(payload)}',
+      );
       await _sendMessage(opcode, payload);
     } catch (_) {
       _log('➡️ SEND (raw): $jsonString');
@@ -299,9 +287,9 @@ extension ApiServiceConnection on ApiService {
 
   Future<int> _sendMessage(int opcode, Map<String, dynamic> payload) async {
     if (!_socketConnected || _socket == null) {
-        print('⚠️ Сокет не подключен, пропускаем opcode=$opcode');
+      print('⚠️ Сокет не подключен, пропускаем opcode=$opcode');
       _reconnect();
-        return -1;
+      return -1;
     }
 
     try {
@@ -322,7 +310,7 @@ extension ApiServiceConnection on ApiService {
     final packet = _packPacket(10, 0, seq, opcode, payload);
 
     _log('📤 ОТПРАВКА: ver=10, cmd=0, seq=$seq, opcode=$opcode');
-      _log('📤 PAYLOAD: ${truncatePayloadObjectForLog(payload)}');
+    _log('📤 PAYLOAD: ${truncatePayloadObjectForLog(payload)}');
     _log('📤 Размер пакета: ${packet.length} байт');
 
     try {
@@ -369,7 +357,7 @@ extension ApiServiceConnection on ApiService {
           conn_state.ConnectionState.disconnected,
           message: 'Соединение закрыто',
         );
-          _reconnect();
+        _reconnect();
       },
       cancelOnError: true,
     );
@@ -384,12 +372,20 @@ extension ApiServiceConnection on ApiService {
       final payload = decodedMessage['payload'];
 
       if (opcode == null || cmd == null || seq == null) {
-        print('⚠️ Некорректное сообщение: ver=$ver, opcode=$opcode, cmd=$cmd, seq=$seq');
+        print(
+          '⚠️ Некорректное сообщение: ver=$ver, opcode=$opcode, cmd=$cmd, seq=$seq',
+        );
         return;
       }
 
-      final cmdType = (cmd == 0x100 || cmd == 256) ? 'OK' : (cmd == 0x300 || cmd == 768) ? 'ERROR' : 'UNKNOWN($cmd)';
-      _log('📥 ПОЛУЧЕНО: ver=$ver, cmd=$cmd ($cmdType), seq=$seq, opcode=$opcode');
+      final cmdType = (cmd == 0x100 || cmd == 256)
+          ? 'OK'
+          : (cmd == 0x300 || cmd == 768)
+          ? 'ERROR'
+          : 'UNKNOWN($cmd)';
+      _log(
+        '📥 ПОЛУЧЕНО: ver=$ver, cmd=$cmd ($cmdType), seq=$seq, opcode=$opcode',
+      );
       if (opcode != 19) {
         _log('📥 PAYLOAD: ${truncatePayloadObjectForLog(payload)}');
       }
@@ -403,297 +399,268 @@ extension ApiServiceConnection on ApiService {
         print('❌ Детали ошибки: ${truncatePayloadObjectForLog(payload)}');
       }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 97 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 97 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256) &&
+          decodedMessage['payload'] != null &&
+          decodedMessage['payload']['token'] != null) {
+        if (!_isTerminatingOtherSessions) {
+          _handleSessionTerminated();
+        }
+        return;
+      }
 
-            if (payload is Map<String, dynamic>) {
-              final terminatedTokens = <String>{};
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 6 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        _isSessionOnline = true;
+        _isSessionReady = false;
+        _reconnectDelaySeconds = 2;
+        _reconnectAttempts = 0;
+        _connectionStatusController.add("authorizing");
+        _updateConnectionState(
+          conn_state.ConnectionState.connected,
+          message: 'Handshake успешен',
+        );
+        _startHealthMonitoring();
 
-              final payloadToken = payload['token'];
-              if (payloadToken is String) {
-                terminatedTokens.add(payloadToken);
-              }
+        _startPinging();
 
-              final payloadTokens = payload['tokens'];
-              if (payloadTokens is List) {
-                terminatedTokens.addAll(payloadTokens.whereType<String>());
-              }
+        if (authToken != null && !_chatsFetchedInThisSession) {
+          unawaited(_sendAuthRequestAfterHandshake());
+        } else if (authToken == null) {
+          _isSessionReady = true;
+          if (_onlineCompleter != null && !_onlineCompleter!.isCompleted) {
+            _onlineCompleter!.complete();
+          }
+        }
+      }
 
-              if (terminatedTokens.contains(authToken)) {
-                _handleSessionTerminated();
-                return;
+      if (decodedMessage is Map &&
+          (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
+        final error = decodedMessage['payload'];
+        final errorMsg = error?['message'] ?? error?['error'] ?? 'server_error';
+        print('← ERROR: $errorMsg');
+        _healthMonitor.onError(errorMsg);
+
+        if (error != null && error['localizedMessage'] != null) {
+          _errorController.add(error['localizedMessage']);
+        } else if (error != null && error['message'] != null) {
+          _errorController.add(error['message']);
+        }
+
+        if (error != null && error['message'] == 'FAIL_WRONG_PASSWORD') {
+          _errorController.add('FAIL_WRONG_PASSWORD');
+        }
+
+        if (error != null && error['error'] == 'password.invalid') {
+          _errorController.add('Неверный пароль');
+        }
+
+        if (error != null && error['error'] == 'proto.state') {
+          print('⚠️ Ошибка proto.state: сессия не готова для этого запроса');
+
+          if (decodedMessage['opcode'] == 64) {
+            final messagePayload = decodedMessage['payload'];
+            if (messagePayload != null && messagePayload['message'] != null) {
+              final messageData =
+                  messagePayload['message'] as Map<String, dynamic>;
+              final cid = messageData['cid'] as int?;
+              if (cid != null) {
+                final queueItem = QueueItem(
+                  id: 'retry_msg_$cid',
+                  type: QueueItemType.sendMessage,
+                  opcode: 64,
+                  payload: messagePayload,
+                  createdAt: DateTime.now(),
+                  persistent: true,
+                  chatId: messagePayload['chatId'] as int?,
+                  cid: cid,
+                );
+                _queueService.addToQueue(queueItem);
+                print('Сообщение возвращено в очередь из-за proto.state');
               }
             }
           }
+          return;
+        }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 6 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            _isSessionOnline = true;
-            _isSessionReady = false;
-            _reconnectDelaySeconds = 2;
-            _reconnectAttempts = 0;
-            _connectionStatusController.add("authorizing");
-            _updateConnectionState(
-              conn_state.ConnectionState.connected,
-              message: 'Handshake успешен',
-            );
-            _startHealthMonitoring();
+        if (error != null && error['error'] == 'login.token') {
+          _handleInvalidToken();
+          return;
+        }
 
-            _startPinging();
-
-            if (authToken != null && !_chatsFetchedInThisSession) {
-              unawaited(_sendAuthRequestAfterHandshake());
-            } else if (authToken == null) {
-              _isSessionReady = true;
-              if (_onlineCompleter != null && !_onlineCompleter!.isCompleted) {
-                _onlineCompleter!.complete();
-              }
-            }
-          }
-
-          if (decodedMessage is Map &&
-              (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
-            final error = decodedMessage['payload'];
-            final errorMsg = error?['message'] ?? error?['error'] ?? 'server_error';
-              print('← ERROR: $errorMsg');
-              _healthMonitor.onError(errorMsg);
-
-              if (error != null && error['localizedMessage'] != null) {
-              _errorController.add(error['localizedMessage']);
-            } else if (error != null && error['message'] != null) {
-              _errorController.add(error['message']);
-            }
-
-            if (error != null && error['message'] == 'FAIL_WRONG_PASSWORD') {
-              _errorController.add('FAIL_WRONG_PASSWORD');
-            }
-
-            if (error != null && error['error'] == 'password.invalid') {
-              _errorController.add('Неверный пароль');
-            }
-
-            if (error != null && error['error'] == 'proto.state') {
-              print('⚠️ Ошибка proto.state: сессия не готова для этого запроса');
-             
-              if (decodedMessage['opcode'] == 64) {
-                final messagePayload = decodedMessage['payload'];
-                if (messagePayload != null && messagePayload['message'] != null) {
-                  final messageData = messagePayload['message'] as Map<String, dynamic>;
-                  final cid = messageData['cid'] as int?;
-                  if (cid != null) {
-                    final queueItem = QueueItem(
-                      id: 'retry_msg_$cid',
-                      type: QueueItemType.sendMessage,
-                      opcode: 64,
-                      payload: messagePayload,
-                      createdAt: DateTime.now(),
-                      persistent: true,
-                      chatId: messagePayload['chatId'] as int?,
-                      cid: cid,
-                    );
-                    _queueService.addToQueue(queueItem);
-                    print('Сообщение возвращено в очередь из-за proto.state');
-                  }
-                }
-              }
-              return;
-            }
-
-            if (error != null && error['error'] == 'login.token') {
-              _handleInvalidToken();
-              return;
-            }
-
-            if (error != null && error['message'] == 'FAIL_WRONG_PASSWORD') {
-              _clearAuthToken().then((_) {
-                _chatsFetchedInThisSession = false;
-                _messageController.add({
-                  'type': 'invalid_token',
-                  'message':
-                      'Токен авторизации недействителен. Требуется повторная авторизация.',
-                });
-                _reconnect();
-              });
-              return;
-            }
-          }
-
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 18 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256) &&
-              decodedMessage['payload'] != null) {
-            final payload = decodedMessage['payload'];
-            if (payload['passwordChallenge'] != null) {
-              final challenge = payload['passwordChallenge'];
-              _currentPasswordTrackId = challenge['trackId'];
-              _currentPasswordHint = challenge['hint'];
-              _currentPasswordEmail = challenge['email'];
-
-
-              _messageController.add({
-                'type': 'password_required',
-                'trackId': _currentPasswordTrackId,
-                'hint': _currentPasswordHint,
-                'email': _currentPasswordEmail,
-              });
-              return;
-            }
-          }
-
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 22 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
+        if (error != null && error['message'] == 'FAIL_WRONG_PASSWORD') {
+          _clearAuthToken().then((_) {
+            _chatsFetchedInThisSession = false;
             _messageController.add({
-              'type': 'privacy_settings_updated',
-              'settings': payload,
+              'type': 'invalid_token',
+              'message':
+                  'Токен авторизации недействителен. Требуется повторная авторизация.',
             });
-          }
+            _reconnect();
+          });
+          return;
+        }
+      }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 116 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'password_set_success',
-              'payload': payload,
-            });
-          }
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 18 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256) &&
+          decodedMessage['payload'] != null) {
+        final payload = decodedMessage['payload'];
+        if (payload['passwordChallenge'] != null) {
+          final challenge = payload['passwordChallenge'];
+          _currentPasswordTrackId = challenge['trackId'];
+          _currentPasswordHint = challenge['hint'];
+          _currentPasswordEmail = challenge['email'];
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 57 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
+          _messageController.add({
+            'type': 'password_required',
+            'trackId': _currentPasswordTrackId,
+            'hint': _currentPasswordHint,
+            'email': _currentPasswordEmail,
+          });
+          return;
+        }
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 22 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': 'privacy_settings_updated',
+          'settings': payload,
+        });
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 116 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': 'password_set_success',
+          'payload': payload,
+        });
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 57 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': 'group_join_success',
+          'payload': payload,
+        });
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 46 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({'type': 'contact_found', 'payload': payload});
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 46 &&
+          (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': 'contact_not_found',
+          'payload': payload,
+        });
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 32 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({'type': 'channels_found', 'payload': payload});
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 32 &&
+          (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': 'channels_not_found',
+          'payload': payload,
+        });
+      }
+
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 89 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        final chat = payload['chat'] as Map<String, dynamic>?;
+
+        if (chat != null) {
+          final chatType = chat['type'] as String?;
+          if (chatType == 'CHAT') {
             _messageController.add({
               'type': 'group_join_success',
               'payload': payload,
             });
-          }
-
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 46 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
+          } else {
             _messageController.add({
-              'type': 'contact_found',
+              'type': 'channel_entered',
               'payload': payload,
             });
           }
+        } else {
+          _messageController.add({
+            'type': 'channel_entered',
+            'payload': payload,
+          });
+        }
+      }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 46 &&
-              (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'contact_not_found',
-              'payload': payload,
-            });
-          }
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 89 &&
+          (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({'type': 'channel_error', 'payload': payload});
+      }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 32 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'channels_found',
-              'payload': payload,
-            });
-          }
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 57 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': 'channel_subscribed',
+          'payload': payload,
+        });
+      }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 32 &&
-              (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'channels_not_found',
-              'payload': payload,
-            });
-          }
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 57 &&
+          (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({'type': 'channel_error', 'payload': payload});
+      }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 89 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
-            final chat = payload['chat'] as Map<String, dynamic>?;
-            
-            if (chat != null) {
-              final chatType = chat['type'] as String?;
-              if (chatType == 'CHAT') {
-                _messageController.add({
-                  'type': 'group_join_success',
-                  'payload': payload,
-                });
-              } else {
-                _messageController.add({
-                  'type': 'channel_entered',
-                  'payload': payload,
-                });
-              }
-            } else {
-              _messageController.add({
-                'type': 'channel_entered',
-                'payload': payload,
-              });
-            }
-          }
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 59 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({'type': 'group_members', 'payload': payload});
+      }
 
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 89 &&
-              (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'channel_error',
-              'payload': payload,
-            });
-          }
-
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 57 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'channel_subscribed',
-              'payload': payload,
-            });
-          }
-
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 57 &&
-              (decodedMessage['cmd'] == 0x300 || decodedMessage['cmd'] == 768)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'channel_error',
-              'payload': payload,
-            });
-          }
-
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 59 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
-            _messageController.add({
-              'type': 'group_members',
-              'payload': payload,
-            });
-          }
-
-          if (decodedMessage is Map &&
-              decodedMessage['opcode'] == 162 &&
-              (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
-            final payload = decodedMessage['payload'];
-            try {
-              final complaintData = ComplaintData.fromJson(payload);
-              _messageController.add({
-                'type': 'complaints_data',
-                'complaintData': complaintData,
-              });
-            } catch (e) {
-              print('← ERROR parsing complaints: $e');
-            }
-          }
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 162 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        try {
+          final complaintData = ComplaintData.fromJson(payload);
+          _messageController.add({
+            'type': 'complaints_data',
+            'complaintData': complaintData,
+          });
+        } catch (e) {
+          print('← ERROR parsing complaints: $e');
+        }
+      }
 
       if (decodedMessage is Map<String, dynamic>) {
         _messageController.add(decodedMessage);
@@ -792,13 +759,21 @@ extension ApiServiceConnection on ApiService {
     final persistentItems = _queueService.getPersistentItems();
     print('Обработка постоянной очереди: ${persistentItems.length} элементов');
     for (var item in persistentItems) {
-      print('Отправляем из очереди: ${item.type.name}, opcode=${item.opcode}, cid=${item.cid}');
-      unawaited(_sendMessage(item.opcode, item.payload).then((_) {
-        print('Сообщение из очереди успешно отправлено, удаляем из очереди: ${item.id}');
-        _queueService.removeFromQueue(item.id);
-      }).catchError((e) {
-        print('Ошибка отправки из очереди: $e, оставляем в очереди');
-      }));
+      print(
+        'Отправляем из очереди: ${item.type.name}, opcode=${item.opcode}, cid=${item.cid}',
+      );
+      unawaited(
+        _sendMessage(item.opcode, item.payload)
+            .then((_) {
+              print(
+                'Сообщение из очереди успешно отправлено, удаляем из очереди: ${item.id}',
+              );
+              _queueService.removeFromQueue(item.id);
+            })
+            .catchError((e) {
+              print('Ошибка отправки из очереди: $e, оставляем в очереди');
+            }),
+      );
     }
 
     // Обрабатываем временную очередь (загрузка чатов)
@@ -809,13 +784,19 @@ extension ApiServiceConnection on ApiService {
         // Проверяем, что пользователь все еще в этом чате
         if (currentActiveChatId == item.chatId) {
           print('Отправляем запрос загрузки чата ${item.chatId} из очереди');
-          unawaited(_sendMessage(item.opcode, item.payload).then((_) {
-            _queueService.removeFromQueue(item.id);
-          }).catchError((e) {
-            print('Ошибка загрузки чата из очереди: $e');
-          }));
+          unawaited(
+            _sendMessage(item.opcode, item.payload)
+                .then((_) {
+                  _queueService.removeFromQueue(item.id);
+                })
+                .catchError((e) {
+                  print('Ошибка загрузки чата из очереди: $e');
+                }),
+          );
         } else {
-          print('Пользователь больше не в чате ${item.chatId}, удаляем из очереди');
+          print(
+            'Пользователь больше не в чате ${item.chatId}, удаляем из очереди',
+          );
           _queueService.removeFromQueue(item.id);
         }
       }

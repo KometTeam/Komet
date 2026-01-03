@@ -8,7 +8,6 @@ import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 import 'package:uuid/uuid.dart';
 import 'package:gwid/utils/log_utils.dart';
 
-
 typedef Lz4DecompressFunction =
     Int32 Function(
       Pointer<Uint8> src,
@@ -33,9 +32,7 @@ class RegistrationService {
   final _uuid = const Uuid();
   Timer? _pingTimer;
   StreamSubscription? _socketSubscription;
-  
-  
-  
+
   DynamicLibrary? _lz4Lib;
   Lz4Decompress? _lz4BlockDecompress;
 
@@ -44,12 +41,10 @@ class RegistrationService {
 
     try {
       if (Platform.isWindows) {
-        
         final dllPath = 'eslz4-win64.dll';
         print('📦 Загрузка LZ4 DLL для block decompress: $dllPath');
         _lz4Lib = DynamicLibrary.open(dllPath);
 
-        
         try {
           _lz4BlockDecompress = _lz4Lib!
               .lookup<NativeFunction<Lz4DecompressFunction>>(
@@ -61,7 +56,7 @@ class RegistrationService {
           print(
             '⚠️  Функция LZ4_decompress_safe не найдена, пробуем альтернативные имена...',
           );
-          
+
           try {
             _lz4BlockDecompress = _lz4Lib!
                 .lookup<NativeFunction<Lz4DecompressFunction>>(
@@ -83,13 +78,11 @@ class RegistrationService {
   Future<void> connect() async {
     if (_isConnected) return;
 
-    
     _initLz4BlockDecompress();
 
     try {
       print('🌐 Подключаемся к api.oneme.ru:443...');
 
-      
       final securityContext = SecurityContext.defaultContext;
 
       print('🔒 Создаем TCP соединение...');
@@ -110,10 +103,8 @@ class RegistrationService {
       _isConnected = true;
       print('✅ SSL соединение установлено');
 
-      
       _startPingLoop();
 
-      
       _socketSubscription = _socket!.listen(
         _handleData,
         onError: (error) {
@@ -148,29 +139,24 @@ class RegistrationService {
   }
 
   void _handleData(Uint8List data) {
-    
     _processIncomingData(data);
   }
 
   Uint8List? _buffer = Uint8List(0);
 
   void _processIncomingData(Uint8List newData) {
-    
     _buffer = Uint8List.fromList([..._buffer!, ...newData]);
 
     while (_buffer!.length >= 10) {
-      
       final header = _buffer!.sublist(0, 10);
       final payloadLen =
           ByteData.view(header.buffer, 6, 4).getUint32(0, Endian.big) &
           0xFFFFFF;
 
       if (_buffer!.length < 10 + payloadLen) {
-        
         break;
       }
 
-      
       final fullPacket = _buffer!.sublist(0, 10 + payloadLen);
       _buffer = _buffer!.sublist(10 + payloadLen);
 
@@ -180,7 +166,6 @@ class RegistrationService {
 
   void _processPacket(Uint8List packet) {
     try {
-      
       final ver = packet[0];
       final cmd = ByteData.view(packet.buffer).getUint16(1, Endian.big);
       final seq = packet[3];
@@ -191,7 +176,6 @@ class RegistrationService {
         4,
       ).getUint32(0, Endian.big);
 
-      
       final compFlag = packedLen >> 24;
       final payloadLen = packedLen & 0x00FFFFFF;
 
@@ -217,7 +201,6 @@ class RegistrationService {
       print('═══════════════════════════════════════════════════════════');
       print('');
 
-      
       final completer = _pending[seq];
       if (completer != null && !completer.isCompleted) {
         completer.complete(payload);
@@ -324,27 +307,14 @@ class RegistrationService {
       dynamic payload = msgpack.deserialize(data);
       print('✅ Msgpack десериализация успешна');
 
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
       if (payload is int &&
           data.length > 1 &&
           payload <= -1 &&
           payload >= -32) {
         final marker = data[0];
 
-        
-        
         final candidateOffsets = <int>[1, 2, 3, 4];
 
-        
         dynamic recovered;
 
         for (final offset in candidateOffsets) {
@@ -379,8 +349,6 @@ class RegistrationService {
         }
       }
 
-      
-      
       final decoded = _decodeBlockTokens(payload);
       return decoded;
     } catch (e) {
@@ -389,18 +357,13 @@ class RegistrationService {
     }
   }
 
-  
-  
-  
   dynamic _decodeBlockTokens(dynamic value) {
     if (value is Map) {
-      
       final maybeDecoded = _tryDecodeSingleBlock(value);
       if (maybeDecoded != null) {
         return maybeDecoded;
       }
 
-      
       final result = <dynamic, dynamic>{};
       value.forEach((k, v) {
         result[k] = _decodeBlockTokens(v);
@@ -413,8 +376,6 @@ class RegistrationService {
     return value;
   }
 
-  
-  
   dynamic _tryDecodeSingleBlock(Map value) {
     try {
       if (value['type'] != 'block') {
@@ -426,8 +387,6 @@ class RegistrationService {
         return null;
       }
 
-      
-      
       final uncompressedSize =
           (value['uncompressed_size'] ??
                   value['uncompressedSize'] ??
@@ -438,7 +397,6 @@ class RegistrationService {
           ? rawData
           : Uint8List.fromList(List<int>.from(rawData as List));
 
-      
       if (_lz4BlockDecompress != null && uncompressedSize != null) {
         print(
           '📦 Декодируем block‑токен через LZ4 FFI: '
@@ -482,15 +440,11 @@ class RegistrationService {
             '$srcSize → ${decompressed.length} байт',
           );
 
-          
-          
           final nested = _deserializeMsgpack(decompressed);
           if (nested != null) {
             return nested;
           }
 
-          
-          
           return decompressed;
         } finally {
           malloc.free(srcPtr);
@@ -498,12 +452,8 @@ class RegistrationService {
         }
       }
 
-      
       try {
-        final decompressed = _lz4DecompressBlockPure(
-          compressedBytes,
-          500000  ,
-        );
+        final decompressed = _lz4DecompressBlockPure(compressedBytes, 500000);
         print(
           '✅ block‑токен декомпрессирован через чистый LZ4 block: '
           '${compressedBytes.length} → ${decompressed.length} байт',
@@ -533,8 +483,6 @@ class RegistrationService {
     }
 
     try {
-      
-      
       Uint8List decompressedBytes = payloadBytes;
 
       try {
@@ -545,7 +493,6 @@ class RegistrationService {
           '${payloadBytes.length} → ${decompressedBytes.length} байт',
         );
       } catch (lz4Error) {
-        
         print('⚠️  LZ4 block‑декомпрессия не применена: $lz4Error');
         print('📦 Используем сырые данные без распаковки...');
         decompressedBytes = payloadBytes;
@@ -559,11 +506,7 @@ class RegistrationService {
     }
   }
 
-  
-  
-  
   Uint8List _lz4DecompressBlockPure(Uint8List src, int maxOutputSize) {
-    
     final dst = BytesBuilder(copy: false);
     int srcPos = 0;
 
@@ -572,7 +515,6 @@ class RegistrationService {
       final token = src[srcPos++];
       var literalLen = token >> 4;
 
-      
       if (literalLen == 15) {
         while (srcPos < src.length) {
           final b = src[srcPos++];
@@ -581,7 +523,6 @@ class RegistrationService {
         }
       }
 
-      
       if (literalLen > 0) {
         if (srcPos + literalLen > src.length) {
           throw StateError(
@@ -598,12 +539,10 @@ class RegistrationService {
         }
       }
 
-      
       if (srcPos >= src.length) {
         break;
       }
 
-      
       if (srcPos + 1 >= src.length) {
         throw StateError('LZ4: неполный offset в потоке');
       }
@@ -616,7 +555,6 @@ class RegistrationService {
 
       var matchLen = (token & 0x0F) + 4;
 
-      
       if ((token & 0x0F) == 0x0F) {
         while (srcPos < src.length) {
           final b = src[srcPos++];
@@ -625,7 +563,6 @@ class RegistrationService {
         }
       }
 
-      
       final dstBytes = dst.toBytes();
       final dstLen = dstBytes.length;
       final matchPos = dstLen - offset;
@@ -672,11 +609,8 @@ class RegistrationService {
   Future<String> startRegistration(String phoneNumber) async {
     await connect();
 
-    
     final mtInstanceId = _uuid.v4();
-    // Generate 16-character hex string deviceId (like f8268babd84e35a5)
-    final deviceIdBytes = List<int>.generate(8, (_) => _random.nextInt(256));
-    final deviceId = deviceIdBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final deviceId = _uuid.v4();
     final possibleDeviceNames = <String>[
       'Samsung Galaxy S23',
       'Samsung Galaxy S22',
@@ -695,19 +629,18 @@ class RegistrationService {
     final deviceName =
         possibleDeviceNames[_random.nextInt(possibleDeviceNames.length)];
 
-    
     final handshakePayload = {
       "mt_instanceid": mtInstanceId,
       "userAgent": {
         "deviceType": "ANDROID",
-        "appVersion": "25.21.3",
+        "appVersion": "25.14.2",
         "osVersion": "Android 14",
         "timezone": "Europe/Moscow",
-        "screen": "xxhdpi 440dpi 1080x2072",
+        "screen": "440dpi 440dpi 1080x2072",
         "pushDeviceType": "GCM",
-        "arch": "arm64-v8a",
+        "arch": "x86_64",
         "locale": "ru",
-        "buildNumber": 6498,
+        "buildNumber": 6442,
         "deviceName": deviceName,
         "deviceLocale": "en",
       },
@@ -722,7 +655,6 @@ class RegistrationService {
     print('📨 Ответ от handshake:');
     print(truncatePayloadForLog(_formatPayload(handshakeResponse)));
 
-    
     if (handshakeResponse is Map) {
       final err = handshakeResponse['payload']?['error'];
       if (err != null) {
@@ -730,7 +662,6 @@ class RegistrationService {
       }
     }
 
-    
     final authPayload = {"type": "START_AUTH", "phone": phoneNumber};
     print('🚀 Отправляем START_AUTH (opcode=17)...');
     print('📦 START_AUTH payload:');
@@ -740,14 +671,11 @@ class RegistrationService {
     print('📨 Ответ от START_AUTH:');
     print(truncatePayloadForLog(_formatPayload(response)));
 
-    
     if (response is Map) {
-      
       final payload = response['payload'] ?? response;
       final err = payload['error'] ?? response['error'];
 
       if (err != null) {
-        
         if (err.toString().contains('limit.violate') ||
             err.toString().contains('error.limit.violate')) {
           throw Exception(
@@ -755,7 +683,6 @@ class RegistrationService {
           );
         }
 
-        
         final message =
             payload['localizedMessage'] ??
             payload['message'] ??
@@ -765,7 +692,6 @@ class RegistrationService {
       }
     }
 
-    
     if (response is Map) {
       final payload = response['payload'] ?? response;
       final token = payload['token'] ?? response['token'];
@@ -792,21 +718,17 @@ class RegistrationService {
     print('📨 Ответ от CHECK_CODE:');
     print(truncatePayloadForLog(_formatPayload(response)));
 
-    
     if (response is Map) {
-      
       final payload = response['payload'] ?? response;
       final err = payload['error'] ?? response['error'];
 
       if (err != null) {
-        
         if (err.toString().contains('verify.code.wrong') ||
             err.toString().contains('wrong.code') ||
             err.toString().contains('code.wrong')) {
           throw Exception('Неверный код');
         }
 
-        
         final message =
             payload['localizedMessage'] ??
             payload['message'] ??
@@ -816,12 +738,10 @@ class RegistrationService {
       }
     }
 
-    
     if (response is Map) {
       final tokenSrc = response['payload'] ?? response;
       final tokenAttrs = tokenSrc['tokenAttrs'];
 
-      
       if (tokenAttrs is Map && tokenAttrs['LOGIN'] is Map) {
         throw Exception('ACCOUNT_EXISTS');
       }
@@ -853,14 +773,12 @@ class RegistrationService {
     print('📨 Ответ от REGISTER:');
     print(truncatePayloadForLog(_formatPayload(response)));
 
-    
     if (response is Map) {
       final err = response['payload']?['error'];
       if (err != null) {
         throw Exception('Ошибка REGISTER: $err');
       }
 
-      
       final payload = response['payload'] ?? response;
       final finalToken = payload['token'] ?? response['token'];
       if (finalToken != null) {

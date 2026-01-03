@@ -99,19 +99,16 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
     HapticFeedback.lightImpact();
     setState(() {
       if (_currentState == _PlayerState.collapsed) {
-        
         _currentState = _PlayerState.fullscreen;
         _animationController.forward();
         BottomSheetMusicPlayer.isExpandedNotifier.value = true;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = true;
       } else if (_currentState == _PlayerState.fullscreen) {
-        
         _currentState = _PlayerState.collapsed;
         _animationController.reverse();
         BottomSheetMusicPlayer.isExpandedNotifier.value = false;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = false;
       } else {
-        
         _currentState = _PlayerState.collapsed;
         _animationController.reverse();
         BottomSheetMusicPlayer.isExpandedNotifier.value = false;
@@ -125,12 +122,10 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
     setState(() {
       if (_currentState == _PlayerState.fullscreen) {
         _currentState = _PlayerState.expanded;
-        
+
         _animationController.value = 1.0;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = false;
       } else {
-        
-        
         _currentState = _PlayerState.fullscreen;
         BottomSheetMusicPlayer.isFullscreenNotifier.value = true;
       }
@@ -178,7 +173,6 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
           targetHeight = collapsedHeight;
         }
 
-        
         final currentHeight =
             collapsedHeight +
             (targetHeight - collapsedHeight) * _heightAnimation.value;
@@ -445,314 +439,324 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                  const SizedBox(height: 8),
-                  
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final maxWidth = constraints.maxWidth;
-                      final albumSize = maxWidth < 380 ? maxWidth : 380.0;
-                      return Hero(
-                        tag: 'album-art-${track.id}',
-                        child: Container(
-                          width: albumSize,
-                          height: albumSize,
-                          margin: EdgeInsets.symmetric(
-                            horizontal: (maxWidth - albumSize) / 2,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(32),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.25),
-                                blurRadius: 30,
-                                offset: const Offset(0, 12),
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(32),
-                            child: track.albumArtUrl != null
-                                ? Image.network(
-                                    track.albumArtUrl!,
-                                    fit: BoxFit.cover,
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                          if (loadingProgress == null) {
-                                            return child;
-                                          }
-                                          return _buildLargeAlbumArtPlaceholder(
-                                            context,
-                                            colorScheme,
-                                          );
-                                        },
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            _buildLargeAlbumArtPlaceholder(
+                    const SizedBox(height: 8),
+
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final maxWidth = constraints.maxWidth;
+                        final albumSize = maxWidth < 380 ? maxWidth : 380.0;
+                        return Hero(
+                          tag: 'album-art-${track.id}',
+                          child: Container(
+                            width: albumSize,
+                            height: albumSize,
+                            margin: EdgeInsets.symmetric(
+                              horizontal: (maxWidth - albumSize) / 2,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(32),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.25),
+                                  blurRadius: 30,
+                                  offset: const Offset(0, 12),
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(32),
+                              child: track.albumArtUrl != null
+                                  ? Image.network(
+                                      track.albumArtUrl!,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                            if (loadingProgress == null) {
+                                              return child;
+                                            }
+                                            return _buildLargeAlbumArtPlaceholder(
                                               context,
                                               colorScheme,
-                                            ),
-                                  )
-                                : _buildLargeAlbumArtPlaceholder(
-                                    context,
-                                    colorScheme,
-                                  ),
+                                            );
+                                          },
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              _buildLargeAlbumArtPlaceholder(
+                                                context,
+                                                colorScheme,
+                                              ),
+                                    )
+                                  : _buildLargeAlbumArtPlaceholder(
+                                      context,
+                                      colorScheme,
+                                    ),
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  Text(
-                    track.title,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
+                        );
+                      },
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    track.artist,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: colorScheme.onSurface.withOpacity(0.75),
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (track.album != null && track.album!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 32),
+
                     Text(
-                      track.album!,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.onSurface.withOpacity(0.6),
+                      track.title,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      track.artist,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: colorScheme.onSurface.withOpacity(0.75),
+                        fontWeight: FontWeight.w500,
                       ),
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                  if (track.duration != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _formatDuration(Duration(milliseconds: track.duration!)),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurface.withOpacity(0.55),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                  const SizedBox(height: 40),
-                  
-                  Column(
-                    children: [
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          activeTrackColor: colorScheme.primary,
-                          inactiveTrackColor: colorScheme.surfaceContainerHigh,
-                          thumbColor: colorScheme.primary,
-                          overlayColor: colorScheme.primary.withOpacity(0.1),
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 8,
-                          ),
-                          trackHeight: 4,
+                    if (track.album != null && track.album!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        track.album!,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onSurface.withOpacity(0.6),
                         ),
-                        child: Slider(
-                          value: musicPlayer.duration.inMilliseconds > 0
-                              ? (musicPlayer.position.inMilliseconds /
-                                        musicPlayer.duration.inMilliseconds)
-                                    .clamp(0.0, 1.0)
-                              : 0.0,
-                          onChanged: (value) {
-                            HapticFeedback.selectionClick();
-                            final newPosition = Duration(
-                              milliseconds:
-                                  (value * musicPlayer.duration.inMilliseconds)
-                                      .round(),
-                            );
-                            musicPlayer.seek(newPosition);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _formatDuration(musicPlayer.position),
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: colorScheme.onSurface.withOpacity(
-                                      0.7,
-                                    ),
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                            ),
-                            Text(
-                              _formatDuration(musicPlayer.duration),
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: colorScheme.onSurface.withOpacity(
-                                      0.7,
-                                    ),
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                            ),
-                          ],
-                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            musicPlayer.previous();
-                          },
-                          borderRadius: BorderRadius.circular(28),
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHigh,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.skip_previous_rounded,
-                              size: 28,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
+                    if (track.duration != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatDuration(
+                          Duration(milliseconds: track.duration!),
                         ),
-                      ),
-                      const SizedBox(width: 24),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            HapticFeedback.mediumImpact();
-                            if (musicPlayer.isPlaying) {
-                              musicPlayer.pause();
-                            } else {
-                              musicPlayer.resume();
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(40),
-                          child: Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: musicPlayer.isLoading
-                                ? Padding(
-                                    padding: const EdgeInsets.all(24),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 3,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        colorScheme.onPrimary,
-                                      ),
-                                    ),
-                                  )
-                                : Icon(
-                                    musicPlayer.isPlaying
-                                        ? Icons.pause_rounded
-                                        : Icons.play_arrow_rounded,
-                                    size: 40,
-                                    color: colorScheme.onPrimary,
-                                  ),
-                          ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurface.withOpacity(0.55),
+                          fontWeight: FontWeight.w500,
                         ),
-                      ),
-                      const SizedBox(width: 24),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            musicPlayer.next();
-                          },
-                          borderRadius: BorderRadius.circular(28),
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHigh,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.skip_next_rounded,
-                              size: 28,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  Row(
-                    children: [
-                      Icon(
-                        musicPlayer.volume == 0
-                            ? Icons.volume_off_rounded
-                            : musicPlayer.volume < 0.5
-                                ? Icons.volume_down_rounded
-                                : Icons.volume_up_rounded,
-                        size: 20,
-                        color: colorScheme.onSurface.withOpacity(0.7),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SliderTheme(
+                    const SizedBox(height: 40),
+
+                    Column(
+                      children: [
+                        SliderTheme(
                           data: SliderTheme.of(context).copyWith(
                             activeTrackColor: colorScheme.primary,
-                            inactiveTrackColor: colorScheme.surfaceContainerHigh,
+                            inactiveTrackColor:
+                                colorScheme.surfaceContainerHigh,
                             thumbColor: colorScheme.primary,
                             overlayColor: colorScheme.primary.withOpacity(0.1),
                             thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 6,
+                              enabledThumbRadius: 8,
                             ),
-                            trackHeight: 3,
+                            trackHeight: 4,
                           ),
                           child: Slider(
-                            value: musicPlayer.volume,
+                            value: musicPlayer.duration.inMilliseconds > 0
+                                ? (musicPlayer.position.inMilliseconds /
+                                          musicPlayer.duration.inMilliseconds)
+                                      .clamp(0.0, 1.0)
+                                : 0.0,
                             onChanged: (value) {
                               HapticFeedback.selectionClick();
-                              musicPlayer.setVolume(value);
+                              final newPosition = Duration(
+                                milliseconds:
+                                    (value *
+                                            musicPlayer.duration.inMilliseconds)
+                                        .round(),
+                              );
+                              musicPlayer.seek(newPosition);
                             },
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${(musicPlayer.volume * 100).round()}%',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withOpacity(0.7),
-                              fontWeight: FontWeight.w500,
-                              fontSize: 12,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _formatDuration(musicPlayer.position),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: colorScheme.onSurface.withOpacity(
+                                        0.7,
+                                      ),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
+                              ),
+                              Text(
+                                _formatDuration(musicPlayer.duration),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: colorScheme.onSurface.withOpacity(
+                                        0.7,
+                                      ),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              musicPlayer.previous();
+                            },
+                            borderRadius: BorderRadius.circular(28),
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHigh,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.skip_previous_rounded,
+                                size: 28,
+                                color: colorScheme.onSurface,
+                              ),
                             ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              HapticFeedback.mediumImpact();
+                              if (musicPlayer.isPlaying) {
+                                musicPlayer.pause();
+                              } else {
+                                musicPlayer.resume();
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(40),
+                            child: Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: musicPlayer.isLoading
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(24),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              colorScheme.onPrimary,
+                                            ),
+                                      ),
+                                    )
+                                  : Icon(
+                                      musicPlayer.isPlaying
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                      size: 40,
+                                      color: colorScheme.onPrimary,
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              musicPlayer.next();
+                            },
+                            borderRadius: BorderRadius.circular(28),
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHigh,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.skip_next_rounded,
+                                size: 28,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+
+                    Row(
+                      children: [
+                        Icon(
+                          musicPlayer.volume == 0
+                              ? Icons.volume_off_rounded
+                              : musicPlayer.volume < 0.5
+                              ? Icons.volume_down_rounded
+                              : Icons.volume_up_rounded,
+                          size: 20,
+                          color: colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: colorScheme.primary,
+                              inactiveTrackColor:
+                                  colorScheme.surfaceContainerHigh,
+                              thumbColor: colorScheme.primary,
+                              overlayColor: colorScheme.primary.withOpacity(
+                                0.1,
+                              ),
+                              thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 6,
+                              ),
+                              trackHeight: 3,
+                            ),
+                            child: Slider(
+                              value: musicPlayer.volume,
+                              onChanged: (value) {
+                                HapticFeedback.selectionClick();
+                                musicPlayer.setVolume(value);
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '${(musicPlayer.volume * 100).round()}%',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: colorScheme.onSurface.withOpacity(0.7),
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),

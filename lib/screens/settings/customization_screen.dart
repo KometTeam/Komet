@@ -66,22 +66,42 @@ class CustomizationScreen extends StatefulWidget {
 }
 
 class _CustomizationScreenState extends State<CustomizationScreen> {
+  late bool _isMaterialYou;
+  late bool _useCustomChatWallpaper;
+  late bool _useAutoReplyColor;
+  late bool _useDesktopLayout;
+  late bool _useGradientForAddAccountButton;
+  late bool _useGlassPanels;
+
+
+  @override
+  void initState() {
+    super.initState();
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    _isMaterialYou = theme.appTheme == AppTheme.system;
+    _useCustomChatWallpaper = theme.useCustomChatWallpaper;
+    _useAutoReplyColor = theme.useAutoReplyColor;
+    _useDesktopLayout = theme.useDesktopLayout;
+    _useGradientForAddAccountButton = theme.useGradientForAddAccountButton;
+    _useGlassPanels = theme.useGlassPanels;
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    final theme = context.watch<ThemeProvider>();
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     final colors = Theme.of(context).colorScheme;
-    final bool isMaterialYou = theme.appTheme == AppTheme.system;
     final bool isCurrentlyDark =
         Theme.of(context).brightness == Brightness.dark;
 
     final Color? myBubbleColorToShow = isCurrentlyDark
-        ? (isMaterialYou ? colors.primaryContainer : theme.myBubbleColorDark)
-        : (isMaterialYou ? colors.primaryContainer : theme.myBubbleColorLight);
+        ? (_isMaterialYou ? colors.primaryContainer : theme.myBubbleColorDark)
+        : (_isMaterialYou ? colors.primaryContainer : theme.myBubbleColorLight);
     final Color? theirBubbleColorToShow = isCurrentlyDark
-        ? (isMaterialYou
+        ? (_isMaterialYou
               ? colors.secondaryContainer
               : theme.theirBubbleColorDark)
-        : (isMaterialYou
+        : (_isMaterialYou
               ? colors.secondaryContainer
               : theme.theirBubbleColorLight);
 
@@ -100,39 +120,42 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
         : const Color(0xFF464646);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Персонализация"),
-        surfaceTintColor: Colors.transparent,
-        backgroundColor: colors.surface,
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        children: [
-          const _MessagePreviewSection(),
-          const SizedBox(height: 16),
-          const _ThemeManagementSection(),
-          const SizedBox(height: 16),
-          _ModernSection(
-            title: "Тема приложения",
+          appBar: AppBar(
+            title: const Text("Персонализация"),
+            surfaceTintColor: Colors.transparent,
+            backgroundColor: colors.surface,
+            elevation: 0,
+          ),
+          body: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
-              const SizedBox(height: 8),
-              _CustomSettingTile(
-                icon: Icons.auto_awesome_outlined,
-                title: "Material You",
-                subtitle: "Использовать цвета системы (Android 12+)",
+              _MessagePreviewSection(isMaterialYou: _isMaterialYou),
+              const SizedBox(height: 16),
+              const _ThemeManagementSection(),
+              const SizedBox(height: 16),
+              _ModernSection(
+                title: "Тема приложения",
+                children: [
+                  const SizedBox(height: 8),
+                  _CustomSettingTile(
+                    icon: Icons.auto_awesome_outlined,
+                    title: "Material You",
+                    subtitle: "Использовать цвета системы (Android 12+)",
                 child: Switch(
-                  value: isMaterialYou,
-                  onChanged: (value) => theme.setMaterialYouEnabled(value),
+                  value: _isMaterialYou,
+                  onChanged: (value) {
+                    setState(() => _isMaterialYou = value);
+                    theme.setMaterialYouEnabled(value);
+                  },
                 ),
-              ),
-              const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 12),
               IgnorePointer(
-                ignoring: isMaterialYou,
+                ignoring: _isMaterialYou,
                 child: Opacity(
-                  opacity: isMaterialYou ? 0.5 : 1.0,
+                  opacity: _isMaterialYou ? 0.5 : 1.0,
                   child: AppThemeSelector(
-                    selectedTheme: isMaterialYou
+                    selectedTheme: _isMaterialYou
                         ? theme.lastNonSystemTheme
                         : theme.appTheme,
                     onChanged: (appTheme) => theme.setTheme(appTheme),
@@ -141,15 +164,15 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ),
               const SizedBox(height: 16),
               IgnorePointer(
-                ignoring: isMaterialYou,
+                ignoring: _isMaterialYou,
                 child: Opacity(
-                  opacity: isMaterialYou ? 0.5 : 1.0,
+                  opacity: _isMaterialYou ? 0.5 : 1.0,
                   child: _ColorPickerTile(
                     title: "Акцентный цвет",
-                    subtitle: isMaterialYou
+                    subtitle: _isMaterialYou
                         ? "Используются цвета системы (Material You)"
                         : "Основной цвет интерфейса",
-                    color: isMaterialYou ? colors.primary : theme.accentColor,
+                    color: _isMaterialYou ? colors.primary : theme.accentColor,
                     onColorChanged: (color) => theme.setAccentColor(color),
                   ),
                 ),
@@ -163,9 +186,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                     icon: Icons.wallpaper,
                     title: "Использовать свои обои",
                     child: Switch(
-                      value: theme.useCustomChatWallpaper,
-                      onChanged: (value) =>
-                          theme.setUseCustomChatWallpaper(value),
+                      value: _useCustomChatWallpaper,
+                      onChanged: (value) {
+                        setState(() => _useCustomChatWallpaper = value);
+                        theme.setUseCustomChatWallpaper(value);
+                      },
                     ),
                   ),
                   if (theme.useCustomChatWallpaper) ...[
@@ -372,9 +397,9 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                         icon: Icons.format_color_fill,
                         title: "Тип отображения",
                         child: IgnorePointer(
-                          ignoring: isMaterialYou,
+                          ignoring: _isMaterialYou,
                           child: Opacity(
-                            opacity: isMaterialYou ? 0.5 : 1.0,
+                            opacity: _isMaterialYou ? 0.5 : 1.0,
                             child: DropdownButton<MessageBubbleType>(
                               value: theme.messageBubbleType,
                               underline: const SizedBox.shrink(),
@@ -400,9 +425,9 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                     icon: Icons.palette,
                     title: "Цвет моих сообщений",
                     child: IgnorePointer(
-                      ignoring: isMaterialYou,
+                      ignoring: _isMaterialYou,
                       child: Opacity(
-                        opacity: isMaterialYou ? 0.5 : 1.0,
+                        opacity: _isMaterialYou ? 0.5 : 1.0,
                         child: GestureDetector(
                           onTap: () async {
                             final initial =
@@ -431,9 +456,9 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                     icon: Icons.palette_outlined,
                     title: "Цвет сообщений собеседника",
                     child: IgnorePointer(
-                      ignoring: isMaterialYou,
+                      ignoring: _isMaterialYou,
                       child: Opacity(
-                        opacity: isMaterialYou ? 0.5 : 1.0,
+                        opacity: _isMaterialYou ? 0.5 : 1.0,
                         child: GestureDetector(
                           onTap: () async {
                             final initial =
@@ -465,8 +490,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                     title: "Автоцвет панели ответа",
                     subtitle: "",
                     child: Switch(
-                      value: theme.useAutoReplyColor,
-                      onChanged: (value) => theme.setUseAutoReplyColor(value),
+                      value: _useAutoReplyColor,
+                      onChanged: (value) {
+                        setState(() => _useAutoReplyColor = value);
+                        theme.setUseAutoReplyColor(value);
+                      },
                     ),
                   ),
                   if (!theme.useAutoReplyColor) ...[
@@ -583,8 +611,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 title: "Режим ПК",
                 subtitle: "Не работает на телефонах",
                 child: Switch(
-                  value: theme.useDesktopLayout,
-                  onChanged: (value) => theme.setUseDesktopLayout(value),
+                  value: _useDesktopLayout,
+                  onChanged: (value) {
+                    setState(() => _useDesktopLayout = value);
+                    theme.setUseDesktopLayout(value);
+                  },
                 ),
               ),
             ],
@@ -724,11 +755,13 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 icon: Icons.person_add,
                 title: "Градиент для кнопки добавления аккаунта",
                 subtitle: "Применить градиент к кнопке в drawer",
-                child: Switch(
-                  value: theme.useGradientForAddAccountButton,
-                  onChanged: (value) =>
-                      theme.setUseGradientForAddAccountButton(value),
-                ),
+                    child: Switch(
+                      value: _useGradientForAddAccountButton,
+                      onChanged: (value) {
+                        setState(() => _useGradientForAddAccountButton = value);
+                        theme.setUseGradientForAddAccountButton(value);
+                      },
+                    ),
               ),
               if (theme.useGradientForAddAccountButton) ...[
                 const SizedBox(height: 16),
@@ -885,8 +918,11 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 title: "Эффект стекла для панелей",
                 subtitle: "Размытие и прозрачность",
                 child: Switch(
-                  value: theme.useGlassPanels,
-                  onChanged: (value) => theme.setUseGlassPanels(value),
+                  value: _useGlassPanels,
+                  onChanged: (value) {
+                    setState(() => _useGlassPanels = value);
+                    theme.setUseGlassPanels(value);
+                  },
                 ),
               ),
               const SizedBox(height: 8),
@@ -1614,12 +1650,16 @@ class AppThemeSelector extends StatelessWidget {
 }
 
 class _MessagePreviewSection extends StatelessWidget {
-  const _MessagePreviewSection();
+  final bool isMaterialYou;
+
+  const _MessagePreviewSection({required this.isMaterialYou});
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.watch<ThemeProvider>();
-    final colors = Theme.of(context).colorScheme;
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final globalColors = Theme.of(context).colorScheme;
+
+    final colors = isMaterialYou ? globalColors : globalColors;
     final mockMyMessage = Message(
       id: '1',
       senderId: 100,
@@ -1703,16 +1743,36 @@ class _MessagePreviewSection extends StatelessWidget {
                     const Spacer(),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: ChatMessageBubble(
-                        message: mockTheirMessage,
-                        isMe: false,
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: isMaterialYou
+                              ? ColorScheme.fromSeed(
+                                  seedColor: colors.primary,
+                                  brightness: Theme.of(context).brightness,
+                                )
+                              : colors,
+                        ),
+                        child: ChatMessageBubble(
+                          message: mockTheirMessage,
+                          isMe: false,
+                        ),
                       ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: ChatMessageBubble(
-                        message: mockMyMessage,
-                        isMe: true,
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: isMaterialYou
+                              ? ColorScheme.fromSeed(
+                                  seedColor: colors.primary,
+                                  brightness: Theme.of(context).brightness,
+                                )
+                              : colors,
+                        ),
+                        child: ChatMessageBubble(
+                          message: mockMyMessage,
+                          isMe: true,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),

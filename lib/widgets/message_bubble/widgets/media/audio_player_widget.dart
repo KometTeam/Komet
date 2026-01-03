@@ -132,8 +132,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           customKey: widget.audioId?.toString(),
         );
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> _togglePlayPause() async {
@@ -475,4 +474,3 @@ class WaveformPainter extends CustomPainter {
         oldDelegate.progressColor != progressColor;
   }
 }
-

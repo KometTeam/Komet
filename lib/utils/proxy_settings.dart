@@ -1,5 +1,3 @@
-
-
 enum ProxyProtocol { http, https, socks4, socks5 }
 
 class ProxySettings {
@@ -19,29 +17,24 @@ class ProxySettings {
     this.password,
   });
 
-
   String toFindProxyString() {
     if (!isEnabled || host.isEmpty) {
       return 'DIRECT';
     }
 
-
     String protocolString;
     switch (protocol) {
       case ProxyProtocol.http:
       case ProxyProtocol.https:
-        protocolString = 'PROXY'; 
+        protocolString = 'PROXY';
         break;
       case ProxyProtocol.socks4:
-
-
         protocolString = 'SOCKS4';
         break;
       case ProxyProtocol.socks5:
         protocolString = 'SOCKS5';
         break;
     }
-
 
     return '$protocolString $host:$port';
   }

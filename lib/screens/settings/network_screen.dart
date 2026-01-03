@@ -838,7 +838,7 @@ class NetworkChartPainter extends CustomPainter {
     final sweepAngle = 2 * pi * progress;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
-      -pi / 2, 
+      -pi / 2,
       sweepAngle,
       false,
       paint,

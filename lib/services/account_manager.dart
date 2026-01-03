@@ -146,7 +146,8 @@ class AccountManager {
       return;
     }
 
-    final resolved = account; // account гарантированно не null после возврата выше
+    final resolved =
+        account; // account гарантированно не null после возврата выше
 
     _currentAccount = resolved;
     await _saveCurrentAccountId(resolved.id);

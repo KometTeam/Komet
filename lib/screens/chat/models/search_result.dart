@@ -16,4 +16,3 @@ class SearchResult {
     this.messageIndex,
   });
 }
-

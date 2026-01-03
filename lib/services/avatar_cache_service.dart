@@ -37,7 +37,7 @@ class AvatarCacheService {
     try {
       final cacheKey = _generateCacheKey(avatarUrl, userId);
 
-            if (_cachedImageProviders.containsKey(cacheKey)) {
+      if (_cachedImageProviders.containsKey(cacheKey)) {
         return _cachedImageProviders[cacheKey]!;
       }
 
@@ -66,7 +66,7 @@ class AvatarCacheService {
       if (cachedFile != null && await cachedFile.exists()) {
         try {
           final imageData = await cachedFile.readAsBytes();
-            if (_isValidImageData(imageData)) {
+          if (_isValidImageData(imageData)) {
             _imageMemoryCache[cacheKey] = imageData;
             _imageCacheTimestamps[cacheKey] = DateTime.now();
 
@@ -160,17 +160,24 @@ class AvatarCacheService {
     final webpHeader = [0x52, 0x49, 0x46, 0x46];
 
     bool isValid = false;
-    if (header[0] == pngHeader[0] && header[1] == pngHeader[1] &&
-        header[2] == pngHeader[2] && header[3] == pngHeader[3]) {
+    if (header[0] == pngHeader[0] &&
+        header[1] == pngHeader[1] &&
+        header[2] == pngHeader[2] &&
+        header[3] == pngHeader[3]) {
       isValid = true;
-    } else if (header[0] == jpegHeader[0] && header[1] == jpegHeader[1] &&
+    } else if (header[0] == jpegHeader[0] &&
+        header[1] == jpegHeader[1] &&
         header[2] == jpegHeader[2]) {
       isValid = true;
-    } else if (header[0] == gifHeader[0] && header[1] == gifHeader[1] &&
-        header[2] == gifHeader[2] && header[3] == gifHeader[3]) {
+    } else if (header[0] == gifHeader[0] &&
+        header[1] == gifHeader[1] &&
+        header[2] == gifHeader[2] &&
+        header[3] == gifHeader[3]) {
       isValid = true;
-    } else if (header[0] == webpHeader[0] && header[1] == webpHeader[1] &&
-        header[2] == webpHeader[2] && header[3] == webpHeader[3]) {
+    } else if (header[0] == webpHeader[0] &&
+        header[1] == webpHeader[1] &&
+        header[2] == webpHeader[2] &&
+        header[3] == webpHeader[3]) {
       isValid = true;
     }
 
@@ -227,20 +234,17 @@ class AvatarCacheService {
 
   Future<void> _clearDirectoryContents(Directory directory) async {
     try {
-      
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
           try {
             await entity.delete();
-            
+
             await Future.delayed(const Duration(milliseconds: 5));
           } catch (fileError) {
-            
             print('Не удалось удалить файл ${entity.path}: $fileError');
           }
         } else if (entity is Directory) {
           try {
-            
             await _clearDirectoryContents(entity);
             try {
               await entity.delete();
@@ -346,7 +350,7 @@ class AvatarCacheService {
     }
 
     final cacheKey = _generateCacheKey(avatarUrl, userId);
-    
+
     if (_cachedImageProviders.containsKey(cacheKey)) {
       return CircleAvatar(
         key: ValueKey('avatar_$cacheKey'),
@@ -355,7 +359,7 @@ class AvatarCacheService {
         backgroundColor: backgroundColor,
       );
     }
-    
+
     return FutureBuilder<ImageProvider?>(
       key: ValueKey('avatar_$cacheKey'),
       future: getAvatar(avatarUrl, userId: userId),

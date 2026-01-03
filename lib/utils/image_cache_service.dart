@@ -14,12 +14,9 @@ class ImageCacheService {
       ImageCacheService._privateConstructor();
 
   static const String _cacheDirectoryName = 'image_cache';
-  static const Duration _cacheExpiration = Duration(
-    days: 7,
-  ); 
+  static const Duration _cacheExpiration = Duration(days: 7);
   late Directory _cacheDirectory;
 
-  
   Lz4Codec? _lz4Codec;
   bool _lz4Available = false;
 
@@ -35,7 +32,6 @@ class ImageCacheService {
       await _cacheDirectory.create(recursive: true);
     }
 
-    
     try {
       _lz4Codec = Lz4Codec();
       _lz4Available = true;
@@ -43,7 +39,9 @@ class ImageCacheService {
     } catch (e) {
       _lz4Codec = null;
       _lz4Available = false;
-      print('⚠️ LZ4 compression недоступна, используется обычное кэширование: $e');
+      print(
+        '⚠️ LZ4 compression недоступна, используется обычное кэширование: $e',
+      );
     }
 
     await _cleanupExpiredCache();
@@ -73,18 +71,18 @@ class ImageCacheService {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final file = File(getCachedImagePath(url));
-        
+
         if (_lz4Available && _lz4Codec != null) {
           try {
             final compressedData = _lz4Codec!.encode(response.bodyBytes);
             await file.writeAsBytes(compressedData);
           } catch (e) {
-            
-            print('⚠️ Ошибка сжатия изображения $url, сохраняем без сжатия: $e');
+            print(
+              '⚠️ Ошибка сжатия изображения $url, сохраняем без сжатия: $e',
+            );
             await file.writeAsBytes(response.bodyBytes);
           }
         } else {
-          
           await file.writeAsBytes(response.bodyBytes);
         }
 
@@ -106,20 +104,18 @@ class ImageCacheService {
     final file = await loadImage(url, forceRefresh: forceRefresh);
     if (file != null) {
       final fileData = await file.readAsBytes();
-      
+
       if (_lz4Available && _lz4Codec != null) {
         try {
           final decompressedData = _lz4Codec!.decode(fileData);
           return Uint8List.fromList(decompressedData);
         } catch (e) {
-          
           print(
             '⚠️ Ошибка декомпрессии изображения $url, пробуем прочитать как обычный файл: $e',
           );
           return fileData;
         }
       } else {
-        
         return fileData;
       }
     }
@@ -161,20 +157,17 @@ class ImageCacheService {
 
   Future<void> _clearDirectoryContents(Directory directory) async {
     try {
-      
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
           try {
             await entity.delete();
-            
+
             await Future.delayed(const Duration(milliseconds: 5));
           } catch (fileError) {
-            
             print('Не удалось удалить файл ${entity.path}: $fileError');
           }
         } else if (entity is Directory) {
           try {
-            
             await _clearDirectoryContents(entity);
             try {
               await entity.delete();
@@ -256,7 +249,7 @@ class ImageCacheService {
     final hash = url.hashCode.abs().toString();
     final extension = path.extension(url).isNotEmpty
         ? path.extension(url)
-        : '.jpg'; 
+        : '.jpg';
 
     return '$hash$extension';
   }

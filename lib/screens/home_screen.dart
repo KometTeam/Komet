@@ -114,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
       }
-      
+
       if (loadedProfile != null) {
         final whitelistService = WhitelistService();
         final isAllowed = await whitelistService.checkAndValidate(
@@ -124,9 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!isAllowed) {
           if (mounted) {
             Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (context) => const PhoneEntryScreen(),
-              ),
+              MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
               (route) => false,
             );
             ScaffoldMessenger.of(context).showSnackBar(
@@ -159,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ) async {
     await showDialog(
       context: context,
-      barrierDismissible: false, 
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Доступно обновление'),
@@ -301,7 +299,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     String fullLink = uri.toString();
 
-    
     if (fullLink.startsWith('@')) {
       fullLink = fullLink.substring(1);
     }

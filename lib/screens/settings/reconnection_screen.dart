@@ -38,7 +38,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
         'ReconnectionScreen: Получено сообщение: opcode=${message['opcode']}, cmd=${message['cmd']}',
       );
 
-
       if (message['opcode'] == 19 && message['cmd'] == 1) {
         final payload = message['payload'];
         print('ReconnectionScreen: Получен opcode 19, payload: $payload');
@@ -48,7 +47,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
           return;
         }
       }
-
 
       if (message['cmd'] == 3) {
         final errorPayload = message['payload'];
@@ -70,7 +68,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
 
     print('ReconnectionScreen: _onReconnectionSuccess() вызван');
 
-
     _timeoutTimer?.cancel();
 
     setState(() {
@@ -79,7 +76,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
     });
 
     print('ReconnectionScreen: Устанавливаем таймер для навигации...');
-
 
     Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
@@ -95,14 +91,12 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
   void _onReconnectionError(String error) {
     if (!mounted) return;
 
-
     _timeoutTimer?.cancel();
 
     setState(() {
       _statusMessage = 'Ошибка: $error';
       _isReconnecting = false;
     });
-
 
     Timer(const Duration(seconds: 3), () {
       if (mounted) {
@@ -117,7 +111,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
     try {
       print('ReconnectionScreen: Начинаем полное переподключение...');
 
-
       _timeoutTimer = Timer(const Duration(seconds: 30), () {
         if (mounted && _isReconnecting) {
           _onReconnectionError('Таймаут переподключения');
@@ -128,13 +121,11 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
         _statusMessage = 'Отключение от сервера...';
       });
 
-
       ApiService.instance.disconnect();
 
       setState(() {
         _statusMessage = 'Очистка кэшей...';
       });
-
 
       ApiService.instance.clearAllCaches();
 
@@ -142,20 +133,17 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
         _statusMessage = 'Подключение к серверу...';
       });
 
-
       await ApiService.instance.performFullReconnection();
 
       setState(() {
         _statusMessage = 'Аутентификация...';
       });
 
-
       final hasToken = await ApiService.instance.hasToken();
       if (hasToken) {
         setState(() {
           _statusMessage = 'Аутентификация...';
         });
-
 
         await ApiService.instance.getChatsAndContacts();
 
@@ -183,7 +171,7 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
     final colors = Theme.of(context).colorScheme;
 
     return WillPopScope(
-      onWillPop: () async => false, 
+      onWillPop: () async => false,
       child: Scaffold(
         backgroundColor: colors.surface,
         body: Container(
@@ -193,7 +181,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-
               Container(
                 width: 120,
                 height: 120,
@@ -221,7 +208,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
 
               const SizedBox(height: 32),
 
-
               Text(
                 'Переподключение',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -231,7 +217,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
               ),
 
               const SizedBox(height: 16),
-
 
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -245,7 +230,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
               ),
 
               const SizedBox(height: 48),
-
 
               if (!_isReconnecting && _statusMessage.contains('Нажмите'))
                 ElevatedButton.icon(
@@ -264,7 +248,6 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
                 ),
 
               const SizedBox(height: 32),
-
 
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 32),

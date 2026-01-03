@@ -20,9 +20,9 @@ class PluginUIBuilder {
 
   Widget buildWidget(PluginScreenWidget widget, BuildContext context) {
     final theme = Theme.of(context);
-    
+
     Widget result;
-    
+
     switch (widget.type) {
       case PluginWidgetType.text:
         result = _buildText(widget, theme);
@@ -59,21 +59,21 @@ class PluginUIBuilder {
         result = _buildIcon(widget, theme);
         break;
     }
-    
+
     if (widget.onTap != null) {
       result = GestureDetector(
         onTap: () => _pluginService.executeAction(widget.onTap!, context),
         child: result,
       );
     }
-    
+
     return result;
   }
 
   Widget _buildText(PluginScreenWidget widget, ThemeData theme) {
     final text = widget.properties['text'] as String? ?? '';
     final style = widget.properties['style'] as String?;
-    
+
     TextStyle textStyle;
     switch (style) {
       case 'headline':
@@ -91,14 +91,16 @@ class PluginUIBuilder {
       default:
         textStyle = theme.textTheme.bodyMedium!;
     }
-    
+
     if (widget.properties['color'] != null) {
-      textStyle = textStyle.copyWith(color: _parseColor(widget.properties['color']));
+      textStyle = textStyle.copyWith(
+        color: _parseColor(widget.properties['color']),
+      );
     }
     if (widget.properties['bold'] == true) {
       textStyle = textStyle.copyWith(fontWeight: FontWeight.bold);
     }
-    
+
     return Padding(
       padding: EdgeInsets.symmetric(
         vertical: (widget.properties['paddingV'] as num?)?.toDouble() ?? 4,
@@ -111,14 +113,16 @@ class PluginUIBuilder {
     final text = widget.properties['text'] as String? ?? 'Button';
     final style = widget.properties['style'] as String?;
     final icon = widget.properties['icon'] as String?;
-    
+
     VoidCallback? onPressed;
     if (widget.onTap != null) {
       onPressed = () => _pluginService.executeAction(widget.onTap!, context);
     }
-    
-    Widget iconWidget = icon != null ? Icon(_getIconData(icon)) : const SizedBox();
-    
+
+    Widget iconWidget = icon != null
+        ? Icon(_getIconData(icon))
+        : const SizedBox();
+
     switch (style) {
       case 'outlined':
         return OutlinedButton.icon(
@@ -146,15 +150,22 @@ class PluginUIBuilder {
     final width = (widget.properties['width'] as num?)?.toDouble();
     final height = (widget.properties['height'] as num?)?.toDouble();
     final fit = widget.properties['fit'] as String?;
-    
+
     BoxFit boxFit;
     switch (fit) {
-      case 'cover': boxFit = BoxFit.cover; break;
-      case 'contain': boxFit = BoxFit.contain; break;
-      case 'fill': boxFit = BoxFit.fill; break;
-      default: boxFit = BoxFit.contain;
+      case 'cover':
+        boxFit = BoxFit.cover;
+        break;
+      case 'contain':
+        boxFit = BoxFit.contain;
+        break;
+      case 'fill':
+        boxFit = BoxFit.fill;
+        break;
+      default:
+        boxFit = BoxFit.contain;
     }
-    
+
     if (src.startsWith('http')) {
       return Image.network(src, width: width, height: height, fit: boxFit);
     } else {
@@ -164,11 +175,12 @@ class PluginUIBuilder {
 
   Widget _buildContainer(PluginScreenWidget widget, BuildContext context) {
     final padding = (widget.properties['padding'] as num?)?.toDouble() ?? 0;
-    final color = widget.properties['color'] != null 
-        ? _parseColor(widget.properties['color']) 
+    final color = widget.properties['color'] != null
+        ? _parseColor(widget.properties['color'])
         : null;
-    final borderRadius = (widget.properties['borderRadius'] as num?)?.toDouble() ?? 0;
-    
+    final borderRadius =
+        (widget.properties['borderRadius'] as num?)?.toDouble() ?? 0;
+
     return Container(
       padding: EdgeInsets.all(padding),
       decoration: BoxDecoration(
@@ -178,7 +190,9 @@ class PluginUIBuilder {
       child: widget.children != null && widget.children!.isNotEmpty
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: widget.children!.map((c) => buildWidget(c, context)).toList(),
+              children: widget.children!
+                  .map((c) => buildWidget(c, context))
+                  .toList(),
             )
           : null,
     );
@@ -186,23 +200,30 @@ class PluginUIBuilder {
 
   Widget _buildColumn(PluginScreenWidget widget, BuildContext context) {
     return Column(
-      crossAxisAlignment: _getCrossAxisAlignment(widget.properties['crossAxis']),
+      crossAxisAlignment: _getCrossAxisAlignment(
+        widget.properties['crossAxis'],
+      ),
       mainAxisAlignment: _getMainAxisAlignment(widget.properties['mainAxis']),
-      children: widget.children?.map((c) => buildWidget(c, context)).toList() ?? [],
+      children:
+          widget.children?.map((c) => buildWidget(c, context)).toList() ?? [],
     );
   }
 
   Widget _buildRow(PluginScreenWidget widget, BuildContext context) {
     return Row(
-      crossAxisAlignment: _getCrossAxisAlignment(widget.properties['crossAxis']),
+      crossAxisAlignment: _getCrossAxisAlignment(
+        widget.properties['crossAxis'],
+      ),
       mainAxisAlignment: _getMainAxisAlignment(widget.properties['mainAxis']),
-      children: widget.children?.map((c) => buildWidget(c, context)).toList() ?? [],
+      children:
+          widget.children?.map((c) => buildWidget(c, context)).toList() ?? [],
     );
   }
 
   Widget _buildList(PluginScreenWidget widget, BuildContext context) {
     return Column(
-      children: widget.children?.map((c) => buildWidget(c, context)).toList() ?? [],
+      children:
+          widget.children?.map((c) => buildWidget(c, context)).toList() ?? [],
     );
   }
 
@@ -218,7 +239,9 @@ class PluginUIBuilder {
         child: widget.children != null && widget.children!.isNotEmpty
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: widget.children!.map((c) => buildWidget(c, context)).toList(),
+                children: widget.children!
+                    .map((c) => buildWidget(c, context))
+                    .toList(),
               )
             : null,
       ),
@@ -231,7 +254,7 @@ class PluginUIBuilder {
     final color = widget.properties['color'] != null
         ? _parseColor(widget.properties['color'])
         : null;
-    
+
     return Icon(_getIconData(name), size: size, color: color);
   }
 
@@ -243,26 +266,26 @@ class PluginUIBuilder {
           title: Text(item.title ?? ''),
           subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
           trailing: const Icon(Icons.chevron_right),
-          onTap: item.action != null 
+          onTap: item.action != null
               ? () => _pluginService.executeAction(item.action!, context)
               : null,
         );
-      
+
       case PluginItemType.toggle:
         return _PluginToggleTile(item: item);
-      
+
       case PluginItemType.slider:
         return _PluginSliderTile(item: item);
-      
+
       case PluginItemType.text:
         return ListTile(
           title: Text(item.title ?? ''),
           subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
         );
-      
+
       case PluginItemType.divider:
         return const Divider();
-      
+
       case PluginItemType.navigation:
         return ListTile(
           leading: item.icon != null ? Icon(_getIconData(item.icon!)) : null,
@@ -293,11 +316,16 @@ class PluginUIBuilder {
         return Color(int.parse('FF$hex', radix: 16));
       }
       switch (colorValue) {
-        case 'primary': return Colors.blue;
-        case 'secondary': return Colors.grey;
-        case 'error': return Colors.red;
-        case 'success': return Colors.green;
-        default: return Colors.black;
+        case 'primary':
+          return Colors.blue;
+        case 'secondary':
+          return Colors.grey;
+        case 'error':
+          return Colors.red;
+        case 'success':
+          return Colors.green;
+        default:
+          return Colors.black;
       }
     }
     return Colors.black;
@@ -352,30 +380,42 @@ class PluginUIBuilder {
 
   CrossAxisAlignment _getCrossAxisAlignment(String? value) {
     switch (value) {
-      case 'start': return CrossAxisAlignment.start;
-      case 'end': return CrossAxisAlignment.end;
-      case 'center': return CrossAxisAlignment.center;
-      case 'stretch': return CrossAxisAlignment.stretch;
-      default: return CrossAxisAlignment.start;
+      case 'start':
+        return CrossAxisAlignment.start;
+      case 'end':
+        return CrossAxisAlignment.end;
+      case 'center':
+        return CrossAxisAlignment.center;
+      case 'stretch':
+        return CrossAxisAlignment.stretch;
+      default:
+        return CrossAxisAlignment.start;
     }
   }
 
   MainAxisAlignment _getMainAxisAlignment(String? value) {
     switch (value) {
-      case 'start': return MainAxisAlignment.start;
-      case 'end': return MainAxisAlignment.end;
-      case 'center': return MainAxisAlignment.center;
-      case 'spaceBetween': return MainAxisAlignment.spaceBetween;
-      case 'spaceAround': return MainAxisAlignment.spaceAround;
-      case 'spaceEvenly': return MainAxisAlignment.spaceEvenly;
-      default: return MainAxisAlignment.start;
+      case 'start':
+        return MainAxisAlignment.start;
+      case 'end':
+        return MainAxisAlignment.end;
+      case 'center':
+        return MainAxisAlignment.center;
+      case 'spaceBetween':
+        return MainAxisAlignment.spaceBetween;
+      case 'spaceAround':
+        return MainAxisAlignment.spaceAround;
+      case 'spaceEvenly':
+        return MainAxisAlignment.spaceEvenly;
+      default:
+        return MainAxisAlignment.start;
     }
   }
 }
 
 class _PluginToggleTile extends StatefulWidget {
   final PluginItem item;
-  
+
   const _PluginToggleTile({required this.item});
 
   @override
@@ -399,7 +439,9 @@ class _PluginToggleTileState extends State<_PluginToggleTile> {
   Widget build(BuildContext context) {
     return SwitchListTile(
       title: Text(widget.item.title ?? ''),
-      subtitle: widget.item.subtitle != null ? Text(widget.item.subtitle!) : null,
+      subtitle: widget.item.subtitle != null
+          ? Text(widget.item.subtitle!)
+          : null,
       value: _value,
       onChanged: (v) {
         setState(() => _value = v);
@@ -411,7 +453,7 @@ class _PluginToggleTileState extends State<_PluginToggleTile> {
 
 class _PluginSliderTile extends StatefulWidget {
   final PluginItem item;
-  
+
   const _PluginSliderTile({required this.item});
 
   @override
@@ -425,10 +467,13 @@ class _PluginSliderTileState extends State<_PluginSliderTile> {
   @override
   void initState() {
     super.initState();
-    _value = (_pluginService.getPluginValue(
-      widget.item.key ?? '',
-      widget.item.defaultValue ?? widget.item.min ?? 0,
-    ) as num).toDouble();
+    _value =
+        (_pluginService.getPluginValue(
+                  widget.item.key ?? '',
+                  widget.item.defaultValue ?? widget.item.min ?? 0,
+                )
+                as num)
+            .toDouble();
   }
 
   @override
@@ -438,7 +483,9 @@ class _PluginSliderTileState extends State<_PluginSliderTile> {
       children: [
         ListTile(
           title: Text(widget.item.title ?? ''),
-          subtitle: widget.item.subtitle != null ? Text(widget.item.subtitle!) : null,
+          subtitle: widget.item.subtitle != null
+              ? Text(widget.item.subtitle!)
+              : null,
           trailing: Text(_value.toStringAsFixed(0)),
         ),
         Slider(
@@ -459,7 +506,7 @@ class _PluginSliderTileState extends State<_PluginSliderTile> {
 class _PluginSubScreen extends StatelessWidget {
   final String title;
   final List<PluginItem> items;
-  
+
   const _PluginSubScreen({required this.title, required this.items});
 
   @override
@@ -468,9 +515,10 @@ class _PluginSubScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: ListView(
-        children: items.map((item) => builder.buildSettingsItem(item, context)).toList(),
+        children: items
+            .map((item) => builder.buildSettingsItem(item, context))
+            .toList(),
       ),
     );
   }
 }
-

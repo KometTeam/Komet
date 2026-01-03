@@ -1,9 +1,9 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gwid/screens/settings/session_spoofing_screen.dart';
 import 'package:gwid/screens/settings/sessions_screen.dart';
 import 'package:gwid/screens/settings/export_session_screen.dart';
+import 'package:gwid/screens/settings/qr_authorize_screen.dart';
 import 'package:gwid/screens/settings/qr_login_screen.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
@@ -37,11 +37,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
 
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _animationController.forward();
   }
@@ -225,10 +225,37 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
     );
   }
 
+  Future<void> _openQrAuthorize() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (context) => const QrAuthorizeScreen()),
+    );
+
+    if (!mounted || result == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('QR-код принят для авторизации')),
+    );
+  }
+
   Widget _buildContent(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(24.0),
       children: [
+        _SecurityCard(
+          icon: Icons.verified_user_outlined,
+          title: 'Авторизовать QR-код',
+          description: 'Сканируйте QR-код и подтвердите авторизацию.',
+          onTap: _openQrAuthorize,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.surfaceContainerHighest,
+              Theme.of(context).colorScheme.surfaceContainer,
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         _SecurityCard(
           icon: Icons.qr_code_scanner_outlined,
           title: 'Вход по QR-коду',
@@ -312,10 +339,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Theme.of(context)
-                .colorScheme
-                .surfaceContainerHighest
-                .withOpacity(0.5),
+            color: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
@@ -393,11 +419,7 @@ class _SecurityCard extends StatelessWidget {
                       color: colors.primaryContainer.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      icon,
-                      color: colors.primary,
-                      size: 24,
-                    ),
+                    child: Icon(icon, color: colors.primary, size: 24),
                   ),
                   const Spacer(),
                 ],
@@ -431,11 +453,7 @@ class _SecurityCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(
-                    Icons.arrow_forward,
-                    color: colors.primary,
-                    size: 18,
-                  ),
+                  Icon(Icons.arrow_forward, color: colors.primary, size: 18),
                 ],
               ),
             ],

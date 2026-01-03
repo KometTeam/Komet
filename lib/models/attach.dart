@@ -1,4 +1,3 @@
-
 enum AttachTypes { call, control, inlineKeyboard, share }
 
 abstract class Attachment {

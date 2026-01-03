@@ -101,7 +101,7 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
   Future<void> _playTrack(MusicTrack track) async {
     final musicPlayer = MusicPlayerService();
     await musicPlayer.playTrack(track, playlist: _musicTracks);
-    
+
     BottomSheetMusicPlayer.isExpandedNotifier.value = true;
     BottomSheetMusicPlayer.isFullscreenNotifier.value = true;
   }
@@ -150,219 +150,237 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
                 appBar: isFullscreen
                     ? null
                     : AppBar(title: const Text('Музыка')),
-            body: Stack(
-              children: [
-                _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _musicTracks.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.music_off,
-                              size: 64,
-                              color: colorScheme.onSurface.withOpacity(0.5),
+                body: Stack(
+                  children: [
+                    _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _musicTracks.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.music_off,
+                                  size: 64,
+                                  color: colorScheme.onSurface.withOpacity(0.5),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Нет музыки',
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    color: colorScheme.onSurface.withOpacity(
+                                      0.7,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Скачайте музыку из чатов',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurface.withOpacity(
+                                      0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Нет музыки',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                color: colorScheme.onSurface.withOpacity(0.7),
-                              ),
+                          )
+                        : ListView.builder(
+                            padding: EdgeInsets.only(
+                              left: 16,
+                              right: 16,
+                              top: 16,
+                              bottom: musicPlayer.currentTrack != null
+                                  ? 120
+                                  : 16,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Скачайте музыку из чатов',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurface.withOpacity(0.5),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: EdgeInsets.only(
-                          left: 16,
-                          right: 16,
-                          top: 16,
-                          bottom: musicPlayer.currentTrack != null ? 120 : 16,
-                        ),
-                        itemCount: _musicTracks.length,
-                        itemBuilder: (context, index) {
-                          final track = _musicTracks[index];
-                          final isCurrentTrack =
-                              musicPlayer.currentTrack?.id == track.id;
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            color: isCurrentTrack
-                                ? colorScheme.primaryContainer.withOpacity(0.3)
-                                : null,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  width: 56,
-                                  height: 56,
-                                  color: colorScheme.primaryContainer,
-                                  child: track.albumArtUrl != null
-                                      ? Image.network(
-                                          track.albumArtUrl!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) =>
-                                                  Icon(
+                            itemCount: _musicTracks.length,
+                            itemBuilder: (context, index) {
+                              final track = _musicTracks[index];
+                              final isCurrentTrack =
+                                  musicPlayer.currentTrack?.id == track.id;
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                color: isCurrentTrack
+                                    ? colorScheme.primaryContainer.withOpacity(
+                                        0.3,
+                                      )
+                                    : null,
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  leading: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      width: 56,
+                                      height: 56,
+                                      color: colorScheme.primaryContainer,
+                                      child: track.albumArtUrl != null
+                                          ? Image.network(
+                                              track.albumArtUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) => Icon(
                                                     Icons.music_note,
                                                     color: colorScheme
                                                         .onPrimaryContainer,
                                                   ),
-                                        )
-                                      : Icon(
-                                          Icons.music_note,
-                                          color: colorScheme.onPrimaryContainer,
-                                        ),
-                                ),
-                              ),
-                              title: Text(
-                                track.title,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    track.artist,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: colorScheme.onSurface.withOpacity(
-                                        0.7,
-                                      ),
+                                            )
+                                          : Icon(
+                                              Icons.music_note,
+                                              color: colorScheme
+                                                  .onPrimaryContainer,
+                                            ),
                                     ),
+                                  ),
+                                  title: Text(
+                                    track.title,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  if (track.album != null) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      track.album!,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurface
-                                                .withOpacity(0.5),
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                  const SizedBox(height: 4),
-                                  Row(
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      if (track.duration != null) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        track.artist,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color: colorScheme.onSurface
+                                                  .withOpacity(0.7),
+                                            ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (track.album != null) ...[
+                                        const SizedBox(height: 2),
                                         Text(
-                                          _formatDuration(track.duration),
+                                          track.album!,
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
                                                 color: colorScheme.onSurface
                                                     .withOpacity(0.5),
                                               ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '•',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color: colorScheme.onSurface
-                                                    .withOpacity(0.5),
-                                              ),
-                                        ),
-                                        const SizedBox(width: 8),
                                       ],
-                                      if (track.filePath != null) ...[
-                                        FutureBuilder<io.FileStat>(
-                                          future: io.File(
-                                            track.filePath!,
-                                          ).stat(),
-                                          builder: (context, snapshot) {
-                                            if (snapshot.hasData) {
-                                              return Text(
-                                                _formatFileSize(
-                                                  snapshot.data!.size,
-                                                ),
-                                                style: theme.textTheme.bodySmall
-                                                    ?.copyWith(
-                                                      color: colorScheme
-                                                          .onSurface
-                                                          .withOpacity(0.5),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          if (track.duration != null) ...[
+                                            Text(
+                                              _formatDuration(track.duration),
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: colorScheme.onSurface
+                                                        .withOpacity(0.5),
+                                                  ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              '•',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: colorScheme.onSurface
+                                                        .withOpacity(0.5),
+                                                  ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                          ],
+                                          if (track.filePath != null) ...[
+                                            FutureBuilder<io.FileStat>(
+                                              future: io.File(
+                                                track.filePath!,
+                                              ).stat(),
+                                              builder: (context, snapshot) {
+                                                if (snapshot.hasData) {
+                                                  return Text(
+                                                    _formatFileSize(
+                                                      snapshot.data!.size,
                                                     ),
-                                              );
-                                            }
-                                            return const SizedBox.shrink();
-                                          },
-                                        ),
-                                      ],
+                                                    style: theme
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          color: colorScheme
+                                                              .onSurface
+                                                              .withOpacity(0.5),
+                                                        ),
+                                                  );
+                                                }
+                                                return const SizedBox.shrink();
+                                              },
+                                            ),
+                                          ],
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                ],
-                              ),
-                              trailing: Builder(
-                                builder: (context) {
-                                  final isCurrentTrack =
-                                      musicPlayer.currentTrack?.id == track.id;
-                                  final isPlaying = isCurrentTrack &&
-                                      musicPlayer.isPlaying;
+                                  trailing: Builder(
+                                    builder: (context) {
+                                      final isCurrentTrack =
+                                          musicPlayer.currentTrack?.id ==
+                                          track.id;
+                                      final isPlaying =
+                                          isCurrentTrack &&
+                                          musicPlayer.isPlaying;
 
-                                  return IconButton(
-                                    onPressed: () {
-                                      if (isCurrentTrack && isPlaying) {
-                                        musicPlayer.pause();
-                                      } else {
-                                        _playTrack(track);
-                                      }
+                                      return IconButton(
+                                        onPressed: () {
+                                          if (isCurrentTrack && isPlaying) {
+                                            musicPlayer.pause();
+                                          } else {
+                                            _playTrack(track);
+                                          }
+                                        },
+                                        icon: isCurrentTrack && isPlaying
+                                            ? const Icon(Icons.pause)
+                                            : const Icon(Icons.play_arrow),
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: isCurrentTrack
+                                              ? colorScheme.primary
+                                              : colorScheme.primaryContainer,
+                                          foregroundColor: isCurrentTrack
+                                              ? colorScheme.onPrimary
+                                              : colorScheme.onPrimaryContainer,
+                                        ),
+                                      );
                                     },
-                                    icon: isCurrentTrack && isPlaying
-                                        ? const Icon(Icons.pause)
-                                        : const Icon(Icons.play_arrow),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: isCurrentTrack
-                                          ? colorScheme.primary
-                                          : colorScheme.primaryContainer,
-                                      foregroundColor: isCurrentTrack
-                                          ? colorScheme.onPrimary
-                                          : colorScheme.onPrimaryContainer,
-                                    ),
-                                  );
-                                },
-                              ),
-                              onTap: () {
-                                final isCurrentTrack =
-                                    musicPlayer.currentTrack?.id == track.id;
-                                if (isCurrentTrack && musicPlayer.isPlaying) {
-                                  musicPlayer.pause();
-                                } else {
-                                  _playTrack(track);
-                                }
-                              },
-                            ),
-                          );
-                        },
+                                  ),
+                                  onTap: () {
+                                    final isCurrentTrack =
+                                        musicPlayer.currentTrack?.id ==
+                                        track.id;
+                                    if (isCurrentTrack &&
+                                        musicPlayer.isPlaying) {
+                                      musicPlayer.pause();
+                                    } else {
+                                      _playTrack(track);
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                    if (musicPlayer.currentTrack != null)
+                      const Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: BottomSheetMusicPlayer(),
                       ),
-                if (musicPlayer.currentTrack != null)
-                  const Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: BottomSheetMusicPlayer(),
-                  ),
-              ],
-            ),
+                  ],
+                ),
               ),
             );
           },

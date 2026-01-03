@@ -62,4 +62,3 @@ class FileDownloadProgressService {
     _progressNotifiers.remove(fileId);
   }
 }
-

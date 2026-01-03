@@ -6,7 +6,7 @@ class GlobalImageStore {
   static final Map<String, ValueNotifier<double?>> _progress = {};
 
   static Uint8List? getData(String url) => _memory[url];
-  
+
   static void setData(String url, Uint8List bytes) {
     _memory[url] = bytes;
     progressFor(url).value = null;
@@ -20,4 +20,3 @@ class GlobalImageStore {
     progressFor(url).value = value;
   }
 }
-

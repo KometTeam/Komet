@@ -62,4 +62,3 @@ Color getUserColor(int userId, BuildContext context) {
 
   return color;
 }
-

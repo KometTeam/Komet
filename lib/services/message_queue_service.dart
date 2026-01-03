@@ -2,10 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:gwid/utils/fresh_mode_helper.dart';
 
-enum QueueItemType {
-  sendMessage,
-  loadChat,
-}
+enum QueueItemType { sendMessage, loadChat }
 
 class QueueItem {
   final String id;
@@ -61,7 +58,7 @@ class MessageQueueService {
   MessageQueueService._internal();
 
   final List<QueueItem> _queue = [];
-  final StreamController<List<QueueItem>> _queueController = 
+  final StreamController<List<QueueItem>> _queueController =
       StreamController<List<QueueItem>>.broadcast();
 
   Stream<List<QueueItem>> get queueStream => _queueController.stream;
@@ -78,7 +75,7 @@ class MessageQueueService {
       _queue.clear();
       return;
     }
-    
+
     try {
       final prefs = await FreshModeHelper.getSharedPreferences();
       final queueJson = prefs.getString(_queueKey);
@@ -86,7 +83,9 @@ class MessageQueueService {
         final List<dynamic> items = jsonDecode(queueJson);
         _queue.clear();
         _queue.addAll(
-          items.map((json) => QueueItem.fromJson(json)).where((item) => item.persistent),
+          items
+              .map((json) => QueueItem.fromJson(json))
+              .where((item) => item.persistent),
         );
         print('Загружено ${_queue.length} элементов из очереди');
         _queueController.add(_queue);
@@ -98,7 +97,7 @@ class MessageQueueService {
 
   Future<void> _saveQueue() async {
     if (FreshModeHelper.shouldSkipSave()) return;
-    
+
     try {
       final prefs = await FreshModeHelper.getSharedPreferences();
       final persistentItems = _queue.where((item) => item.persistent).toList();
@@ -117,7 +116,9 @@ class MessageQueueService {
     if (item.persistent) {
       _saveQueue();
     }
-    print('Добавлен в очередь: ${item.type.name}, opcode=${item.opcode}, persistent=${item.persistent}');
+    print(
+      'Добавлен в очередь: ${item.type.name}, opcode=${item.opcode}, persistent=${item.persistent}',
+    );
   }
 
   void removeFromQueue(String itemId) {
@@ -138,7 +139,9 @@ class MessageQueueService {
       _queue.removeWhere((item) => !item.persistent);
     }
     _queueController.add(_queue);
-    print('Временная очередь очищена${chatId != null ? ' для чата $chatId' : ''}');
+    print(
+      'Временная очередь очищена${chatId != null ? ' для чата $chatId' : ''}',
+    );
   }
 
   void clearAllQueues() {
@@ -154,7 +157,9 @@ class MessageQueueService {
 
   List<QueueItem> getTemporaryItems({int? chatId}) {
     if (chatId != null) {
-      return _queue.where((item) => !item.persistent && item.chatId == chatId).toList();
+      return _queue
+          .where((item) => !item.persistent && item.chatId == chatId)
+          .toList();
     }
     return _queue.where((item) => !item.persistent).toList();
   }

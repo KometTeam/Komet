@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
 
-
 class AnimationsScreen extends StatelessWidget {
   const AnimationsScreen({super.key});
 
@@ -20,7 +19,6 @@ class AnimationsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         children: [
-
           _ModernSection(
             title: "Анимации сообщений",
             children: [
@@ -60,7 +58,6 @@ class AnimationsScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-
 
           _ModernSection(
             title: "Переходы и эффекты",
@@ -103,7 +100,6 @@ class AnimationsScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-
 
           _ModernSection(
             title: "Управление",
@@ -168,9 +164,6 @@ class AnimationsScreen extends StatelessWidget {
     );
   }
 }
-
-
-
 
 class _ModernSection extends StatelessWidget {
   final String title;

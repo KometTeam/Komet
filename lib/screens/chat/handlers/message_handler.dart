@@ -69,15 +69,19 @@ class MessageHandler {
     // Анализируем вложения
     for (final attach in message.attaches) {
       final type = attach['_type'] ?? attach['type'];
-      
+
       switch (type) {
         case 'STICKER':
           return '🎭 Стикер';
         case 'PHOTO':
         case 'IMAGE':
-          final count = message.attaches.where((a) => 
-            (a['_type'] ?? a['type']) == 'PHOTO' || (a['_type'] ?? a['type']) == 'IMAGE'
-          ).length;
+          final count = message.attaches
+              .where(
+                (a) =>
+                    (a['_type'] ?? a['type']) == 'PHOTO' ||
+                    (a['_type'] ?? a['type']) == 'IMAGE',
+              )
+              .length;
           return count > 1 ? '🖼 Фото ($count)' : '🖼 Фото';
         case 'VIDEO':
           final videoType = attach['videoType'] as int?;
@@ -85,9 +89,9 @@ class MessageHandler {
             // Кружочек (видеосообщение)
             return '📹 Видеосообщение';
           }
-          final count = message.attaches.where((a) => 
-            (a['_type'] ?? a['type']) == 'VIDEO'
-          ).length;
+          final count = message.attaches
+              .where((a) => (a['_type'] ?? a['type']) == 'VIDEO')
+              .length;
           return count > 1 ? '🎬 Видео ($count)' : '🎬 Видео';
         case 'VOICE':
           return '🎤 Голосовое сообщение';
@@ -115,7 +119,8 @@ class MessageHandler {
         case 'GEO':
           return '📍 Местоположение';
         case 'CONTACT':
-          final contactName = attach['name'] as String? ?? attach['firstName'] as String?;
+          final contactName =
+              attach['name'] as String? ?? attach['firstName'] as String?;
           if (contactName != null && contactName.isNotEmpty) {
             return '👤 Контакт: $contactName';
           }
@@ -131,11 +136,17 @@ class MessageHandler {
           final callType = attach['callType'] as String? ?? 'AUDIO';
           final hangupType = attach['hangupType'] as String? ?? '';
           if (hangupType == 'MISSED') {
-            return callType == 'VIDEO' ? '📵 Пропущенный видеозвонок' : '📵 Пропущенный звонок';
+            return callType == 'VIDEO'
+                ? '📵 Пропущенный видеозвонок'
+                : '📵 Пропущенный звонок';
           } else if (hangupType == 'CANCELED') {
-            return callType == 'VIDEO' ? '📵 Видеозвонок отменён' : '📵 Звонок отменён';
+            return callType == 'VIDEO'
+                ? '📵 Видеозвонок отменён'
+                : '📵 Звонок отменён';
           } else if (hangupType == 'REJECTED') {
-            return callType == 'VIDEO' ? '📵 Видеозвонок отклонён' : '📵 Звонок отклонён';
+            return callType == 'VIDEO'
+                ? '📵 Видеозвонок отклонён'
+                : '📵 Звонок отклонён';
           }
           return callType == 'VIDEO' ? '📹 Видеозвонок' : '📞 Звонок';
         case 'FORWARD':
@@ -154,7 +165,9 @@ class MessageHandler {
       if (!getMounted()) return;
 
       if (message['type'] == 'invalid_token') {
-        print('Получено событие недействительного токена, перенаправляем на вход');
+        print(
+          'Получено событие недействительного токена, перенаправляем на вход',
+        );
         showTokenExpiredDialog(
           message['message'] ?? 'Токен авторизации недействителен',
         );
@@ -190,7 +203,7 @@ class MessageHandler {
         final messageData = payload['message'] as Map<String, dynamic>?;
         if (messageData != null) {
           final cid = messageData['cid'] as int?;
-          
+
           // Удаляем из очереди по id или cid
           final queueService = MessageQueueService();
           if (cid != null) {
@@ -200,7 +213,7 @@ class MessageHandler {
             }
           }
         }
-        
+
         // Обновляем чат с новым сообщением
         _handleNewChat(payload);
       } else if (opcode == 64) {
@@ -210,7 +223,7 @@ class MessageHandler {
         _handleNewMessage(chatId, payload);
       } else if (opcode == 67 && chatId != null) {
         _handleEditedMessage(chatId, payload);
-      } else if (opcode == 66 && chatId != null) {
+      } else if ((opcode == 66 || opcode == 142) && chatId != null) {
         _handleDeletedMessages(chatId, payload);
       } else if (opcode == 132) {
         _handlePresenceUpdate(payload);
@@ -251,7 +264,7 @@ class MessageHandler {
     final chatId = payload['chatId'] as int?;
     final chatJson = payload['chat'] as Map<String, dynamic>?;
     final messageJson = payload['message'] as Map<String, dynamic>?;
-    
+
     // Если есть полный объект чата - используем его
     if (chatJson != null) {
       final newChat = Chat.fromJson(chatJson);
@@ -260,7 +273,9 @@ class MessageHandler {
       final context = getContext();
       if (context.mounted) {
         setState(() {
-          final existingIndex = allChats.indexWhere((chat) => chat.id == newChat.id);
+          final existingIndex = allChats.indexWhere(
+            (chat) => chat.id == newChat.id,
+          );
           if (existingIndex != -1) {
             allChats[existingIndex] = newChat;
           } else {
@@ -271,7 +286,7 @@ class MessageHandler {
           filterChats();
         });
       }
-    } 
+    }
     // Если есть только сообщение и chatId - обновляем существующий чат
     else if (chatId != null && messageJson != null) {
       final newMessage = Message.fromJson(messageJson);
@@ -281,9 +296,7 @@ class MessageHandler {
           final chatIndex = allChats.indexWhere((chat) => chat.id == chatId);
           if (chatIndex != -1) {
             final oldChat = allChats[chatIndex];
-            final updatedChat = oldChat.copyWith(
-              lastMessage: newMessage,
-            );
+            final updatedChat = oldChat.copyWith(lastMessage: newMessage);
             allChats.removeAt(chatIndex);
             _insertChatAtCorrectPosition(updatedChat);
             filterChats();
@@ -302,7 +315,9 @@ class MessageHandler {
 
     if (newMessage.status == 'REMOVED') {
       ApiService.instance.clearCacheForChat(chatId);
-      unawaited(ChatCacheService().removeMessageFromCache(chatId, newMessage.id));
+      unawaited(
+        ChatCacheService().removeMessageFromCache(chatId, newMessage.id),
+      );
       return;
     }
 
@@ -310,11 +325,9 @@ class MessageHandler {
     for (final attach in newMessage.attaches) {
       if (attach['_type'] == 'CONTACT') {
         final contactIdValue = attach['contactId'];
-        final int? contactId = contactIdValue is int 
+        final int? contactId = contactIdValue is int
             ? contactIdValue
-            : (contactIdValue is String 
-                ? int.tryParse(contactIdValue) 
-                : null);
+            : (contactIdValue is String ? int.tryParse(contactIdValue) : null);
         if (contactId != null) {
           // Проверяем, есть ли контакт в кэше перед запросом
           final cachedContact = ApiService.instance.getCachedContact(contactId);
@@ -325,16 +338,16 @@ class MessageHandler {
         }
       }
     }
-    
+
     // Дедупликация
     final messageId = newMessage.id;
     if (_processedMessageIds.contains(messageId)) return;
-    
+
     _processedMessageIds.add(messageId);
     if (_processedMessageIds.length > _maxProcessedMessages) {
       _processedMessageIds.remove(_processedMessageIds.first);
     }
-    
+
     ApiService.instance.clearCacheForChat(chatId);
 
     // Получаем myId из профиля
@@ -345,7 +358,7 @@ class MessageHandler {
       final contactProfile = profileData?['contact'] as Map<String, dynamic>?;
       myId = contactProfile?['id'] as int?;
     }
-    
+
     // Если myId не найден, пробуем получить из ApiService
     if (myId == null && ApiService.instance.userId != null) {
       myId = int.tryParse(ApiService.instance.userId!);
@@ -353,19 +366,19 @@ class MessageHandler {
 
     // Не показываем уведомление для своих сообщений
     bool shouldShowNotification = (myId == null || newMessage.senderId != myId);
-    
+
     // Если мы в приложении и в этом чате - не показываем уведомление
-    if (shouldShowNotification && 
-        ApiService.instance.isAppInForeground && 
+    if (shouldShowNotification &&
+        ApiService.instance.isAppInForeground &&
         ApiService.instance.currentActiveChatId == chatId) {
       shouldShowNotification = false;
     }
-    
+
     final int chatIndex = allChats.indexWhere((chat) => chat.id == chatId);
     if (shouldShowNotification && chatIndex != -1) {
       final oldChat = allChats[chatIndex];
       // Проверяем как по myId, так и по ownerId чата
-      if (newMessage.senderId == oldChat.ownerId || 
+      if (newMessage.senderId == oldChat.ownerId ||
           (myId != null && newMessage.senderId == myId)) {
         shouldShowNotification = false;
       }
@@ -374,11 +387,21 @@ class MessageHandler {
     if (shouldShowNotification) {
       final contact = contacts[newMessage.senderId];
       final chatFromPayload = payload['chat'] as Map<String, dynamic>?;
-      
+
       if (contact == null) {
-        _loadAndShowNotification(chatId, newMessage, newMessage.senderId, chatFromPayload);
+        _loadAndShowNotification(
+          chatId,
+          newMessage,
+          newMessage.senderId,
+          chatFromPayload,
+        );
       } else {
-        _showNotificationWithContact(chatId, newMessage, contact, chatFromPayload);
+        _showNotificationWithContact(
+          chatId,
+          newMessage,
+          contact,
+          chatFromPayload,
+        );
       }
     }
 
@@ -386,8 +409,9 @@ class MessageHandler {
       final oldChat = allChats[chatIndex];
 
       // Определяем, наше ли это сообщение
-      final isMyMessage = (myId != null && newMessage.senderId == myId) ||
-                          newMessage.senderId == oldChat.ownerId;
+      final isMyMessage =
+          (myId != null && newMessage.senderId == myId) ||
+          newMessage.senderId == oldChat.ownerId;
 
       final updatedChat = oldChat.copyWith(
         lastMessage: newMessage,
@@ -460,7 +484,8 @@ class MessageHandler {
   }
 
   void _handleDeletedMessages(int chatId, Map<String, dynamic> payload) {
-    final deletedMessageIds = List<String>.from(payload['messageIds'] ?? []);
+    final rawMessageIds = payload['messageIds'] as List<dynamic>? ?? [];
+    final deletedMessageIds = rawMessageIds.map((id) => id.toString()).toList();
     ApiService.instance.clearCacheForChat(chatId);
 
     final int chatIndex = allChats.indexWhere((chat) => chat.id == chatId);
@@ -475,8 +500,9 @@ class MessageHandler {
                 .cast<Map<String, dynamic>>()
                 .where((chat) => chat['id'] == chatId)
                 .toList();
-            final Map<String, dynamic>? updatedChatData =
-                filtered.isNotEmpty ? filtered.first : null;
+            final Map<String, dynamic>? updatedChatData = filtered.isNotEmpty
+                ? filtered.first
+                : null;
             if (updatedChatData != null) {
               final updatedChat = Chat.fromJson(updatedChatData);
               setState(() {
@@ -562,7 +588,9 @@ class MessageHandler {
     final chatsJson = payload['chats'] as List<dynamic>?;
 
     Map<String, dynamic>? effectiveChatJson = chatJson;
-    if (effectiveChatJson == null && chatsJson != null && chatsJson.isNotEmpty) {
+    if (effectiveChatJson == null &&
+        chatsJson != null &&
+        chatsJson.isNotEmpty) {
       final first = chatsJson.first;
       if (first is Map<String, dynamic>) {
         effectiveChatJson = first;
@@ -575,7 +603,9 @@ class MessageHandler {
       final context = getContext();
       if (context.mounted) {
         setState(() {
-          final existingIndex = allChats.indexWhere((chat) => chat.id == newChat.id);
+          final existingIndex = allChats.indexWhere(
+            (chat) => chat.id == newChat.id,
+          );
           if (existingIndex != -1) {
             allChats[existingIndex] = newChat;
           } else {
@@ -602,7 +632,9 @@ class MessageHandler {
         final context = getContext();
         if (context.mounted) {
           setState(() {
-            final existingIndex = allChats.indexWhere((chat) => chat.id == newChat.id);
+            final existingIndex = allChats.indexWhere(
+              (chat) => chat.id == newChat.id,
+            );
             if (existingIndex != -1) {
               allChats[existingIndex] = newChat;
             } else {
@@ -625,17 +657,19 @@ class MessageHandler {
       ApiService.instance.updateChatInCacheFromJson(chatJson);
       final context = getContext();
       if (context.mounted) {
-          setState(() {
-            final existingIndex = allChats.indexWhere((chat) => chat.id == updatedChat.id);
-            if (existingIndex != -1) {
-              allChats[existingIndex] = updatedChat;
-            } else {
-              final savedIndex = allChats.indexWhere(isSavedMessages);
-              final insertIndex = savedIndex >= 0 ? savedIndex + 1 : 0;
-              allChats.insert(insertIndex, updatedChat);
-            }
-            filterChats();
-          });
+        setState(() {
+          final existingIndex = allChats.indexWhere(
+            (chat) => chat.id == updatedChat.id,
+          );
+          if (existingIndex != -1) {
+            allChats[existingIndex] = updatedChat;
+          } else {
+            final savedIndex = allChats.indexWhere(isSavedMessages);
+            final insertIndex = savedIndex >= 0 ? savedIndex + 1 : 0;
+            allChats.insert(insertIndex, updatedChat);
+          }
+          filterChats();
+        });
       }
     }
   }
@@ -782,17 +816,28 @@ class MessageHandler {
   }
 
   /// Показать уведомление с известным контактом
-  void _showNotificationWithContact(int chatId, Message message, Contact contact, [Map<String, dynamic>? chatFromPayload]) async {
+  void _showNotificationWithContact(
+    int chatId,
+    Message message,
+    Contact contact, [
+    Map<String, dynamic>? chatFromPayload,
+  ]) async {
     // Получаем данные чата
     final effectiveChat = await _getEffectiveChat(chatId, chatFromPayload);
 
     // Группы: chatId < 0 ИЛИ type='CHAT' ИЛИ isGroup
-    final isGroupChat = chatId < 0 || (effectiveChat != null && (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
-    final groupTitle = effectiveChat?.title ?? effectiveChat?.displayTitle ?? (isGroupChat ? 'Группа' : null);
-    final avatarUrl = isGroupChat 
+    final isGroupChat =
+        chatId < 0 ||
+        (effectiveChat != null &&
+            (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
+    final groupTitle =
+        effectiveChat?.title ??
+        effectiveChat?.displayTitle ??
+        (isGroupChat ? 'Группа' : null);
+    final avatarUrl = isGroupChat
         ? (effectiveChat?.baseIconUrl ?? contact.photoBaseUrl)
         : contact.photoBaseUrl;
-    
+
     NotificationService().showMessageNotification(
       chatId: chatId,
       senderName: contact.name,
@@ -804,28 +849,62 @@ class MessageHandler {
   }
 
   /// Загрузить контакт и показать уведомление
-  void _loadAndShowNotification(int chatId, Message message, int userId, [Map<String, dynamic>? chatFromPayload]) {
-    ApiService.instance.fetchContactsByIds([userId]).then((contactsList) {
-      if (contactsList.isNotEmpty) {
-        final contact = contactsList.first;
-        contacts[userId] = contact;
-        _showNotificationWithContact(chatId, message, contact, chatFromPayload);
-      } else {
-        _showNotificationWithoutContact(chatId, message, userId, chatFromPayload);
-      }
-    }).catchError((_) {
-      _showNotificationWithoutContact(chatId, message, userId, chatFromPayload);
-    });
+  void _loadAndShowNotification(
+    int chatId,
+    Message message,
+    int userId, [
+    Map<String, dynamic>? chatFromPayload,
+  ]) {
+    ApiService.instance
+        .fetchContactsByIds([userId])
+        .then((contactsList) {
+          if (contactsList.isNotEmpty) {
+            final contact = contactsList.first;
+            contacts[userId] = contact;
+            _showNotificationWithContact(
+              chatId,
+              message,
+              contact,
+              chatFromPayload,
+            );
+          } else {
+            _showNotificationWithoutContact(
+              chatId,
+              message,
+              userId,
+              chatFromPayload,
+            );
+          }
+        })
+        .catchError((_) {
+          _showNotificationWithoutContact(
+            chatId,
+            message,
+            userId,
+            chatFromPayload,
+          );
+        });
   }
 
   /// Показать уведомление без информации о контакте
-  void _showNotificationWithoutContact(int chatId, Message message, int userId, [Map<String, dynamic>? chatFromPayload]) async {
+  void _showNotificationWithoutContact(
+    int chatId,
+    Message message,
+    int userId, [
+    Map<String, dynamic>? chatFromPayload,
+  ]) async {
     final effectiveChat = await _getEffectiveChat(chatId, chatFromPayload);
 
-    final isGroupChat = chatId < 0 || (effectiveChat != null && (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
-    final groupTitle = effectiveChat?.title ?? effectiveChat?.displayTitle ?? (isGroupChat ? 'Группа' : null);
+    final isGroupChat =
+        chatId < 0 ||
+        (effectiveChat != null &&
+            (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
+    final groupTitle =
+        effectiveChat?.title ??
+        effectiveChat?.displayTitle ??
+        (isGroupChat ? 'Группа' : null);
     final avatarUrl = isGroupChat ? effectiveChat?.baseIconUrl : null;
-    
+
     NotificationService().showMessageNotification(
       chatId: chatId,
       senderName: 'Пользователь $userId',
@@ -837,17 +916,20 @@ class MessageHandler {
   }
 
   /// Получить данные чата из разных источников
-  Future<Chat?> _getEffectiveChat(int chatId, [Map<String, dynamic>? chatFromPayload]) async {
+  Future<Chat?> _getEffectiveChat(
+    int chatId, [
+    Map<String, dynamic>? chatFromPayload,
+  ]) async {
     // Ищем в allChats
     try {
       return allChats.firstWhere((c) => c.id == chatId);
     } catch (_) {}
-    
+
     // Из payload
     if (chatFromPayload != null) {
       return Chat.fromJson(chatFromPayload);
     }
-    
+
     // Из кэша
     try {
       final cachedChatJson = await ChatCacheService().getChatById(chatId);
@@ -855,7 +937,7 @@ class MessageHandler {
         return Chat.fromJson(cachedChatJson);
       }
     } catch (_) {}
-    
+
     return null;
   }
 }

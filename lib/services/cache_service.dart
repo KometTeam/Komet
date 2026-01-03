@@ -23,19 +23,15 @@ class CacheService {
 
   Directory? _cacheDirectory;
 
-  
   Lz4Codec? _lz4Codec;
   bool _lz4Available = false;
 
-  
   static final _clearLock = Object();
 
-  
   Future<T> _synchronized<T>(
     Object lock,
     Future<T> Function() operation,
   ) async {
-    
     return operation();
   }
 
@@ -49,7 +45,6 @@ class CacheService {
 
     await _createCacheDirectories();
 
-    
     try {
       _lz4Codec = Lz4Codec();
       _lz4Available = true;
@@ -57,7 +52,9 @@ class CacheService {
     } catch (e) {
       _lz4Codec = null;
       _lz4Available = false;
-      print('⚠️ CacheService: LZ4 compression недоступна, используется обычное кэширование: $e');
+      print(
+        '⚠️ CacheService: LZ4 compression недоступна, используется обычное кэширование: $e',
+      );
     }
 
     print('CacheService инициализирован');
@@ -86,7 +83,7 @@ class CacheService {
 
   Future<T?> get<T>(String key, {Duration? ttl}) async {
     if (FreshModeHelper.shouldSkipLoad()) return null;
-    
+
     if (_memoryCache.containsKey(key)) {
       final timestamp = _cacheTimestamps[key];
       if (timestamp != null && !_isExpired(timestamp, ttl ?? _defaultTTL)) {
@@ -125,7 +122,7 @@ class CacheService {
 
   Future<void> set<T>(String key, T value, {Duration? ttl}) async {
     if (FreshModeHelper.shouldSkipSave()) return;
-    
+
     final timestamp = DateTime.now();
 
     _memoryCache[key] = value;
@@ -166,7 +163,6 @@ class CacheService {
   }
 
   Future<void> clear() async {
-    
     return _synchronized(_clearLock, () async {
       _memoryCache.clear();
       _cacheTimestamps.clear();
@@ -242,7 +238,7 @@ class CacheService {
 
     return {
       'memory': memorySize,
-      'database': 0, 
+      'database': 0,
       'files': filesSize,
       'total': filesSize,
     };
@@ -262,25 +258,22 @@ class CacheService {
 
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
-        
         if (_lz4Available && _lz4Codec != null) {
           try {
             final compressedData = _lz4Codec!.encode(response.bodyBytes);
             await existingFile.writeAsBytes(compressedData);
           } catch (e) {
-            
             print('⚠️ Ошибка сжатия файла $url, сохраняем без сжатия: $e');
             await existingFile.writeAsBytes(response.bodyBytes);
           }
         } else {
-          
           await existingFile.writeAsBytes(response.bodyBytes);
         }
         return filePath;
       }
     } catch (e) {
       print('Ошибка кэширования файла $url: $e');
-      
+
       return null;
     }
 
@@ -345,20 +338,18 @@ class CacheService {
     final file = await getCachedFile(url, customKey: customKey);
     if (file != null && await file.exists()) {
       final fileData = await file.readAsBytes();
-      
+
       if (_lz4Available && _lz4Codec != null) {
         try {
           final decompressedData = _lz4Codec!.decode(fileData);
           return Uint8List.fromList(decompressedData);
         } catch (e) {
-          
           print(
             '⚠️ Ошибка декомпрессии файла $url, пробуем прочитать как обычный файл: $e',
           );
           return fileData;
         }
       } else {
-        
         return fileData;
       }
     }
@@ -383,20 +374,17 @@ class CacheService {
 
   Future<void> _clearDirectoryContents(Directory directory) async {
     try {
-      
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
           try {
             await entity.delete();
-            
+
             await Future.delayed(const Duration(milliseconds: 5));
           } catch (fileError) {
-            
             print('Не удалось удалить файл ${entity.path}: $fileError');
           }
         } else if (entity is Directory) {
           try {
-            
             await _clearDirectoryContents(entity);
             try {
               await entity.delete();
@@ -487,18 +475,17 @@ class CacheService {
           await audioDir.create(recursive: true);
         }
 
-        
         if (_lz4Available && _lz4Codec != null) {
           try {
             final compressedData = _lz4Codec!.encode(response.bodyBytes);
             await existingFile.writeAsBytes(compressedData);
           } catch (e) {
-            
-            print('⚠️ Ошибка сжатия аудио файла $url, сохраняем без сжатия: $e');
+            print(
+              '⚠️ Ошибка сжатия аудио файла $url, сохраняем без сжатия: $e',
+            );
             await existingFile.writeAsBytes(response.bodyBytes);
           }
         } else {
-          
           await existingFile.writeAsBytes(response.bodyBytes);
         }
         final fileSize = await existingFile.length();
@@ -559,20 +546,18 @@ class CacheService {
     final file = await getCachedAudioFile(url, customKey: customKey);
     if (file != null && await file.exists()) {
       final fileData = await file.readAsBytes();
-      
+
       if (_lz4Available && _lz4Codec != null) {
         try {
           final decompressedData = _lz4Codec!.decode(fileData);
           return Uint8List.fromList(decompressedData);
         } catch (e) {
-          
           print(
             '⚠️ Ошибка декомпрессии аудио файла $url, пробуем прочитать как обычный файл: $e',
           );
           return fileData;
         }
       } else {
-        
         return fileData;
       }
     }
@@ -697,7 +682,10 @@ class CacheService {
     return file != null;
   }
 
-  Future<Uint8List?> getCachedStickerFileBytes(int stickerId, {String? url}) async {
+  Future<Uint8List?> getCachedStickerFileBytes(
+    int stickerId, {
+    String? url,
+  }) async {
     final file = await getCachedStickerFile(stickerId, url: url);
     if (file != null && await file.exists()) {
       final fileData = await file.readAsBytes();

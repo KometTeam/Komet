@@ -366,11 +366,9 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
     });
 
     try {
-      
       int? chatId = widget.dialogChatId;
 
       if (chatId == null || chatId == 0) {
-        
         chatId = await ApiService.instance.getChatIdByUserId(widget.userId);
       }
 
@@ -388,10 +386,8 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
 
       if (!mounted) return;
 
-      
       Navigator.of(context).pop();
 
-      
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (ctx) => ChatScreen(
@@ -440,10 +436,8 @@ class _UserProfilePanelState extends State<UserProfilePanel> {
     });
 
     try {
-      
       await ApiService.instance.addContact(widget.userId);
 
-      
       await ApiService.instance.requestContactsByIds([widget.userId]);
 
       await _checkIfInContacts();

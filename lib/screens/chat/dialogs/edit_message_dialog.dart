@@ -18,10 +18,7 @@ class EditMessageDialog extends StatefulWidget {
   }) {
     return showDialog(
       context: context,
-      builder: (context) => EditMessageDialog(
-        message: message,
-        onEdit: onEdit,
-      ),
+      builder: (context) => EditMessageDialog(message: message, onEdit: onEdit),
     );
   }
 
@@ -72,4 +69,3 @@ class _EditMessageDialogState extends State<EditMessageDialog> {
     );
   }
 }
-

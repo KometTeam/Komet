@@ -20,4 +20,3 @@ class DateSeparatorItem extends ChatItem {
   final DateTime date;
   DateSeparatorItem(this.date);
 }
-

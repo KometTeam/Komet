@@ -485,7 +485,6 @@ class _VideoControls extends StatelessWidget {
             ),
             const Spacer(),
 
-            
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -540,7 +539,7 @@ class _VideoControls extends StatelessWidget {
                         isPrimary: true,
                       ),
                       const SizedBox(width: 12),
-                      
+
                       _MaterialYouControlButton(
                         icon: Icons.forward_10,
                         onTap: onForward,
@@ -765,7 +764,7 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
                     ),
                   ),
                 ),
-                
+
                 Center(
                   child: Align(
                     alignment: Alignment(progress * 2 - 1, 0),

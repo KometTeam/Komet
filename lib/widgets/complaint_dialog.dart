@@ -134,9 +134,8 @@ class _ComplaintDialogState extends State<ComplaintDialog> {
       for (final reason in complaintType.reasons) {
         if (!uniqueReasons.containsKey(reason.reasonId)) {
           String title = reason.reasonTitle;
-          
+
           if (reason.reasonId == 11) {
-            
             title = 'Абзывательства матюки';
           }
 
@@ -154,17 +153,17 @@ class _ComplaintDialogState extends State<ComplaintDialog> {
 
   IconData _getReasonIcon(int reasonId) {
     switch (reasonId) {
-      case 7: 
+      case 7:
         return Icons.more_horiz;
-      case 8: 
+      case 8:
         return Icons.warning;
-      case 9: 
+      case 9:
         return Icons.campaign;
-      case 10: 
+      case 10:
         return Icons.gavel;
-      case 11: 
+      case 11:
         return Icons.sentiment_very_dissatisfied;
-      case 12: 
+      case 12:
         return Icons.help_outline;
       default:
         return Icons.report_problem;

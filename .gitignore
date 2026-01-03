@@ -45,14 +45,7 @@ app.*.map.json
 /android/app/release
 
 pubspec.lock
-.vscode/
-macos/Podfile.lock
 
-# Android signing keys (keystore)
-android/key.properties
-android/app/*.jks
-*.jks
-
-# Large files
-.zip
-*.zip
+# Attributes from this file will override those from pubspec.yaml; see
+# https://dart.dev/tools/pub/dependencies#pubspec-overrides
+pubspec_overrides.yaml

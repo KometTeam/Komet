@@ -13,7 +13,7 @@ class _ProxySettingsScreenState extends State<ProxySettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   late ProxySettings _settings;
   bool _isLoading = true;
-  bool _isTesting = false; 
+  bool _isTesting = false;
 
   final _hostController = TextEditingController();
   final _portController = TextEditingController();
@@ -47,7 +47,7 @@ class _ProxySettingsScreenState extends State<ProxySettingsScreen> {
     });
 
     final settingsToTest = ProxySettings(
-      isEnabled: true, 
+      isEnabled: true,
       protocol: _settings.protocol,
       host: _hostController.text.trim(),
       port: int.tryParse(_portController.text.trim()) ?? 8080,

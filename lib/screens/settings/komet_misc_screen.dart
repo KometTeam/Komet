@@ -42,11 +42,11 @@ class _KometMiscScreenState extends State<KometMiscScreen>
 
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _checkBatteryOptimizationStatus();
     _loadUpdateSettings();
@@ -64,8 +64,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
             prefs.getBool('enable_web_version_check') ?? false;
         _showSpoofUpdateDialog =
             prefs.getBool('show_spoof_update_dialog') ?? true;
-        _showSferumButton =
-            prefs.getBool('show_sferum_button') ?? true;
+        _showSferumButton = prefs.getBool('show_sferum_button') ?? true;
       });
     }
   }
@@ -103,8 +102,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
     }
 
     try {
-      await DisableBatteryOptimization
-          .showDisableBatteryOptimizationSettings();
+      await DisableBatteryOptimization.showDisableBatteryOptimizationSettings();
       Future.delayed(const Duration(milliseconds: 500), () {
         _checkBatteryOptimizationStatus();
       });
@@ -345,10 +343,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              colors.surfaceContainerHighest,
-              colors.surfaceContainer,
-            ],
+            colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
           ),
         ),
         const SizedBox(height: 20),
@@ -367,10 +362,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              colors.surfaceContainerHighest,
-              colors.surfaceContainer,
-            ],
+            colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
           ),
         ),
         const SizedBox(height: 12),
@@ -392,10 +384,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              colors.surfaceContainerHighest,
-              colors.surfaceContainer,
-            ],
+            colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
           ),
         ),
         const SizedBox(height: 12),
@@ -403,7 +392,8 @@ class _KometMiscScreenState extends State<KometMiscScreen>
         _ToggleCard(
           icon: Icons.sync_problem_rounded,
           title: 'Диалог обновлений спуфа',
-          description: 'Показывать диалог проверки обновлений спуфа при запуске',
+          description:
+              'Показывать диалог проверки обновлений спуфа при запуске',
           value: _showSpoofUpdateDialog,
           onChanged: (value) {
             setState(() {
@@ -414,10 +404,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              colors.surfaceContainerHighest,
-              colors.surfaceContainer,
-            ],
+            colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
           ),
         ),
         const SizedBox(height: 12),
@@ -436,10 +423,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              colors.surfaceContainerHighest,
-              colors.surfaceContainer,
-            ],
+            colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
           ),
         ),
         const SizedBox(height: 12),
@@ -459,10 +443,7 @@ class _KometMiscScreenState extends State<KometMiscScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              colors.surfaceContainerHighest,
-              colors.surfaceContainer,
-            ],
+            colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
           ),
         ),
         const SizedBox(height: 28),
@@ -472,17 +453,11 @@ class _KometMiscScreenState extends State<KometMiscScreen>
           decoration: BoxDecoration(
             color: colors.surfaceContainerHighest.withOpacity(0.5),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: colors.outline.withOpacity(0.2),
-            ),
+            border: Border.all(color: colors.outline.withOpacity(0.2)),
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.info_outline,
-                color: colors.primary,
-                size: 24,
-              ),
+              Icon(Icons.info_outline, color: colors.primary, size: 24),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
@@ -565,11 +540,7 @@ class _SettingCard extends StatelessWidget {
                       color: colors.primaryContainer.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      icon,
-                      color: colors.primary,
-                      size: 24,
-                    ),
+                    child: Icon(icon, color: colors.primary, size: 24),
                   ),
                   const Spacer(),
                   Container(
@@ -636,11 +607,7 @@ class _SettingCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Icon(
-                      Icons.arrow_forward,
-                      color: colors.primary,
-                      size: 18,
-                    ),
+                    Icon(Icons.arrow_forward, color: colors.primary, size: 18),
                   ],
                 ),
               ],
@@ -680,15 +647,14 @@ class _ToggleCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: gradient,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: colors.outline.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: colors.outline.withOpacity(0.2), width: 1),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: isDisabled ? null : (onChanged != null ? () => onChanged!(!value) : null),
+          onTap: isDisabled
+              ? null
+              : (onChanged != null ? () => onChanged!(!value) : null),
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),

@@ -135,6 +135,8 @@ class ApiService {
   bool _isSessionReady = false;
   bool get isSessionReady => _isSessionReady;
 
+  bool _isTerminatingOtherSessions = false;
+
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
 
@@ -184,7 +186,11 @@ class ApiService {
 
   Map<String, dynamic>? get lastChatsPayload => _lastChatsPayload;
 
-  void updateChatInListLocally(int chatId, Map<String, dynamic> messageJson, [Map<String, dynamic>? chatJson]) {
+  void updateChatInListLocally(
+    int chatId,
+    Map<String, dynamic> messageJson, [
+    Map<String, dynamic>? chatJson,
+  ]) {
     try {
       _lastChatsPayload ??= {
         'chats': <dynamic>[],
@@ -205,9 +211,10 @@ class ApiService {
 
         final currentUserId = userId;
         final newMessageSenderId = messageJson['sender'];
-        final isMyMessage = currentUserId != null &&
+        final isMyMessage =
+            currentUserId != null &&
             (newMessageSenderId.toString() == currentUserId ||
-             chat['ownerId'] == newMessageSenderId);
+                chat['ownerId'] == newMessageSenderId);
 
         if (!isMyMessage) {
           final currentCount = chat['newMessages'] as int? ?? 0;
@@ -221,10 +228,7 @@ class ApiService {
           'cmd': 0,
           'seq': -1,
           'opcode': 64,
-          'payload': {
-            'chatId': chatId,
-            'chat': chat,
-          },
+          'payload': {'chatId': chatId, 'chat': chat},
         });
       } else if (chatJson != null) {
         chats.insert(0, chatJson);
@@ -234,14 +238,10 @@ class ApiService {
           'cmd': 0,
           'seq': -1,
           'opcode': 64,
-          'payload': {
-            'chatId': chatId,
-            'chat': chatJson,
-          },
+          'payload': {'chatId': chatId, 'chat': chatJson},
         });
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   int _reconnectDelaySeconds = 2;
@@ -257,8 +257,8 @@ class ApiService {
     if (_isConnecting || _isReconnecting) return true;
     final state = _connectionStateManager.currentInfo.state;
     return state == conn_state.ConnectionState.connecting ||
-           state == conn_state.ConnectionState.reconnecting ||
-           state == conn_state.ConnectionState.connected;
+        state == conn_state.ConnectionState.reconnecting ||
+        state == conn_state.ConnectionState.connected;
   }
 
   void _log(
@@ -286,17 +286,7 @@ class ApiService {
   }
 
   String generateRandomDeviceId() {
-    // Generate 16-character hex string (like f8268babd84e35a5)
-    final random = Random();
-    final bytes = List<int>.generate(8, (_) => random.nextInt(256));
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-  }
-
-  /// Clears session-based values that should be regenerated on each app launch
-  static Future<void> clearSessionValues() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('session_mt_instanceid');
-    await prefs.remove('session_client_session_id');
+    return const Uuid().v4();
   }
 
   Future<Map<String, dynamic>> _buildUserAgentPayload() async {
@@ -312,76 +302,72 @@ class ApiService {
         finalDeviceId = generateRandomDeviceId();
       }
       return {
-        'deviceType': spoofedData['device_type'] as String? ?? 'ANDROID',
+        'deviceType': spoofedData['device_type'] as String? ?? 'IOS',
         'locale': spoofedData['locale'] as String? ?? 'ru',
         'deviceLocale': spoofedData['locale'] as String? ?? 'ru',
-        'osVersion': spoofedData['os_version'] as String? ?? 'Android 14',
-        'deviceName': spoofedData['device_name'] as String? ?? 'Samsung Galaxy S23',
+        'osVersion': spoofedData['os_version'] as String? ?? 'iOS 17.5.1',
+        'deviceName': spoofedData['device_name'] as String? ?? 'iPhone',
+        'headerUserAgent':
+            spoofedData['user_agent'] as String? ??
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
         'appVersion': spoofedData['app_version'] as String? ?? '25.21.3',
-        'screen': spoofedData['screen'] as String? ?? 'xxhdpi 480dpi 1080x2340',
+        'screen': spoofedData['screen'] as String? ?? '1170x2532 3.0x',
         'timezone': spoofedData['timezone'] as String? ?? 'Europe/Moscow',
-        'pushDeviceType': 'GCM',
-        'arch': spoofedData['arch'] as String? ?? 'arm64-v8a',
-        'buildNumber': spoofedData['build_number'] as int? ?? 6498,
       };
     } else {
       await _generateAndSaveRandomSpoofing();
       final generatedData = await SpoofingService.getSpoofedSessionData();
-      
+
       if (generatedData != null) {
         return {
           'deviceType': generatedData['device_type'] as String? ?? 'ANDROID',
           'locale': generatedData['locale'] as String? ?? 'ru',
           'deviceLocale': generatedData['locale'] as String? ?? 'ru',
           'osVersion': generatedData['os_version'] as String? ?? 'Android 14',
-          'deviceName': generatedData['device_name'] as String? ?? 'Samsung Galaxy S23',
+          'deviceName':
+              generatedData['device_name'] as String? ?? 'Samsung Galaxy S23',
+          'headerUserAgent': generatedData['user_agent'] as String? ?? '',
           'appVersion': generatedData['app_version'] as String? ?? '25.21.3',
-          'screen': generatedData['screen'] as String? ?? 'xxhdpi 480dpi 1080x2340',
+          'screen': generatedData['screen'] as String? ?? '1080x2340 3.0x',
           'timezone': generatedData['timezone'] as String? ?? 'Europe/Moscow',
-          'pushDeviceType': 'GCM',
-          'arch': generatedData['arch'] as String? ?? 'arm64-v8a',
-          'buildNumber': generatedData['build_number'] as int? ?? 6498,
         };
       }
-      
+
       return {
         'deviceType': 'ANDROID',
         'locale': 'ru',
         'deviceLocale': 'ru',
         'osVersion': 'Android 14',
         'deviceName': 'Samsung Galaxy S23',
+        'headerUserAgent':
+            'Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
         'appVersion': '25.21.3',
-        'screen': 'xxhdpi 480dpi 1080x2340',
+        'screen': '1080x2340 3.0x',
         'timezone': 'Europe/Moscow',
-        'pushDeviceType': 'GCM',
-        'arch': 'arm64-v8a',
-        'buildNumber': 6498,
       };
     }
   }
 
   Future<void> _generateAndSaveRandomSpoofing() async {
     final prefs = await SharedPreferences.getInstance();
-    
 
     if (prefs.getBool('spoofing_enabled') == true) {
       return;
     }
-    
 
     final availablePresets = devicePresets
-        .where((p) => p.deviceType == 'ANDROID') // Только Android устройства
+        .where(
+          (p) => p.deviceType != 'WEB',
+        ) //✖️✖️✖️✖️✖️ ЗАПРЕТ НЕЛЬЗЯ АЛО ✖️✖️✖️✖️
         .toList();
-    
+
     if (availablePresets.isEmpty) {
       return;
     }
-    
-  
+
     final random = Random();
     final preset = availablePresets[random.nextInt(availablePresets.length)];
-    
-   
+
     String timezone;
     try {
       final timezoneInfo = await FlutterTimezone.getLocalTimezone();
@@ -389,12 +375,13 @@ class ApiService {
     } catch (_) {
       timezone = preset.timezone;
     }
-    
+
     final locale = Platform.localeName.split('_').first;
-    
+
     final deviceId = generateRandomDeviceId();
-    
+
     await prefs.setBool('spoofing_enabled', true);
+    await prefs.setString('spoof_useragent', preset.userAgent);
     await prefs.setString('spoof_devicename', preset.deviceName);
     await prefs.setString('spoof_osversion', preset.osVersion);
     await prefs.setString('spoof_screen', preset.screen);
@@ -403,10 +390,10 @@ class ApiService {
     await prefs.setString('spoof_deviceid', deviceId);
     await prefs.setString('spoof_devicetype', preset.deviceType);
     await prefs.setString('spoof_appversion', '25.21.3');
-    await prefs.setString('spoof_arch', 'arm64-v8a');
-    await prefs.setInt('spoof_buildnumber', 6498);
-    
-    print('✅ Автоматически сгенерирован спуфинг: ${preset.deviceType} - ${preset.deviceName}');
+
+    print(
+      '✅ Автоматически сгенерирован спуфинг: ${preset.deviceType} - ${preset.deviceName}',
+    );
   }
 
   bool get isAppInForeground => _isAppInForeground;
@@ -543,7 +530,6 @@ class ApiService {
         'payload': payload,
       };
 
-      
       _emitLocal(message);
 
       final completer = _pending[seq];
@@ -668,10 +654,7 @@ class ApiService {
       }
 
       try {
-        final decompressed = _lz4DecompressBlockPure(
-          compressedBytes,
-          500000,
-        );
+        final decompressed = _lz4DecompressBlockPure(compressedBytes, 500000);
 
         final nested = _deserializeMsgpack(decompressed);
         return nested ?? decompressed;

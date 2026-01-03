@@ -177,4 +177,3 @@ class _PulseAnimatedTextState extends State<PulseAnimatedText>
     );
   }
 }
-

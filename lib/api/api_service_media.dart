@@ -1,8 +1,6 @@
 part of 'api_service.dart';
 
 extension ApiServiceMedia on ApiService {
-  
-  
   Future<Profile?> updateProfileText(
     String firstName,
     String lastName,
@@ -20,9 +18,10 @@ extension ApiServiceMedia on ApiService {
       }
 
       final int seq = await _sendMessage(16, payload);
-      _log('➡️ SEND: opcode=16, payload=${truncatePayloadObjectForLog(payload)}');
+      _log(
+        '➡️ SEND: opcode=16, payload=${truncatePayloadObjectForLog(payload)}',
+      );
 
-      
       final response = await messages.firstWhere(
         (msg) => msg['seq'] == seq && msg['opcode'] == 16,
       );
@@ -34,9 +33,9 @@ extension ApiServiceMedia on ApiService {
         throw Exception('Пустой ответ сервера на изменение профиля');
       }
 
-      
       if (respPayload.containsKey('error')) {
-        final humanMessage = respPayload['localizedMessage'] ??
+        final humanMessage =
+            respPayload['localizedMessage'] ??
             respPayload['message'] ??
             respPayload['title'] ??
             respPayload['error'];
@@ -45,8 +44,6 @@ extension ApiServiceMedia on ApiService {
 
       final profileJson = respPayload['profile'];
       if (profileJson is Map<String, dynamic>) {
-        
-        
         _lastChatsPayload ??= {
           'chats': <dynamic>[],
           'contacts': <dynamic>[],
@@ -64,8 +61,6 @@ extension ApiServiceMedia on ApiService {
     return null;
   }
 
-  
-  
   Future<Profile?> updateProfilePhoto(String firstName, String lastName) async {
     try {
       final picker = ImagePicker();
@@ -102,7 +97,6 @@ extension ApiServiceMedia on ApiService {
       final int seq16 = await _sendMessage(16, payload);
       print("Запрос на смену аватара отправлен.");
 
-      
       final resp16 = await messages.firstWhere(
         (msg) => msg['seq'] == seq16 && msg['opcode'] == 16,
       );
@@ -115,7 +109,8 @@ extension ApiServiceMedia on ApiService {
       }
 
       if (respPayload16.containsKey('error')) {
-        final humanMessage = respPayload16['localizedMessage'] ??
+        final humanMessage =
+            respPayload16['localizedMessage'] ??
             respPayload16['message'] ??
             respPayload16['title'] ??
             respPayload16['error'];
@@ -143,9 +138,6 @@ extension ApiServiceMedia on ApiService {
     return null;
   }
 
-  
-  
-  
   Future<Map<String, dynamic>> fetchPresetAvatars() async {
     await waitUntilOnline();
 
@@ -160,8 +152,6 @@ extension ApiServiceMedia on ApiService {
     return payload ?? <String, dynamic>{};
   }
 
-  
-  
   Future<Profile?> setPresetAvatar({
     required String firstName,
     required String lastName,
@@ -178,7 +168,9 @@ extension ApiServiceMedia on ApiService {
       };
 
       final int seq16 = await _sendMessage(16, payload);
-      _log('➡️ SEND: opcode=16 (PRESET_AVATAR), payload=${truncatePayloadObjectForLog(payload)}');
+      _log(
+        '➡️ SEND: opcode=16 (PRESET_AVATAR), payload=${truncatePayloadObjectForLog(payload)}',
+      );
 
       final resp16 = await messages.firstWhere(
         (msg) => msg['seq'] == seq16 && msg['opcode'] == 16,
@@ -192,7 +184,8 @@ extension ApiServiceMedia on ApiService {
       }
 
       if (respPayload16.containsKey('error')) {
-        final humanMessage = respPayload16['localizedMessage'] ??
+        final humanMessage =
+            respPayload16['localizedMessage'] ??
             respPayload16['message'] ??
             respPayload16['title'] ??
             respPayload16['error'];
@@ -370,7 +363,7 @@ extension ApiServiceMedia on ApiService {
       };
 
       clearChatsCache();
-      
+
       final queueItem = QueueItem(
         id: 'photo_$cid',
         type: QueueItemType.sendMessage,
@@ -382,12 +375,16 @@ extension ApiServiceMedia on ApiService {
         cid: cid,
       );
 
-      unawaited(_sendMessage(64, payload).then((_) {
-        _queueService.removeFromQueue(queueItem.id);
-      }).catchError((e) {
-        print('Ошибка отправки фото: $e');
-        _queueService.addToQueue(queueItem);
-      }));
+      unawaited(
+        _sendMessage(64, payload)
+            .then((_) {
+              _queueService.removeFromQueue(queueItem.id);
+            })
+            .catchError((e) {
+              print('Ошибка отправки фото: $e');
+              _queueService.addToQueue(queueItem);
+            }),
+      );
     } catch (e) {
       print('Ошибка отправки фото-сообщений: $e');
     }
@@ -414,7 +411,6 @@ extension ApiServiceMedia on ApiService {
 
       await waitUntilOnline();
 
-      
       final int cid = DateTime.now().millisecondsSinceEpoch;
       _emitLocal({
         'ver': 11,
@@ -442,7 +438,6 @@ extension ApiServiceMedia on ApiService {
         },
       });
 
-      
       final int seq87 = await _sendMessage(87, {"count": 1});
       final resp87 = await messages.firstWhere((m) => m['seq'] == seq87);
 
@@ -459,7 +454,6 @@ extension ApiServiceMedia on ApiService {
 
       print('Получен fileId: $fileId, token: $token и URL: $uploadUrl');
 
-      
       Timer? heartbeatTimer;
       heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (_) {
         _sendMessage(65, {"chatId": chatId, "type": "FILE"});
@@ -467,7 +461,6 @@ extension ApiServiceMedia on ApiService {
       });
 
       try {
-        
         var request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
         request.files.add(await http.MultipartFile.fromPath('file', filePath));
         var streamed = await request.send();
@@ -480,7 +473,6 @@ extension ApiServiceMedia on ApiService {
 
         print('Файл успешно загружен на сервер. Ожидаем подтверждение...');
 
-        
         final uploadCompleteMsg = await messages
             .timeout(const Duration(seconds: 30))
             .firstWhere(
@@ -492,7 +484,6 @@ extension ApiServiceMedia on ApiService {
           'Получено подтверждение загрузки файла: ${uploadCompleteMsg['payload']}',
         );
 
-        
         heartbeatTimer.cancel();
 
         final payload = {
@@ -521,15 +512,18 @@ extension ApiServiceMedia on ApiService {
           cid: cid,
         );
 
-        unawaited(_sendMessage(64, payload).then((_) {
-          _queueService.removeFromQueue(queueItem.id);
-        }).catchError((e) {
-          print('Ошибка отправки файла: $e');
-          _queueService.addToQueue(queueItem);
-        }));
+        unawaited(
+          _sendMessage(64, payload)
+              .then((_) {
+                _queueService.removeFromQueue(queueItem.id);
+              })
+              .catchError((e) {
+                print('Ошибка отправки файла: $e');
+                _queueService.addToQueue(queueItem);
+              }),
+        );
         print('Сообщение о файле (Opcode 64) отправлено.');
       } finally {
-        
         heartbeatTimer.cancel();
       }
     } catch (e) {
@@ -546,7 +540,7 @@ extension ApiServiceMedia on ApiService {
       await waitUntilOnline();
 
       final int cid = DateTime.now().millisecondsSinceEpoch;
-      
+
       _emitLocal({
         'ver': 11,
         'cmd': 1,
@@ -592,12 +586,16 @@ extension ApiServiceMedia on ApiService {
         cid: cid,
       );
 
-      unawaited(_sendMessage(64, payload).then((_) {
-        _queueService.removeFromQueue(queueItem.id);
-      }).catchError((e) {
-        print('Ошибка отправки контакта: $e');
-        _queueService.addToQueue(queueItem);
-      }));
+      unawaited(
+        _sendMessage(64, payload)
+            .then((_) {
+              _queueService.removeFromQueue(queueItem.id);
+            })
+            .catchError((e) {
+              print('Ошибка отправки контакта: $e');
+              _queueService.addToQueue(queueItem);
+            }),
+      );
     } catch (e) {
       print('Ошибка отправки контакта: $e');
     }

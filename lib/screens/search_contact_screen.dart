@@ -47,7 +47,6 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
         if (contactData != null) {
           _foundContact = Contact.fromJson(contactData);
 
-          
           _openChatWithContact(_foundContact!);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -165,7 +164,6 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
         '🔍 Открываем чат с контактом: ${contact.name} (ID: ${contact.id})',
       );
 
-      
       final chatId = await ApiService.instance.getChatIdByUserId(contact.id);
 
       if (chatId == null) {
@@ -186,11 +184,9 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
 
       print('✅ Найден chatId: $chatId');
 
-      
       await ApiService.instance.subscribeToChat(chatId, true);
       print('✅ Подписались на чат $chatId');
 
-      
       final profileData = ApiService.instance.lastChatsPayload?['profile'];
       final contactProfile = profileData?['contact'] as Map<String, dynamic>?;
       final myId = contactProfile?['id'] as int? ?? 0;
@@ -199,7 +195,6 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
         print('⚠️ Не удалось получить myId, используем 0');
       }
 
-      
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -251,11 +246,9 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
 
       print('🔄 Альтернативный способ: добавляем контакт ${_foundContact!.id}');
 
-      
       await ApiService.instance.addContact(_foundContact!.id);
       print('✅ Отправлен opcode=34 с action=ADD');
 
-      
       await ApiService.instance.requestContactsByIds([_foundContact!.id]);
       print('✅ Отправлен opcode=35 с contactIds=[${_foundContact!.id}]');
 
@@ -264,7 +257,6 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
           _isLoading = false;
         });
 
-        
         showDialog(
           context: context,
           barrierDismissible: false,

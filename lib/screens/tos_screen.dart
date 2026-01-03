@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 class TosScreen extends StatelessWidget {
   const TosScreen({super.key});
 
-
   final String tosText = """
 ### 1. Статус и отношения
 1.1. «Komet» (далее — «Приложение») — неофициальное стороннее приложение, не имеющее отношения к ООО «Коммуникационная платформа» (правообладатель сервиса «MAX»).

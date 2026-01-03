@@ -3,6 +3,7 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'dart:io';
+import 'dart:math';
 import 'screens/home_screen.dart';
 import 'screens/phone_entry_screen.dart';
 import 'utils/theme_provider.dart';
@@ -21,12 +22,80 @@ import 'services/whitelist_service.dart';
 import 'services/notification_service.dart';
 import 'services/message_queue_service.dart';
 import 'plugins/plugin_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'utils/device_presets.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+Future<void> _generateInitialAndroidSpoof() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final isSpoofingEnabled = prefs.getBool('spoofing_enabled') ?? false;
+    
+    if (isSpoofingEnabled) {
+      print('Спуф уже настроен, генерация не требуется');
+      return;
+    }
+    
+    print('Генерируем автоматический спуф для Android...');
+    
+    final androidPresets = devicePresets
+        .where((p) => p.deviceType == 'ANDROID')
+        .toList();
+    
+    if (androidPresets.isEmpty) {
+      print('Не найдены пресеты для Android');
+      return;
+    }
+    
+    final random = Random();
+    final preset = androidPresets[random.nextInt(androidPresets.length)];
+    
+    const uuid = Uuid();
+    final deviceId = uuid.v4();
+    
+    String timezone;
+    try {
+      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+      timezone = timezoneInfo.identifier;
+    } catch (_) {
+      timezone = 'Europe/Moscow';
+    }
+    
+    final locale = Platform.localeName.split('_').first;
+    
+    await prefs.setBool('spoofing_enabled', true);
+    await prefs.setBool('anonymity_enabled', true);
+    await prefs.setString('spoof_useragent', preset.userAgent);
+    await prefs.setString('spoof_devicename', preset.deviceName);
+    await prefs.setString('spoof_osversion', preset.osVersion);
+    await prefs.setString('spoof_screen', preset.screen);
+    await prefs.setString('spoof_timezone', timezone);
+    await prefs.setString('spoof_locale', locale);
+    await prefs.setString('spoof_deviceid', deviceId);
+    await prefs.setString('spoof_devicetype', 'ANDROID');
+    await prefs.setString('spoof_appversion', '25.21.3');
+    
+    print('Спуф для Android успешно сгенерирован:');
+    print('  - Устройство: ${preset.deviceName}');
+    print('  - ОС: ${preset.osVersion}');
+    print('  - Device ID: $deviceId');
+    print('  - Часовой пояс: $timezone');
+    print('  - Локаль: $locale');
+  } catch (e) {
+    print('Ошибка при генерации спуфа: $e');
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
+
+  print("Генерируем спуф для Android при первом запуске...");
+  await _generateInitialAndroidSpoof();
+  print("Проверка и генерация спуфа завершена");
 
   print("Инициализируем сервисы кеширования...");
   await CacheService().initialize();
@@ -58,16 +127,11 @@ Future<void> main() async {
   NotificationService().setNavigatorKey(navigatorKey);
   print("NotificationService инициализирован");
 
-
   if (Platform.isAndroid) {
     print("Инициализируем фоновый сервис для Android...");
     await initializeBackgroundService();
     print("Фоновый сервис инициализирован");
   }
-
-  print("Очищаем сессионные значения...");
-  await ApiService.clearSessionValues();
-  print("Сессионные значения очищены");
 
   final hasToken = await ApiService.instance.hasToken();
   print("При запуске приложения токен ${hasToken ? 'найден' : 'не найден'}");
@@ -150,7 +214,9 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
           pageTransitionsTheme: pageTransitionsTheme,
           shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization ? NoSplash.splashFactory : null,
+          splashFactory: themeProvider.optimization
+              ? NoSplash.splashFactory
+              : null,
           appBarTheme: AppBarTheme(
             titleTextStyle: TextStyle(
               fontSize: 16,
@@ -173,7 +239,9 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
           pageTransitionsTheme: pageTransitionsTheme,
           shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization ? NoSplash.splashFactory : null,
+          splashFactory: themeProvider.optimization
+              ? NoSplash.splashFactory
+              : null,
           appBarTheme: AppBarTheme(
             titleTextStyle: TextStyle(
               fontSize: 16,

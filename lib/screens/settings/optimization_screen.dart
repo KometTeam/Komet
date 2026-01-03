@@ -51,9 +51,7 @@ class OptimizationScreen extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.timeline),
                   title: const Text("Да ниче он бля не делает"),
-                  subtitle: Text(
-                    "Оно визуал😭😭",
-                  ),
+                  subtitle: Text("Оно визуал😭😭"),
                 ),
                 Slider(
                   value: theme.maxFrameRate.toDouble(),
@@ -220,9 +218,7 @@ class _ResourceStatsWidgetState extends State<_ResourceStatsWidget> {
             _batteryState = batteryState;
           });
         }
-      } catch (e) {
-        
-      }
+      } catch (e) {}
     }
   }
 
@@ -299,7 +295,9 @@ class _ResourceStatsWidgetState extends State<_ResourceStatsWidget> {
           label: 'Время кадра',
           value: '${_avgMs.toStringAsFixed(1)} мс',
           subtitle: 'Среднее время рендеринга',
-          valueColor: _avgMs < 16.67 ? Colors.green : (_avgMs < 33.33 ? Colors.orange : Colors.red),
+          valueColor: _avgMs < 16.67
+              ? Colors.green
+              : (_avgMs < 33.33 ? Colors.orange : Colors.red),
         ),
       ],
     );
@@ -343,10 +341,7 @@ class _StatRow extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colors.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
               ),
             ],
           ),
@@ -363,4 +358,3 @@ class _StatRow extends StatelessWidget {
     );
   }
 }
-

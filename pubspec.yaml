@@ -1,156 +1,106 @@
 name: gwid
-description: "A new Flutter project."
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-# The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
-# Both the version and the builder number may be overridden in flutter
-# build by specifying --build-name and --build-number, respectively.
-# In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
-# Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-# In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
-version: 0.4.0+9
+description: Альтернативный FOSS клиент для мессенджера MAX.
+
+# Версия приложения и номер сборки
+version: 0.4.1+9
+
+repository: https://github.com/KometTeam/Komet
+
+# Предотвращение случайной публикации в pub
+publish_to: none
 
 environment:
-  sdk: ^3.9.2
+  # Поддерживаются версии Dart SDK от 3.10 до 4.0.
+  # Рекомендуется обновлять только минорную компоненту версии.
+  sdk: ^3.10.0
 
-# Dependencies specify other packages that your package needs in order to work.
-# To automatically upgrade your package dependencies to the latest versions
-# consider running `flutter pub upgrade --major-versions`. Alternatively,
-# dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
-# versions available, run `flutter pub outdated`.
+  # Поддерживаются версии Flutter от 3.38.
+  flutter: ">=3.38.0"
+
 dependencies:
+  # SDK зависимости
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
-
-
+  # Hosted зависимости
   dynamic_color: ^1.7.0
-
-
   pinput: ^4.0.0
-
-
   mask_text_input_formatter: ^2.9.0
-
-
   web_socket_channel: ^2.4.0
-
-  uuid: ^4.4.0 
-
+  uuid: ^4.4.0
   device_info_plus: ^10.1.0
-
   package_info_plus: ^8.0.0
-
   battery_plus: ^6.0.2
-
-
   shared_preferences: ^2.2.3
-
   intl: ^0.20.2
-
   provider: ^6.1.2
   flutter_colorpicker: ^1.1.0
-
   http: ^1.5.0
   image_picker: ^1.1.2
   path_provider: ^2.1.5
   path: ^1.9.0
   crypto: ^3.0.3
-
   cached_network_image: ^3.3.1
-
   scrollable_positioned_list: ^0.3.8
-
   socks5_proxy: ^2.1.1
-
   flutter_launcher_icons: ^0.14.4
-
   flutter_timezone: ^5.0.0
-
   timezone: ^0.10.1
-
-
   file_picker: ^10.3.3
-
   permission_handler: ^11.3.1
-
   image: ^4.1.7
-
   encrypt: ^5.0.3
-
   google_fonts: ^6.2.1
-
   share_plus: ^12.0.0
-
-  url_launcher: 6.3.2
-
+  url_launcher: ^6.3.2
   flutter_background_service: ^5.0.1
   flutter_local_notifications: ^19.5.0
   wakelock_plus: ^1.2.8
-
   flutter_markdown: ^0.7.7
-
   video_player: ^2.9.2
-
-  qr_flutter: ^4.1.0 
-
+  qr_flutter: ^4.1.0
   mobile_scanner: ^7.1.2
-
   es_compression: ^2.0.14
-
   msgpack_dart: ^1.0.1
-
   ffi: ^2.1.0
-
   disable_battery_optimization: ^1.1.2
-
   flutter_highlight: ^0.7.0
-
   flutter_linkify: ^6.0.0
   app_links: ^6.4.1
-
   open_file: ^3.5.2
-
   flutter_secure_storage: ^9.2.4
   flutter_inappwebview: ^6.1.5
-
   lottie: ^3.1.2
-
   flutter_svg: ^2.0.10+1
-
   chewie: ^1.7.5
-
   just_audio: ^0.9.40
   platform_info: ^5.0.0
 
 dev_dependencies:
+  # SDK зависимости
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  # Hosted зависимости
+  flutter_lints: ^6.0.0
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
+# Конфигурация Flutter.
+flutter:
+  # Рекомендуется использовать фреймворк для i18n вместо встроенного во Flutter.
+  generate: false
 
+  # Включает библиотеку flutter/material.
+  uses-material-design: true
+
+  # Ресурсы, которые прилагаются к приложению без сжатия или шифрования.
+  assets:
+    - assets/images/
+    - assets/icon/
+
+# Конфирурация генератора иконок приложения.
 flutter_launcher_icons:
   android: true
   ios: true
@@ -161,42 +111,3 @@ flutter_launcher_icons:
     generate: true
     image_path: "assets/icon/komet_512.png"
     icon_size: 256
-
-# The following section is specific to Flutter packages.
-flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
-  uses-material-design: true
-
-  # To add assets to your application, add an assets section, like this:
-  assets:
-    - assets/images/
-    - assets/icon/
-
-  # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/to/resolution-aware-images
-
-  # For details regarding adding assets from package dependencies, see
-  # https://flutter.dev/to/asset-from-package
-
-  # To add custom fonts to your application, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package

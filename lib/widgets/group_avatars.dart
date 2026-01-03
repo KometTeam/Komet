@@ -35,18 +35,14 @@ class GroupAvatars extends StatelessWidget {
     final visibleParticipants = participantIds.take(maxAvatars).toList();
     final remainingCount = participantIds.length - maxAvatars;
 
-
     final totalParticipants = participantIds.length;
     double adaptiveAvatarSize;
     if (totalParticipants <= 2) {
-      adaptiveAvatarSize =
-          avatarSize * 1.5;
+      adaptiveAvatarSize = avatarSize * 1.5;
     } else if (totalParticipants <= 4) {
-      adaptiveAvatarSize =
-          avatarSize * 1.2;
+      adaptiveAvatarSize = avatarSize * 1.2;
     } else {
-      adaptiveAvatarSize =
-          avatarSize * 0.8;
+      adaptiveAvatarSize = avatarSize * 0.8;
     }
 
     return SizedBox(
@@ -54,24 +50,19 @@ class GroupAvatars extends StatelessWidget {
       width: adaptiveAvatarSize * 2.5,
       child: Stack(
         children: [
-
           ...visibleParticipants.asMap().entries.map((entry) {
             final index = entry.key;
             final participantId = entry.value;
             final contact = contacts[participantId];
 
-
             double x, y;
             if (visibleParticipants.length == 1) {
-
               x = adaptiveAvatarSize * 1.25;
               y = adaptiveAvatarSize * 1.25;
             } else if (visibleParticipants.length == 2) {
-
               x = adaptiveAvatarSize * (0.5 + index * 1.5);
               y = adaptiveAvatarSize * 1.25;
             } else {
-
               final angle = (index * 2 * pi) / visibleParticipants.length;
               final radius = adaptiveAvatarSize * 0.6;
               final center = adaptiveAvatarSize * 1.25;
@@ -90,7 +81,6 @@ class GroupAvatars extends StatelessWidget {
               ),
             );
           }),
-
 
           if (remainingCount > 0)
             Positioned(
@@ -115,7 +105,9 @@ class GroupAvatars extends StatelessWidget {
   ) {
     final colors = Theme.of(context).colorScheme;
 
-    if (contact == null || contact.photoBaseUrl == null || contact.photoBaseUrl!.isEmpty) {
+    if (contact == null ||
+        contact.photoBaseUrl == null ||
+        contact.photoBaseUrl!.isEmpty) {
       return Container(
         width: size,
         height: size,
@@ -154,7 +146,10 @@ class GroupAvatars extends StatelessWidget {
     }
 
     return FutureBuilder<ImageProvider?>(
-      future: AvatarCacheService().getAvatar(contact.photoBaseUrl, userId: participantId),
+      future: AvatarCacheService().getAvatar(
+        contact.photoBaseUrl,
+        userId: participantId,
+      ),
       builder: (context, snapshot) {
         ImageProvider? imageProvider;
         if (snapshot.hasData && snapshot.data != null) {
@@ -181,8 +176,7 @@ class GroupAvatars extends StatelessWidget {
             radius: size / 2,
             backgroundColor: colors.primaryContainer,
             backgroundImage: imageProvider,
-            onBackgroundImageError: (exception, stackTrace) {
-            },
+            onBackgroundImageError: (exception, stackTrace) {},
             child: imageProvider == null
                 ? Text(
                     contact.name.isNotEmpty

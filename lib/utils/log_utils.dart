@@ -1,5 +1,6 @@
 import 'package:gwid/consts.dart';
-//Потому что заебало блять на пол консоли один запрос 
+
+//Потому что заебало блять на пол консоли один запрос
 String truncatePayloadForLog(String payload) {
   if (payload.length <= AppLimits.maxLogPayloadLength) {
     return payload;

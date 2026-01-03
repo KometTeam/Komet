@@ -16,8 +16,6 @@ class LocalProfileManager {
   }
 
   Future<Profile?> getActualProfile(Profile? serverProfile) async {
-    
-    
     return serverProfile;
   }
 

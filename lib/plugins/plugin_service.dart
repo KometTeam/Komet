@@ -13,18 +13,19 @@ class PluginService {
   final List<KometPlugin> _plugins = [];
   final Map<String, dynamic> _overriddenConstants = {};
   final Map<String, dynamic> _pluginValues = {};
-  
+
   bool _initialized = false;
 
   List<KometPlugin> get plugins => List.unmodifiable(_plugins);
-  List<KometPlugin> get enabledPlugins => _plugins.where((p) => p.isEnabled).toList();
+  List<KometPlugin> get enabledPlugins =>
+      _plugins.where((p) => p.isEnabled).toList();
 
   Future<void> initialize() async {
     if (_initialized) return;
-    
+
     final prefs = await SharedPreferences.getInstance();
     final pluginPaths = prefs.getStringList('installed_plugins') ?? [];
-    
+
     for (final path in pluginPaths) {
       try {
         final plugin = await _loadPluginFromPath(path);
@@ -38,19 +39,19 @@ class PluginService {
         print('Ошибка загрузки плагина $path: $e');
       }
     }
-    
+
     final savedValues = prefs.getString('plugin_values');
     if (savedValues != null) {
       _pluginValues.addAll(jsonDecode(savedValues));
     }
-    
+
     _initialized = true;
   }
 
   Future<KometPlugin?> _loadPluginFromPath(String path) async {
     final file = File(path);
     if (!await file.exists()) return null;
-    
+
     final content = await file.readAsString();
     final json = jsonDecode(content) as Map<String, dynamic>;
     return KometPlugin.fromJson(json, path);
@@ -72,18 +73,21 @@ class PluginService {
     } else {
       _plugins.add(plugin);
     }
-    
+
     await _savePluginList();
-    
+
     if (plugin.isEnabled) {
       _applyPluginConstants(plugin);
     }
-    
+
     return true;
   }
 
   Future<void> uninstallPlugin(String pluginId) async {
-    final plugin = _plugins.firstWhere((p) => p.id == pluginId, orElse: () => throw Exception('Plugin not found'));
+    final plugin = _plugins.firstWhere(
+      (p) => p.id == pluginId,
+      orElse: () => throw Exception('Plugin not found'),
+    );
     _removePluginConstants(plugin);
     _plugins.removeWhere((p) => p.id == pluginId);
     await _savePluginList();
@@ -92,13 +96,13 @@ class PluginService {
   Future<void> setPluginEnabled(String pluginId, bool enabled) async {
     final plugin = _plugins.firstWhere((p) => p.id == pluginId);
     plugin.isEnabled = enabled;
-    
+
     if (enabled) {
       _applyPluginConstants(plugin);
     } else {
       _removePluginConstants(plugin);
     }
-    
+
     await _savePluginList();
   }
 
@@ -149,7 +153,9 @@ class PluginService {
     final subsections = <PluginSubsection>[];
     for (final plugin in enabledPlugins) {
       subsections.addAll(
-        plugin.settingsSubsections.where((s) => s.parentSection == parentSection)
+        plugin.settingsSubsections.where(
+          (s) => s.parentSection == parentSection,
+        ),
       );
     }
     return subsections;
@@ -188,16 +194,19 @@ class PluginService {
     }
   }
 
-  Future<void> _executeBuiltinAction(String actionId, BuildContext context) async {
+  Future<void> _executeBuiltinAction(
+    String actionId,
+    BuildContext context,
+  ) async {
     switch (actionId) {
       case 'clear_cache':
         break;
       case 'reconnect':
         break;
       case 'show_snackbar':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Действие выполнено!')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Действие выполнено!')));
         break;
     }
   }
@@ -208,4 +217,3 @@ class PluginService {
     'show_snackbar': 'Показать уведомление',
   };
 }
-

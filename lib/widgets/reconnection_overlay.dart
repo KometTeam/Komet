@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 
 class ReconnectionOverlay extends StatelessWidget {
@@ -39,7 +37,6 @@ class ReconnectionOverlay extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-
                 SizedBox(
                   width: 48,
                   height: 48,
@@ -52,7 +49,6 @@ class ReconnectionOverlay extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-
                 Text(
                   message ?? 'Переподключение...',
                   style: TextStyle(
@@ -64,7 +60,6 @@ class ReconnectionOverlay extends StatelessWidget {
                 ),
 
                 const SizedBox(height: 8),
-
 
                 Text(
                   'Пожалуйста, подождите',

@@ -5,17 +5,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 class AboutScreen extends StatelessWidget {
   final bool isModal;
-  
-  const AboutScreen({super.key, this.isModal = false});
 
+  const AboutScreen({super.key, this.isModal = false});
 
   Future<void> _launchUrl(String url) async {
     if (!await launchUrl(Uri.parse(url))) {
-
       print('Could not launch $url');
     }
   }
-
 
   Widget _buildTeamMember(
     BuildContext context, {
@@ -66,9 +63,7 @@ class AboutScreen extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("О приложении"),
-      ),
+      appBar: AppBar(title: const Text("О приложении")),
       body: ListView(
         padding: const EdgeInsets.all(24.0),
         children: [
@@ -85,9 +80,8 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-
           Card(
-            clipBehavior: Clip.antiAlias, 
+            clipBehavior: Clip.antiAlias,
             child: ListTile(
               leading: const Icon(Icons.description_outlined),
               title: const Text("Пользовательское соглашение"),
@@ -101,7 +95,6 @@ class AboutScreen extends StatelessWidget {
               },
             ),
           ),
-
 
           const SizedBox(height: 24),
           const Text(
@@ -147,14 +140,9 @@ class AboutScreen extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-
           Column(
             children: [
-              Image.asset(
-                'assets/icon/komet.png',
-                width: 128,
-                height: 128,
-              ),
+              Image.asset('assets/icon/komet.png', width: 128, height: 128),
               const SizedBox(height: 16),
               Text(
                 'Komet',
@@ -175,7 +163,6 @@ class AboutScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          
 
           Container(
             padding: const EdgeInsets.all(16),
@@ -234,7 +221,8 @@ class AboutScreen extends StatelessWidget {
                   context,
                   name: "Jganenok",
                   role: "программист",
-                  description: "Участие в разработке и пользовательские интерфейсы",
+                  description:
+                      "Участие в разработке и пользовательские интерфейсы",
                 ),
                 _buildTeamMember(
                   context,
@@ -264,13 +252,15 @@ class AboutScreen extends StatelessWidget {
                   context,
                   name: "WhiteMax",
                   role: "PR-менеджер",
-                  description: "Коммуникация с сообществом и продвижение проекта",
+                  description:
+                      "Коммуникация с сообществом и продвижение проекта",
                 ),
                 _buildTeamMember(
                   context,
                   name: "Raspberry",
                   role: "PR-менеджер",
-                  description: "Коммуникация с сообществом и продвижение проекта",
+                  description:
+                      "Коммуникация с сообществом и продвижение проекта",
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -311,7 +301,6 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          
 
           Container(
             padding: const EdgeInsets.all(16),
@@ -352,4 +341,3 @@ class AboutScreen extends StatelessWidget {
     );
   }
 }
-

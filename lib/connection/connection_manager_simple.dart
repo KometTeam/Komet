@@ -23,8 +23,7 @@ class ConnectionManagerSimple {
   IOWebSocketChannel? _channel;
   StreamSubscription? _messageSubscription;
 
-  final List<String> _serverUrls = AppUrls
-      .websocketUrls;
+  final List<String> _serverUrls = AppUrls.websocketUrls;
 
   int _currentUrlIndex = 0;
   String? _currentServerUrl;
