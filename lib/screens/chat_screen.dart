@@ -1438,7 +1438,9 @@ class _ChatScreenState extends State<ChatScreen> {
         final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
         if (themeProvider.showDeletedMessages && hasCache) {
           for (final cachedMsg in _messages) {
-            if (!serverMessageIds.contains(cachedMsg.id)) {
+            // Не помечаем локальные неотправленные сообщения как удаленные
+            if (!serverMessageIds.contains(cachedMsg.id) && 
+                !cachedMsg.id.startsWith('local_')) {
               messagesMap[cachedMsg.id] = cachedMsg.copyWith(isDeleted: true);
             }
           }

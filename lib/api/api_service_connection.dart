@@ -788,18 +788,20 @@ extension ApiServiceConnection on ApiService {
       print(
         'Отправляем из очереди: ${item.type.name}, opcode=${item.opcode}, cid=${item.cid}',
       );
-      // Отмечаем сообщение как обработанное перед отправкой
-      _queueService.markMessageAsProcessed(item.id);
+      // Отправляем сообщение
       unawaited(
         _sendMessage(item.opcode, item.payload)
             .then((_) {
               print(
                 'Сообщение из очереди успешно отправлено, удаляем из очереди: ${item.id}',
               );
+              // Отмечаем сообщение как обработанное ТОЛЬКО после успешной отправки
+              _queueService.markMessageAsProcessed(item.id);
               _queueService.removeFromQueue(item.id);
             })
             .catchError((e) {
               print('Ошибка отправки из очереди: $e, оставляем в очереди');
+              // НЕ отмечаем как обработанное при ошибке - попробуем снова позже
             }),
       );
     }
