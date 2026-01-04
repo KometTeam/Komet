@@ -756,7 +756,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: colorScheme.surfaceVariant.withValues(
+                          color: colorScheme.surfaceContainerHighest.withValues(
                             alpha: 0.5,
                           ),
                           borderRadius: BorderRadius.circular(8),
