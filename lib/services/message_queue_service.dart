@@ -227,14 +227,14 @@ class MessageQueueService {
       final toRemove = _processedMessageIds.take(_cleanupBatchSize).toList();
       _processedMessageIds.removeAll(toRemove);
     }
-    // Сохраняем обновленный список в SharedPreferences
-    _saveProcessedIds();
+    // Сохраняем обновленный список в SharedPreferences асинхронно
+    unawaited(_saveProcessedIds());
   }
 
   /// Очищает список обработанных сообщений
   void clearProcessedMessages() {
     _processedMessageIds.clear();
-    _saveProcessedIds();
+    unawaited(_saveProcessedIds());
   }
 
   void dispose() {
