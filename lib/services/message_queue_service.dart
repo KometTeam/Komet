@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:collection';
 import 'package:gwid/utils/fresh_mode_helper.dart';
 
 enum QueueItemType { sendMessage, loadChat }
@@ -62,8 +63,10 @@ class MessageQueueService {
       StreamController<List<QueueItem>>.broadcast();
 
   // Локальный массив для отслеживания обработанных сообщений из очереди
-  final Set<String> _processedMessageIds = {};
+  // LinkedHashSet сохраняет порядок вставки
+  final LinkedHashSet<String> _processedMessageIds = LinkedHashSet<String>();
   static const int _maxProcessedMessageIds = 1000;
+  static const int _cleanupBatchSize = 100;
 
   Stream<List<QueueItem>> get queueStream => _queueController.stream;
   List<QueueItem> get queue => List.unmodifiable(_queue);
@@ -186,10 +189,8 @@ class MessageQueueService {
     _processedMessageIds.add(messageId);
     // Ограничиваем размер множества, чтобы не занимать слишком много памяти
     if (_processedMessageIds.length > _maxProcessedMessageIds) {
-      // Удаляем случайный элемент, так как Set не гарантирует порядок
-      // В реальности это нормально, так как вероятность отправки одного и того же
-      // сообщения после обработки 1000 других сообщений крайне мала
-      final toRemove = _processedMessageIds.take(100).toList();
+      // LinkedHashSet сохраняет порядок вставки, поэтому удаляем самые старые
+      final toRemove = _processedMessageIds.take(_cleanupBatchSize).toList();
       _processedMessageIds.removeAll(toRemove);
     }
   }
