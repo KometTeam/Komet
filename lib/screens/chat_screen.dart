@@ -4537,7 +4537,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     onColorSelected: (color) {
                                       if (_currentKometColorPrefix == null)
                                         return;
-                                      final hex = color.value
+                                      final hex = color
+                                          .toARGB32()
                                           .toRadixString(16)
                                           .padLeft(8, '0')
                                           .substring(2)
