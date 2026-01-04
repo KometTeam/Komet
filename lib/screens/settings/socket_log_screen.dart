@@ -490,7 +490,9 @@ class _SocketLogScreenState extends State<SocketLogScreen>
               "[${DateFormat('HH:mm:ss.SSS').format(entry.timestamp)}] ${entry.message}",
         )
         .join('\n\n');
-    await Share.share(logText, subject: 'Gwid Connection Log');
+    await SharePlus.instance.share(
+      ShareParams(text: logText, subject: 'Gwid Connection Log'),
+    );
   }
 
   Future<void> _exportLogsToFile() async {
@@ -516,7 +518,9 @@ class _SocketLogScreenState extends State<SocketLogScreen>
             content: Text('Логи сохранены: ${file.path}'),
             action: SnackBarAction(
               label: 'Открыть',
-              onPressed: () => Share.shareXFiles([XFile(file.path)]),
+              onPressed: () => SharePlus.instance.share(
+                ShareParams(files: [XFile(file.path)]),
+              ),
             ),
           ),
         );

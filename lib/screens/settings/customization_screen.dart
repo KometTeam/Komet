@@ -1080,9 +1080,12 @@ class _ThemeManagementSection extends StatelessWidget {
           final tempFile = File('${tempDir.path}/$fileName');
           await tempFile.writeAsBytes(bytes);
 
-          final result = await Share.shareXFiles([
-            XFile(tempFile.path),
-          ], text: 'Экспорт темы: ${preset.name}');
+          final result = await SharePlus.instance.share(
+            ShareParams(
+              text: 'Экспорт темы: ${preset.name}',
+              files: [XFile(tempFile.path)],
+            ),
+          );
 
           if (context.mounted) {
             if (result.status == ShareResultStatus.success) {
