@@ -455,7 +455,6 @@ class MessageHandler {
               newMessages: newChat.newMessages + 1,
             );
             setState(() {
-              allChats.add(updatedChat);
               _insertChatAtCorrectPosition(updatedChat);
               filterChats();
             });
