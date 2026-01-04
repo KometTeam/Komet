@@ -211,8 +211,8 @@ class _NotificationSettingsScreenState
           title: Text(title),
           children: [
             RadioGroup<String>(
-              onChanged: (v) => Navigator.of(context).pop(v),
               groupValue: currentValue,
+              onChanged: (v) => Navigator.of(context).pop(v),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

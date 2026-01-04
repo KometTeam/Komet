@@ -156,13 +156,13 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           title: Text(title),
           children: [
             RadioGroup<String>(
+              groupValue: currentValue,
               onChanged: (newValue) {
                 if (newValue != null) {
                   onSelect(newValue);
                   Navigator.of(context).pop();
                 }
               },
-              groupValue: currentValue,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

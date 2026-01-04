@@ -156,8 +156,8 @@ class _ReadSettingsDialogContentState extends State<ReadSettingsDialogContent> {
           Flexible(
             child: SingleChildScrollView(
               child: RadioGroup<String>(
-                onChanged: (value) => _setOption(value!),
                 groupValue: selectedOption,
+                onChanged: (value) => _setOption(value!),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
