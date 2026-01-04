@@ -73,7 +73,6 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
   late bool _useGradientForAddAccountButton;
   late bool _useGlassPanels;
 
-
   @override
   void initState() {
     super.initState();
@@ -85,7 +84,6 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
     _useGradientForAddAccountButton = theme.useGradientForAddAccountButton;
     _useGlassPanels = theme.useGlassPanels;
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -120,27 +118,27 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
         : const Color(0xFF464646);
 
     return Scaffold(
-          appBar: AppBar(
-            title: const Text("Персонализация"),
-            surfaceTintColor: Colors.transparent,
-            backgroundColor: colors.surface,
-            elevation: 0,
-          ),
-          body: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      appBar: AppBar(
+        title: const Text("Персонализация"),
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: colors.surface,
+        elevation: 0,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        children: [
+          _MessagePreviewSection(isMaterialYou: _isMaterialYou),
+          const SizedBox(height: 16),
+          const _ThemeManagementSection(),
+          const SizedBox(height: 16),
+          _ModernSection(
+            title: "Тема приложения",
             children: [
-              _MessagePreviewSection(isMaterialYou: _isMaterialYou),
-              const SizedBox(height: 16),
-              const _ThemeManagementSection(),
-              const SizedBox(height: 16),
-              _ModernSection(
-                title: "Тема приложения",
-                children: [
-                  const SizedBox(height: 8),
-                  _CustomSettingTile(
-                    icon: Icons.auto_awesome_outlined,
-                    title: "Material You",
-                    subtitle: "Использовать цвета системы (Android 12+)",
+              const SizedBox(height: 8),
+              _CustomSettingTile(
+                icon: Icons.auto_awesome_outlined,
+                title: "Material You",
+                subtitle: "Использовать цвета системы (Android 12+)",
                 child: Switch(
                   value: _isMaterialYou,
                   onChanged: (value) {
@@ -148,8 +146,8 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                     theme.setMaterialYouEnabled(value);
                   },
                 ),
-                  ),
-                  const SizedBox(height: 12),
+              ),
+              const SizedBox(height: 12),
               IgnorePointer(
                 ignoring: _isMaterialYou,
                 child: Opacity(
@@ -755,13 +753,13 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                 icon: Icons.person_add,
                 title: "Градиент для кнопки добавления аккаунта",
                 subtitle: "Применить градиент к кнопке в drawer",
-                    child: Switch(
-                      value: _useGradientForAddAccountButton,
-                      onChanged: (value) {
-                        setState(() => _useGradientForAddAccountButton = value);
-                        theme.setUseGradientForAddAccountButton(value);
-                      },
-                    ),
+                child: Switch(
+                  value: _useGradientForAddAccountButton,
+                  onChanged: (value) {
+                    setState(() => _useGradientForAddAccountButton = value);
+                    theme.setUseGradientForAddAccountButton(value);
+                  },
+                ),
               ),
               if (theme.useGradientForAddAccountButton) ...[
                 const SizedBox(height: 16),
@@ -1210,13 +1208,13 @@ class _ThemeManagementSection extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             elevation: 0,
             color: isActive
-                ? colors.primaryContainer.withOpacity(0.3)
-                : colors.surfaceContainerHighest.withOpacity(0.2),
+                ? colors.primaryContainer.withValues(alpha: 0.3)
+                : colors.surfaceContainerHighest.withValues(alpha: 0.2),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
                 color: isActive
-                    ? colors.primary.withOpacity(0.5)
+                    ? colors.primary.withValues(alpha: 0.5)
                     : Colors.transparent,
                 width: 2,
               ),
@@ -1360,12 +1358,12 @@ class _ModernSection extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
             side: BorderSide(
-              color: colors.outlineVariant.withOpacity(0.2),
+              color: colors.outlineVariant.withValues(alpha: 0.2),
               width: 1,
             ),
           ),
           clipBehavior: Clip.antiAlias,
-          color: colors.surfaceContainerHighest.withOpacity(0.3),
+          color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -1402,7 +1400,7 @@ class _CustomSettingTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: colors.primaryContainer.withOpacity(0.3),
+              color: colors.primaryContainer.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: colors.primary, size: 20),
@@ -1472,7 +1470,7 @@ class _ColorPickerTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: colors.primaryContainer.withOpacity(0.3),
+                color: colors.primaryContainer.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -1512,12 +1510,12 @@ class _ColorPickerTile extends StatelessWidget {
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: colors.outline.withOpacity(0.3),
+                  color: colors.outline.withValues(alpha: 0.3),
                   width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withOpacity(0.3),
+                    color: color.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -1582,7 +1580,7 @@ class _SliderTile extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: colors.primaryContainer.withOpacity(0.5),
+                  color: colors.primaryContainer.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1695,7 +1693,7 @@ class _MessagePreviewSection extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: colors.outlineVariant.withOpacity(0.2),
+              color: colors.outlineVariant.withValues(alpha: 0.2),
               width: 1,
             ),
           ),
@@ -1714,8 +1712,8 @@ class _MessagePreviewSection extends StatelessWidget {
                         ),
                         child: Container(
                           height: 40,
-                          color: colors.surface.withOpacity(
-                            theme.topBarOpacity,
+                          color: colors.surface.withValues(
+                            alpha: theme.topBarOpacity,
                           ),
                           child: Row(
                             children: [
@@ -1788,8 +1786,8 @@ class _MessagePreviewSection extends StatelessWidget {
                         ),
                         child: Container(
                           height: 40,
-                          color: colors.surface.withOpacity(
-                            theme.bottomBarOpacity,
+                          color: colors.surface.withValues(
+                            alpha: theme.bottomBarOpacity,
                           ),
                           child: Row(
                             children: [
@@ -1864,7 +1862,7 @@ class _ChatWallpaperPreview extends StatelessWidget {
                     sigmaX: theme.chatWallpaperImageBlur,
                     sigmaY: theme.chatWallpaperImageBlur,
                   ),
-                  child: Container(color: Colors.black.withOpacity(0.05)),
+                  child: Container(color: Colors.black.withValues(alpha: 0.05)),
                 ),
             ],
           );
@@ -2027,7 +2025,7 @@ class _VideoWallpaperState extends State<_VideoWallpaper> {
         ),
 
         Container(
-          decoration: BoxDecoration(color: Colors.black.withOpacity(0.3)),
+          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3)),
         ),
       ],
     );
@@ -2166,7 +2164,7 @@ class _ActionTile extends StatelessWidget {
                     (isDestructive
                             ? colors.errorContainer
                             : colors.primaryContainer)
-                        .withOpacity(0.3),
+                        .withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: iconColor, size: 20),

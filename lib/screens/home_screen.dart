@@ -1245,7 +1245,7 @@ class _DesktopLayoutState extends State<_DesktopLayout> {
               cursor: SystemMouseCursors.resizeLeftRight,
               child: Container(
                 width: 4.0,
-                color: colors.outline.withOpacity(0.3),
+                color: colors.outline.withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -1264,7 +1264,7 @@ class _DesktopLayoutState extends State<_DesktopLayout> {
                               Icon(
                                 Icons.message,
                                 size: 80,
-                                color: colors.primary.withOpacity(0.5),
+                                color: colors.primary.withValues(alpha: 0.5),
                               ),
                               const SizedBox(height: 16),
                               Text(

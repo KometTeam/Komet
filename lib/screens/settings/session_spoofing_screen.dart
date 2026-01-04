@@ -86,7 +86,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
     _appVersionController.text = '25.21.3';
     _localeController.text = Platform.localeName.split('_').first;
-    
+
     // Generate screen in Android format: "xxhdpi 420dpi 1080x2400"
     final dpi = (160 * pixelRatio).round();
     String densityBucket;
@@ -120,8 +120,8 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
           '${androidInfo.manufacturer} ${androidInfo.model}';
       _osVersionController.text = 'Android ${androidInfo.version.release}';
       _selectedDeviceType = 'ANDROID';
-      _selectedArch = androidInfo.supportedAbis.isNotEmpty 
-          ? androidInfo.supportedAbis.first 
+      _selectedArch = androidInfo.supportedAbis.isNotEmpty
+          ? androidInfo.supportedAbis.first
           : 'arm64-v8a';
       _buildNumberController.text = '6498';
     } else if (Platform.isIOS) {
@@ -143,14 +143,18 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
   Future<void> _applyGeneratedData() async {
     final filteredPresets = devicePresets
-        .where((p) => p.deviceType != 'WEB' && p.deviceType == _selectedDeviceType)
+        .where(
+          (p) => p.deviceType != 'WEB' && p.deviceType == _selectedDeviceType,
+        )
         .toList();
 
     if (filteredPresets.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Нет доступных пресетов для типа устройства $_selectedDeviceType.'),
+            content: Text(
+              'Нет доступных пресетов для типа устройства $_selectedDeviceType.',
+            ),
           ),
         );
       }
@@ -170,7 +174,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
       _deviceIdController.text = _generateDeviceId();
 
       _selectedDeviceType = preset.deviceType;
-      
+
       // Set arch based on device type
       if (preset.deviceType == 'ANDROID') {
         _selectedArch = 'arm64-v8a';
@@ -321,7 +325,10 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
     await prefs.setString('spoof_devicetype', _selectedDeviceType);
     await prefs.setString('spoof_appversion', _appVersionController.text);
     await prefs.setString('spoof_arch', _selectedArch);
-    await prefs.setInt('spoof_buildnumber', int.tryParse(_buildNumberController.text) ?? 6498);
+    await prefs.setInt(
+      'spoof_buildnumber',
+      int.tryParse(_buildNumberController.text) ?? 6498,
+    );
   }
 
   Future<void> _handleVersionCheck() async {
@@ -419,7 +426,9 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
 
   Widget _buildInfoCard() {
     return Card(
-      color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+      color: Theme.of(
+        context,
+      ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -518,10 +527,7 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Тип устройства",
-              style: theme.textTheme.titleMedium,
-            ),
+            Text("Тип устройства", style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             _buildDescriptionTile(
               icon: Icons.info_outline,
@@ -661,12 +667,12 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
               controller: _deviceIdController,
               decoration: _inputDecoration('ID Устройства', Icons.tag_outlined)
                   .copyWith(
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.autorenew_outlined),
-                  tooltip: 'Сгенерировать новый ID',
-                  onPressed: _generateNewDeviceId,
-                ),
-              ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.autorenew_outlined),
+                      tooltip: 'Сгенерировать новый ID',
+                      onPressed: _generateNewDeviceId,
+                    ),
+                  ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -729,11 +735,26 @@ class _SessionSpoofingScreenState extends State<SessionSpoofingScreen> {
                 Icons.memory_outlined,
               ),
               items: const [
-                DropdownMenuItem(value: 'arm64-v8a', child: Text('arm64-v8a (64-bit ARM)')),
-                DropdownMenuItem(value: 'armeabi-v7a', child: Text('armeabi-v7a (32-bit ARM)')),
-                DropdownMenuItem(value: 'x86', child: Text('x86 (32-bit Intel)')),
-                DropdownMenuItem(value: 'x86_64', child: Text('x86_64 (64-bit Intel)')),
-                DropdownMenuItem(value: 'arm64', child: Text('arm64 (iOS/Desktop)')),
+                DropdownMenuItem(
+                  value: 'arm64-v8a',
+                  child: Text('arm64-v8a (64-bit ARM)'),
+                ),
+                DropdownMenuItem(
+                  value: 'armeabi-v7a',
+                  child: Text('armeabi-v7a (32-bit ARM)'),
+                ),
+                DropdownMenuItem(
+                  value: 'x86',
+                  child: Text('x86 (32-bit Intel)'),
+                ),
+                DropdownMenuItem(
+                  value: 'x86_64',
+                  child: Text('x86_64 (64-bit Intel)'),
+                ),
+                DropdownMenuItem(
+                  value: 'arm64',
+                  child: Text('arm64 (iOS/Desktop)'),
+                ),
               ],
               onChanged: (value) {
                 if (value != null) {

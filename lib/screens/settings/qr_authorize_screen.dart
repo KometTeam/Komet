@@ -15,7 +15,7 @@ class QrAuthorizeScreen extends StatefulWidget {
 }
 
 class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
-  with TickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final MobileScannerController _scannerController = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
     facing: CameraFacing.back,
@@ -67,7 +67,8 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
     const double timeConstant = 0.12; // seconds; smaller = snappier
     final t = 1 - exp(-dtSeconds / timeConstant);
 
-    final nextAlignment = Alignment.lerp(_frameAlignment, _targetFrameAlignment, t) ??
+    final nextAlignment =
+        Alignment.lerp(_frameAlignment, _targetFrameAlignment, t) ??
         _targetFrameAlignment;
     final nextSide =
         lerpDouble(_frameSide, _targetFrameSide, t) ?? _targetFrameSide;
@@ -147,10 +148,9 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
                   Expanded(
                     child: Text(
                       'Вы хотите авторизоваться?',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -158,10 +158,9 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
               const SizedBox(height: 12),
               Text(
                 'Подтвердите действие, если доверяете устройству, которое сгенерировало этот QR-код.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: colors.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 20),
               Row(
@@ -202,7 +201,11 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
       final cy = (center.dy / imageSize.height) * 2 - 1;
 
       final targetSide =
-          (bounds.width / imageSize.width) * (_screenWidth == 0 ? MediaQuery.of(context).size.width : _screenWidth) * 1.1;
+          (bounds.width / imageSize.width) *
+          (_screenWidth == 0
+              ? MediaQuery.of(context).size.width
+              : _screenWidth) *
+          1.1;
 
       _targetFrameAlignment = Alignment(
         cx.clamp(-1.0, 1.0),
@@ -215,7 +218,8 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
 
   Rect? _extractBounds(Barcode barcode) {
     final dynamic b = barcode;
-    final List<dynamic>? corners = (b.corners ?? b.cornerPoints) as List<dynamic>?;
+    final List<dynamic>? corners =
+        (b.corners ?? b.cornerPoints) as List<dynamic>?;
     if (corners == null || corners.isEmpty) return null;
 
     double minX = double.infinity;
@@ -353,15 +357,18 @@ class _QrAuthorizeScreenState extends State<QrAuthorizeScreen>
                   'Наведите камеру на QR-код, чтобы подтвердить авторизацию.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -403,15 +410,13 @@ class _ScannerOverlay extends StatelessWidget {
         const double borderRadius = 18;
         final double maxSide =
             constraints.hasBoundedWidth && constraints.hasBoundedHeight
-                ? (constraints.biggest.shortestSide * 0.9)
-                : frameSide;
+            ? (constraints.biggest.shortestSide * 0.9)
+            : frameSide;
         final double frameSize = frameSide.clamp(160.0, maxSide);
 
         return Stack(
           children: [
-            Container(
-              color: Colors.black.withOpacity(0.35),
-            ),
+            Container(color: Colors.black.withValues(alpha: 0.35)),
             AnimatedAlign(
               alignment: frameAlignment,
               duration: const Duration(milliseconds: 120),
@@ -424,9 +429,7 @@ class _ScannerOverlay extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(borderRadius),
                 ),
-                child: CustomPaint(
-                  painter: _CornerPainter(colors.primary),
-                ),
+                child: CustomPaint(painter: _CornerPainter(colors.primary)),
               ),
             ),
           ],

@@ -3,7 +3,8 @@ import 'package:http/http.dart' as http;
 
 class VersionChecker {
   static const String _packageName = 'ru.oneme.app';
-  static const String _apiUrl = 'https://backapi.rustore.ru/applicationData/overallInfo/$_packageName';
+  static const String _apiUrl =
+      'https://backapi.rustore.ru/applicationData/overallInfo/$_packageName';
 
   static Future<String> getLatestVersion() async {
     final info = await getLatestVersionInfo();
@@ -38,10 +39,7 @@ class VersionChecker {
 
       print('[SUCCESS] Version: $versionName, Build: $versionCode');
 
-      return {
-        'versionName': versionName,
-        'versionCode': versionCode,
-      };
+      return {'versionName': versionName, 'versionCode': versionCode};
     } catch (e) {
       throw Exception('Не удалось получить информацию о версии: $e');
     }

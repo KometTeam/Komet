@@ -264,10 +264,7 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                colors.surfaceContainerHighest,
-                colors.surfaceContainer,
-              ],
+              colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
             ),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
@@ -285,7 +282,11 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
                       color: colors.primaryContainer.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.access_time, color: colors.primary, size: 24),
+                    child: Icon(
+                      Icons.access_time,
+                      color: colors.primary,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -333,7 +334,11 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
                       color: colors.primaryContainer.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.delete_outline, color: colors.primary, size: 24),
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: colors.primary,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -381,7 +386,11 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
                       color: colors.primaryContainer.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.edit_outlined, color: colors.primary, size: 24),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      color: colors.primary,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(

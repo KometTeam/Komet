@@ -116,7 +116,7 @@ class GroupAvatars extends StatelessWidget {
           border: Border.all(color: colors.surface, width: 2),
           boxShadow: [
             BoxShadow(
-              color: colors.shadow.withOpacity(0.3),
+              color: colors.shadow.withValues(alpha: 0.3),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -166,7 +166,7 @@ class GroupAvatars extends StatelessWidget {
             border: Border.all(color: colors.surface, width: 2),
             boxShadow: [
               BoxShadow(
-                color: colors.shadow.withOpacity(0.3),
+                color: colors.shadow.withValues(alpha: 0.3),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -209,7 +209,7 @@ class GroupAvatars extends StatelessWidget {
         border: Border.all(color: colors.surface, width: 2),
         boxShadow: [
           BoxShadow(
-            color: colors.shadow.withOpacity(0.3),
+            color: colors.shadow.withValues(alpha: 0.3),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),

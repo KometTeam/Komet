@@ -286,13 +286,11 @@ class ApiService {
   }
 
   String generateRandomDeviceId() {
-
     final random = Random();
     final bytes = List<int>.generate(8, (_) => random.nextInt(256));
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
- 
   static Future<void> clearSessionValues() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('session_mt_instanceid');
@@ -316,7 +314,8 @@ class ApiService {
         'locale': spoofedData['locale'] as String? ?? 'ru',
         'deviceLocale': spoofedData['locale'] as String? ?? 'ru',
         'osVersion': spoofedData['os_version'] as String? ?? 'Android 14',
-        'deviceName': spoofedData['device_name'] as String? ?? 'Samsung Galaxy S23',
+        'deviceName':
+            spoofedData['device_name'] as String? ?? 'Samsung Galaxy S23',
         'appVersion': spoofedData['app_version'] as String? ?? '25.21.3',
         'screen': spoofedData['screen'] as String? ?? 'xxhdpi 480dpi 1080x2340',
         'timezone': spoofedData['timezone'] as String? ?? 'Europe/Moscow',
@@ -337,7 +336,8 @@ class ApiService {
           'deviceName':
               generatedData['device_name'] as String? ?? 'Samsung Galaxy S23',
           'appVersion': generatedData['app_version'] as String? ?? '25.21.3',
-          'screen': generatedData['screen'] as String? ?? 'xxhdpi 480dpi 1080x2340',
+          'screen':
+              generatedData['screen'] as String? ?? 'xxhdpi 480dpi 1080x2340',
           'timezone': generatedData['timezone'] as String? ?? 'Europe/Moscow',
           'pushDeviceType': 'GCM',
           'arch': generatedData['arch'] as String? ?? 'arm64-v8a',

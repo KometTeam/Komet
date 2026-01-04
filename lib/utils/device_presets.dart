@@ -1,4 +1,3 @@
-
 class DevicePreset {
   final String deviceType;
   final String userAgent;
@@ -19,9 +18,7 @@ class DevicePreset {
   });
 }
 
-
 final List<DevicePreset> devicePresets = [
-
   DevicePreset(
     deviceType: 'ANDROID',
     userAgent:
@@ -403,8 +400,6 @@ final List<DevicePreset> devicePresets = [
     locale: 'zh-HK',
   ),
 
-
-
   DevicePreset(
     deviceType: 'IOS',
     userAgent:
@@ -646,7 +641,6 @@ final List<DevicePreset> devicePresets = [
     locale: 'cs-CZ',
   ),
 
-
   DevicePreset(
     deviceType: 'DESKTOP',
     userAgent:
@@ -697,8 +691,6 @@ final List<DevicePreset> devicePresets = [
     timezone: 'America/Los_Angeles',
     locale: 'en-US',
   ),
-
-
 
   DevicePreset(
     deviceType: 'WEB',
@@ -751,7 +743,6 @@ final List<DevicePreset> devicePresets = [
     locale: 'es-ES',
   ),
 
-
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -783,7 +774,6 @@ final List<DevicePreset> devicePresets = [
     locale: 'pl-PL',
   ),
 
-
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -804,7 +794,6 @@ final List<DevicePreset> devicePresets = [
     timezone: 'America/Sao_Paulo',
     locale: 'pt-BR',
   ),
-
 
   DevicePreset(
     deviceType: 'WEB',
@@ -847,7 +836,6 @@ final List<DevicePreset> devicePresets = [
     locale: 'en-GB',
   ),
 
-
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -868,7 +856,6 @@ final List<DevicePreset> devicePresets = [
     timezone: 'Europe/Berlin',
     locale: 'de-DE',
   ),
-
 
   DevicePreset(
     deviceType: 'WEB',
@@ -900,7 +887,6 @@ final List<DevicePreset> devicePresets = [
     timezone: 'Asia/Tokyo',
     locale: 'ja-JP',
   ),
-
 
   DevicePreset(
     deviceType: 'WEB',
@@ -943,7 +929,6 @@ final List<DevicePreset> devicePresets = [
     locale: 'zh-CN',
   ),
 
-
   DevicePreset(
     deviceType: 'WEB',
     userAgent:
@@ -974,7 +959,6 @@ final List<DevicePreset> devicePresets = [
     timezone: 'Asia/Dubai',
     locale: 'ar-AE',
   ),
-
 
   DevicePreset(
     deviceType: 'WEB',

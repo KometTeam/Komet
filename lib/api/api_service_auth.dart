@@ -224,12 +224,11 @@ extension ApiServiceAuth on ApiService {
       authToken = currentAccount.token;
       userId = currentAccount.userId;
 
-
       _resetSession();
 
       bool invalidTokenDetected = false;
       StreamSubscription? tempSubscription;
-      
+
       tempSubscription = messages.listen((message) {
         if (message != null && message['type'] == 'invalid_token') {
           invalidTokenDetected = true;
@@ -262,34 +261,31 @@ extension ApiServiceAuth on ApiService {
           await accountManager.updateAccountProfile(accountId, profileObj);
         }
       } catch (e) {
-      
         tempSubscription?.cancel();
-        
+
         print("Ошибка переключения аккаунта: $e");
-        
-   
+
         if (previousAccountId != null) {
           print("Восстанавливаем предыдущий аккаунт: $previousAccountId");
-          
+
           await accountManager.switchAccount(previousAccountId);
-          
-  
+
           disconnect();
           authToken = previousToken;
           userId = previousUserId;
-          
-         
+
           _resetSession();
-          
-        
+
           try {
             await connect();
             await waitUntilOnline().timeout(const Duration(seconds: 10));
           } catch (reconnectError) {
-            print("Ошибка восстановления предыдущего аккаунта: $reconnectError");
+            print(
+              "Ошибка восстановления предыдущего аккаунта: $reconnectError",
+            );
           }
         }
-        
+
         rethrow;
       } finally {
         tempSubscription?.cancel();

@@ -1185,9 +1185,12 @@ class ThemeProvider with ChangeNotifier {
   Future<void> setUseGlassPanels(bool value) async {
     _activeTheme = _activeTheme.copyWith(useGlassPanels: value);
     _useGlassPanelsSaveTimer?.cancel();
-    _useGlassPanelsSaveTimer = Timer(const Duration(milliseconds: 300), () async {
-      await _saveActiveTheme();
-    });
+    _useGlassPanelsSaveTimer = Timer(
+      const Duration(milliseconds: 300),
+      () async {
+        await _saveActiveTheme();
+      },
+    );
   }
 
   Future<void> setTopBarBlur(double value) async {
@@ -1263,9 +1266,12 @@ class ThemeProvider with ChangeNotifier {
   Future<void> setUseCustomChatWallpaper(bool value) async {
     _activeTheme = _activeTheme.copyWith(useCustomChatWallpaper: value);
     _useCustomChatWallpaperSaveTimer?.cancel();
-    _useCustomChatWallpaperSaveTimer = Timer(const Duration(milliseconds: 300), () async {
-      await _saveActiveTheme();
-    });
+    _useCustomChatWallpaperSaveTimer = Timer(
+      const Duration(milliseconds: 300),
+      () async {
+        await _saveActiveTheme();
+      },
+    );
   }
 
   Future<void> setChatWallpaperType(ChatWallpaperType type) async {
@@ -1415,17 +1421,23 @@ class ThemeProvider with ChangeNotifier {
   Future<void> setShowDeletedMessages(bool value) async {
     _activeTheme = _activeTheme.copyWith(showDeletedMessages: value);
     _showDeletedMessagesSaveTimer?.cancel();
-    _showDeletedMessagesSaveTimer = Timer(const Duration(milliseconds: 300), () async {
-      await _saveActiveTheme();
-    });
+    _showDeletedMessagesSaveTimer = Timer(
+      const Duration(milliseconds: 300),
+      () async {
+        await _saveActiveTheme();
+      },
+    );
   }
 
   Future<void> setViewRedactHistory(bool value) async {
     _activeTheme = _activeTheme.copyWith(viewRedactHistory: value);
     _viewRedactHistorySaveTimer?.cancel();
-    _viewRedactHistorySaveTimer = Timer(const Duration(milliseconds: 300), () async {
-      await _saveActiveTheme();
-    });
+    _viewRedactHistorySaveTimer = Timer(
+      const Duration(milliseconds: 300),
+      () async {
+        await _saveActiveTheme();
+      },
+    );
   }
 
   Future<void> setMessageBubbleOpacity(double value) async {
@@ -1682,17 +1694,23 @@ class ThemeProvider with ChangeNotifier {
   Future<void> setUseDesktopLayout(bool value) async {
     _activeTheme = _activeTheme.copyWith(useDesktopLayout: value);
     _useDesktopLayoutSaveTimer?.cancel();
-    _useDesktopLayoutSaveTimer = Timer(const Duration(milliseconds: 300), () async {
-      await _saveActiveTheme();
-    });
+    _useDesktopLayoutSaveTimer = Timer(
+      const Duration(milliseconds: 300),
+      () async {
+        await _saveActiveTheme();
+      },
+    );
   }
 
   Future<void> setUseAutoReplyColor(bool value) async {
     _activeTheme = _activeTheme.copyWith(useAutoReplyColor: value);
     _useAutoReplyColorSaveTimer?.cancel();
-    _useAutoReplyColorSaveTimer = Timer(const Duration(milliseconds: 300), () async {
-      await _saveActiveTheme();
-    });
+    _useAutoReplyColorSaveTimer = Timer(
+      const Duration(milliseconds: 300),
+      () async {
+        await _saveActiveTheme();
+      },
+    );
   }
 
   Future<void> setCustomReplyColor(Color? color) async {
@@ -1764,9 +1782,12 @@ class ThemeProvider with ChangeNotifier {
   Future<void> setUseGradientForAddAccountButton(bool value) async {
     _activeTheme = _activeTheme.copyWith(useGradientForAddAccountButton: value);
     _useGradientForAddAccountButtonSaveTimer?.cancel();
-    _useGradientForAddAccountButtonSaveTimer = Timer(const Duration(milliseconds: 300), () async {
-      await _saveActiveTheme();
-    });
+    _useGradientForAddAccountButtonSaveTimer = Timer(
+      const Duration(milliseconds: 300),
+      () async {
+        await _saveActiveTheme();
+      },
+    );
   }
 
   Future<void> setAddAccountButtonGradientColor1(Color color) async {

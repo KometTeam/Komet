@@ -121,7 +121,6 @@ class _ChatScreenState extends State<ChatScreen> {
   int? _lastPeerReadMessageId;
   String? _lastPeerReadMessageIdStr;
 
-
   Map<String, dynamic>? _cachedCurrentGroupChat;
 
   final Set<String> _sendingReactions = {};
@@ -184,7 +183,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             elevation: 0,
-                            backgroundColor: colors.primary.withOpacity(0.10),
+                            backgroundColor: colors.primary.withValues(
+                              alpha: 0.10,
+                            ),
                             foregroundColor: colors.primary,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
@@ -744,12 +745,14 @@ class _ChatScreenState extends State<ChatScreen> {
         };
       }
 
-      final draftData = text.trim().isNotEmpty ? {
-        'text': text,
-        'elements': elements,
-        'replyingToMessage': replyingToMessageData,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      } : null;
+      final draftData = text.trim().isNotEmpty
+          ? {
+              'text': text,
+              'elements': elements,
+              'replyingToMessage': replyingToMessageData,
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            }
+          : null;
 
       await ChatCacheService().saveChatInputState(
         widget.chatId,
@@ -1126,7 +1129,6 @@ class _ChatScreenState extends State<ChatScreen> {
   void _loadHistoryAndListen() {
     _paginateInitialLoad();
 
-
     ApiService.instance.reconnectionComplete.listen((_) {
       if (mounted && ApiService.instance.currentActiveChatId == widget.chatId) {
         print('Переподключение: перезагружаем чат ${widget.chatId}');
@@ -1142,15 +1144,14 @@ class _ChatScreenState extends State<ChatScreen> {
       final seq = message['seq'];
       final payload = message['payload'];
 
-
       if (payload is! Map<String, dynamic>) return;
 
-      final dynamic incomingChatId = payload['chatId'] ?? payload['chat']?['id'];
+      final dynamic incomingChatId =
+          payload['chatId'] ?? payload['chat']?['id'];
       final int? chatIdNormalized = incomingChatId is int
           ? incomingChatId
           : int.tryParse(incomingChatId?.toString() ?? '');
 
-    
       final shouldCheckChatId =
           opcode != 178 || (opcode == 178 && payload.containsKey('chatId'));
 
@@ -1165,7 +1166,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
         final newMessage = Message.fromJson(messageMap);
 
-   
         final messageId = newMessage.id;
         if (messageId.isNotEmpty && !messageId.startsWith('local_')) {
           final queueService = MessageQueueService();
@@ -1239,7 +1239,9 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       } else if (opcode == 66 || opcode == 142) {
         final rawMessageIds = payload['messageIds'] as List<dynamic>? ?? [];
-        final deletedMessageIds = rawMessageIds.map((id) => id.toString()).toList();
+        final deletedMessageIds = rawMessageIds
+            .map((id) => id.toString())
+            .toList();
         if (deletedMessageIds.isNotEmpty) {
           Future.microtask(() {
             if (mounted) {
@@ -1254,7 +1256,6 @@ class _ChatScreenState extends State<ChatScreen> {
             _pendingReactionSeqs.remove(seq);
             _updateMessageReaction(messageId, payload['reactionInfo'] ?? {});
           } else {
-        
             if (_sendingReactions.isNotEmpty) {
               _sendingReactions.clear();
               _buildChatItems();
@@ -1344,7 +1345,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   int get _optPage => _ultraOptimize ? 10 : (_optimize ? 50 : _pageSize);
 
-
   Future<void> _paginateInitialLoad() async {
     setState(() => _isLoadingHistory = true);
 
@@ -1425,7 +1425,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       List<Message> mergedMessages;
       if (hasServerData) {
-    
         final Map<String, Message> messagesMap = {};
 
         final Set<String> serverMessageIds = {};
@@ -1435,11 +1434,13 @@ class _ChatScreenState extends State<ChatScreen> {
           serverMessageIds.add(msg.id);
         }
 
-        final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+        final themeProvider = Provider.of<ThemeProvider>(
+          context,
+          listen: false,
+        );
         if (themeProvider.showDeletedMessages && hasCache) {
           for (final cachedMsg in _messages) {
-     
-            if (!serverMessageIds.contains(cachedMsg.id) && 
+            if (!serverMessageIds.contains(cachedMsg.id) &&
                 !cachedMsg.id.startsWith('local_')) {
               messagesMap[cachedMsg.id] = cachedMsg.copyWith(isDeleted: true);
             }
@@ -1450,14 +1451,18 @@ class _ChatScreenState extends State<ChatScreen> {
           for (final cachedMsg in _messages) {
             final serverMsg = messagesMap[cachedMsg.id];
             if (serverMsg != null) {
-              if (cachedMsg.originalText != null && serverMsg.originalText == null) {
-                messagesMap[cachedMsg.id] = serverMsg.copyWith(originalText: cachedMsg.originalText);
-              }
-              else if (cachedMsg.text != serverMsg.text &&
-                       cachedMsg.text.isNotEmpty &&
-                       (serverMsg.isEdited || serverMsg.updateTime != null) &&
-                       serverMsg.originalText == null) {
-                messagesMap[cachedMsg.id] = serverMsg.copyWith(originalText: cachedMsg.text);
+              if (cachedMsg.originalText != null &&
+                  serverMsg.originalText == null) {
+                messagesMap[cachedMsg.id] = serverMsg.copyWith(
+                  originalText: cachedMsg.originalText,
+                );
+              } else if (cachedMsg.text != serverMsg.text &&
+                  cachedMsg.text.isNotEmpty &&
+                  (serverMsg.isEdited || serverMsg.updateTime != null) &&
+                  serverMsg.originalText == null) {
+                messagesMap[cachedMsg.id] = serverMsg.copyWith(
+                  originalText: cachedMsg.text,
+                );
               }
             }
           }
@@ -2078,13 +2083,12 @@ class _ChatScreenState extends State<ChatScreen> {
         } else if (oldMessage.originalText != null) {
           return finalMessage.copyWith(originalText: oldMessage.originalText);
         } else if ((finalMessage.isEdited || finalMessage.updateTime != null) &&
-                   finalMessage.text != oldMessage.text) {
+            finalMessage.text != oldMessage.text) {
           return finalMessage.copyWith(originalText: oldMessage.text);
         } else {
           return finalMessage;
         }
       })();
-
 
       final oldHasPhoto = oldMessage.attaches.any((a) => a['_type'] == 'PHOTO');
       final newHasPhoto = finalMessageWithOriginalText.attaches.any(
@@ -2167,16 +2171,15 @@ class _ChatScreenState extends State<ChatScreen> {
         final isMyMessage = message.senderId == _actualMyId;
 
         if (isMyMessage) {
-    
           _removeMessages([messageId]);
-        } else {         
-          if (showDeletedMessages) {    
+        } else {
+          if (showDeletedMessages) {
             _messages[messageIndex] = message.copyWith(isDeleted: true);
             _buildChatItems();
             if (mounted) {
               setState(() {});
             }
-          } else {        
+          } else {
             _removeMessages([messageId]);
           }
         }
@@ -2505,9 +2508,13 @@ class _ChatScreenState extends State<ChatScreen> {
       MessageQueueService().removeFromQueue('msg_$cid');
     }
     _removeMessages([message.id]);
-    unawaited(ApiService.instance.updateChatLastMessage(widget.chatId).then((newLastMessage) {
-      widget.onLastMessageChanged?.call(newLastMessage);
-    }));
+    unawaited(
+      ApiService.instance.updateChatLastMessage(widget.chatId).then((
+        newLastMessage,
+      ) {
+        widget.onLastMessageChanged?.call(newLastMessage);
+      }),
+    );
   }
 
   Future<void> _retryPendingMessage(Message message) async {
@@ -3130,7 +3137,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Map<String, dynamic>? _getCurrentGroupChat() {
-   
     if (_cachedCurrentGroupChat != null) {
       return _cachedCurrentGroupChat;
     }
@@ -3149,7 +3155,6 @@ class _ChatScreenState extends State<ChatScreen> {
       return null;
     }
   }
-
 
   void _invalidateCache() {
     _cachedCurrentGroupChat = null;
@@ -3274,7 +3279,7 @@ class _ChatScreenState extends State<ChatScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.surface.withOpacity(0.92),
+        color: colors.surface.withValues(alpha: 0.92),
         border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
       child: Row(
@@ -3351,17 +3356,17 @@ class _ChatScreenState extends State<ChatScreen> {
                                 onTap: _scrollToPinnedMessage,
                                 child: PinnedMessageWidget(
                                   pinnedMessage: pinnedMessage,
-                              contacts: _contactDetailsCache,
-                              myId: _actualMyId ?? 0,
-                              onTap: _scrollToPinnedMessage,
-                              onClose: () {
-                                _pinnedMessage = null;
-                                _pinnedMessageNotifier.value = null;
-                              },
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(key: ValueKey('empty'));
+                                  contacts: _contactDetailsCache,
+                                  myId: _actualMyId ?? 0,
+                                  onTap: _scrollToPinnedMessage,
+                                  onClose: () {
+                                    _pinnedMessage = null;
+                                    _pinnedMessageNotifier.value = null;
+                                  },
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(key: ValueKey('empty'));
                     },
                   ),
                 ),
@@ -3461,7 +3466,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                       final bool isMe =
                                           item.message.senderId == _actualMyId;
 
-                                      final bool canDeleteForAll = isMe || (widget.isGroupChat && _isCurrentUserAdmin());
+                                      final bool canDeleteForAll =
+                                          isMe ||
+                                          (widget.isGroupChat &&
+                                              _isCurrentUserAdmin());
 
                                       MessageReadStatus? readStatus;
                                       if (isMe) {
@@ -3574,7 +3582,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                           }
                                         }
                                       }
-                                      final stableKey = '${item.message.id}_${item.message.updateTime ?? item.message.time}_${item.message.originalText ?? ''}_${DateTime.now().millisecondsSinceEpoch}';
+                                      final stableKey =
+                                          '${item.message.id}_${item.message.updateTime ?? item.message.time}_${item.message.originalText ?? ''}_${DateTime.now().millisecondsSinceEpoch}';
 
                                       final hasPhoto = item.message.attaches
                                           .any((a) => a['_type'] == 'PHOTO');
@@ -3614,7 +3623,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                       }
 
                                       final bubble = ChatMessageBubble(
-                                        key: message.originalText != null ? ValueKey(stableKey) : UniqueKey(),
+                                        key: message.originalText != null
+                                            ? ValueKey(stableKey)
+                                            : UniqueKey(),
                                         message: item.message,
                                         isMe: isMe,
                                         readStatus: readStatus,
@@ -3640,7 +3651,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                             : null,
                                         onDeleteForMe: isMe
                                             ? () async {
-                                         
                                                 _removeMessages([
                                                   item.message.id,
                                                 ]);
@@ -3651,8 +3661,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                                       item.message.id,
                                                       forMe: true,
                                                     );
-                                                final newLastMessage = await ApiService.instance.updateChatLastMessage(widget.chatId);
-                                                widget.onLastMessageChanged?.call(newLastMessage);
+                                                final newLastMessage =
+                                                    await ApiService.instance
+                                                        .updateChatLastMessage(
+                                                          widget.chatId,
+                                                        );
+                                                widget.onLastMessageChanged
+                                                    ?.call(newLastMessage);
                                               }
                                             : null,
                                         onDeleteForAll: canDeleteForAll
@@ -3666,8 +3681,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                                       item.message.id,
                                                       forMe: false,
                                                     );
-                                                final newLastMessage = await ApiService.instance.updateChatLastMessage(widget.chatId);
-                                                widget.onLastMessageChanged?.call(newLastMessage);
+                                                final newLastMessage =
+                                                    await ApiService.instance
+                                                        .updateChatLastMessage(
+                                                          widget.chatId,
+                                                        );
+                                                widget.onLastMessageChanged
+                                                    ?.call(newLastMessage);
                                               }
                                             : null,
                                         onReaction: (emoji) async {
@@ -3781,7 +3801,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .primaryContainer
-                                                .withOpacity(0.5),
+                                                .withValues(alpha: 0.5),
                                             borderRadius: BorderRadius.circular(
                                               16,
                                             ),
@@ -3997,7 +4017,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Container(
                   color: Theme.of(
                     context,
-                  ).colorScheme.surface.withOpacity(theme.topBarOpacity),
+                  ).colorScheme.surface.withValues(alpha: theme.topBarOpacity),
                 ),
               ),
             )
@@ -4313,10 +4333,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: theme.ultraOptimizeChats
-                                ? Colors.red.withOpacity(0.7)
+                                ? Colors.red.withValues(alpha: 0.7)
                                 : theme.optimizeChats
-                                ? Colors.orange.withOpacity(0.7)
-                                : Colors.blue.withOpacity(0.7),
+                                ? Colors.orange.withValues(alpha: 0.7)
+                                : Colors.blue.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -4433,7 +4453,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   sigmaX: provider.chatWallpaperBlurSigma,
                   sigmaY: provider.chatWallpaperBlurSigma,
                 ),
-                child: Container(color: Colors.black.withOpacity(0.0)),
+                child: Container(color: Colors.black.withValues(alpha: 0.0)),
               ),
           ],
         );
@@ -4447,7 +4467,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 style: TextStyle(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withOpacity(0.6),
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -4492,11 +4512,11 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: BoxDecoration(
               color: Theme.of(
                 context,
-              ).colorScheme.surface.withOpacity(theme.bottomBarOpacity),
+              ).colorScheme.surface.withValues(alpha: theme.bottomBarOpacity),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
@@ -4516,7 +4536,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       decoration: BoxDecoration(
                         color: Theme.of(
                           context,
-                        ).colorScheme.primaryContainer.withOpacity(0.4),
+                        ).colorScheme.primaryContainer.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(12),
                         border: Border(
                           left: BorderSide(
@@ -4556,9 +4576,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                             : 'Фото'),
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.7),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.7),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -4593,7 +4614,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       decoration: BoxDecoration(
                         color: Theme.of(
                           context,
-                        ).colorScheme.errorContainer.withOpacity(0.4),
+                        ).colorScheme.errorContainer.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(12),
                         border: Border(
                           left: BorderSide(
@@ -4637,9 +4658,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           Text(
                             'или включите block_bypass',
                             style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer.withOpacity(0.7),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onErrorContainer
+                                  .withValues(alpha: 0.7),
                               fontSize: 11,
                               fontStyle: FontStyle.italic,
                             ),
@@ -4662,9 +4684,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: Icon(
                                 Icons.auto_fix_high,
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.3)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.3)
                                     : Theme.of(context).colorScheme.primary,
                                 size: 24,
                               ),
@@ -4831,11 +4852,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .surfaceContainerHighest
-                                                .withOpacity(0.25)
+                                                .withValues(alpha: 0.25)
                                           : Theme.of(context)
                                                 .colorScheme
                                                 .surfaceContainerHighest
-                                                .withOpacity(0.4),
+                                                .withValues(alpha: 0.4),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(24),
                                         borderSide: BorderSide.none,
@@ -4866,7 +4887,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                               ],
                             ),
-                      
+
                             StreamBuilder<bool>(
                               stream: Stream.periodic(
                                 const Duration(milliseconds: 500),
@@ -4902,7 +4923,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ],
                         ),
                       ),
-      
+
                       StreamBuilder<bool>(
                         stream: Stream.periodic(
                           const Duration(milliseconds: 500),
@@ -4945,9 +4966,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             child: Icon(
                               Icons.attach_file,
                               color: isBlocked
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.3)
+                                  ? Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.3)
                                   : Theme.of(context).colorScheme.primary,
                               size: 24,
                             ),
@@ -4966,9 +4986,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: Icon(
                                 Icons.animation,
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.3)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.3)
                                     : Colors.orange,
                                 size: 24,
                               ),
@@ -4981,7 +5000,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           color: isBlocked
                               ? Theme.of(
                                   context,
-                                ).colorScheme.onSurface.withOpacity(0.2)
+                                ).colorScheme.onSurface.withValues(alpha: 0.2)
                               : Theme.of(context).colorScheme.primary,
                           shape: BoxShape.circle,
                         ),
@@ -4995,9 +5014,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: Icon(
                                 Icons.send_rounded,
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.5)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.5)
                                     : Theme.of(context).colorScheme.onPrimary,
                                 size: 24,
                               ),
@@ -5039,9 +5057,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           padding: const EdgeInsets.all(10),
                           margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer.withOpacity(0.4),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(12),
                             border: Border(
                               left: BorderSide(
@@ -5113,7 +5132,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           decoration: BoxDecoration(
                             color: Theme.of(
                               context,
-                            ).colorScheme.errorContainer.withOpacity(0.4),
+                            ).colorScheme.errorContainer.withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(12),
                             border: Border(
                               left: BorderSide(
@@ -5162,7 +5181,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   color: Theme.of(context)
                                       .colorScheme
                                       .onErrorContainer
-                                      .withOpacity(0.7),
+                                      .withValues(alpha: 0.7),
                                   fontSize: 11,
                                   fontStyle: FontStyle.italic,
                                 ),
@@ -5194,11 +5213,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                         ? Theme.of(context)
                                               .colorScheme
                                               .surfaceContainerHighest
-                                              .withOpacity(0.25)
+                                              .withValues(alpha: 0.25)
                                         : Theme.of(context)
                                               .colorScheme
                                               .surfaceContainerHighest
-                                              .withOpacity(0.4),
+                                              .withValues(alpha: 0.4),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(24),
                                       borderSide: BorderSide.none,
@@ -5224,7 +5243,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           }
                                         },
                                 ),
-                         
+
                                 StreamBuilder<bool>(
                                   stream: Stream.periodic(
                                     const Duration(milliseconds: 500),
@@ -5262,7 +5281,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               ],
                             ),
                           ),
-                     
+
                           StreamBuilder<bool>(
                             stream: Stream.periodic(
                               const Duration(milliseconds: 500),
@@ -5294,7 +5313,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               );
                             },
                           ),
-                     
+
                           if (!ApiService.instance.isOnline ||
                               !ApiService.instance.isSessionReady)
                             Padding(
@@ -5349,7 +5368,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .surfaceContainerHighest
-                                                .withOpacity(0.25)
+                                                .withValues(alpha: 0.25)
                                           : Theme.of(
                                               context,
                                             ).colorScheme.primary,
@@ -5361,7 +5380,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .onSurfaceVariant
-                                                .withOpacity(0.5)
+                                                .withValues(alpha: 0.5)
                                           : Theme.of(
                                               context,
                                             ).colorScheme.onPrimary,
@@ -5391,7 +5410,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ? Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest
-                                            .withOpacity(0.25)
+                                            .withValues(alpha: 0.25)
                                       : Theme.of(context).colorScheme.primary,
                                   shape: BoxShape.circle,
                                 ),
@@ -5403,7 +5422,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ? Theme.of(context)
                                             .colorScheme
                                             .onSurfaceVariant
-                                            .withOpacity(0.5)
+                                            .withValues(alpha: 0.5)
                                       : Theme.of(context).colorScheme.onPrimary,
                                   size: 20,
                                 ),
@@ -5426,11 +5445,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(
                       context,
-                    ).colorScheme.surface.withOpacity(0.85),
+                    ).colorScheme.surface.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
@@ -5448,9 +5467,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             padding: const EdgeInsets.all(10),
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer.withOpacity(0.4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(12),
                               border: Border(
                                 left: BorderSide(
@@ -5494,7 +5514,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           color: Theme.of(context)
                                               .colorScheme
                                               .onSurface
-                                              .withOpacity(0.7),
+                                              .withValues(alpha: 0.7),
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -5529,9 +5549,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             padding: const EdgeInsets.all(12),
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.errorContainer.withOpacity(0.4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .errorContainer
+                                  .withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(12),
                               border: Border(
                                 left: BorderSide(
@@ -5582,7 +5603,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onErrorContainer
-                                        .withOpacity(0.7),
+                                        .withValues(alpha: 0.7),
                                     fontSize: 11,
                                     fontStyle: FontStyle.italic,
                                   ),
@@ -5612,11 +5633,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ? Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest
-                                            .withOpacity(0.25)
+                                            .withValues(alpha: 0.25)
                                       : Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest
-                                            .withOpacity(0.4),
+                                            .withValues(alpha: 0.4),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(24),
                                     borderSide: BorderSide.none,
@@ -5680,7 +5701,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             ? Theme.of(context)
                                                   .colorScheme
                                                   .onSurface
-                                                  .withOpacity(0.3)
+                                                  .withValues(alpha: 0.3)
                                             : Theme.of(
                                                 context,
                                               ).colorScheme.primary,
@@ -5708,7 +5729,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
-                                                .withOpacity(0.3)
+                                                .withValues(alpha: 0.3)
                                           : Colors.orange,
                                       size: 24,
                                     ),
@@ -5719,9 +5740,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             Container(
                               decoration: BoxDecoration(
                                 color: isBlocked
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.2)
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.2)
                                     : Theme.of(context).colorScheme.primary,
                                 shape: BoxShape.circle,
                               ),
@@ -5738,7 +5758,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
-                                                .withOpacity(0.5)
+                                                .withValues(alpha: 0.5)
                                           : Theme.of(
                                               context,
                                             ).colorScheme.onPrimary,
@@ -5868,8 +5888,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void _scrollToResult() {
     if (_currentResultIndex == -1) return;
 
-    if (!mounted || !_itemScrollController.isAttached)
-      return;
+    if (!mounted || !_itemScrollController.isAttached) return;
 
     final targetMessage = _searchResults[_currentResultIndex];
 
@@ -6117,11 +6136,11 @@ class _KometColorPickerBarState extends State<_KometColorPickerBar> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withOpacity(0.9),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -6767,7 +6786,7 @@ class _DateSeparatorChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: Theme.of(
               context,
-            ).colorScheme.primaryContainer.withOpacity(0.5),
+            ).colorScheme.primaryContainer.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -6813,7 +6832,7 @@ class GroupProfileDraggableDialog extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colors.onSurfaceVariant.withOpacity(0.3),
+                  color: colors.onSurfaceVariant.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -6976,7 +6995,9 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                   sigmaY: theme.profileDialogBlur,
                 ),
                 child: Container(
-                  color: Colors.black.withOpacity(theme.profileDialogOpacity),
+                  color: Colors.black.withValues(
+                    alpha: theme.profileDialogOpacity,
+                  ),
                 ),
               ),
             ),
@@ -7032,7 +7053,7 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, -8),
                         ),
@@ -7828,7 +7849,7 @@ class _ControlMessageChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: Theme.of(
               context,
-            ).colorScheme.primaryContainer.withOpacity(0.5),
+            ).colorScheme.primaryContainer.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -8028,7 +8049,7 @@ class _VideoWallpaperBackgroundState extends State<_VideoWallpaperBackground> {
           ),
         ),
 
-        Container(color: Colors.black.withOpacity(0.3)),
+        Container(color: Colors.black.withValues(alpha: 0.3)),
       ],
     );
   }

@@ -1291,8 +1291,11 @@ extension ApiServiceChats on ApiService {
 
   Future<Message?> updateChatLastMessage(int chatId) async {
     try {
-      final remainingMessages = await _chatCacheService.getCachedChatMessages(chatId);
-      final newLastMessage = remainingMessages != null && remainingMessages.isNotEmpty
+      final remainingMessages = await _chatCacheService.getCachedChatMessages(
+        chatId,
+      );
+      final newLastMessage =
+          remainingMessages != null && remainingMessages.isNotEmpty
           ? (remainingMessages..sort((a, b) => b.time.compareTo(a.time))).first
           : Message(
               id: 'empty',

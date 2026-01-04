@@ -24,7 +24,7 @@ class ChatNotificationSettingsDialog extends StatefulWidget {
 class _ChatNotificationSettingsDialogState
     extends State<ChatNotificationSettingsDialog> {
   final _settingsService = NotificationSettingsService();
-  
+
   bool _isLoading = true;
   bool _hasException = false;
   bool _notificationsEnabled = true;
@@ -126,7 +126,9 @@ class _ChatNotificationSettingsDialogState
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Исключение удалено, используются настройки по умолчанию'),
+          content: Text(
+            'Исключение удалено, используются настройки по умолчанию',
+          ),
           backgroundColor: Colors.green,
         ),
       );

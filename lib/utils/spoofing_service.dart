@@ -1,17 +1,14 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SpoofingService {
-
-
   static Future<Map<String, dynamic>?> getSpoofedSessionData() async {
     final prefs = await SharedPreferences.getInstance();
 
     final isEnabled = prefs.getBool('spoofing_enabled') ?? false;
 
     if (!isEnabled) {
-      return null; 
+      return null;
     }
-
 
     return {
       'device_name': prefs.getString('spoof_devicename'),

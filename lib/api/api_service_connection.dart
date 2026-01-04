@@ -157,10 +157,8 @@ extension ApiServiceConnection on ApiService {
       await prefs.setString('spoof_deviceid', deviceId);
     }
 
-   
     String mtInstanceId = prefs.getString('session_mt_instanceid') ?? '';
     int clientSessionId = prefs.getInt('session_client_session_id') ?? 0;
-    
 
     if (mtInstanceId.isEmpty || clientSessionId == 0) {
       mtInstanceId = const Uuid().v4();
@@ -769,11 +767,9 @@ extension ApiServiceConnection on ApiService {
       return;
     }
 
-
     final persistentItems = _queueService.getPersistentItems();
     print('Обработка постоянной очереди: ${persistentItems.length} элементов');
     for (var item in persistentItems) {
- 
       if (_queueService.isMessageProcessed(item.id)) {
         print(
           'Сообщение ${item.id} уже было обработано, пропускаем и удаляем из очереди',
@@ -792,23 +788,20 @@ extension ApiServiceConnection on ApiService {
               print(
                 'Сообщение из очереди успешно отправлено, удаляем из очереди: ${item.id}',
               );
-             
+
               _queueService.markMessageAsProcessed(item.id);
               _queueService.removeFromQueue(item.id);
             })
             .catchError((e) {
               print('Ошибка отправки из очереди: $e, оставляем в очереди');
-            
             }),
       );
     }
 
- 
     final temporaryItems = _queueService.getTemporaryItems();
     print('Обработка временной очереди: ${temporaryItems.length} элементов');
     for (var item in temporaryItems) {
       if (item.type == QueueItemType.loadChat && item.chatId != null) {
-   
         if (currentActiveChatId == item.chatId) {
           print('Отправляем запрос загрузки чата ${item.chatId} из очереди');
           unawaited(

@@ -2,18 +2,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 /// Типы чатов для настроек уведомлений
-enum ChatType {
-  private,
-  group,
-  channel,
-}
+enum ChatType { private, group, channel }
 
 /// Режим вибрации
-enum VibrationMode {
-  none,
-  short,
-  long,
-}
+enum VibrationMode { none, short, long }
 
 /// Сервис для управления настройками уведомлений
 class NotificationSettingsService {
@@ -29,7 +21,7 @@ class NotificationSettingsService {
   static const String _keyReactionsEnabled = 'notifications_reactions';
   static const String _keyVibrationMode = 'notifications_vibration_mode';
   static const String _keyChatExceptions = 'notifications_chat_exceptions';
-  
+
   // Константы по умолчанию
   static const VibrationMode _defaultVibrationMode = VibrationMode.short;
 
@@ -98,7 +90,7 @@ class NotificationSettingsService {
     final prefs = await SharedPreferences.getInstance();
     final modeString = prefs.getString(_keyVibrationMode);
     if (modeString == null) return _defaultVibrationMode;
-    
+
     switch (modeString) {
       case 'none':
         return VibrationMode.none;
@@ -128,7 +120,7 @@ class NotificationSettingsService {
 
     try {
       final decoded = json.decode(exceptionsJson) as Map<String, dynamic>;
-      
+
       // Преобразуем ключи из String в int
       final result = <int, Map<String, dynamic>>{};
       decoded.forEach((key, value) {
@@ -180,10 +172,7 @@ class NotificationSettingsService {
     // Если исключений нет, используем глобальные настройки
     final globalEnabled = await areNotificationsEnabled();
     if (!globalEnabled) {
-      return {
-        'enabled': false,
-        'vibration': VibrationMode.none.name,
-      };
+      return {'enabled': false, 'vibration': VibrationMode.none.name};
     }
 
     // Проверяем настройки для типа чата
@@ -198,10 +187,7 @@ class NotificationSettingsService {
 
     final vibrationMode = await getVibrationMode();
 
-    return {
-      'enabled': typeEnabled,
-      'vibration': vibrationMode.name,
-    };
+    return {'enabled': typeEnabled, 'vibration': vibrationMode.name};
   }
 
   /// Проверить, должны ли показываться уведомления для чата
@@ -223,13 +209,13 @@ class NotificationSettingsService {
     Map<int, Map<String, dynamic>> exceptions,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // Преобразуем ключи int в String для JSON
     final Map<String, dynamic> toSave = {};
     exceptions.forEach((key, value) {
       toSave[key.toString()] = value;
     });
-    
+
     await prefs.setString(_keyChatExceptions, json.encode(toSave));
   }
 }

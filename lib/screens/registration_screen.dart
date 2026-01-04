@@ -66,15 +66,17 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     _apiSubscription = ApiService.instance.messages.listen((message) {
       if (message['opcode'] == 23 && mounted && !_isNavigating) {
         _isNavigating = true;
-        print('Получен ответ opcode 23 (регистрация), полное сообщение: $message');
-        
+        print(
+          'Получен ответ opcode 23 (регистрация), полное сообщение: $message',
+        );
+
         final payload = message['payload'];
         print('Payload при регистрации: $payload');
 
         if (payload != null && payload['error'] != null) {
           final error = payload['error'];
           print('Ошибка регистрации: $error');
-          
+
           SchedulerBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               setState(() {
@@ -104,20 +106,24 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           finalToken = payload['token'];
           userId = payload['userId']?.toString();
         }
-        
+
         if (finalToken == null && message['token'] != null) {
           finalToken = message['token']?.toString();
         }
         if (userId == null && message['userId'] != null) {
           userId = message['userId']?.toString();
         }
-        
+
         if (finalToken != null) {
-          print('Найден токен регистрации: ${finalToken.substring(0, 20)}..., UserID: $userId');
+          print(
+            'Найден токен регистрации: ${finalToken.substring(0, 20)}..., UserID: $userId',
+          );
         }
 
         if (finalToken != null) {
-          print('Успешная регистрация! Токен: ${finalToken.substring(0, 20)}..., UserID: $userId');
+          print(
+            'Успешная регистрация! Токен: ${finalToken.substring(0, 20)}..., UserID: $userId',
+          );
 
           SchedulerBinding.instance.addPostFrameCallback((_) async {
             if (!mounted) return;
@@ -169,7 +175,9 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 setState(() => _isLoading = false);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Регистрация завершена! Добро пожаловать!'),
+                    content: const Text(
+                      'Регистрация завершена! Добро пожаловать!',
+                    ),
                     backgroundColor: Colors.green,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -373,7 +381,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                 ),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: colors.outline.withOpacity(0.2),
+                                  color: colors.outline.withValues(alpha: 0.2),
                                   width: 1,
                                 ),
                               ),
@@ -387,8 +395,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: colors.primaryContainer
-                                              .withOpacity(0.5),
-                                          borderRadius: BorderRadius.circular(12),
+                                              .withValues(alpha: 0.5),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         child: Icon(
                                           Icons.person_add_outlined,
@@ -428,14 +438,17 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                     controller: _firstNameController,
                                     focusNode: _firstNameFocusNode,
                                     autofocus: true,
-                                    textCapitalization: TextCapitalization.words,
+                                    textCapitalization:
+                                        TextCapitalization.words,
                                     style: GoogleFonts.manrope(
                                       textStyle: textTheme.titleMedium,
                                       fontWeight: FontWeight.w600,
                                     ),
                                     decoration: InputDecoration(
                                       hintText: 'Введите ваше имя',
-                                      prefixIcon: const Icon(Icons.person_outline),
+                                      prefixIcon: const Icon(
+                                        Icons.person_outline,
+                                      ),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(16),
                                       ),
@@ -458,15 +471,17 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                   TextFormField(
                                     controller: _lastNameController,
                                     focusNode: _lastNameFocusNode,
-                                    textCapitalization: TextCapitalization.words,
+                                    textCapitalization:
+                                        TextCapitalization.words,
                                     style: GoogleFonts.manrope(
                                       textStyle: textTheme.titleMedium,
                                       fontWeight: FontWeight.w600,
                                     ),
                                     decoration: InputDecoration(
                                       hintText: 'Введите вашу фамилию',
-                                      prefixIcon:
-                                          const Icon(Icons.person_outline),
+                                      prefixIcon: const Icon(
+                                        Icons.person_outline,
+                                      ),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(16),
                                       ),
@@ -486,11 +501,11 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                             Container(
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color:
-                                    colors.surfaceContainerHighest.withOpacity(0.5),
+                                color: colors.surfaceContainerHighest
+                                    .withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: colors.outline.withOpacity(0.2),
+                                  color: colors.outline.withValues(alpha: 0.2),
                                 ),
                               ),
                               child: Row(
@@ -543,7 +558,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
               ),
               if (_isLoading)
                 Container(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

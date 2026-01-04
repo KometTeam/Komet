@@ -167,17 +167,12 @@ class NotificationService {
             : (chatIdDynamic is num ? chatIdDynamic.toInt() : null);
         final text = args['text'] as String?;
 
-        print(
-          "🔔 Получен ответ из уведомления: chatId=$chatId, text=$text",
-        );
+        print("🔔 Получен ответ из уведомления: chatId=$chatId, text=$text");
 
         if (chatId != null && text != null && text.isNotEmpty) {
           try {
             // Отправляем сообщение через API
-            ApiService.instance.sendMessage(
-              chatId,
-              text,
-            );
+            ApiService.instance.sendMessage(chatId, text);
             print("✅ Сообщение из уведомления отправлено успешно");
           } catch (e) {
             print("❌ Ошибка отправки сообщения из уведомления: $e");
@@ -730,10 +725,9 @@ class NotificationService {
         category: AndroidNotificationCategory.message,
         showWhen: true,
         enableVibration: enableVibration,
-        vibrationPattern:
-            enableVibration
-                ? typed_data.Int64List.fromList(vibrationPattern)
-                : null,
+        vibrationPattern: enableVibration
+            ? typed_data.Int64List.fromList(vibrationPattern)
+            : null,
         playSound: true,
         icon: 'notification_icon',
         styleInformation: BigTextStyleInformation(

@@ -16,7 +16,7 @@ class NotificationSettingsScreen extends StatefulWidget {
 class _NotificationSettingsScreenState
     extends State<NotificationSettingsScreen> {
   bool _isLoading = false;
-  
+
   // Новые настройки
   bool _notificationsEnabled = true;
   bool _privateChatsEnabled = true;
@@ -24,7 +24,7 @@ class _NotificationSettingsScreenState
   bool _channelsEnabled = true;
   bool _reactionsEnabled = true;
   VibrationMode _vibrationMode = VibrationMode.short;
-  
+
   final _settingsService = NotificationSettingsService();
 
   Widget buildModalContent(BuildContext context) {
@@ -104,14 +104,18 @@ class _NotificationSettingsScreenState
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Настройки по типу чата
               _OutlinedSection(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.only(left: 8, top: 8, bottom: 4),
+                      padding: const EdgeInsets.only(
+                        left: 8,
+                        top: 8,
+                        bottom: 4,
+                      ),
                       child: Text(
                         'Уведомления из чатов',
                         style: TextStyle(
@@ -126,79 +130,91 @@ class _NotificationSettingsScreenState
                       secondary: const Icon(Icons.person_outline),
                       title: const Text("Личные чаты"),
                       value: _privateChatsEnabled,
-                      onChanged: _notificationsEnabled ? (value) async {
-                        await _settingsService.setPrivateChatsEnabled(value);
-                        setState(() => _privateChatsEnabled = value);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Настройки обновлены'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } : null,
+                      onChanged: _notificationsEnabled
+                          ? (value) async {
+                              await _settingsService.setPrivateChatsEnabled(
+                                value,
+                              );
+                              setState(() => _privateChatsEnabled = value);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Настройки обновлены'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
+                          : null,
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       secondary: const Icon(Icons.group_outlined),
                       title: const Text("Группы"),
                       value: _groupsEnabled,
-                      onChanged: _notificationsEnabled ? (value) async {
-                        await _settingsService.setGroupsEnabled(value);
-                        setState(() => _groupsEnabled = value);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Настройки обновлены'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } : null,
+                      onChanged: _notificationsEnabled
+                          ? (value) async {
+                              await _settingsService.setGroupsEnabled(value);
+                              setState(() => _groupsEnabled = value);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Настройки обновлены'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
+                          : null,
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       secondary: const Icon(Icons.campaign_outlined),
                       title: const Text("Каналы"),
                       value: _channelsEnabled,
-                      onChanged: _notificationsEnabled ? (value) async {
-                        await _settingsService.setChannelsEnabled(value);
-                        setState(() => _channelsEnabled = value);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Настройки обновлены'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } : null,
+                      onChanged: _notificationsEnabled
+                          ? (value) async {
+                              await _settingsService.setChannelsEnabled(value);
+                              setState(() => _channelsEnabled = value);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Настройки обновлены'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
+                          : null,
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       secondary: const Icon(Icons.favorite_outline),
                       title: const Text("Реакции"),
-                      subtitle: const Text("Уведомления о реакциях на сообщения"),
+                      subtitle: const Text(
+                        "Уведомления о реакциях на сообщения",
+                      ),
                       value: _reactionsEnabled,
-                      onChanged: _notificationsEnabled ? (value) async {
-                        await _settingsService.setReactionsEnabled(value);
-                        setState(() => _reactionsEnabled = value);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Настройки обновлены'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } : null,
+                      onChanged: _notificationsEnabled
+                          ? (value) async {
+                              await _settingsService.setReactionsEnabled(value);
+                              setState(() => _reactionsEnabled = value);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Настройки обновлены'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
+                          : null,
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Настройки вибрации
               _OutlinedSection(
                 child: Column(
@@ -211,12 +227,13 @@ class _NotificationSettingsScreenState
                         _getVibrationDescription(_vibrationMode),
                         style: TextStyle(color: colors.primary),
                       ),
-                      onTap: _notificationsEnabled ? () => _showVibrationDialog() : null,
+                      onTap: _notificationsEnabled
+                          ? () => _showVibrationDialog()
+                          : null,
                     ),
                   ],
                 ),
               ),
-
             ],
           );
   }
@@ -238,7 +255,7 @@ class _NotificationSettingsScreenState
       _channelsEnabled = await _settingsService.areChannelsEnabled();
       _reactionsEnabled = await _settingsService.areReactionsEnabled();
       _vibrationMode = await _settingsService.getVibrationMode();
-      
+
       setState(() {});
     } catch (e) {
       print('Ошибка загрузки настроек: $e');
@@ -389,14 +406,18 @@ class _NotificationSettingsScreenState
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Настройки по типу чата
                 _OutlinedSection(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(left: 8, top: 8, bottom: 4),
+                        padding: const EdgeInsets.only(
+                          left: 8,
+                          top: 8,
+                          bottom: 4,
+                        ),
                         child: Text(
                           'Уведомления из чатов',
                           style: TextStyle(
@@ -411,79 +432,95 @@ class _NotificationSettingsScreenState
                         secondary: const Icon(Icons.person_outline),
                         title: const Text("Личные чаты"),
                         value: _privateChatsEnabled,
-                        onChanged: _notificationsEnabled ? (value) async {
-                          await _settingsService.setPrivateChatsEnabled(value);
-                          setState(() => _privateChatsEnabled = value);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Настройки обновлены'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        } : null,
+                        onChanged: _notificationsEnabled
+                            ? (value) async {
+                                await _settingsService.setPrivateChatsEnabled(
+                                  value,
+                                );
+                                setState(() => _privateChatsEnabled = value);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Настройки обновлены'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.group_outlined),
                         title: const Text("Группы"),
                         value: _groupsEnabled,
-                        onChanged: _notificationsEnabled ? (value) async {
-                          await _settingsService.setGroupsEnabled(value);
-                          setState(() => _groupsEnabled = value);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Настройки обновлены'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        } : null,
+                        onChanged: _notificationsEnabled
+                            ? (value) async {
+                                await _settingsService.setGroupsEnabled(value);
+                                setState(() => _groupsEnabled = value);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Настройки обновлены'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.campaign_outlined),
                         title: const Text("Каналы"),
                         value: _channelsEnabled,
-                        onChanged: _notificationsEnabled ? (value) async {
-                          await _settingsService.setChannelsEnabled(value);
-                          setState(() => _channelsEnabled = value);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Настройки обновлены'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        } : null,
+                        onChanged: _notificationsEnabled
+                            ? (value) async {
+                                await _settingsService.setChannelsEnabled(
+                                  value,
+                                );
+                                setState(() => _channelsEnabled = value);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Настройки обновлены'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.favorite_outline),
                         title: const Text("Реакции"),
-                        subtitle: const Text("Уведомления о реакциях на сообщения"),
+                        subtitle: const Text(
+                          "Уведомления о реакциях на сообщения",
+                        ),
                         value: _reactionsEnabled,
-                        onChanged: _notificationsEnabled ? (value) async {
-                          await _settingsService.setReactionsEnabled(value);
-                          setState(() => _reactionsEnabled = value);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Настройки обновлены'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        } : null,
+                        onChanged: _notificationsEnabled
+                            ? (value) async {
+                                await _settingsService.setReactionsEnabled(
+                                  value,
+                                );
+                                setState(() => _reactionsEnabled = value);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Настройки обновлены'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Настройки вибрации
                 _OutlinedSection(
                   child: Column(
@@ -496,12 +533,13 @@ class _NotificationSettingsScreenState
                           _getVibrationDescription(_vibrationMode),
                           style: TextStyle(color: colors.primary),
                         ),
-                        onTap: _notificationsEnabled ? () => _showVibrationDialog() : null,
+                        onTap: _notificationsEnabled
+                            ? () => _showVibrationDialog()
+                            : null,
                       ),
                     ],
                   ),
                 ),
-
               ],
             ),
     );
@@ -518,7 +556,7 @@ class _OutlinedSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: colors.outline.withOpacity(0.3)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: child,

@@ -245,7 +245,7 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
                         color: colors.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: colors.outline.withOpacity(0.2),
+                          color: colors.outline.withValues(alpha: 0.2),
                         ),
                       ),
                       child: Column(
@@ -332,7 +332,7 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
 
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],

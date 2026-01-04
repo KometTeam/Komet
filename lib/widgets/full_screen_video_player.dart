@@ -277,7 +277,7 @@ class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer>
                     child: Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
+                        color: Colors.black.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
@@ -428,10 +428,10 @@ class _VideoControls extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.black.withOpacity(0.7),
+            Colors.black.withValues(alpha: 0.7),
             Colors.transparent,
             Colors.transparent,
-            Colors.black.withOpacity(0.7),
+            Colors.black.withValues(alpha: 0.7),
           ],
         ),
       ),
@@ -446,7 +446,7 @@ class _VideoControls extends StatelessWidget {
                     onPressed: onBack,
                     icon: const Icon(Icons.arrow_back),
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.black.withOpacity(0.5),
+                      backgroundColor: Colors.black.withValues(alpha: 0.5),
                       foregroundColor: Colors.white,
                       shape: const CircleBorder(),
                     ),
@@ -455,7 +455,7 @@ class _VideoControls extends StatelessWidget {
                   FilledButton.tonal(
                     onPressed: onSpeedTap,
                     style: FilledButton.styleFrom(
-                      backgroundColor: Colors.black.withOpacity(0.5),
+                      backgroundColor: Colors.black.withValues(alpha: 0.5),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -593,7 +593,7 @@ class _MaterialYouControlButton extends StatelessWidget {
       return FilledButton.tonal(
         onPressed: onTap,
         style: FilledButton.styleFrom(
-          backgroundColor: Colors.white.withOpacity(0.16),
+          backgroundColor: Colors.white.withValues(alpha: 0.16),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.all(14),
           shape: const CircleBorder(),
@@ -711,7 +711,7 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
                   child: Container(
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -743,7 +743,7 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
                         width: bufferedWidthPx,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.5),
+                          color: Colors.white.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -776,7 +776,7 @@ class _CustomProgressBarState extends State<_CustomProgressBar> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),

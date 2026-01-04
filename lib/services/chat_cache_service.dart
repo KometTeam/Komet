@@ -192,7 +192,6 @@ class ChatCacheService {
           )
           .toList();
 
-
       await _cacheService.set(key, messagesData, ttl: _messagesTTL);
       print('Кэшировано ${messages.length} сообщений для чата $chatId');
     } catch (e) {

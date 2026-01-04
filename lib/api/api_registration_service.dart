@@ -611,7 +611,9 @@ class RegistrationService {
 
     final mtInstanceId = _uuid.v4();
     final deviceIdBytes = List<int>.generate(8, (_) => _random.nextInt(256));
-    final deviceId = deviceIdBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final deviceId = deviceIdBytes
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
     final possibleDeviceNames = <String>[
       'Samsung Galaxy S23',
       'Samsung Galaxy S22',

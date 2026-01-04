@@ -276,7 +276,9 @@ class _ChatsScreenState extends State<ChatsScreen>
   void _updateChatLastMessage(int chatId, Message? newLastMessage) {
     final chatIndex = _allChats.indexWhere((chat) => chat.id == chatId);
     if (chatIndex != -1) {
-      final updatedChat = _allChats[chatIndex].copyWith(lastMessage: newLastMessage);
+      final updatedChat = _allChats[chatIndex].copyWith(
+        lastMessage: newLastMessage,
+      );
       setState(() {
         _allChats[chatIndex] = updatedChat;
       });
@@ -302,7 +304,8 @@ class _ChatsScreenState extends State<ChatsScreen>
       final drafts = <int, Map<String, dynamic>>{};
       for (final chat in _allChats) {
         final draft = await chatCacheService.getChatInputState(chat.id);
-        if (draft != null && draft['text']?.toString().trim().isNotEmpty == true) {
+        if (draft != null &&
+            draft['text']?.toString().trim().isNotEmpty == true) {
           drafts[chat.id] = draft;
         }
       }
@@ -322,11 +325,10 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   void _showTokenExpiredDialog(String message) {
-
     if (_isSwitchingAccounts) {
       return;
     }
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -415,9 +417,7 @@ class _ChatsScreenState extends State<ChatsScreen>
             .toList();
         _contacts.clear();
         for (final contactJson in contacts) {
-
-
-        _loadChatDrafts();
+          _loadChatDrafts();
           final contact = Contact.fromJson(
             (contactJson as Map).cast<String, dynamic>(),
           );
@@ -921,7 +921,6 @@ class _ChatsScreenState extends State<ChatsScreen>
         continue;
       }
 
-    
       if (chat.type == 'CHANNEL') {
         final channelTitle = chat.title ?? '';
         final channelDescription = chat.description ?? '';
@@ -934,14 +933,15 @@ class _ChatsScreenState extends State<ChatsScreen>
               chat: chat,
               contact: null,
               matchedText: channelTitle.isNotEmpty ? channelTitle : 'Канал',
-              matchType: channelTitle.toLowerCase().contains(query) ? 'name' : 'description',
+              matchType: channelTitle.toLowerCase().contains(query)
+                  ? 'name'
+                  : 'description',
             ),
           );
         }
         continue;
       }
 
-  
       if (_isGroupChat(chat)) {
         final groupTitle = chat.title ?? '';
         final groupDescription = chat.description ?? '';
@@ -952,9 +952,11 @@ class _ChatsScreenState extends State<ChatsScreen>
           results.add(
             SearchResult(
               chat: chat,
-              contact: null, 
+              contact: null,
               matchedText: groupTitle.isNotEmpty ? groupTitle : 'Группа',
-              matchType: groupTitle.toLowerCase().contains(query) ? 'name' : 'description',
+              matchType: groupTitle.toLowerCase().contains(query)
+                  ? 'name'
+                  : 'description',
             ),
           );
         }
@@ -1317,7 +1319,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     .toList();
                 _chatsLoaded = true;
                 _listenForUpdates();
-            
+
                 _loadChatDrafts();
                 final contacts = contactListJson.map(
                   (json) => Contact.fromJson(json as Map<String, dynamic>),
@@ -1382,7 +1384,9 @@ class _ChatsScreenState extends State<ChatsScreen>
             bodyContent: bodyContent,
             buildAppBar: _buildAppBar,
             buildAppDrawer: _buildAppDrawer,
-            onAddPressed: widget.isForwardMode ? null : () => _showAddMenu(context),
+            onAddPressed: widget.isForwardMode
+                ? null
+                : () => _showAddMenu(context),
           )
         : bodyContent;
 
@@ -1531,8 +1535,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                               child: Text(
                                 _myProfile?.formattedPhone ?? '',
                                 style: TextStyle(
-                                  color: colors.onPrimaryContainer.withOpacity(
-                                    0.8,
+                                  color: colors.onPrimaryContainer.withValues(
+                                    alpha: 0.8,
                                   ),
                                   fontSize: 14,
                                 ),
@@ -1646,7 +1650,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                 if (mounted) {
                                                   setState(() {
                                                     _isAccountsExpanded = false;
-                                             
+
                                                     _allChats.clear();
                                                     _filteredChats.clear();
                                                     _contacts.clear();
@@ -1656,7 +1660,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                     _myProfile = null;
                                                     _isProfileLoading = true;
                                                     _chatsLoaded = false;
-                                                    
+
                                                     _loadMyProfile();
                                                     _chatsFuture = (() async {
                                                       try {
@@ -1677,13 +1681,25 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                 }
                                               } catch (e) {
                                                 if (mounted) {
-                                                  final errorMessage = e.toString();
-                                             
-                                                  const invalidTokenKeywords = ['invalid_token', 'FAIL_WRONG_PASSWORD'];
-                                                  final isInvalidToken = invalidTokenKeywords.any(
-                                                    (keyword) => errorMessage.contains(keyword)
-                                                  ) || errorMessage.contains('недействительн');
-                                                  
+                                                  final errorMessage = e
+                                                      .toString();
+
+                                                  const invalidTokenKeywords = [
+                                                    'invalid_token',
+                                                    'FAIL_WRONG_PASSWORD',
+                                                  ];
+                                                  final isInvalidToken =
+                                                      invalidTokenKeywords.any(
+                                                        (keyword) =>
+                                                            errorMessage
+                                                                .contains(
+                                                                  keyword,
+                                                                ),
+                                                      ) ||
+                                                      errorMessage.contains(
+                                                        'недействительн',
+                                                      );
+
                                                   if (isInvalidToken) {
                                                     ScaffoldMessenger.of(
                                                       context,
@@ -1694,7 +1710,10 @@ class _ChatsScreenState extends State<ChatsScreen>
                                                         ),
                                                         backgroundColor:
                                                             colors.error,
-                                                        duration: const Duration(seconds: 4),
+                                                        duration:
+                                                            const Duration(
+                                                              seconds: 4,
+                                                            ),
                                                       ),
                                                     );
                                                   } else {
@@ -1714,7 +1733,8 @@ class _ChatsScreenState extends State<ChatsScreen>
                                               } finally {
                                                 if (mounted) {
                                                   setState(() {
-                                                    _isSwitchingAccounts = false;
+                                                    _isSwitchingAccounts =
+                                                        false;
                                                   });
                                                 }
                                               }
@@ -1975,14 +1995,14 @@ class _ChatsScreenState extends State<ChatsScreen>
                   Icon(
                     Icons.search,
                     size: 64,
-                    color: colors.onSurfaceVariant.withOpacity(0.5),
+                    color: colors.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Начните вводить для поиска',
                     style: TextStyle(
                       fontSize: 18,
-                      color: colors.onSurfaceVariant.withOpacity(0.7),
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.7),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1990,7 +2010,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     'Или выберите чат из списка выше',
                     style: TextStyle(
                       fontSize: 14,
-                      color: colors.onSurfaceVariant.withOpacity(0.5),
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.5),
                     ),
                   ),
                 ],
@@ -2009,14 +2029,14 @@ class _ChatsScreenState extends State<ChatsScreen>
             Icon(
               Icons.search_off,
               size: 64,
-              color: colors.onSurfaceVariant.withOpacity(0.5),
+              color: colors.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
               'Ничего не найдено',
               style: TextStyle(
                 fontSize: 18,
-                color: colors.onSurfaceVariant.withOpacity(0.7),
+                color: colors.onSurfaceVariant.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 8),
@@ -2024,7 +2044,7 @@ class _ChatsScreenState extends State<ChatsScreen>
               'Попробуйте изменить поисковый запрос',
               style: TextStyle(
                 fontSize: 14,
-                color: colors.onSurfaceVariant.withOpacity(0.5),
+                color: colors.onSurfaceVariant.withValues(alpha: 0.5),
               ),
             ),
           ],
@@ -2120,7 +2140,9 @@ class _ChatsScreenState extends State<ChatsScreen>
             : null,
         child: contactToUseFinal.photoBaseUrl == null
             ? Text(
-                contactToUseFinal.name.isNotEmpty ? contactToUseFinal.name[0].toUpperCase() : '?',
+                contactToUseFinal.name.isNotEmpty
+                    ? contactToUseFinal.name[0].toUpperCase()
+                    : '?',
                 style: TextStyle(color: colors.onPrimaryContainer),
               )
             : null,
@@ -2303,9 +2325,10 @@ class _ChatsScreenState extends State<ChatsScreen>
                         onLastMessageChanged: (Message? newLastMessage) {
                           _updateChatLastMessage(chat.id, newLastMessage);
                         },
-                        onDraftChanged: (int chatId, Map<String, dynamic>? draft) {
-                          _updateChatDraft(chatId, draft);
-                        },
+                        onDraftChanged:
+                            (int chatId, Map<String, dynamic>? draft) {
+                              _updateChatDraft(chatId, draft);
+                            },
                         onChatRemoved: () {
                           _removeChatLocally(chat.id);
                         },
@@ -2539,7 +2562,10 @@ class _ChatsScreenState extends State<ChatsScreen>
           end: Alignment.bottomRight,
         ),
         border: Border(
-          bottom: BorderSide(color: colors.outline.withOpacity(0.2), width: 1),
+          bottom: BorderSide(
+            color: colors.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
         ),
       );
     } else if (themeProvider.folderTabsBackgroundType ==
@@ -2552,7 +2578,10 @@ class _ChatsScreenState extends State<ChatsScreen>
           fit: BoxFit.cover,
         ),
         border: Border(
-          bottom: BorderSide(color: colors.outline.withOpacity(0.2), width: 1),
+          bottom: BorderSide(
+            color: colors.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
         ),
       );
     }
@@ -2565,7 +2594,7 @@ class _ChatsScreenState extends State<ChatsScreen>
             color: colors.surface,
             border: Border(
               bottom: BorderSide(
-                color: colors.outline.withOpacity(0.2),
+                color: colors.outline.withValues(alpha: 0.2),
                 width: 1,
               ),
             ),
@@ -2721,7 +2750,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: colors.onSurfaceVariant.withOpacity(0.4),
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -2733,7 +2762,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: colors.outline.withOpacity(0.2),
+                          color: colors.outline.withValues(alpha: 0.2),
                           width: 1,
                         ),
                       ),
@@ -2986,7 +3015,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colors.onSurfaceVariant.withOpacity(0.4),
+                  color: colors.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -3160,7 +3189,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: Material(
-              color: colors.surface.withOpacity(0.95),
+              color: colors.surface.withValues(alpha: 0.95),
               elevation: 6,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
@@ -3396,10 +3425,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                   tooltip: 'Сферум',
                 ),
               IconButton(
-                icon: Icon(
-                  Icons.download,
-                  color: Colors.white,
-                ),
+                icon: Icon(Icons.download, color: Colors.white),
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -3466,7 +3492,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           hintText: 'Поиск в чатах...',
           hintStyle: TextStyle(color: colors.onSurfaceVariant),
           filled: true,
-          fillColor: colors.surfaceContainerHighest.withOpacity(0.3),
+          fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.3),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20),
             borderSide: BorderSide.none,
@@ -3863,7 +3889,6 @@ class _ChatsScreenState extends State<ChatsScreen>
       messagePreview = _buildMessagePreviewContent(message, chat, colors);
     }
 
-
     if (isMyMessage) {
       final queueItem = MessageQueueService().findByCid(message.cid ?? 0);
       final bool isPending =
@@ -3988,9 +4013,7 @@ class _ChatsScreenState extends State<ChatsScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface, 
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -4072,7 +4095,6 @@ class _ChatsScreenState extends State<ChatsScreen>
         final photoUrl =
             attach['photoUrl'] as String? ?? attach['baseUrl'] as String?;
 
-
         String displayName;
         if (name != null && name.isNotEmpty) {
           displayName = name;
@@ -4113,17 +4135,14 @@ class _ChatsScreenState extends State<ChatsScreen>
       return 'Кнопки';
     }
 
-
     return 'Вложение';
   }
 
   String _getSenderDisplayName(Chat chat, Message message) {
-
     final isGroupChat = _isGroupChat(chat);
     final isChannel = chat.type == 'CHANNEL';
 
     if (!isGroupChat && !isChannel) {
-    
       return '';
     }
 
