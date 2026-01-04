@@ -695,8 +695,8 @@ class _ToggleCard extends StatelessWidget {
                         description,
                         style: GoogleFonts.manrope(
                           textStyle: textTheme.bodySmall,
-                          color: colors.onSurfaceVariant.withValues(alpha:
-                            isDisabled ? 0.5 : 1,
+                          color: colors.onSurfaceVariant.withValues(
+                            alpha: isDisabled ? 0.5 : 1,
                           ),
                           height: 1.3,
                         ),
@@ -710,7 +710,7 @@ class _ToggleCard extends StatelessWidget {
                 Switch(
                   value: value,
                   onChanged: isDisabled ? null : onChanged,
-                  activeColor: colors.primary,
+                  activeThumbColor: colors.primary,
                   inactiveThumbColor: colors.outlineVariant,
                 ),
               ],

@@ -170,8 +170,8 @@ class _ReconnectionScreenState extends State<ReconnectionScreen> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Scaffold(
         backgroundColor: colors.surface,
         body: Container(

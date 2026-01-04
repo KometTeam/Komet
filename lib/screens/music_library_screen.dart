@@ -140,7 +140,7 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
           builder: (context, isFullscreen, _) {
             return PopScope(
               canPop: !isPlayerExpanded,
-              onPopInvoked: (didPop) {
+              onPopInvokedWithResult: (didPop, _) {
                 if (!didPop && isPlayerExpanded) {
                   BottomSheetMusicPlayer.isExpandedNotifier.value = false;
                   BottomSheetMusicPlayer.isFullscreenNotifier.value = false;
