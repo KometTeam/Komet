@@ -63,6 +63,7 @@ class MessageQueueService {
 
   // Локальный массив для отслеживания обработанных сообщений из очереди
   final Set<String> _processedMessageIds = {};
+  static const int _maxProcessedMessageIds = 1000;
 
   Stream<List<QueueItem>> get queueStream => _queueController.stream;
   List<QueueItem> get queue => List.unmodifiable(_queue);
@@ -184,9 +185,12 @@ class MessageQueueService {
   void markMessageAsProcessed(String messageId) {
     _processedMessageIds.add(messageId);
     // Ограничиваем размер множества, чтобы не занимать слишком много памяти
-    if (_processedMessageIds.length > 1000) {
-      // Удаляем первый элемент (самый старый)
-      _processedMessageIds.remove(_processedMessageIds.first);
+    if (_processedMessageIds.length > _maxProcessedMessageIds) {
+      // Удаляем случайный элемент, так как Set не гарантирует порядок
+      // В реальности это нормально, так как вероятность отправки одного и того же
+      // сообщения после обработки 1000 других сообщений крайне мала
+      final toRemove = _processedMessageIds.take(100).toList();
+      _processedMessageIds.removeAll(toRemove);
     }
   }
 
