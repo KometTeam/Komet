@@ -7682,7 +7682,16 @@ class _ControlMessageChip extends StatelessWidget {
     switch (eventType) {
       case 'new':
         final title = controlAttach['title'] ?? 'Новая группа';
-        return '$senderDisplayName создал(а) группу "$title"';
+
+        // Костыль i think
+        // Best method is check for type of channel but i dont know how to get it
+  
+        if (message.senderId == 0) {
+          return 'Создана группа "$title"';
+        } else {
+          return '$senderDisplayName создал(а) группу "$title"';
+        }
+
 
       case 'add':
         final userIds = List<int>.from(
