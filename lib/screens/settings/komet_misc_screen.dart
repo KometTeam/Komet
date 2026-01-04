@@ -707,12 +707,7 @@ class _ToggleCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-                Switch(
-                  value: value,
-                  onChanged: isDisabled ? null : onChanged,
-                  activeThumbColor: colors.primary,
-                  inactiveThumbColor: colors.outlineVariant,
-                ),
+                Switch(value: value, onChanged: isDisabled ? null : onChanged),
               ],
             ),
           ),

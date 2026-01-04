@@ -320,8 +320,6 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
                       });
                       themeProvider.setShowSeconds(value);
                     },
-                    activeThumbColor: colors.primary,
-                    activeTrackColor: colors.primary.withValues(alpha: 0.5),
                   ),
                 ],
               ),
@@ -372,8 +370,6 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
                       });
                       themeProvider.setShowDeletedMessages(value);
                     },
-                    activeThumbColor: colors.primary,
-                    activeTrackColor: colors.primary.withValues(alpha: 0.5),
                   ),
                 ],
               ),
@@ -424,8 +420,6 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
                       });
                       themeProvider.setViewRedactHistory(value);
                     },
-                    activeThumbColor: colors.primary,
-                    activeTrackColor: colors.primary.withValues(alpha: 0.5),
                   ),
                 ],
               ),

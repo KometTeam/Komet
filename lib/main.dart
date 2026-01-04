@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -9,7 +11,6 @@ import 'screens/phone_entry_screen.dart';
 import 'utils/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 import 'package:gwid/api/api_service.dart';
 import 'connection_lifecycle_manager.dart';
 import 'services/cache_service.dart';
@@ -167,9 +168,108 @@ class MyApp extends StatelessWidget {
 
   const MyApp({super.key, required this.hasToken});
 
+  ThemeData _createTheme({
+    required ThemeProvider themeProvider,
+    required ColorScheme colorScheme,
+  }) {
+    return ThemeData(
+      colorScheme: colorScheme,
+      shadowColor: themeProvider.optimization ? Colors.transparent : null,
+      splashFactory: themeProvider.optimization
+          ? NoSplash.splashFactory
+          : InkSparkle.splashFactory,
+      appBarTheme: AppBarTheme(
+        toolbarHeight: 64.0,
+        // Убираем устаревший surfaceTint и оставляем только surfaceContainer
+        // при состоянии scrolled under
+        elevation: 0.0,
+        scrolledUnderElevation: 0.0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        // Стиль текста заголовка
+        titleTextStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: colorScheme.onSurface,
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        materialTapTargetSize: MaterialTapTargetSize.padded,
+        thumbIcon: const WidgetStatePropertyAll(null),
+        splashRadius: 40.0 / 2.0,
+        trackColor: WidgetStateColor.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colorScheme.onPrimaryContainer
+              : colorScheme.onSurfaceVariant,
+        ),
+        trackOutlineWidth: const WidgetStatePropertyAll(0.0),
+        trackOutlineColor: WidgetStateColor.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colorScheme.onPrimaryContainer
+              : colorScheme.onSurfaceVariant,
+        ),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest,
+        ),
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          final stateLayerColor = states.contains(WidgetState.selected)
+              ? colorScheme.primaryContainer
+              : colorScheme.onSurfaceVariant;
+          final double stateLayerOpacity;
+          if (states.contains(WidgetState.disabled)) {
+            stateLayerOpacity = 0.0;
+          } else if (states.contains(WidgetState.pressed)) {
+            stateLayerOpacity = 0.10;
+          } else if (states.contains(WidgetState.focused)) {
+            stateLayerOpacity = 0.1;
+          } else if (states.contains(WidgetState.hovered)) {
+            stateLayerOpacity = 0.08;
+          } else {
+            stateLayerOpacity = 0.0;
+          }
+          return stateLayerOpacity > 0.0
+              ? stateLayerColor.withValues(alpha: stateLayerOpacity)
+              : stateLayerColor.withAlpha(0);
+        }),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: colorScheme.surfaceContainer,
+        height: 64.0,
+        elevation: 0.0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+      ),
+      pageTransitionsTheme: themeProvider.optimization
+          ? const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+                TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
+                TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
+                TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+                TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+                TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+              },
+            )
+          : const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+                TargetPlatform.fuchsia: FadeForwardsPageTransitionsBuilder(),
+                TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+                TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+              },
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
+
+    final padding = MediaQuery.paddingOf(context);
 
     if (themeProvider.optimization) {
       timeDilation = 0.001;
@@ -188,23 +288,6 @@ class MyApp extends StatelessWidget {
             ? lightDynamic.primary
             : themeProvider.accentColor;
 
-        final PageTransitionsTheme pageTransitionsTheme =
-            themeProvider.optimization
-            ? const PageTransitionsTheme(
-                builders: {
-                  TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-                },
-              )
-            : PageTransitionsTheme(
-                builders: {
-                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-                },
-              );
-
         final ColorScheme lightScheme = useMaterialYou
             ? lightDynamic
             : ColorScheme.fromSeed(
@@ -213,21 +296,9 @@ class MyApp extends StatelessWidget {
                 dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
               );
 
-        final ThemeData baseLightTheme = ThemeData(
+        final ThemeData baseLightTheme = _createTheme(
+          themeProvider: themeProvider,
           colorScheme: lightScheme,
-          useMaterial3: true,
-          pageTransitionsTheme: pageTransitionsTheme,
-          shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization
-              ? NoSplash.splashFactory
-              : null,
-          appBarTheme: AppBarTheme(
-            titleTextStyle: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: lightScheme.onSurface,
-            ),
-          ),
         );
 
         final ColorScheme darkScheme = useMaterialYou
@@ -238,25 +309,14 @@ class MyApp extends StatelessWidget {
                 dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
               );
 
-        final ThemeData baseDarkTheme = ThemeData(
+        final ThemeData darkTheme = _createTheme(
+          themeProvider: themeProvider,
           colorScheme: darkScheme,
-          useMaterial3: true,
-          pageTransitionsTheme: pageTransitionsTheme,
-          shadowColor: themeProvider.optimization ? Colors.transparent : null,
-          splashFactory: themeProvider.optimization
-              ? NoSplash.splashFactory
-              : null,
-          appBarTheme: AppBarTheme(
-            titleTextStyle: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: darkScheme.onSurface,
-            ),
-          ),
         );
-        final ThemeData oledTheme = baseDarkTheme.copyWith(
+
+        final ThemeData oledTheme = darkTheme.copyWith(
           scaffoldBackgroundColor: Colors.black,
-          colorScheme: baseDarkTheme.colorScheme.copyWith(
+          colorScheme: darkTheme.colorScheme.copyWith(
             surface: Colors.black,
             surfaceContainerLowest: Colors.black,
             surfaceContainerLow: Colors.black,
@@ -284,12 +344,20 @@ class MyApp extends StatelessWidget {
         );
 
         final ThemeData activeDarkTheme =
-            themeProvider.appTheme == AppTheme.black
-            ? oledTheme
-            : baseDarkTheme;
+            themeProvider.appTheme == AppTheme.black ? oledTheme : darkTheme;
 
         return MaterialApp(
           title: 'Komet',
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('ru'), Locale('en')],
+          locale: const Locale('ru'),
+          themeMode: themeProvider.themeMode,
+          theme: baseLightTheme,
+          darkTheme: activeDarkTheme,
           navigatorKey: navigatorKey,
           builder: (context, child) {
             final showHud =
@@ -300,22 +368,18 @@ class MyApp extends StatelessWidget {
                 children: [
                   if (child != null) child,
                   if (showHud)
-                    const Positioned(top: 8, right: 56, child: _MiniFpsHud()),
+                    Positioned(
+                      top: 64.0 + 48.0 + 16.0,
+                      right: 16.0,
+                      child: Padding(
+                        padding: padding,
+                        child: IgnorePointer(child: _MiniFpsHud()),
+                      ),
+                    ),
                 ],
               ),
             );
           },
-          theme: baseLightTheme,
-          darkTheme: activeDarkTheme,
-          themeMode: themeProvider.themeMode,
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [Locale('ru'), Locale('en')],
-          locale: const Locale('ru'),
-
           home: hasToken ? const HomeScreen() : const PhoneEntryScreen(),
         );
       },
@@ -336,18 +400,6 @@ class _MiniFpsHudState extends State<_MiniFpsHud> {
   double _fps = 0.0;
   double _avgMs = 0.0;
 
-  @override
-  void initState() {
-    super.initState();
-    SchedulerBinding.instance.addTimingsCallback(_onTimings);
-  }
-
-  @override
-  void dispose() {
-    SchedulerBinding.instance.removeTimingsCallback(_onTimings);
-    super.dispose();
-  }
-
   void _onTimings(List<FrameTiming> timings) {
     _timings.addAll(timings);
     if (_timings.length > _sampleSize) {
@@ -367,31 +419,57 @@ class _MiniFpsHudState extends State<_MiniFpsHud> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    SchedulerBinding.instance.addTimingsCallback(_onTimings);
+  }
+
+  @override
+  void dispose() {
+    SchedulerBinding.instance.removeTimingsCallback(_onTimings);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.surface.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8),
-        ],
+    final themeProvider = context.watch<ThemeProvider>();
+    final colorScheme = ColorScheme.of(context);
+    final textTheme = TextTheme.of(context);
+    return Material(
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12.0)),
       ),
-      child: DefaultTextStyle(
-        style: TextStyle(
-          fontSize: 12,
-          color: theme.onSurface,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text('FPS: ${_fps.toStringAsFixed(0)}'),
-            const SizedBox(height: 2),
-            Text('${_avgMs.toStringAsFixed(1)} ms/frame'),
-          ],
+      color: themeProvider.optimization
+          ? colorScheme.inverseSurface
+          : colorScheme.surfaceContainer,
+      elevation: themeProvider.optimization
+          ? 0.0
+          // md.sys.elevation.level3
+          : 6.0,
+      shadowColor: colorScheme.shadow,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        child: DefaultTextStyle(
+          textAlign: TextAlign.end,
+          style: textTheme.labelSmall!.copyWith(
+            fontFamily: "monospace",
+            fontWeight: FontWeight.w600,
+            fontVariations: [FontVariation.weight(600.0)],
+            fontFeatures: const [FontFeature.tabularFigures()],
+            color: themeProvider.optimization
+                ? colorScheme.onInverseSurface
+                : colorScheme.onSurfaceVariant,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('${_fps.toStringAsFixed(0)} fps'),
+              const SizedBox(height: 4.0),
+              Text('${_avgMs.toStringAsFixed(1)} ms'),
+            ],
+          ),
         ),
       ),
     );
