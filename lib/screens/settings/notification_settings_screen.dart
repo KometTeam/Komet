@@ -210,17 +210,22 @@ class _NotificationSettingsScreenState
         return SimpleDialog(
           title: Text(title),
           children: [
-            RadioListTile<String>(
-              title: const Text('Стандартный звук'),
-              value: 'DEFAULT',
-              groupValue: currentValue,
+            RadioGroup<String>(
               onChanged: (v) => Navigator.of(context).pop(v),
-            ),
-            RadioListTile<String>(
-              title: const Text('Без звука'),
-              value: '_NONE_',
               groupValue: currentValue,
-              onChanged: (v) => Navigator.of(context).pop(v),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    value: 'DEFAULT',
+                    title: const Text('Стандартный звук'),
+                  ),
+                  RadioListTile<String>(
+                    value: '_NONE_',
+                    title: const Text('Без звука'),
+                  ),
+                ],
+              ),
             ),
           ],
         );
