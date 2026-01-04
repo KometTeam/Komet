@@ -1,0 +1,45 @@
+name: 🐛 Багрепорт
+title: '[Баг]: '
+description: Сообщить о баге
+labels: ['багрепорт']
+
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: ⚠️ Чеклист
+      description: Перед созданием нового Issue, удостоверьтесь что выполнили следующие пункты
+      options:
+        - label: Я скачал актуальную версию Komet из [Releases](https://github.com/KometTeam/Komet/releases) или из [Telegram канала](https://t.me/TeamKomet)
+        - label: Я поискал в [Issues](https://github.com/KometTeam/Komet/issues) такую же ошибку как у меня и не нашел
+  - type: textarea
+    id: description
+    attributes:
+      label: Опишите вашу проблему
+      description: Чётко опишите проблему с которой вы столкнулись
+      placeholder: Описание проблемы
+    validations:
+      required: true
+
+  - type: textarea
+    id: version
+    attributes:
+      label: Версия Komet
+      description: Версия Komet у вас возникает ошибка
+      placeholder: Версия
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Шаги воспроизведения проблемы
+      description: Шаги по воспроизведению поведения (вашей проблемы).
+      placeholder: |
+        С помощью каких действий мы можем повторить вашу проблему?
+
+  - type: textarea
+    id: additions
+    attributes:
+      label: Дополнительные детали
+      description: Дополнительные детали о которых нам нужно знать
