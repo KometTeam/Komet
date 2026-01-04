@@ -193,7 +193,9 @@ class _ModernSection extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: colors.outlineVariant.withOpacity(0.3)),
+            side: BorderSide(
+              color: colors.outlineVariant.withValues(alpha: 0.3),
+            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(

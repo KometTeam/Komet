@@ -50,7 +50,9 @@ class _CustomEmojiDialogState extends State<CustomEmojiDialog> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                color: Theme.of(
+                  context,
+                ).colorScheme.outline.withValues(alpha: 0.3),
               ),
             ),
             child: TextField(
@@ -64,7 +66,7 @@ class _CustomEmojiDialogState extends State<CustomEmojiDialog> {
                 hintStyle: TextStyle(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withOpacity(0.6),
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
               onChanged: (value) {
@@ -86,21 +88,23 @@ class _CustomEmojiDialogState extends State<CustomEmojiDialog> {
                     Theme.of(context).colorScheme.primaryContainer,
                     Theme.of(
                       context,
-                    ).colorScheme.primaryContainer.withOpacity(0.7),
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.7),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.3),
                   width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: Theme.of(
                       context,
-                    ).colorScheme.primary.withOpacity(0.2),
+                    ).colorScheme.primary.withValues(alpha: 0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),

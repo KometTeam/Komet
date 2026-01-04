@@ -223,7 +223,7 @@ class ControlMessageChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         margin: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: colors.primaryContainer.withOpacity(0.5),
+          color: colors.primaryContainer.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -462,7 +462,7 @@ class MessagePreviewDialog {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: colors.onSurfaceVariant.withOpacity(0.4),
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -474,7 +474,7 @@ class MessagePreviewDialog {
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: colors.outline.withOpacity(0.2),
+                          color: colors.outline.withValues(alpha: 0.2),
                           width: 1,
                         ),
                       ),
@@ -648,7 +648,10 @@ class MessagePreviewDialog {
                           ),
                   ),
                   if (menuBuilder != null) ...[
-                    Divider(height: 1, color: colors.outline.withOpacity(0.2)),
+                    Divider(
+                      height: 1,
+                      color: colors.outline.withValues(alpha: 0.2),
+                    ),
                     menuBuilder(context),
                   ],
                 ],

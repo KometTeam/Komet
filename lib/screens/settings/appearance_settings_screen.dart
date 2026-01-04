@@ -254,9 +254,9 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen>
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: colors.surfaceContainerHighest.withOpacity(0.5),
+            color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colors.outline.withOpacity(0.2)),
+            border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
           ),
           child: Row(
             children: [
@@ -310,7 +310,7 @@ class _AppearanceCard extends StatelessWidget {
             gradient: gradient,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: colors.outline.withOpacity(0.2),
+              color: colors.outline.withValues(alpha: 0.2),
               width: 1,
             ),
           ),
@@ -323,7 +323,7 @@ class _AppearanceCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: colors.primaryContainer.withOpacity(0.5),
+                      color: colors.primaryContainer.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(icon, color: colors.primary, size: 24),

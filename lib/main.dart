@@ -190,7 +190,7 @@ class MyApp extends StatelessWidget {
           ),
           navigationBarTheme: NavigationBarThemeData(
             backgroundColor: Colors.black,
-            indicatorColor: accentColor.withOpacity(0.4),
+            indicatorColor: accentColor.withValues(alpha: 0.4),
             labelTextStyle: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.selected)) {
                 return TextStyle(
@@ -299,10 +299,10 @@ class _MiniFpsHudState extends State<_MiniFpsHud> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.surface.withOpacity(0.85),
+        color: theme.surface.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8),
         ],
       ),
       child: DefaultTextStyle(

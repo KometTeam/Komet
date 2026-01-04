@@ -31,9 +31,12 @@ class PinnedMessageWidget extends StatelessWidget {
       margin: const EdgeInsets.only(left: 8, right: 8, top: 4, bottom: 0),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: colors.surface.withOpacity(0.6),
+        color: colors.surface.withValues(alpha: 0.6),
         border: Border(
-          bottom: BorderSide(color: colors.outline.withOpacity(0.2), width: 1),
+          bottom: BorderSide(
+            color: colors.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
         ),
       ),
       child: Row(
@@ -41,7 +44,7 @@ class PinnedMessageWidget extends StatelessWidget {
           Icon(
             Icons.push_pin,
             size: 14,
-            color: colors.primary.withOpacity(0.7),
+            color: colors.primary.withValues(alpha: 0.7),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -57,7 +60,7 @@ class PinnedMessageWidget extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: colors.onSurface.withOpacity(0.7),
+                          color: colors.onSurface.withValues(alpha: 0.7),
                         ),
                       ),
                       TextSpan(
@@ -66,7 +69,7 @@ class PinnedMessageWidget extends StatelessWidget {
                             : 'Вложение',
                         style: TextStyle(
                           fontSize: 13,
-                          color: colors.onSurface.withOpacity(0.9),
+                          color: colors.onSurface.withValues(alpha: 0.9),
                         ),
                       ),
                     ],
@@ -88,7 +91,7 @@ class PinnedMessageWidget extends StatelessWidget {
                   child: Icon(
                     Icons.close,
                     size: 16,
-                    color: colors.onSurface.withOpacity(0.5),
+                    color: colors.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
               ),

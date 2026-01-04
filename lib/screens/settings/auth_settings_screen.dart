@@ -217,12 +217,12 @@ class _AuthSettingsScreenState extends State<AuthSettingsScreen>
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: colors.surfaceContainerHighest.withOpacity(
+                            color: colors.surfaceContainerHighest.withValues(alpha:
                               0.5,
                             ),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: colors.outline.withOpacity(0.2),
+                              color: colors.outline.withValues(alpha: 0.2),
                             ),
                           ),
                           child: Row(
@@ -292,14 +292,14 @@ class _SettingsCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isConfigured
-                  ? colors.primary.withOpacity(0.3)
-                  : colors.outline.withOpacity(0.2),
+                  ? colors.primary.withValues(alpha: 0.3)
+                  : colors.outline.withValues(alpha: 0.2),
               width: isConfigured ? 2 : 1,
             ),
             boxShadow: isConfigured
                 ? [
                     BoxShadow(
-                      color: colors.primary.withOpacity(0.1),
+                      color: colors.primary.withValues(alpha: 0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),
@@ -316,7 +316,7 @@ class _SettingsCard extends StatelessWidget {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: isConfigured
-                          ? colors.primary.withOpacity(0.15)
+                          ? colors.primary.withValues(alpha: 0.15)
                           : colors.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -336,7 +336,7 @@ class _SettingsCard extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: colors.primary.withOpacity(0.15),
+                        color: colors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(

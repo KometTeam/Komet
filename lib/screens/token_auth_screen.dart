@@ -494,7 +494,7 @@ class _TokenAuthScreenState extends State<TokenAuthScreen>
               ),
               if (_isLoading)
                 Container(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   child: const Center(child: CircularProgressIndicator()),
                 ),
             ],
@@ -539,7 +539,7 @@ class _AuthMethodCard extends StatelessWidget {
             gradient: gradient,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: colors.outline.withOpacity(0.2),
+              color: colors.outline.withValues(alpha: 0.2),
               width: 1,
             ),
           ),
@@ -581,7 +581,7 @@ class _AuthMethodCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: colors.secondaryContainer.withOpacity(0.5),
+                    color: colors.secondaryContainer.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -660,7 +660,7 @@ class _TokenAuthCard extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: colors.outline.withOpacity(0.2),
+              color: colors.outline.withValues(alpha: 0.2),
               width: 1,
             ),
           ),
@@ -705,7 +705,7 @@ class _TokenAuthCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colors.secondaryContainer.withOpacity(0.5),
+                  color: colors.secondaryContainer.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(

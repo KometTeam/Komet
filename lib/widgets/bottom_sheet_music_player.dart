@@ -202,8 +202,8 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                   ? []
                   : [
                       BoxShadow(
-                        color: Colors.black.withOpacity(
-                          0.15 * _heightAnimation.value,
+                        color: Colors.black.withValues(
+                          alpha: 0.15 * _heightAnimation.value,
                         ),
                         blurRadius: 20,
                         offset: Offset(0, -6 * _heightAnimation.value),
@@ -340,7 +340,9 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                           track.artist,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
-                                color: colorScheme.onSurface.withOpacity(0.65),
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.65,
+                                ),
                                 fontSize: 13,
                               ),
                           maxLines: 1,
@@ -457,7 +459,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                               borderRadius: BorderRadius.circular(32),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.25),
+                                  color: Colors.black.withValues(alpha: 0.25),
                                   blurRadius: 30,
                                   offset: const Offset(0, 12),
                                   spreadRadius: 2,
@@ -513,7 +515,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                     Text(
                       track.artist,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: colorScheme.onSurface.withOpacity(0.75),
+                        color: colorScheme.onSurface.withValues(alpha: 0.75),
                         fontWeight: FontWeight.w500,
                       ),
                       textAlign: TextAlign.center,
@@ -525,7 +527,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                       Text(
                         track.album!,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: colorScheme.onSurface.withOpacity(0.6),
+                          color: colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -539,7 +541,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                           Duration(milliseconds: track.duration!),
                         ),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurface.withOpacity(0.55),
+                          color: colorScheme.onSurface.withValues(alpha: 0.55),
                           fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
@@ -555,7 +557,9 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                             inactiveTrackColor:
                                 colorScheme.surfaceContainerHigh,
                             thumbColor: colorScheme.primary,
-                            overlayColor: colorScheme.primary.withOpacity(0.1),
+                            overlayColor: colorScheme.primary.withValues(
+                              alpha: 0.1,
+                            ),
                             thumbShape: const RoundSliderThumbShape(
                               enabledThumbRadius: 8,
                             ),
@@ -588,8 +592,8 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                                 _formatDuration(musicPlayer.position),
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(
-                                      color: colorScheme.onSurface.withOpacity(
-                                        0.7,
+                                      color: colorScheme.onSurface.withValues(
+                                        alpha: 0.7,
                                       ),
                                       fontWeight: FontWeight.w500,
                                       fontSize: 13,
@@ -599,8 +603,8 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                                 _formatDuration(musicPlayer.duration),
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(
-                                      color: colorScheme.onSurface.withOpacity(
-                                        0.7,
+                                      color: colorScheme.onSurface.withValues(
+                                        alpha: 0.7,
                                       ),
                                       fontWeight: FontWeight.w500,
                                       fontSize: 13,
@@ -717,7 +721,7 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                               ? Icons.volume_down_rounded
                               : Icons.volume_up_rounded,
                           size: 20,
-                          color: colorScheme.onSurface.withOpacity(0.7),
+                          color: colorScheme.onSurface.withValues(alpha: 0.7),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -727,8 +731,8 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                               inactiveTrackColor:
                                   colorScheme.surfaceContainerHigh,
                               thumbColor: colorScheme.primary,
-                              overlayColor: colorScheme.primary.withOpacity(
-                                0.1,
+                              overlayColor: colorScheme.primary.withValues(
+                                alpha: 0.1,
                               ),
                               thumbShape: const RoundSliderThumbShape(
                                 enabledThumbRadius: 6,
@@ -749,7 +753,9 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
                           '${(musicPlayer.volume * 100).round()}%',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
-                                color: colorScheme.onSurface.withOpacity(0.7),
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.7,
+                                ),
                                 fontWeight: FontWeight.w500,
                                 fontSize: 12,
                               ),
@@ -775,14 +781,14 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
           end: Alignment.bottomRight,
           colors: [
             colorScheme.primaryContainer,
-            colorScheme.primaryContainer.withOpacity(0.7),
+            colorScheme.primaryContainer.withValues(alpha: 0.7),
           ],
         ),
       ),
       child: Center(
         child: Icon(
           Icons.music_note_rounded,
-          color: colorScheme.onPrimaryContainer.withOpacity(0.7),
+          color: colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
           size: 32,
         ),
       ),
@@ -802,14 +808,14 @@ class _BottomSheetMusicPlayerState extends State<BottomSheetMusicPlayer>
           end: Alignment.bottomRight,
           colors: [
             colorScheme.primaryContainer,
-            colorScheme.primaryContainer.withOpacity(0.6),
+            colorScheme.primaryContainer.withValues(alpha: 0.6),
           ],
         ),
       ),
       child: Center(
         child: Icon(
           Icons.music_note_rounded,
-          color: colorScheme.onPrimaryContainer.withOpacity(0.6),
+          color: colorScheme.onPrimaryContainer.withValues(alpha: 0.6),
           size: 100,
         ),
       ),

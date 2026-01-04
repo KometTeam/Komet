@@ -58,20 +58,20 @@ class _PluginsScreenState extends State<PluginsScreen> {
           Icon(
             Icons.extension_off,
             size: 64,
-            color: theme.colorScheme.onSurface.withOpacity(0.3),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             'Нет установленных плагинов',
             style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Нажмите плюсик чтобы добавить плагин',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.4),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
             ),
           ),
           const SizedBox(height: 24),
@@ -173,13 +173,15 @@ class _PluginsScreenState extends State<PluginsScreen> {
                 style: TextStyle(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withOpacity(0.6),
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             Text(
               'Версия: ${plugin.version}',
               style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             if (summary.isNotEmpty) ...[
@@ -358,7 +360,9 @@ class _PluginCard extends StatelessWidget {
                         Text(
                           'v${plugin.version}${plugin.author != null ? ' • ${plugin.author}' : ''}',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
                           ),
                         ),
                       ],
@@ -372,7 +376,7 @@ class _PluginCard extends StatelessWidget {
                 Text(
                   plugin.description!,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -423,13 +427,13 @@ class _PluginCard extends StatelessWidget {
           Icon(
             icon,
             size: 14,
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
           const SizedBox(width: 4),
           Text(
             text,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -467,7 +471,7 @@ class _PluginDetailsSheet extends StatelessWidget {
               height: 4,
               margin: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withOpacity(0.2),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -501,7 +505,9 @@ class _PluginDetailsSheet extends StatelessWidget {
                     Text(
                       'Версия ${plugin.version}',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                   ],
@@ -531,7 +537,7 @@ class _PluginDetailsSheet extends StatelessWidget {
             Text(
               'Плагин хуетень ниче не делает ',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             )
           else
@@ -573,7 +579,9 @@ class _PluginDetailsSheet extends StatelessWidget {
                         e.key,
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontFamily: 'monospace',
-                          color: theme.colorScheme.onSurface.withOpacity(0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ),
@@ -605,13 +613,13 @@ class _PluginDetailsSheet extends StatelessWidget {
         Icon(
           icon,
           size: 20,
-          color: theme.colorScheme.onSurface.withOpacity(0.5),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
         ),
         const SizedBox(width: 8),
         Text(
           '$label: ',
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.5),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
         Text(value, style: theme.textTheme.bodyMedium),

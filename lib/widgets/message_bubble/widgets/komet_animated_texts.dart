@@ -163,7 +163,7 @@ class _PulseAnimatedTextState extends State<PulseAnimatedText>
       builder: (context, child) {
         final t = _controller.value;
         final opacity = 0.5 + (t * 0.5);
-        final color = baseColor.withOpacity(opacity);
+        final color = baseColor.withValues(alpha: opacity);
 
         return Text(
           messageText,

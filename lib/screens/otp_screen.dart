@@ -271,7 +271,10 @@ class _OTPScreenState extends State<OTPScreen>
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2), width: 1),
+        border: Border.all(
+          color: colors.outline.withValues(alpha: 0.2),
+          width: 1,
+        ),
       ),
     );
 
@@ -350,7 +353,7 @@ class _OTPScreenState extends State<OTPScreen>
                                 ),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: colors.outline.withOpacity(0.2),
+                                  color: colors.outline.withValues(alpha: 0.2),
                                   width: 1,
                                 ),
                               ),
@@ -364,7 +367,7 @@ class _OTPScreenState extends State<OTPScreen>
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: colors.primaryContainer
-                                              .withOpacity(0.5),
+                                              .withValues(alpha: 0.5),
                                           borderRadius: BorderRadius.circular(
                                             12,
                                           ),
@@ -447,10 +450,10 @@ class _OTPScreenState extends State<OTPScreen>
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 color: colors.surfaceContainerHighest
-                                    .withOpacity(0.5),
+                                    .withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: colors.outline.withOpacity(0.2),
+                                  color: colors.outline.withValues(alpha: 0.2),
                                 ),
                               ),
                               child: Row(
@@ -484,7 +487,7 @@ class _OTPScreenState extends State<OTPScreen>
               ),
               if (_isLoading)
                 Container(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

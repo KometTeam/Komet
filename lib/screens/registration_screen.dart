@@ -308,7 +308,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: colors.primary.withOpacity(0.1),
+                                color: colors.primary.withValues(alpha: 0.1),
                               ),
                               child: const Image(
                                 image: AssetImage(
@@ -412,7 +412,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           ),
           if (_isLoading)
             Container(
-              color: colors.scrim.withOpacity(0.7),
+              color: colors.scrim.withValues(alpha: 0.7),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

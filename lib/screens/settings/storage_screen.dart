@@ -269,13 +269,13 @@ class _StorageScreenState extends State<StorageScreen>
                   Icon(
                     Icons.storage_outlined,
                     size: 64,
-                    color: colors.onSurface.withOpacity(0.3),
+                    color: colors.onSurface.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Не удалось загрузить информацию о хранилище',
                     style: TextStyle(
-                      color: colors.onSurface.withOpacity(0.6),
+                      color: colors.onSurface.withValues(alpha: 0.6),
                       fontSize: 16,
                     ),
                   ),
@@ -321,7 +321,7 @@ class _StorageScreenState extends State<StorageScreen>
             child: Container(
               width: double.infinity,
               height: double.infinity,
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
             ),
           ),
 
@@ -335,7 +335,7 @@ class _StorageScreenState extends State<StorageScreen>
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -421,7 +421,7 @@ class _StorageScreenState extends State<StorageScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -478,7 +478,7 @@ class _StorageScreenState extends State<StorageScreen>
                             'из ${_formatBytes(totalSize)}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: colors.onSurface.withOpacity(0.7),
+                              color: colors.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         ],
@@ -547,7 +547,7 @@ class _StorageScreenState extends State<StorageScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outline.withOpacity(0.2)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,7 +615,7 @@ class _StorageScreenState extends State<StorageScreen>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.zero,
             ),
             child: Icon(icon, color: color, size: 20),
@@ -638,7 +638,7 @@ class _StorageScreenState extends State<StorageScreen>
                   size,
                   style: TextStyle(
                     fontSize: 12,
-                    color: colors.onSurface.withOpacity(0.6),
+                    color: colors.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -748,7 +748,7 @@ class _StorageScreenState extends State<StorageScreen>
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colors.outline.withOpacity(0.2)),
+            border: Border.all(color: colors.outline.withValues(alpha: 0.2)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,7 +773,7 @@ class _StorageScreenState extends State<StorageScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest.withOpacity(0.5),
+                  color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -786,7 +786,7 @@ class _StorageScreenState extends State<StorageScreen>
                             'Текущая папка:',
                             style: TextStyle(
                               fontSize: 12,
-                              color: colors.onSurface.withOpacity(0.6),
+                              color: colors.onSurface.withValues(alpha: 0.6),
                             ),
                           ),
                           const SizedBox(height: 4),

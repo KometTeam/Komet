@@ -700,7 +700,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 boxShadow: expansionProgress > 0
                     ? [
                         BoxShadow(
-                          color: colors.shadow.withOpacity(
+                          color: colors.shadow.withValues(alpha:
                             0.2 * expansionProgress,
                           ),
                           blurRadius: 20 * expansionProgress,
@@ -755,7 +755,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               'ID: ${_myProfile!.id}',
               style: GoogleFonts.manrope(
                 textStyle: textTheme.bodyMedium,
-                color: colors.onSurfaceVariant.withOpacity(0.7),
+                color: colors.onSurfaceVariant.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),
@@ -787,12 +787,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: colors.primary.withOpacity(0.3),
+                    color: colors.primary.withValues(alpha: 0.3),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: colors.primary.withOpacity(0.1),
+                      color: colors.primary.withValues(alpha: 0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),
@@ -884,7 +884,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: colors.outline.withOpacity(0.2),
+                color: colors.outline.withValues(alpha: 0.2),
                 width: 1,
               ),
             ),
@@ -894,7 +894,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: colors.primaryContainer.withOpacity(0.5),
+                    color: colors.primaryContainer.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: colors.primary, size: 24),
