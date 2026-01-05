@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/profile.dart';
 import 'package:gwid/screens/phone_entry_screen.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ManageAccountScreen extends StatefulWidget {
   final Profile? myProfile;
@@ -21,10 +25,230 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
   Profile? _actualProfile;
   bool _isLoading = false;
 
+  bool? _hasDeleteRequest;
+  bool _isDeleteStatusLoading = false;
+  bool _isDeleteActionInProgress = false;
+
   @override
   void initState() {
     super.initState();
     _initializeProfileData();
+    _loadAccountDeleteStatus();
+  }
+
+  Future<void> _loadAccountDeleteStatus() async {
+    if (_isDeleteStatusLoading) return;
+
+    setState(() {
+      _isDeleteStatusLoading = true;
+    });
+
+    try {
+      final payload = await ApiService.instance.sendRequest(200, const {});
+      final timestamp = (payload is Map)
+          ? (payload['timestamp'] as int? ?? 0)
+          : 0;
+
+      if (mounted) {
+        setState(() {
+          _hasDeleteRequest = timestamp > 0;
+        });
+      }
+    } catch (e) {
+      // Log the detailed error for debugging without exposing it to the user.
+      debugPrint('Failed to load account delete status: $e');
+      if (mounted) {
+        setState(() {
+          _hasDeleteRequest = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Не удалось получить статус удаления аккаунта. Попробуйте позже.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDeleteStatusLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _setAccountDeleteRequest(bool delete) async {
+    if (_isDeleteActionInProgress) return;
+
+    setState(() {
+      _isDeleteActionInProgress = true;
+    });
+
+    try {
+      await ApiService.instance.sendRequest(
+        199,
+        {
+          'delete': delete,
+          'type': 0,
+        },
+        timeout: const Duration(seconds: 30),
+      );
+
+      if (mounted) {
+        setState(() {
+          _hasDeleteRequest = delete;
+        });
+      }
+    } catch (e) {
+      // Log the detailed error for debugging without exposing it to the user.
+      debugPrint('Failed to set account delete request: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Не удалось выполнить запрос. Попробуйте позже.'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      rethrow;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDeleteActionInProgress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _onDeleteAccountPressed() async {
+    final confirmDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить аккаунт?'),
+        content: const Text('Учетная запись MAX, к которой подключается Komet, будет удалена через 30 дней'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Подтвердить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmDelete != true || !mounted) return;
+
+    try {
+      await _setAccountDeleteRequest(true);
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    final confirmLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Выйти из аккаунта?'),
+        content: const Text(
+          'Вы хотите выйти из аккаунта? Все локальные данные (токены, настройки, кэш чатов) будут удалены безвозвратно.',
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Нет'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Да'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmLogout == true && mounted) {
+      await _wipeLocalDataAndGoToLogin();
+    }
+  }
+
+  Future<void> _onCancelDeleteAccountPressed() async {
+    try {
+      await _setAccountDeleteRequest(false);
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Заявка на удаление отменена'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _wipeLocalDataAndGoToLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (e) {
+      debugPrint('Failed to clear SharedPreferences: $e');
+    }
+
+    try {
+      final cacheDir = await getApplicationCacheDirectory();
+      if (await cacheDir.exists()) {
+        await cacheDir.delete(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('Failed to delete cache directory: $e');
+    }
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('Failed to delete temporary directory: $e');
+    }
+
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final imageCacheDir = Directory('${docsDir.path}/image_cache');
+      if (await imageCacheDir.exists()) {
+        await imageCacheDir.delete(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('Failed to delete image cache directory: $e');
+    }
+
+    try {
+      await ApiService.instance.clearAllData();
+    } catch (e) {
+      debugPrint('Failed to clear API service data: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
+      (route) => false,
+    );
   }
 
   Future<void> _initializeProfileData() async {
@@ -339,7 +563,14 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
                   ),
 
                 const SizedBox(height: 32),
-                _buildLogoutButton(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildLogoutButton(),
+                    const SizedBox(height: 12),
+                    _buildDeleteAccountButton(),
+                  ],
+                ),
               ],
             ),
           ),
@@ -732,6 +963,28 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
       icon: const Icon(Icons.logout),
       label: const Text('Выйти из аккаунта'),
       onPressed: _logout,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.red.shade400,
+        side: BorderSide(color: Colors.red.shade200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildDeleteAccountButton() {
+    final isRequested = _hasDeleteRequest == true;
+    final label = isRequested ? 'Не удалять аккаунт' : 'Удалить аккаунт';
+
+    final enabled =
+        !_isDeleteStatusLoading && !_isDeleteActionInProgress && _hasDeleteRequest != null;
+
+    return OutlinedButton.icon(
+      icon: Icon(isRequested ? Icons.undo : Icons.delete_outline),
+      label: Text(label),
+      onPressed: !enabled
+          ? null
+          : (isRequested ? _onCancelDeleteAccountPressed : _onDeleteAccountPressed),
       style: OutlinedButton.styleFrom(
         foregroundColor: Colors.red.shade400,
         side: BorderSide(color: Colors.red.shade200),

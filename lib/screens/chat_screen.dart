@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:gwid/models/chat.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/models/message.dart';
+import 'package:gwid/models/bot_command.dart';
 import 'package:gwid/widgets/chat_message_bubble.dart';
 import 'package:gwid/widgets/complaint_dialog.dart';
 import 'package:gwid/widgets/pinned_message_widget.dart';
@@ -128,6 +129,40 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<String>? _connectionStatusSub;
   String _connectionStatus = 'connecting';
 
+  bool _showBotCommandsPanel = false;
+  bool _isLoadingBotCommands = false;
+  int? _botCommandsForBotId;
+  List<BotCommand> _botCommands = const [];
+
+  Widget _wrapInputWithBotCommandsBar(Widget inputBar) {
+    if (!_showBotCommandsPanel) return inputBar;
+
+    final query = _textController.text.toLowerCase();
+    final filteredCommands =
+        _botCommands.where((cmd) {
+          return cmd.slashCommand.toLowerCase().startsWith(query);
+        }).toList();
+
+    if (filteredCommands.isEmpty && !_isLoadingBotCommands) {
+      return inputBar;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _BotCommandsPanel(
+            isLoading: _isLoadingBotCommands,
+            commands: filteredCommands,
+            onCommandTap: _applyBotCommandToInput,
+          ),
+        ),
+        inputBar,
+      ],
+    );
+  }
+
   int? _parseMessageId(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
@@ -140,6 +175,95 @@ class _ChatScreenState extends State<ChatScreen> {
     if (value is int) return value;
     if (value is String) return int.tryParse(value);
     return int.tryParse(value.toString());
+  }
+
+  void _handleChatInputChanged(String v) {
+    _resetDraftFormattingIfNeeded(v);
+
+    if (v.isNotEmpty) {
+      _scheduleTypingPing();
+    }
+
+    final shouldShowPanel = _currentContact.isBot && v.startsWith('/');
+
+    if (shouldShowPanel != _showBotCommandsPanel) {
+      setState(() {
+        _showBotCommandsPanel = shouldShowPanel;
+      });
+    } else if (shouldShowPanel) {
+      // Rebuild to update filtered commands list
+      setState(() {});
+    }
+
+    if (shouldShowPanel) {
+      _ensureBotCommandsLoaded();
+    }
+  }
+
+  Future<void> _ensureBotCommandsLoaded() async {
+    if (!_currentContact.isBot) return;
+
+    final botId = _currentContact.id;
+    if (_botCommandsForBotId == botId && _botCommands.isNotEmpty) return;
+    if (_isLoadingBotCommands) return;
+
+    setState(() {
+      _isLoadingBotCommands = true;
+    });
+
+    try {
+      final seq = await ApiService.instance.sendRawRequest(145, {'botId': botId});
+      if (seq == -1) {
+        throw Exception('Не удалось отправить запрос команд бота');
+      }
+
+      final resp = await ApiService.instance.messages
+          .firstWhere((m) => m['seq'] == seq && m['opcode'] == 145)
+          .timeout(const Duration(seconds: 10));
+
+      final payload = resp['payload'] as Map<String, dynamic>?;
+      final commandsJson = (payload?['commands'] as List<dynamic>?) ?? const [];
+
+      final commands = commandsJson
+          .whereType<Map>()
+          .map((e) => BotCommand.fromJson(Map<String, dynamic>.from(e)))
+          .where((c) => c.name.isNotEmpty)
+          .toList(growable: false);
+
+      if (!mounted) return;
+      setState(() {
+        _botCommandsForBotId = botId;
+        _botCommands = commands;
+      });
+      if (!mounted || _currentContact.id != botId) return;
+      setState(() {
+        _botCommandsForBotId = botId;
+        _botCommands = commands;
+      });
+    } catch (e) {
+      if (!mounted || _currentContact.id != botId) return;
+      setState(() {
+        _botCommandsForBotId = botId;
+        _botCommands = const [];
+      });
+    } finally {
+      if (!mounted || _currentContact.id != botId) return;
+      setState(() {
+        _isLoadingBotCommands = false;
+      });
+    }
+  }
+
+  void _applyBotCommandToInput(BotCommand command) {
+    final text = command.slashCommand;
+    _textController.text = text;
+    _textController.selection = TextSelection.collapsed(offset: text.length);
+
+    setState(() {
+      _showBotCommandsPanel = false;
+    });
+
+    _textFocusNode.requestFocus();
   }
 
   Future<void> _onAttachPressed() async {
@@ -4497,7 +4621,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (theme.useGlassPanels) {
-      return ClipRRect(
+      final inputBar = ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
           filter: ImageFilter.blur(
@@ -4876,14 +5000,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             vertical: 12.0,
                                           ),
                                     ),
-                                    onChanged: isBlocked
-                                        ? null
-                                        : (v) {
-                                            _resetDraftFormattingIfNeeded(v);
-                                            if (v.isNotEmpty) {
-                                              _scheduleTypingPing();
-                                            }
-                                          },
+                                    onChanged: isBlocked ? null : _handleChatInputChanged,
                                   ),
                                 ),
                               ],
@@ -5032,9 +5149,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       );
+      return _wrapInputWithBotCommandsBar(inputBar);
     } else {
       final theme = context.watch<ThemeProvider>();
-      return ClipRRect(
+      final inputBar = ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: theme.optimization
             ? Container(
@@ -5195,57 +5313,55 @@ class _ChatScreenState extends State<ChatScreen> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Expanded(
-                            child: Stack(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                TextField(
-                                  controller: _textController,
-                                  enabled: !isBlocked,
-                                  keyboardType: TextInputType.multiline,
-                                  textInputAction: TextInputAction.newline,
-                                  minLines: 1,
-                                  maxLines: 5,
-                                  decoration: InputDecoration(
-                                    hintText: isBlocked
-                                        ? 'Пользователь заблокирован'
-                                        : 'Сообщение...',
-                                    filled: true,
-                                    isDense: true,
-                                    fillColor: isBlocked
-                                        ? Theme.of(context)
-                                              .colorScheme
-                                              .surfaceContainerHighest
-                                              .withValues(alpha: 0.25)
-                                        : Theme.of(context)
-                                              .colorScheme
-                                              .surfaceContainerHighest
-                                              .withValues(alpha: 0.4),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(24),
-                                      borderSide: BorderSide.none,
+                                Stack(
+                                  children: [
+                                    TextField(
+                                      controller: _textController,
+                                      enabled: !isBlocked,
+                                      keyboardType: TextInputType.multiline,
+                                      textInputAction: TextInputAction.newline,
+                                      minLines: 1,
+                                      maxLines: 5,
+                                      decoration: InputDecoration(
+                                        hintText: isBlocked
+                                            ? 'Пользователь заблокирован'
+                                            : 'Сообщение...',
+                                        filled: true,
+                                        isDense: true,
+                                        fillColor: isBlocked
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest
+                                                  .withValues(alpha: 0.25)
+                                            : Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest
+                                                  .withValues(alpha: 0.4),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 18.0,
+                                          vertical: 12.0,
+                                        ),
+                                      ),
+                                      onChanged:
+                                          isBlocked ? null : _handleChatInputChanged,
                                     ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(24),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(24),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 18.0,
-                                      vertical: 12.0,
-                                    ),
-                                  ),
-                                  onChanged: isBlocked
-                                      ? null
-                                      : (v) {
-                                          if (v.isNotEmpty) {
-                                            _scheduleTypingPing();
-                                          }
-                                        },
-                                ),
 
-                                StreamBuilder<bool>(
+                                    StreamBuilder<bool>(
                                   stream: Stream.periodic(
                                     const Duration(milliseconds: 500),
                                     (_) {
@@ -5278,6 +5394,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ),
                                     );
                                   },
+                                ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -5617,52 +5735,52 @@ class _ChatScreenState extends State<ChatScreen> {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
-                              child: TextField(
-                                controller: _textController,
-                                enabled: !isBlocked,
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
-                                minLines: 1,
-                                maxLines: 5,
-                                decoration: InputDecoration(
-                                  hintText: isBlocked
-                                      ? 'Пользователь заблокирован'
-                                      : 'Сообщение...',
-                                  filled: true,
-                                  isDense: true,
-                                  fillColor: isBlocked
-                                      ? Theme.of(context)
-                                            .colorScheme
-                                            .surfaceContainerHighest
-                                            .withValues(alpha: 0.25)
-                                      : Theme.of(context)
-                                            .colorScheme
-                                            .surfaceContainerHighest
-                                            .withValues(alpha: 0.4),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextField(
+                                    controller: _textController,
+                                    enabled: !isBlocked,
+                                    keyboardType: TextInputType.multiline,
+                                    textInputAction: TextInputAction.newline,
+                                    minLines: 1,
+                                    maxLines: 5,
+                                    decoration: InputDecoration(
+                                      hintText: isBlocked
+                                          ? 'Пользователь заблокирован'
+                                          : 'Сообщение...',
+                                      filled: true,
+                                      isDense: true,
+                                      fillColor: isBlocked
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.25)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.4),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 18.0,
+                                        vertical: 12.0,
+                                      ),
+                                    ),
+                                    onChanged:
+                                        isBlocked ? null : _handleChatInputChanged,
                                   ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 18.0,
-                                    vertical: 12.0,
-                                  ),
-                                ),
-                                onChanged: isBlocked
-                                    ? null
-                                    : (v) {
-                                        if (v.isNotEmpty) {
-                                          _scheduleTypingPing();
-                                        }
-                                      },
+                                ],
                               ),
                             ),
                             const SizedBox(width: 4),
@@ -5777,6 +5895,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
       );
+
+      return _wrapInputWithBotCommandsBar(inputBar);
     }
   }
 
@@ -6069,6 +6189,117 @@ class _SpecialMessageButton extends StatelessWidget {
             Icon(Icons.chevron_right, color: colors.onSurfaceVariant),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _BotCommandsPanel extends StatelessWidget {
+  final bool isLoading;
+  final List<BotCommand> commands;
+  final ValueChanged<BotCommand> onCommandTap;
+
+  const _BotCommandsPanel({
+    required this.isLoading,
+    required this.commands,
+    required this.onCommandTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 140),
+        child: isLoading
+            ? Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(colors.primary),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Загрузка команд…',
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              )
+            : (commands.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'Нет команд',
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  )
+                : Material(
+                    color: Colors.transparent,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      shrinkWrap: true,
+                      itemCount: commands.length,
+                      itemBuilder: (context, index) {
+                        final cmd = commands[index];
+                        return InkWell(
+                          onTap: () => onCommandTap(cmd),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: cmd.slashCommand,
+                                    style: TextStyle(
+                                      color: colors.onSurface,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (cmd.description.isNotEmpty)
+                                    TextSpan(
+                                      text: ' ${cmd.description}',
+                                      style: TextStyle(
+                                        color: colors.onSurfaceVariant,
+                                        fontWeight: FontWeight.w400,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  )),
       ),
     );
   }

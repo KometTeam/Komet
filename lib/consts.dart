@@ -8,6 +8,15 @@ const String appVersion = "0.4.1";
 
 const String appName = "Komet";
 
+// Windows Toast notifications require a stable AppUserModelID (AUMID).
+// This value must match whatever you register in a Start Menu shortcut/MSIX
+// for notifications to display reliably.
+const String windowsAppUserModelId = "KometTeam.Komet";
+
+// Must be a stable GUID used for the toast activation callback on Windows.
+// Changing it will break activation handling for installed shortcuts.
+const String windowsNotificationGuid = "f30f0a4b-1a7f-4f74-8a86-6d241b5a78d0";
+
 /// Лимиты
 class AppLimits {
   AppLimits._();
