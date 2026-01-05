@@ -235,14 +235,19 @@ class _ChatScreenState extends State<ChatScreen> {
         _botCommandsForBotId = botId;
         _botCommands = commands;
       });
+      if (!mounted || _currentContact.id != botId) return;
+      setState(() {
+        _botCommandsForBotId = botId;
+        _botCommands = commands;
+      });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || _currentContact.id != botId) return;
       setState(() {
         _botCommandsForBotId = botId;
         _botCommands = const [];
       });
     } finally {
-      if (!mounted) return;
+      if (!mounted || _currentContact.id != botId) return;
       setState(() {
         _isLoadingBotCommands = false;
       });
