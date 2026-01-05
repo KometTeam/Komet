@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gwid/api/api_service.dart';
 
 enum TwoFAStep {
@@ -904,6 +905,7 @@ class _PasswordManagementScreenState extends State<PasswordManagementScreen> {
           keyboardType: TextInputType.number,
           maxLength: _codeLength,
           textAlign: TextAlign.center,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           style: const TextStyle(
             fontSize: 24,
             letterSpacing: 8,
