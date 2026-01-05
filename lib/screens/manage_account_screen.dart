@@ -55,14 +55,16 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
         });
       }
     } catch (e) {
+      // Log the detailed error for debugging without exposing it to the user.
+      debugPrint('Failed to load account delete status: $e');
       if (mounted) {
         setState(() {
           _hasDeleteRequest = null;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Не удалось получить статус удаления: $e'),
+          const SnackBar(
+            content: Text('Не удалось получить статус удаления аккаунта. Попробуйте позже.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
