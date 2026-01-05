@@ -204,21 +204,27 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to clear SharedPreferences: $e');
+    }
 
     try {
       final cacheDir = await getApplicationCacheDirectory();
       if (await cacheDir.exists()) {
         await cacheDir.delete(recursive: true);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to delete cache directory: $e');
+    }
 
     try {
       final tempDir = await getTemporaryDirectory();
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to delete temporary directory: $e');
+    }
 
     try {
       final docsDir = await getApplicationDocumentsDirectory();
@@ -226,11 +232,15 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
       if (await imageCacheDir.exists()) {
         await imageCacheDir.delete(recursive: true);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to delete image cache directory: $e');
+    }
 
     try {
       await ApiService.instance.clearAllData();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to clear API service data: $e');
+    }
 
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
