@@ -288,44 +288,6 @@ extension ApiServiceConnection on ApiService {
     return await _sendMessage(opcode, payload);
   }
 
-  Future<dynamic> sendRequest(
-    int opcode,
-    Map<String, dynamic> payload, {
-    Duration timeout = const Duration(seconds: 30),
-  }) async {
-    await waitUntilOnline();
-
-    if (!_socketConnected || _socket == null) {
-      throw Exception('Socket is not connected. Connect first.');
-    }
-
-    _seq = (_seq + 1) % 256;
-    final seq = _seq;
-    final packet = _packPacket(10, 0, seq, opcode, payload);
-
-    final completer = Completer<dynamic>();
-    _pending[seq] = completer;
-
-    try {
-      _log('📤 ОТПРАВКА (await): ver=10, cmd=0, seq=$seq, opcode=$opcode');
-      _log('📤 PAYLOAD (await): ${truncatePayloadObjectForLog(payload)}');
-      _socket!.add(packet);
-    } catch (e) {
-      await _resetSocket(close: true);
-      _pending.remove(seq);
-      throw Exception('Send failed: $e');
-    }
-
-    try {
-      return await completer.future.timeout(timeout);
-    } finally {
-      final current = _pending[seq];
-      if (identical(current, completer)) {
-        _pending.remove(seq);
-      }
-    }
-  }
-
   Future<int> sendAndTrackFullJsonRequest(String jsonString) async {
     if (!_socketConnected || _socket == null) {
       throw Exception('Socket is not connected. Connect first.');

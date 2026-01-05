@@ -18,7 +18,6 @@ import 'package:gwid/services/notification_settings_service.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:gwid/models/contact.dart';
 import 'package:gwid/screens/chat_screen.dart';
-import 'package:gwid/consts.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -84,18 +83,11 @@ class NotificationService {
       defaultActionName: 'Open notification',
     );
 
-    const windowsSettings = WindowsInitializationSettings(
-      appName: appName,
-      appUserModelId: windowsAppUserModelId,
-      guid: windowsNotificationGuid,
-    );
-
     const initializationSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
       macOS: macosSettings,
       linux: linuxSettings,
-      windows: windowsSettings,
     );
 
     await _flutterLocalNotificationsPlugin.initialize(
