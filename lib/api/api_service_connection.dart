@@ -299,17 +299,6 @@ extension ApiServiceConnection on ApiService {
       throw Exception('Socket is not connected. Connect first.');
     }
 
-    try {
-      if (_socket == null) {
-        throw Exception('Socket is not initialized');
-      }
-      _socket!.remoteAddress;
-    } catch (e) {
-      _socketConnected = false;
-      _socket = null;
-      throw Exception('Socket is closed');
-    }
-
     _seq = (_seq + 1) % 256;
     final seq = _seq;
     final packet = _packPacket(10, 0, seq, opcode, payload);
