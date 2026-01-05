@@ -598,6 +598,86 @@ extension ApiServiceConnection on ApiService {
         });
       }
 
+      // opcode 112: Начало установки 2FA - получаем trackId
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 112 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': '2fa_setup_started',
+          'trackId': payload?['trackId'],
+          'payload': payload,
+        });
+      }
+
+      // opcode 107: Пароль 2FA установлен
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 107 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        _messageController.add({
+          'type': '2fa_password_set',
+          'payload': decodedMessage['payload'],
+        });
+      }
+
+      // opcode 108: Подсказка 2FA установлена
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 108 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        _messageController.add({
+          'type': '2fa_hint_set',
+          'payload': decodedMessage['payload'],
+        });
+      }
+
+      // opcode 109: Email для 2FA установлен, получаем данные для ввода кода
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 109 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': '2fa_email_set',
+          'blockingDuration': payload?['blockingDuration'],
+          'codeLength': payload?['codeLength'],
+          'trackId': payload?['trackId'],
+          'payload': payload,
+        });
+      }
+
+      // opcode 110: Email подтверждён
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 110 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        final payload = decodedMessage['payload'];
+        _messageController.add({
+          'type': '2fa_email_verified',
+          'email': payload?['email'],
+          'trackId': payload?['trackId'],
+          'payload': payload,
+        });
+      }
+
+      // opcode 111: 2FA успешно установлен
+      if (decodedMessage is Map &&
+          decodedMessage['opcode'] == 111 &&
+          (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {
+        _messageController.add({
+          'type': '2fa_setup_complete',
+          'payload': decodedMessage['payload'],
+        });
+      }
+
+      // 2FA Setup error handlers
+      if (decodedMessage is Map &&
+          decodedMessage['cmd'] == 3 &&
+          [107, 108, 109, 110, 111, 112].contains(decodedMessage['opcode'])) {
+        _messageController.add({
+          'type': '2fa_error',
+          'opcode': decodedMessage['opcode'],
+          'payload': decodedMessage['payload'],
+        });
+      }
+
       if (decodedMessage is Map &&
           decodedMessage['opcode'] == 57 &&
           (decodedMessage['cmd'] == 0x100 || decodedMessage['cmd'] == 256)) {

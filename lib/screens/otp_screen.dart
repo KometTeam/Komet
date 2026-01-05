@@ -84,11 +84,17 @@ class _OTPScreenState extends State<OTPScreen>
       }
 
       if (message['opcode'] == 18 && mounted && !_isNavigating) {
-        _isNavigating = true;
         print('Получен ответ opcode 18, полное сообщение: $message');
         final payload = message['payload'];
         print('Payload при авторизации: $payload');
 
+        // Если требуется пароль, не обрабатываем здесь - это делает password_required хендлер
+        if (payload != null && payload['passwordChallenge'] != null) {
+          print('Обнаружен passwordChallenge, ожидаем навигацию на экран пароля');
+          return;
+        }
+
+        _isNavigating = true;
         String? finalToken;
         String? userId;
         String? registerToken;
@@ -304,7 +310,7 @@ class _OTPScreenState extends State<OTPScreen>
       width: 56,
       height: 60,
       textStyle: GoogleFonts.manrope(
-        fontSize: 22,
+        fontSize: 22, 
         color: colors.onSurface,
         fontWeight: FontWeight.w600,
       ),

@@ -32,7 +32,7 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
         });
       }
 
-      if (message['opcode'] == 115 && message['cmd'] == 1 && mounted) {
+      if (message['opcode'] == 115 && message['cmd'] == 256 && mounted) {
         final payload = message['payload'];
         if (payload != null &&
             payload['tokenAttrs']?['LOGIN']?['token'] != null) {
@@ -126,7 +126,7 @@ class _PasswordAuthScreenState extends State<PasswordAuthScreen> {
         }
       }
 
-      if (message['opcode'] == 115 && message['cmd'] == 3 && mounted) {
+      if (message['opcode'] == 115 && message['cmd'] == 768 && mounted) {
         setState(() {
           _isLoading = false;
         });
