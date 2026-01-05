@@ -101,10 +101,12 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
         });
       }
     } catch (e) {
+      // Log the detailed error for debugging without exposing it to the user.
+      debugPrint('Failed to set account delete request: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка запроса: $e'),
+            content: const Text('Не удалось выполнить запрос. Попробуйте позже.'),
             backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ),
