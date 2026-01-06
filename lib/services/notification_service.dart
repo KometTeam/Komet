@@ -25,7 +25,7 @@ class NotificationService {
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
+  FlutterLocalNotificationsPlugin();
 
   // MethodChannel для нативных уведомлений Android
   static const _nativeChannel = MethodChannel('com.gwid.app/notifications');
@@ -83,11 +83,19 @@ class NotificationService {
       defaultActionName: 'Open notification',
     );
 
+    // Windows-специфичные настройки
+    const windowsSettings = WindowsInitializationSettings(
+      appName: 'Komet',
+      appUserModelId: 'com.gwid.app',
+      guid: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', // я в душе не ебу что это значит но без него оно мне компилировать под винду не хочет
+    ); // по идее в guid нужно записать UUID приложения (получить его можно тут https://www.uuidgenerator.net)  , но с этим ебитесь сами. я на фронт
+      //TODO : ЭТО ВАЖНО!!!
     const initializationSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
       macOS: macosSettings,
       linux: linuxSettings,
+      windows: windowsSettings, // под винду
     );
 
     await _flutterLocalNotificationsPlugin.initialize(
@@ -99,14 +107,14 @@ class NotificationService {
     if (Platform.isIOS || Platform.isMacOS) {
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin
-          >()
+          IOSFlutterLocalNotificationsPlugin
+      >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
 
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-            MacOSFlutterLocalNotificationsPlugin
-          >()
+          MacOSFlutterLocalNotificationsPlugin
+      >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     }
 
@@ -114,8 +122,8 @@ class NotificationService {
     if (Platform.isAndroid) {
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
+          AndroidFlutterLocalNotificationsPlugin
+      >()
           ?.requestNotificationsPermission();
 
       // Проверяем pending notification (если приложение было запущено из уведомления)
@@ -323,8 +331,8 @@ class NotificationService {
         // Группа - создаём Contact из данных чата
         final title =
             chatData['title'] as String? ??
-            chatData['displayTitle'] as String? ??
-            'Группа';
+                chatData['displayTitle'] as String? ??
+                'Группа';
         final baseIconUrl = chatData['baseIconUrl'] as String?;
         contact = Contact(
           id: chatId,
@@ -371,7 +379,7 @@ class NotificationService {
                       pData['name'] as String? ?? pData['firstName'] as String?;
                   participantPhotoUrl =
                       pData['baseUrl'] as String? ??
-                      pData['photoBaseUrl'] as String?;
+                          pData['photoBaseUrl'] as String?;
                 }
                 print(
                   "🔔 Найден собеседник из Map: id=$contactId, name=$participantName",
@@ -965,11 +973,11 @@ class NotificationService {
             largeIcon: avatarBitmap,
             styleInformation: avatarBitmap != null
                 ? BigPictureStyleInformation(
-                    avatarBitmap!,
-                    hideExpandedLargeIcon: false,
-                    contentTitle: senderName,
-                    summaryText: messageText,
-                  )
+              avatarBitmap!,
+              hideExpandedLargeIcon: false,
+              contentTitle: senderName,
+              summaryText: messageText,
+            )
                 : null,
             tag: 'debug_tag_6',
             groupKey: null,
@@ -1144,9 +1152,9 @@ class NotificationService {
           print("🔔 [NotificationService] Скачиваем с URL...");
           final response = await http
               .get(
-                Uri.parse(avatarUrl),
-                headers: {'User-Agent': 'gwid-app/1.0'},
-              )
+            Uri.parse(avatarUrl),
+            headers: {'User-Agent': 'gwid-app/1.0'},
+          )
               .timeout(const Duration(seconds: 10));
 
           print("🔔 [NotificationService] HTTP статус: ${response.statusCode}");
@@ -1278,12 +1286,12 @@ Future<void> initializeBackgroundService() async {
     );
 
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
+    FlutterLocalNotificationsPlugin();
 
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
+        AndroidFlutterLocalNotificationsPlugin
+    >()
         ?.createNotificationChannel(channel);
   }
 
