@@ -550,7 +550,7 @@ class NotificationHelper(private val context: Context) {
 
             val builder = NotificationCompat.Builder(context, BACKGROUND_SERVICE_CHANNEL_ID)
                 .setSmallIcon(R.drawable.notification_icon)
-                .setContentTitle(compactTitle) // "Komet Активно"
+                .setContentTitle(compactTitle) // "Komet активен"
                 .setStyle(expandedStyle)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setOngoing(true) // Уведомление нельзя смахнуть
