@@ -1141,16 +1141,16 @@ class _BrowserScreenState extends State<BrowserScreen> {
         return NavigationActionPolicy.ALLOW;
       },
       shouldInterceptRequest: (controller, request) async {
+        // Быстрая проверка - если блокировщик выключен, пропускаем
+        if (!AdBlockService.instance.isEnabled) return null;
+        
         final url = request.url.toString();
         if (AdBlockService.instance.shouldBlockDomain(url)) {
           _blockedAdsCount++;
           // Возвращаем пустой ответ для заблокированного запроса
           return WebResourceResponse(
             contentType: 'text/plain',
-            contentEncoding: 'utf-8',
             data: Uint8List(0),
-            statusCode: 204,
-            reasonPhrase: 'Blocked by AdBlock',
           );
         }
         return null;

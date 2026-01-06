@@ -9,9 +9,12 @@ class AdBlockService {
   static const String _hostsFilesKey = 'ad_block_hosts_files';
   static const String _customDomainsKey = 'ad_block_custom_domains';
   static const String _enabledKey = 'ad_block_enabled';
+  static const int _cacheMaxSize = 500;
 
   final Set<String> _blockedDomains = {};
   final Set<String> _customDomains = {};
+  final Map<String, bool> _hostCache = {}; // Кэш результатов проверки
+  final List<String> _cacheOrder = []; // Порядок для LRU
   List<String> _hostsFilePaths = [];
   bool _isEnabled = true;
   bool _isInitialized = false;
@@ -134,6 +137,7 @@ class AdBlockService {
 
   Future<void> _reloadAllDomains() async {
     _blockedDomains.clear();
+    _clearCache();
     await _loadAllHostsFiles();
     _blockedDomains.addAll(_customDomains);
   }
@@ -144,35 +148,106 @@ class AdBlockService {
     }
 
     try {
-      final uri = Uri.parse(url);
-      final host = uri.host.toLowerCase();
+      // Быстро извлекаем хост без полного парсинга URI
+      final host = _extractHost(url);
+      if (host == null || host.isEmpty) return false;
       
-      // Проверяем точное совпадение
-      if (_blockedDomains.contains(host)) {
-        return true;
+      // Проверяем кэш
+      final cached = _hostCache[host];
+      if (cached != null) {
+        return cached;
       }
       
-      // Проверяем без www
-      if (host.startsWith('www.')) {
-        final hostWithoutWww = host.substring(4);
-        if (_blockedDomains.contains(hostWithoutWww)) {
-          return true;
-        }
-      }
-      
-      // Проверяем поддомены
-      final parts = host.split('.');
-      for (int i = 1; i < parts.length - 1; i++) {
-        final subdomain = parts.sublist(i).join('.');
-        if (_blockedDomains.contains(subdomain)) {
-          return true;
-        }
-      }
-      
-      return false;
+      // Проверяем и кэшируем результат
+      final result = _checkHost(host);
+      _addToCache(host, result);
+      return result;
     } catch (e) {
       return false;
     }
+  }
+
+  /// Быстрое извлечение хоста из URL без Uri.parse
+  String? _extractHost(String url) {
+    var start = 0;
+    
+    // Пропускаем протокол
+    if (url.startsWith('https://')) {
+      start = 8;
+    } else if (url.startsWith('http://')) {
+      start = 7;
+    }
+    
+    // Находим конец хоста
+    var end = url.indexOf('/', start);
+    if (end == -1) end = url.indexOf('?', start);
+    if (end == -1) end = url.indexOf('#', start);
+    if (end == -1) end = url.length;
+    
+    // Извлекаем хост
+    var host = url.substring(start, end).toLowerCase();
+    
+    // Убираем порт если есть
+    final colonIndex = host.indexOf(':');
+    if (colonIndex != -1) {
+      host = host.substring(0, colonIndex);
+    }
+    
+    return host.isEmpty ? null : host;
+  }
+
+  /// Проверка хоста в списке заблокированных
+  bool _checkHost(String host) {
+    // Точное совпадение
+    if (_blockedDomains.contains(host)) {
+      return true;
+    }
+    
+    // Проверяем без www
+    if (host.startsWith('www.')) {
+      if (_blockedDomains.contains(host.substring(4))) {
+        return true;
+      }
+    }
+    
+    // Проверяем поддомены (только если точек больше одной)
+    var dotCount = 0;
+    for (var i = 0; i < host.length; i++) {
+      if (host[i] == '.') dotCount++;
+    }
+    
+    if (dotCount > 1) {
+      var idx = host.indexOf('.');
+      while (idx != -1 && idx < host.length - 1) {
+        final subdomain = host.substring(idx + 1);
+        if (_blockedDomains.contains(subdomain)) {
+          return true;
+        }
+        idx = host.indexOf('.', idx + 1);
+      }
+    }
+    
+    return false;
+  }
+
+  /// Добавление в кэш с LRU вытеснением
+  void _addToCache(String host, bool blocked) {
+    if (_cacheOrder.length >= _cacheMaxSize) {
+      // Удаляем старые записи
+      final toRemove = _cacheOrder.take(50).toList();
+      for (final key in toRemove) {
+        _hostCache.remove(key);
+        _cacheOrder.remove(key);
+      }
+    }
+    _hostCache[host] = blocked;
+    _cacheOrder.add(host);
+  }
+
+  /// Очистка кэша (вызывать при изменении списка доменов)
+  void _clearCache() {
+    _hostCache.clear();
+    _cacheOrder.clear();
   }
 
   Future<void> _saveHostsFilePaths() async {
