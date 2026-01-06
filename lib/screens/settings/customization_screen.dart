@@ -103,20 +103,6 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
               ? colors.secondaryContainer
               : theme.theirBubbleColorLight);
 
-    final Function(Color?) myBubbleSetter = isCurrentlyDark
-        ? theme.setMyBubbleColorDark
-        : theme.setMyBubbleColorLight;
-    final Function(Color?) theirBubbleSetter = isCurrentlyDark
-        ? theme.setTheirBubbleColorDark
-        : theme.setTheirBubbleColorLight;
-
-    final Color myBubbleFallback = isCurrentlyDark
-        ? const Color(0xFF2b5278)
-        : Colors.blue.shade100;
-    final Color theirBubbleFallback = isCurrentlyDark
-        ? const Color(0xFF182533)
-        : const Color(0xFF464646);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Персонализация"),
@@ -428,19 +414,30 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                         opacity: _isMaterialYou ? 0.5 : 1.0,
                         child: GestureDetector(
                           onTap: () async {
-                            final initial =
-                                myBubbleColorToShow ?? myBubbleFallback;
+                            final initial = myBubbleColorToShow ?? 
+                                (isCurrentlyDark 
+                                    ? const Color(0xFF2b5278) 
+                                    : Colors.blue.shade100);
                             _showColorPicker(
                               context,
                               initialColor: initial,
-                              onColorChanged: (color) => myBubbleSetter(color),
+                              onColorChanged: (color) {
+                                if (isCurrentlyDark) {
+                                  theme.setMyBubbleColorDark(color);
+                                } else {
+                                  theme.setMyBubbleColorLight(color);
+                                }
+                              },
                             );
                           },
                           child: Container(
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(
-                              color: myBubbleColorToShow ?? myBubbleFallback,
+                              color: myBubbleColorToShow ?? 
+                                  (isCurrentlyDark 
+                                      ? const Color(0xFF2b5278) 
+                                      : Colors.blue.shade100),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Colors.grey),
                             ),
@@ -459,21 +456,30 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                         opacity: _isMaterialYou ? 0.5 : 1.0,
                         child: GestureDetector(
                           onTap: () async {
-                            final initial =
-                                theirBubbleColorToShow ?? theirBubbleFallback;
+                            final initial = theirBubbleColorToShow ?? 
+                                (isCurrentlyDark 
+                                    ? const Color(0xFF182533) 
+                                    : const Color(0xFF464646));
                             _showColorPicker(
                               context,
                               initialColor: initial,
-                              onColorChanged: (color) =>
-                                  theirBubbleSetter(color),
+                              onColorChanged: (color) {
+                                if (isCurrentlyDark) {
+                                  theme.setTheirBubbleColorDark(color);
+                                } else {
+                                  theme.setTheirBubbleColorLight(color);
+                                }
+                              },
                             );
                           },
                           child: Container(
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(
-                              color:
-                                  theirBubbleColorToShow ?? theirBubbleFallback,
+                              color: theirBubbleColorToShow ?? 
+                                  (isCurrentlyDark 
+                                      ? const Color(0xFF182533) 
+                                      : const Color(0xFF464646)),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Colors.grey),
                             ),
@@ -975,6 +981,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
   }
 }
 
+
 class _ThemeManagementSection extends StatelessWidget {
   const _ThemeManagementSection();
 
@@ -1211,13 +1218,13 @@ class _ThemeManagementSection extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             elevation: 0,
             color: isActive
-                ? colors.primaryContainer.withValues(alpha: 0.3)
-                : colors.surfaceContainerHighest.withValues(alpha: 0.2),
+                ? colors.primaryContainer.withAlpha((0.3 * 255).toInt())
+                : colors.surfaceContainerHighest.withAlpha((0.2 * 255).toInt()),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
                 color: isActive
-                    ? colors.primary.withValues(alpha: 0.5)
+                    ? colors.primary.withAlpha((0.5 * 255).toInt())
                     : Colors.transparent,
                 width: 2,
               ),
@@ -1332,6 +1339,7 @@ class _ThemeManagementSection extends StatelessWidget {
   }
 }
 
+
 class _ModernSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -1361,12 +1369,12 @@ class _ModernSection extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
             side: BorderSide(
-              color: colors.outlineVariant.withValues(alpha: 0.2),
+              color: colors.outlineVariant.withAlpha((0.2 * 255).toInt()),
               width: 1,
             ),
           ),
           clipBehavior: Clip.antiAlias,
-          color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
+          color: colors.surfaceContainerHighest.withAlpha((0.3 * 255).toInt()),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -1403,7 +1411,7 @@ class _CustomSettingTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: colors.primaryContainer.withValues(alpha: 0.3),
+              color: colors.primaryContainer.withAlpha((0.3 * 255).toInt()),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: colors.primary, size: 20),
@@ -1473,7 +1481,7 @@ class _ColorPickerTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: colors.primaryContainer.withValues(alpha: 0.3),
+                color: colors.primaryContainer.withAlpha((0.3 * 255).toInt()),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -1513,12 +1521,12 @@ class _ColorPickerTile extends StatelessWidget {
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: colors.outline.withValues(alpha: 0.3),
+                  color: colors.outline.withAlpha((0.3 * 255).toInt()),
                   width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withValues(alpha: 0.3),
+                    color: color.withAlpha((0.3 * 255).toInt()),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -1583,7 +1591,7 @@ class _SliderTile extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: colors.primaryContainer.withValues(alpha: 0.5),
+                  color: colors.primaryContainer.withAlpha((0.5 * 255).toInt()),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1696,7 +1704,7 @@ class _MessagePreviewSection extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: colors.outlineVariant.withValues(alpha: 0.2),
+              color: colors.outlineVariant.withAlpha((0.2 * 255).toInt()),
               width: 1,
             ),
           ),
@@ -1715,9 +1723,8 @@ class _MessagePreviewSection extends StatelessWidget {
                         ),
                         child: Container(
                           height: 40,
-                          color: colors.surface.withValues(
-                            alpha: theme.topBarOpacity,
-                          ),
+                          color: colors.surface.withAlpha(
+                              (theme.topBarOpacity * 255).toInt()),
                           child: Row(
                             children: [
                               const SizedBox(width: 16),
@@ -1789,9 +1796,8 @@ class _MessagePreviewSection extends StatelessWidget {
                         ),
                         child: Container(
                           height: 40,
-                          color: colors.surface.withValues(
-                            alpha: theme.bottomBarOpacity,
-                          ),
+                          color: colors.surface.withAlpha(
+                              (theme.bottomBarOpacity * 255).toInt()),
                           child: Row(
                             children: [
                               const SizedBox(width: 16),
@@ -1865,7 +1871,7 @@ class _ChatWallpaperPreview extends StatelessWidget {
                     sigmaX: theme.chatWallpaperImageBlur,
                     sigmaY: theme.chatWallpaperImageBlur,
                   ),
-                  child: Container(color: Colors.black.withValues(alpha: 0.05)),
+                  child: Container(color: Colors.black.withAlpha((0.05 * 255).toInt())),
                 ),
             ],
           );
@@ -2026,9 +2032,8 @@ class _VideoWallpaperState extends State<_VideoWallpaper> {
             ),
           ),
         ),
-
         Container(
-          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3)),
+          decoration: BoxDecoration(color: Colors.black.withAlpha((0.3 * 255).toInt())),
         ),
       ],
     );
@@ -2163,11 +2168,10 @@ class _ActionTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color:
-                    (isDestructive
-                            ? colors.errorContainer
-                            : colors.primaryContainer)
-                        .withValues(alpha: 0.3),
+                color: (isDestructive
+                        ? colors.errorContainer
+                        : colors.primaryContainer)
+                    .withAlpha((0.3 * 255).toInt()),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: iconColor, size: 20),
