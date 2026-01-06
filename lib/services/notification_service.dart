@@ -38,7 +38,7 @@ class NotificationService {
 
   static Future<void> updateForegroundServiceNotification({
     String title = 'Komet',
-    String content = 'Активно',
+    String content = '',
   }) async {
     if (Platform.isAndroid) {
       try {
@@ -1301,8 +1301,8 @@ Future<void> initializeBackgroundService() async {
       autoStart: true,
       isForegroundMode: true,
       notificationChannelId: 'background_service',
-      initialNotificationTitle: 'Komet',
-      initialNotificationContent: 'Активно',
+      initialNotificationTitle: 'Komet активен',
+      initialNotificationContent: '',
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(
@@ -1348,8 +1348,8 @@ void onStart(ServiceInstance service) async {
         // В фоновом изоляте MethodChannel недоступен, поэтому обновляем
         // foreground-уведомление напрямую через service API.
         service.setForegroundNotificationInfo(
-          title: "Komet",
-          content: "Активно",
+          title: "Komet активен",
+          content: "",
         );
       }
     }
