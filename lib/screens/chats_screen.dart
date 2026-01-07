@@ -824,17 +824,9 @@ class _ChatsScreenState extends State<ChatsScreen>
       if (query.isEmpty && !_searchFocusNode.hasFocus) {
         _filteredChats = List.from(chatsToFilter);
 
+        // Сортировка по времени последнего сообщения (новые сверху)
         _filteredChats.sort((a, b) {
-          final aIsSaved = _isSavedMessages(a);
-          final bIsSaved = _isSavedMessages(b);
-          if (aIsSaved && !bIsSaved) return -1;
-          if (!aIsSaved && bIsSaved) return 1;
-
-          if (aIsSaved && bIsSaved) {
-            if (a.id == 0) return -1;
-            if (b.id == 0) return 1;
-          }
-          return 0;
+          return b.lastMessage.time.compareTo(a.lastMessage.time);
         });
       } else if (_searchFocusNode.hasFocus && query.isEmpty) {
         _filteredChats = [];
@@ -853,17 +845,9 @@ class _ChatsScreenState extends State<ChatsScreen>
           return contactName.contains(query);
         }).toList();
 
+        // Сортировка по времени последнего сообщения (новые сверху)
         _filteredChats.sort((a, b) {
-          final aIsSaved = _isSavedMessages(a);
-          final bIsSaved = _isSavedMessages(b);
-          if (aIsSaved && !bIsSaved) return -1;
-          if (!aIsSaved && bIsSaved) return 1;
-
-          if (aIsSaved && bIsSaved) {
-            if (a.id == 0) return -1;
-            if (b.id == 0) return 1;
-          }
-          return 0;
+          return b.lastMessage.time.compareTo(a.lastMessage.time);
         });
       } else {
         _filteredChats = [];

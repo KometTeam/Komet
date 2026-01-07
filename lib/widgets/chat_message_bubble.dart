@@ -5047,14 +5047,16 @@ class ChatMessageBubble extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4.5),
       margin: _getMessageMargin(context),
       decoration: decoration,
-      child: SelectionArea(
-        contextMenuBuilder: (context, selectableRegionState) {
-          return AdaptiveTextSelectionToolbar.buttonItems(
-            anchors: selectableRegionState.contextMenuAnchors,
-            buttonItems: [],
-          );
-        },
-        child: content,
+      child: RepaintBoundary(
+        child: SelectionArea(
+          contextMenuBuilder: (context, selectableRegionState) {
+            return AdaptiveTextSelectionToolbar.buttonItems(
+              anchors: selectableRegionState.contextMenuAnchors,
+              buttonItems: [],
+            );
+          },
+          child: content,
+        ),
       ),
     );
   }

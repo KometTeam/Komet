@@ -1198,10 +1198,20 @@ class _ChatScreenState extends State<ChatScreen> {
               .map((p) => p.index)
               .reduce((a, b) => a > b ? a : b);
 
+          // Track maximum viewed index (highest index user has scrolled to)
+          if (maxIndex > _maxViewedIndex) {
+            _maxViewedIndex = maxIndex;
+          }
+
+          // Load more when user has scrolled through 20+ items from bottom
+          // maxIndex represents how far from bottom (index 0) user has scrolled
+          final shouldLoadByViewedCount = maxIndex >= _loadMoreThreshold &&
+              (maxIndex - _lastLoadedAtViewedIndex) >= _loadMoreThreshold;
+
           final threshold = _chatItems.length > 5 ? 3 : 1;
           final isNearTop = maxIndex >= _chatItems.length - threshold;
 
-          if (isNearTop &&
+          if ((isNearTop || shouldLoadByViewedCount) &&
               _hasMore &&
               !_isLoadingMore &&
               _messages.isNotEmpty &&
@@ -1459,9 +1469,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   static const int _pageSize = 50;
+  static const int _loadMoreThreshold = 20;
   bool _isLoadingMore = false;
   bool _hasMore = true;
   int? _oldestLoadedTime;
+  int _maxViewedIndex = 0;
+  int _lastLoadedAtViewedIndex = 0;
 
   bool get _optimize => context.read<ThemeProvider>().optimizeChats;
   bool get _ultraOptimize => context.read<ThemeProvider>().ultraOptimizeChats;
@@ -1471,6 +1484,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _paginateInitialLoad() async {
     setState(() => _isLoadingHistory = true);
+
+    // Reset viewed message tracking for new chat load
+    _maxViewedIndex = 0;
+    _lastLoadedAtViewedIndex = 0;
 
     final loadChatQueueItem = QueueItem(
       id: 'load_chat_${widget.chatId}',
@@ -1482,7 +1499,7 @@ class _ChatScreenState extends State<ChatScreen> {
             .add(const Duration(days: 1))
             .millisecondsSinceEpoch,
         "forward": 0,
-        "backward": 1000,
+        "backward": _pageSize,
         "getMessages": true,
       },
       createdAt: DateTime.now(),
@@ -1666,9 +1683,11 @@ class _ChatScreenState extends State<ChatScreen> {
           ? mergedMessages.sublist(mergedMessages.length - page)
           : mergedMessages;
       final bool hasAnyMessages = mergedMessages.isNotEmpty;
+      // If we got 30 messages from server (API default), there are likely more
+      // API uses backward: 30, not _pageSize
+      final bool serverHasMore = allMessages.length >= 30;
       final bool nextHasMore = hasServerData
-          ? mergedMessages.length >= 1000 ||
-                mergedMessages.length > slice.length
+          ? serverHasMore || mergedMessages.length > slice.length
           : (_hasMore && hasAnyMessages);
 
       Future.microtask(() {
@@ -1729,7 +1748,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     _isLoadingMore = true;
-    setState(() {});
+    // Don't call setState here to avoid unnecessary rebuild
 
     try {
       final olderMessages = await ApiService.instance
@@ -1765,16 +1784,34 @@ class _ChatScreenState extends State<ChatScreen> {
         initialKnown: _buildKnownMessagesMap(),
       );
 
+      final oldItemsCount = _chatItems.length;
       _messages.insertAll(0, hydratedOlder);
       _oldestLoadedTime = _messages.first.time;
 
       _hasMore = olderMessages.length >= 30;
 
       _buildChatItems();
+
+      // Calculate how many items were added (including date separators)
+      final addedItemsCount = _chatItems.length - oldItemsCount;
+
+      // Update tracking: after insert, indices shift by addedItemsCount
+      // Set lastLoadedAt to current position + shift, so user needs to scroll 20 more
+      _lastLoadedAtViewedIndex = _maxViewedIndex + addedItemsCount;
+
       _isLoadingMore = false;
 
       if (mounted) {
-        setState(() {});
+        // Wait for current frame to complete, then schedule setState for next frame
+        // Double postFrameCallback prevents SelectionArea layout issues
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {});
+            }
+          });
+        });
       }
 
       _updatePinnedMessage();
@@ -3573,6 +3610,20 @@ class _ChatScreenState extends State<ChatScreen> {
                                     final isLastVisual =
                                         index == _chatItems.length - 1;
 
+                                    // Add top padding for the oldest message when no more messages to load
+                                    // This prevents the top panel from covering the message
+                                    final needsTopPadding = isLastVisual && !_hasMore;
+
+                                    Widget wrapWithTopPadding(Widget child) {
+                                      if (needsTopPadding) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(top: 100.0),
+                                          child: child,
+                                        );
+                                      }
+                                      return child;
+                                    }
+
                                     if (item is MessageItem) {
                                       final message = item.message;
                                       final bool isSearchHighlighted =
@@ -3589,11 +3640,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                       final isControlMessage = message.attaches
                                           .any((a) => a['_type'] == 'CONTROL');
                                       if (isControlMessage) {
-                                        return _ControlMessageChip(
+                                        return wrapWithTopPadding(_ControlMessageChip(
                                           message: message,
                                           contacts: _contactDetailsCache,
                                           myId: _actualMyId ?? widget.myId,
-                                        );
+                                        ));
                                       }
 
                                       final bool isMe =
@@ -3900,7 +3951,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       final isDeleting = _deletingMessageIds
                                           .contains(message.id);
                                       if (isDeleting) {
-                                        return TweenAnimationBuilder<double>(
+                                        return wrapWithTopPadding(TweenAnimationBuilder<double>(
                                           duration: const Duration(
                                             milliseconds: 300,
                                           ),
@@ -3922,11 +3973,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                             );
                                           },
                                           child: finalMessageWidget,
-                                        );
+                                        ));
                                       }
 
                                       if (isHighlighted) {
-                                        return Container(
+                                        return wrapWithTopPadding(Container(
                                           margin: const EdgeInsets.symmetric(
                                             vertical: 1,
                                           ),
@@ -3946,21 +3997,21 @@ class _ChatScreenState extends State<ChatScreen> {
                                             ),
                                           ),
                                           child: finalMessageWidget,
-                                        );
+                                        ));
                                       }
 
                                       if (shouldAnimateNew) {
-                                        return _NewMessageAnimation(
+                                        return wrapWithTopPadding(_NewMessageAnimation(
                                           key: ValueKey('anim_$stableKey'),
                                           child: finalMessageWidget,
-                                        );
+                                        ));
                                       }
 
-                                      return finalMessageWidget;
+                                      return wrapWithTopPadding(finalMessageWidget);
                                     } else if (item is DateSeparatorItem) {
-                                      return _DateSeparatorChip(
+                                      return wrapWithTopPadding(_DateSeparatorChip(
                                         date: item.date,
-                                      );
+                                      ));
                                     }
                                     if (isLastVisual && _isLoadingMore) {
                                       return TweenAnimationBuilder<double>(
