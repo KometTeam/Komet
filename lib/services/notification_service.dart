@@ -300,9 +300,10 @@ class NotificationService {
           chatData = chat as Map<String, dynamic>;
           // Определяем тип чата
           final chatType = chat['type'] as String?;
+          isChannel = chatType == 'CHANNEL';
           isGroupChat =
-              chatType == 'CHAT' || chat['isGroup'] == true || chatId < 0;
-          isChannel = chat['isChannel'] == true;
+              !isChannel &&
+              (chatType == 'CHAT' || chat['isGroup'] == true || chatId < 0);
           participantCount = chat['participantCount'] as int?;
           break;
         }
@@ -315,9 +316,12 @@ class NotificationService {
         if (cachedChat != null) {
           chatData = cachedChat;
           final chatType = cachedChat['type'] as String?;
+          isChannel = chatType == 'CHANNEL';
           isGroupChat =
-              chatType == 'CHAT' || cachedChat['isGroup'] == true || chatId < 0;
-          isChannel = cachedChat['isChannel'] == true;
+              !isChannel &&
+              (chatType == 'CHAT' ||
+                  cachedChat['isGroup'] == true ||
+                  chatId < 0);
           participantCount = cachedChat['participantCount'] as int?;
         } else {
           print("⚠️ Чат не найден в кэше");
