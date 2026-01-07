@@ -12,10 +12,8 @@ extension ApiServiceMedia on ApiService {
       final Map<String, dynamic> payload = {
         "firstName": firstName,
         "lastName": lastName,
+        "description": description,
       };
-      if (description.isNotEmpty) {
-        payload["description"] = description;
-      }
 
       final int seq = await _sendMessage(16, payload);
       _log(
