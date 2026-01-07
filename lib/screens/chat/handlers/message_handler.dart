@@ -183,6 +183,12 @@ class MessageHandler {
         return;
       }
 
+      // Обработка push-уведомлений об обновлении профиля (opcode 159)
+      if (opcode == 159 && payload != null) {
+        _handleProfileUpdate(payload);
+        return;
+      }
+
       if (payload == null) return;
       final chatIdValue = payload['chatId'];
       final int? chatId = chatIdValue != null ? chatIdValue as int? : null;

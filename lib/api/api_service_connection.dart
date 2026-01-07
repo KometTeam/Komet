@@ -447,6 +447,15 @@ extension ApiServiceConnection on ApiService {
         _healthMonitor.onPongReceived();
       }
 
+      // Обновляем кэш профиля при получении push-уведомления opcode 159
+      if (opcode == 159 && payload != null) {
+        final profileData = payload['profile'] as Map<String, dynamic>?;
+        if (profileData != null && _lastChatsPayload != null) {
+          _lastChatsPayload!['profile'] = profileData;
+          print('🔄 Кэш профиля обновлён из push opcode 159');
+        }
+      }
+
       if (cmd == 0x300 || cmd == 768) {
         print('❌ ОШИБКА СЕРВЕРА: opcode=$opcode, seq=$seq');
         print('❌ Детали ошибки: ${truncatePayloadObjectForLog(payload)}');

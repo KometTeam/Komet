@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gwid/consts.dart';
@@ -55,6 +57,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   final ScrollController _scrollController = ScrollController();
   double _overscrollOffset = 0.0;
 
+  StreamSubscription<Map<String, dynamic>>? _profileUpdateSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +88,19 @@ class _SettingsScreenState extends State<SettingsScreen>
       _loadMyProfile();
     }
 
+    // Подписываемся на обновления профиля с сервера (opcode 159)
+    _profileUpdateSubscription = ApiService.instance.messages.listen((message) {
+      if (message['opcode'] == 159 && mounted) {
+        final payload = message['payload'] as Map<String, dynamic>?;
+        final profileData = payload?['profile'] as Map<String, dynamic>?;
+        if (profileData != null) {
+          setState(() {
+            _myProfile = Profile.fromJson(profileData);
+          });
+        }
+      }
+    });
+
     _animationController.forward();
   }
 
@@ -111,6 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   @override
   void dispose() {
+    _profileUpdateSubscription?.cancel();
     _animationController.dispose();
     _scrollController.dispose();
     super.dispose();
