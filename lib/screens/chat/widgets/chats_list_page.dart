@@ -45,16 +45,9 @@ class _ChatsListPageState extends State<ChatsListPage>
           .toList();
     }
 
+    // Сортировка по времени последнего сообщения (новые сверху)
     chatsForFolder.sort((a, b) {
-      final aIsSaved = widget.isSavedMessages(a);
-      final bIsSaved = widget.isSavedMessages(b);
-      if (aIsSaved && !bIsSaved) return -1;
-      if (!aIsSaved && bIsSaved) return 1;
-      if (aIsSaved && bIsSaved) {
-        if (a.id == 0) return -1;
-        if (b.id == 0) return 1;
-      }
-      return 0;
+      return b.lastMessage.time.compareTo(a.lastMessage.time);
     });
 
     if (widget.searchQuery.isNotEmpty) {

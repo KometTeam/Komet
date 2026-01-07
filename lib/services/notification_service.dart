@@ -304,7 +304,10 @@ class NotificationService {
           isGroupChat =
               !isChannel &&
               (chatType == 'CHAT' || chat['isGroup'] == true || chatId < 0);
-          participantCount = chat['participantCount'] as int?;
+          // Проверяем оба варианта названия поля (participantCount и participantsCount)
+          participantCount =
+              chat['participantsCount'] as int? ??
+              chat['participantCount'] as int?;
           break;
         }
       }
@@ -322,16 +325,40 @@ class NotificationService {
               (chatType == 'CHAT' ||
                   cachedChat['isGroup'] == true ||
                   chatId < 0);
-          participantCount = cachedChat['participantCount'] as int?;
+          // Проверяем оба варианта названия поля (participantCount и participantsCount)
+          participantCount =
+              cachedChat['participantsCount'] as int? ??
+              cachedChat['participantCount'] as int?;
         } else {
           print("⚠️ Чат не найден в кэше");
           return;
         }
       }
 
-      // Для групп создаём фейковый Contact с данными группы
+      // Логируем определённый тип чата
+      final chatType = chatData['type'] as String?;
+      print("🔔 Тип чата: $chatType, isChannel: $isChannel, isGroupChat: $isGroupChat, participantCount: $participantCount");
+
+      // Для групп и каналов создаём фейковый Contact с данными чата
       Contact contact;
-      if (isGroupChat) {
+      if (isChannel) {
+        // Канал - создаём Contact из данных чата
+        final title =
+            chatData['title'] as String? ??
+            chatData['displayTitle'] as String? ??
+            'Канал';
+        final baseIconUrl = chatData['baseIconUrl'] as String?;
+        contact = Contact(
+          id: chatId,
+          name: title,
+          firstName: title,
+          lastName: '',
+          photoBaseUrl: baseIconUrl,
+        );
+        print(
+          "✅ Создан контакт для канала: $title, participantCount: $participantCount",
+        );
+      } else if (isGroupChat) {
         // Группа - создаём Contact из данных чата
         final title =
             chatData['title'] as String? ??
