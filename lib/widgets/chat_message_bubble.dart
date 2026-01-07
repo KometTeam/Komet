@@ -4400,7 +4400,7 @@ class ChatMessageBubble extends StatelessWidget {
             onTap: onSenderNameTap,
 
             child: Padding(
-              padding: const EdgeInsets.only(left: 2.0, bottom: 0.0),
+              padding: const EdgeInsets.only(left: 0.0, bottom: 0.0),
               child: Text(
                 senderName!,
                 style: TextStyle(

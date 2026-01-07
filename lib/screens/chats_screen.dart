@@ -3737,7 +3737,7 @@ class _ChatsScreenState extends State<ChatsScreen>
 
   String _buildForwardedSnippet(Message forwardedMessage) {
     if (forwardedMessage.text.isNotEmpty) {
-      return forwardedMessage.text;
+      return forwardedMessage.text.replaceAll("\n", " ");
     }
 
     if (forwardedMessage.attaches.isNotEmpty) {
@@ -3778,7 +3778,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       } else {
         final attachmentText = _getAttachmentTypeText(message.attaches);
         messagePreview = Text(
-          attachmentText,
+          attachmentText.replaceAll("\n", " "),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(color: colors.onSurfaceVariant),
@@ -3792,7 +3792,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         messagePreview = _buildPhotoWithCaptionPreview(message);
       } else {
         messagePreview = Text(
-          message.text,
+          message.text.replaceAll("\n", " "),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(color: colors.onSurfaceVariant),
@@ -3800,7 +3800,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       }
     } else if (message.text.isNotEmpty) {
       messagePreview = Text(
-        message.text,
+        message.text.replaceAll("\n", " "),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: colors.onSurfaceVariant),
@@ -4254,6 +4254,7 @@ class _ChatsScreenState extends State<ChatsScreen>
       final hasPhoto = message.attaches.any(
         (attach) => attach['_type'] == 'PHOTO',
       );
+
       final hasContact = message.attaches.any(
         (attach) => attach['_type'] == 'CONTACT',
       );
@@ -4264,6 +4265,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         return _buildContactAttachmentPreview(message);
       } else {
         final attachmentText = _getAttachmentTypeText(message.attaches);
+      
         return Text(
           attachmentText,
           maxLines: 1,
