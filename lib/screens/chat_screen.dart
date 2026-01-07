@@ -2761,6 +2761,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _forwardMessage(Message message) {
+    print('🔄 _forwardMessage вызван для: ${message.id}');
     _showForwardDialog(message);
   }
 
@@ -2780,12 +2781,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showForwardDialog(Message message) async {
+    print('🔄 _showForwardDialog вызван для сообщения: ${message.id}');
+    
     Map<String, dynamic>? chatData = ApiService.instance.lastChatsPayload;
     if (chatData == null || chatData['chats'] == null) {
+      print('🔄 chatData пуст, загружаем...');
       chatData = await _loadChatsIfNeeded();
     }
 
     if (chatData == null || chatData['chats'] == null) {
+      print('❌ Не удалось загрузить чаты для пересылки');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Список чатов не загружен'),
@@ -2795,8 +2800,12 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    if (!mounted) return;
+    if (!mounted) {
+      print('❌ Виджет не смонтирован');
+      return;
+    }
 
+    print('🔄 Открываем экран выбора чата для пересылки');
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ChatsScreen(

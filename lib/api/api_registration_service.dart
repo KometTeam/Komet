@@ -42,7 +42,6 @@ class RegistrationService {
     try {
       if (Platform.isWindows) {
         final dllPath = 'eslz4-win64.dll';
-        print('📦 Загрузка LZ4 DLL для block decompress: $dllPath');
         _lz4Lib = DynamicLibrary.open(dllPath);
 
         try {
@@ -51,27 +50,20 @@ class RegistrationService {
                 'LZ4_decompress_safe',
               )
               .asFunction();
-          print('✅ LZ4 block decompress функция загружена');
         } catch (e) {
-          print(
-            '⚠️  Функция LZ4_decompress_safe не найдена, пробуем альтернативные имена...',
-          );
-
           try {
             _lz4BlockDecompress = _lz4Lib!
                 .lookup<NativeFunction<Lz4DecompressFunction>>(
                   'LZ4_decompress_fast',
                 )
                 .asFunction();
-            print('✅ LZ4 block decompress функция загружена (fast)');
           } catch (e2) {
-            print('❌ Не удалось найти LZ4 block decompress функцию: $e2');
+            // LZ4 block decompress недоступна
           }
         }
       }
     } catch (e) {
-      print('⚠️  Не удалось загрузить LZ4 DLL для block decompress: $e');
-      print('📦 Будем использовать только frame format (es_compression)');
+      // LZ4 DLL недоступна - используем только frame format
     }
   }
 
