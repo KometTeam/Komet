@@ -242,7 +242,7 @@ class MessageHandler {
       } else if (opcode == 55) {
         _handleChatUpdate(payload, cmd);
       } else if (opcode == 135) {
-        _handleChatRemoved(payload);
+        _handleChatChanged(payload);
       } else if (opcode == 272) {
         _handleFoldersUpdate(payload);
       } else if (opcode == 274) {
@@ -409,23 +409,33 @@ class MessageHandler {
 
     if (shouldShowNotification) {
       print('🔔 [MessageHandler] Показываем уведомление!');
-      final contact = contacts[newMessage.senderId];
       final chatFromPayload = payload['chat'] as Map<String, dynamic>?;
-
-      if (contact == null) {
-        _loadAndShowNotification(
+      
+      // Для каналов используем специальную логику - показываем название канала
+      if (chatIndex != -1 && allChats[chatIndex].type == 'CHANNEL') {
+        _showChannelNotification(
           chatId,
           newMessage,
-          newMessage.senderId,
+          allChats[chatIndex],
           chatFromPayload,
         );
       } else {
-        _showNotificationWithContact(
-          chatId,
-          newMessage,
-          contact,
-          chatFromPayload,
-        );
+        final contact = contacts[newMessage.senderId];
+        if (contact == null) {
+          _loadAndShowNotification(
+            chatId,
+            newMessage,
+            newMessage.senderId,
+            chatFromPayload,
+          );
+        } else {
+          _showNotificationWithContact(
+            chatId,
+            newMessage,
+            contact,
+            chatFromPayload,
+          );
+        }
       }
     }
 
@@ -698,19 +708,41 @@ class MessageHandler {
     }
   }
 
-  void _handleChatRemoved(Map<String, dynamic> payload) {
+  void _handleChatChanged(Map<String, dynamic> payload) {
     if (payload['chat'] is! Map<String, dynamic>) return;
-    final removedChat = payload['chat'] as Map<String, dynamic>;
-    final int? removedChatId = removedChat['id'] as int?;
-    final String? status = removedChat['status'] as String?;
+    final chatJson = payload['chat'] as Map<String, dynamic>;
+    final int? chatId = chatJson['id'] as int?;
+    final String? status = chatJson['status'] as String?;
 
-    if (removedChatId != null && status == 'REMOVED') {
-      final context = getContext();
-      if (context.mounted) {
-        setState(() {
-          allChats.removeWhere((chat) => chat.id == removedChatId);
-        });
-      }
+    if (chatId == null) return;
+
+    final context = getContext();
+    if (!context.mounted) return;
+
+    if (status == 'REMOVED') {
+      // Удаляем чат из списка
+      setState(() {
+        allChats.removeWhere((chat) => chat.id == chatId);
+        filterChats();
+      });
+    } else if (status == 'ACTIVE') {
+      // Добавляем или обновляем чат (подписка на канал)
+      final newChat = Chat.fromJson(chatJson);
+      ApiService.instance.updateChatInCacheFromJson(chatJson);
+      
+      setState(() {
+        final existingIndex = allChats.indexWhere((chat) => chat.id == chatId);
+        if (existingIndex != -1) {
+          // Обновляем существующий чат
+          allChats[existingIndex] = newChat;
+        } else {
+          // Добавляем новый чат (новая подписка на канал)
+          final savedIndex = allChats.indexWhere(isSavedMessages);
+          final insertIndex = savedIndex >= 0 ? savedIndex + 1 : 0;
+          allChats.insert(insertIndex, newChat);
+        }
+        filterChats();
+      });
     }
   }
 
@@ -873,6 +905,29 @@ class MessageHandler {
       isGroupChat: isGroupChat,
       isChannel: isChannel,
       groupTitle: groupTitle,
+    );
+  }
+
+  /// Показать уведомление для канала
+  void _showChannelNotification(
+    int chatId,
+    Message message,
+    Chat channel, [
+    Map<String, dynamic>? chatFromPayload,
+  ]) {
+    final channelName = channel.title ?? channel.displayTitle ?? 'Канал';
+    final avatarUrl = channel.baseIconUrl;
+    
+    print('🔔 [MessageHandler] Показываем уведомление канала: $channelName');
+    
+    NotificationService().showMessageNotification(
+      chatId: chatId,
+      senderName: channelName,
+      messageText: _getAttachmentPreviewText(message),
+      avatarUrl: avatarUrl,
+      isGroupChat: false,
+      isChannel: true,
+      groupTitle: channelName,
     );
   }
 
