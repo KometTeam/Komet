@@ -25,10 +25,10 @@ class AppLimits {
   static const int messageEditHours = 6969;
 
   /// Количество сообщений ГОСТ
-  static const int pageSize = 100;
+  static const int pageSize = 30;
 
   /// при оптимизированной загрузки
-  static const int optimizedPageSize = 50;
+  static const int optimizedPageSize = 30;
 
   /// Сделайте кто небудь плагин на ультра оптимизацию пжпжп
   static const int ultraOptimizedPageSize = 10;
