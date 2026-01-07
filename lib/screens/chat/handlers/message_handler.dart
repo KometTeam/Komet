@@ -410,7 +410,7 @@ class MessageHandler {
     if (shouldShowNotification) {
       print('🔔 [MessageHandler] Показываем уведомление!');
       final chatFromPayload = payload['chat'] as Map<String, dynamic>?;
-      
+
       // Для каналов используем специальную логику - показываем название канала
       if (chatIndex != -1 && allChats[chatIndex].type == 'CHANNEL') {
         _showChannelNotification(
@@ -729,7 +729,7 @@ class MessageHandler {
       // Добавляем или обновляем чат (подписка на канал)
       final newChat = Chat.fromJson(chatJson);
       ApiService.instance.updateChatInCacheFromJson(chatJson);
-      
+
       setState(() {
         final existingIndex = allChats.indexWhere((chat) => chat.id == chatId);
         if (existingIndex != -1) {
@@ -917,9 +917,9 @@ class MessageHandler {
   ]) {
     final channelName = channel.title ?? channel.displayTitle ?? 'Канал';
     final avatarUrl = channel.baseIconUrl;
-    
+
     print('🔔 [MessageHandler] Показываем уведомление канала: $channelName');
-    
+
     NotificationService().showMessageNotification(
       chatId: chatId,
       senderName: channelName,
