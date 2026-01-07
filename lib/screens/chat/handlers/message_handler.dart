@@ -313,11 +313,15 @@ class MessageHandler {
   }
 
   void _handleNewMessage(int chatId, Map<String, dynamic> payload) {
+    print('🔔 [MessageHandler] _handleNewMessage вызван для chatId: $chatId');
+    
     if (allChats.isEmpty) {
+      print('🔔 [MessageHandler] allChats пустой, выход');
       return;
     }
 
     final newMessage = Message.fromJson(payload['message']);
+    print('🔔 [MessageHandler] Сообщение: id=${newMessage.id}, senderId=${newMessage.senderId}, text=${newMessage.text.substring(0, newMessage.text.length > 50 ? 50 : newMessage.text.length)}...');
 
     if (newMessage.status == 'REMOVED') {
       ApiService.instance.clearCacheForChat(chatId);
@@ -372,25 +376,39 @@ class MessageHandler {
 
     // Не показываем уведомление для своих сообщений
     bool shouldShowNotification = (myId == null || newMessage.senderId != myId);
+    print('🔔 [MessageHandler] myId=$myId, senderId=${newMessage.senderId}, shouldShowNotification=$shouldShowNotification');
 
     // Если мы в приложении и в этом чате - не показываем уведомление
     if (shouldShowNotification &&
         ApiService.instance.isAppInForeground &&
         ApiService.instance.currentActiveChatId == chatId) {
+      print('🔔 [MessageHandler] В foreground и в этом чате - не показываем');
       shouldShowNotification = false;
     }
+    print('🔔 [MessageHandler] isAppInForeground=${ApiService.instance.isAppInForeground}, currentActiveChatId=${ApiService.instance.currentActiveChatId}');
 
     final int chatIndex = allChats.indexWhere((chat) => chat.id == chatId);
+    print('🔔 [MessageHandler] chatIndex=$chatIndex');
     if (shouldShowNotification && chatIndex != -1) {
       final oldChat = allChats[chatIndex];
-      // Проверяем как по myId, так и по ownerId чата
-      if (newMessage.senderId == oldChat.ownerId ||
-          (myId != null && newMessage.senderId == myId)) {
-        shouldShowNotification = false;
+      print('🔔 [MessageHandler] oldChat.ownerId=${oldChat.ownerId}, oldChat.type=${oldChat.type}');
+      // Для каналов НЕ проверяем senderId == ownerId, т.к. оба равны 0
+      // Проверяем только для личных чатов и групп
+      final isChannel = oldChat.type == 'CHANNEL';
+      if (!isChannel) {
+        // Проверяем как по myId, так и по ownerId чата (только для НЕ-каналов)
+        if (newMessage.senderId == oldChat.ownerId ||
+            (myId != null && newMessage.senderId == myId)) {
+          print('🔔 [MessageHandler] senderId совпадает с ownerId или myId - не показываем');
+          shouldShowNotification = false;
+        }
+      } else {
+        print('🔔 [MessageHandler] Это канал, пропускаем проверку ownerId');
       }
     }
 
     if (shouldShowNotification) {
+      print('🔔 [MessageHandler] Показываем уведомление!');
       final contact = contacts[newMessage.senderId];
       final chatFromPayload = payload['chat'] as Map<String, dynamic>?;
 

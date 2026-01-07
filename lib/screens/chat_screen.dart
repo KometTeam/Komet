@@ -1482,7 +1482,7 @@ class _ChatScreenState extends State<ChatScreen> {
             .add(const Duration(days: 1))
             .millisecondsSinceEpoch,
         "forward": 0,
-        "backward": 1000,
+        "backward": _pageSize,
         "getMessages": true,
       },
       createdAt: DateTime.now(),
