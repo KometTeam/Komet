@@ -642,7 +642,7 @@ extension ApiServiceChats on ApiService {
           .add(const Duration(days: 1))
           .millisecondsSinceEpoch,
       "forward": 0,
-      "backward": 1000,
+      "backward": 30,
       "getMessages": true,
     };
 

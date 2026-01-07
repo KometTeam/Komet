@@ -48,14 +48,18 @@ class DomainLinkifier extends Linkifier {
     List<LinkifyElement> elements,
     LinkifyOptions options,
   ) {
+    // Регулярка для поиска URL с протоколом и без
+    final urlRegex = RegExp(
+      r'(?:(?:https?|ftp|telnet)://(?:[а-яёa-z0-9_-]{1,32}(?::[а-яёa-z0-9_-]{1,32})?@)?)?(?:(?:[а-яёa-z0-9-]{1,128}\.)+(?:рф|онлайн|сайт|ру|su|com|net|org|mil|edu|arpa|gov|biz|info|aero|inc|name|app|dev|io|co|shop|club|guru|ninja|xyz|top|store|tech|space|world|today|news|[а-яёa-z]{2,})|(?!0)(?:(?!0[^.]|255)[0-9]{1,3}\.){3}(?!0|255)[0-9]{1,3})(?::[0-9]{1,5})?(?:/[а-яёa-z0-9.,_@%&?+=~/-]*)?(?:#[^ ]*)?',
+      caseSensitive: false,
+    );
+
     final List<LinkifyElement> list = [];
 
     for (final element in elements) {
       if (element is TextElement) {
         final text = element.text;
-        final matches = RegExp(
-          r'\b([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\b',
-        ).allMatches(text);
+        final matches = urlRegex.allMatches(text);
 
         if (matches.isNotEmpty) {
           var lastIndex = 0;
@@ -65,14 +69,14 @@ class DomainLinkifier extends Linkifier {
             }
 
             final url = text.substring(match.start, match.end);
-            // Пропускаем, если URL уже содержит протокол (обработается UrlLinkifier)
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-              final fullUrl = 'https://$url';
-              list.add(LinkableElement(url, fullUrl));
-            } else {
-              // Если уже содержит протокол, добавляем как обычный текст
-              list.add(TextElement(url));
-            }
+            // Добавляем протокол, если его нет
+            final fullUrl = url.startsWith('http://') ||
+                    url.startsWith('https://') ||
+                    url.startsWith('ftp://') ||
+                    url.startsWith('telnet://')
+                ? url
+                : 'https://$url';
+            list.add(LinkableElement(url, fullUrl));
 
             lastIndex = match.end;
           }
@@ -4549,9 +4553,8 @@ class ChatMessageBubble extends StatelessWidget {
               onOpen: onOpenLink,
               options: const LinkifyOptions(humanize: false),
               linkifiers: const [
-                UrlLinkifier(),
-                EmailLinkifier(),
                 DomainLinkifier(),
+                EmailLinkifier(),
               ],
               textAlign: TextAlign.left,
             )
@@ -4848,9 +4851,8 @@ class ChatMessageBubble extends StatelessWidget {
                   onOpen: onOpenLink,
                   options: const LinkifyOptions(humanize: false),
                   linkifiers: const [
-                    UrlLinkifier(),
-                    EmailLinkifier(),
                     DomainLinkifier(),
+                    EmailLinkifier(),
                   ],
                   textAlign: TextAlign.left,
                   overflow: TextOverflow.visible,
