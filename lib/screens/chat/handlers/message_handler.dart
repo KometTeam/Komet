@@ -825,12 +825,14 @@ class MessageHandler {
     // Получаем данные чата
     final effectiveChat = await _getEffectiveChat(chatId, chatFromPayload);
 
-    // Группы: chatId < 0 ИЛИ type='CHAT' ИЛИ isGroup
-    final isGroupChat =
-        chatId < 0 ||
-        (effectiveChat != null &&
-            (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
+    // Сначала проверяем канал, потом группу
     final isChannel = effectiveChat?.type == 'CHANNEL';
+    // Группы: chatId < 0 ИЛИ type='CHAT' ИЛИ isGroup, НО не канал
+    final isGroupChat =
+        !isChannel &&
+        (chatId < 0 ||
+            (effectiveChat != null &&
+                (effectiveChat.isGroup || effectiveChat.type == 'CHAT')));
     final groupTitle =
         effectiveChat?.title ??
         effectiveChat?.displayTitle ??
@@ -897,11 +899,14 @@ class MessageHandler {
   ]) async {
     final effectiveChat = await _getEffectiveChat(chatId, chatFromPayload);
 
-    final isGroupChat =
-        chatId < 0 ||
-        (effectiveChat != null &&
-            (effectiveChat.isGroup || effectiveChat.type == 'CHAT'));
+    // Сначала проверяем канал, потом группу
     final isChannel = effectiveChat?.type == 'CHANNEL';
+    // Группы: chatId < 0 ИЛИ type='CHAT' ИЛИ isGroup, НО не канал
+    final isGroupChat =
+        !isChannel &&
+        (chatId < 0 ||
+            (effectiveChat != null &&
+                (effectiveChat.isGroup || effectiveChat.type == 'CHAT')));
     final groupTitle =
         effectiveChat?.title ??
         effectiveChat?.displayTitle ??
