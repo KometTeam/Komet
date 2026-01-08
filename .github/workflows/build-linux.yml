@@ -13,12 +13,20 @@ on:
 jobs:
   build-binary:
     uses: ./.github/workflows/build-linux-binary.yml
+    permissions:
+      contents: read
 
   build-deb:
     uses: ./.github/workflows/build-linux-deb.yml
+    permissions:
+      contents: read
 
   build-aur:
     uses: ./.github/workflows/build-linux-aur.yml
+    permissions:
+      contents: read
 
   build-snap:
     uses: ./.github/workflows/build-linux-snap.yml
+    permissions:
+      contents: read
