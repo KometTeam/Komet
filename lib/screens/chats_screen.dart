@@ -4539,7 +4539,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         ],
       ),
     );
-  }
+  } 
 
   @override
   void dispose() {
