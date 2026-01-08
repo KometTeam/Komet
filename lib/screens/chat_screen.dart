@@ -7840,7 +7840,11 @@ class _ControlMessageChip extends StatelessWidget {
         final eventTypeStr = eventType?.toString() ?? 'неизвестное';
 
         if (eventTypeStr.toLowerCase() == 'system') {
-          return controlAttach["message"];
+          final message = controlAttach['message'];
+          if (message is String && message.isNotEmpty) {
+            return message;
+          }
+          return 'Системное событие';
         }
         if (eventTypeStr == 'joinByLink') {
           return '$senderName присоединился(ась) по пригласительной ссылке...';
