@@ -743,9 +743,9 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           options?['MEMBERS_CAN_SEE_PRIVATE_LINK'] as bool? ?? false;
       canSeeLink = amIAdmin || membersCanSeeLink;
 
-      final canEditInf =
+      final onlyOwnerCanChangeIconTitle =
           options?['ONLY_OWNER_CAN_CHANGE_ICON_TITLE'] as bool? ?? false;
-      canEditInfo = amIAdmin || !canEditInf;
+      canEditInfo = amIAdmin || !onlyOwnerCanChangeIconTitle;
 
       final canInvite =
       options?['ONLY_ADMIN_CAN_ADD_MEMBER'] as bool? ?? false;
