@@ -33,6 +33,7 @@ extension ApiServiceChats on ApiService {
         "interactive": true,
         "presenceSync": 0,
         "token": authToken,
+        "configHash": "00000000-0000000000000000-00000000-0000000000000000-0000000000000000-0-0000000000000000-00000000",
         "userAgent": userAgentPayload,
       };
 
@@ -48,6 +49,7 @@ extension ApiServiceChats on ApiService {
 
       if (chatResponse['cmd'] == 0x100 || chatResponse['cmd'] == 256) {
         print("✅ Авторизация (opcode 19) успешна. Сессия ГОТОВА.");
+
         _isSessionReady = true;
         _processMessageQueue();
 
@@ -76,6 +78,7 @@ extension ApiServiceChats on ApiService {
           ApiService.instance._startAnalyticsTimer();
 
           _sendInitialSetupRequests();
+          print(chatResponse['payload']?['config']);
         }
 
         if (profile != null && authToken != null) {
@@ -420,6 +423,7 @@ extension ApiServiceChats on ApiService {
           "draftsSync": 0,
           "interactive": true,
           "presenceSync": 0,
+          "configHash": "00000000-0000000000000000-00000000-0000000000000000-0000000000000000-0-0000000000000000-00000000",
           "token": authToken,
           "userAgent": userAgentPayload,
         };
@@ -437,6 +441,7 @@ extension ApiServiceChats on ApiService {
       if (opcode == 19 &&
           (chatResponse['cmd'] == 0x100 || chatResponse['cmd'] == 256)) {
         print("✅ Авторизация (opcode 19) успешна. Сессия ГОТОВА.");
+
         _isSessionReady = true;
         _processMessageQueue();
 
