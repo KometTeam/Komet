@@ -3,26 +3,12 @@ name: Build iOS with Deploy to TestFlight
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
-    paths:
-      - 'lib/**'
-      - 'ios/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-ios.yml'
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'ios/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-ios.yml'
+    branches: [main, master]
+    paths: ['lib/**', 'ios/**', 'pubspec.yaml', '.github/workflows/ios_deploy.yml']
 
 jobs:
   build-ios:
     runs-on: macos-latest
-    permissions:
-      contents: read
     
     steps:
       - name: Checkout code
@@ -31,7 +17,6 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.5'
           channel: 'stable'
           cache: true
 
@@ -44,55 +29,90 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
         run: |
-          # Decode certificate
           echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
-          
-          # Decode provisioning profile
           echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > profile.mobileprovision
           
-          # Create temporary keychain
-          security create-keychain -p temp_password build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p temp_password build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           
-          # Import certificate
-          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k temp_password build.keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           
-          # Install provisioning profile
+          security import certificate.p12 \
+            -P "$CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          PP_UUID=$(security cms -D -i profile.mobileprovision | plutil -extract UUID raw -o - -)
+          echo "Provisioning Profile UUID: $PP_UUID"
+          
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(grep -A1 'UUID' profile.mobileprovision | grep -o '[A-F0-9-]\{36\}' || echo "profile")
-          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
           
-          # List available certificates
-          security find-identity -v -p codesigning
+          echo "Certificate installed:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          echo "Provisioning profile installed at:"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+
+      - name: Create ExportOptions.plist
+        run: |
+          PP_UUID=$(security cms -D -i profile.mobileprovision | plutil -extract UUID raw -o - -)
+          TEAM_ID=$(security cms -D -i profile.mobileprovision | plutil -extract TeamIdentifier.0 raw -o - -)
+          PP_NAME=$(security cms -D -i profile.mobileprovision | plutil -extract Name raw -o - -)
+          BUNDLE_ID=$(security cms -D -i profile.mobileprovision | plutil -extract Entitlements.application-identifier raw -o - - | sed 's/^[^.]*\.//')
+          
+          echo "UUID: $PP_UUID"
+          echo "Team ID: $TEAM_ID"
+          echo "Name: $PP_NAME"
+          echo "Bundle ID: $BUNDLE_ID"
+          
+          cat > ios/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>$TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>$BUNDLE_ID</key>
+                  <string>$PP_NAME</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+          
+          cat ios/ExportOptions.plist
 
       - name: Install CocoaPods dependencies
         run: |
           cd ios
-          pod install --repo-update
+          pod install
 
-      - name: Build IPA
-        run: flutter build ipa --release --no-codesign
-
-      - name: Build with xcodebuild
+      - name: Build and Archive
         run: |
           cd ios
           
-          # Получить данные из сертификата и профиля
           CERT_NAME=$(security find-identity -v -p codesigning $RUNNER_TEMP/app-signing.keychain-db | grep "Apple Distribution" | head -1 | grep -o '".*"' | sed 's/"//g')
+          PP_UUID=$(security cms -D -i ../profile.mobileprovision | plutil -extract UUID raw -o - -)
+          TEAM_ID=$(security cms -D -i ../profile.mobileprovision | plutil -extract TeamIdentifier.0 raw -o - -)
+          
           echo "Certificate: $CERT_NAME"
-          
-          # UUID provisioning profile
-          PP_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -1 | xargs basename | sed 's/.mobileprovision//')
-          echo "Provisioning Profile UUID: $PP_UUID"
-          
-          # Team ID из provisioning profile
-          TEAM_ID=$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision | plutil -extract TeamIdentifier.0 raw -o - -)
           echo "Team ID: $TEAM_ID"
+          echo "PP UUID: $PP_UUID"
           
-          # Архивация с явным указанием параметров подписи
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
@@ -105,21 +125,36 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
             archive
           
-          # Экспорт IPA
           xcodebuild -exportArchive \
             -archivePath $PWD/build/Runner.xcarchive \
             -exportPath $PWD/build \
             -exportOptionsPlist ExportOptions.plist
 
+      - name: Upload to TestFlight
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          APPLE_KEY_CONTENT: ${{ secrets.APPLE_KEY_CONTENT }}
+        run: |
+          echo "$APPLE_KEY_CONTENT" > AuthKey_$APPLE_KEY_ID.p8
+          
+          xcrun altool --upload-app \
+            --type ios \
+            --file ios/build/*.ipa \
+            --apiKey $APPLE_KEY_ID \
+            --apiIssuer $APPLE_ISSUER_ID
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: komet-ios-ipa
           path: ios/build/*.ipa
           retention-days: 30
 
-      - name: Cleanup keychain
+      - name: Cleanup
         if: always()
         run: |
-          security delete-keychain build.keychain || true
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+          rm -f certificate.p12 profile.mobileprovision AuthKey_*.p8
