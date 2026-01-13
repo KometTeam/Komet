@@ -45,6 +45,7 @@ jobs:
         with:
           platform: "ios"
           ios-app-id: "tech.artemev.banilife"
+          testflight-groups: "Тестеры"
 
           # Version name for this build (e.g., 1.0.0)
           version-name: "1.0" # TestFlight Requirement. Do not change.
