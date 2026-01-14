@@ -3169,6 +3169,23 @@ class _ChatScreenState extends State<ChatScreen> {
     return false;
   }
 
+  bool _canCurrentUserWriteInChannel() {
+    if (!widget.isChannel) return true;
+
+    final currentChat = _getCurrentGroupChat();
+    final myId = _actualMyId ?? widget.myId;
+    if (currentChat == null) return false;
+
+    final owner = currentChat['owner'];
+    if (owner is int && owner == myId) return true;
+    if (owner is String && int.tryParse(owner) == myId) return true;
+
+    final admins = currentChat['admins'] as List<dynamic>? ?? [];
+    if (admins.contains(myId)) return true;
+
+    return false;
+  }
+
   Future<void> _setChatWallpaper(String imagePath) async {
     try {
       final theme = context.read<ThemeProvider>();
@@ -4486,7 +4503,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildTextInput() {
-    if (widget.isChannel) {
+    if (widget.isChannel && !_canCurrentUserWriteInChannel()) {
       return const SizedBox.shrink();
     }
     final theme = context.watch<ThemeProvider>();
