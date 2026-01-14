@@ -20,6 +20,7 @@ import 'package:gwid/screens/chat_screen.dart';
 import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/widgets/user_profile_panel.dart';
 import 'package:gwid/api/api_service.dart';
+import 'package:gwid/services/max_link_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
 import 'package:gwid/widgets/full_screen_video_player.dart';
@@ -39,6 +40,7 @@ import 'package:gwid/widgets/message_bubble/widgets/komet_animated_texts.dart';
 import 'package:gwid/widgets/message_bubble/widgets/media/audio_player_widget.dart';
 import 'package:gwid/widgets/message_bubble/utils/user_color_helper.dart';
 import 'package:gwid/widgets/message_bubble/widgets/dialogs/custom_emoji_dialog.dart';
+import 'package:gwid/utils/max_linkify.dart';
 
 class DomainLinkifier extends Linkifier {
   const DomainLinkifier();
@@ -479,6 +481,16 @@ class ChatMessageBubble extends StatelessWidget {
 
                   Future<void> onOpenLink(LinkableElement link) async {
                     final uri = Uri.parse(link.url);
+                    if (MaxLinkHandler.isSupportedUri(uri)) {
+                      final res = await MaxLinkHandler.tryOpenChatFromUri(
+                        context,
+                        uri,
+                        showErrors: true,
+                      );
+                      if (res != MaxLinkOpenResult.notHandled) {
+                        return;
+                      }
+                    }
                     if (await canLaunchUrl(uri)) {
                       await launchUrl(
                         uri,
@@ -954,6 +966,16 @@ class ChatMessageBubble extends StatelessWidget {
 
     Future<void> onOpenLink(LinkableElement link) async {
       final uri = Uri.parse(link.url);
+      if (MaxLinkHandler.isSupportedUri(uri)) {
+        final res = await MaxLinkHandler.tryOpenChatFromUri(
+          context,
+          uri,
+          showErrors: true,
+        );
+        if (res != MaxLinkOpenResult.notHandled) {
+          return;
+        }
+      }
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
@@ -4848,6 +4870,7 @@ class ChatMessageBubble extends StatelessWidget {
                   onOpen: onOpenLink,
                   options: const LinkifyOptions(humanize: false),
                   linkifiers: const [
+                    MaxSchemeLinkifier(),
                     UrlLinkifier(),
                     EmailLinkifier(),
                     DomainLinkifier(),

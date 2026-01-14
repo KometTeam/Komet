@@ -33,6 +33,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:gwid/screens/chat_encryption_settings_screen.dart';
+import 'package:gwid/services/max_link_handler.dart';
 import 'package:gwid/screens/chat_media_screen.dart';
 import 'package:gwid/screens/settings/chat_notification_settings_dialog.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -7097,6 +7098,16 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                             ),
                             onOpen: (link) async {
                               final uri = Uri.parse(link.url);
+                              if (MaxLinkHandler.isSupportedUri(uri)) {
+                                final res = await MaxLinkHandler.tryOpenChatFromUri(
+                                  context,
+                                  uri,
+                                  showErrors: true,
+                                );
+                                if (res != MaxLinkOpenResult.notHandled) {
+                                  return;
+                                }
+                              }
                               if (await canLaunchUrl(uri)) {
                                 await launchUrl(
                                   uri,
