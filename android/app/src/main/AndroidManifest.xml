@@ -46,6 +46,24 @@
                 <data android:host="max.ru" />
                 <data android:pathPrefix="/join/" />
             </intent-filter>
+
+            <!-- Открытие max.ru ссылок извне приложения (Android only) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="max.ru" />
+            </intent-filter>
+
+            <!-- max://max.ru/<id> -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="max" />
+                <data android:host="max.ru" />
+            </intent-filter>
         </activity>
 
         <!-- Фоновый сервис для поддержания соединения -->

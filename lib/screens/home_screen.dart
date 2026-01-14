@@ -14,6 +14,7 @@ import 'package:gwid/screens/chat_screen.dart';
 import 'package:gwid/services/whitelist_service.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
+import 'package:gwid/services/max_link_handler.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -271,7 +272,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (initialUriFromLaunch != null) {
         print('Получена ссылка (initial): $initialUriFromLaunch');
         if (mounted) {
-          _handleJoinLink(initialUriFromLaunch);
+          unawaited(_handleJoinLink(initialUriFromLaunch));
         }
       }
     } catch (e) {
@@ -289,25 +290,35 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (mounted) {
-        _handleJoinLink(uri);
+        unawaited(_handleJoinLink(uri));
       }
     });
   }
 
-  void _handleJoinLink(Uri uri) {
+  Future<void> _handleJoinLink(Uri uri) async {
     if (uri.host != 'max.ru') return;
 
-    String fullLink = uri.toString();
+    final normalizedUri = MaxLinkHandler.normalize(uri);
+    final directResult = await MaxLinkHandler.tryOpenChatFromUri(
+      context,
+      normalizedUri,
+      showErrors: false,
+    );
+    if (directResult == MaxLinkOpenResult.opened) {
+      return;
+    }
+
+    String fullLink = normalizedUri.toString();
 
     if (fullLink.startsWith('@')) {
       fullLink = fullLink.substring(1);
     }
 
-    final bool isGroupLink = uri.path.startsWith('/join/');
+    final bool isGroupLink = normalizedUri.path.startsWith('/join/');
     final bool isChannelLink =
         !isGroupLink &&
-        uri.pathSegments.isNotEmpty &&
-        uri.pathSegments.first.startsWith('id');
+        normalizedUri.pathSegments.isNotEmpty &&
+        normalizedUri.pathSegments.first.startsWith('id');
 
     if (!isGroupLink && !isChannelLink) {
       return;
@@ -363,6 +374,10 @@ class _HomeScreenState extends State<HomeScreen> {
             });
       });
     } else if (isChannelLink) {
+      if (directResult == MaxLinkOpenResult.failed) {
+        // Если чат/канал не удалось открыть напрямую — оставляем старый флоу
+        // с предложением подписки на канал.
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Загрузка информации о канале...'),
