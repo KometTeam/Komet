@@ -234,7 +234,11 @@ class _NetworkSettingsScreenState extends State<NetworkSettingsScreen>
               'Просмотр статистики использования и скорости соединения',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const NetworkScreen()),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const NetworkScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
             );
           },
         ),
@@ -245,8 +249,10 @@ class _NetworkSettingsScreenState extends State<NetworkSettingsScreen>
           description: 'HTTP/HTTPS прокси и SOCKS для безопасного подключения',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const ProxySettingsScreen(),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const ProxySettingsScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
               ),
             );
           },
@@ -258,12 +264,15 @@ class _NetworkSettingsScreenState extends State<NetworkSettingsScreen>
           description: 'Отладочная информация и логирование соединений',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const SocketLogScreen()),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const SocketLogScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
             );
           },
         ),
         const SizedBox(height: 28),
-        // Info Box
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(

@@ -12,11 +12,7 @@ class SpecialSettingsScreen extends StatefulWidget {
   State<SpecialSettingsScreen> createState() => _SpecialSettingsScreenState();
 }
 
-class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+class _SpecialSettingsScreenState extends State<SpecialSettingsScreen> {
   late bool _showSecondsValue;
   late bool _showDeletedMessagesValue;
   late bool _viewRedactHistoryValue;
@@ -25,36 +21,10 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
   void initState() {
     super.initState();
 
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     _showSecondsValue = themeProvider.showSeconds;
     _showDeletedMessagesValue = themeProvider.showDeletedMessages;
     _viewRedactHistoryValue = themeProvider.viewRedactHistory;
-
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
   }
 
   @override
@@ -71,15 +41,7 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(colors.surface, colors.primary, 0.05)!,
-              colors.surface,
-              Color.lerp(colors.surface, colors.tertiary, 0.05)!,
-            ],
-          ),
+          color: colors.surface,
         ),
         child: SafeArea(
           child: Column(
@@ -122,13 +84,7 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
                 ),
               ),
               Expanded(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: _buildSettingsContent(),
-                  ),
-                ),
+                child: _buildSettingsContent(),
               ),
             ],
           ),
@@ -261,11 +217,7 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen>
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [colors.surfaceContainerHighest, colors.surfaceContainer],
-            ),
+            color: colors.surfaceContainer,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: colors.outline.withValues(alpha: 0.2),

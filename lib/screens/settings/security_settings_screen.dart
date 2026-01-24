@@ -227,7 +227,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
 
   Future<void> _openQrAuthorize() async {
     final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (context) => const QrAuthorizeScreen()),
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const QrAuthorizeScreen(),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
     );
 
     if (!mounted || result == null) return;
@@ -262,7 +266,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
           description: 'Показать QR-код для входа на другом устройстве',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const QrLoginScreen()),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const QrLoginScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
             );
           },
           gradient: LinearGradient(
@@ -281,7 +289,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
           description: 'Просмотр и управление активными сессиями',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const SessionsScreen()),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const SessionsScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
             );
           },
           gradient: LinearGradient(
@@ -300,8 +312,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
           description: 'Сохранить данные сессии для переноса',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const ExportSessionScreen(),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const ExportSessionScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
               ),
             );
           },
@@ -321,8 +335,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen>
           description: 'Изменение User-Agent, версии ОС и т.д.',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const SessionSpoofingScreen(),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const SessionSpoofingScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
               ),
             );
           },

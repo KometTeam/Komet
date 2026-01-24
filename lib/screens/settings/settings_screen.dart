@@ -17,7 +17,6 @@ import 'package:gwid/screens/debug_screen.dart';
 import 'package:gwid/screens/settings/komet_misc_screen.dart';
 import 'package:gwid/screens/settings/special_settings_screen.dart';
 import 'package:gwid/screens/settings/optimization_screen.dart';
-// import 'package:gwid/screens/settings/plugins_screen.dart';
 import 'package:gwid/screens/settings/plugin_section_screen.dart';
 import 'package:gwid/plugins/plugin_service.dart';
 import 'package:gwid/utils/theme_provider.dart';
@@ -41,18 +40,13 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen>
-    with SingleTickerProviderStateMixin {
+class _SettingsScreenState extends State<SettingsScreen> {
   Profile? _myProfile;
   bool _isProfileLoading = true;
   int _versionTapCount = 0;
   DateTime? _lastTapTime;
 
   String _currentModalScreen = 'main';
-
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
 
   final ScrollController _scrollController = ScrollController();
   double _overscrollOffset = 0.0;
@@ -63,24 +57,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   void initState() {
     super.initState();
 
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-
     if (widget.myProfile != null) {
       _myProfile = widget.myProfile;
       _isProfileLoading = false;
@@ -88,7 +64,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       _loadMyProfile();
     }
 
-    // Подписываемся на обновления профиля с сервера (opcode 159)
     _profileUpdateSubscription = ApiService.instance.messages.listen((message) {
       if (message['opcode'] == 159 && mounted) {
         final payload = message['payload'] as Map<String, dynamic>?;
@@ -100,8 +75,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         }
       }
     });
-
-    _animationController.forward();
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -129,7 +102,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void dispose() {
     _profileUpdateSubscription?.cancel();
-    _animationController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -180,9 +152,13 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (_versionTapCount >= 7) {
       _versionTapCount = 0;
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (context) => const DebugScreen()));
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const DebugScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        ),
+      );
     }
   }
 
@@ -200,15 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(colors.surface, colors.primary, 0.05)!,
-              colors.surface,
-              Color.lerp(colors.surface, colors.tertiary, 0.05)!,
-            ],
-          ),
+          color: colors.surface,
         ),
         child: SafeArea(
           child: Column(
@@ -251,13 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
               Expanded(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: _buildSettingsContent(),
-                  ),
-                ),
+                child: _buildSettingsContent(),
               ),
             ],
           ),
@@ -527,13 +489,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         subtitle: "Команда, соглашение",
         screen: const AboutScreen(),
       ),
-      // _SettingsItem(
-      //   type: _SettingsItemType.category,
-      //   icon: Icons.extension,
-      //   title: "Plugins(WIP)",
-      //   subtitle: "Плагины(WIP)",
-      //   screen: const PluginsScreen(),
-      // ),
     ];
 
     final pluginSections = PluginService().getAllPluginSections();
@@ -667,6 +622,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           color: Colors.transparent,
           child: InkWell(
             onTap: _loadMyProfile,
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
             borderRadius: BorderRadius.circular(20),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -794,9 +751,11 @@ class _SettingsScreenState extends State<SettingsScreen>
               onTap: () async {
                 final updatedProfile = await Navigator.of(context)
                     .push<Profile?>(
-                      MaterialPageRoute(
-                        builder: (context) =>
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
                             ManageAccountScreen(myProfile: _myProfile!),
+                        transitionDuration: Duration.zero,
+                        reverseTransitionDuration: Duration.zero,
                       ),
                     );
                 if (updatedProfile != null && mounted) {
@@ -807,14 +766,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               },
               child: Container(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.lerp(colors.primaryContainer, colors.primary, 0.1)!,
-                      colors.primaryContainer,
-                    ],
-                  ),
+                  color: colors.primaryContainer,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: colors.primary.withValues(alpha: 0.3),
@@ -898,22 +850,21 @@ class _SettingsScreenState extends State<SettingsScreen>
                 _currentModalScreen = screenKey;
               });
             } else {
-              Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (context) => screen));
+              Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) => screen,
+                  transitionDuration: Duration.zero,
+                  reverseTransitionDuration: Duration.zero,
+                ),
+              );
             }
           },
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           child: Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  colors.surfaceContainerHighest,
-                  colors.surfaceContainer,
-                ],
-              ),
+              color: colors.surfaceContainer,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: colors.outline.withValues(alpha: 0.2),

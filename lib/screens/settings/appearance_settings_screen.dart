@@ -238,8 +238,10 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen>
           description: 'Тема, обои, цвета и другие настройки внешнего вида',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const CustomizationScreen(),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const CustomizationScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
               ),
             );
           },
@@ -250,7 +252,6 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen>
           ),
         ),
         const SizedBox(height: 28),
-        // Info Box
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(

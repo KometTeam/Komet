@@ -234,8 +234,10 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen>
           description: 'Статус онлайн, видимость профиля и другие параметры',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const PrivacySettingsScreen(),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const PrivacySettingsScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
               ),
             );
           },
@@ -253,8 +255,10 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen>
               'Пароль, активные сессии, заблокированные пользователи и защита',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const SecuritySettingsScreen(),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const SecuritySettingsScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
               ),
             );
           },
@@ -265,7 +269,6 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen>
           ),
         ),
         const SizedBox(height: 28),
-        // Info Box
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
