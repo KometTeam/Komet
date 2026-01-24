@@ -84,7 +84,7 @@ class _SpecialSettingsScreenState extends State<SpecialSettingsScreen> {
                 ),
               ),
               Expanded(
-                child: _buildSettingsContent(),
+                    child: _buildSettingsContent(),
               ),
             ],
           ),

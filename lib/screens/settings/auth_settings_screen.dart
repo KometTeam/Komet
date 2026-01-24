@@ -117,72 +117,72 @@ class _AuthSettingsScreenState extends State<AuthSettingsScreen> {
               ),
 
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(24.0),
-                  children: [
-                    _SettingsCard(
-                      icon: _hasCustomAnonymity
-                          ? Icons.verified_user
-                          : Icons.visibility_outlined,
-                      title: 'Настройки анонимности',
-                      description: _hasCustomAnonymity
-                          ? 'Активны кастомные настройки анонимности'
-                          : 'Настройте анонимность для скрытия данных устройства',
-                      isConfigured: _hasCustomAnonymity,
-                      onTap: _navigateToAnonymitySettings,
+                    child: ListView(
+                      padding: const EdgeInsets.all(24.0),
+                      children: [
+                        _SettingsCard(
+                          icon: _hasCustomAnonymity
+                              ? Icons.verified_user
+                              : Icons.visibility_outlined,
+                          title: 'Настройки анонимности',
+                          description: _hasCustomAnonymity
+                              ? 'Активны кастомные настройки анонимности'
+                              : 'Настройте анонимность для скрытия данных устройства',
+                          isConfigured: _hasCustomAnonymity,
+                          onTap: _navigateToAnonymitySettings,
                       color: _hasCustomAnonymity
                           ? colors.primaryContainer
                           : colors.surfaceContainer,
-                    ),
-                    const SizedBox(height: 16),
-                    _SettingsCard(
-                      icon: _hasProxyConfigured
-                          ? Icons.vpn_key
-                          : Icons.vpn_key_outlined,
-                      title: 'Настройки прокси',
-                      description: _hasProxyConfigured
-                          ? 'Прокси-сервер настроен и активен'
-                          : 'Настройте прокси-сервер для безопасного подключения',
-                      isConfigured: _hasProxyConfigured,
-                      onTap: _navigateToProxySettings,
+                        ),
+                        const SizedBox(height: 16),
+                        _SettingsCard(
+                          icon: _hasProxyConfigured
+                              ? Icons.vpn_key
+                              : Icons.vpn_key_outlined,
+                          title: 'Настройки прокси',
+                          description: _hasProxyConfigured
+                              ? 'Прокси-сервер настроен и активен'
+                              : 'Настройте прокси-сервер для безопасного подключения',
+                          isConfigured: _hasProxyConfigured,
+                          onTap: _navigateToProxySettings,
                       color: _hasProxyConfigured
                           ? colors.tertiaryContainer
                           : colors.surfaceContainer,
-                    ),
-                    const SizedBox(height: 32),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerHighest.withValues(
-                          alpha: 0.5,
                         ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: colors.outline.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: colors.primary,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              'Иногда, забавные вещи могут быть наказуемы',
-                              style: GoogleFonts.manrope(
-                                textStyle: textTheme.bodyMedium,
-                                color: colors.onSurfaceVariant,
-                                height: 1.4,
-                              ),
+                        const SizedBox(height: 32),
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainerHighest.withValues(
+                              alpha: 0.5,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: colors.outline.withValues(alpha: 0.2),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: colors.primary,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Text(
+                                  'Иногда, забавные вещи могут быть наказуемы',
+                                  style: GoogleFonts.manrope(
+                                    textStyle: textTheme.bodyMedium,
+                                    color: colors.onSurfaceVariant,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                 ),
               ),
             ],

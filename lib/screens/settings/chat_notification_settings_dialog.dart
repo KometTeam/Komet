@@ -182,6 +182,7 @@ class _ChatNotificationSettingsDialogState
     final colors = Theme.of(context).colorScheme;
 
     return Dialog(
+      backgroundColor: colors.surface,
       child: Container(
         width: 400,
         padding: const EdgeInsets.all(20),
@@ -231,36 +232,6 @@ class _ChatNotificationSettingsDialogState
                     ],
                   ),
                   const SizedBox(height: 20),
-
-                  // Статус исключения
-                  if (_hasException)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: colors.primaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            size: 20,
-                            color: colors.onPrimaryContainer,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Используются индивидуальные настройки для этого чата',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colors.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (_hasException) const SizedBox(height: 16),
 
                   // Включить/выключить уведомления
                   SwitchListTile(
@@ -327,13 +298,33 @@ Future<void> showChatNotificationSettings({
   required bool isGroupChat,
   required bool isChannel,
 }) {
-  return showDialog(
+  return showGeneralDialog(
     context: context,
-    builder: (context) => ChatNotificationSettingsDialog(
-      chatId: chatId,
-      chatName: chatName,
-      isGroupChat: isGroupChat,
-      isChannel: isChannel,
+    barrierDismissible: true,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: Colors.black.withOpacity(0.4),
+    transitionDuration: const Duration(milliseconds: 150),
+    pageBuilder: (context, animation, secondaryAnimation) => ScaleTransition(
+      scale: Tween<double>(begin: 0.9, end: 1.0).animate(
+        CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        ),
+      ),
+      child: FadeTransition(
+        opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ),
+        ),
+        child: ChatNotificationSettingsDialog(
+          chatId: chatId,
+          chatName: chatName,
+          isGroupChat: isGroupChat,
+          isChannel: isChannel,
+        ),
+      ),
     ),
   );
 }

@@ -17,7 +17,6 @@ import 'package:gwid/widgets/complaint_dialog.dart';
 import 'package:gwid/widgets/pinned_message_widget.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gwid/services/chat_cache_service.dart';
-import 'package:gwid/services/avatar_cache_service.dart';
 import 'package:gwid/services/chat_read_settings_service.dart';
 import 'package:gwid/services/contact_local_names_service.dart';
 import 'package:gwid/services/notification_service.dart';
@@ -65,7 +64,6 @@ class ChatScreen extends StatefulWidget {
   final bool isChannel;
   final int? participantCount;
   final bool isDesktopMode;
-  final int initialUnreadCount;
 
   const ChatScreen({
     super.key,
@@ -81,7 +79,6 @@ class ChatScreen extends StatefulWidget {
     this.isChannel = false,
     this.participantCount,
     this.isDesktopMode = false,
-    this.initialUnreadCount = 0,
   });
 
   @override
@@ -100,6 +97,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Map<String, dynamic>? _emptyChatSticker;
   final FormattedTextController _textController = FormattedTextController();
   final FocusNode _textFocusNode = FocusNode();
+  List<Mention> _mentions = [];
   StreamSubscription? _apiSubscription;
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener =
@@ -118,7 +116,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final Map<int, Contact> _contactDetailsCache = {};
   final Set<int> _loadingContactIds = {};
 
-  int _initialUnreadCount = 0;
   int? _lastPeerReadMessageId;
   String? _lastPeerReadMessageIdStr;
 
@@ -177,14 +174,19 @@ class _ChatScreenState extends State<ChatScreen> {
     return int.tryParse(value.toString());
   }
 
-  void _handleChatInputChanged(String v) {
-    _resetDraftFormattingIfNeeded(v);
+  void _handleChatInputChanged(String text) {
+    _resetDraftFormattingIfNeeded(text);
 
-    if (v.isNotEmpty) {
+    if (text.endsWith('@')) {
+      _showMentionInputDialog();
+    }
+    _updateMentionPositions(text);
+
+    if (text.isNotEmpty) {
       _scheduleTypingPing();
     }
 
-    final shouldShowPanel = _currentContact.isBot && v.startsWith('/');
+    final shouldShowPanel = _currentContact.isBot && text.startsWith('/');
 
     if (shouldShowPanel != _showBotCommandsPanel) {
       setState(() {
@@ -593,7 +595,6 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _sendEncryptedForCurrentChat = true;
   bool _specialMessagesEnabled = true;
 
-  bool _formatWarningVisible = false;
   bool _hasTextSelection = false;
   Timer? _selectionCheckTimer;
 
@@ -771,7 +772,6 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _initialUnreadCount = widget.initialUnreadCount;
     _currentContact = widget.contact;
     _pinnedMessage = widget.pinnedMessage;
     _initializeChat();
@@ -833,7 +833,7 @@ class _ChatScreenState extends State<ChatScreen> {
             state['replyingToMessage'] as Map<String, dynamic>?;
 
         _textController.text = text;
-        _textController.elements.clear();
+        _mentions.clear();
         _textController.elements.addAll(elements);
         if (replyingToMessageData != null) {
           try {
@@ -2419,9 +2419,6 @@ class _ChatScreenState extends State<ChatScreen> {
         _encryptionConfigForCurrentChat!.password.isNotEmpty &&
         _sendEncryptedForCurrentChat;
     if (isEncryptionActive) {
-      setState(() {
-        _formatWarningVisible = true;
-      });
       return;
     }
     final selection = _textController.selection;
@@ -2585,12 +2582,12 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       if (textToSend != originalText) {
-        _textController.elements.clear();
+        _mentions.clear();
       }
 
       final int tempCid = DateTime.now().millisecondsSinceEpoch;
-      final List<Map<String, dynamic>> tempElements =
-          List<Map<String, dynamic>>.from(_textController.elements);
+      final List<Map<String, dynamic>> tempElements = _mentions.map((m) => m.toJson()).toList();
+      print('[_sendTextMessage] Final elements for sending: $tempElements');
       final tempMessageJson = {
         'id': 'local_$tempCid',
         'text': textToSend,
@@ -2654,7 +2651,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       setState(() {
         _replyingToMessage = null;
-        _textController.elements.clear();
+        _mentions.clear();
       });
 
       await ChatCacheService().clearChatInputState(widget.chatId);
@@ -2710,6 +2707,117 @@ class _ChatScreenState extends State<ChatScreen> {
       cid: cid,
       elements: message.elements,
     );
+  }
+
+  void _onChatInputChanged(String text) {
+    print('[_onChatInputChanged] Current text: $text');
+    print('[_onChatInputChanged] Mentions count: ${_mentions.length}');
+    if (text.endsWith('@')) {
+      _showMentionInputDialog();
+    }
+    _updateMentionPositions(text);
+  }
+
+  void _updateMentionPositions(String currentText) {
+    // Remove mentions that are no longer valid (e.g., text deleted)
+    _mentions.removeWhere((mention) {
+      if (mention.from + mention.length > currentText.length) {
+        return true;
+      }
+      final mentionText = currentText.substring(mention.from, mention.from + mention.length);
+      return mentionText != mention.entityName;
+    });
+
+    // Adjust 'from' positions for remaining mentions
+    for (int i = 0; i < _mentions.length; i++) {
+      final mention = _mentions[i];
+      // Find the actual start of the mention in the current text
+      final actualStart = currentText.indexOf(mention.entityName, mention.from - 5 < 0 ? 0 : mention.from - 5);
+      if (actualStart != -1 && actualStart != mention.from) {
+        _mentions[i] = Mention(
+          from: actualStart,
+          length: mention.entityName.length,
+          entityId: mention.entityId,
+          entityName: mention.entityName,
+        );
+      }
+    }
+  }
+
+  Future<void> _showMentionInputDialog() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        String entityId = '';
+        String entityName = '';
+        return AlertDialog(
+          title: const Text('Добавить упоминание'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: const InputDecoration(labelText: 'ID пользователя (entityId)'),
+                keyboardType: TextInputType.number,
+                onChanged: (value) => entityId = value,
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: 'Имя пользователя'),
+                onChanged: (value) => entityName = value,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (entityId.isNotEmpty && entityName.isNotEmpty) {
+                  Navigator.of(context).pop({
+                    'entityId': int.parse(entityId),
+                    'entityName': entityName,
+                  });
+                }
+              },
+              child: const Text('Добавить'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null) {
+      final int cursorPosition = _textController.selection.baseOffset;
+      String currentText = _textController.text;
+
+      print('[_showMentionInputDialog] Dialog result: $result');
+      print('[_showMentionInputDialog] Cursor position: $cursorPosition');
+      print('[_showMentionInputDialog] Current text before modification: $currentText');
+
+      // Символ '@' находится на позиции cursorPosition - 1. Мы хотим заменить его на имя пользователя.
+      final String textBeforeAt = currentText.substring(0, cursorPosition - 1); // Текст до '@'
+      final String textAfterAt = currentText.substring(cursorPosition);         // Текст после '@'
+
+      final String mentionName = result['entityName']; // Имя пользователя из диалога
+      final String newText = textBeforeAt + mentionName + textAfterAt; // Новый текст без '@'
+
+      _textController.text = newText;
+      _textController.selection = TextSelection.fromPosition(
+        TextPosition(offset: textBeforeAt.length + mentionName.length), // Курсор после вставленного имени
+      );
+
+      final newMention = Mention(
+        from: textBeforeAt.length, // Начальный индекс имени в новом тексте
+        length: mentionName.length, // Длина имени
+        entityId: result['entityId'],
+        entityName: mentionName,
+      );
+      _mentions.add(newMention);
+      print('[_showMentionInputDialog] Added mention: ${newMention.toJson()}');
+      print('[_showMentionInputDialog] All mentions: ${_mentions.map((e) => e.toJson()).toList()}');
+      _updateMentionPositions(newText);
+    }
   }
 
   void _testSlideAnimation() {
@@ -4956,6 +5064,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     textInputAction: TextInputAction.newline,
                                     minLines: 1,
                                     maxLines: 5,
+                                    onChanged: _onChatInputChanged,
                                     contextMenuBuilder: (context, editableTextState) {
                                       if (isBlocked) {
                                         return AdaptiveTextSelectionToolbar.editableText(
@@ -5060,7 +5169,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                             vertical: 12.0,
                                           ),
                                     ),
-                                    onChanged: isBlocked ? null : _handleChatInputChanged,
                                   ),
                                 ),
                               ],
@@ -5418,7 +5526,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                         ),
                                       ),
                                       onChanged:
-                                          isBlocked ? null : _handleChatInputChanged,
+                                          isBlocked ? null : _onChatInputChanged,
                                     ),
 
                                     StreamBuilder<bool>(
@@ -5993,6 +6101,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _textController.removeListener(_handleTextChangedForKometColor);
     _textController.dispose();
     _textFocusNode.dispose();
+    _mentions.clear();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _pinnedMessageNotifier.dispose();

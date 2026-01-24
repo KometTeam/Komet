@@ -80,20 +80,27 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: const Text("Пользовательское соглашение"),
-              subtitle: const Text("Правовая информация и условия"),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const TosScreen()),
-                );
-              },
-            ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.description_outlined),
+            title: const Text("Пользовательское соглашение"),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      ScaleTransition(
+                    scale: Tween<double>(begin: 0.9, end: 1.0).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                    child: FadeTransition(
+                      opacity: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                      child: const TosScreen(),
+                    ),
+                  ),
+                  transitionDuration: const Duration(milliseconds: 150),
+                  reverseTransitionDuration: const Duration(milliseconds: 150),
+                ),
+              );
+            },
           ),
 
           const SizedBox(height: 24),
@@ -104,30 +111,18 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 16),
-          InkWell(
-            onTap: () => _launchUrl(AppUrls.telegramChannel),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: RichText(
-                text: TextSpan(
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(height: 1.5),
-                  children: [
-                    const TextSpan(text: "Связаться с нами: \n"),
-                    TextSpan(
-                      text: "Телеграм-канал: https://t.me/TeamKomet",
-                      style: TextStyle(
-                        color: colors.primary,
-                        decoration: TextDecoration.underline,
-                        decorationColor: colors.primary,
-                      ),
-                    ),
-                  ],
-                ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.telegram),
+            title: Text(
+              'Телеграм-канал: https://t.me/TeamKomet',
+              style: TextStyle(
+                color: colors.primary,
+                decoration: TextDecoration.underline,
+                decorationColor: colors.primary,
               ),
             ),
+            onTap: () => _launchUrl(AppUrls.telegramChannel),
           ),
         ],
       ),
@@ -327,8 +322,17 @@ class AboutScreen extends StatelessWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const TosScreen(),
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            ScaleTransition(
+                          scale: Tween<double>(begin: 0.9, end: 1.0).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                          child: FadeTransition(
+                            opacity: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                            child: const TosScreen(),
+                          ),
+                        ),
+                        transitionDuration: const Duration(milliseconds: 150),
+                        reverseTransitionDuration: const Duration(milliseconds: 150),
                       ),
                     );
                   },

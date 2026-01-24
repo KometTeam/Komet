@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'dart:async';
 import 'dart:io' show File;
 import 'dart:convert' show base64Decode, jsonDecode, jsonEncode;
@@ -542,6 +543,7 @@ class ChatMessageBubble extends StatelessWidget {
                           ),
                         ),
                         _buildMixedMessageContent(
+                          context,
                           displayText,
                           defaultTextStyle,
                           linkStyle,
@@ -553,6 +555,7 @@ class ChatMessageBubble extends StatelessWidget {
                   }
 
                   return _buildMixedMessageContent(
+                    context,
                     displayText,
                     defaultTextStyle,
                     linkStyle,
@@ -4536,6 +4539,7 @@ class ChatMessageBubble extends StatelessWidget {
                   ),
                 ),
                 _buildMixedMessageContent(
+                  context,
                   decryptedText!,
                   defaultTextStyle,
                   linkStyle,
@@ -4561,6 +4565,7 @@ class ChatMessageBubble extends StatelessWidget {
           else if (message.text.contains("komet.cosmetic.") ||
               message.text.contains("komet.color_"))
             _buildMixedMessageContent(
+              context,
               message.text,
               defaultTextStyle,
               linkStyle,
@@ -4569,6 +4574,7 @@ class ChatMessageBubble extends StatelessWidget {
             )
           else
             _buildMixedMessageContent(
+              context,
               message.text,
               defaultTextStyle,
               linkStyle,
@@ -4812,6 +4818,7 @@ class ChatMessageBubble extends StatelessWidget {
   }
 
   Widget _buildMixedMessageContent(
+    BuildContext context,
     String text,
     TextStyle baseStyle,
     TextStyle linkStyle,
@@ -4862,7 +4869,7 @@ class ChatMessageBubble extends StatelessWidget {
             } else {
               return Container(
                 constraints: const BoxConstraints(maxWidth: double.infinity),
-                child: _buildFormattedRichText(seg.text, baseForSeg, elements),
+                child: _buildFormattedRichText(context, seg.text, baseForSeg, elements),
               );
             }
           case KometSegmentType.galaxy:
@@ -4889,6 +4896,7 @@ class ChatMessageBubble extends StatelessWidget {
   }
 
   Widget _buildFormattedRichText(
+    BuildContext context,
     String text,
     TextStyle baseStyle,
     List<Map<String, dynamic>> elements,
@@ -4907,11 +4915,13 @@ class ChatMessageBubble extends StatelessWidget {
     final italic = List<bool>.filled(text.length, false);
     final underline = List<bool>.filled(text.length, false);
     final strike = List<bool>.filled(text.length, false);
+    final mentionEntityIds = List<int?>.filled(text.length, null);
 
     for (final el in elements) {
       final type = el['type'] as String?;
       final from = (el['from'] as int?) ?? 0;
       final length = (el['length'] as int?) ?? 0;
+      final entityId = el['entityId'] as int?;
       if (type == null || length <= 0) continue;
       final start = from.clamp(0, text.length);
       final end = (from + length).clamp(0, text.length);
@@ -4928,6 +4938,12 @@ class ChatMessageBubble extends StatelessWidget {
             break;
           case 'STRIKETHROUGH':
             strike[i] = true;
+            break;
+          case 'USER_MENTION':
+            underline[i] = true;
+            if (entityId != null) {
+              mentionEntityIds[i] = entityId;
+            }
             break;
         }
       }
@@ -4949,13 +4965,36 @@ class ChatMessageBubble extends StatelessWidget {
       return s;
     }
 
+    int? getEntityIdForIndex(int i) {
+      return mentionEntityIds[i];
+    }
+
     while (start < text.length) {
       int end = start + 1;
       final style = styleForIndex(start);
-      while (end < text.length && styleForIndex(end) == style) {
+      final entityId = getEntityIdForIndex(start);
+      while (end < text.length && 
+             styleForIndex(end) == style && 
+             getEntityIdForIndex(end) == entityId) {
         end++;
       }
-      spans.add(TextSpan(text: text.substring(start, end), style: style));
+      
+      final spanText = text.substring(start, end);
+      final spanEntityId = getEntityIdForIndex(start);
+      
+      if (spanEntityId != null) {
+        final recognizer = TapGestureRecognizer()
+          ..onTap = () {
+            openUserProfileById(context, spanEntityId);
+          };
+        spans.add(TextSpan(
+          text: spanText,
+          style: style.copyWith(color: baseStyle.color),
+          recognizer: recognizer,
+        ));
+      } else {
+        spans.add(TextSpan(text: spanText, style: style));
+      }
       start = end;
     }
 

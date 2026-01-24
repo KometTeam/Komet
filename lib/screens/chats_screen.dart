@@ -91,7 +91,6 @@ class _ChatsScreenState extends State<ChatsScreen>
   String? _selectedFolderId;
   late TabController _folderTabController;
 
-  int _currentFolderIndex = 0;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -4448,7 +4447,6 @@ class _ChatsScreenState extends State<ChatsScreen>
                 isGroupChat: isGroupChat,
                 isChannel: isChannel,
                 participantCount: participantCount,
-                initialUnreadCount: chat.newMessages,
                 onLastMessageChanged: (Message? newLastMessage) {
                   _updateChatLastMessage(chat.id, newLastMessage);
                 },

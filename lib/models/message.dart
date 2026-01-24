@@ -141,3 +141,26 @@ class Message {
     };
   }
 }
+
+class Mention {
+  final int from;
+  final int length;
+  final int entityId;
+  final String entityName; // Store the name for display purposes
+
+  Mention({
+    required this.from,
+    required this.length,
+    required this.entityId,
+    required this.entityName,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'type': 'USER_MENTION',
+      'from': from,
+      'length': length,
+      'entityId': entityId,
+    };
+  }
+}
