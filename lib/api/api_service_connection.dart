@@ -447,6 +447,10 @@ extension ApiServiceConnection on ApiService {
         _healthMonitor.onPongReceived();
       }
 
+      if (opcode == 134 && payload != null) {
+        _processServerPrivacyConfig(payload["config"]);
+      }
+
       // Обновляем кэш профиля при получении push-уведомления opcode 159
       if (opcode == 159 && payload != null) {
         final profileData = payload['profile'] as Map<String, dynamic>?;
