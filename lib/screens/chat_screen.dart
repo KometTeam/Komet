@@ -6203,44 +6203,60 @@ class _ChatScreenState extends State<ChatScreen> {
   void _scrollToMessage(String messageId) {
     if (!mounted) return;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+    () async {
+      setState(() {
+        _highlightedMessageId = messageId;
+      });
 
-      final itemIndex = _chatItems.indexWhere(
-        (item) => item is MessageItem && item.message.id == messageId,
-      );
+      final startedAt = DateTime.now();
 
-      if (itemIndex != -1) {
-        final viewIndex = _chatItems.length - 1 - itemIndex;
+      while (mounted && DateTime.now().difference(startedAt) < const Duration(seconds: 2)) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
 
-        if (!mounted || !_itemScrollController.isAttached) return;
+        if (!_itemScrollController.isAttached) {
+          await Future.delayed(const Duration(milliseconds: 16));
+          continue;
+        }
 
-        setState(() {
-          _highlightedMessageId = messageId;
-        });
-
-        _itemScrollController.scrollTo(
-          index: viewIndex,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOutCubic,
-          alignment: 0.2,
+        final itemIndex = _chatItems.indexWhere(
+          (item) => item is MessageItem && item.message.id == messageId,
         );
 
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            setState(() {
-              _highlightedMessageId = null;
-            });
-          }
-        });
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Исходное сообщение не найдено...🥀')),
-          );
+        if (itemIndex == -1) {
+          await Future.delayed(const Duration(milliseconds: 50));
+          continue;
         }
+
+        final viewIndex = _chatItems.length - 1 - itemIndex;
+
+        try {
+          await _itemScrollController.scrollTo(
+            index: viewIndex,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOutCubic,
+            alignment: 0.2,
+          );
+        } catch (_) {}
+
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+
+        setState(() {
+          _highlightedMessageId = null;
+        });
+        return;
       }
-    });
+
+      if (mounted) {
+        setState(() {
+          _highlightedMessageId = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Исходное сообщение не найдено...🥀')),
+        );
+      }
+    }();
   }
 }
 
