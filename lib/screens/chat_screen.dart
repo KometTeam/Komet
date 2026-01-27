@@ -104,9 +104,13 @@ class _ChatScreenState extends State<ChatScreen> {
       ItemPositionsListener.create();
   final ValueNotifier<bool> _showScrollToBottomNotifier = ValueNotifier(false);
   final ValueNotifier<Message?> _pinnedMessageNotifier = ValueNotifier(null);
+  final ValueNotifier<bool> _scrollButtonHighlightNotifier =
+      ValueNotifier(false);
 
   bool _isUserAtBottom = true;
   bool _isScrollingToBottom = false;
+
+  String? _scrollReturnMessageId;
 
   late Contact _currentContact;
   Message? _pinnedMessage;
@@ -158,6 +162,40 @@ class _ChatScreenState extends State<ChatScreen> {
         inputBar,
       ],
     );
+  }
+
+  String? _getBestVisibleMessageId() {
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty || _chatItems.isEmpty) return null;
+
+    final candidate = positions
+        .where((p) => p.index >= 0 && p.index < _chatItems.length)
+        .fold<ItemPosition?>(null, (best, p) {
+      if (best == null) return p;
+      final bestDist = (best.itemLeadingEdge - 0.2).abs();
+      final dist = (p.itemLeadingEdge - 0.2).abs();
+      return dist < bestDist ? p : best;
+    });
+
+    if (candidate == null) return null;
+
+    final mappedIndex = _chatItems.length - 1 - candidate.index;
+    if (mappedIndex < 0 || mappedIndex >= _chatItems.length) return null;
+
+    final item = _chatItems[mappedIndex];
+    if (item is MessageItem) return item.message.id;
+    return null;
+  }
+
+  void _handleScrollButtonTap() {
+    final returnId = _scrollReturnMessageId;
+    if (returnId != null) {
+      _scrollReturnMessageId = null;
+      _scrollButtonHighlightNotifier.value = false;
+      _scrollToMessageInternal(returnId, saveReturn: false);
+      return;
+    }
+    _scrollToBottom();
   }
 
   int? _parseMessageId(dynamic value) {
@@ -4158,40 +4196,47 @@ class _ChatScreenState extends State<ChatScreen> {
                       ValueListenableBuilder<bool>(
                         valueListenable: _showScrollToBottomNotifier,
                         builder: (context, showArrow, child) {
-                          return AnimatedPositioned(
-                            duration: const Duration(milliseconds: 100),
-                            curve: Curves.easeOutQuad,
-                            right: 16,
-                            bottom:
-                                MediaQuery.of(context).viewInsets.bottom +
-                                MediaQuery.of(context).padding.bottom +
-                                80,
-                            child: AnimatedScale(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutBack,
-                              scale: showArrow ? 1.0 : 0.0,
-                              child: AnimatedOpacity(
-                                duration: const Duration(milliseconds: 150),
-                                opacity: showArrow ? 1.0 : 0.0,
-                                child: Material(
-                                  color: Colors.grey[800],
-                                  shape: const CircleBorder(),
-                                  elevation: 4,
-                                  child: InkWell(
-                                    onTap: _scrollToBottom,
-                                    borderRadius: BorderRadius.circular(28),
-                                    child: const SizedBox(
-                                      width: 56,
-                                      height: 56,
-                                      child: Icon(
-                                        Icons.arrow_downward_rounded,
-                                        color: Colors.white,
+                          return ValueListenableBuilder<bool>(
+                            valueListenable: _scrollButtonHighlightNotifier,
+                            builder: (context, isHighlighted, child) {
+                              return AnimatedPositioned(
+                                duration: const Duration(milliseconds: 100),
+                                curve: Curves.easeOutQuad,
+                                right: 16,
+                                bottom:
+                                    MediaQuery.of(context).viewInsets.bottom +
+                                    MediaQuery.of(context).padding.bottom +
+                                    80,
+                                child: AnimatedScale(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeOutBack,
+                                  scale: showArrow ? 1.0 : 0.0,
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 150),
+                                    opacity: showArrow ? 1.0 : 0.0,
+                                    child: Material(
+                                      color: isHighlighted
+                                          ? Colors.grey[700]
+                                          : Colors.grey[800],
+                                      shape: const CircleBorder(),
+                                      elevation: 4,
+                                      child: InkWell(
+                                        onTap: _handleScrollButtonTap,
+                                        borderRadius: BorderRadius.circular(28),
+                                        child: const SizedBox(
+                                          width: 56,
+                                          height: 56,
+                                          child: Icon(
+                                            Icons.arrow_downward_rounded,
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -6106,6 +6151,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _searchFocusNode.dispose();
     _pinnedMessageNotifier.dispose();
     _showScrollToBottomNotifier.dispose();
+    _scrollButtonHighlightNotifier.dispose();
     super.dispose();
   }
 
@@ -6200,10 +6246,18 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToMessage(String messageId) {
+  void _scrollToMessageInternal(
+    String messageId, {
+    required bool saveReturn,
+  }) {
     if (!mounted) return;
 
     () async {
+      if (saveReturn) {
+        _scrollReturnMessageId = _getBestVisibleMessageId();
+        _scrollButtonHighlightNotifier.value = _scrollReturnMessageId != null;
+      }
+
       setState(() {
         _highlightedMessageId = messageId;
       });
@@ -6257,6 +6311,10 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     }();
+  }
+
+  void _scrollToMessage(String messageId) {
+    _scrollToMessageInternal(messageId, saveReturn: true);
   }
 }
 
