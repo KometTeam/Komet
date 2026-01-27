@@ -4233,7 +4233,7 @@ class _ChatsScreenState extends State<ChatsScreen>
         return _buildContactAttachmentPreview(message);
       } else {
         final attachmentText = _getAttachmentTypeText(message.attaches);
-      
+
         return Text(
           attachmentText,
           maxLines: 1,
