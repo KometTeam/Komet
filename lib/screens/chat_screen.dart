@@ -237,7 +237,7 @@ class _ChatScreenState extends State<ChatScreen> {
         });
         _saveInputState();
 
-        // Hide mention dropdown when focus is lost
+
         if (_showMentionDropdown) {
           setState(() {
             _showMentionDropdown = false;
@@ -313,53 +313,55 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadMentionableUsers() async {
     if (!widget.isGroupChat && !widget.isChannel) {
-      // In private chat, only the other person is mentionable
-      _mentionableUsers = [_currentContact];
+      if (_currentContact.id != null) {
+        _mentionableUsers = [_currentContact];
+      } else {
+        _mentionableUsers = [];
+      }
       return;
     }
 
-    // For groups and channels, load participants
-    final chatData = ApiService.instance.lastChatsPayload;
-    if (chatData == null) return;
-
-    final chats = chatData['chats'] as List<dynamic>?;
-    if (chats == null) return;
-
-    final currentChat = chats.firstWhere(
-          (chat) => chat['id'] == widget.chatId,
-      orElse: () => null,
-    );
-
-    if (currentChat == null) return;
-
-    // Отладка типа данных
-    print('DEBUG participants type: ${currentChat['participants']?.runtimeType}');
-    print('DEBUG participants data: ${currentChat['participants']}');
-
-    // Поддержка разных форматов participants (Map или List)
-    final dynamic participantsData = currentChat['participants'];
     List<int> participantIds = [];
 
-    if (participantsData is Map<String, dynamic>) {
-      participantIds = participantsData.keys
-          .map((id) => int.tryParse(id))
-          .where((id) => id != null && id != (_actualMyId ?? widget.myId))
-          .cast<int>()
-          .toList();
-    } else if (participantsData is List<dynamic>) {
-      participantIds = participantsData
-          .map((p) => p is int ? p : int.tryParse(p.toString()))
-          .where((id) => id != null && id != (_actualMyId ?? widget.myId))
-          .cast<int>()
+    // Пробуем получить из payload (как сейчас)
+    final chatData = ApiService.instance.lastChatsPayload;
+    if (chatData != null) {
+      final chats = chatData['chats'] as List<dynamic>?;
+      final currentChat = chats?.firstWhere(
+            (chat) => chat['id'] == widget.chatId,
+        orElse: () => null,
+      );
+
+      if (currentChat != null) {
+        final dynamic participantsData = currentChat['participants'];
+        if (participantsData is Map<String, dynamic>) {
+          participantIds = participantsData.keys
+              .map((id) => int.tryParse(id))
+              .where((id) => id != null && id != (_actualMyId ?? widget.myId))
+              .cast<int>()
+              .toList();
+        } else if (participantsData is List<dynamic>) {
+          participantIds = participantsData
+              .map((p) => p is int ? p : int.tryParse(p.toString()))
+              .where((id) => id != null && id != (_actualMyId ?? widget.myId))
+              .cast<int>()
+              .toList();
+        }
+      }
+    }
+
+    // Fallback на кэш, если из payload ничего не получили
+    if (participantIds.isEmpty && _contactDetailsCache.isNotEmpty) {
+      print('DEBUG: Using contact cache for mentions');
+      participantIds = _contactDetailsCache.keys
+          .where((id) => id != (_actualMyId ?? widget.myId))
           .toList();
     }
 
     if (participantIds.isEmpty) {
-      print('DEBUG: No participant IDs found');
+      setState(() => _mentionableUsers = []);
       return;
     }
-
-    print('DEBUG: Found ${participantIds.length} participants: $participantIds');
 
     // Загружаем недостающие контакты
     final idsToFetch = participantIds
@@ -368,12 +370,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (idsToFetch.isNotEmpty) {
       try {
-        print('DEBUG: Fetching ${idsToFetch.length} missing contacts');
         final contacts = await ApiService.instance.fetchContactsByIds(idsToFetch);
         for (final contact in contacts) {
-          _contactDetailsCache[contact.id] = contact;
+          if (contact.id != null) {
+            _contactDetailsCache[contact.id] = contact;
+          }
         }
-        print('DEBUG: Loaded ${contacts.length} contacts');
       } catch (e) {
         print('Ошибка загрузки контактов для пингов: $e');
       }
@@ -383,18 +385,17 @@ class _ChatScreenState extends State<ChatScreen> {
       _mentionableUsers = participantIds
           .where((id) => _contactDetailsCache.containsKey(id))
           .map((id) => _contactDetailsCache[id]!)
+          .where((contact) => contact.id != null && contact.id != 0)  // Доп. проверка
           .toList();
     });
 
-    print('DEBUG: Final mentionable users count: ${_mentionableUsers.length}');
+    print('DEBUG: Mentionable users loaded: ${_mentionableUsers.length}');
   }
 
   void _handleMentionFiltering(String text) {
     final cursorPosition = _textController.selection.baseOffset;
 
-    // Check if we should show mention dropdown
     if (cursorPosition > 0) {
-      // Look for @ symbol before cursor
       int atPosition = -1;
       for (int i = cursorPosition - 1; i >= 0; i--) {
         if (text[i] == '@') {
@@ -475,27 +476,46 @@ class _ChatScreenState extends State<ChatScreen> {
   void _insertMention(Contact user) {
     if (_mentionStartPosition == null) return;
 
+    if (user.id == null || user.id == 0) {
+      print('ERROR: Cannot mention user with null ID: ${user.name}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ошибка: не удалось получить ID пользователя')),
+      );
+      return;
+    }
+
     final currentText = _textController.text;
-    final beforeMention = currentText.substring(0, _mentionStartPosition!);
-    final afterMention = currentText.substring(_textController.selection.baseOffset);
+    final cursorPosition = _textController.selection.baseOffset;
 
-    final mentionText = '@${user.name}';
-    final newText = beforeMention + mentionText + afterMention;
+    // Текст до символа @ (не включая @)
+    final beforeAt = currentText.substring(0, _mentionStartPosition!);
+    // Текст после текущей позиции курсора (что было введено после части имени)
+    final afterCursor = currentText.substring(cursorPosition);
+    final mentionText = user.name;
+    final newText = beforeAt + mentionText + afterCursor;
 
-    _textController.text = newText;
-    _textController.selection = TextSelection.collapsed(
-      offset: _mentionStartPosition! + mentionText.length,
+    _textController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: _mentionStartPosition! + mentionText.length,
+      ),
     );
 
+    // Добавляем упоминание с правильным entityId
     _mentions.add(Mention(
-      from: _mentionStartPosition!,
-      length: mentionText.length,
-      entityId: user.id,
+      from: _mentionStartPosition!,  // Позиция, где было @
+      length: mentionText.length,    // Длина имени
+      entityId: user.id,             // Обязательно числовой ID
       entityName: user.name,
     ));
 
+    print('DEBUG: Added mention - entityId: ${user.id}, name: ${user.name}, '
+        'pos: $_mentionStartPosition, length: ${mentionText.length}');
+
     setState(() {
       _showMentionDropdown = false;
+      _mentionQuery = '';
+      _mentionStartPosition = null;
     });
 
     _textFocusNode.requestFocus();
@@ -1324,7 +1344,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ИСПРАВЛЕННЫЙ МЕТОД: Теперь с await для загрузки участников и пингов
+
   Future<void> _initializeChat() async {
     await _loadCachedContacts();
     final prefs = await SharedPreferences.getInstance();
@@ -1370,13 +1390,49 @@ class _ChatScreenState extends State<ChatScreen> {
     _loadContactDetails();
     _checkContactCache();
 
-    // ИСПРАВЛЕНИЕ: Сначала загружаем участников группы, потом формируем список для пингов
+    // Сначала загружаем участников группы, потом формируем список для пингов
     if (widget.isGroupChat || widget.isChannel) {
       await _loadGroupParticipants();
-      await _loadMentionableUsers(); // Теперь с await и после загрузки участников
+      await _loadMentionableUsers();
+
+      // Если список пустой, делаем повторные попытки с задержкой (данные могут грузиться асинхронно)
+      if (_mentionableUsers.isEmpty) {
+        var retryCount = 0;
+        Timer.periodic(const Duration(milliseconds: 600), (timer) async {
+          if (!mounted || _mentionableUsers.isNotEmpty || retryCount >= 10) {
+            timer.cancel();
+            return;
+          }
+          retryCount++;
+          print('DEBUG: Retrying mentionable users load, attempt $retryCount');
+          await _loadGroupParticipants();
+          await _loadMentionableUsers();
+          if (_mentionableUsers.isNotEmpty && mounted) {
+            setState(() {});
+            print('DEBUG: Mentionable users loaded after retry: ${_mentionableUsers.length} users');
+            timer.cancel();
+          }
+        });
+      }
     } else {
-      _loadMentionableUsers();
+      await _loadMentionableUsers();
     }
+
+    // Также обновляем при получении любого сообщения в этом чате (на случай если состав изменился)
+    ApiService.instance.messages.listen((msg) {
+      final payload = msg['payload'];
+      if (payload != null && payload['chatId'] == widget.chatId &&
+          (widget.isGroupChat || widget.isChannel) &&
+          (msg['opcode'] == 64 || msg['opcode'] == 128)) {
+        // Если пришло сообщение о новом участнике или обновление чата
+        if (payload['participants'] != null ||
+            (payload['chat'] != null && payload['chat']['participants'] != null)) {
+          _loadMentionableUsers().then((_) {
+            if (mounted) setState(() {});
+          });
+        }
+      }
+    });
 
     if (!ApiService.instance.isContactCacheValid()) {
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -1429,13 +1485,11 @@ class _ChatScreenState extends State<ChatScreen> {
               .map((p) => p.index)
               .reduce((a, b) => a > b ? a : b);
 
-          // Track maximum viewed index (highest index user has scrolled to)
+
           if (maxIndex > _maxViewedIndex) {
             _maxViewedIndex = maxIndex;
           }
 
-          // Load more when user has scrolled through 20+ items from bottom
-          // maxIndex represents how far from bottom (index 0) user has scrolled
           final shouldLoadByViewedCount = maxIndex >= _loadMoreThreshold &&
               (maxIndex - _lastLoadedAtViewedIndex) >= _loadMoreThreshold;
 
@@ -2745,120 +2799,324 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendMessage() async {
     final originalText = _textController.text.trim();
-    if (originalText.isNotEmpty) {
+
+    // Ранний выход если текст пустой
+    if (originalText.isEmpty) {
+      print('ОТЛАДКА: Попытка отправки пустого сообщения');
+      return;
+    }
+
+    try {
       final theme = context.read<ThemeProvider>();
-      final isBlocked = _currentContact.isBlockedByMe && !theme.blockBypass;
 
-      if (isBlocked) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Нельзя отправить сообщение заблокированному пользователю',
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+      // Проверка блокировки пользователя
+      if (_currentContact.isBlockedByMe && !theme.blockBypass) {
+        _showErrorSnackBar('Нельзя отправить сообщение заблокированному пользователю');
         return;
       }
 
-      if (_encryptionConfigForCurrentChat != null &&
-          _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-          _sendEncryptedForCurrentChat &&
-          (originalText == 'kometSM' || originalText == 'kometSM.')) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Нее, так нельзя)')));
+      // Валидация ограничений шифрования
+      if (_isEncryptionRestrictionActive(originalText)) {
+        _showInfoSnackBar('Нее, так нельзя)');
         return;
       }
 
-      String textToSend = originalText;
-      if (_encryptionConfigForCurrentChat != null &&
-          _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-          _sendEncryptedForCurrentChat &&
-          !ChatEncryptionService.isEncryptedMessage(originalText)) {
-        textToSend = ChatEncryptionService.encryptWithPassword(
-          _encryptionConfigForCurrentChat!.password,
-          originalText,
-        );
-      }
+      // Подготовка текста (шифрование при необходимости)
+      final textToSend = _prepareTextToSend(originalText);
 
-      if (textToSend != originalText) {
-        _mentions.clear();
-      }
-
+      // Генерация временного CID (локальный идентификатор)
       final int tempCid = DateTime.now().millisecondsSinceEpoch;
-      final List<Map<String, dynamic>> tempElements = _mentions.map((m) => m.toJson()).toList();
-      print('DEBUG sending elements: $tempElements'); // Отладка отправки пингов
-      print('[_sendTextMessage] Final elements for sending: $tempElements');
-      final tempMessageJson = {
-        'id': 'local_$tempCid',
-        'text': textToSend,
-        'time': tempCid,
-        'sender': _actualMyId!,
-        'cid': tempCid,
-        'type': 'USER',
-        'attaches': [],
-        'elements': tempElements,
-        'link': _replyingToMessage != null
-            ? {
-          'type': 'REPLY',
-          'messageId':
-          int.tryParse(_replyingToMessage!.id) ??
-              _replyingToMessage!.id,
-          'message': {
-            'sender': _replyingToMessage!.senderId,
-            'id':
-            int.tryParse(_replyingToMessage!.id) ??
-                _replyingToMessage!.id,
-            'time': _replyingToMessage!.time,
-            'text': _replyingToMessage!.text,
-            'type': 'USER',
-            'cid': _replyingToMessage!.cid,
-            'attaches': _replyingToMessage!.attaches,
-          },
-          'chatId': 0,
-        }
-            : null,
-      };
 
-      final tempMessage = Message.fromJson(tempMessageJson);
-      _addMessage(tempMessage);
-      print(
-        'Создано временное сообщение с link: ${tempMessage.link} и cid: $tempCid',
+      // Захват и валидация упоминаний ДО любых асинхронных операций
+      // Это критически важно, чтобы не потерять mentions при очистке
+      final List<Map<String, dynamic>> elements = _captureMentions();
+
+      // Отладочное логирование для пингов/упоминаний
+      _logMentionsDebugInfo(elements);
+
+      // Валидация целостности данных упоминаний
+      if (!_validateMentions(elements)) {
+        print('ВНИМАНИЕ: Обнаружены невалидные упоминания, отправка без них');
+        elements.clear();
+      }
+
+      // Создание временного сообщения для ультра быстрый апдейт  UI
+      final tempMessage = _createTempMessage(
+        text: textToSend,
+        cid: tempCid,
+        elements: elements,
       );
 
+      // Немедленное добавление в UI
+      _addMessage(tempMessage);
+      print('ОТЛАДКА: Создано временное сообщение с cid: $tempCid, элементов: ${elements.length}');
+
+      // Очистка поля ввода сразу для лучшего UX
+      _clearInputState();
+
+      // Отправка на сервер асинхронно (не блокирует UI)
+      // если sendMessage возвращает Future, попробуйте await добавить но у меня вроде норм.
+      _sendToServer(
+        text: textToSend,
+        cid: tempCid,
+        elements: elements,
+      );
+
+      // Обработка статусов прочтения (не блокирует отправку)
+      _handleReadReceipts();
+
+    } catch (e, stackTrace) {
+      print('ОШИБКА в _sendMessage: $e');
+      print(stackTrace);
+      _showErrorSnackBar('Не удалось отправить сообщение');
+    }
+  }
+
+// Вспомогательные методы:
+
+  /// Проверка активности ограничения на шифрование
+  bool _isEncryptionRestrictionActive(String text) {
+    return _encryptionConfigForCurrentChat != null &&
+        _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+        _sendEncryptedForCurrentChat &&
+        (text == 'kometSM' || text == 'kometSM.');
+  }
+
+  /// Подготовка текста к отправке (шифрование если активно)
+  String _prepareTextToSend(String original) {
+    if (_encryptionConfigForCurrentChat != null &&
+        _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+        _sendEncryptedForCurrentChat &&
+        !ChatEncryptionService.isEncryptedMessage(original)) {
+
+      final encrypted = ChatEncryptionService.encryptWithPassword(
+        _encryptionConfigForCurrentChat!.password,
+        original,
+      );
+
+      print('ОТЛАДКА: Текст успешно зашифрован');
+      return encrypted;
+    }
+    return original;
+  }
+
+  /// Захват упоминаний в момент отправки
+  List<Map<String, dynamic>> _captureMentions() {
+    final captured = _mentions.map((m) {
+      // Отправляем только необходимые поля для сервера
+      return {
+        'entityId': m.entityId,
+        'type': m.type, // USER_MENTION
+        'length': m.length,
+      };
+    }).toList();
+
+    print('ОТЛАДКА: Захвачено ${captured.length} упоминаний перед отправкой');
+    print('======== ОТЛАДКА УПОМИНАНИЙ ========');
+    print('Всего упоминаний: ${captured.length}');
+    for (int i = 0; i < captured.length; i++) {
+      final element = captured[i];
+      print('Упоминание #$i: entityId=${element['entityId']}, type=${element['type']}, length=${element['length']}');
+    }
+    print('=====================================');
+    return captured;
+  }
+
+  /// Подробное логирование информации об упоминаниях (для отладки пингов)
+  void _logMentionsDebugInfo(List<Map<String, dynamic>> elements) {
+    if (elements.isEmpty) {
+      print('ОТЛАДКА: Список упоминаний пуст');
+      return;
+    }
+
+    print('======== ОТЛАДКА УПОМИНАНИЙ ========');
+    print('Всего упоминаний: ${elements.length}');
+
+    for (int i = 0; i < elements.length; i++) {
+      final element = elements[i];
+      print('Упоминание #$i:');
+      print('  - ID сущности: ${element['entityId']} (тип: ${element['entityId']?.runtimeType})');
+      print('  - Имя: ${element['entityName']}');
+      print('  - Позиция от: ${element['from']}, длина: ${element['length']}');
+      print('  - Тип: ${element['type']}');
+
+      // Дополнительные проверки валидации
+      if (element['entityId'] == null) {
+        print('  ⚠️ ВНИМАНИЕ: entityId равен NULL!');
+      }
+      if (element['entityId'] == 0) {
+        print('  ⚠️ ВНИМАНИЕ: entityId равен 0, возможно невалидный ID!');
+      }
+    }
+    print('=====================================');
+  }
+
+  /// Валидация упоминаний перед отправкой
+  bool _validateMentions(List<Map<String, dynamic>> elements) {
+    for (final element in elements) {
+      if (element['type'] == 'USER_MENTION') {
+        final entityId = element['entityId'];
+
+        if (entityId == null) {
+          print('ОШИБКА: Упоминание имеет null в entityId: $element');
+          return false;
+        }
+
+        if (entityId is! int) {
+          print('ОШИБКА: entityId не является целым числом: $entityId (${entityId.runtimeType})');
+          return false;
+        }
+
+        if (entityId <= 0) {
+          print('ОШИБКА: entityId меньше или равен 0: $entityId');
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /// Создание временного сообщения для локального отображения
+  Message _createTempMessage({
+    required String text,
+    required int cid,
+    required List<Map<String, dynamic>> elements,
+  }) {
+    return Message.fromJson({
+      'id': 'local_$cid', // Временный локальный ID
+      'text': text,
+      'time': cid,
+      'sender': _actualMyId!,
+      'cid': cid,
+      'type': 'USER',
+      'attaches': [],
+      'elements': elements,
+      'link': _buildReplyLink(),
+    });
+  }
+
+  /// Формирование структуры ответа на сообщение (reply)
+  Map<String, dynamic>? _buildReplyLink() {
+    if (_replyingToMessage == null) return null;
+
+    final replyId = int.tryParse(_replyingToMessage!.id) ?? _replyingToMessage!.id;
+
+    return {
+      'type': 'REPLY',
+      'messageId': replyId,
+      'chatId': 0,
+      'message': {
+        'sender': _replyingToMessage!.senderId,
+        'id': replyId,
+        'time': _replyingToMessage!.time,
+        'text': _replyingToMessage!.text,
+        'type': 'USER',
+        'cid': _replyingToMessage!.cid,
+        'attaches': _replyingToMessage!.attaches,
+      },
+    };
+  }
+
+  /// Очистка состояния ввода после отправки
+  void _clearInputState() {
+    _textController.clear();
+
+    setState(() {
+      _replyingToMessage = null;
+      _mentions.clear(); // Безопасно очищать после захвата в _captureMentions()
+    });
+
+    // Асинхронная очистка кеша без ожидания (не блокирует UI)
+    ChatCacheService().clearChatInputState(widget.chatId);
+    widget.onDraftChanged?.call(widget.chatId, null);
+
+    print('ОТЛАДКА: Состояние ввода очищено, mentions сброшены');
+  }
+
+  /// Отправка сообщения на сервер
+  /// Если sendMessage возвращает Future, добавьте async и await
+  void _sendToServer({
+    required String text,
+    required int cid,
+    required List<Map<String, dynamic>> elements,
+  }) {
+    try {
+      // Если ApiService.instance.sendMessage возвращает void:
       ApiService.instance.sendMessage(
         widget.chatId,
-        textToSend,
+        text,
         replyToMessageId: _replyingToMessage?.id,
         replyToMessage: _replyingToMessage,
-        cid: tempCid,
-        elements: tempElements,
+        cid: cid,
+        elements: elements,
       );
 
-      final readSettings = await ChatReadSettingsService.instance.getSettings(
-        widget.chatId,
-      );
-
-      final shouldReadOnAction = readSettings != null
-          ? (!readSettings.disabled && readSettings.readOnAction)
-          : theme.debugReadOnAction;
-
-      if (shouldReadOnAction && _messages.isNotEmpty) {
-        final lastMessageId = _messages.last.id;
-        ApiService.instance.markMessageAsRead(widget.chatId, lastMessageId);
+      print('ОТЛАДКА: Сообщение отправлено на сервер с cid: $cid');
+      if (elements.isNotEmpty) {
+        print('ОТЛАДКА: Отправлены элементы (пинги): ${elements.map((e) => e['entityId']).toList()}');
       }
 
-      _textController.clear();
+      // Если нужна обработка ошибок для Future:
+      // ApiService.instance.sendMessage(...).catchError((e) {
+      //   print('ОШИБКА отправки: $e');
+      // });
 
-      setState(() {
-        _replyingToMessage = null;
-        _mentions.clear();
+    } catch (e) {
+      print('ОШИБКА: Не удалось отправить сообщение на сервер: $e');
+
+    }
+  }
+
+  /// Обработка статусов прочтения (mark as read)
+  /// Если markMessageAsRead возвращает Future,  async/await
+  void _handleReadReceipts() {
+    try {
+      // Получаем настройки синхронно если возможно, или игнорируем
+      ChatReadSettingsService.instance.getSettings(widget.chatId).then((readSettings) {
+        final shouldReadOnAction = readSettings != null
+            ? (!readSettings.disabled && readSettings.readOnAction)
+            : context.read<ThemeProvider>().debugReadOnAction;
+
+        if (shouldReadOnAction && _messages.isNotEmpty) {
+          final lastMessageId = _messages.last.id;
+
+          ApiService.instance.markMessageAsRead(widget.chatId, lastMessageId);
+          print('ОТЛАДКА: Сообщения помечены как прочитанные');
+        }
+      }).catchError((e) {
+        print('ОШИБКА получения настроек чтения: $e');
       });
 
-      await ChatCacheService().clearChatInputState(widget.chatId);
-      widget.onDraftChanged?.call(widget.chatId, null);
+    } catch (e) {
+      print('ОШИБКА: Не удалось обновить статус прочтения: $e');
     }
+  }
+
+  /// Показ всплывающего уведомления об ошибке
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// Показ информационного уведомления
+  void _showInfoSnackBar(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _cancelPendingMessage(Message message) {
