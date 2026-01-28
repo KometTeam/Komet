@@ -46,23 +46,6 @@ class OptimizationScreen extends StatelessWidget {
                   value: theme.showFpsOverlay,
                   onChanged: (value) => theme.setShowFpsOverlay(value),
                 ),
-                const SizedBox(height: 8),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.timeline),
-                  title: const Text("Да ниче он бля не делает"),
-                  subtitle: Text("Оно визуал😭😭"),
-                ),
-                Slider(
-                  value: theme.maxFrameRate.toDouble(),
-                  min: 30,
-                  max: 120,
-                  divisions: 9,
-                  label: "${theme.maxFrameRate} FPS",
-                  onChanged: (value) {
-                    theme.setMaxFrameRate(value.round());
-                  },
-                ),
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),

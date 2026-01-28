@@ -1,6 +1,121 @@
 part of 'api_service.dart';
 
 extension ApiServiceMedia on ApiService {
+  Future<void> sendVoiceMessage(
+    int chatId, {
+    required String localPath,
+    int? senderId,
+    int? cidOverride,
+    int maxNotReadyRetries = 6,
+  }) async {
+    await waitUntilOnline();
+
+    final int cid = cidOverride ?? DateTime.now().millisecondsSinceEpoch;
+
+    _emitLocal({
+      'ver': 11,
+      'cmd': 1,
+      'seq': -1,
+      'opcode': 128,
+      'payload': {
+        'chatId': chatId,
+        'message': {
+          'id': 'local_$cid',
+          'sender': senderId ?? 0,
+          'time': DateTime.now().millisecondsSinceEpoch,
+          'text': '',
+          'type': 'USER',
+          'cid': cid,
+          'attaches': [
+            {'_type': 'AUDIO', 'url': 'file://$localPath'},
+          ],
+        },
+      },
+    });
+
+    final int seq82 = await _sendMessage(82, {'type': 2, 'count': 1});
+    final resp82 = await messages.firstWhere((m) => m['seq'] == seq82);
+
+    final infoList = resp82['payload']?['info'];
+    if (infoList is! List || infoList.isEmpty) {
+      throw Exception('Неверный ответ на opcode 82: отсутствует info');
+    }
+
+    final uploadInfo = infoList.first;
+    final String uploadUrl = uploadInfo['url'];
+    final int audioId = (uploadInfo['id'] as num).toInt();
+
+    final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
+    request.files.add(await http.MultipartFile.fromPath('file', localPath));
+    final streamed = await request.send();
+    final httpResp = await http.Response.fromStream(streamed);
+    if (httpResp.statusCode != 200) {
+      throw Exception(
+        'Ошибка загрузки аудио: ${httpResp.statusCode} ${httpResp.body}',
+      );
+    }
+
+    String? token;
+    try {
+      final decoded = jsonDecode(httpResp.body);
+      if (decoded is Map) {
+        token = decoded['token']?.toString();
+      }
+    } catch (_) {}
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Не получен token после загрузки аудио');
+    }
+
+    Future<void> trySendWithToken() async {
+      final payload = {
+        'chatId': chatId,
+        'message': {
+          'isLive': false,
+          'detectShare': false,
+          'elements': [],
+          'cid': cid,
+          'attaches': [
+            {'_type': 'AUDIO', 'token': token},
+          ],
+        },
+        'notify': true,
+      };
+      clearChatsCache();
+
+      final int seq64 = await _sendMessage(64, payload);
+      final resp64 = await messages.firstWhere((m) => m['seq'] == seq64);
+      final cmd = resp64['cmd'] as int?;
+      if (cmd == 0x300 || cmd == 768) {
+        final err = resp64['payload'];
+        if (err is Map && err['error'] == 'attachment.not.ready') {
+          throw err;
+        }
+        throw Exception(err?.toString() ?? 'Ошибка отправки аудио');
+      }
+    }
+
+    int attempt = 0;
+    while (true) {
+      try {
+        await trySendWithToken();
+        return;
+      } catch (e) {
+        if (e is Map && e['error'] == 'attachment.not.ready') {
+          if (attempt >= maxNotReadyRetries) {
+            throw Exception('attachment.not.ready (max retries exceeded)');
+          }
+          final backoffMs = 250 * (attempt + 1);
+          await Future.delayed(Duration(milliseconds: backoffMs));
+          await _sendMessage(136, {'audioId': audioId});
+          attempt += 1;
+          continue;
+        }
+        rethrow;
+      }
+    }
+  }
+
   Future<Profile?> updateProfileText(
     String firstName,
     String lastName,

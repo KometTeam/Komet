@@ -8,7 +8,9 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_linux
   flutter_timezone
   gtk
+  media_kit_libs_linux
   open_file_linux
+  record_linux
   smart_auth
   url_launcher_linux
 )

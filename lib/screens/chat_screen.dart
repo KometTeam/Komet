@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:ui';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:record/record.dart';
 import 'package:gwid/utils/theme_provider.dart';
 import 'package:gwid/api/api_service.dart';
 import 'package:flutter/services.dart';
@@ -85,47 +89,47 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class Mention {
-  final int from;
-  final int length;
-  final int entityId;
-  final String entityName;
-  final String type;
-
-  Mention({
-    required this.from,
-    required this.length,
-    required this.entityId,
-    required this.entityName,
-    this.type = 'USER_MENTION', // Влияет на пинги не трогать короч.
-  });
-
-
-  Map<String, dynamic> toJson() {
-    return {
-      'from': from,
-      'length': length,
-      'entityId': entityId,
-      'entityName': entityName,
-      'type': type,
-    };
-  }
-}
-
-class _PhotoPickerResult {
-  final List<String> paths;
-  final String? caption;
-
-  _PhotoPickerResult({required this.paths, this.caption});
-}
-
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final List<Message> _messages = [];
   List<ChatItem> _chatItems = [];
   final Set<String> _deletingMessageIds = {};
   final Set<String> _messagesToAnimate = {};
   List<Map<String, dynamic>> _cachedAllPhotos = [];
   String? _highlightedMessageId;
+
+  bool _isVoiceRecording = false;
+  bool _isVoiceLocked = false;
+  bool _isVoicePreview = false;
+  bool _isVoicePlaying = false;
+  bool _isVoiceArming = false;
+  double _voiceDragDy = 0.0;
+  double _voiceDragDx = 0.0;
+  final ValueNotifier<double> _voiceDragDyN = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _voiceDragDxN = ValueNotifier<double>(0.0);
+  int _voiceRecordSeconds = 0;
+  Timer? _voiceRecordTimer;
+  int _voiceDragLastSetStateMs = 0;
+  int _voiceArmLastSetStateMs = 0;
+  final AudioRecorder _voiceRecorder = AudioRecorder();
+  final AudioPlayer _voicePlayer = AudioPlayer();
+  String? _voiceRecordFilePath;
+
+  final List<double> _voiceWaveSamples = <double>[];
+  final ValueNotifier<int> _voiceWaveTick = ValueNotifier<int>(0);
+  final ValueNotifier<double> _voicePlaybackProgress = ValueNotifier<double>(0.0);
+  StreamSubscription? _voiceAmplitudeSub;
+  StreamSubscription<Duration>? _voicePositionSub;
+
+  final LayerLink _voiceOverlayLink = LayerLink();
+  OverlayEntry? _voiceOverlayEntry;
+  bool _voiceOverlayIsBlocked = false;
+  bool _voiceOverlayIsSmall = false;
+
+  int _voiceDebugArmUpdates = 0;
+  int _voiceDebugDragUpdates = 0;
+  int _voiceDebugLastMs = 0;
+  final ValueNotifier<String> _voiceDebugText = ValueNotifier<String>('');
 
   bool _isLoadingHistory = true;
   Map<String, dynamic>? _emptyChatSticker;
@@ -135,12 +139,16 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription? _apiSubscription;
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener =
-  ItemPositionsListener.create();
+      ItemPositionsListener.create();
   final ValueNotifier<bool> _showScrollToBottomNotifier = ValueNotifier(false);
   final ValueNotifier<Message?> _pinnedMessageNotifier = ValueNotifier(null);
+  final ValueNotifier<bool> _scrollButtonHighlightNotifier =
+      ValueNotifier(false);
 
   bool _isUserAtBottom = true;
   bool _isScrollingToBottom = false;
+
+  String? _scrollReturnMessageId;
 
   late Contact _currentContact;
   Message? _pinnedMessage;
@@ -165,360 +173,170 @@ class _ChatScreenState extends State<ChatScreen> {
   int? _botCommandsForBotId;
   List<BotCommand> _botCommands = const [];
 
+  Widget _wrapInputWithBotCommandsBar(Widget inputBar) {
+    if (!_showBotCommandsPanel) return inputBar;
 
-  bool _showMentionDropdown = false;
-  List<Contact> _mentionableUsers = [];
-  List<Contact> _filteredMentionableUsers = [];
-  String _mentionQuery = '';
-  int? _mentionStartPosition;
-  final LayerLink _mentionLayerLink = LayerLink();
-
-
-  static const int _pageSize = 50;
-  static const int _loadMoreThreshold = 20;
-  bool _isLoadingMore = false;
-  bool _hasMore = true;
-  int? _oldestLoadedTime;
-  int _maxViewedIndex = 0;
-  int _lastLoadedAtViewedIndex = 0;
-
-  int? _actualMyId;
-  bool _isIdReady = false;
-  bool _isEncryptionPasswordSetForCurrentChat = false;
-  ChatEncryptionConfig? _encryptionConfigForCurrentChat;
-  bool _sendEncryptedForCurrentChat = true;
-  bool _specialMessagesEnabled = true;
-
-  bool _hasTextSelection = false;
-  Timer? _selectionCheckTimer;
-
-  bool _showKometColorPicker = false;
-  String? _currentKometColorPrefix;
-
-  bool _isSearching = false;
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-  List<Message> _searchResults = [];
-  int _currentResultIndex = -1;
-
-
-  bool get _optimize => context.read<ThemeProvider>().optimizeChats;
-  bool get _ultraOptimize => context.read<ThemeProvider>().ultraOptimizeChats;
-  bool get _anyOptimize => _optimize || _ultraOptimize;
-  int get _optPage => _ultraOptimize ? 10 : (_optimize ? 50 : _pageSize);
-
-  @override
-  void initState() {
-    super.initState();
-    _currentContact = widget.contact;
-    _pinnedMessage = widget.pinnedMessage;
-    _initializeChat();
-    _loadEncryptionConfig();
-    _loadSpecialMessagesSetting();
-
-    ApiService.instance.currentActiveChatId = widget.chatId;
-
-    NotificationService().clearNotificationMessagesForChat(widget.chatId);
-
-    _textController.addListener(() {
-      _handleTextChangedForKometColor();
-      _updateTextSelectionState();
-      _handleMentionFiltering(_textController.text);
-    });
-
-    _textFocusNode.addListener(() {
-      if (_textFocusNode.hasFocus) {
-        _startSelectionCheck();
-      } else {
-        _stopSelectionCheck();
-        if (!mounted) return;
-        setState(() {
-          _hasTextSelection = false;
-        });
-        _saveInputState();
-
-
-        if (_showMentionDropdown) {
-          setState(() {
-            _showMentionDropdown = false;
-          });
-        }
-      }
-    });
-
-    _connectionStatus =
-    ApiService.instance.isOnline &&
-        ApiService.instance.isSessionReady &&
-        ApiService.instance.isActuallyConnected
-        ? 'connected'
-        : 'connecting';
-
-    _connectionStatusSub = ApiService.instance.connectionStatus.listen((
-        status,
-        ) {
-      if (!mounted) return;
-      setState(() {
-        _connectionStatus = status;
-      });
-    });
-
-    _loadInputState();
-  }
-
-
-  Widget _wrapInputWithPanels(Widget inputBar) {
-    if (_showBotCommandsPanel) {
-      final query = _textController.text.toLowerCase();
-      final filteredCommands = _botCommands.where((cmd) {
-        return cmd.slashCommand.toLowerCase().startsWith(query);
-      }).toList();
-
-      if (filteredCommands.isNotEmpty || _isLoadingBotCommands) {
-        inputBar = Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _BotCommandsPanel(
-                isLoading: _isLoadingBotCommands,
-                commands: filteredCommands,
-                onCommandTap: _applyBotCommandToInput,
-              ),
-            ),
-            inputBar,
-          ],
-        );
-      }
-    }
-
-    // Wrap with mention dropdown if needed
-    if (_showMentionDropdown && _filteredMentionableUsers.isNotEmpty) {
-      return CompositedTransformTarget(
-        link: _mentionLayerLink,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _MentionDropdownPanel(
-              users: _filteredMentionableUsers,
-              onUserSelected: _insertMention,
-            ),
-            inputBar,
-          ],
-        ),
-      );
-    }
-
-    return inputBar;
-  }
-
-  Future<void> _loadMentionableUsers() async {
-    if (!widget.isGroupChat && !widget.isChannel) {
-      if (_currentContact.id != null) {
-        _mentionableUsers = [_currentContact];
-      } else {
-        _mentionableUsers = [];
-      }
-      return;
-    }
-
-    List<int> participantIds = [];
-
-    // Пробуем получить из payload (как сейчас)
-    final chatData = ApiService.instance.lastChatsPayload;
-    if (chatData != null) {
-      final chats = chatData['chats'] as List<dynamic>?;
-      final currentChat = chats?.firstWhere(
-            (chat) => chat['id'] == widget.chatId,
-        orElse: () => null,
-      );
-
-      if (currentChat != null) {
-        final dynamic participantsData = currentChat['participants'];
-        if (participantsData is Map<String, dynamic>) {
-          participantIds = participantsData.keys
-              .map((id) => int.tryParse(id))
-              .where((id) => id != null && id != (_actualMyId ?? widget.myId))
-              .cast<int>()
-              .toList();
-        } else if (participantsData is List<dynamic>) {
-          participantIds = participantsData
-              .map((p) => p is int ? p : int.tryParse(p.toString()))
-              .where((id) => id != null && id != (_actualMyId ?? widget.myId))
-              .cast<int>()
-              .toList();
-        }
-      }
-    }
-
-    // Fallback на кэш, если из payload ничего не получили
-    if (participantIds.isEmpty && _contactDetailsCache.isNotEmpty) {
-      print('DEBUG: Using contact cache for mentions');
-      participantIds = _contactDetailsCache.keys
-          .where((id) => id != (_actualMyId ?? widget.myId))
-          .toList();
-    }
-
-    if (participantIds.isEmpty) {
-      setState(() => _mentionableUsers = []);
-      return;
-    }
-
-    // Загружаем недостающие контакты
-    final idsToFetch = participantIds
-        .where((id) => !_contactDetailsCache.containsKey(id))
-        .toList();
-
-    if (idsToFetch.isNotEmpty) {
-      try {
-        final contacts = await ApiService.instance.fetchContactsByIds(idsToFetch);
-        for (final contact in contacts) {
-          if (contact.id != null) {
-            _contactDetailsCache[contact.id] = contact;
-          }
-        }
-      } catch (e) {
-        print('Ошибка загрузки контактов для пингов: $e');
-      }
-    }
-
-    setState(() {
-      _mentionableUsers = participantIds
-          .where((id) => _contactDetailsCache.containsKey(id))
-          .map((id) => _contactDetailsCache[id]!)
-          .where((contact) => contact.id != null && contact.id != 0)  // Доп. проверка
-          .toList();
-    });
-
-    print('DEBUG: Mentionable users loaded: ${_mentionableUsers.length}');
-  }
-
-  void _handleMentionFiltering(String text) {
-    final cursorPosition = _textController.selection.baseOffset;
-
-    if (cursorPosition > 0) {
-      int atPosition = -1;
-      for (int i = cursorPosition - 1; i >= 0; i--) {
-        if (text[i] == '@') {
-          atPosition = i;
-          break;
-        } else if (text[i] == ' ' || text[i] == '\n') {
-          break; // Stop at whitespace
-        }
-      }
-
-      if (atPosition != -1) {
-        // выбираем пользователей после ввода символа @
-        _mentionQuery = text.substring(atPosition + 1, cursorPosition).toLowerCase();
-        _mentionStartPosition = atPosition;
-
-        _filteredMentionableUsers = _mentionableUsers.where((user) {
-          final username = user.name.toLowerCase();
-          final displayName = getContactDisplayName(
-            contactId: user.id,
-            originalName: user.name,
-            originalFirstName: user.firstName,
-            originalLastName: user.lastName,
-          ).toLowerCase();
-
-          return username.startsWith(_mentionQuery) ||
-              displayName.startsWith(_mentionQuery);
+    final query = _textController.text.toLowerCase();
+    final filteredCommands =
+        _botCommands.where((cmd) {
+          return cmd.slashCommand.toLowerCase().startsWith(query);
         }).toList();
 
-        _filteredMentionableUsers.sort((a, b) {
-          final aName = a.name.toLowerCase();
-          final bName = b.name.toLowerCase();
-          final aDisplay = getContactDisplayName(
-            contactId: a.id,
-            originalName: a.name,
-            originalFirstName: a.firstName,
-            originalLastName: a.lastName,
-          ).toLowerCase();
-          final bDisplay = getContactDisplayName(
-            contactId: b.id,
-            originalName: b.name,
-            originalFirstName: b.firstName,
-            originalLastName: b.lastName,
-          ).toLowerCase();
-
-          final aStartsWith = aName.startsWith(_mentionQuery) || aDisplay.startsWith(_mentionQuery);
-          final bStartsWith = bName.startsWith(_mentionQuery) || bDisplay.startsWith(_mentionQuery);
-
-          if (aStartsWith && !bStartsWith) return -1;
-          if (!aStartsWith && bStartsWith) return 1;
-          return aDisplay.compareTo(bDisplay);
-        });
-
-        if (!_showMentionDropdown) {
-          setState(() {
-            _showMentionDropdown = true;
-          });
-        } else {
-          setState(() {});
-        }
-      } else {
-
-        if (_showMentionDropdown) {
-          setState(() {
-            _showMentionDropdown = false;
-          });
-        }
-      }
-    } else {
-
-      if (_showMentionDropdown) {
-        setState(() {
-          _showMentionDropdown = false;
-        });
-      }
+    if (filteredCommands.isEmpty && !_isLoadingBotCommands) {
+      return inputBar;
     }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _BotCommandsPanel(
+            isLoading: _isLoadingBotCommands,
+            commands: filteredCommands,
+            onCommandTap: _applyBotCommandToInput,
+          ),
+        ),
+        inputBar,
+      ],
+    );
   }
 
-  void _insertMention(Contact user) {
-    if (_mentionStartPosition == null) return;
+  Widget _buildVoiceWaveform({
+    required bool isBlocked,
+    required bool isSmall,
+    required bool canCancel,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final showPreview = _isVoicePreview && _voiceRecordFilePath != null;
+    final showRecording = _isVoiceRecording;
 
-    if (user.id == null || user.id == 0) {
-      print('ERROR: Cannot mention user with null ID: ${user.name}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ошибка: не удалось получить ID пользователя')),
-      );
-      return;
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
 
-    final currentText = _textController.text;
-    final cursorPosition = _textController.selection.baseOffset;
+        final painter = _VoiceWaveformPainter(
+          samples: _voiceWaveSamples,
+          color: colors.onSurfaceVariant.withValues(alpha: 0.55),
+          progressColor: colors.primary,
+          progress: _voicePlaybackProgress,
+          showProgress: showPreview,
+          isDense: isSmall,
+        );
 
-    // Текст до символа @ (не включая @)
-    final beforeAt = currentText.substring(0, _mentionStartPosition!);
-    // Текст после текущей позиции курсора (что было введено после части имени)
-    final afterCursor = currentText.substring(cursorPosition);
-    final mentionText = user.name;
-    final newText = beforeAt + mentionText + afterCursor;
+        Widget wave = RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: Listenable.merge([
+              _voiceWaveTick,
+              _voicePlaybackProgress,
+            ]),
+            builder: (context, _) {
+              return CustomPaint(
+                painter: painter,
+                size: Size(width, isSmall ? 26 : 28),
+              );
+            },
+          ),
+        );
 
-    _textController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(
-        offset: _mentionStartPosition! + mentionText.length,
-      ),
+        if (showPreview && !isBlocked) {
+          wave = GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanDown: (d) => _seekVoiceByWave(d.localPosition.dx, width),
+            onPanUpdate: (d) => _seekVoiceByWave(d.localPosition.dx, width),
+            child: wave,
+          );
+        }
+
+        if (showRecording && canCancel && !isBlocked) {
+          wave = Stack(
+            children: [
+              Positioned.fill(child: wave),
+              Align(
+                alignment: Alignment.center,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: _cancelVoiceRecording,
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: isSmall ? 12 : 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color.lerp(
+                            colors.onSurfaceVariant,
+                            colors.error,
+                            (-_voiceDragDx / 120).clamp(0.0, 1.0),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return SizedBox(
+          height: isSmall ? 26 : 28,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: ColoredBox(
+              color: Colors.transparent,
+              child: wave,
+            ),
+          ),
+        );
+      },
     );
+  }
 
-    // Добавляем упоминание с правильным entityId
-    _mentions.add(Mention(
-      from: _mentionStartPosition!,  // Позиция, где было @
-      length: mentionText.length,    // Длина имени
-      entityId: user.id,             // Обязательно числовой ID
-      entityName: user.name,
-    ));
+  void _seekVoiceByWave(double localDx, double width) {
+    final total = _voicePlayer.duration;
+    if (total == null || total.inMilliseconds <= 0) return;
+    if (width <= 0) return;
+    final ratio = (localDx / width).clamp(0.0, 1.0);
+    final ms = (total.inMilliseconds * ratio).round();
+    _voicePlayer.seek(Duration(milliseconds: ms));
+  }
 
-    print('DEBUG: Added mention - entityId: ${user.id}, name: ${user.name}, '
-        'pos: $_mentionStartPosition, length: ${mentionText.length}');
+  String? _getBestVisibleMessageId() {
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty || _chatItems.isEmpty) return null;
 
-    setState(() {
-      _showMentionDropdown = false;
-      _mentionQuery = '';
-      _mentionStartPosition = null;
+    final candidate = positions
+        .where((p) => p.index >= 0 && p.index < _chatItems.length)
+        .fold<ItemPosition?>(null, (best, p) {
+      if (best == null) return p;
+      final bestDist = (best.itemLeadingEdge - 0.2).abs();
+      final dist = (p.itemLeadingEdge - 0.2).abs();
+      return dist < bestDist ? p : best;
     });
 
-    _textFocusNode.requestFocus();
+    if (candidate == null) return null;
+
+    final mappedIndex = _chatItems.length - 1 - candidate.index;
+    if (mappedIndex < 0 || mappedIndex >= _chatItems.length) return null;
+
+    final item = _chatItems[mappedIndex];
+    if (item is MessageItem) return item.message.id;
+    return null;
+  }
+
+  void _handleScrollButtonTap() {
+    final returnId = _scrollReturnMessageId;
+    if (returnId != null) {
+      _scrollReturnMessageId = null;
+      _scrollButtonHighlightNotifier.value = false;
+      _scrollToMessageInternal(returnId, saveReturn: false);
+      return;
+    }
+    _scrollToBottom();
   }
 
   int? _parseMessageId(dynamic value) {
@@ -537,6 +355,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _handleChatInputChanged(String text) {
     _resetDraftFormattingIfNeeded(text);
+
+    if (text.endsWith('@')) {
+      _showMentionInputDialog();
+    }
+    _updateMentionPositions(text);
 
     if (text.isNotEmpty) {
       _scheduleTypingPing();
@@ -592,6 +415,11 @@ class _ChatScreenState extends State<ChatScreen> {
         _botCommandsForBotId = botId;
         _botCommands = commands;
       });
+      if (!mounted || _currentContact.id != botId) return;
+      setState(() {
+        _botCommandsForBotId = botId;
+        _botCommands = commands;
+      });
     } catch (e) {
       if (!mounted || _currentContact.id != botId) return;
       setState(() {
@@ -616,80 +444,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     _textFocusNode.requestFocus();
-  }
-
-  Future<_PhotoPickerResult?> _pickPhotosFlow(BuildContext context) async {
-    try {
-      final ImagePicker picker = ImagePicker();
-
-      final choice = await showModalBottomSheet<String>(
-        context: context,
-        builder: (context) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Выбрать из галереи'),
-                onTap: () => Navigator.pop(context, 'gallery'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Сделать фото'),
-                onTap: () => Navigator.pop(context, 'camera'),
-              ),
-            ],
-          ),
-        ),
-      );
-
-      if (choice == null) return null;
-
-      List<XFile>? pickedFiles;
-
-      if (choice == 'gallery') {
-        pickedFiles = await picker.pickMultiImage();
-      } else if (choice == 'camera') {
-        final file = await picker.pickImage(source: ImageSource.camera);
-        if (file != null) {
-          pickedFiles = [file];
-        }
-      }
-
-      if (pickedFiles == null || pickedFiles.isEmpty) return null;
-
-      final caption = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Добавить подпись?'),
-          content: TextField(
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Подпись к фото (необязательно)',
-            ),
-            onSubmitted: (value) => Navigator.pop(context, value),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Пропустить'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, ''),
-              child: const Text('Добавить'),
-            ),
-          ],
-        ),
-      );
-
-      return _PhotoPickerResult(
-        paths: pickedFiles.map((f) => f.path).toList(),
-        caption: caption,
-      );
-    } catch (e) {
-      print('Ошибка выбора фото: $e');
-      return null;
-    }
   }
 
   Future<void> _onAttachPressed() async {
@@ -750,10 +504,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           onPressed: () async {
                             final isEncryptionActive =
                                 _encryptionConfigForCurrentChat != null &&
-                                    _encryptionConfigForCurrentChat!
-                                        .password
-                                        .isNotEmpty &&
-                                    _sendEncryptedForCurrentChat;
+                                _encryptionConfigForCurrentChat!
+                                    .password
+                                    .isNotEmpty &&
+                                _sendEncryptedForCurrentChat;
                             if (isEncryptionActive) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -804,10 +558,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           onPressed: () async {
                             final isEncryptionActive =
                                 _encryptionConfigForCurrentChat != null &&
-                                    _encryptionConfigForCurrentChat!
-                                        .password
-                                        .isNotEmpty &&
-                                    _sendEncryptedForCurrentChat;
+                                _encryptionConfigForCurrentChat!
+                                    .password
+                                    .isNotEmpty &&
+                                _sendEncryptedForCurrentChat;
                             if (isEncryptionActive) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -853,11 +607,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             Navigator.of(ctx).pop();
                             final selectedContact = await Navigator.of(context)
                                 .push(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                const ContactSelectionScreen(),
-                              ),
-                            );
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ContactSelectionScreen(),
+                                  ),
+                                );
                             if (selectedContact != null && mounted) {
                               await ApiService.instance.sendContactMessage(
                                 widget.chatId,
@@ -890,8 +644,8 @@ class _ChatScreenState extends State<ChatScreen> {
     } else {
       final isEncryptionActive =
           _encryptionConfigForCurrentChat != null &&
-              _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-              _sendEncryptedForCurrentChat;
+          _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+          _sendEncryptedForCurrentChat;
       if (isEncryptionActive) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -946,6 +700,23 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       if (choice == 'media') {
+        final isEncryptionActive =
+            _encryptionConfigForCurrentChat != null &&
+            _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+            _sendEncryptedForCurrentChat;
+        if (isEncryptionActive) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Нельзя отправлять медиа при включенном шифровании',
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
         final result = await _pickPhotosFlow(context);
         if (result != null && result.paths.isNotEmpty) {
           await ApiService.instance.sendPhotoMessages(
@@ -956,6 +727,23 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
       } else if (choice == 'file') {
+        final isEncryptionActive =
+            _encryptionConfigForCurrentChat != null &&
+            _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+            _sendEncryptedForCurrentChat;
+        if (isEncryptionActive) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Нельзя отправлять медиа при включенном шифровании',
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
         await ApiService.instance.sendFileMessage(
           widget.chatId,
           senderId: _actualMyId,
@@ -976,6 +764,26 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
   }
+
+  int? _actualMyId;
+
+  bool _isIdReady = false;
+  bool _isEncryptionPasswordSetForCurrentChat = false;
+  ChatEncryptionConfig? _encryptionConfigForCurrentChat;
+  bool _sendEncryptedForCurrentChat = true;
+  bool _specialMessagesEnabled = true;
+
+  bool _hasTextSelection = false;
+  Timer? _selectionCheckTimer;
+
+  bool _showKometColorPicker = false;
+  String? _currentKometColorPrefix;
+
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<Message> _searchResults = [];
+  int _currentResultIndex = -1;
 
   void _checkContactCache() {
     if (widget.chatId == 0) {
@@ -1011,7 +819,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final positions = _itemPositionsListener.itemPositions.value;
         if (positions.isNotEmpty) {
           final bottomItemPosition = positions.firstWhere(
-                (p) => p.index == 0,
+            (p) => p.index == 0,
             orElse: () => positions.first,
           );
           final isBottomItemVisible = bottomItemPosition.index == 0;
@@ -1026,6 +834,696 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     });
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (!mounted) return;
+    if (_isVoiceRecording) return;
+    if (_isVoiceArming) {
+      setState(() {
+        _isVoiceArming = false;
+      });
+    }
+
+    final ok = await _ensureVoicePermission();
+    if (!ok) {
+      return;
+    }
+
+    final path = await _createVoiceTempPath();
+
+    try {
+      await _voiceRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: path,
+      );
+    } catch (_) {
+      return;
+    }
+
+    _voiceRecordTimer?.cancel();
+
+    _voiceAmplitudeSub?.cancel();
+    _voiceAmplitudeSub = null;
+    _voiceWaveSamples.clear();
+    _voiceWaveTick.value = 0;
+    _voicePlaybackProgress.value = 0.0;
+
+    setState(() {
+      _isVoiceRecording = true;
+      _isVoiceLocked = false;
+      _isVoicePreview = false;
+      _isVoicePlaying = false;
+      _voiceDragDy = 0.0;
+      _voiceDragDx = 0.0;
+      _voiceRecordSeconds = 0;
+      _voiceRecordFilePath = path;
+    });
+
+    _syncVoiceOverlay();
+
+    try {
+      _voiceAmplitudeSub = _voiceRecorder
+          .onAmplitudeChanged(const Duration(milliseconds: 50))
+          .listen((amp) {
+        if (!_isVoiceRecording) return;
+        final current = amp.current;
+        final normalized = ((current + 60.0) / 60.0).clamp(0.0, 1.0);
+        _voiceWaveSamples.add(normalized);
+        if (_voiceWaveSamples.length > 180) {
+          _voiceWaveSamples.removeRange(0, _voiceWaveSamples.length - 180);
+        }
+        _voiceWaveTick.value = _voiceWaveTick.value + 1;
+      });
+    } catch (_) {}
+
+    _voiceRecordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (!_isVoiceRecording) return;
+      setState(() {
+        _voiceRecordSeconds += 1;
+      });
+    });
+  }
+
+  Future<void> _stopVoiceRecordingToPreview() async {
+    _voiceRecordTimer?.cancel();
+    _voiceRecordTimer = null;
+
+    _voiceAmplitudeSub?.cancel();
+    _voiceAmplitudeSub = null;
+
+    String? path;
+    try {
+      path = await _voiceRecorder.stop();
+    } catch (_) {
+      path = null;
+    }
+
+    final resolvedPath = path ?? _voiceRecordFilePath;
+    if (resolvedPath == null) {
+      await _resetVoiceUiState(deleteFile: true);
+      return;
+    }
+
+    try {
+      await _voicePlayer.setFilePath(resolvedPath);
+    } catch (_) {
+      await _resetVoiceUiState(deleteFile: true);
+      return;
+    }
+
+    _voicePositionSub?.cancel();
+    _voicePositionSub = null;
+    _voicePlaybackProgress.value = 0.0;
+
+    _voicePositionSub = _voicePlayer.positionStream.listen((pos) {
+      final total = _voicePlayer.duration;
+      if (total == null || total.inMilliseconds <= 0) {
+        _voicePlaybackProgress.value = 0.0;
+        return;
+      }
+      _voicePlaybackProgress.value =
+          (pos.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
+    });
+
+    if (!mounted) return;
+    setState(() {
+      _isVoiceRecording = false;
+      _isVoiceLocked = false;
+      _isVoicePreview = true;
+      _isVoicePlaying = false;
+      _voiceDragDy = 0.0;
+      _voiceDragDx = 0.0;
+      _voiceRecordFilePath = resolvedPath;
+    });
+
+    _syncVoiceOverlay();
+  }
+
+  Future<void> _cancelVoiceRecording() async {
+    try {
+      await _voiceRecorder.stop();
+    } catch (_) {}
+    await _resetVoiceUiState(deleteFile: true);
+  }
+
+  Future<void> _toggleVoicePlayback() async {
+    if (!_isVoicePreview) return;
+    try {
+      if (_voicePlayer.playing) {
+        await _voicePlayer.pause();
+        if (!mounted) return;
+        setState(() {
+          _isVoicePlaying = false;
+        });
+      } else {
+        await _voicePlayer.play();
+        if (!mounted) return;
+        setState(() {
+          _isVoicePlaying = true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _syncVoiceOverlay() {
+    if (!mounted) return;
+
+    final shouldShow = (_isVoiceRecording || _isVoicePreview);
+    if (!shouldShow) {
+      _voiceOverlayEntry?.remove();
+      _voiceOverlayEntry = null;
+      return;
+    }
+
+    if (_voiceOverlayEntry != null) {
+      _voiceOverlayEntry!.markNeedsBuild();
+      return;
+    }
+
+    _voiceOverlayEntry = OverlayEntry(
+      builder: (context) {
+        return CompositedTransformFollower(
+          link: _voiceOverlayLink,
+          targetAnchor: Alignment.topRight,
+          followerAnchor: Alignment.bottomRight,
+          offset: const Offset(-18, -10),
+          child: Material(
+            color: Colors.transparent,
+            child: _buildVoiceOverlayButton(
+              isBlocked: _voiceOverlayIsBlocked,
+              isSmall: _voiceOverlayIsSmall,
+            ),
+          ),
+        );
+      },
+    );
+
+    final overlay = Overlay.of(context);
+    overlay.insert(_voiceOverlayEntry!);
+  }
+
+  String _formatVoiceDuration(int seconds) {
+    final m = (seconds ~/ 60).toString().padLeft(1, '0');
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  void _onVoiceArmPanStart(DragStartDetails details) {
+    if (_textController.text.trim().isNotEmpty) return;
+    if (_isVoiceRecording || _isVoicePreview) return;
+    _textFocusNode.unfocus();
+    if (!mounted) return;
+    setState(() {
+      _isVoiceArming = true;
+      _voiceDragDy = 0.0;
+      _voiceDragDx = 0.0;
+    });
+
+    _voiceDragDyN.value = 0.0;
+    _voiceDragDxN.value = 0.0;
+  }
+
+  void _onVoiceArmPanUpdate(DragUpdateDetails details) {
+    if (!_isVoiceArming) return;
+
+    _voiceDebugArmUpdates += 1;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _voiceArmLastSetStateMs < 16) {
+      _voiceDragDy += details.delta.dy;
+      _voiceDragDx += details.delta.dx;
+      _voiceDragDyN.value = _voiceDragDy;
+      _voiceDragDxN.value = _voiceDragDx;
+      return;
+    }
+    _voiceArmLastSetStateMs = now;
+
+    _voiceDragDy += details.delta.dy;
+    _voiceDragDx += details.delta.dx;
+    _voiceDragDyN.value = _voiceDragDy;
+    _voiceDragDxN.value = _voiceDragDx;
+
+    _updateVoiceDebugStats();
+
+    if (_voiceDragDy <= -12) {
+      _startVoiceRecording();
+    }
+  }
+
+  void _onVoiceArmPanEnd(DragEndDetails details) {
+    if (!_isVoiceArming) return;
+    if (!mounted) return;
+    setState(() {
+      _isVoiceArming = false;
+      _voiceDragDy = 0.0;
+      _voiceDragDx = 0.0;
+    });
+
+    _voiceDragDyN.value = 0.0;
+    _voiceDragDxN.value = 0.0;
+  }
+
+  void _onVoicePanUpdate(DragUpdateDetails details) {
+    if (!_isVoiceRecording || _isVoiceLocked) return;
+    _voiceDebugDragUpdates += 1;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _voiceDragLastSetStateMs < 16) {
+      _voiceDragDy += details.delta.dy;
+      _voiceDragDx += details.delta.dx;
+      _voiceDragDyN.value = _voiceDragDy;
+      _voiceDragDxN.value = _voiceDragDx;
+      return;
+    }
+    _voiceDragLastSetStateMs = now;
+
+    _voiceDragDy += details.delta.dy;
+    _voiceDragDx += details.delta.dx;
+    _voiceDragDyN.value = _voiceDragDy;
+    _voiceDragDxN.value = _voiceDragDx;
+
+    _updateVoiceDebugStats();
+  }
+
+  void _updateVoiceDebugStats() {
+    if (!kDebugMode) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_voiceDebugLastMs == 0) {
+      _voiceDebugLastMs = now;
+      return;
+    }
+    if (now - _voiceDebugLastMs < 500) return;
+    final arm = _voiceDebugArmUpdates;
+    final drag = _voiceDebugDragUpdates;
+    _voiceDebugArmUpdates = 0;
+    _voiceDebugDragUpdates = 0;
+    _voiceDebugLastMs = now;
+    _voiceDebugText.value = 'arm:$arm/0.5s drag:$drag/0.5s';
+  }
+
+  void _onVoicePanEnd(DragEndDetails details) {
+    if (!_isVoiceRecording) return;
+    if (_isVoiceLocked) return;
+
+    final shouldCancel = _voiceDragDx <= -120;
+    if (shouldCancel) {
+      _cancelVoiceRecording();
+      return;
+    }
+
+    final shouldLock = _voiceDragDy <= -140;
+    if (shouldLock) {
+      setState(() {
+        _isVoiceLocked = true;
+        _voiceDragDy = 0.0;
+        _voiceDragDx = 0.0;
+      });
+      return;
+    }
+
+    _stopVoiceRecordingToPreview();
+  }
+
+  Widget _buildVoiceInputBar({
+    required bool isBlocked,
+    required bool isSmall,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    final showPreview = _isVoicePreview && _voiceRecordFilePath != null;
+    final showRecording = _isVoiceRecording;
+
+    final canSend = !isBlocked && showPreview;
+    final canStopToPreview = !isBlocked && showRecording;
+
+    final barHeight = isSmall ? 44.0 : 48.0;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanUpdate: (showRecording && !_isVoiceLocked) ? _onVoicePanUpdate : null,
+      onPanEnd: (showRecording && !_isVoiceLocked) ? _onVoicePanEnd : null,
+      child: SizedBox(
+        height: barHeight,
+        child: Stack(
+          children: [
+            Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _formatVoiceDuration(_voiceRecordSeconds),
+                  style: TextStyle(
+                    fontSize: isSmall ? 13 : 14,
+                    fontWeight: FontWeight.w700,
+                    color: colors.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Transform.translate(
+                  offset: Offset(
+                    showRecording
+                        ? (_voiceDragDxN.value).clamp(-80.0, 0.0)
+                        : 0,
+                    0,
+                  ),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 160),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: (showPreview)
+                          ? _buildVoiceWaveform(
+                              isBlocked: isBlocked,
+                              isSmall: isSmall,
+                              canCancel: !isBlocked && showRecording,
+                            )
+                          : Center(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: isBlocked
+                                    ? null
+                                    : () {
+                                        _resetVoiceUiState(deleteFile: true);
+                                      },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(
+                                      fontSize: isSmall ? 12 : 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: isSmall ? 50 : 56,
+                height: barHeight,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.centerRight,
+                  children: [
+                ValueListenableBuilder<double>(
+                  valueListenable: _voiceDragDyN,
+                  builder: (context, dy, _) {
+                    final dragDy = (showRecording && !_isVoiceLocked)
+                        ? dy.clamp(-18.0, 0.0)
+                        : 0.0;
+                    return Transform.translate(
+                      offset: Offset(0, dragDy),
+                      child: Container(
+                    width: isSmall ? 44 : 50,
+                    height: isSmall ? 44 : 50,
+                    decoration: BoxDecoration(
+                      color: isBlocked
+                          ? colors.onSurface.withValues(alpha: 0.2)
+                          : colors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(30),
+                        onTap: (canStopToPreview || canSend)
+                            ? () async {
+                                if (showRecording) {
+                                  await _stopVoiceRecordingToPreview();
+                                  return;
+                                }
+
+                                final path = _voiceRecordFilePath;
+                                if (path == null) {
+                                  await _resetVoiceUiState(deleteFile: true);
+                                  return;
+                                }
+
+                                try {
+                                  await ApiService.instance.sendVoiceMessage(
+                                    widget.chatId,
+                                    localPath: path,
+                                    senderId: _actualMyId,
+                                  );
+                                  await _resetVoiceUiState(deleteFile: true);
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Ошибка отправки ГС: $e'),
+                                      backgroundColor:
+                                          Theme.of(context).colorScheme.error,
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
+                        child: Center(
+                          child: Icon(
+                            Icons.send_rounded,
+                            size: isSmall ? 20 : 22,
+                            color: isBlocked
+                                ? colors.onSurface.withValues(alpha: 0.5)
+                                : colors.onPrimary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                    );
+                  },
+                ),
+                  ],
+                ),
+              ),
+            ],
+            ),
+            if (kDebugMode && (showRecording || showPreview))
+              Positioned(
+                left: 8,
+                bottom: 2,
+                child: ValueListenableBuilder<String>(
+                  valueListenable: _voiceDebugText,
+                  builder: (context, v, _) {
+                    if (v.isEmpty) return const SizedBox.shrink();
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        v,
+                        style: const TextStyle(fontSize: 10, color: Colors.white),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVoiceOverlayButton({
+    required bool isBlocked,
+    required bool isSmall,
+  }) {
+    final showPreview = _isVoicePreview && _voiceRecordFilePath != null;
+    final showRecording = _isVoiceRecording;
+
+    if (!showPreview && !showRecording) return const SizedBox.shrink();
+
+    final colors = Theme.of(context).colorScheme;
+    final size = isSmall ? 34.0 : 38.0;
+
+    final bool isPause = showRecording;
+    final icon = isPause
+        ? Icons.pause_rounded
+        : (_isVoicePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded);
+
+    final onTap = isBlocked
+        ? null
+        : () {
+            if (showRecording) {
+              _stopVoiceRecordingToPreview();
+            } else {
+              _toggleVoicePlayback();
+            }
+          };
+
+    final bgColor = showRecording
+        ? colors.primary.withValues(alpha: 0.92)
+        : colors.surfaceContainerHighest.withValues(alpha: 0.35);
+
+    final iconColor = showRecording
+        ? (isBlocked
+            ? colors.onPrimary.withValues(alpha: 0.55)
+            : colors.onPrimary)
+        : (isBlocked
+            ? colors.onSurface.withValues(alpha: 0.45)
+            : colors.onSurface);
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Material(
+        color: bgColor,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Center(
+            child: Icon(
+              icon,
+              size: isSmall ? 18 : 20,
+              color: iconColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSendOrMicButton({
+    required bool isBlocked,
+    required bool isSmall,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    return ValueListenableBuilder(
+      valueListenable: _textController,
+      builder: (context, value, child) {
+        final hasText = _textController.text.trim().isNotEmpty;
+        final showSend = hasText;
+
+        final bool showStop = _isVoiceRecording && _isVoiceLocked;
+        final canStartVoice = !isBlocked && !hasText;
+
+        Color backgroundColor;
+        if (isBlocked) {
+          backgroundColor = colors.onSurface.withValues(alpha: 0.2);
+        } else if (showStop) {
+          backgroundColor = colors.error;
+        } else {
+          backgroundColor = colors.primary;
+        }
+
+        Color iconColor;
+        if (isBlocked) {
+          iconColor = colors.onSurface.withValues(alpha: 0.5);
+        } else {
+          iconColor = showStop ? colors.onError : colors.onPrimary;
+        }
+
+        Widget icon;
+        VoidCallback? onTap;
+        GestureDragStartCallback? onPanStart;
+        GestureDragUpdateCallback? onPanUpdate;
+        GestureDragEndCallback? onPanEnd;
+
+        if (showStop) {
+          icon = Icon(Icons.stop_rounded, color: iconColor, size: isSmall ? 20 : 24);
+          onTap = _stopVoiceRecordingToPreview;
+        } else if (showSend) {
+          icon = Icon(Icons.send_rounded, color: iconColor, size: isSmall ? 20 : 24);
+          onTap = isBlocked ? null : _sendMessage;
+        } else {
+          icon = Icon(Icons.mic_rounded, color: iconColor, size: isSmall ? 20 : 24);
+          onTap = null;
+          if (_isVoiceRecording && !_isVoiceLocked) {
+            onPanStart = null;
+            onPanUpdate = _onVoicePanUpdate;
+            onPanEnd = _onVoicePanEnd;
+          } else {
+            onPanStart = canStartVoice ? _onVoiceArmPanStart : null;
+            onPanUpdate = canStartVoice ? _onVoiceArmPanUpdate : null;
+            onPanEnd = canStartVoice ? _onVoiceArmPanEnd : null;
+          }
+        }
+
+        final padding = EdgeInsets.all(isSmall ? 10 : 6);
+
+        final dragDy = _isVoiceArming ? _voiceDragDyN.value.clamp(-18.0, 0.0) : 0.0;
+
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            return ScaleTransition(
+              scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
+              child: FadeTransition(opacity: animation, child: child),
+            );
+          },
+          child: GestureDetector(
+            key: ValueKey<String>(showStop ? 'stop' : (showSend ? 'send' : 'mic')),
+            behavior: HitTestBehavior.opaque,
+            onPanStart: onPanStart,
+            onPanUpdate: onPanUpdate,
+            onPanEnd: onPanEnd,
+            child: Transform.translate(
+              offset: (!showSend && !showStop && _isVoiceArming)
+                  ? Offset(0, dragDy)
+                  : Offset.zero,
+              child: Container(
+                decoration: BoxDecoration(color: backgroundColor, shape: BoxShape.circle),
+                child: (!showSend && !showStop)
+                    ? Padding(
+                        padding: padding,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            icon,
+                            if (!_isVoiceRecording && _isVoiceArming)
+                              Positioned(
+                                top: -18,
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 100),
+                                  opacity: 1.0,
+                                  child: Icon(
+                                    Icons.keyboard_arrow_up_rounded,
+                                    size: isSmall ? 16 : 18,
+                                    color: colors.onPrimary.withValues(alpha: 0.85),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      )
+                    : Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: onTap,
+                          child: Padding(padding: padding, child: icon),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _jumpToBottom() {
@@ -1090,7 +1588,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       final currentChat = chats.firstWhere(
-            (chat) => chat['id'] == widget.chatId,
+        (chat) => chat['id'] == widget.chatId,
         orElse: () => null,
       );
 
@@ -1139,6 +1637,116 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _currentContact = widget.contact;
+    _pinnedMessage = widget.pinnedMessage;
+    _initializeChat();
+    _loadEncryptionConfig();
+    _loadSpecialMessagesSetting();
+
+    ApiService.instance.currentActiveChatId = widget.chatId;
+
+    NotificationService().clearNotificationMessagesForChat(widget.chatId);
+
+    _textController.addListener(() {
+      _handleTextChangedForKometColor();
+      _updateTextSelectionState();
+    });
+
+    _textFocusNode.addListener(() {
+      if (_textFocusNode.hasFocus) {
+        _startSelectionCheck();
+      } else {
+        _stopSelectionCheck();
+        if (!mounted) return;
+        setState(() {
+          _hasTextSelection = false;
+        });
+        _saveInputState();
+      }
+    });
+
+    _connectionStatus =
+        ApiService.instance.isOnline &&
+            ApiService.instance.isSessionReady &&
+            ApiService.instance.isActuallyConnected
+        ? 'connected'
+        : 'connecting';
+
+    _connectionStatusSub = ApiService.instance.connectionStatus.listen((
+      status,
+    ) {
+      if (!mounted) return;
+      setState(() {
+        _connectionStatus = status;
+      });
+    });
+
+    _loadInputState();
+  }
+
+  Future<String> _createVoiceTempPath() async {
+    final dir = await getTemporaryDirectory();
+    final fileName =
+        'voice_${DateTime.now().millisecondsSinceEpoch.toString()}.m4a';
+    return '${dir.path}/$fileName';
+  }
+
+  Future<void> _resetVoiceUiState({required bool deleteFile}) async {
+    _voiceRecordTimer?.cancel();
+    _voiceRecordTimer = null;
+
+    _voiceAmplitudeSub?.cancel();
+    _voiceAmplitudeSub = null;
+    _voicePositionSub?.cancel();
+    _voicePositionSub = null;
+    _voicePlaybackProgress.value = 0.0;
+    try {
+      if (_isVoicePlaying) {
+        await _voicePlayer.stop();
+      }
+    } catch (_) {}
+
+    final toDelete = deleteFile ? _voiceRecordFilePath : null;
+
+    if (!mounted) return;
+    setState(() {
+      _isVoiceRecording = false;
+      _isVoiceLocked = false;
+      _isVoicePreview = false;
+      _isVoicePlaying = false;
+      _isVoiceArming = false;
+      _voiceDragDy = 0.0;
+      _voiceDragDx = 0.0;
+      _voiceRecordSeconds = 0;
+      _voiceRecordFilePath = null;
+    });
+
+    _syncVoiceOverlay();
+
+    _voiceWaveSamples.clear();
+    _voiceWaveTick.value = 0;
+
+    if (toDelete != null) {
+      try {
+        final f = File(toDelete);
+        if (await f.exists()) {
+          await f.delete();
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<bool> _ensureVoicePermission() async {
+    try {
+      return await _voiceRecorder.hasPermission();
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _loadInputState() async {
     try {
       final state = await ChatCacheService().getChatInputState(widget.chatId);
@@ -1148,9 +1756,9 @@ class _ChatScreenState extends State<ChatScreen> {
             (state['elements'] as List<dynamic>?)
                 ?.map((e) => e as Map<String, dynamic>)
                 .toList() ??
-                [];
+            [];
         final replyingToMessageData =
-        state['replyingToMessage'] as Map<String, dynamic>?;
+            state['replyingToMessage'] as Map<String, dynamic>?;
 
         _textController.text = text;
         _mentions.clear();
@@ -1191,11 +1799,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final draftData = text.trim().isNotEmpty
           ? {
-        'text': text,
-        'elements': elements,
-        'replyingToMessage': replyingToMessageData,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      }
+              'text': text,
+              'elements': elements,
+              'replyingToMessage': replyingToMessageData,
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            }
           : null;
 
       await ChatCacheService().saveChatInputState(
@@ -1241,7 +1849,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(height: 16),
             _SpecialMessageButton(
               label: 'Цветной текст',
-              template: "komet.color_#'",
+              template: "komet.color_#''",
               icon: Icons.color_lens,
               onTap: () {
                 Navigator.pop(context);
@@ -1255,8 +1863,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   final template = "komet.color_#";
                   final newText =
                       currentText.substring(0, cursorPos) +
-                          template +
-                          currentText.substring(cursorPos);
+                      template +
+                      currentText.substring(cursorPos);
                   _textController.value = TextEditingValue(
                     text: newText,
                     selection: TextSelection.collapsed(
@@ -1283,8 +1891,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   final template = "komet.cosmetic.galaxy' ваш текст '";
                   final newText =
                       currentText.substring(0, cursorPos) +
-                          template +
-                          currentText.substring(cursorPos);
+                      template +
+                      currentText.substring(cursorPos);
                   _textController.value = TextEditingValue(
                     text: newText,
                     selection: TextSelection.collapsed(
@@ -1311,8 +1919,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   final template = "komet.cosmetic.pulse#";
                   final newText =
                       currentText.substring(0, cursorPos) +
-                          template +
-                          currentText.substring(cursorPos);
+                      template +
+                      currentText.substring(cursorPos);
                   _textController.value = TextEditingValue(
                     text: newText,
                     selection: TextSelection.collapsed(
@@ -1322,28 +1930,105 @@ class _ChatScreenState extends State<ChatScreen> {
                 });
               },
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _loadEncryptionConfig() async {
-    try {
-      final config = await ChatEncryptionService.getConfigForChat(widget.chatId);
-      if (mounted) {
+  Future<void> _handleTextChangedForKometColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    final autoCompleteEnabled =
+        prefs.getBool('komet_auto_complete_enabled') ?? false;
+
+    if (!autoCompleteEnabled) {
+      if (_showKometColorPicker) {
         setState(() {
-          _encryptionConfigForCurrentChat = config;
-          _isEncryptionPasswordSetForCurrentChat =
-              config != null && config.password.isNotEmpty;
-          _sendEncryptedForCurrentChat = config?.sendEncrypted ?? true;
+          _showKometColorPicker = false;
+          _currentKometColorPrefix = null;
         });
       }
-    } catch (e) {
-      print('Ошибка загрузки конфигурации шифрования: $e');
+      return;
+    }
+
+    final text = _textController.text;
+    final cursorPos = _textController.selection.baseOffset;
+    const prefix1 = 'komet.color_#';
+    const prefix2 = 'komet.cosmetic.pulse#';
+
+    String? detectedPrefix;
+    int? prefixStartPos;
+
+    for (final prefix in [prefix1, prefix2]) {
+      int searchStart = 0;
+      int lastFound = -1;
+      while (true) {
+        final found = text.indexOf(prefix, searchStart);
+        if (found == -1 || found > cursorPos) break;
+        if (found + prefix.length <= cursorPos) {
+          lastFound = found;
+        }
+        searchStart = found + 1;
+      }
+
+      if (lastFound != -1) {
+        final afterPrefix = text.substring(
+          lastFound + prefix.length,
+          cursorPos,
+        );
+
+        if (afterPrefix.isEmpty || afterPrefix.trim().isEmpty) {
+          final afterCursor = cursorPos < text.length
+              ? text.substring(cursorPos)
+              : '';
+
+          if (afterCursor.length < 7 ||
+              !RegExp(r"^[0-9A-Fa-f]{6}'").hasMatch(afterCursor)) {
+            detectedPrefix = prefix;
+            prefixStartPos = lastFound;
+            break;
+          }
+        }
+      }
+    }
+
+    if (detectedPrefix != null && prefixStartPos != null) {
+      final after = text.substring(
+        prefixStartPos + detectedPrefix.length,
+        cursorPos,
+      );
+
+      if (after.isEmpty || after.trim().isEmpty) {
+        if (!_showKometColorPicker ||
+            _currentKometColorPrefix != detectedPrefix) {
+          setState(() {
+            _showKometColorPicker = true;
+            _currentKometColorPrefix = detectedPrefix;
+          });
+        }
+        return;
+      }
+    }
+
+    if (_showKometColorPicker) {
+      setState(() {
+        _showKometColorPicker = false;
+        _currentKometColorPrefix = null;
+      });
     }
   }
 
+  Future<void> _loadEncryptionConfig() async {
+    final cfg = await ChatEncryptionService.getConfigForChat(widget.chatId);
+    if (!mounted) return;
+    setState(() {
+      _encryptionConfigForCurrentChat = cfg;
+      _isEncryptionPasswordSetForCurrentChat =
+          cfg != null && cfg.password.isNotEmpty;
+      _sendEncryptedForCurrentChat = cfg?.sendEncrypted ?? true;
+    });
+  }
 
   Future<void> _initializeChat() async {
     await _loadCachedContacts();
@@ -1390,50 +2075,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _loadContactDetails();
     _checkContactCache();
 
-    // Сначала загружаем участников группы, потом формируем список для пингов
-    if (widget.isGroupChat || widget.isChannel) {
-      await _loadGroupParticipants();
-      await _loadMentionableUsers();
-
-      // Если список пустой, делаем повторные попытки с задержкой (данные могут грузиться асинхронно)
-      if (_mentionableUsers.isEmpty) {
-        var retryCount = 0;
-        Timer.periodic(const Duration(milliseconds: 600), (timer) async {
-          if (!mounted || _mentionableUsers.isNotEmpty || retryCount >= 10) {
-            timer.cancel();
-            return;
-          }
-          retryCount++;
-          print('DEBUG: Retrying mentionable users load, attempt $retryCount');
-          await _loadGroupParticipants();
-          await _loadMentionableUsers();
-          if (_mentionableUsers.isNotEmpty && mounted) {
-            setState(() {});
-            print('DEBUG: Mentionable users loaded after retry: ${_mentionableUsers.length} users');
-            timer.cancel();
-          }
-        });
-      }
-    } else {
-      await _loadMentionableUsers();
-    }
-
-    // Также обновляем при получении любого сообщения в этом чате (на случай если состав изменился)
-    ApiService.instance.messages.listen((msg) {
-      final payload = msg['payload'];
-      if (payload != null && payload['chatId'] == widget.chatId &&
-          (widget.isGroupChat || widget.isChannel) &&
-          (msg['opcode'] == 64 || msg['opcode'] == 128)) {
-        // Если пришло сообщение о новом участнике или обновление чата
-        if (payload['participants'] != null ||
-            (payload['chat'] != null && payload['chat']['participants'] != null)) {
-          _loadMentionableUsers().then((_) {
-            if (mounted) setState(() {});
-          });
-        }
-      }
-    });
-
     if (!ApiService.instance.isContactCacheValid()) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
@@ -1463,7 +2104,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final positions = _itemPositionsListener.itemPositions.value;
       if (positions.isNotEmpty) {
         final bottomItemPosition = positions.firstWhere(
-              (p) => p.index == 0,
+          (p) => p.index == 0,
           orElse: () => positions.first,
         );
 
@@ -1485,11 +2126,13 @@ class _ChatScreenState extends State<ChatScreen> {
               .map((p) => p.index)
               .reduce((a, b) => a > b ? a : b);
 
-
+          // Track maximum viewed index (highest index user has scrolled to)
           if (maxIndex > _maxViewedIndex) {
             _maxViewedIndex = maxIndex;
           }
 
+          // Load more when user has scrolled through 20+ items from bottom
+          // maxIndex represents how far from bottom (index 0) user has scrolled
           final shouldLoadByViewedCount = maxIndex >= _loadMoreThreshold &&
               (maxIndex - _lastLoadedAtViewedIndex) >= _loadMoreThreshold;
 
@@ -1527,6 +2170,22 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     _loadHistoryAndListen();
+  }
+
+  @override
+  void didUpdateWidget(ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.contact.id != widget.contact.id) {
+      _currentContact = widget.contact;
+      _checkContactCache();
+      if (!ApiService.instance.isContactCacheValid()) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) {
+            ApiService.instance.getBlockedContacts();
+          }
+        });
+      }
+    }
   }
 
   void _loadHistoryAndListen() {
@@ -1602,7 +2261,7 @@ class _ChatScreenState extends State<ChatScreen> {
             final hasSameId = _messages.any((m) => m.id == newMessage.id);
             final hasSameCid =
                 newMessage.cid != null &&
-                    _messages.any((m) => m.cid != null && m.cid == newMessage.cid);
+                _messages.any((m) => m.cid != null && m.cid == newMessage.cid);
             if (hasSameId || hasSameCid) {
               _updateMessage(newMessage);
             } else {
@@ -1701,9 +2360,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
           final readerId =
               payload['userId'] ??
-                  payload['contactId'] ??
-                  payload['uid'] ??
-                  payload['sender'];
+              payload['contactId'] ??
+              payload['uid'] ??
+              payload['sender'];
           final int? readerIdInt = _parseMessageId(readerId);
 
           if (readerIdInt != null &&
@@ -1737,10 +2396,23 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  static const int _pageSize = 50;
+  static const int _loadMoreThreshold = 20;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int? _oldestLoadedTime;
+  int _maxViewedIndex = 0;
+  int _lastLoadedAtViewedIndex = 0;
+
+  bool get _optimize => context.read<ThemeProvider>().optimizeChats;
+  bool get _ultraOptimize => context.read<ThemeProvider>().ultraOptimizeChats;
+  bool get _anyOptimize => _optimize || _ultraOptimize;
+
+  int get _optPage => _ultraOptimize ? 10 : (_optimize ? 50 : _pageSize);
+
   Future<void> _paginateInitialLoad() async {
     setState(() => _isLoadingHistory = true);
 
-    // Reset viewed message tracking for new chat load
     _maxViewedIndex = 0;
     _lastLoadedAtViewedIndex = 0;
 
@@ -1805,12 +2477,12 @@ class _ChatScreenState extends State<ChatScreen> {
       allMessages = await ApiService.instance
           .getMessageHistory(widget.chatId, force: true)
           .timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          print('Таймаут загрузки истории, используем кеш');
-          return <Message>[];
-        },
-      );
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('Таймаут загрузки истории, используем кеш');
+              return <Message>[];
+            },
+          );
       if (allMessages.isNotEmpty) {
         MessageQueueService().removeFromQueue('load_chat_${widget.chatId}');
       }
@@ -1938,8 +2610,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ? mergedMessages.sublist(mergedMessages.length - page)
           : mergedMessages;
       final bool hasAnyMessages = mergedMessages.isNotEmpty;
-      // If we got 30 messages from server (API default), there are likely more
-      // API uses backward: 30, not _pageSize
       final bool serverHasMore = allMessages.length >= 30;
       final bool nextHasMore = hasServerData
           ? serverHasMore || mergedMessages.length > slice.length
@@ -2007,10 +2677,10 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final olderMessages = await ApiService.instance
           .loadOlderMessagesByTimestamp(
-        widget.chatId,
-        _oldestLoadedTime!,
-        backward: 30,
-      );
+            widget.chatId,
+            _oldestLoadedTime!,
+            backward: 30,
+          );
 
       if (!mounted) return;
 
@@ -2046,18 +2716,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
       _buildChatItems();
 
-      // Calculate how many items were added (including date separators)
       final addedItemsCount = _chatItems.length - oldItemsCount;
 
-      // Update tracking: after insert, indices shift by addedItemsCount
-      // Set lastLoadedAt to current position + shift, so user needs to scroll 20 more
       _lastLoadedAtViewedIndex = _maxViewedIndex + addedItemsCount;
 
       _isLoadingMore = false;
 
       if (mounted) {
-        // Wait for current frame to complete, then schedule setState for next frame
-        // Double postFrameCallback prevents SelectionArea layout issues
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2124,11 +2789,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final isFirstInGroup =
           previousMessage == null ||
-              !_isMessageGrouped(currentMessage, previousMessage);
+          !_isMessageGrouped(currentMessage, previousMessage);
 
       final isLastInGroup =
           i == source.length - 1 ||
-              !_isMessageGrouped(source[i + 1], currentMessage);
+          !_isMessageGrouped(source[i + 1], currentMessage);
 
       items.add(
         MessageItem(
@@ -2177,14 +2842,14 @@ class _ChatScreenState extends State<ChatScreen> {
       final response = await ApiService.instance.messages
           .firstWhere(
             (msg) => msg['seq'] == seq && msg['opcode'] == 28,
-        orElse: () => <String, dynamic>{},
-      )
+            orElse: () => <String, dynamic>{},
+          )
           .timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException(
-          'Превышено время ожидания ответа от сервера',
-        ),
-      );
+            const Duration(seconds: 10),
+            onTimeout: () => throw TimeoutException(
+              'Превышено время ожидания ответа от сервера',
+            ),
+          );
 
       if (response.isEmpty || response['payload'] == null) {
         print('[ChatScreen] Не получен ответ от сервера для стикера');
@@ -2214,7 +2879,7 @@ class _ChatScreenState extends State<ChatScreen> {
     for (int i = _messages.length - 1; i >= 0; i--) {
       final message = _messages[i];
       final controlAttach = message.attaches.firstWhere(
-            (a) => a['_type'] == 'CONTROL',
+        (a) => a['_type'] == 'CONTROL',
         orElse: () => const {},
       );
       if (controlAttach.isNotEmpty && controlAttach['event'] == 'pin') {
@@ -2295,7 +2960,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _messagesToAnimate.add(normalizedMessage.id);
 
     final hasPhoto = normalizedMessage.attaches.any(
-          (a) => a['_type'] == 'PHOTO',
+      (a) => a['_type'] == 'PHOTO',
     );
     if (hasPhoto) {
       _updateCachedPhotos();
@@ -2314,7 +2979,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final lastMessageItem =
-    _chatItems.isNotEmpty && _chatItems.last is MessageItem
+        _chatItems.isNotEmpty && _chatItems.last is MessageItem
         ? _chatItems.last as MessageItem
         : null;
 
@@ -2359,9 +3024,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _updateMessageReaction(
-      String messageId,
-      Map<String, dynamic> reactionInfo,
-      ) {
+    String messageId,
+    Map<String, dynamic> reactionInfo,
+  ) {
     final messageIndex = _messages.indexWhere((m) => m.id == messageId);
     if (messageIndex != -1) {
       final message = _messages[messageIndex];
@@ -2388,7 +3053,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       final existingCounterIndex = currentCounters.indexWhere(
-            (counter) => counter['reaction'] == emoji,
+        (counter) => counter['reaction'] == emoji,
       );
 
       if (existingCounterIndex != -1) {
@@ -2404,7 +3069,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'yourReaction': emoji,
         'totalCount': currentCounters.fold<int>(
           0,
-              (sum, counter) => sum + (counter['count'] as int),
+          (sum, counter) => sum + (counter['count'] as int),
         ),
       };
 
@@ -2436,7 +3101,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
 
         final counterIndex = currentCounters.indexWhere(
-              (counter) => counter['reaction'] == yourReaction,
+          (counter) => counter['reaction'] == yourReaction,
         );
 
         if (counterIndex != -1) {
@@ -2454,7 +3119,7 @@ class _ChatScreenState extends State<ChatScreen> {
           'yourReaction': null,
           'totalCount': currentCounters.fold<int>(
             0,
-                (sum, counter) => sum + (counter['count'] as int),
+            (sum, counter) => sum + (counter['count'] as int),
           ),
         };
 
@@ -2478,7 +3143,7 @@ class _ChatScreenState extends State<ChatScreen> {
     int? index = _messages.indexWhere((m) => m.id == updatedMessage.id);
     if (index == -1 && updatedMessage.cid != null) {
       index = _messages.indexWhere(
-            (m) => m.cid != null && m.cid == updatedMessage.cid,
+        (m) => m.cid != null && m.cid == updatedMessage.cid,
       );
     }
 
@@ -2507,7 +3172,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final oldHasPhoto = oldMessage.attaches.any((a) => a['_type'] == 'PHOTO');
       final newHasPhoto = finalMessageWithOriginalText.attaches.any(
-            (a) => a['_type'] == 'PHOTO',
+        (a) => a['_type'] == 'PHOTO',
       );
 
       _messages[index] = finalMessageWithOriginalText;
@@ -2524,8 +3189,8 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       final chatItemIndex = _chatItems.indexWhere(
-            (item) =>
-        item is MessageItem &&
+        (item) =>
+            item is MessageItem &&
             (item.message.id == oldMessage.id ||
                 item.message.id == updatedMessage.id ||
                 (updatedMessage.cid != null &&
@@ -2555,18 +3220,18 @@ class _ChatScreenState extends State<ChatScreen> {
       ApiService.instance
           .getMessageHistory(widget.chatId, force: true)
           .then((fresh) {
-        if (!mounted) return;
-        _messages
-          ..clear()
-          ..addAll(fresh);
-        _buildChatItems();
+            if (!mounted) return;
+            _messages
+              ..clear()
+              ..addAll(fresh);
+            _buildChatItems();
 
-        Future.microtask(() {
-          if (mounted) {
-            setState(() {});
-          }
-        });
-      })
+            Future.microtask(() {
+              if (mounted) {
+                setState(() {});
+              }
+            });
+          })
           .catchError((_) {});
     }
   }
@@ -2670,8 +3335,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _applyTextFormat(String type) {
     final isEncryptionActive =
         _encryptionConfigForCurrentChat != null &&
-            _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-            _sendEncryptedForCurrentChat;
+        _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+        _sendEncryptedForCurrentChat;
     if (isEncryptionActive) {
       return;
     }
@@ -2695,8 +3360,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final selection = _textController.selection;
     final hasSelection =
         selection.isValid &&
-            !selection.isCollapsed &&
-            selection.end > selection.start;
+        !selection.isCollapsed &&
+        selection.end > selection.start;
     if (_hasTextSelection != hasSelection) {
       setState(() {
         _hasTextSelection = hasSelection;
@@ -2707,8 +3372,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _startSelectionCheck() {
     _stopSelectionCheck();
     _selectionCheckTimer = Timer.periodic(const Duration(milliseconds: 100), (
-        timer,
-        ) {
+      timer,
+    ) {
       if (!_textFocusNode.hasFocus) {
         _stopSelectionCheck();
         return;
@@ -2725,7 +3390,6 @@ class _ChatScreenState extends State<ChatScreen> {
   void _resetDraftFormattingIfNeeded(String newText) {
     if (newText.isEmpty) {
       _textController.elements.clear();
-      _mentions.clear();
     }
   }
 
@@ -2756,9 +3420,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Message _hydrateLinkFromKnown(
-      Message message,
-      Map<String, Message> knownMessages,
-      ) {
+    Message message,
+    Map<String, Message> knownMessages,
+  ) {
     final link = message.link;
     if (link == null || link['message'] != null) return message;
 
@@ -2775,9 +3439,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   List<Message> _hydrateLinksSequentially(
-      List<Message> messages, {
-        Map<String, Message>? initialKnown,
-      }) {
+    List<Message> messages, {
+    Map<String, Message>? initialKnown,
+  }) {
     final known = initialKnown != null
         ? Map<String, Message>.from(initialKnown)
         : <String, Message>{};
@@ -2799,324 +3463,119 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendMessage() async {
     final originalText = _textController.text.trim();
-
-    // Ранний выход если текст пустой
-    if (originalText.isEmpty) {
-      print('ОТЛАДКА: Попытка отправки пустого сообщения');
-      return;
-    }
-
-    try {
+    if (originalText.isNotEmpty) {
       final theme = context.read<ThemeProvider>();
+      final isBlocked = _currentContact.isBlockedByMe && !theme.blockBypass;
 
-      // Проверка блокировки пользователя
-      if (_currentContact.isBlockedByMe && !theme.blockBypass) {
-        _showErrorSnackBar('Нельзя отправить сообщение заблокированному пользователю');
+      if (isBlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Нельзя отправить сообщение заблокированному пользователю',
+            ),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
         return;
       }
 
-      // Валидация ограничений шифрования
-      if (_isEncryptionRestrictionActive(originalText)) {
-        _showInfoSnackBar('Нее, так нельзя)');
+      if (_encryptionConfigForCurrentChat != null &&
+          _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+          _sendEncryptedForCurrentChat &&
+          (originalText == 'kometSM' || originalText == 'kometSM.')) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Нее, так нельзя)')));
         return;
       }
 
-      // Подготовка текста (шифрование при необходимости)
-      final textToSend = _prepareTextToSend(originalText);
+      String textToSend = originalText;
+      if (_encryptionConfigForCurrentChat != null &&
+          _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+          _sendEncryptedForCurrentChat &&
+          !ChatEncryptionService.isEncryptedMessage(originalText)) {
+        textToSend = ChatEncryptionService.encryptWithPassword(
+          _encryptionConfigForCurrentChat!.password,
+          originalText,
+        );
+      }
 
-      // Генерация временного CID (локальный идентификатор)
+      if (textToSend != originalText) {
+        _mentions.clear();
+      }
+
       final int tempCid = DateTime.now().millisecondsSinceEpoch;
-
-      // Захват и валидация упоминаний ДО любых асинхронных операций
-      // Это критически важно, чтобы не потерять mentions при очистке
-      final List<Map<String, dynamic>> elements = _captureMentions();
-
-      // Отладочное логирование для пингов/упоминаний
-      _logMentionsDebugInfo(elements);
-
-      // Валидация целостности данных упоминаний
-      if (!_validateMentions(elements)) {
-        print('ВНИМАНИЕ: Обнаружены невалидные упоминания, отправка без них');
-        elements.clear();
-      }
-
-      // Создание временного сообщения для ультра быстрый апдейт  UI
-      final tempMessage = _createTempMessage(
-        text: textToSend,
-        cid: tempCid,
-        elements: elements,
-      );
-
-      // Немедленное добавление в UI
-      _addMessage(tempMessage);
-      print('ОТЛАДКА: Создано временное сообщение с cid: $tempCid, элементов: ${elements.length}');
-
-      // Очистка поля ввода сразу для лучшего UX
-      _clearInputState();
-
-      // Отправка на сервер асинхронно (не блокирует UI)
-      // если sendMessage возвращает Future, попробуйте await добавить но у меня вроде норм.
-      _sendToServer(
-        text: textToSend,
-        cid: tempCid,
-        elements: elements,
-      );
-
-      // Обработка статусов прочтения (не блокирует отправку)
-      _handleReadReceipts();
-
-    } catch (e, stackTrace) {
-      print('ОШИБКА в _sendMessage: $e');
-      print(stackTrace);
-      _showErrorSnackBar('Не удалось отправить сообщение');
-    }
-  }
-
-// Вспомогательные методы:
-
-  /// Проверка активности ограничения на шифрование
-  bool _isEncryptionRestrictionActive(String text) {
-    return _encryptionConfigForCurrentChat != null &&
-        _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-        _sendEncryptedForCurrentChat &&
-        (text == 'kometSM' || text == 'kometSM.');
-  }
-
-  /// Подготовка текста к отправке (шифрование если активно)
-  String _prepareTextToSend(String original) {
-    if (_encryptionConfigForCurrentChat != null &&
-        _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-        _sendEncryptedForCurrentChat &&
-        !ChatEncryptionService.isEncryptedMessage(original)) {
-
-      final encrypted = ChatEncryptionService.encryptWithPassword(
-        _encryptionConfigForCurrentChat!.password,
-        original,
-      );
-
-      print('ОТЛАДКА: Текст успешно зашифрован');
-      return encrypted;
-    }
-    return original;
-  }
-
-  /// Захват упоминаний в момент отправки
-  List<Map<String, dynamic>> _captureMentions() {
-    final captured = _mentions.map((m) {
-      // Отправляем только необходимые поля для сервера
-      return {
-        'entityId': m.entityId,
-        'type': m.type, // USER_MENTION
-        'length': m.length,
-      };
-    }).toList();
-
-    print('ОТЛАДКА: Захвачено ${captured.length} упоминаний перед отправкой');
-    print('======== ОТЛАДКА УПОМИНАНИЙ ========');
-    print('Всего упоминаний: ${captured.length}');
-    for (int i = 0; i < captured.length; i++) {
-      final element = captured[i];
-      print('Упоминание #$i: entityId=${element['entityId']}, type=${element['type']}, length=${element['length']}');
-    }
-    print('=====================================');
-    return captured;
-  }
-
-  /// Подробное логирование информации об упоминаниях (для отладки пингов)
-  void _logMentionsDebugInfo(List<Map<String, dynamic>> elements) {
-    if (elements.isEmpty) {
-      print('ОТЛАДКА: Список упоминаний пуст');
-      return;
-    }
-
-    print('======== ОТЛАДКА УПОМИНАНИЙ ========');
-    print('Всего упоминаний: ${elements.length}');
-
-    for (int i = 0; i < elements.length; i++) {
-      final element = elements[i];
-      print('Упоминание #$i:');
-      print('  - ID сущности: ${element['entityId']} (тип: ${element['entityId']?.runtimeType})');
-      print('  - Имя: ${element['entityName']}');
-      print('  - Позиция от: ${element['from']}, длина: ${element['length']}');
-      print('  - Тип: ${element['type']}');
-
-      // Дополнительные проверки валидации
-      if (element['entityId'] == null) {
-        print('  ⚠️ ВНИМАНИЕ: entityId равен NULL!');
-      }
-      if (element['entityId'] == 0) {
-        print('  ⚠️ ВНИМАНИЕ: entityId равен 0, возможно невалидный ID!');
-      }
-    }
-    print('=====================================');
-  }
-
-  /// Валидация упоминаний перед отправкой
-  bool _validateMentions(List<Map<String, dynamic>> elements) {
-    for (final element in elements) {
-      if (element['type'] == 'USER_MENTION') {
-        final entityId = element['entityId'];
-
-        if (entityId == null) {
-          print('ОШИБКА: Упоминание имеет null в entityId: $element');
-          return false;
-        }
-
-        if (entityId is! int) {
-          print('ОШИБКА: entityId не является целым числом: $entityId (${entityId.runtimeType})');
-          return false;
-        }
-
-        if (entityId <= 0) {
-          print('ОШИБКА: entityId меньше или равен 0: $entityId');
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  /// Создание временного сообщения для локального отображения
-  Message _createTempMessage({
-    required String text,
-    required int cid,
-    required List<Map<String, dynamic>> elements,
-  }) {
-    return Message.fromJson({
-      'id': 'local_$cid', // Временный локальный ID
-      'text': text,
-      'time': cid,
-      'sender': _actualMyId!,
-      'cid': cid,
-      'type': 'USER',
-      'attaches': [],
-      'elements': elements,
-      'link': _buildReplyLink(),
-    });
-  }
-
-  /// Формирование структуры ответа на сообщение (reply)
-  Map<String, dynamic>? _buildReplyLink() {
-    if (_replyingToMessage == null) return null;
-
-    final replyId = int.tryParse(_replyingToMessage!.id) ?? _replyingToMessage!.id;
-
-    return {
-      'type': 'REPLY',
-      'messageId': replyId,
-      'chatId': 0,
-      'message': {
-        'sender': _replyingToMessage!.senderId,
-        'id': replyId,
-        'time': _replyingToMessage!.time,
-        'text': _replyingToMessage!.text,
+      final List<Map<String, dynamic>> tempElements = _mentions.map((m) => m.toJson()).toList();
+      print('[_sendTextMessage] Final elements for sending: $tempElements');
+      final tempMessageJson = {
+        'id': 'local_$tempCid',
+        'text': textToSend,
+        'time': tempCid,
+        'sender': _actualMyId!,
+        'cid': tempCid,
         'type': 'USER',
-        'cid': _replyingToMessage!.cid,
-        'attaches': _replyingToMessage!.attaches,
-      },
-    };
-  }
+        'attaches': [],
+        'elements': tempElements,
+        'link': _replyingToMessage != null
+            ? {
+                'type': 'REPLY',
+                'messageId':
+                    int.tryParse(_replyingToMessage!.id) ??
+                    _replyingToMessage!.id,
+                'message': {
+                  'sender': _replyingToMessage!.senderId,
+                  'id':
+                      int.tryParse(_replyingToMessage!.id) ??
+                      _replyingToMessage!.id,
+                  'time': _replyingToMessage!.time,
+                  'text': _replyingToMessage!.text,
+                  'type': 'USER',
+                  'cid': _replyingToMessage!.cid,
+                  'attaches': _replyingToMessage!.attaches,
+                },
+                'chatId': 0,
+              }
+            : null,
+      };
 
-  /// Очистка состояния ввода после отправки
-  void _clearInputState() {
-    _textController.clear();
+      final tempMessage = Message.fromJson(tempMessageJson);
+      _addMessage(tempMessage);
+      print(
+        'Создано временное сообщение с link: ${tempMessage.link} и cid: $tempCid',
+      );
 
-    setState(() {
-      _replyingToMessage = null;
-      _mentions.clear(); // Безопасно очищать после захвата в _captureMentions()
-    });
-
-    // Асинхронная очистка кеша без ожидания (не блокирует UI)
-    ChatCacheService().clearChatInputState(widget.chatId);
-    widget.onDraftChanged?.call(widget.chatId, null);
-
-    print('ОТЛАДКА: Состояние ввода очищено, mentions сброшены');
-  }
-
-  /// Отправка сообщения на сервер
-  /// Если sendMessage возвращает Future, добавьте async и await
-  void _sendToServer({
-    required String text,
-    required int cid,
-    required List<Map<String, dynamic>> elements,
-  }) {
-    try {
-      // Если ApiService.instance.sendMessage возвращает void:
       ApiService.instance.sendMessage(
         widget.chatId,
-        text,
+        textToSend,
         replyToMessageId: _replyingToMessage?.id,
         replyToMessage: _replyingToMessage,
-        cid: cid,
-        elements: elements,
+        cid: tempCid,
+        elements: tempElements,
       );
 
-      print('ОТЛАДКА: Сообщение отправлено на сервер с cid: $cid');
-      if (elements.isNotEmpty) {
-        print('ОТЛАДКА: Отправлены элементы (пинги): ${elements.map((e) => e['entityId']).toList()}');
+      final readSettings = await ChatReadSettingsService.instance.getSettings(
+        widget.chatId,
+      );
+
+      final shouldReadOnAction = readSettings != null
+          ? (!readSettings.disabled && readSettings.readOnAction)
+          : theme.debugReadOnAction;
+
+      if (shouldReadOnAction && _messages.isNotEmpty) {
+        final lastMessageId = _messages.last.id;
+        ApiService.instance.markMessageAsRead(widget.chatId, lastMessageId);
       }
 
-      // Если нужна обработка ошибок для Future:
-      // ApiService.instance.sendMessage(...).catchError((e) {
-      //   print('ОШИБКА отправки: $e');
-      // });
+      _textController.clear();
 
-    } catch (e) {
-      print('ОШИБКА: Не удалось отправить сообщение на сервер: $e');
-
-    }
-  }
-
-  /// Обработка статусов прочтения (mark as read)
-  /// Если markMessageAsRead возвращает Future,  async/await
-  void _handleReadReceipts() {
-    try {
-      // Получаем настройки синхронно если возможно, или игнорируем
-      ChatReadSettingsService.instance.getSettings(widget.chatId).then((readSettings) {
-        final shouldReadOnAction = readSettings != null
-            ? (!readSettings.disabled && readSettings.readOnAction)
-            : context.read<ThemeProvider>().debugReadOnAction;
-
-        if (shouldReadOnAction && _messages.isNotEmpty) {
-          final lastMessageId = _messages.last.id;
-
-          ApiService.instance.markMessageAsRead(widget.chatId, lastMessageId);
-          print('ОТЛАДКА: Сообщения помечены как прочитанные');
-        }
-      }).catchError((e) {
-        print('ОШИБКА получения настроек чтения: $e');
+      setState(() {
+        _replyingToMessage = null;
+        _mentions.clear();
       });
 
-    } catch (e) {
-      print('ОШИБКА: Не удалось обновить статус прочтения: $e');
+      await ChatCacheService().clearChatInputState(widget.chatId);
+      widget.onDraftChanged?.call(widget.chatId, null);
     }
-  }
-
-  /// Показ всплывающего уведомления об ошибке
-  void _showErrorSnackBar(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  /// Показ информационного уведомления
-  void _showInfoSnackBar(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _cancelPendingMessage(Message message) {
@@ -3128,8 +3587,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _removeMessages([message.id]);
     unawaited(
       ApiService.instance.updateChatLastMessage(widget.chatId).then((
-          newLastMessage,
-          ) {
+        newLastMessage,
+      ) {
         widget.onLastMessageChanged?.call(newLastMessage);
       }),
     );
@@ -3167,6 +3626,134 @@ class _ChatScreenState extends State<ChatScreen> {
       cid: cid,
       elements: message.elements,
     );
+  }
+
+  void _onChatInputChanged(String text) {
+    print('[_onChatInputChanged] Current text: $text');
+    print('[_onChatInputChanged] Mentions count: ${_mentions.length}');
+    if (text.endsWith('@')) {
+      _showMentionInputDialog();
+    }
+    _updateMentionPositions(text);
+  }
+
+  void _updateMentionPositions(String currentText) {
+    // Remove mentions that are no longer valid (e.g., text deleted)
+    _mentions.removeWhere((mention) {
+      if (mention.from + mention.length > currentText.length) {
+        return true;
+      }
+      final mentionText = currentText.substring(mention.from, mention.from + mention.length);
+      return mentionText != mention.entityName;
+    });
+
+    for (int i = 0; i < _mentions.length; i++) {
+      final mention = _mentions[i];
+      final actualStart = currentText.indexOf(mention.entityName, mention.from - 5 < 0 ? 0 : mention.from - 5);
+      if (actualStart != -1 && actualStart != mention.from) {
+        _mentions[i] = Mention(
+          from: actualStart,
+          length: mention.entityName.length,
+          entityId: mention.entityId,
+          entityName: mention.entityName,
+        );
+      }
+    }
+  }
+
+  Future<void> _showMentionInputDialog() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        String entityId = '';
+        String entityName = '';
+        return AlertDialog(
+          title: const Text('Добавить упоминание'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: const InputDecoration(labelText: 'ID пользователя (entityId)'),
+                keyboardType: TextInputType.number,
+                onChanged: (value) => entityId = value,
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: 'Имя пользователя'),
+                onChanged: (value) => entityName = value,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (entityId.isNotEmpty && entityName.isNotEmpty) {
+                  Navigator.of(context).pop({
+                    'entityId': int.parse(entityId),
+                    'entityName': entityName,
+                  });
+                }
+              },
+              child: const Text('Добавить'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null) {
+      final int cursorPosition = _textController.selection.baseOffset;
+      String currentText = _textController.text;
+
+      print('[_showMentionInputDialog] Dialog result: $result');
+      print('[_showMentionInputDialog] Cursor position: $cursorPosition');
+      print('[_showMentionInputDialog] Current text before modification: $currentText');
+
+      final String textBeforeAt = currentText.substring(0, cursorPosition - 1);
+      final String textAfterAt = currentText.substring(cursorPosition);
+
+      final String mentionName = result['entityName'];
+      final String newText = textBeforeAt + mentionName + textAfterAt;
+
+      _textController.text = newText;
+      _textController.selection = TextSelection.fromPosition(
+        TextPosition(offset: textBeforeAt.length + mentionName.length),
+      );
+
+      final newMention = Mention(
+        from: textBeforeAt.length,
+        length: mentionName.length,
+        entityId: result['entityId'],
+        entityName: mentionName,
+      );
+      _mentions.add(newMention);
+      print('[_showMentionInputDialog] Added mention: ${newMention.toJson()}');
+      print('[_showMentionInputDialog] All mentions: ${_mentions.map((e) => e.toJson()).toList()}');
+      _updateMentionPositions(newText);
+    }
+  }
+
+  void _testSlideAnimation() {
+    final myMessage = Message(
+      id: 'test_my_${DateTime.now().millisecondsSinceEpoch}',
+      text: 'Тест моё сообщение (должно выехать справа)',
+      time: DateTime.now().millisecondsSinceEpoch,
+      senderId: _actualMyId!,
+    );
+    _addMessage(myMessage);
+
+    Future.delayed(const Duration(seconds: 1), () {
+      final otherMessage = Message(
+        id: 'test_other_${DateTime.now().millisecondsSinceEpoch}',
+        text: 'Тест сообщение собеседника (должно выехать слева)',
+        time: DateTime.now().millisecondsSinceEpoch,
+        senderId: widget.contact.id,
+      );
+      _addMessage(otherMessage);
+    });
   }
 
   void _editMessage(Message message) {
@@ -3658,7 +4245,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final chats = ApiService.instance.lastChatsPayload?['chats'] as List?;
       if (chats != null) {
         final chat = chats.firstWhere(
-              (c) => c['id'] == widget.chatId,
+          (c) => c['id'] == widget.chatId,
           orElse: () => null,
         );
         chatName = chat?['title'] ?? chat?['displayTitle'] ?? 'Чат';
@@ -3754,7 +4341,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final chats = chatData['chats'] as List<dynamic>;
     try {
       _cachedCurrentGroupChat = chats.firstWhere(
-            (chat) => chat['id'] == widget.chatId,
+        (chat) => chat['id'] == widget.chatId,
         orElse: () => null,
       );
       return _cachedCurrentGroupChat;
@@ -3864,8 +4451,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final colors = Theme.of(context).colorScheme;
     final bool isConnected =
         ApiService.instance.isOnline &&
-            ApiService.instance.isSessionReady &&
-            ApiService.instance.isActuallyConnected;
+        ApiService.instance.isSessionReady &&
+        ApiService.instance.isActuallyConnected;
 
     if (isConnected) {
       return const SizedBox.shrink();
@@ -3914,263 +4501,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Timer? _typingTimer;
-  DateTime _lastTypingSentAt = DateTime.fromMillisecondsSinceEpoch(0);
-  void _scheduleTypingPing() {
-    final now = DateTime.now();
-    if (now.difference(_lastTypingSentAt) >= const Duration(seconds: 9)) {
-      ApiService.instance.sendTyping(widget.chatId, type: "TEXT");
-      _lastTypingSentAt = now;
-    }
-    _typingTimer?.cancel();
-    _typingTimer = Timer(const Duration(seconds: 9), () {
-      if (!mounted) return;
-      if (_textController.text.isNotEmpty) {
-        ApiService.instance.sendTyping(widget.chatId, type: "TEXT");
-        _lastTypingSentAt = DateTime.now();
-        _scheduleTypingPing();
-      }
-    });
-  }
-
-  Future<void> _handleTextChangedForKometColor() async {
-    final prefs = await SharedPreferences.getInstance();
-    final autoCompleteEnabled =
-        prefs.getBool('komet_auto_complete_enabled') ?? false;
-
-    if (!autoCompleteEnabled) {
-      if (_showKometColorPicker) {
-        setState(() {
-          _showKometColorPicker = false;
-          _currentKometColorPrefix = null;
-        });
-      }
-      return;
-    }
-
-    final text = _textController.text;
-    final cursorPos = _textController.selection.baseOffset;
-    const prefix1 = 'komet.color_#';
-    const prefix2 = 'komet.cosmetic.pulse#';
-
-    String? detectedPrefix;
-    int? prefixStartPos;
-
-    for (final prefix in [prefix1, prefix2]) {
-      int searchStart = 0;
-      int lastFound = -1;
-      while (true) {
-        final found = text.indexOf(prefix, searchStart);
-        if (found == -1 || found > cursorPos) break;
-        if (found + prefix.length <= cursorPos) {
-          lastFound = found;
-        }
-        searchStart = found + 1;
-      }
-
-      if (lastFound != -1) {
-        final afterPrefix = text.substring(
-          lastFound + prefix.length,
-          cursorPos,
-        );
-
-        if (afterPrefix.isEmpty || afterPrefix.trim().isEmpty) {
-          final afterCursor = cursorPos < text.length
-              ? text.substring(cursorPos)
-              : '';
-
-          if (afterCursor.length < 7 ||
-              !RegExp(r"^[0-9A-Fa-f]{6}'").hasMatch(afterCursor)) {
-            detectedPrefix = prefix;
-            prefixStartPos = lastFound;
-            break;
-          }
-        }
-      }
-    }
-
-    if (detectedPrefix != null && prefixStartPos != null) {
-      final after = text.substring(
-        prefixStartPos + detectedPrefix.length,
-        cursorPos,
-      );
-
-      if (after.isEmpty || after.trim().isEmpty) {
-        if (!_showKometColorPicker ||
-            _currentKometColorPrefix != detectedPrefix) {
-          setState(() {
-            _showKometColorPicker = true;
-            _currentKometColorPrefix = detectedPrefix;
-          });
-        }
-        return;
-      }
-    }
-
-    if (_showKometColorPicker) {
-      setState(() {
-        _showKometColorPicker = false;
-        _currentKometColorPrefix = null;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    MessageQueueService().clearTemporaryQueue(chatId: widget.chatId);
-
-    if (ApiService.instance.currentActiveChatId == widget.chatId) {
-      ApiService.instance.currentActiveChatId = null;
-    }
-    _typingTimer?.cancel();
-    _stopSelectionCheck();
-    _apiSubscription?.cancel();
-    _connectionStatusSub?.cancel();
-    _textController.removeListener(_handleTextChangedForKometColor);
-    _textController.dispose();
-    _textFocusNode.dispose();
-    _mentions.clear();
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    _pinnedMessageNotifier.dispose();
-    _showScrollToBottomNotifier.dispose();
-    super.dispose();
-  }
-
-  void _startSearch() {
-    if (!mounted) return;
-    setState(() {
-      _isSearching = true;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _searchFocusNode.requestFocus();
-    });
-  }
-
-  void _stopSearch() {
-    if (!mounted) return;
-    setState(() {
-      _isSearching = false;
-      _searchResults.clear();
-      _currentResultIndex = -1;
-      _searchController.clear();
-    });
-  }
-
-  void _performSearch(String query) {
-    if (query.isEmpty) {
-      if (_searchResults.isNotEmpty) {
-        if (!mounted) return;
-        setState(() {
-          _searchResults.clear();
-          _currentResultIndex = -1;
-        });
-      }
-      return;
-    }
-    final results = _messages
-        .where((msg) => msg.text.toLowerCase().contains(query.toLowerCase()))
-        .toList();
-
-    if (!mounted) return;
-    setState(() {
-      _searchResults = results.reversed.toList();
-      _currentResultIndex = _searchResults.isNotEmpty ? 0 : -1;
-    });
-
-    if (_currentResultIndex != -1) {
-      _scrollToResult();
-    }
-  }
-
-  void _navigateToNextResult() {
-    if (_searchResults.isEmpty) return;
-    if (!mounted) return;
-    setState(() {
-      _currentResultIndex = (_currentResultIndex + 1) % _searchResults.length;
-    });
-    _scrollToResult();
-  }
-
-  void _navigateToPreviousResult() {
-    if (_searchResults.isEmpty) return;
-    setState(() {
-      _currentResultIndex =
-          (_currentResultIndex - 1 + _searchResults.length) %
-              _searchResults.length;
-    });
-    _scrollToResult();
-  }
-
-  void _scrollToResult() {
-    if (_currentResultIndex == -1) return;
-
-    if (!mounted || !_itemScrollController.isAttached) return;
-
-    final targetMessage = _searchResults[_currentResultIndex];
-
-    final itemIndex = _chatItems.indexWhere(
-          (item) => item is MessageItem && item.message.id == targetMessage.id,
-    );
-
-    if (itemIndex != -1) {
-      final viewIndex = _chatItems.length - 1 - itemIndex;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_itemScrollController.isAttached) return;
-        _itemScrollController.scrollTo(
-          index: viewIndex,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOutCubic,
-          alignment: 0.5,
-        );
-      });
-    }
-  }
-
-  void _scrollToMessage(String messageId) {
-    if (!mounted) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      final itemIndex = _chatItems.indexWhere(
-            (item) => item is MessageItem && item.message.id == messageId,
-      );
-
-      if (itemIndex != -1) {
-        final viewIndex = _chatItems.length - 1 - itemIndex;
-
-        if (!mounted || !_itemScrollController.isAttached) return;
-
-        setState(() {
-          _highlightedMessageId = messageId;
-        });
-
-        _itemScrollController.scrollTo(
-          index: viewIndex,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOutCubic,
-          alignment: 0.2,
-        );
-
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            setState(() {
-              _highlightedMessageId = null;
-            });
-          }
-        });
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Исходное сообщение не найдено...🥀')),
-          );
-        }
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = context.read<ThemeProvider>();
@@ -4215,21 +4545,21 @@ class _ChatScreenState extends State<ChatScreen> {
                     builder: (context, pinnedMessage, _) {
                       return pinnedMessage != null
                           ? SafeArea(
-                        key: ValueKey(pinnedMessage.id),
-                        child: InkWell(
-                          onTap: _scrollToPinnedMessage,
-                          child: PinnedMessageWidget(
-                            pinnedMessage: pinnedMessage,
-                            contacts: _contactDetailsCache,
-                            myId: _actualMyId ?? 0,
-                            onTap: _scrollToPinnedMessage,
-                            onClose: () {
-                              _pinnedMessage = null;
-                              _pinnedMessageNotifier.value = null;
-                            },
-                          ),
-                        ),
-                      )
+                              key: ValueKey(pinnedMessage.id),
+                              child: InkWell(
+                                onTap: _scrollToPinnedMessage,
+                                child: PinnedMessageWidget(
+                                  pinnedMessage: pinnedMessage,
+                                  contacts: _contactDetailsCache,
+                                  myId: _actualMyId ?? 0,
+                                  onTap: _scrollToPinnedMessage,
+                                  onClose: () {
+                                    _pinnedMessage = null;
+                                    _pinnedMessageNotifier.value = null;
+                                  },
+                                ),
+                              ),
+                            )
                           : const SizedBox.shrink(key: ValueKey('empty'));
                     },
                   ),
@@ -4248,536 +4578,541 @@ class _ChatScreenState extends State<ChatScreen> {
                             child: ScaleTransition(
                               scale: Tween<double>(begin: 0.8, end: 1.0)
                                   .animate(
-                                CurvedAnimation(
-                                  parent: animation,
-                                  curve: Curves.easeOutCubic,
-                                ),
-                              ),
+                                    CurvedAnimation(
+                                      parent: animation,
+                                      curve: Curves.easeOutCubic,
+                                    ),
+                                  ),
                               child: child,
                             ),
                           );
                         },
                         child: (!_isIdReady || _isLoadingHistory)
                             ? const Center(
-                          key: ValueKey('loading'),
-                          child: CircularProgressIndicator(),
-                        )
+                                key: ValueKey('loading'),
+                                child: CircularProgressIndicator(),
+                              )
                             : _messages.isEmpty && !widget.isChannel
                             ? EmptyChatWidget(
-                          key: const ValueKey('empty'),
-                          sticker: _emptyChatSticker,
-                          onStickerTap: _sendEmptyChatSticker,
-                        )
+                                key: const ValueKey('empty'),
+                                sticker: _emptyChatSticker,
+                                onStickerTap: _sendEmptyChatSticker,
+                              )
                             : AnimatedPadding(
-                          key: const ValueKey('chat_list'),
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOutCubic,
-                          padding: EdgeInsets.only(
-                            bottom: MediaQuery.of(
-                              context,
-                            ).viewInsets.bottom,
-                          ),
-                          child: ScrollablePositionedList.builder(
-                            key: const ValueKey('scroll_list'),
-                            itemScrollController: _itemScrollController,
-                            itemPositionsListener: _itemPositionsListener,
-                            reverse: true,
-                            padding: EdgeInsets.fromLTRB(
-                              8.0,
-                              8.0,
-                              8.0,
-                              widget.isChannel ? 16.0 : 100.0,
-                            ),
-                            itemCount: _chatItems.length,
-                            itemBuilder: (context, index) {
-                              if (index < 0 ||
-                                  index >= _chatItems.length) {
-                                return const SizedBox.shrink();
-                              }
-                              final mappedIndex =
-                                  _chatItems.length - 1 - index;
-                              if (mappedIndex < 0 ||
-                                  mappedIndex >= _chatItems.length) {
-                                return const SizedBox.shrink();
-                              }
-                              final item = _chatItems[mappedIndex];
-                              final isLastVisual =
-                                  index == _chatItems.length - 1;
-
-                              // Add top padding for the oldest message when no more messages to load
-                              // This prevents the top panel from covering the message
-                              final needsTopPadding = isLastVisual && !_hasMore;
-
-                              Widget wrapWithTopPadding(Widget child) {
-                                if (needsTopPadding) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 100.0),
-                                    child: child,
-                                  );
-                                }
-                                return child;
-                              }
-
-                              if (item is MessageItem) {
-                                final message = item.message;
-                                final bool isSearchHighlighted =
-                                    _isSearching &&
-                                        _searchResults.isNotEmpty &&
-                                        _currentResultIndex != -1 &&
-                                        message.id ==
-                                            _searchResults[_currentResultIndex]
-                                                .id;
-                                final bool isHighlighted =
-                                    isSearchHighlighted ||
-                                        message.id == _highlightedMessageId;
-
-                                final isControlMessage = message.attaches
-                                    .any((a) => a['_type'] == 'CONTROL');
-                                if (isControlMessage) {
-                                  return wrapWithTopPadding(_ControlMessageChip(
-                                    message: message,
-                                    contacts: _contactDetailsCache,
-                                    myId: _actualMyId ?? widget.myId,
-                                  ));
-                                }
-
-                                final bool isMe =
-                                    item.message.senderId == _actualMyId;
-
-                                final bool canDeleteForAll =
-                                    isMe ||
-                                        (widget.isGroupChat &&
-                                            _isCurrentUserAdmin());
-
-                                MessageReadStatus? readStatus;
-                                if (isMe) {
-                                  final messageId = item.message.id;
-                                  if (messageId.startsWith('local_')) {
-                                    readStatus =
-                                        MessageReadStatus.sending;
-                                  } else {
-                                    readStatus = MessageReadStatus.sent;
-                                  }
-
-                                  final int? numericMessageId =
-                                  _parseMessageId(messageId);
-                                  if (numericMessageId != null &&
-                                      _lastPeerReadMessageId != null &&
-                                      numericMessageId <=
-                                          _lastPeerReadMessageId!) {
-                                    readStatus = MessageReadStatus.read;
-                                  } else if (numericMessageId == null &&
-                                      _lastPeerReadMessageIdStr != null &&
-                                      messageId ==
-                                          _lastPeerReadMessageIdStr) {
-                                    readStatus = MessageReadStatus.read;
-                                  }
-                                }
-
-                                String? forwardedFrom;
-                                String? forwardedFromAvatarUrl;
-                                if (message.isForwarded) {
-                                  final link = message.link;
-                                  if (link is Map<String, dynamic>) {
-                                    final chatName =
-                                    link['chatName'] as String?;
-                                    final chatIconUrl =
-                                    link['chatIconUrl'] as String?;
-
-                                    if (chatName != null) {
-                                      forwardedFrom = chatName;
-                                      forwardedFromAvatarUrl =
-                                          chatIconUrl;
-                                    } else {
-                                      final forwardedMessage =
-                                      link['message']
-                                      as Map<String, dynamic>?;
-                                      final originalSenderId =
-                                      forwardedMessage?['sender']
-                                      as int?;
-                                      if (originalSenderId != null) {
-                                        final originalSenderContact =
-                                        _contactDetailsCache[originalSenderId];
-                                        if (originalSenderContact ==
-                                            null) {
-                                          _loadContactIfNeeded(
-                                            originalSenderId,
-                                          );
-                                          forwardedFrom =
-                                          'Участник $originalSenderId';
-                                          forwardedFromAvatarUrl = null;
-                                        } else {
-                                          forwardedFrom =
-                                              originalSenderContact.name;
-                                          forwardedFromAvatarUrl =
-                                              originalSenderContact
-                                                  .photoBaseUrl;
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                                String? senderName;
-                                if (widget.isGroupChat && !isMe) {
-                                  bool shouldShowName = true;
-                                  if (mappedIndex > 0) {
-                                    final previousItem =
-                                    _chatItems[mappedIndex - 1];
-                                    if (previousItem is MessageItem) {
-                                      final previousMessage =
-                                          previousItem.message;
-                                      if (previousMessage.senderId ==
-                                          message.senderId) {
-                                        final timeDifferenceInMinutes =
-                                            (message.time -
-                                                previousMessage.time) /
-                                                (1000 * 60);
-                                        if (timeDifferenceInMinutes < 5) {
-                                          shouldShowName = false;
-                                        }
-                                      }
-                                    }
-                                  }
-                                  if (shouldShowName) {
-                                    final senderContact =
-                                    _contactDetailsCache[message
-                                        .senderId];
-                                    if (senderContact != null) {
-                                      senderName = getContactDisplayName(
-                                        contactId: senderContact.id,
-                                        originalName: senderContact.name,
-                                        originalFirstName:
-                                        senderContact.firstName,
-                                        originalLastName:
-                                        senderContact.lastName,
-                                      );
-                                    } else {
-                                      senderName =
-                                      'ID ${message.senderId}';
-                                      _loadContactIfNeeded(
-                                        message.senderId,
-                                      );
-                                    }
-                                  }
-                                }
-                                final stableKey =
-                                    '${item.message.id}_${item.message.updateTime ?? item.message.time}_${item.message.originalText ?? ''}_${DateTime.now().millisecondsSinceEpoch}';
-
-                                final hasPhoto = item.message.attaches
-                                    .any((a) => a['_type'] == 'PHOTO');
-                                final shouldAnimateNew =
-                                _messagesToAnimate.contains(
-                                  item.message.id,
-                                );
-                                if (shouldAnimateNew) {
-                                  _messagesToAnimate.remove(
-                                    item.message.id,
-                                  );
-                                }
-                                final deferImageLoading =
-                                    hasPhoto &&
-                                        shouldAnimateNew &&
-                                        !_anyOptimize &&
-                                        !context
-                                            .read<ThemeProvider>()
-                                            .animatePhotoMessages;
-
-                                String? decryptedText;
-                                if (_isEncryptionPasswordSetForCurrentChat &&
-                                    _encryptionConfigForCurrentChat !=
-                                        null &&
-                                    _encryptionConfigForCurrentChat!
-                                        .password
-                                        .isNotEmpty &&
-                                    ChatEncryptionService.isEncryptedMessage(
-                                      item.message.text,
-                                    )) {
-                                  decryptedText =
-                                      ChatEncryptionService.decryptWithPassword(
-                                        _encryptionConfigForCurrentChat!
-                                            .password,
-                                        item.message.text,
-                                      );
-                                }
-
-                                final bubble = ChatMessageBubble(
-                                  key: message.originalText != null
-                                      ? ValueKey(stableKey)
-                                      : UniqueKey(),
-                                  message: item.message,
-                                  isMe: isMe,
-                                  readStatus: readStatus,
-                                  isReactionSending: _sendingReactions
-                                      .contains(item.message.id),
-                                  deferImageLoading: deferImageLoading,
-                                  myUserId: _actualMyId,
-                                  chatId: widget.chatId,
-                                  isEncryptionPasswordSet:
-                                  _isEncryptionPasswordSetForCurrentChat,
-                                  decryptedText: decryptedText,
-                                  onReply: widget.isChannel
-                                      ? null
-                                      : () =>
-                                      _replyToMessage(item.message),
-                                  onForward: () =>
-                                      _forwardMessage(item.message),
-                                  onEdit: isMe
-                                      ? () => _editMessage(item.message)
-                                      : null,
-                                  canEditMessage: isMe
-                                      ? item.message.canEdit(_actualMyId!)
-                                      : null,
-                                  onDeleteForMe: isMe
-                                      ? () async {
-                                    _removeMessages([
-                                      item.message.id,
-                                    ]);
-
-                                    await ApiService.instance
-                                        .deleteMessage(
-                                      widget.chatId,
-                                      item.message.id,
-                                      forMe: true,
-                                    );
-                                    final newLastMessage =
-                                    await ApiService.instance
-                                        .updateChatLastMessage(
-                                      widget.chatId,
-                                    );
-                                    widget.onLastMessageChanged
-                                        ?.call(newLastMessage);
-                                  }
-                                      : null,
-                                  onDeleteForAll: canDeleteForAll
-                                      ? () async {
-                                    _removeMessages([
-                                      item.message.id,
-                                    ]);
-                                    await ApiService.instance
-                                        .deleteMessage(
-                                      widget.chatId,
-                                      item.message.id,
-                                      forMe: false,
-                                    );
-                                    final newLastMessage =
-                                    await ApiService.instance
-                                        .updateChatLastMessage(
-                                      widget.chatId,
-                                    );
-                                    widget.onLastMessageChanged
-                                        ?.call(newLastMessage);
-                                  }
-                                      : null,
-                                  onReaction: (emoji) async {
-                                    _updateReactionOptimistically(
-                                      item.message.id,
-                                      emoji,
-                                    );
-                                    final seq = await ApiService.instance
-                                        .sendReaction(
-                                      widget.chatId,
-                                      item.message.id,
-                                      emoji,
-                                    );
-                                    _pendingReactionSeqs[seq] =
-                                        item.message.id;
-                                    widget.onChatUpdated?.call();
-                                  },
-                                  onRemoveReaction: () async {
-                                    _removeReactionOptimistically(
-                                      item.message.id,
-                                    );
-                                    final seq = await ApiService.instance
-                                        .removeReaction(
-                                      widget.chatId,
-                                      item.message.id,
-                                    );
-                                    _pendingReactionSeqs[seq] =
-                                        item.message.id;
-                                    widget.onChatUpdated?.call();
-                                  },
-                                  isGroupChat: widget.isGroupChat,
-                                  isChannel: widget.isChannel,
-                                  senderName: senderName,
-                                  forwardedFrom: forwardedFrom,
-                                  forwardedFromAvatarUrl:
-                                  forwardedFromAvatarUrl,
-                                  contactDetailsCache:
-                                  _contactDetailsCache,
-                                  onReplyTap: _scrollToMessage,
-                                  useAutoReplyColor: context
-                                      .read<ThemeProvider>()
-                                      .useAutoReplyColor,
-                                  customReplyColor: context
-                                      .read<ThemeProvider>()
-                                      .customReplyColor,
-                                  isFirstInGroup: item.isFirstInGroup,
-                                  isLastInGroup: item.isLastInGroup,
-                                  isGrouped: item.isGrouped,
-                                  avatarVerticalOffset: -8.0,
-                                  onComplain: () => _showComplaintDialog(
-                                    item.message.id,
+                                key: const ValueKey('chat_list'),
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOutCubic,
+                                padding: EdgeInsets.only(
+                                  bottom: MediaQuery.of(
+                                    context,
+                                  ).viewInsets.bottom,
+                                ),
+                                child: ScrollablePositionedList.builder(
+                                  key: const ValueKey('scroll_list'),
+                                  itemScrollController: _itemScrollController,
+                                  itemPositionsListener: _itemPositionsListener,
+                                  reverse: true,
+                                  padding: EdgeInsets.fromLTRB(
+                                    8.0,
+                                    8.0,
+                                    8.0,
+                                    widget.isChannel ? 16.0 : 100.0,
                                   ),
-                                  onCancelSend:
-                                  isMe &&
-                                      readStatus ==
-                                          MessageReadStatus.sending
-                                      ? () => _cancelPendingMessage(
-                                    item.message,
-                                  )
-                                      : null,
-                                  onRetrySend:
-                                  isMe &&
-                                      readStatus ==
-                                          MessageReadStatus.sending
-                                      ? () => _retryPendingMessage(
-                                    item.message,
-                                  )
-                                      : null,
-                                  allPhotos: _cachedAllPhotos,
-                                  onGoToMessage: _scrollToMessage,
-                                  canDeleteForAll: canDeleteForAll,
-                                );
+                                  itemCount: _chatItems.length,
+                                  itemBuilder: (context, index) {
+                                    if (index < 0 ||
+                                        index >= _chatItems.length) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final mappedIndex =
+                                        _chatItems.length - 1 - index;
+                                    if (mappedIndex < 0 ||
+                                        mappedIndex >= _chatItems.length) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final item = _chatItems[mappedIndex];
+                                    final isLastVisual =
+                                        index == _chatItems.length - 1;
 
-                                Widget finalMessageWidget =
-                                RepaintBoundary(child: bubble);
+                                    final needsTopPadding = isLastVisual && !_hasMore;
 
-                                final isDeleting = _deletingMessageIds
-                                    .contains(message.id);
-                                if (isDeleting) {
-                                  return wrapWithTopPadding(TweenAnimationBuilder<double>(
-                                    duration: const Duration(
-                                      milliseconds: 300,
-                                    ),
-                                    tween: Tween<double>(
-                                      begin: 1.0,
-                                      end: 0.0,
-                                    ),
-                                    curve: Curves.easeIn,
-                                    builder: (context, value, child) {
-                                      return Transform.scale(
-                                        scale: value,
-                                        child: Transform.rotate(
-                                          angle: (1.0 - value) * 0.3,
-                                          child: Opacity(
+                                    Widget wrapWithTopPadding(Widget child) {
+                                      if (needsTopPadding) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(top: 100.0),
+                                          child: child,
+                                        );
+                                      }
+                                      return child;
+                                    }
+
+                                    if (item is MessageItem) {
+                                      final message = item.message;
+                                      final bool isSearchHighlighted =
+                                          _isSearching &&
+                                          _searchResults.isNotEmpty &&
+                                          _currentResultIndex != -1 &&
+                                          message.id ==
+                                              _searchResults[_currentResultIndex]
+                                                  .id;
+                                      final bool isHighlighted =
+                                          isSearchHighlighted ||
+                                          message.id == _highlightedMessageId;
+
+                                      final isControlMessage = message.attaches
+                                          .any((a) => a['_type'] == 'CONTROL');
+                                      if (isControlMessage) {
+                                        return wrapWithTopPadding(_ControlMessageChip(
+                                          message: message,
+                                          contacts: _contactDetailsCache,
+                                          myId: _actualMyId ?? widget.myId,
+                                        ));
+                                      }
+
+                                      final bool isMe =
+                                          item.message.senderId == _actualMyId;
+
+                                      final bool canDeleteForAll =
+                                          isMe ||
+                                          (widget.isGroupChat &&
+                                              _isCurrentUserAdmin());
+
+                                      MessageReadStatus? readStatus;
+                                      if (isMe) {
+                                        final messageId = item.message.id;
+                                        if (messageId.startsWith('local_')) {
+                                          readStatus =
+                                              MessageReadStatus.sending;
+                                        } else {
+                                          readStatus = MessageReadStatus.sent;
+                                        }
+
+                                        final int? numericMessageId =
+                                            _parseMessageId(messageId);
+                                        if (numericMessageId != null &&
+                                            _lastPeerReadMessageId != null &&
+                                            numericMessageId <=
+                                                _lastPeerReadMessageId!) {
+                                          readStatus = MessageReadStatus.read;
+                                        } else if (numericMessageId == null &&
+                                            _lastPeerReadMessageIdStr != null &&
+                                            messageId ==
+                                                _lastPeerReadMessageIdStr) {
+                                          readStatus = MessageReadStatus.read;
+                                        }
+                                      }
+
+                                      String? forwardedFrom;
+                                      String? forwardedFromAvatarUrl;
+                                      if (message.isForwarded) {
+                                        final link = message.link;
+                                        if (link is Map<String, dynamic>) {
+                                          final chatName =
+                                              link['chatName'] as String?;
+                                          final chatIconUrl =
+                                              link['chatIconUrl'] as String?;
+
+                                          if (chatName != null) {
+                                            forwardedFrom = chatName;
+                                            forwardedFromAvatarUrl =
+                                                chatIconUrl;
+                                          } else {
+                                            final forwardedMessage =
+                                                link['message']
+                                                    as Map<String, dynamic>?;
+                                            final originalSenderId =
+                                                forwardedMessage?['sender']
+                                                    as int?;
+                                            if (originalSenderId != null) {
+                                              final originalSenderContact =
+                                                  _contactDetailsCache[originalSenderId];
+                                              if (originalSenderContact ==
+                                                  null) {
+                                                _loadContactIfNeeded(
+                                                  originalSenderId,
+                                                );
+                                                forwardedFrom =
+                                                    'Участник $originalSenderId';
+                                                forwardedFromAvatarUrl = null;
+                                              } else {
+                                                forwardedFrom =
+                                                    originalSenderContact.name;
+                                                forwardedFromAvatarUrl =
+                                                    originalSenderContact
+                                                        .photoBaseUrl;
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      String? senderName;
+                                      if (widget.isGroupChat && !isMe) {
+                                        bool shouldShowName = true;
+                                        if (mappedIndex > 0) {
+                                          final previousItem =
+                                              _chatItems[mappedIndex - 1];
+                                          if (previousItem is MessageItem) {
+                                            final previousMessage =
+                                                previousItem.message;
+                                            if (previousMessage.senderId ==
+                                                message.senderId) {
+                                              final timeDifferenceInMinutes =
+                                                  (message.time -
+                                                      previousMessage.time) /
+                                                  (1000 * 60);
+                                              if (timeDifferenceInMinutes < 5) {
+                                                shouldShowName = false;
+                                              }
+                                            }
+                                          }
+                                        }
+                                        if (shouldShowName) {
+                                          final senderContact =
+                                              _contactDetailsCache[message
+                                                  .senderId];
+                                          if (senderContact != null) {
+                                            senderName = getContactDisplayName(
+                                              contactId: senderContact.id,
+                                              originalName: senderContact.name,
+                                              originalFirstName:
+                                                  senderContact.firstName,
+                                              originalLastName:
+                                                  senderContact.lastName,
+                                            );
+                                          } else {
+                                            senderName =
+                                                'ID ${message.senderId}';
+                                            _loadContactIfNeeded(
+                                              message.senderId,
+                                            );
+                                          }
+                                        }
+                                      }
+                                      final stableKey =
+                                          '${item.message.id}_${item.message.updateTime ?? item.message.time}_${item.message.originalText ?? ''}_${DateTime.now().millisecondsSinceEpoch}';
+
+                                      final hasPhoto = item.message.attaches
+                                          .any((a) => a['_type'] == 'PHOTO');
+                                      final shouldAnimateNew =
+                                          _messagesToAnimate.contains(
+                                            item.message.id,
+                                          );
+                                      if (shouldAnimateNew) {
+                                        _messagesToAnimate.remove(
+                                          item.message.id,
+                                        );
+                                      }
+                                      final deferImageLoading =
+                                          hasPhoto &&
+                                          shouldAnimateNew &&
+                                          !_anyOptimize &&
+                                          !context
+                                              .read<ThemeProvider>()
+                                              .animatePhotoMessages;
+
+                                      String? decryptedText;
+                                      if (_isEncryptionPasswordSetForCurrentChat &&
+                                          _encryptionConfigForCurrentChat !=
+                                              null &&
+                                          _encryptionConfigForCurrentChat!
+                                              .password
+                                              .isNotEmpty &&
+                                          ChatEncryptionService.isEncryptedMessage(
+                                            item.message.text,
+                                          )) {
+                                        decryptedText =
+                                            ChatEncryptionService.decryptWithPassword(
+                                              _encryptionConfigForCurrentChat!
+                                                  .password,
+                                              item.message.text,
+                                            );
+                                      }
+
+                                      final bubble = ChatMessageBubble(
+                                        key: message.originalText != null
+                                            ? ValueKey(stableKey)
+                                            : UniqueKey(),
+                                        message: item.message,
+                                        isMe: isMe,
+                                        readStatus: readStatus,
+                                        isReactionSending: _sendingReactions
+                                            .contains(item.message.id),
+                                        deferImageLoading: deferImageLoading,
+                                        myUserId: _actualMyId,
+                                        chatId: widget.chatId,
+                                        isEncryptionPasswordSet:
+                                            _isEncryptionPasswordSetForCurrentChat,
+                                        decryptedText: decryptedText,
+                                        onReply: widget.isChannel
+                                            ? null
+                                            : () =>
+                                                  _replyToMessage(item.message),
+                                        onForward: () =>
+                                            _forwardMessage(item.message),
+                                        onEdit: isMe
+                                            ? () => _editMessage(item.message)
+                                            : null,
+                                        canEditMessage: isMe
+                                            ? item.message.canEdit(_actualMyId!)
+                                            : null,
+                                        onDeleteForMe: isMe
+                                            ? () async {
+                                                _removeMessages([
+                                                  item.message.id,
+                                                ]);
+
+                                                await ApiService.instance
+                                                    .deleteMessage(
+                                                      widget.chatId,
+                                                      item.message.id,
+                                                      forMe: true,
+                                                    );
+                                                final newLastMessage =
+                                                    await ApiService.instance
+                                                        .updateChatLastMessage(
+                                                          widget.chatId,
+                                                        );
+                                                widget.onLastMessageChanged
+                                                    ?.call(newLastMessage);
+                                              }
+                                            : null,
+                                        onDeleteForAll: canDeleteForAll
+                                            ? () async {
+                                                _removeMessages([
+                                                  item.message.id,
+                                                ]);
+                                                await ApiService.instance
+                                                    .deleteMessage(
+                                                      widget.chatId,
+                                                      item.message.id,
+                                                      forMe: false,
+                                                    );
+                                                final newLastMessage =
+                                                    await ApiService.instance
+                                                        .updateChatLastMessage(
+                                                          widget.chatId,
+                                                        );
+                                                widget.onLastMessageChanged
+                                                    ?.call(newLastMessage);
+                                              }
+                                            : null,
+                                        onReaction: (emoji) async {
+                                          _updateReactionOptimistically(
+                                            item.message.id,
+                                            emoji,
+                                          );
+                                          final seq = await ApiService.instance
+                                              .sendReaction(
+                                                widget.chatId,
+                                                item.message.id,
+                                                emoji,
+                                              );
+                                          _pendingReactionSeqs[seq] =
+                                              item.message.id;
+                                          widget.onChatUpdated?.call();
+                                        },
+                                        onRemoveReaction: () async {
+                                          _removeReactionOptimistically(
+                                            item.message.id,
+                                          );
+                                          final seq = await ApiService.instance
+                                              .removeReaction(
+                                                widget.chatId,
+                                                item.message.id,
+                                              );
+                                          _pendingReactionSeqs[seq] =
+                                              item.message.id;
+                                          widget.onChatUpdated?.call();
+                                        },
+                                        isGroupChat: widget.isGroupChat,
+                                        isChannel: widget.isChannel,
+                                        senderName: senderName,
+                                        forwardedFrom: forwardedFrom,
+                                        forwardedFromAvatarUrl:
+                                            forwardedFromAvatarUrl,
+                                        contactDetailsCache:
+                                            _contactDetailsCache,
+                                        onReplyTap: _scrollToMessage,
+                                        useAutoReplyColor: context
+                                            .read<ThemeProvider>()
+                                            .useAutoReplyColor,
+                                        customReplyColor: context
+                                            .read<ThemeProvider>()
+                                            .customReplyColor,
+                                        isFirstInGroup: item.isFirstInGroup,
+                                        isLastInGroup: item.isLastInGroup,
+                                        isGrouped: item.isGrouped,
+                                        avatarVerticalOffset: -8.0,
+                                        onComplain: () => _showComplaintDialog(
+                                          item.message.id,
+                                        ),
+                                        onCancelSend:
+                                            isMe &&
+                                                readStatus ==
+                                                    MessageReadStatus.sending
+                                            ? () => _cancelPendingMessage(
+                                                item.message,
+                                              )
+                                            : null,
+                                        onRetrySend:
+                                            isMe &&
+                                                readStatus ==
+                                                    MessageReadStatus.sending
+                                            ? () => _retryPendingMessage(
+                                                item.message,
+                                              )
+                                            : null,
+                                        allPhotos: _cachedAllPhotos,
+                                        onGoToMessage: _scrollToMessage,
+                                        canDeleteForAll: canDeleteForAll,
+                                      );
+
+                                      Widget finalMessageWidget =
+                                          RepaintBoundary(child: bubble);
+
+                                      final isDeleting = _deletingMessageIds
+                                          .contains(message.id);
+                                      if (isDeleting) {
+                                        return wrapWithTopPadding(TweenAnimationBuilder<double>(
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          tween: Tween<double>(
+                                            begin: 1.0,
+                                            end: 0.0,
+                                          ),
+                                          curve: Curves.easeIn,
+                                          builder: (context, value, child) {
+                                            return Transform.scale(
+                                              scale: value,
+                                              child: Transform.rotate(
+                                                angle: (1.0 - value) * 0.3,
+                                                child: Opacity(
+                                                  opacity: value,
+                                                  child: finalMessageWidget,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          child: finalMessageWidget,
+                                        ));
+                                      }
+
+                                      if (isHighlighted) {
+                                        return wrapWithTopPadding(Container(
+                                          margin: const EdgeInsets.symmetric(
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primaryContainer
+                                                .withValues(alpha: 0.5),
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          child: finalMessageWidget,
+                                        ));
+                                      }
+
+                                      if (shouldAnimateNew) {
+                                        return wrapWithTopPadding(_NewMessageAnimation(
+                                          key: ValueKey('anim_$stableKey'),
+                                          child: finalMessageWidget,
+                                        ));
+                                      }
+
+                                      return wrapWithTopPadding(finalMessageWidget);
+                                    } else if (item is DateSeparatorItem) {
+                                      return wrapWithTopPadding(_DateSeparatorChip(
+                                        date: item.date,
+                                      ));
+                                    }
+                                    if (isLastVisual && _isLoadingMore) {
+                                      return TweenAnimationBuilder<double>(
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
+                                        tween: Tween<double>(
+                                          begin: 0.0,
+                                          end: 1.0,
+                                        ),
+                                        curve: Curves.easeOut,
+                                        builder: (context, value, child) {
+                                          return Opacity(
                                             opacity: value,
-                                            child: finalMessageWidget,
+                                            child: Transform.scale(
+                                              scale: 0.7 + (0.3 * value),
+                                              child: child,
+                                            ),
+                                          );
+                                        },
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                          child: Center(
+                                            child: CircularProgressIndicator(),
                                           ),
                                         ),
                                       );
-                                    },
-                                    child: finalMessageWidget,
-                                  ));
-                                }
-
-                                if (isHighlighted) {
-                                  return wrapWithTopPadding(Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primaryContainer
-                                          .withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(
-                                        16,
-                                      ),
-                                      border: Border.all(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    child: finalMessageWidget,
-                                  ));
-                                }
-
-                                if (shouldAnimateNew) {
-                                  return wrapWithTopPadding(_NewMessageAnimation(
-                                    key: ValueKey('anim_$stableKey'),
-                                    child: finalMessageWidget,
-                                  ));
-                                }
-
-                                return wrapWithTopPadding(finalMessageWidget);
-                              } else if (item is DateSeparatorItem) {
-                                return wrapWithTopPadding(_DateSeparatorChip(
-                                  date: item.date,
-                                ));
-                              }
-                              if (isLastVisual && _isLoadingMore) {
-                                return TweenAnimationBuilder<double>(
-                                  duration: const Duration(
-                                    milliseconds: 300,
-                                  ),
-                                  tween: Tween<double>(
-                                    begin: 0.0,
-                                    end: 1.0,
-                                  ),
-                                  curve: Curves.easeOut,
-                                  builder: (context, value, child) {
-                                    return Opacity(
-                                      opacity: value,
-                                      child: Transform.scale(
-                                        scale: 0.7 + (0.3 * value),
-                                        child: child,
-                                      ),
-                                    );
+                                    }
+                                    return const SizedBox.shrink();
                                   },
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    child: Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
-                          ),
-                        ),
+                                ),
+                              ),
                       ),
                       ValueListenableBuilder<bool>(
                         valueListenable: _showScrollToBottomNotifier,
                         builder: (context, showArrow, child) {
-                          return AnimatedPositioned(
-                            duration: const Duration(milliseconds: 100),
-                            curve: Curves.easeOutQuad,
-                            right: 16,
-                            bottom:
-                            MediaQuery.of(context).viewInsets.bottom +
-                                MediaQuery.of(context).padding.bottom +
-                                80,
-                            child: AnimatedScale(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutBack,
-                              scale: showArrow ? 1.0 : 0.0,
-                              child: AnimatedOpacity(
-                                duration: const Duration(milliseconds: 150),
-                                opacity: showArrow ? 1.0 : 0.0,
-                                child: Material(
-                                  color: Colors.grey[800],
-                                  shape: const CircleBorder(),
-                                  elevation: 4,
-                                  child: InkWell(
-                                    onTap: _scrollToBottom,
-                                    borderRadius: BorderRadius.circular(28),
-                                    child: const SizedBox(
-                                      width: 56,
-                                      height: 56,
-                                      child: Icon(
-                                        Icons.arrow_downward_rounded,
-                                        color: Colors.white,
+                          return ValueListenableBuilder<bool>(
+                            valueListenable: _scrollButtonHighlightNotifier,
+                            builder: (context, isHighlighted, child) {
+                              return AnimatedPositioned(
+                                duration: const Duration(milliseconds: 100),
+                                curve: Curves.easeOutQuad,
+                                right: 16,
+                                bottom:
+                                    MediaQuery.of(context).viewInsets.bottom +
+                                    MediaQuery.of(context).padding.bottom +
+                                    80,
+                                child: AnimatedScale(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeOutBack,
+                                  scale: showArrow ? 1.0 : 0.0,
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 150),
+                                    opacity: showArrow ? 1.0 : 0.0,
+                                    child: Material(
+                                      color: isHighlighted
+                                          ? Colors.grey[700]
+                                          : Colors.grey[800],
+                                      shape: const CircleBorder(),
+                                      elevation: 4,
+                                      child: InkWell(
+                                        onTap: _handleScrollButtonTap,
+                                        borderRadius: BorderRadius.circular(28),
+                                        child: const SizedBox(
+                                          width: 56,
+                                          height: 56,
+                                          child: Icon(
+                                            Icons.arrow_downward_rounded,
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -4793,7 +5128,7 @@ class _ChatScreenState extends State<ChatScreen> {
             left: 8,
             right: 8,
             bottom:
-            MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).viewInsets.bottom +
                 MediaQuery.of(context).padding.bottom +
                 0,
             child: _buildTextInput(),
@@ -4887,25 +5222,25 @@ class _ChatScreenState extends State<ChatScreen> {
       elevation: theme.useGlassPanels ? 0 : null,
       flexibleSpace: theme.useGlassPanels
           ? ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: theme.topBarBlur,
-            sigmaY: theme.topBarBlur,
-          ),
-          child: Container(
-            color: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: theme.topBarOpacity),
-          ),
-        ),
-      )
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: theme.topBarBlur,
+                  sigmaY: theme.topBarBlur,
+                ),
+                child: Container(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: theme.topBarOpacity),
+                ),
+              ),
+            )
           : null,
       leading: widget.isDesktopMode
           ? null
           : IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.of(context).pop(),
-      ),
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
       actions: [
         if (widget.isGroupChat)
           IconButton(
@@ -4922,26 +5257,26 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                   transitionsBuilder:
                       (context, animation, secondaryAnimation, child) {
-                    return SlideTransition(
-                      position:
-                      Tween<Offset>(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      ),
-                      child: FadeTransition(
-                        opacity: CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOut,
-                        ),
-                        child: child,
-                      ),
-                    );
-                  },
+                        return SlideTransition(
+                          position:
+                              Tween<Offset>(
+                                begin: const Offset(1.0, 0.0),
+                                end: Offset.zero,
+                              ).animate(
+                                CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOutCubic,
+                                ),
+                              ),
+                          child: FadeTransition(
+                            opacity: CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOut,
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
                   transitionDuration: const Duration(milliseconds: 350),
                 ),
               );
@@ -4973,13 +5308,13 @@ class _ChatScreenState extends State<ChatScreen> {
             } else if (value == 'encryption_password') {
               Navigator.of(context)
                   .push(
-                MaterialPageRoute(
-                  builder: (context) => ChatEncryptionSettingsScreen(
-                    chatId: widget.chatId,
-                    isPasswordSet: _isEncryptionPasswordSetForCurrentChat,
-                  ),
-                ),
-              )
+                    MaterialPageRoute(
+                      builder: (context) => ChatEncryptionSettingsScreen(
+                        chatId: widget.chatId,
+                        isPasswordSet: _isEncryptionPasswordSetForCurrentChat,
+                      ),
+                    ),
+                  )
                   .then((_) => _loadEncryptionConfig());
             } else if (value == 'media') {
               Navigator.of(context).push(
@@ -5161,24 +5496,24 @@ class _ChatScreenState extends State<ChatScreen> {
               tag: 'contact_avatar_${widget.contact.id}',
               child: widget.chatId == 0
                   ? CircleAvatar(
-                radius: 18,
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.primaryContainer,
-                child: Icon(
-                  Icons.bookmark,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-              )
+                      radius: 18,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
+                      child: Icon(
+                        Icons.bookmark,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    )
                   : ContactAvatarWidget(
-                contactId: widget.contact.id,
-                originalAvatarUrl: widget.contact.photoBaseUrl,
-                radius: 18,
-                fallbackText: widget.contact.name.isNotEmpty
-                    ? widget.contact.name[0].toUpperCase()
-                    : '?',
-              ),
+                      contactId: widget.contact.id,
+                      originalAvatarUrl: widget.contact.photoBaseUrl,
+                      radius: 18,
+                      fallbackText: widget.contact.name.isNotEmpty
+                          ? widget.contact.name[0].toUpperCase()
+                          : '?',
+                    ),
             ),
           ),
           const SizedBox(width: 8),
@@ -5403,9 +5738,35 @@ class _ChatScreenState extends State<ChatScreen> {
             child: SafeArea(
               top: false,
               bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.06),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: (_isVoiceRecording || _isVoicePreview)
+                    ? Padding(
+                        key: const ValueKey('voice_bar_glass'),
+                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: _buildVoiceInputBar(
+                          isBlocked: isBlocked,
+                          isSmall: false,
+                        ),
+                      )
+                    : Column(
+                        key: const ValueKey('text_bar_glass'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                   if (_replyingToMessage != null) ...[
                     Container(
                       width: double.infinity,
@@ -5450,8 +5811,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                   _replyingToMessage!.text.isNotEmpty
                                       ? _replyingToMessage!.text
                                       : (_replyingToMessage!.hasFileAttach
-                                      ? 'Файл'
-                                      : 'Фото'),
+                                            ? 'Файл'
+                                            : 'Фото'),
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Theme.of(context)
@@ -5563,7 +5924,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 Icons.auto_fix_high,
                                 color: isBlocked
                                     ? Theme.of(context).colorScheme.onSurface
-                                    .withValues(alpha: 0.3)
+                                          .withValues(alpha: 0.3)
                                     : Theme.of(context).colorScheme.primary,
                                 size: 24,
                               ),
@@ -5595,13 +5956,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                       if (_currentKometColorPrefix ==
                                           'komet.color_#') {
                                         newText =
-                                        '$_currentKometColorPrefix$hex\'ваш текст\'';
+                                            '$_currentKometColorPrefix$hex\'ваш текст\'';
                                         final textLength = newText.length;
                                         cursorOffset = textLength - 12;
                                       } else if (_currentKometColorPrefix ==
                                           'komet.cosmetic.pulse#') {
                                         newText =
-                                        '$_currentKometColorPrefix$hex\'ваш текст\'';
+                                            '$_currentKometColorPrefix$hex\'ваш текст\'';
                                         final textLength = newText.length;
                                         cursorOffset = textLength - 12;
                                       } else {
@@ -5626,12 +5987,12 @@ class _ChatScreenState extends State<ChatScreen> {
                                                 .instance
                                                 .logicalKeysPressed
                                                 .contains(
-                                              LogicalKeyboardKey.shiftLeft,
-                                            ) ||
-                                                HardwareKeyboard
-                                                    .instance
-                                                    .logicalKeysPressed
-                                                    .contains(
+                                                  LogicalKeyboardKey.shiftLeft,
+                                                ) ||
+                                            HardwareKeyboard
+                                                .instance
+                                                .logicalKeysPressed
+                                                .contains(
                                                   LogicalKeyboardKey.shiftRight,
                                                 );
 
@@ -5650,7 +6011,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     textInputAction: TextInputAction.newline,
                                     minLines: 1,
                                     maxLines: 5,
-                                    onChanged: _handleChatInputChanged,
+                                    onChanged: _onChatInputChanged,
                                     contextMenuBuilder: (context, editableTextState) {
                                       if (isBlocked) {
                                         return AdaptiveTextSelectionToolbar.editableText(
@@ -5730,13 +6091,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                       isDense: true,
                                       fillColor: isBlocked
                                           ? Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.25)
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.25)
                                           : Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.4),
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.4),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(24),
                                         borderSide: BorderSide.none,
@@ -5750,10 +6111,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                         borderSide: BorderSide.none,
                                       ),
                                       contentPadding:
-                                      const EdgeInsets.symmetric(
-                                        horizontal: 18.0,
-                                        vertical: 12.0,
-                                      ),
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 18.0,
+                                            vertical: 12.0,
+                                          ),
                                     ),
                                   ),
                                 ),
@@ -5763,13 +6124,13 @@ class _ChatScreenState extends State<ChatScreen> {
                             StreamBuilder<bool>(
                               stream: Stream.periodic(
                                 const Duration(milliseconds: 500),
-                                    (_) {
+                                (_) {
                                   return ApiService.instance.isOnline &&
                                       ApiService.instance.isSessionReady;
                                 },
                               ).distinct(),
                               initialData:
-                              ApiService.instance.isOnline &&
+                                  ApiService.instance.isOnline &&
                                   ApiService.instance.isSessionReady,
                               builder: (context, snapshot) {
                                 final isConnected = snapshot.data ?? false;
@@ -5799,13 +6160,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       StreamBuilder<bool>(
                         stream: Stream.periodic(
                           const Duration(milliseconds: 500),
-                              (_) {
+                          (_) {
                             return ApiService.instance.isOnline &&
                                 ApiService.instance.isSessionReady;
                           },
                         ).distinct(),
                         initialData:
-                        ApiService.instance.isOnline &&
+                            ApiService.instance.isOnline &&
                             ApiService.instance.isSessionReady,
                         builder: (context, snapshot) {
                           final isConnected = snapshot.data ?? false;
@@ -5839,7 +6200,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               Icons.attach_file,
                               color: isBlocked
                                   ? Theme.of(context).colorScheme.onSurface
-                                  .withValues(alpha: 0.3)
+                                        .withValues(alpha: 0.3)
                                   : Theme.of(context).colorScheme.primary,
                               size: 24,
                             ),
@@ -5859,7 +6220,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 Icons.animation,
                                 color: isBlocked
                                     ? Theme.of(context).colorScheme.onSurface
-                                    .withValues(alpha: 0.3)
+                                          .withValues(alpha: 0.3)
                                     : Colors.orange,
                                 size: 24,
                               ),
@@ -5867,913 +6228,952 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         ),
                       const SizedBox(width: 4),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isBlocked
-                              ? Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.2)
-                              : Theme.of(context).colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: isBlocked ? null : _sendMessage,
-                            child: Padding(
-                              padding: const EdgeInsets.all(6.0),
-                              child: Icon(
-                                Icons.send_rounded,
-                                color: isBlocked
-                                    ? Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.5)
-                                    : Theme.of(
-                                  context,
-                                ).colorScheme.onPrimary,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      _buildSendOrMicButton(isBlocked: isBlocked, isSmall: false),
                     ],
                   ),
-                ],
-              ),
+                        ],
+            ),
             ),
           ),
         ),
+        ),
       );
-      return _wrapInputWithPanels(inputBar);
+      final wrapped = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CompositedTransformTarget(
+            link: _voiceOverlayLink,
+            child: inputBar,
+          ),
+        ],
+      );
+      return _wrapInputWithBotCommandsBar(wrapped);
     } else {
       final theme = context.watch<ThemeProvider>();
       final inputBar = ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: theme.optimization
             ? Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12.0,
-            vertical: 8.0,
-          ),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: SafeArea(
-            top: false,
-            bottom: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_replyingToMessage != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primaryContainer
-                          .withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border(
-                        left: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.reply_rounded,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Ответ на сообщение',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                _replyingToMessage!.text.isNotEmpty
-                                    ? _replyingToMessage!.text
-                                    : (_replyingToMessage!.hasFileAttach
-                                    ? 'Файл'
-                                    : 'Фото'),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () {
-                            setState(() {
-                              _replyingToMessage = null;
-                            });
-                            _saveInputState();
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (isBlocked) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.errorContainer.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border(
-                        left: BorderSide(
-                          color: Theme.of(context).colorScheme.error,
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.block_rounded,
-                              color: Theme.of(context).colorScheme.error,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Пользователь заблокирован',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.error,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Разблокируйте пользователя для отправки сообщений',
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onErrorContainer,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'или включите block_bypass',
-                          style: TextStyle(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12.0,
+                  vertical: 8.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isVoiceRecording || _isVoicePreview)
+                        _buildVoiceInputBar(isBlocked: isBlocked, isSmall: true)
+                      else ...[
+                      if (_replyingToMessage != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
                             color: Theme.of(context)
                                 .colorScheme
-                                .onErrorContainer
-                                .withValues(alpha: 0.7),
-                            fontSize: 11,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Stack(
-                            children: [
-                              TextField(
-                                controller: _textController,
-                                enabled: !isBlocked,
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
-                                minLines: 1,
-                                maxLines: 5,
-                                decoration: InputDecoration(
-                                  hintText: isBlocked
-                                      ? 'Пользователь заблокирован'
-                                      : 'Сообщение...',
-                                  filled: true,
-                                  isDense: true,
-                                  fillColor: isBlocked
-                                      ? Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withValues(alpha: 0.25)
-                                      : Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withValues(alpha: 0.4),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 18.0,
-                                    vertical: 12.0,
-                                  ),
-                                ),
-                                onChanged:
-                                isBlocked ? null : _handleChatInputChanged,
+                                .primaryContainer
+                                .withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 3,
                               ),
-
-                              StreamBuilder<bool>(
-                                stream: Stream.periodic(
-                                  const Duration(milliseconds: 500),
-                                      (_) {
-                                    return ApiService.instance.isOnline &&
-                                        ApiService.instance.isSessionReady;
-                                  },
-                                ).distinct(),
-                                initialData:
-                                ApiService.instance.isOnline &&
-                                    ApiService.instance.isSessionReady,
-                                builder: (context, snapshot) {
-                                  final isConnected = snapshot.data ?? false;
-                                  if (isConnected)
-                                    return const SizedBox.shrink();
-                                  return Positioned(
-                                    left: 8,
-                                    bottom: 8,
-                                    child: SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                        AlwaysStoppedAnimation<Color>(
-                                          Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                        ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.reply_rounded,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ответ на сообщение',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
                                       ),
                                     ),
-                                  );
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _replyingToMessage!.text.isNotEmpty
+                                          ? _replyingToMessage!.text
+                                          : (_replyingToMessage!.hasFileAttach
+                                                ? 'Файл'
+                                                : 'Фото'),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () {
+                                  setState(() {
+                                    _replyingToMessage = null;
+                                  });
+                                  _saveInputState();
                                 },
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-
-                    StreamBuilder<bool>(
-                      stream: Stream.periodic(
-                        const Duration(milliseconds: 500),
-                            (_) {
-                          return ApiService.instance.isOnline &&
-                              ApiService.instance.isSessionReady;
-                        },
-                      ).distinct(),
-                      initialData:
-                      ApiService.instance.isOnline &&
-                          ApiService.instance.isSessionReady,
-                      builder: (context, snapshot) {
-                        final isConnected = snapshot.data ?? false;
-                        if (isConnected) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 4.0),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    if (!ApiService.instance.isOnline ||
-                        !ApiService.instance.isSessionReady)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
                         ),
-                      ),
-                    const SizedBox(width: 4),
-                    Builder(
-                      builder: (context) {
-                        final isEncryptionActive =
-                            _encryptionConfigForCurrentChat != null &&
-                                _encryptionConfigForCurrentChat!
-                                    .password
-                                    .isNotEmpty &&
-                                _sendEncryptedForCurrentChat;
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: (isBlocked || isEncryptionActive)
-                                ? null
-                                : () async {
-                              final result = await _pickPhotosFlow(
-                                context,
-                              );
-                              if (result != null &&
-                                  result.paths.isNotEmpty) {
-                                await ApiService.instance
-                                    .sendPhotoMessages(
-                                  widget.chatId,
-                                  localPaths: result.paths,
-                                  caption: result.caption,
-                                  senderId: _actualMyId,
-                                );
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: (isBlocked || isEncryptionActive)
-                                    ? Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withValues(alpha: 0.25)
-                                    : Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.photo_camera_outlined,
-                                color: (isBlocked || isEncryptionActive)
-                                    ? Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withValues(alpha: 0.5)
-                                    : Theme.of(
-                                  context,
-                                ).colorScheme.onPrimary,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
-                        onTap:
-                        (isBlocked ||
-                            _textController.text.trim().isEmpty)
-                            ? null
-                            : _sendMessage,
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
+                        const SizedBox(height: 8),
+                      ],
+                      if (isBlocked) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
-                            color:
-                            (isBlocked ||
-                                _textController.text.trim().isEmpty)
-                                ? Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.25)
-                                : Theme.of(context).colorScheme.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.send_rounded,
-                            color:
-                            (isBlocked ||
-                                _textController.text.trim().isEmpty)
-                                ? Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant
-                                .withValues(alpha: 0.5)
-                                : Theme.of(context).colorScheme.onPrimary,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        )
-            : BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.surface.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_replyingToMessage != null) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primaryContainer
-                            .withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border(
-                          left: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.reply_rounded,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Ответ на сообщение',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  _replyingToMessage!.text.isNotEmpty
-                                      ? _replyingToMessage!.text
-                                      : (_replyingToMessage!.hasFileAttach
-                                      ? 'Файл'
-                                      : 'Фото'),
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.7),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: _cancelReply,
-                              child: Padding(
-                                padding: const EdgeInsets.all(6.0),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: 18,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary,
-                                ),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.errorContainer.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(context).colorScheme.error,
+                                width: 3,
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (isBlocked) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .errorContainer
-                            .withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border(
-                          left: BorderSide(
-                            color: Theme.of(context).colorScheme.error,
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.block_rounded,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.error,
-                                size: 20,
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.block_rounded,
+                                    color: Theme.of(context).colorScheme.error,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Пользователь заблокирован',
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(height: 6),
                               Text(
-                                'Пользователь заблокирован',
+                                'Разблокируйте пользователя для отправки сообщений',
                                 style: TextStyle(
                                   color: Theme.of(
                                     context,
-                                  ).colorScheme.error,
-                                  fontWeight: FontWeight.w600,
+                                  ).colorScheme.onErrorContainer,
                                   fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'или включите block_bypass',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer
+                                      .withValues(alpha: 0.7),
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Разблокируйте пользователя для отправки сообщений',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer,
-                              fontSize: 13,
+                        ),
+                      ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Stack(
+                                  children: [
+                                    TextField(
+                                      controller: _textController,
+                                      enabled: !isBlocked,
+                                      keyboardType: TextInputType.multiline,
+                                      textInputAction: TextInputAction.newline,
+                                      minLines: 1,
+                                      maxLines: 5,
+                                      decoration: InputDecoration(
+                                        hintText: isBlocked
+                                            ? 'Пользователь заблокирован'
+                                            : 'Сообщение...',
+                                        filled: true,
+                                        isDense: true,
+                                        fillColor: isBlocked
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest
+                                                  .withValues(alpha: 0.25)
+                                            : Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest
+                                                  .withValues(alpha: 0.4),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 18.0,
+                                          vertical: 12.0,
+                                        ),
+                                      ),
+                                      onChanged:
+                                          isBlocked ? null : _onChatInputChanged,
+                                    ),
+
+                                    StreamBuilder<bool>(
+                                  stream: Stream.periodic(
+                                    const Duration(milliseconds: 500),
+                                    (_) {
+                                      return ApiService.instance.isOnline &&
+                                          ApiService.instance.isSessionReady;
+                                    },
+                                  ).distinct(),
+                                  initialData:
+                                      ApiService.instance.isOnline &&
+                                      ApiService.instance.isSessionReady,
+                                  builder: (context, snapshot) {
+                                    final isConnected = snapshot.data ?? false;
+                                    if (isConnected)
+                                      return const SizedBox.shrink();
+                                    return Positioned(
+                                      left: 8,
+                                      bottom: 8,
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'или включите block_bypass',
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onErrorContainer
-                                  .withValues(alpha: 0.7),
-                              fontSize: 11,
-                              fontStyle: FontStyle.italic,
-                            ),
+
+                          StreamBuilder<bool>(
+                            stream: Stream.periodic(
+                              const Duration(milliseconds: 500),
+                              (_) {
+                                return ApiService.instance.isOnline &&
+                                    ApiService.instance.isSessionReady;
+                              },
+                            ).distinct(),
+                            initialData:
+                                ApiService.instance.isOnline &&
+                                ApiService.instance.isSessionReady,
+                            builder: (context, snapshot) {
+                              final isConnected = snapshot.data ?? false;
+                              if (isConnected) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 4.0),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextField(
-                              controller: _textController,
-                              enabled: !isBlocked,
-                              keyboardType: TextInputType.multiline,
-                              textInputAction: TextInputAction.newline,
-                              minLines: 1,
-                              maxLines: 5,
-                              decoration: InputDecoration(
-                                hintText: isBlocked
-                                    ? 'Пользователь заблокирован'
-                                    : 'Сообщение...',
-                                filled: true,
-                                isDense: true,
-                                fillColor: isBlocked
-                                    ? Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withValues(alpha: 0.25)
-                                    : Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withValues(alpha: 0.4),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18.0,
-                                  vertical: 12.0,
+
+                          if (!ApiService.instance.isOnline ||
+                              !ApiService.instance.isSessionReady)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
                               ),
-                              onChanged:
-                              isBlocked ? null : _handleChatInputChanged,
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Builder(
-                        builder: (context) {
-                          final isEncryptionActive =
-                              _encryptionConfigForCurrentChat != null &&
+                          const SizedBox(width: 4),
+                          Builder(
+                            builder: (context) {
+                              final isEncryptionActive =
+                                  _encryptionConfigForCurrentChat != null &&
                                   _encryptionConfigForCurrentChat!
                                       .password
                                       .isNotEmpty &&
                                   _sendEncryptedForCurrentChat;
-                          return Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(24),
-                              onTap: (isBlocked || isEncryptionActive)
-                                  ? null
-                                  : () async {
-                                final result =
-                                await _pickPhotosFlow(context);
-                                if (result != null &&
-                                    result.paths.isNotEmpty) {
-                                  await ApiService.instance
-                                      .sendPhotoMessages(
-                                    widget.chatId,
-                                    localPaths: result.paths,
-                                    caption: result.caption,
-                                    senderId: _actualMyId,
-                                  );
-                                }
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(6.0),
-                                child: Icon(
-                                  Icons.photo_library_outlined,
-                                  color: (isBlocked || isEncryptionActive)
-                                      ? Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.3)
-                                      : Theme.of(
-                                    context,
-                                  ).colorScheme.primary,
-                                  size: 24,
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(24),
+                                  onTap: (isBlocked || isEncryptionActive)
+                                      ? null
+                                      : () async {
+                                          final result = await _pickPhotosFlow(
+                                            context,
+                                          );
+                                          if (result != null &&
+                                              result.paths.isNotEmpty) {
+                                            await ApiService.instance
+                                                .sendPhotoMessages(
+                                                  widget.chatId,
+                                                  localPaths: result.paths,
+                                                  caption: result.caption,
+                                                  senderId: _actualMyId,
+                                                );
+                                          }
+                                        },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: (isBlocked || isEncryptionActive)
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.25)
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.photo_camera_outlined,
+                                      color: (isBlocked || isEncryptionActive)
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant
+                                                .withValues(alpha: 0.5)
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimary,
+                                      size: 20,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 4),
+                          _buildSendOrMicButton(isBlocked: isBlocked, isSmall: true),
+                        ],
                       ),
-                      if (context
-                          .watch<ThemeProvider>()
-                          .messageTransition ==
-                          TransitionOption.slide)
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: isBlocked ? null : _testSlideAnimation,
-                            child: Padding(
-                              padding: const EdgeInsets.all(6.0),
-                              child: Icon(
-                                Icons.animation,
-                                color: isBlocked
-                                    ? Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.3)
-                                    : Colors.orange,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 4),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isBlocked
-                              ? Theme.of(context).colorScheme.onSurface
-                              .withValues(alpha: 0.2)
-                              : Theme.of(context).colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: isBlocked ? null : _sendMessage,
-                            child: Padding(
-                              padding: const EdgeInsets.all(6.0),
-                              child: Icon(
-                                Icons.send_rounded,
-                                color: isBlocked
-                                    ? Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.5)
-                                    : Theme.of(
-                                  context,
-                                ).colorScheme.onPrimary,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
+            : BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surface.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                ],
+                  child: SafeArea(
+                    top: false,
+                    bottom: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isVoiceRecording || _isVoicePreview)
+                          _buildVoiceInputBar(isBlocked: isBlocked, isSmall: false)
+                        else ...[
+                        if (_replyingToMessage != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border(
+                                left: BorderSide(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.reply_rounded,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Ответ на сообщение',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        _replyingToMessage!.text.isNotEmpty
+                                            ? _replyingToMessage!.text
+                                            : (_replyingToMessage!.hasFileAttach
+                                                  ? 'Файл'
+                                                  : 'Фото'),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.7),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap: _cancelReply,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(6.0),
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        size: 18,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (isBlocked) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .errorContainer
+                                  .withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border(
+                                left: BorderSide(
+                                  color: Theme.of(context).colorScheme.error,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.block_rounded,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Пользователь заблокирован',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Разблокируйте пользователя для отправки сообщений',
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onErrorContainer,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'или включите block_bypass',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer
+                                        .withValues(alpha: 0.7),
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextField(
+                                    controller: _textController,
+                                    enabled: !isBlocked,
+                                    keyboardType: TextInputType.multiline,
+                                    textInputAction: TextInputAction.newline,
+                                    minLines: 1,
+                                    maxLines: 5,
+                                    decoration: InputDecoration(
+                                      hintText: isBlocked
+                                          ? 'Пользователь заблокирован'
+                                          : 'Сообщение...',
+                                      filled: true,
+                                      isDense: true,
+                                      fillColor: isBlocked
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.25)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.4),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 18.0,
+                                        vertical: 12.0,
+                                      ),
+                                    ),
+                                    onChanged:
+                                        isBlocked ? null : _handleChatInputChanged,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Builder(
+                              builder: (context) {
+                                final isEncryptionActive =
+                                    _encryptionConfigForCurrentChat != null &&
+                                    _encryptionConfigForCurrentChat!
+                                        .password
+                                        .isNotEmpty &&
+                                    _sendEncryptedForCurrentChat;
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(24),
+                                    onTap: (isBlocked || isEncryptionActive)
+                                        ? null
+                                        : () async {
+                                            final result =
+                                                await _pickPhotosFlow(context);
+                                            if (result != null &&
+                                                result.paths.isNotEmpty) {
+                                              await ApiService.instance
+                                                  .sendPhotoMessages(
+                                                    widget.chatId,
+                                                    localPaths: result.paths,
+                                                    caption: result.caption,
+                                                    senderId: _actualMyId,
+                                                  );
+                                            }
+                                          },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(6.0),
+                                      child: Icon(
+                                        Icons.photo_library_outlined,
+                                        color: (isBlocked || isEncryptionActive)
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withValues(alpha: 0.3)
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            if (context
+                                    .watch<ThemeProvider>()
+                                    .messageTransition ==
+                                TransitionOption.slide)
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(24),
+                                  onTap: isBlocked ? null : _testSlideAnimation,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6.0),
+                                    child: Icon(
+                                      Icons.animation,
+                                      color: isBlocked
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withValues(alpha: 0.3)
+                                          : Colors.orange,
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(width: 4),
+                            _buildSendOrMicButton(isBlocked: isBlocked, isSmall: false),
+                          ],
+                        ),
+                      ],
+                  ],
               ),
             ),
           ),
         ),
       );
 
-      return _wrapInputWithPanels(inputBar);
+      final wrapped = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CompositedTransformTarget(
+            link: _voiceOverlayLink,
+            child: inputBar,
+          ),
+        ],
+      );
+      _voiceOverlayIsBlocked = isBlocked;
+      _voiceOverlayIsSmall = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncVoiceOverlay());
+      return _wrapInputWithBotCommandsBar(wrapped);
     }
   }
 
-  void _testSlideAnimation() {
-    final myMessage = Message(
-      id: 'test_my_${DateTime.now().millisecondsSinceEpoch}',
-      text: 'Тест моё сообщение (должно выехать справа)',
-      time: DateTime.now().millisecondsSinceEpoch,
-      senderId: _actualMyId!,
-    );
-    _addMessage(myMessage);
-
-    Future.delayed(const Duration(seconds: 1), () {
-      final otherMessage = Message(
-        id: 'test_other_${DateTime.now().millisecondsSinceEpoch}',
-        text: 'Тест сообщение собеседника (должно выехать слева)',
-        time: DateTime.now().millisecondsSinceEpoch,
-        senderId: widget.contact.id,
-      );
-      _addMessage(otherMessage);
+  Timer? _typingTimer;
+  DateTime _lastTypingSentAt = DateTime.fromMillisecondsSinceEpoch(0);
+  void _scheduleTypingPing() {
+    final now = DateTime.now();
+    if (now.difference(_lastTypingSentAt) >= const Duration(seconds: 9)) {
+      ApiService.instance.sendTyping(widget.chatId, type: "TEXT");
+      _lastTypingSentAt = now;
+    }
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 9), () {
+      if (!mounted) return;
+      if (_textController.text.isNotEmpty) {
+        ApiService.instance.sendTyping(widget.chatId, type: "TEXT");
+        _lastTypingSentAt = DateTime.now();
+        _scheduleTypingPing();
+      }
     });
   }
-}
-
-class _MentionDropdownPanel extends StatelessWidget {
-  final List<Contact> users;
-  final Function(Contact) onUserSelected;
-
-  const _MentionDropdownPanel({
-    required this.users,
-    required this.onUserSelected,
-  });
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+  void dispose() {
+    _voiceOverlayEntry?.remove();
+    _voiceOverlayEntry = null;
+    MessageQueueService().clearTemporaryQueue(chatId: widget.chatId);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      constraints: const BoxConstraints(
-        maxHeight: 200,
-        maxWidth: 300,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: colors.shadow.withAlpha(50),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: colors.outlineVariant,
-          width: 1,
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: users.length,
-          itemBuilder: (context, index) {
-            final user = users[index];
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => onUserSelected(user),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      ContactAvatarWidget(
-                        contactId: user.id,
-                        radius: 16,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              getContactDisplayName(
-                                contactId: user.id,
-                                originalName: user.name,
-                                originalFirstName: user.firstName,
-                                originalLastName: user.lastName,
-                              ),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (user.description?.isNotEmpty == true)
-                              Text(
-                                user.description!,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: colors.onSurfaceVariant,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+    _voiceAmplitudeSub?.cancel();
+    _voiceAmplitudeSub = null;
+    _voicePositionSub?.cancel();
+    _voicePositionSub = null;
+    _voiceWaveTick.dispose();
+    _voicePlaybackProgress.dispose();
+    _voiceDragDxN.dispose();
+    _voiceDragDyN.dispose();
+    _voiceDebugText.dispose();
+
+    if (ApiService.instance.currentActiveChatId == widget.chatId) {
+      ApiService.instance.currentActiveChatId = null;
+    }
+    _voiceRecordTimer?.cancel();
+    _voiceRecordTimer = null;
+    try {
+      _voiceRecorder.dispose();
+    } catch (_) {}
+    try {
+      _voicePlayer.dispose();
+    } catch (_) {}
+    _typingTimer?.cancel();
+    _stopSelectionCheck();
+    _apiSubscription?.cancel();
+    _connectionStatusSub?.cancel();
+    _textController.removeListener(_handleTextChangedForKometColor);
+    _textController.dispose();
+    _textFocusNode.dispose();
+    _mentions.clear();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _pinnedMessageNotifier.dispose();
+    _showScrollToBottomNotifier.dispose();
+    _scrollButtonHighlightNotifier.dispose();
+    super.dispose();
+  }
+
+  void _startSearch() {
+    if (!mounted) return;
+    setState(() {
+      _isSearching = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _stopSearch() {
+    if (!mounted) return;
+    setState(() {
+      _isSearching = false;
+      _searchResults.clear();
+      _currentResultIndex = -1;
+      _searchController.clear();
+    });
+  }
+
+  void _performSearch(String query) {
+    if (query.isEmpty) {
+      if (_searchResults.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _searchResults.clear();
+          _currentResultIndex = -1;
+        });
+      }
+      return;
+    }
+    final results = _messages
+        .where((msg) => msg.text.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+
+    if (!mounted) return;
+    setState(() {
+      _searchResults = results.reversed.toList();
+      _currentResultIndex = _searchResults.isNotEmpty ? 0 : -1;
+    });
+
+    if (_currentResultIndex != -1) {
+      _scrollToResult();
+    }
+  }
+
+  void _navigateToNextResult() {
+    if (_searchResults.isEmpty) return;
+    if (!mounted) return;
+    setState(() {
+      _currentResultIndex = (_currentResultIndex + 1) % _searchResults.length;
+    });
+    _scrollToResult();
+  }
+
+  void _navigateToPreviousResult() {
+    if (_searchResults.isEmpty) return;
+    setState(() {
+      _currentResultIndex =
+          (_currentResultIndex - 1 + _searchResults.length) %
+          _searchResults.length;
+    });
+    _scrollToResult();
+  }
+
+  void _scrollToResult() {
+    if (_currentResultIndex == -1) return;
+
+    if (!mounted || !_itemScrollController.isAttached) return;
+
+    final targetMessage = _searchResults[_currentResultIndex];
+
+    final itemIndex = _chatItems.indexWhere(
+      (item) => item is MessageItem && item.message.id == targetMessage.id,
     );
+
+    if (itemIndex != -1) {
+      final viewIndex = _chatItems.length - 1 - itemIndex;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_itemScrollController.isAttached) return;
+        _itemScrollController.scrollTo(
+          index: viewIndex,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.5,
+        );
+      });
+    }
+  }
+
+  void _scrollToMessageInternal(
+    String messageId, {
+    required bool saveReturn,
+  }) {
+    if (!mounted) return;
+
+    () async {
+      if (saveReturn) {
+        _scrollReturnMessageId = _getBestVisibleMessageId();
+        _scrollButtonHighlightNotifier.value = _scrollReturnMessageId != null;
+      }
+
+      setState(() {
+        _highlightedMessageId = messageId;
+      });
+
+      final startedAt = DateTime.now();
+
+      while (mounted && DateTime.now().difference(startedAt) < const Duration(seconds: 2)) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+
+        if (!_itemScrollController.isAttached) {
+          await Future.delayed(const Duration(milliseconds: 16));
+          continue;
+        }
+
+        final itemIndex = _chatItems.indexWhere(
+          (item) => item is MessageItem && item.message.id == messageId,
+        );
+
+        if (itemIndex == -1) {
+          await Future.delayed(const Duration(milliseconds: 50));
+          continue;
+        }
+
+        final viewIndex = _chatItems.length - 1 - itemIndex;
+
+        try {
+          await _itemScrollController.scrollTo(
+            index: viewIndex,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOutCubic,
+            alignment: 0.2,
+          );
+        } catch (_) {}
+
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+
+        setState(() {
+          _highlightedMessageId = null;
+        });
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _highlightedMessageId = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Исходное сообщение не найдено...🥀')),
+        );
+      }
+    }();
+  }
+
+  void _scrollToMessage(String messageId) {
+    _scrollToMessageInternal(messageId, saveReturn: true);
   }
 }
 
@@ -6928,80 +7328,80 @@ class _BotCommandsPanel extends StatelessWidget {
         constraints: const BoxConstraints(maxHeight: 140),
         child: isLoading
             ? Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(colors.primary),
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(colors.primary),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Загрузка команд…',
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Загрузка команд…',
-                style: TextStyle(color: colors.onSurfaceVariant),
-              ),
-            ],
-          ),
-        )
+              )
             : (commands.isEmpty
-            ? Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          child: Text(
-            'Нет команд',
-            style: TextStyle(color: colors.onSurfaceVariant),
-          ),
-        )
-            : Material(
-          color: Colors.transparent,
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            shrinkWrap: true,
-            itemCount: commands.length,
-            itemBuilder: (context, index) {
-              final cmd = commands[index];
-              return InkWell(
-                onTap: () => onCommandTap(cmd),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: cmd.slashCommand,
-                          style: TextStyle(
-                            color: colors.onSurface,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        if (cmd.description.isNotEmpty)
-                          TextSpan(
-                            text: ' ${cmd.description}',
-                            style: TextStyle(
-                              color: colors.onSurfaceVariant,
-                              fontWeight: FontWeight.w400,
-                              fontSize: 14,
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'Нет команд',
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  )
+                : Material(
+                    color: Colors.transparent,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      shrinkWrap: true,
+                      itemCount: commands.length,
+                      itemBuilder: (context, index) {
+                        final cmd = commands[index];
+                        return InkWell(
+                          onTap: () => onCommandTap(cmd),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: cmd.slashCommand,
+                                    style: TextStyle(
+                                      color: colors.onSurface,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (cmd.description.isNotEmpty)
+                                    TextSpan(
+                                      text: ' ${cmd.description}',
+                                      style: TextStyle(
+                                        color: colors.onSurfaceVariant,
+                                        fontWeight: FontWeight.w400,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                      ],
+                        );
+                      },
                     ),
-                  ),
-                ),
-              );
-            },
-          ),
-        )),
+                  )),
       ),
     );
   }
@@ -7501,11 +7901,11 @@ class _SendPhotosDialogState extends State<_SendPhotosDialog> {
           onPressed: _pickedPaths.isEmpty
               ? null
               : () {
-            Navigator.pop(
-              context,
-              _PhotosToSend(paths: _pickedPaths, caption: _caption.text),
-            );
-          },
+                  Navigator.pop(
+                    context,
+                    _PhotosToSend(paths: _pickedPaths, caption: _caption.text),
+                  );
+                },
           child: const Text('Отправить'),
         ),
       ],
@@ -7516,7 +7916,7 @@ class _SendPhotosDialogState extends State<_SendPhotosDialog> {
 Future<_PhotosToSend?> _pickPhotosFlow(BuildContext context) async {
   final isMobile =
       Theme.of(context).platform == TargetPlatform.android ||
-          Theme.of(context).platform == TargetPlatform.iOS;
+      Theme.of(context).platform == TargetPlatform.iOS;
   if (isMobile) {
     return await showModalBottomSheet<_PhotosToSend>(
       context: context,
@@ -7597,11 +7997,11 @@ class _SendPhotosBottomSheetState extends State<_SendPhotosBottomSheet> {
                           borderRadius: BorderRadius.circular(12),
                           child: preview != null
                               ? Image(
-                            image: preview,
-                            width: 140,
-                            height: 140,
-                            fit: BoxFit.cover,
-                          )
+                                  image: preview,
+                                  width: 140,
+                                  height: 140,
+                                  fit: BoxFit.cover,
+                                )
                               : const ColoredBox(color: Colors.black12),
                         ),
                         Positioned(
@@ -7662,14 +8062,14 @@ class _SendPhotosBottomSheetState extends State<_SendPhotosBottomSheet> {
                   onPressed: _pickedPaths.isEmpty
                       ? null
                       : () {
-                    Navigator.pop(
-                      context,
-                      _PhotosToSend(
-                        paths: _pickedPaths,
-                        caption: _caption.text,
-                      ),
-                    );
-                  },
+                          Navigator.pop(
+                            context,
+                            _PhotosToSend(
+                              paths: _pickedPaths,
+                              caption: _caption.text,
+                            ),
+                          );
+                        },
                   child: const Text('Отправить'),
                 ),
               ],
@@ -7874,8 +8274,8 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
     _loadLocalDescription();
 
     _changesSubscription = ContactLocalNamesService().changes.listen((
-        contactId,
-        ) {
+      contactId,
+    ) {
       if (contactId == widget.contact.id && mounted) {
         _loadLocalDescription();
       }
@@ -7909,7 +8309,7 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
       originalLastName: widget.contact.lastName,
     );
     final String description =
-    (_localDescription != null && _localDescription!.isNotEmpty)
+        (_localDescription != null && _localDescription!.isNotEmpty)
         ? _localDescription!
         : (widget.contact.description ?? '');
 
@@ -8061,12 +8461,12 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                                     builder: (context) => EditContactScreen(
                                       contactId: widget.contact.id,
                                       originalFirstName:
-                                      widget.contact.firstName,
+                                          widget.contact.firstName,
                                       originalLastName: widget.contact.lastName,
                                       originalDescription:
-                                      widget.contact.description,
+                                          widget.contact.description,
                                       originalAvatarUrl:
-                                      widget.contact.photoBaseUrl,
+                                          widget.contact.photoBaseUrl,
                                     ),
                                   ),
                                 );
@@ -8098,7 +8498,7 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                                       ApiService.instance.getCachedContact(
                                         widget.contact.id,
                                       ) !=
-                                          null;
+                                      null;
                                   if (isInContacts) {
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(
@@ -8119,8 +8519,8 @@ class _ContactProfileDialogState extends State<ContactProfileDialog> {
                                     );
                                     await ApiService.instance
                                         .requestContactsByIds([
-                                      widget.contact.id,
-                                    ]);
+                                          widget.contact.id,
+                                        ]);
 
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(
@@ -8365,10 +8765,10 @@ class _WallpaperSelectionDialogState extends State<_WallpaperSelectionDialog> {
                 : () => widget.onImageSelected(_selectedImagePath!),
             child: _isLoading
                 ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('Установить'),
           ),
       ],
@@ -8571,18 +8971,18 @@ class _ControlMessageChip extends StatelessWidget {
 
   String _formatControlMessage() {
     final controlAttach = message.attaches.firstWhere(
-          (a) => a['_type'] == 'CONTROL',
+      (a) => a['_type'] == 'CONTROL',
     );
 
     final eventType = controlAttach['event'];
     final senderContact = contacts[message.senderId];
     final senderName = senderContact != null
         ? getContactDisplayName(
-      contactId: senderContact.id,
-      originalName: senderContact.name,
-      originalFirstName: senderContact.firstName,
-      originalLastName: senderContact.lastName,
-    )
+            contactId: senderContact.id,
+            originalName: senderContact.name,
+            originalFirstName: senderContact.firstName,
+            originalLastName: senderContact.lastName,
+          )
         : 'ID ${message.senderId}';
     final isMe = message.senderId == myId;
     final senderDisplayName = isMe ? 'Вы' : senderName;
@@ -8593,20 +8993,20 @@ class _ControlMessageChip extends StatelessWidget {
       }
       final userNames = userIds
           .map((id) {
-        if (id == myId) {
-          return 'Вы';
-        }
-        final contact = contacts[id];
-        if (contact != null) {
-          return getContactDisplayName(
-            contactId: contact.id,
-            originalName: contact.name,
-            originalFirstName: contact.firstName,
-            originalLastName: contact.lastName,
-          );
-        }
-        return 'участник с ID $id';
-      })
+            if (id == myId) {
+              return 'Вы';
+            }
+            final contact = contacts[id];
+            if (contact != null) {
+              return getContactDisplayName(
+                contactId: contact.id,
+                originalName: contact.name,
+                originalFirstName: contact.firstName,
+                originalLastName: contact.lastName,
+              );
+            }
+            return 'участник с ID $id';
+          })
           .where((name) => name.isNotEmpty)
           .join(', ');
       return userNames;
@@ -8616,8 +9016,6 @@ class _ControlMessageChip extends StatelessWidget {
       case 'new':
         final title = controlAttach['title'] ?? 'Новая группа';
 
-        // Костыль i think
-        // Best method is check for type of channel but i dont know how to get it
         if (message.senderId == 0) {
           return 'Создана группа "$title"';
         } else {
@@ -8674,7 +9072,7 @@ class _ControlMessageChip extends StatelessWidget {
         }
 
         if (message.senderId == myId) {
-          return '$senderDisplayName изменили название группы на "$newTitle"';
+            return '$senderDisplayName изменили название группы на "$newTitle"';
         } else {
           return '$senderDisplayName изменил(а) название группы на "$newTitle"';
         }
@@ -9009,5 +9407,72 @@ class _VideoWallpaperBackgroundState extends State<_VideoWallpaperBackground> {
         Container(color: Colors.black.withValues(alpha: 0.3)),
       ],
     );
+  }
+}
+
+class _VoiceWaveformPainter extends CustomPainter {
+  final List<double> samples;
+  final Color color;
+  final Color progressColor;
+  final ValueListenable<double> progress;
+  final bool showProgress;
+  final bool isDense;
+
+  _VoiceWaveformPainter({
+    required this.samples,
+    required this.color,
+    required this.progressColor,
+    required this.progress,
+    required this.showProgress,
+    required this.isDense,
+  }) : super(repaint: progress);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final basePaint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final playedPaint = Paint()
+      ..color = progressColor
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final h = size.height;
+    final mid = h / 2;
+
+    final barW = isDense ? 2.0 : 2.5;
+    final gap = isDense ? 1.6 : 2.2;
+    final step = barW + gap;
+    final bars = (size.width / step).floor().clamp(1, 400);
+
+    final p = showProgress ? progress.value.clamp(0.0, 1.0) : 0.0;
+    final progressX = size.width * p;
+
+    for (int i = 0; i < bars; i++) {
+      final x = i * step + barW / 2;
+      final sampleIdx = samples.isEmpty
+          ? 0
+          : ((i / bars) * (samples.length - 1)).round();
+      final amp = samples.isEmpty ? 0.1 : samples[sampleIdx].clamp(0.05, 1.0);
+      final lineH = (amp * (h * 0.9)).clamp(2.0, h);
+      final y1 = mid - lineH / 2;
+      final y2 = mid + lineH / 2;
+
+      final usePlayed = showProgress && x <= progressX;
+      final pnt = usePlayed ? playedPaint : basePaint;
+      pnt.strokeWidth = barW;
+      canvas.drawLine(Offset(x, y1), Offset(x, y2), pnt);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VoiceWaveformPainter oldDelegate) {
+    return oldDelegate.samples != samples ||
+        oldDelegate.color != color ||
+        oldDelegate.progressColor != progressColor ||
+        oldDelegate.showProgress != showProgress ||
+        oldDelegate.isDense != isDense;
   }
 }
