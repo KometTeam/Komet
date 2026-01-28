@@ -59,7 +59,7 @@ dependencies:
   flutter_background_service: ^5.0.1
   flutter_local_notifications: ^19.5.0
   wakelock_plus: ^1.2.8
-  flutter_markdown_plus: ^0.7.7
+  flutter_markdown_plus: ^1.0.6
   video_player: ^2.9.2
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.1.2
