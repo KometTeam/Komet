@@ -77,9 +77,11 @@ dependencies:
   flutter_svg: ^2.0.10+1
   chewie: ^1.7.5
   just_audio: ^0.9.40
+  just_audio_windows: ^0.2.2
   just_audio_media_kit: ^2.1.0
   media_kit_libs_linux: any
   record: ^6.1.2
+  record_windows: ^1.0.1
   platform_info: ^5.0.0
 
 dev_dependencies:

@@ -1,96 +1,115 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    
-    <!-- Разрешения для фонового сервиса и уведомлений -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    
-    <application
-        android:label="Komet"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTask" 
-            android:taskAffinity=""
-            android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true">
-            <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
+          xmlns:tools="http://schemas.android.com/tools"
+          package="com.gwid.app">  <!-- Укажите ваш реальный package name -->
 
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="max.ru" />
-                <data android:pathPrefix="/join/" />
-            </intent-filter>
-        </activity>
+  <!-- === РАЗРЕШЕНИЯ === -->
 
-        <!-- Фоновый сервис для поддержания соединения -->
-        <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="dataSync"
-            android:exported="true"
-            tools:replace="android:exported" />
+  <!-- Микрофон (Критично для ГС) -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-        <!-- Receiver для автозапуска после перезагрузки -->
-        <receiver
-            android:name="id.flutter.flutter_background_service.BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
+  <!-- Сеть -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-        <!-- Receiver for handling inline reply from notifications -->
-        <receiver
-            android:name=".NotificationReplyReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.gwid.app.REPLY_ACTION" />
-            </intent-filter>
-        </receiver>
+  <!-- Хранилище (Android 12 и ниже) -->
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+                   android:maxSdkVersion="28" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+                   android:maxSdkVersion="32" />
 
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
-    </application>
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
-        </intent>
+  <!-- Хранилище (Android 13+ / API 33+) - Теперь это раздельные права -->
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+  <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" />
-        </intent>
+  <!-- Фоновый сервис и уведомления -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+  <!-- Если планируете запись ГС в фоне на Android 14+, может потребоваться FOREGROUND_SERVICE_MICROPHONE -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <uses-permission android:name="android.permission.VIBRATE" />
 
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="http" />
-        </intent>
-    </queries>
+  <application
+    android:label="Komet"
+    android:name="${applicationName}"
+    android:icon="@mipmap/ic_launcher"
+    android:requestLegacyExternalStorage="true"
+    android:usesCleartextTraffic="true"> <!-- Добавлено на всякий случай для http ссылок -->
+
+    <activity
+      android:name=".MainActivity"
+      android:exported="true"
+      android:launchMode="singleTask"
+      android:theme="@style/LaunchTheme"
+      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+      android:hardwareAccelerated="true"
+      android:windowSoftInputMode="adjustResize"
+      android:showWhenLocked="true"
+      android:turnScreenOn="true">
+
+      <meta-data
+        android:name="io.flutter.embedding.android.NormalTheme"
+        android:resource="@style/NormalTheme" />
+
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+
+      <!-- Deep Links -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https"
+              android:host="max.ru"
+              android:pathPrefix="/join/" />
+      </intent-filter>
+    </activity>
+
+    <!-- Фоновый сервис -->
+    <service
+      android:name="id.flutter.flutter_background_service.BackgroundService"
+      android:foregroundServiceType="dataSync"
+      android:exported="true"
+      tools:replace="android:exported" />
+
+    <receiver
+      android:name="id.flutter.flutter_background_service.BootReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+    </receiver>
+
+    <receiver
+      android:name=".NotificationReplyReceiver"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="com.gwid.app.REPLY_ACTION" />
+      </intent-filter>
+    </receiver>
+
+    <meta-data
+      android:name="flutterEmbedding"
+      android:value="2" />
+  </application>
+
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.PROCESS_TEXT"/>
+      <data android:mimeType="text/plain"/>
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="https" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="http" />
+    </intent>
+  </queries>
 </manifest>
