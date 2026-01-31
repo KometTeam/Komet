@@ -1,13 +1,12 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'dart:io';
-import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:gwid/utils/theme_provider.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:gwid/api/api_service.dart';
 import 'package:flutter/services.dart';
 import 'package:gwid/models/chat.dart';
@@ -44,10 +43,6 @@ import 'package:gwid/screens/chat/models/chat_item.dart';
 import 'package:gwid/screens/chat/widgets/empty_chat_widget.dart';
 import 'package:gwid/widgets/message_bubble/models/message_read_status.dart';
 import 'package:gwid/screens/chats_screen.dart';
-
-import 'package:record/record.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:path_provider/path_provider.dart';
 
 bool _debugShowExactDate = false;
 
@@ -125,7 +120,7 @@ class _PhotoPickerResult {
   _PhotoPickerResult({required this.paths, this.caption});
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final List<Message> _messages = [];
   List<ChatItem> _chatItems = [];
   final Set<String> _deletingMessageIds = {};
@@ -201,6 +196,26 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _showKometColorPicker = false;
   String? _currentKometColorPrefix;
 
+  static const double _sendDragThreshold = 52.0;
+  static const double _sendDragVisualThreshold = 88.0;
+  double _sendDragDy = 0.0;
+  double _sendDragPullDy = 0.0;
+  bool _isSendDragging = false;
+  late final AnimationController _sendDragReturnController;
+
+  bool _isVoiceRecordingUi = false;
+  bool _isVoiceRecordingPaused = false;
+  Duration _voiceRecordingDuration = Duration.zero;
+  Timer? _voiceRecordingTimer;
+
+  static const double _recordCancelThreshold = 92.0;
+  double _recordCancelDragDx = 0.0;
+  late final AnimationController _recordCancelReturnController;
+
+  static const double _recordSendButtonSpace = 40.0;
+  static const double _recordPauseButtonSpace = 32.0;
+  static const double _recordButtonGap = 4.0;
+
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -213,46 +228,22 @@ class _ChatScreenState extends State<ChatScreen> {
   bool get _anyOptimize => _optimize || _ultraOptimize;
   int get _optPage => _ultraOptimize ? 10 : (_optimize ? 50 : _pageSize);
 
-
-  bool _isVoiceRecording = false;
-  bool _isVoiceLocked = false;
-  bool _isVoicePreview = false;
-  bool _isVoicePlaying = false;
-  bool _isVoiceArming = false;
-  bool _isVoiceStarting = false;
-  double _voiceDragDy = 0.0;
-  double _voiceDragDx = 0.0;
-  final ValueNotifier<double> _voiceDragDyN = ValueNotifier<double>(0.0);
-  final ValueNotifier<double> _voiceDragDxN = ValueNotifier<double>(0.0);
-  int _voiceRecordSeconds = 0;
-  Timer? _voiceRecordTimer;
-  int _voiceDragLastSetStateMs = 0;
-  int _voiceArmLastSetStateMs = 0;
-  final AudioRecorder _voiceRecorder = AudioRecorder();
-  final AudioPlayer _voicePlayer = AudioPlayer();
-  String? _voiceRecordFilePath;
-
-  final List<double> _voiceWaveSamples = <double>[];
-  final ValueNotifier<int> _voiceWaveTick = ValueNotifier<int>(0);
-  final ValueNotifier<double> _voicePlaybackProgress = ValueNotifier<double>(0.0);
-  StreamSubscription? _voiceAmplitudeSub;
-  StreamSubscription<Duration>? _voicePositionSub;
-
-  final LayerLink _voiceOverlayLink = LayerLink();
-  OverlayEntry? _voiceOverlayEntry;
-  bool _voiceOverlayIsBlocked = false;
-  bool _voiceOverlayIsSmall = false;
-
-  int _voiceDebugArmUpdates = 0;
-  int _voiceDebugDragUpdates = 0;
-  int _voiceDebugLastMs = 0;
-  final ValueNotifier<String> _voiceDebugText = ValueNotifier<String>('');
-
   @override
   void initState() {
     super.initState();
     _currentContact = widget.contact;
     _pinnedMessage = widget.pinnedMessage;
+
+    _sendDragReturnController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+
+    _recordCancelReturnController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+
     _initializeChat();
     _loadEncryptionConfig();
     _loadSpecialMessagesSetting();
@@ -512,6 +503,10 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       }
     }
+  }
+
+  Widget _buildChatWallpaper(ThemeProvider provider) {
+    return _buildChatBackground(provider);
   }
 
   void _insertMention(Contact user) {
@@ -4061,30 +4056,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    _voiceOverlayEntry?.remove();
-    _voiceOverlayEntry = null;
-
-    _voiceAmplitudeSub?.cancel();
-    _voiceAmplitudeSub = null;
-    _voicePositionSub?.cancel();
-    _voicePositionSub = null;
-    _voiceWaveTick.dispose();
-    _voicePlaybackProgress.dispose();
-    _voiceDragDxN.dispose();
-    _voiceDragDyN.dispose();
-    _voiceDebugText.dispose();
-
-    _voiceRecordTimer?.cancel();
-    _voiceRecordTimer = null;
-    try {
-      _voiceRecorder.dispose();
-    } catch (_) {}
-    try {
-      _voicePlayer.dispose();
-    } catch (_) {}
-
     MessageQueueService().clearTemporaryQueue(chatId: widget.chatId);
 
+    _sendDragReturnController.dispose();
+    _recordCancelReturnController.dispose();
+    _voiceRecordingTimer?.cancel();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     if (ApiService.instance.currentActiveChatId == widget.chatId) {
       ApiService.instance.currentActiveChatId = null;
     }
@@ -4101,6 +4079,202 @@ class _ChatScreenState extends State<ChatScreen> {
     _pinnedMessageNotifier.dispose();
     _showScrollToBottomNotifier.dispose();
     super.dispose();
+  }
+
+  String _formatRecordingDuration(Duration duration) {
+    final totalSeconds = duration.inSeconds;
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  void _startVoiceRecordingUi() {
+    _voiceRecordingTimer?.cancel();
+    setState(() {
+      _isVoiceRecordingUi = true;
+      _isVoiceRecordingPaused = false;
+      _voiceRecordingDuration = Duration.zero;
+      _recordCancelDragDx = 0.0;
+      _sendDragPullDy = 0.0;
+      _sendDragDy = 0.0;
+      _isSendDragging = false;
+    });
+
+    _voiceRecordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (!_isVoiceRecordingUi) return;
+      if (_isVoiceRecordingPaused) return;
+      setState(() {
+        _voiceRecordingDuration += const Duration(seconds: 1);
+      });
+    });
+  }
+
+  void _cancelVoiceRecordingUi() {
+    _voiceRecordingTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _isVoiceRecordingUi = false;
+      _isVoiceRecordingPaused = false;
+      _voiceRecordingDuration = Duration.zero;
+      _recordCancelDragDx = 0.0;
+    });
+  }
+
+  void _toggleVoiceRecordingPause() {
+    if (!mounted) return;
+    setState(() {
+      _isVoiceRecordingPaused = !_isVoiceRecordingPaused;
+      _recordCancelDragDx = 0.0;
+    });
+  }
+
+  void _handleRecordCancelDragStart() {
+    _recordCancelReturnController.stop();
+  }
+
+  void _handleRecordCancelDragUpdate(DragUpdateDetails details) {
+    final next = (_recordCancelDragDx + details.delta.dx).clamp(-_recordCancelThreshold * 1.25, 0.0);
+    if (next == _recordCancelDragDx) return;
+    setState(() {
+      _recordCancelDragDx = next;
+    });
+  }
+
+  void _handleRecordCancelDragEnd() {
+    final reached = _recordCancelDragDx <= -_recordCancelThreshold;
+    if (reached) {
+      _cancelVoiceRecordingUi();
+      return;
+    }
+
+    final tween = Tween<double>(begin: _recordCancelDragDx, end: 0.0).animate(
+      CurvedAnimation(parent: _recordCancelReturnController, curve: Curves.easeOutCubic),
+    );
+    void listener() {
+      setState(() {
+        _recordCancelDragDx = tween.value;
+      });
+    }
+
+    _recordCancelReturnController
+      ..removeListener(listener)
+      ..reset();
+    _recordCancelReturnController.addListener(listener);
+    _recordCancelReturnController.forward().whenComplete(() {
+      _recordCancelReturnController.removeListener(listener);
+    });
+  }
+
+  Widget _buildVoiceRecordingBar({
+    required bool isBlocked,
+    required bool isGlass,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    final cancelProgress = (_recordCancelDragDx.abs() / _recordCancelThreshold).clamp(0.0, 1.0);
+    final cancelColor = Color.lerp(
+      colors.onSurface.withValues(alpha: 0.7),
+      colors.error,
+      cancelProgress,
+    )!;
+
+    final canInteract = !isBlocked && !_isVoiceRecordingPaused;
+
+    final trashButton = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: (!isBlocked) ? _cancelVoiceRecordingUi : null,
+        child: Padding(
+          padding: const EdgeInsets.all(6.0),
+          child: Icon(
+            Icons.delete_rounded,
+            size: 20,
+            color: colors.error,
+          ),
+        ),
+      ),
+    );
+
+    final content = Row(
+      children: [
+        Text(
+          _formatRecordingDuration(_voiceRecordingDuration),
+          style: TextStyle(
+            color: colors.onSurface.withValues(alpha: 0.85),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 6),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final offset = Tween<Offset>(begin: const Offset(-0.15, 0), end: Offset.zero).animate(animation);
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(position: offset, child: child),
+            );
+          },
+          child: _isVoiceRecordingPaused
+              ? SizedBox(key: const ValueKey<String>('trash'), child: trashButton)
+              : const SizedBox(key: ValueKey<String>('trashSpacer'), width: 32, height: 32),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+              child: _isVoiceRecordingPaused
+                  ? SizedBox(
+                      key: const ValueKey<String>('waveform'),
+                      height: 24,
+                      child: _FakeWaveform(),
+                    )
+                  : Transform.translate(
+                      key: const ValueKey<String>('cancel'),
+                      offset: Offset(_recordCancelDragDx, 0),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: canInteract ? _cancelVoiceRecordingUi : null,
+                        child: Text(
+                          'CANCEL',
+                          style: TextStyle(
+                            color: cancelColor,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const SizedBox(width: _recordSendButtonSpace + _recordButtonGap + _recordPauseButtonSpace),
+      ],
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: canInteract
+          ? (_) => _handleRecordCancelDragStart()
+          : null,
+      onHorizontalDragUpdate: canInteract
+          ? (details) => _handleRecordCancelDragUpdate(details)
+          : null,
+      onHorizontalDragEnd: canInteract
+          ? (_) => _handleRecordCancelDragEnd()
+          : null,
+      child: content,
+    );
   }
 
   void _startSearch() {
@@ -5326,7 +5500,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildChatWallpaper(ThemeProvider provider) {
+  Widget _buildChatBackground(ThemeProvider provider) {
     if (provider.hasChatSpecificWallpaper(widget.chatId)) {
       final chatSpecificImagePath = provider.getChatSpecificWallpaper(
         widget.chatId,
@@ -5431,736 +5605,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-
-  Future<String> _createVoiceTempPath() async {
-    final dir = await getTemporaryDirectory();
-    final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-    final ext = isDesktop ? '.wav' : '.m4a';
-    final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}$ext';
-    final fullPath = path.join(dir.path, fileName);
-    final directory = Directory(fullPath).parent;
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
-
-    print('DEBUG: Voice path: $fullPath');
-    return fullPath;
-  }
-
-  Future<void> _resetVoiceUiState({required bool deleteFile}) async {
-    _voiceRecordTimer?.cancel();
-    _voiceRecordTimer = null;
-
-    _voiceAmplitudeSub?.cancel();
-    _voiceAmplitudeSub = null;
-    _voicePositionSub?.cancel();
-    _voicePositionSub = null;
-
-    _voicePlaybackProgress.value = 0.0;
-
-    try {
-      if (_isVoicePlaying) {
-        await _voicePlayer.pause();
-      }
-    } catch (_) {}
-
-    final toDelete = deleteFile ? _voiceRecordFilePath : null;
-
-    if (!mounted) return;
-    setState(() {
-      _isVoiceRecording = false;
-      _isVoiceLocked = false;
-      _isVoicePreview = false;
-      _isVoicePlaying = false;
-      _isVoiceArming = false;
-      _isVoiceStarting = false;
-      _voiceDragDy = 0.0;
-      _voiceDragDx = 0.0;
-      _voiceDragDyN.value = 0.0;
-      _voiceDragDxN.value = 0.0;
-      _voiceRecordSeconds = 0;
-      _voiceRecordFilePath = null;
-    });
-
-    _syncVoiceOverlay();
-
-    _voiceWaveSamples.clear();
-    _voiceWaveTick.value = 0;
-
-    if (toDelete != null) {
-      try {
-        final f = File(toDelete);
-        if (await f.exists()) {
-          await f.delete();
-        }
-      } catch (_) {}
-    }
-  }
-
-  Future<bool> _ensureVoicePermission() async {
-    try {
-      return await _voiceRecorder.hasPermission();
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _startVoiceRecording() async {
-    if (!mounted) return;
-    if (_isVoiceRecording || _isVoiceStarting) return;
-
-    _isVoiceStarting = true;
-
-    final ok = await _ensureVoicePermission();
-    if (!ok) {
-      _isVoiceArming = false;
-      _isVoiceStarting = false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нужно разрешение на запись аудио')),
-        );
-      }
-      return;
-    }
-
-    try {
-      final recordPath = await _createVoiceTempPath();
-
-      print('DEBUG: Starting recording to: $recordPath');
-
-
-      final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-
-      final config = RecordConfig(
-        encoder: isDesktop ? AudioEncoder.wav : AudioEncoder.aacLc,
-        sampleRate: isDesktop ? 48000 : 44100,
-      );
-
-      await _voiceRecorder.start(
-        config,
-        path: recordPath,
-      );
-
-
-      if (!mounted) {
-        _isVoiceStarting = false;
-        return;
-      }
-
-      setState(() {
-        _isVoiceRecording = true;
-        _isVoiceStarting = false;
-      });
-
-      _voiceRecordFilePath = recordPath;
-
-      _voiceRecordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!mounted) return;
-        if (!_isVoiceRecording) return;
-        setState(() {
-          _voiceRecordSeconds += 1;
-        });
-      });
-
-    } catch (e, stackTrace) {
-      print('Ошибка начала записи: $e');
-      print(stackTrace);
-
-      _isVoiceArming = false;
-      _isVoiceStarting = false;
-      _voiceRecordFilePath = null;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка записи: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-
-
-  Future<void> _stopVoiceRecordingToPreview() async {
-    _voiceRecordTimer?.cancel();
-    _voiceRecordTimer = null;
-
-    _voiceAmplitudeSub?.cancel();
-    _voiceAmplitudeSub = null;
-
-    String? path;
-    try {
-      path = await _voiceRecorder.stop();
-    } catch (e) {
-      print('Ошибка остановки записи: $e');
-      path = null;
-    }
-
-    final resolvedPath = path ?? _voiceRecordFilePath;
-    if (resolvedPath == null) {
-      await _resetVoiceUiState(deleteFile: true);
-      return;
-    }
-
-    try {
-      await _voicePlayer.setFilePath(resolvedPath);
-    } catch (e) {
-      print('Ошибка установки файла в плеер: $e');
-      await _resetVoiceUiState(deleteFile: true);
-      return;
-    }
-
-    _voicePositionSub?.cancel();
-    _voicePlaybackProgress.value = 0.0;
-
-    _voicePositionSub = _voicePlayer.positionStream.listen((pos) {
-      final total = _voicePlayer.duration;
-      if (total == null || total.inMilliseconds <= 0) {
-        _voicePlaybackProgress.value = 0.0;
-        return;
-      }
-      _voicePlaybackProgress.value =
-          (pos.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
-    });
-
-    if (!mounted) return;
-    setState(() {
-      _isVoiceRecording = false;
-      _isVoiceLocked = false;
-      _isVoicePreview = true;
-      _isVoicePlaying = false;
-      _voiceDragDy = 0.0;
-      _voiceDragDx = 0.0;
-      _voiceDragDyN.value = 0.0;
-      _voiceRecordFilePath = resolvedPath;
-    });
-
-    _syncVoiceOverlay();
-  }
-
-  Future<void> _cancelVoiceRecording() async {
-    try {
-      await _voiceRecorder.stop();
-    } catch (_) {}
-    await _resetVoiceUiState(deleteFile: true);
-  }
-
-  Future<void> _toggleVoicePlayback() async {
-    if (!_isVoicePreview) return;
-    try {
-      if (_voicePlayer.playing) {
-        await _voicePlayer.pause();
-        if (!mounted) return;
-        setState(() {
-          _isVoicePlaying = false;
-        });
-      } else {
-        await _voicePlayer.play();
-        if (!mounted) return;
-        setState(() {
-          _isVoicePlaying = true;
-        });
-      }
-    } catch (e) {
-      print('Ошибка воспроизведения: $e');
-    }
-  }
-
-  void _syncVoiceOverlay() {
-    if (!mounted) return;
-
-    final shouldShow = (_isVoiceRecording || _isVoicePreview);
-    if (!shouldShow) {
-      _voiceOverlayEntry?.remove();
-      _voiceOverlayEntry = null;
-      return;
-    }
-
-    if (_voiceOverlayEntry != null) {
-      _voiceOverlayEntry!.markNeedsBuild();
-      return;
-    }
-
-    _voiceOverlayEntry = OverlayEntry(
-      builder: (context) {
-        return CompositedTransformFollower(
-          link: _voiceOverlayLink,
-          targetAnchor: Alignment.topRight,
-          followerAnchor: Alignment.bottomRight,
-          offset: const Offset(-18, -10),
-          child: Material(
-            color: Colors.transparent,
-            child: _buildVoiceOverlayButton(
-              isBlocked: _voiceOverlayIsBlocked,
-              isSmall: _voiceOverlayIsSmall,
-            ),
-          ),
-        );
-      },
-    );
-
-    final overlay = Overlay.of(context);
-    overlay.insert(_voiceOverlayEntry!);
-  }
-
-  String _formatVoiceDuration(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(1, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    return '\$m:\$s';
-  }
-
-  void _onVoiceArmPanStart(DragStartDetails details) {
-    if (_textController.text.trim().isNotEmpty) return;
-    if (_isVoiceRecording || _isVoicePreview) return;
-
-    _textFocusNode.unfocus();
-    if (!mounted) return;
-
-    _isVoiceArming = true;
-    _voiceDragDy = 0.0;
-    _voiceDragDx = 0.0;
-    _voiceDragDyN.value = 0.0;
-    _voiceDragDxN.value = 0.0;
-
-    _syncVoiceOverlay();
-  }
-
-  void _onVoiceArmPanUpdate(DragUpdateDetails details) {
-    if (!_isVoiceArming) return;
-    if (_isVoiceStarting || _isVoiceRecording) return;
-
-    _voiceDebugArmUpdates += 1;
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    _voiceDragDy += details.delta.dy;
-    _voiceDragDx += details.delta.dx;
-    _voiceDragDyN.value = _voiceDragDy;
-    _voiceDragDxN.value = _voiceDragDx;
-
-    _updateVoiceDebugStats();
-
-    if (_voiceDragDy <= -12 && !_isVoiceRecording && !_isVoiceStarting) {
-      _startVoiceRecording();
-    }
-  }
-
-  void _onVoiceArmPanEnd(DragEndDetails details) {
-    if (!_isVoiceArming) return;
-
-
-    _isVoiceArming = false;
-    _voiceDragDyN.value = 0.0;
-
-    if (!_isVoiceRecording) {
-      _voiceDragDx = 0.0;
-      _voiceDragDy = 0.0;
-      _syncVoiceOverlay();
-    }
-  }
-
-  void _onVoicePanUpdate(DragUpdateDetails details) {
-    if (!_isVoiceRecording || _isVoiceLocked) return;
-
-    _voiceDebugDragUpdates += 1;
-
-
-    _voiceDragDy += details.delta.dy;
-    _voiceDragDx += details.delta.dx;
-    _voiceDragDyN.value = _voiceDragDy;
-    _voiceDragDxN.value = _voiceDragDx;
-
-    _updateVoiceDebugStats();
-  }
-
-  void _updateVoiceDebugStats() {
-    if (!kDebugMode) return;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (_voiceDebugLastMs == 0) {
-      _voiceDebugLastMs = now;
-      return;
-    }
-    if (now - _voiceDebugLastMs < 500) return;
-    final arm = _voiceDebugArmUpdates;
-    final drag = _voiceDebugDragUpdates;
-    _voiceDebugArmUpdates = 0;
-    _voiceDebugDragUpdates = 0;
-    _voiceDebugLastMs = now;
-    _voiceDebugText.value = 'arm:\$arm/0.5s drag:\$drag/0.5s';
-  }
-
-  void _onVoicePanEnd(DragEndDetails details) {
-    if (!_isVoiceRecording) return;
-    if (_isVoiceLocked) return;
-
-    final shouldCancel = _voiceDragDx <= -120;
-    if (shouldCancel) {
-      _cancelVoiceRecording();
-      return;
-    }
-
-    final shouldLock = _voiceDragDy <= -140;
-    if (shouldLock) {
-      setState(() {
-        _isVoiceLocked = true;
-        _voiceDragDy = 0.0;
-        _voiceDragDx = 0.0;
-        _voiceDragDyN.value = 0.0;
-        _voiceDragDxN.value = 0.0;
-      });
-      return;
-    }
-
-
-    _stopVoiceRecordingToPreview();
-  }
-
-  void _seekVoiceByWave(double localDx, double width) {
-    final total = _voicePlayer.duration;
-    if (total == null || total.inMilliseconds <= 0) return;
-    if (width <= 0) return;
-    final ratio = (localDx / width).clamp(0.0, 1.0);
-    final ms = (total.inMilliseconds * ratio).round();
-    _voicePlayer.seek(Duration(milliseconds: ms));
-  }
-
-  Widget _buildVoiceWaveform({
-    required bool isBlocked,
-    required bool isSmall,
-    required bool canCancel,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    final showPreview = _isVoicePreview && _voiceRecordFilePath != null;
-    final showRecording = _isVoiceRecording;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-
-        final painter = _VoiceWaveformPainter(
-          samples: _voiceWaveSamples,
-          color: colors.onSurfaceVariant.withValues(alpha: 0.55),
-          progressColor: colors.primary,
-          progress: _voicePlaybackProgress,
-          showProgress: showPreview,
-          isDense: isSmall,
-        );
-
-        Widget wave = RepaintBoundary(
-          child: AnimatedBuilder(
-            animation: Listenable.merge([
-              _voiceWaveTick,
-              _voicePlaybackProgress,
-            ]),
-            builder: (context, _) {
-              return CustomPaint(
-                painter: painter,
-                size: Size(width, isSmall ? 26 : 28),
-              );
-            },
-          ),
-        );
-
-        if (showPreview && !isBlocked) {
-          wave = GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanDown: (d) => _seekVoiceByWave(d.localPosition.dx, width),
-            onPanUpdate: (d) => _seekVoiceByWave(d.localPosition.dx, width),
-            child: wave,
-          );
-        }
-
-        if (showRecording && canCancel && !isBlocked) {
-          wave = Stack(
-            children: [
-              Positioned.fill(child: wave),
-              Align(
-                alignment: Alignment.center,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: _cancelVoiceRecording,
-                    child: Padding(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontSize: isSmall ? 12 : 13,
-                          fontWeight: FontWeight.w600,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-
-        return wave;
-      },
-    );
-  }
-
-  Widget _buildVoiceInputBar({
-    required bool isBlocked,
-    required bool isSmall,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-
-    final showPreview = _isVoicePreview && _voiceRecordFilePath != null;
-    final showRecording = _isVoiceRecording;
-
-    final canSend = !isBlocked && showPreview;
-    final canStopToPreview = !isBlocked && showRecording;
-
-    final barHeight = isSmall ? 44.0 : 48.0;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanUpdate: (showRecording && !_isVoiceLocked) ? _onVoicePanUpdate : null,
-      onPanEnd: (showRecording && !_isVoiceLocked) ? _onVoicePanEnd : null,
-      child: SizedBox(
-        height: barHeight,
-        child: Stack(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _formatVoiceDuration(_voiceRecordSeconds),
-                    style: TextStyle(
-                      fontSize: isSmall ? 13 : 14,
-                      fontWeight: FontWeight.w700,
-                      color: colors.onSurface,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Transform.translate(
-                    offset: Offset(
-                      showRecording
-                          ? (_voiceDragDxN.value).clamp(-80.0, 0.0)
-                          : 0,
-                      0,
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 160),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: (showPreview)
-                          ? _buildVoiceWaveform(
-                        isBlocked: isBlocked,
-                        isSmall: isSmall,
-                        canCancel: !isBlocked && showRecording,
-                      )
-                          : Center(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(18),
-                            onTap: isBlocked
-                                ? null
-                                : () {
-                              _resetVoiceUiState(deleteFile: true);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              child: Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  fontSize: isSmall ? 12 : 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: isSmall ? 50 : 56,
-                  height: barHeight,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.centerRight,
-                    children: [
-                      ValueListenableBuilder<double>(
-                        valueListenable: _voiceDragDyN,
-                        builder: (context, dy, _) {
-                          final dragDy = (showRecording && !_isVoiceLocked)
-                              ? dy.clamp(-18.0, 0.0)
-                              : 0.0;
-                          return Transform.translate(
-                            offset: Offset(0, dragDy),
-                            child: Container(
-                              width: isSmall ? 44 : 50,
-                              height: isSmall ? 44 : 50,
-                              decoration: BoxDecoration(
-                                color: isBlocked
-                                    ? colors.onSurface.withValues(alpha: 0.2)
-                                    : colors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(30),
-                                  onTap: (canStopToPreview || canSend)
-                                      ? () async {
-                                    if (showRecording) {
-                                      await _stopVoiceRecordingToPreview();
-                                      return;
-                                    }
-
-                                    final path = _voiceRecordFilePath;
-                                    if (path == null) {
-                                      await _resetVoiceUiState(deleteFile: true);
-                                      return;
-                                    }
-
-                                    try {
-                                      await ApiService.instance.sendVoiceMessage(
-                                        widget.chatId,
-                                        localPath: path,
-                                        senderId: _actualMyId,
-                                      );
-                                      await _resetVoiceUiState(deleteFile: true);
-                                    } catch (e) {
-                                      if (!mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Ошибка отправки ГС: \$e'),
-                                          backgroundColor:
-                                          Theme.of(context).colorScheme.error,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                      : null,
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.send_rounded,
-                                      size: isSmall ? 20 : 22,
-                                      color: isBlocked
-                                          ? colors.onSurface.withValues(alpha: 0.5)
-                                          : colors.onPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (kDebugMode && (showRecording || showPreview))
-              Positioned(
-                left: 8,
-                bottom: 2,
-                child: ValueListenableBuilder<String>(
-                  valueListenable: _voiceDebugText,
-                  builder: (context, v, _) {
-                    if (v.isEmpty) return const SizedBox.shrink();
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        v,
-                        style: const TextStyle(fontSize: 10, color: Colors.white),
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVoiceOverlayButton({
-    required bool isBlocked,
-    required bool isSmall,
-  }) {
-    final showPreview = _isVoicePreview && _voiceRecordFilePath != null;
-    final showRecording = _isVoiceRecording;
-
-    if (!showPreview && !showRecording) return const SizedBox.shrink();
-
-    final colors = Theme.of(context).colorScheme;
-    final size = isSmall ? 34.0 : 38.0;
-
-    final bool isPause = showRecording;
-    final icon = isPause
-        ? Icons.pause_rounded
-        : (_isVoicePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded);
-
-    final onTap = isBlocked
-        ? null
-        : () {
-      if (showRecording) {
-        _stopVoiceRecordingToPreview();
-      } else {
-        _toggleVoicePlayback();
-      }
-    };
-
-    final bgColor = showRecording
-        ? colors.primary.withValues(alpha: 0.92)
-        : colors.surfaceContainerHighest.withValues(alpha: 0.35);
-
-    final iconColor = showRecording
-        ? (isBlocked
-        ? colors.onPrimary.withValues(alpha: 0.55)
-        : colors.onPrimary)
-        : (isBlocked
-        ? colors.onSurface.withValues(alpha: 0.45)
-        : colors.onSurface);
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Material(
-        color: bgColor,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Center(
-            child: Icon(
-              icon,
-              size: isSmall ? 18 : 20,
-              color: iconColor,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSendOrMicButton({
     required bool isBlocked,
     required bool isSmall,
@@ -6170,16 +5614,30 @@ class _ChatScreenState extends State<ChatScreen> {
     return ValueListenableBuilder(
       valueListenable: _textController,
       builder: (context, value, child) {
+        if (_isVoiceRecordingUi) {
+          final padding = EdgeInsets.all(isSmall ? 10 : 6);
+          return Container(
+            decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
+            child: Material(
+              color: Colors.transparent,
+              child: Padding(
+                padding: padding,
+                child: Icon(
+                  Icons.send_rounded,
+                  color: colors.onPrimary,
+                  size: isSmall ? 20 : 24,
+                ),
+              ),
+            ),
+          );
+        }
+
         final hasText = _textController.text.trim().isNotEmpty;
         final showSend = hasText;
-        final bool showStop = _isVoiceRecording && _isVoiceLocked;
-        final canStartVoice = !isBlocked && !hasText;
 
         Color backgroundColor;
         if (isBlocked) {
           backgroundColor = colors.onSurface.withValues(alpha: 0.2);
-        } else if (showStop) {
-          backgroundColor = colors.error;
         } else {
           backgroundColor = colors.primary;
         }
@@ -6188,105 +5646,166 @@ class _ChatScreenState extends State<ChatScreen> {
         if (isBlocked) {
           iconColor = colors.onSurface.withValues(alpha: 0.5);
         } else {
-          iconColor = showStop ? colors.onError : colors.onPrimary;
+          iconColor = colors.onPrimary;
         }
 
         Widget icon;
         VoidCallback? onTap;
 
-        if (showStop) {
-          icon = Icon(Icons.stop_rounded, color: iconColor, size: isSmall ? 20 : 24);
-          onTap = _stopVoiceRecordingToPreview;
-        } else if (showSend) {
-          icon = Icon(Icons.send_rounded, color: iconColor, size: isSmall ? 20 : 24);
-          onTap = isBlocked ? null : _sendMessage;
-        } else {
-          icon = Icon(Icons.mic_rounded, color: iconColor, size: isSmall ? 20 : 24);
-          onTap = null;
-        }
+        final dragProgress = (_sendDragPullDy.abs() / _sendDragVisualThreshold).clamp(0.0, 1.0);
+
+        final sendColor = showSend ? iconColor : iconColor.withValues(alpha: 0.4);
+        icon = Stack(
+          alignment: Alignment.center,
+          children: [
+            Opacity(
+              opacity: 1.0 - dragProgress,
+              child: Icon(Icons.send_rounded, color: sendColor, size: isSmall ? 20 : 24),
+            ),
+            Opacity(
+              opacity: dragProgress,
+              child: Icon(Icons.mic_rounded, color: iconColor, size: isSmall ? 20 : 24),
+            ),
+          ],
+        );
+        onTap = (showSend && !isBlocked) ? _sendMessage : null;
 
         final padding = EdgeInsets.all(isSmall ? 10 : 6);
+        final baseIconSize = isSmall ? 20.0 : 24.0;
+        final baseDiameter = baseIconSize + 2 * (isSmall ? 10.0 : 6.0);
+        const maxScale = 1.12;
+        final scale = 1.0 + (maxScale - 1.0) * dragProgress;
 
-        GestureDragStartCallback? onPanStart;
-        GestureDragUpdateCallback? onPanUpdate;
-        GestureDragEndCallback? onPanEnd;
+        final button = Container(
+          key: ValueKey<String>(showSend ? 'send' : 'mic'),
+          decoration: BoxDecoration(color: backgroundColor, shape: BoxShape.circle),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: _isSendDragging ? null : onTap,
+              child: Padding(padding: padding, child: icon),
+            ),
+          ),
+        );
 
-        if (!showSend && !showStop) {
-          if (_isVoiceRecording && !_isVoiceLocked) {
-            // Уже идёт запись — используем обработчики записи
-            onPanUpdate = _onVoicePanUpdate;
-            onPanEnd = _onVoicePanEnd;
-          } else if (!_isVoiceRecording && !_isVoicePreview) {
-            onPanStart = canStartVoice ? _onVoiceArmPanStart : null;
-            onPanUpdate = canStartVoice ? _onVoiceArmPanUpdate : null;
-            onPanEnd = canStartVoice ? _onVoiceArmPanEnd : null;
-          }
-        }
-
-        return ValueListenableBuilder<double>(
-          valueListenable: _voiceDragDyN,
-          builder: (context, dragDyValue, _) {
-            final dragDy = (!showSend && !showStop && _isVoiceArming)
-                ? dragDyValue.clamp(-18.0, 0.0)
-                : 0.0;
-
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanStart: onPanStart,
-              onPanUpdate: onPanUpdate,
-              onPanEnd: onPanEnd,
-              child: Transform.translate(
-                offset: Offset(0, dragDy),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) {
-                    return ScaleTransition(
-                      scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
-                      child: FadeTransition(opacity: animation, child: child),
-                    );
-                  },
-                  child: Container(
-                    key: ValueKey<String>(showStop ? 'stop' : (showSend ? 'send' : 'mic')),
-                    decoration: BoxDecoration(
-                        color: backgroundColor,
-                        shape: BoxShape.circle
-                    ),
-                    child: (!showSend && !showStop)
-                        ? Padding(
-                      padding: padding,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.center,
-                        children: [
-                          icon,
-                          // Показываем стрелку вверх при arming
-                          if (!_isVoiceRecording && _isVoiceArming)
-                            Positioned(
-                              top: -18,
-                              child: Icon(
-                                Icons.keyboard_arrow_up_rounded,
-                                size: isSmall ? 16 : 18,
-                                color: colors.onPrimary.withValues(alpha: 0.85),
-                              ),
-                            ),
-                        ],
-                      ),
-                    )
-                        : Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
-                        onTap: onTap,
-                        child: Padding(padding: padding, child: icon),
-                      ),
-                    ),
-                  ),
-                ),
+        final ring = SizedBox(
+          width: baseDiameter * maxScale,
+          height: baseDiameter * maxScale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: iconColor.withValues(alpha: 0.22),
+                width: 1.25,
               ),
-            );
-          },
+            ),
+          ),
+        );
+
+        final scaled = Transform.scale(
+          scale: scale,
+          child: button,
+        );
+
+        final dragEnabled = !isBlocked;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: dragEnabled
+              ? (_) {
+                  _sendDragReturnController.stop();
+                  setState(() {
+                    _isSendDragging = true;
+                  });
+                }
+              : null,
+          onPanUpdate: dragEnabled
+              ? (details) {
+                  final nextPull = (_sendDragPullDy + details.delta.dy).clamp(-_sendDragVisualThreshold, 0.0);
+                  final nextPos = nextPull.clamp(-_sendDragThreshold, 0.0);
+                  if (nextPull == _sendDragPullDy && nextPos == _sendDragDy) return;
+                  setState(() {
+                    _sendDragPullDy = nextPull;
+                    _sendDragDy = nextPos;
+                  });
+                }
+              : null,
+          onPanEnd: dragEnabled
+              ? (_) {
+                  final reached = _sendDragDy <= -_sendDragThreshold;
+                  if (!reached) {
+                    final tween = Tween<double>(begin: _sendDragPullDy, end: 0.0).animate(
+                      CurvedAnimation(parent: _sendDragReturnController, curve: Curves.easeOutCubic),
+                    );
+                    void listener() {
+                      setState(() {
+                        _sendDragPullDy = tween.value;
+                        _sendDragDy = tween.value.clamp(-_sendDragThreshold, 0.0);
+                      });
+                    }
+
+                    _sendDragReturnController
+                      ..removeListener(listener)
+                      ..reset();
+                    _sendDragReturnController.addListener(listener);
+                    _sendDragReturnController.forward().whenComplete(() {
+                      _sendDragReturnController.removeListener(listener);
+                      if (!mounted) return;
+                      setState(() {
+                        _sendDragPullDy = 0.0;
+                        _sendDragDy = 0.0;
+                        _isSendDragging = false;
+                      });
+                    });
+                  } else {
+                    _sendDragReturnController.duration = const Duration(milliseconds: 320);
+                    final tween = Tween<double>(begin: _sendDragDy, end: 0.0).animate(
+                      CurvedAnimation(parent: _sendDragReturnController, curve: Curves.easeOutCubic),
+                    );
+
+                    void listener() {
+                      setState(() {
+                        _sendDragDy = tween.value;
+                        _sendDragPullDy = -_sendDragVisualThreshold;
+                      });
+                    }
+
+                    _sendDragReturnController
+                      ..removeListener(listener)
+                      ..reset();
+                    _sendDragReturnController.addListener(listener);
+                    _sendDragReturnController.forward().whenComplete(() {
+                      _sendDragReturnController.removeListener(listener);
+                      if (!mounted) return;
+                      _sendDragReturnController.duration = const Duration(milliseconds: 180);
+                      _startVoiceRecordingUi();
+                    });
+                  }
+                }
+              : null,
+          child: Transform.translate(
+            offset: Offset(0, _sendDragDy),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return ScaleTransition(
+                  scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
+                  child: FadeTransition(opacity: animation, child: child),
+                );
+              },
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  if (dragProgress > 0.0) ring,
+                  scaled,
+                ],
+              ),
+            ),
+          ),
         );
       },
     );
@@ -6305,35 +5824,134 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (theme.useGlassPanels) {
-      final inputBar = ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: theme.bottomBarBlur,
-            sigmaY: theme.bottomBarBlur,
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface.withValues(alpha: theme.bottomBarOpacity),
+      final sendButton = _buildSendOrMicButton(isBlocked: isBlocked, isSmall: false);
+
+      if (_isVoiceRecordingUi) {
+        final inputBar = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
+              clipBehavior: Clip.antiAlias,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: theme.bottomBarBlur,
+                  sigmaY: theme.bottomBarBlur,
                 ),
-              ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface.withValues(alpha: theme.bottomBarOpacity),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    bottom: false,
+                    child: _buildVoiceRecordingBar(isBlocked: isBlocked, isGlass: true),
+                  ),
+                ),
+              ),
             ),
-            child: SafeArea(
-              top: false,
-              bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+            Positioned(
+              right: 12,
+              top: 0,
+              bottom: 0,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (!isBlocked && !_isVoiceRecordingPaused)
+                    ? (_) => _handleRecordCancelDragStart()
+                    : null,
+                onHorizontalDragUpdate: (!isBlocked && !_isVoiceRecordingPaused)
+                    ? (details) => _handleRecordCancelDragUpdate(details)
+                    : null,
+                onHorizontalDragEnd: (!isBlocked && !_isVoiceRecordingPaused)
+                    ? (_) => _handleRecordCancelDragEnd()
+                    : null,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: sendButton,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 12 + _recordSendButtonSpace + _recordButtonGap,
+              top: 0,
+              bottom: 0,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: (!isBlocked) ? _toggleVoiceRecordingPause : null,
+                  child: Container(
+                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        _isVoiceRecordingPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+
+        final wrapped = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CompositedTransformTarget(
+              link: _mentionLayerLink,
+              child: inputBar,
+            ),
+          ],
+        );
+
+        return _wrapInputWithPanels(wrapped);
+      }
+
+      final inputBar = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: theme.bottomBarBlur,
+                sigmaY: theme.bottomBarBlur,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12.0,
+                  vertical: 8.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface.withValues(alpha: theme.bottomBarOpacity),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                   if (_replyingToMessage != null) ...[
                     Container(
                       width: double.infinity,
@@ -6460,307 +6078,335 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ],
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_specialMessagesEnabled)
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: isBlocked ? null : _showSpecialMessagesPanel,
-                            child: Padding(
-                              padding: const EdgeInsets.all(6.0),
-                              child: Icon(
-                                Icons.auto_fix_high,
-                                color: isBlocked
-                                    ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
-                                    : Theme.of(context).colorScheme.primary,
-                                size: 24,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          if (_specialMessagesEnabled)
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(24),
+                                onTap: isBlocked ? null : _showSpecialMessagesPanel,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6.0),
+                                  child: Icon(
+                                    Icons.auto_fix_high,
+                                    color: isBlocked
+                                        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
+                                        : Theme.of(context).colorScheme.primary,
+                                    size: 24,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      if (_specialMessagesEnabled) const SizedBox(width: 4),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
+                          if (_specialMessagesEnabled) const SizedBox(width: 4),
+                          Expanded(
+                            child: Stack(
                               children: [
-                                if (_showKometColorPicker)
-                                  _KometColorPickerBar(
-                                    onColorSelected: (color) {
-                                      if (_currentKometColorPrefix == null) return;
-                                      final hex = color
-                                          .toARGB32()
-                                          .toRadixString(16)
-                                          .padLeft(8, '0')
-                                          .substring(2)
-                                          .toUpperCase();
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_showKometColorPicker)
+                                      _KometColorPickerBar(
+                                        onColorSelected: (color) {
+                                          if (_currentKometColorPrefix == null) return;
+                                          final hex = color
+                                              .toARGB32()
+                                              .toRadixString(16)
+                                              .padLeft(8, '0')
+                                              .substring(2)
+                                              .toUpperCase();
 
-                                      String newText;
-                                      int cursorOffset;
+                                          String newText;
+                                          int cursorOffset;
 
-                                      if (_currentKometColorPrefix == 'komet.color_#') {
-                                        newText = '$_currentKometColorPrefix$hex\'ваш текст\'';
-                                        final textLength = newText.length;
-                                        cursorOffset = textLength - 12;
-                                      } else if (_currentKometColorPrefix == 'komet.cosmetic.pulse#') {
-                                        newText = '$_currentKometColorPrefix$hex\'ваш текст\'';
-                                        final textLength = newText.length;
-                                        cursorOffset = textLength - 12;
-                                      } else {
-                                        return;
-                                      }
+                                          if (_currentKometColorPrefix == 'komet.color_#') {
+                                            newText = '$_currentKometColorPrefix$hex\'ваш текст\'';
+                                            final textLength = newText.length;
+                                            cursorOffset = textLength - 12;
+                                          } else if (_currentKometColorPrefix == 'komet.cosmetic.pulse#') {
+                                            newText = '$_currentKometColorPrefix$hex\'ваш текст\'';
+                                            final textLength = newText.length;
+                                            cursorOffset = textLength - 12;
+                                          } else {
+                                            return;
+                                          }
 
-                                      _textController.text = newText;
-                                      _textController.selection = TextSelection(
-                                        baseOffset: cursorOffset,
-                                        extentOffset: newText.length - 1,
-                                      );
-                                    },
-                                  ),
-                                Focus(
-                                  focusNode: _textFocusNode,
-                                  onKeyEvent: (node, event) {
-                                    if (event is KeyDownEvent) {
-                                      if (event.logicalKey == LogicalKeyboardKey.enter) {
-                                        final bool isShiftPressed = HardwareKeyboard.instance.logicalKeysPressed
-                                            .contains(LogicalKeyboardKey.shiftLeft) ||
-                                            HardwareKeyboard.instance.logicalKeysPressed
-                                                .contains(LogicalKeyboardKey.shiftRight);
+                                          _textController.text = newText;
+                                          _textController.selection = TextSelection(
+                                            baseOffset: cursorOffset,
+                                            extentOffset: newText.length - 1,
+                                          );
+                                        },
+                                      ),
+                                    Focus(
+                                      focusNode: _textFocusNode,
+                                      onKeyEvent: (node, event) {
+                                        if (event is KeyDownEvent) {
+                                          if (event.logicalKey == LogicalKeyboardKey.enter) {
+                                            final bool isShiftPressed = HardwareKeyboard.instance.logicalKeysPressed
+                                                    .contains(LogicalKeyboardKey.shiftLeft) ||
+                                                HardwareKeyboard.instance.logicalKeysPressed
+                                                    .contains(LogicalKeyboardKey.shiftRight);
 
-                                        if (!isShiftPressed) {
-                                          _sendMessage();
-                                          return KeyEventResult.handled;
+                                            if (!isShiftPressed) {
+                                              _sendMessage();
+                                              return KeyEventResult.handled;
+                                            }
+                                          }
                                         }
-                                      }
-                                    }
-                                    return KeyEventResult.ignored;
-                                  },
-                                  child: TextField(
-                                    controller: _textController,
-                                    enabled: !isBlocked,
-                                    keyboardType: TextInputType.multiline,
-                                    textInputAction: TextInputAction.newline,
-                                    minLines: 1,
-                                    maxLines: 5,
-                                    onChanged: _handleChatInputChanged,
-                                    contextMenuBuilder: (context, editableTextState) {
-                                      if (isBlocked) {
-                                        return AdaptiveTextSelectionToolbar.editableText(
-                                          editableTextState: editableTextState,
-                                        );
-                                      }
-
-                                      final selection = _textController.selection;
-                                      if (!selection.isValid || selection.isCollapsed) {
-                                        return AdaptiveTextSelectionToolbar.editableText(
-                                          editableTextState: editableTextState,
-                                        );
-                                      }
-
-                                      final buttonItems = <ContextMenuButtonItem>[
-                                        ContextMenuButtonItem(
-                                          label: 'Копировать',
-                                          onPressed: () {
-                                            editableTextState.copySelection(SelectionChangedCause.toolbar);
-                                            ContextMenuController.removeAny();
-                                          },
+                                        return KeyEventResult.ignored;
+                                      },
+                                      child: TextField(
+                                        controller: _textController,
+                                        enabled: !isBlocked,
+                                        keyboardType: TextInputType.multiline,
+                                        textInputAction: TextInputAction.newline,
+                                        minLines: 1,
+                                        maxLines: 5,
+                                        onChanged: _handleChatInputChanged,
+                                        decoration: InputDecoration(
+                                          hintText: isBlocked ? 'Пользователь заблокирован' : 'Сообщение...',
+                                          filled: true,
+                                          isDense: true,
+                                          fillColor: isBlocked
+                                              ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)
+                                              : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(24),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(24),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(24),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 18.0,
+                                            vertical: 12.0,
+                                          ),
                                         ),
-                                        ContextMenuButtonItem(
-                                          label: 'Вырезать',
-                                          onPressed: () {
-                                            editableTextState.cutSelection(SelectionChangedCause.toolbar);
-                                            ContextMenuController.removeAny();
-                                          },
-                                        ),
-                                        ContextMenuButtonItem(
-                                          label: 'Жирный',
-                                          onPressed: () {
-                                            _applyTextFormat('STRONG');
-                                            ContextMenuController.removeAny();
-                                          },
-                                        ),
-                                        ContextMenuButtonItem(
-                                          label: 'Курсив',
-                                          onPressed: () {
-                                            _applyTextFormat('EMPHASIZED');
-                                            ContextMenuController.removeAny();
-                                          },
-                                        ),
-                                        ContextMenuButtonItem(
-                                          label: 'Подчеркнуть',
-                                          onPressed: () {
-                                            _applyTextFormat('UNDERLINE');
-                                            ContextMenuController.removeAny();
-                                          },
-                                        ),
-                                        ContextMenuButtonItem(
-                                          label: 'Зачеркнуть',
-                                          onPressed: () {
-                                            _applyTextFormat('STRIKETHROUGH');
-                                            ContextMenuController.removeAny();
-                                          },
-                                        ),
-                                      ];
-
-                                      return AdaptiveTextSelectionToolbar.buttonItems(
-                                        anchors: editableTextState.contextMenuAnchors,
-                                        buttonItems: buttonItems,
-                                      );
-                                    },
-                                    decoration: InputDecoration(
-                                      hintText: isBlocked ? 'Пользователь заблокирован' : 'Сообщение...',
-                                      filled: true,
-                                      isDense: true,
-                                      fillColor: isBlocked
-                                          ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)
-                                          : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(24),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(24),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(24),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 18.0,
-                                        vertical: 12.0,
                                       ),
                                     ),
-                                  ),
+                                  ],
+                                ),
+                                StreamBuilder<bool>(
+                                  stream: Stream.periodic(
+                                    const Duration(milliseconds: 500),
+                                    (_) {
+                                      return ApiService.instance.isOnline && ApiService.instance.isSessionReady;
+                                    },
+                                  ).distinct(),
+                                  initialData: ApiService.instance.isOnline && ApiService.instance.isSessionReady,
+                                  builder: (context, snapshot) {
+                                    final isConnected = snapshot.data ?? false;
+                                    if (isConnected) return const SizedBox.shrink();
+                                    return Positioned(
+                                      left: 8,
+                                      bottom: 8,
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
-                            StreamBuilder<bool>(
-                              stream: Stream.periodic(
-                                const Duration(milliseconds: 500),
-                                    (_) {
-                                  return ApiService.instance.isOnline && ApiService.instance.isSessionReady;
-                                },
-                              ).distinct(),
-                              initialData: ApiService.instance.isOnline && ApiService.instance.isSessionReady,
-                              builder: (context, snapshot) {
-                                final isConnected = snapshot.data ?? false;
-                                if (isConnected) return const SizedBox.shrink();
-                                return Positioned(
-                                  left: 8,
-                                  bottom: 8,
-                                  child: SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
+                          ),
+                          StreamBuilder<bool>(
+                            stream: Stream.periodic(
+                              const Duration(milliseconds: 500),
+                              (_) {
+                                return ApiService.instance.isOnline && ApiService.instance.isSessionReady;
+                              },
+                            ).distinct(),
+                            initialData: ApiService.instance.isOnline && ApiService.instance.isSessionReady,
+                            builder: (context, snapshot) {
+                              final isConnected = snapshot.data ?? false;
+                              if (isConnected) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 4.0),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      StreamBuilder<bool>(
-                        stream: Stream.periodic(
-                          const Duration(milliseconds: 500),
-                              (_) {
-                            return ApiService.instance.isOnline && ApiService.instance.isSessionReady;
-                          },
-                        ).distinct(),
-                        initialData: ApiService.instance.isOnline && ApiService.instance.isSessionReady,
-                        builder: (context, snapshot) {
-                          final isConnected = snapshot.data ?? false;
-                          if (isConnected) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 4.0),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 4),
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(24),
+                              onTap: isBlocked ? null : _onAttachPressed,
+                              child: Padding(
+                                padding: const EdgeInsets.all(6.0),
+                                child: Icon(
+                                  Icons.attach_file,
+                                  color: isBlocked
+                                      ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
+                                      : Theme.of(context).colorScheme.primary,
+                                  size: 24,
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 4),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(24),
-                          onTap: isBlocked ? null : _onAttachPressed,
-                          child: Padding(
-                            padding: const EdgeInsets.all(6.0),
-                            child: Icon(
-                              Icons.attach_file,
-                              color: isBlocked
-                                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
-                                  : Theme.of(context).colorScheme.primary,
-                              size: 24,
-                            ),
                           ),
-                        ),
-                      ),
-                      if (context.watch<ThemeProvider>().messageTransition == TransitionOption.slide)
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(24),
-                            onTap: isBlocked ? null : _testSlideAnimation,
-                            child: Padding(
-                              padding: const EdgeInsets.all(6.0),
-                              child: Icon(
-                                Icons.animation,
-                                color: isBlocked
-                                    ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
-                                    : Colors.orange,
-                                size: 24,
+                          if (context.watch<ThemeProvider>().messageTransition == TransitionOption.slide)
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(24),
+                                onTap: isBlocked ? null : _testSlideAnimation,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6.0),
+                                  child: Icon(
+                                    Icons.animation,
+                                    color: isBlocked
+                                        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
+                                        : Colors.orange,
+                                    size: 24,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      const SizedBox(width: 4),
-                      _buildSendOrMicButton(isBlocked: isBlocked, isSmall: false),
+                          const SizedBox(width: 4),
+                          const SizedBox(width: 52),
+                        ],
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
           ),
+          ),
         ),
+          Positioned(
+            right: 12,
+            bottom: 8,
+            child: sendButton,
+          ),
+        ],
       );
 
       final wrapped = Stack(
         clipBehavior: Clip.none,
         children: [
           CompositedTransformTarget(
-            link: _voiceOverlayLink,
+            link: _mentionLayerLink,
             child: inputBar,
           ),
         ],
       );
 
-      _voiceOverlayIsBlocked = isBlocked;
-      _voiceOverlayIsSmall = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _syncVoiceOverlay());
       return _wrapInputWithPanels(wrapped);
 
     } else {
 
+      if (_isVoiceRecordingUi) {
+        final sendButton = _buildSendOrMicButton(isBlocked: isBlocked, isSmall: false);
+
+        final inputBar = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.none,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: _buildVoiceRecordingBar(isBlocked: isBlocked, isGlass: false),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 12,
+              top: 0,
+              bottom: 0,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (!isBlocked && !_isVoiceRecordingPaused)
+                    ? (_) => _handleRecordCancelDragStart()
+                    : null,
+                onHorizontalDragUpdate: (!isBlocked && !_isVoiceRecordingPaused)
+                    ? (details) => _handleRecordCancelDragUpdate(details)
+                    : null,
+                onHorizontalDragEnd: (!isBlocked && !_isVoiceRecordingPaused)
+                    ? (_) => _handleRecordCancelDragEnd()
+                    : null,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: sendButton,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 12 + _recordSendButtonSpace + _recordButtonGap,
+              top: 0,
+              bottom: 0,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: (!isBlocked) ? _toggleVoiceRecordingPause : null,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        _isVoiceRecordingPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+
+        return _wrapInputWithPanels(inputBar);
+      }
+
       final inputBar = ClipRRect(
         borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.none,
         child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: 12.0,
@@ -6910,107 +6556,107 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(
-                            controller: _textController,
-                            enabled: !isBlocked,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            minLines: 1,
-                            maxLines: 5,
-                            decoration: InputDecoration(
-                              hintText: isBlocked ? 'Пользователь заблокирован' : 'Сообщение...',
-                              filled: true,
-                              isDense: true,
-                              fillColor: isBlocked
-                                  ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)
-                                  : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: _textController,
+                              enabled: !isBlocked,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                              minLines: 1,
+                              maxLines: 5,
+                              decoration: InputDecoration(
+                                hintText: isBlocked ? 'Пользователь заблокирован' : 'Сообщение...',
+                                filled: true,
+                                isDense: true,
+                                fillColor: isBlocked
+                                    ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)
+                                    : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 18.0,
+                                  vertical: 12.0,
+                                ),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 18.0,
-                                vertical: 12.0,
+                              onChanged: isBlocked ? null : _handleChatInputChanged,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Builder(
+                        builder: (context) {
+                          final isEncryptionActive = _encryptionConfigForCurrentChat != null &&
+                              _encryptionConfigForCurrentChat!.password.isNotEmpty &&
+                              _sendEncryptedForCurrentChat;
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(24),
+                              onTap: (isBlocked || isEncryptionActive)
+                                  ? null
+                                  : () async {
+                                final result = await _pickPhotosFlow(context);
+                                if (result != null && result.paths.isNotEmpty) {
+                                  await ApiService.instance.sendPhotoMessages(
+                                    widget.chatId,
+                                    localPaths: result.paths,
+                                    caption: result.caption,
+                                    senderId: _actualMyId,
+                                  );
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(6.0),
+                                child: Icon(
+                                  Icons.photo_library_outlined,
+                                  color: (isBlocked || isEncryptionActive)
+                                      ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
+                                      : Theme.of(context).colorScheme.primary,
+                                  size: 24,
+                                ),
                               ),
                             ),
-                            onChanged: isBlocked ? null : _handleChatInputChanged,
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Builder(
-                      builder: (context) {
-                        final isEncryptionActive = _encryptionConfigForCurrentChat != null &&
-                            _encryptionConfigForCurrentChat!.password.isNotEmpty &&
-                            _sendEncryptedForCurrentChat;
-                        return Material(
+                      if (context.watch<ThemeProvider>().messageTransition == TransitionOption.slide)
+                        Material(
                           color: Colors.transparent,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(24),
-                            onTap: (isBlocked || isEncryptionActive)
-                                ? null
-                                : () async {
-                              final result = await _pickPhotosFlow(context);
-                              if (result != null && result.paths.isNotEmpty) {
-                                await ApiService.instance.sendPhotoMessages(
-                                  widget.chatId,
-                                  localPaths: result.paths,
-                                  caption: result.caption,
-                                  senderId: _actualMyId,
-                                );
-                              }
-                            },
+                            onTap: isBlocked ? null : _testSlideAnimation,
                             child: Padding(
                               padding: const EdgeInsets.all(6.0),
                               child: Icon(
-                                Icons.photo_library_outlined,
-                                color: (isBlocked || isEncryptionActive)
+                                Icons.animation,
+                                color: isBlocked
                                     ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
-                                    : Theme.of(context).colorScheme.primary,
+                                    : Colors.orange,
                                 size: 24,
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                    if (context.watch<ThemeProvider>().messageTransition == TransitionOption.slide)
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(24),
-                          onTap: isBlocked ? null : _testSlideAnimation,
-                          child: Padding(
-                            padding: const EdgeInsets.all(6.0),
-                            child: Icon(
-                              Icons.animation,
-                              color: isBlocked
-                                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
-                                  : Colors.orange,
-                              size: 24,
-                            ),
-                          ),
                         ),
-                      ),
-                    const SizedBox(width: 4),
-                    _buildSendOrMicButton(isBlocked: isBlocked, isSmall: false),
-                  ],
-                ),
+                      const SizedBox(width: 4),
+                      _buildSendOrMicButton(isBlocked: isBlocked, isSmall: false),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -7021,15 +6667,12 @@ class _ChatScreenState extends State<ChatScreen> {
         clipBehavior: Clip.none,
         children: [
           CompositedTransformTarget(
-            link: _voiceOverlayLink,
+            link: _mentionLayerLink,
             child: inputBar,
           ),
         ],
       );
 
-      _voiceOverlayIsBlocked = isBlocked;
-      _voiceOverlayIsSmall = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _syncVoiceOverlay());
       return _wrapInputWithPanels(wrapped);
     }
   }
@@ -7561,6 +7204,62 @@ class _EditMessageDialogState extends State<_EditMessageDialog> {
           child: const Text('Сохранить'),
         ),
       ],
+    );
+  }
+}
+
+class _FakeWaveform extends StatefulWidget {
+  const _FakeWaveform();
+
+  @override
+  State<_FakeWaveform> createState() => _FakeWaveformState();
+}
+
+class _FakeWaveformState extends State<_FakeWaveform> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _phase;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+    _phase = CurvedAnimation(parent: _controller, curve: Curves.linear);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _phase,
+      builder: (context, _) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(16, (i) {
+            final t = (_phase.value * 2 * pi) + (i * 0.55);
+            final h = 6.0 + 16.0 * (0.5 + 0.5 * sin(t));
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1.5),
+              child: Container(
+                width: 3,
+                height: h,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -9383,72 +9082,5 @@ class _VideoWallpaperBackgroundState extends State<_VideoWallpaperBackground> {
         Container(color: Colors.black.withValues(alpha: 0.3)),
       ],
     );
-  }
-}
-
-class _VoiceWaveformPainter extends CustomPainter {
-  final List<double> samples;
-  final Color color;
-  final Color progressColor;
-  final ValueNotifier<double> progress;
-  final bool showProgress;
-  final bool isDense;
-
-  _VoiceWaveformPainter({
-    required this.samples,
-    required this.color,
-    required this.progressColor,
-    required this.progress,
-    required this.showProgress,
-    required this.isDense,
-  }) : super(repaint: progress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final basePaint = Paint()
-      ..color = color
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    final playedPaint = Paint()
-      ..color = progressColor
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    final h = size.height;
-    final mid = h / 2;
-
-    final barW = isDense ? 2.0 : 2.5;
-    final gap = isDense ? 1.6 : 2.2;
-    final step = barW + gap;
-    final bars = (size.width / step).floor().clamp(1, 400);
-
-    final p = showProgress ? progress.value.clamp(0.0, 1.0) : 0.0;
-    final progressX = size.width * p;
-
-    for (int i = 0; i < bars; i++) {
-      final x = i * step + barW / 2;
-      final sampleIdx = samples.isEmpty
-          ? 0
-          : ((i / bars) * (samples.length - 1)).round();
-      final amp = samples.isEmpty ? 0.1 : samples[sampleIdx].clamp(0.05, 1.0);
-      final lineH = (amp * (h * 0.9)).clamp(2.0, h);
-      final y1 = mid - lineH / 2;
-      final y2 = mid + lineH / 2;
-
-      final usePlayed = showProgress && x <= progressX;
-      final pnt = usePlayed ? playedPaint : basePaint;
-      pnt.strokeWidth = barW;
-      canvas.drawLine(Offset(x, y1), Offset(x, y2), pnt);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _VoiceWaveformPainter oldDelegate) {
-    return oldDelegate.samples != samples ||
-        oldDelegate.color != color ||
-        oldDelegate.progressColor != progressColor ||
-        oldDelegate.showProgress != showProgress ||
-        oldDelegate.isDense != isDense;
   }
 }

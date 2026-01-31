@@ -37,7 +37,6 @@ import 'package:gwid/widgets/message_bubble/models/message_read_status.dart';
 import 'package:gwid/widgets/message_bubble/models/komet_segment.dart';
 import 'package:gwid/widgets/message_bubble/services/file_download_service.dart';
 import 'package:gwid/widgets/message_bubble/widgets/komet_animated_texts.dart';
-import 'package:gwid/widgets/message_bubble/widgets/media/audio_player_widget.dart';
 import 'package:gwid/widgets/message_bubble/utils/user_color_helper.dart';
 import 'package:gwid/widgets/message_bubble/widgets/dialogs/custom_emoji_dialog.dart';
 
@@ -387,15 +386,6 @@ class ChatMessageBubble extends StatelessWidget {
                 textColor,
                 isUltraOptimized,
                 messageTextOpacity,
-              ),
-              Column(
-                children: _buildAudioWithCaption(
-                  context,
-                  attaches,
-                  textColor,
-                  isUltraOptimized,
-                  messageTextOpacity,
-                ),
               ),
               ..._buildPhotosWithCaption(
                 context,
@@ -1184,7 +1174,7 @@ class ChatMessageBubble extends StatelessWidget {
   bool _hasUnsupportedMessageTypes() {
     final hasUnsupportedAttachments = message.attaches.any((attach) {
       final type = attach['_type']?.toString().toUpperCase();
-      return type == 'VOICE' || type == 'GIF' || type == 'LOCATION';
+      return type == 'VOICE' || type == 'AUDIO' || type == 'GIF' || type == 'LOCATION';
     });
 
     return hasUnsupportedAttachments;
@@ -3443,72 +3433,14 @@ class ChatMessageBubble extends StatelessWidget {
     }
   }
 
-  List<Widget> _buildAudioWithCaption(
+  List<Widget> _buildAudioAttachments(
     BuildContext context,
-    List<Map<String, dynamic>> attaches,
+    List<dynamic> attaches,
     Color textColor,
     bool isUltraOptimized,
     double messageTextOpacity,
   ) {
-    final audioMessages = attaches.where((a) => a['_type'] == 'AUDIO').toList();
-    final List<Widget> widgets = [];
-
-    if (audioMessages.isEmpty) return widgets;
-
-    for (final audio in audioMessages) {
-      widgets.add(
-        _buildAudioWidget(
-          context,
-          audio,
-          textColor,
-          isUltraOptimized,
-          messageTextOpacity,
-        ),
-      );
-      widgets.add(const SizedBox(height: 6));
-    }
-
-    return widgets;
-  }
-
-  Widget _buildAudioWidget(
-    BuildContext context,
-    Map<String, dynamic> audioData,
-    Color textColor,
-    bool isUltraOptimized,
-    double messageTextOpacity,
-  ) {
-    final borderRadius = BorderRadius.circular(isUltraOptimized ? 8 : 12);
-    final url = audioData['url'] as String?;
-    final duration = audioData['duration'] as int? ?? 0;
-
-    final waveRaw = audioData['wave'];
-    final wave = waveRaw is String ? waveRaw : null;
-    Uint8List? waveBytes;
-    if (waveRaw is List<dynamic>) {
-      try {
-        waveBytes = Uint8List.fromList(List<int>.from(waveRaw));
-      } catch (_) {}
-    }
-
-    final audioId = audioData['audioId'] as int?;
-
-    final durationSeconds = (duration / 1000).round();
-    final minutes = durationSeconds ~/ 60;
-    final seconds = durationSeconds % 60;
-    final durationText = '$minutes:${seconds.toString().padLeft(2, '0')}';
-
-    return AudioPlayerWidget(
-      url: url ?? '',
-      duration: duration,
-      durationText: durationText,
-      wave: wave,
-      waveBytes: waveBytes,
-      audioId: audioId,
-      textColor: textColor,
-      borderRadius: borderRadius,
-      messageTextOpacity: messageTextOpacity,
-    );
+    return const <Widget>[];
   }
 
   Future<void> _handleFileDownload(
@@ -4450,13 +4382,6 @@ class ChatMessageBubble extends StatelessWidget {
         ],
         if (attachesToShow.isNotEmpty) ...[
           ..._buildCallsWithCaption(
-            context,
-            attachesToShow,
-            textColor,
-            isUltraOptimized,
-            messageTextOpacity,
-          ),
-          ..._buildAudioWithCaption(
             context,
             attachesToShow,
             textColor,
