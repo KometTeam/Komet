@@ -2,6 +2,8 @@ import 'dart:typed_data';
 import 'package:dart_lz4/dart_lz4.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
+import '../utils/logger.dart';
+
 final int apiVersion = 10;
 int seq = 1;
 
@@ -34,7 +36,7 @@ class Packet {
 
   /// Выводит пакет в консоль
   void printPacket() {
-    print(
+    logger.i(
       "Api: $api\nCmd: $cmd\nSeq: $seq\nOPCode: $opcode\nPayload: $payload",
     );
   }
@@ -108,7 +110,7 @@ Packet unpackPacket(Uint8List packet) {
 
         payloadBytes = decompressedBytes;
       } catch (e) {
-        print("Ошибка при декомпрессировании: $e");
+        logger.e("Ошибка при декомпрессировании: $e", error: e);
       }
     }
 
@@ -116,7 +118,7 @@ Packet unpackPacket(Uint8List packet) {
     try {
       payload = msgpack.deserialize(payloadBytes);
     } catch (e) {
-      print("Ошибка при десериализации msgpack: $e");
+      logger.e("Ошибка при десериализации msgpack: $e", error: e);
     }
   }
 
