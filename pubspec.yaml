@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   dart_lz4: ^1.0.0
   msgpack_dart: ^1.0.1
+  logger: ^2.6.2
 
 dev_dependencies:
   flutter_test:
