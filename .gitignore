@@ -1,11 +1,20 @@
 # Miscellaneous
 *.class
-*.lock
 *.log
 *.pyc
 *.swp
 .buildlog/
 .history
+
+# IDE - IntelliJ / Android Studio
+.idea/
+*.iml
+
+# Flutter metadata
+.metadata
+
+# OS
+.DS_Store
 
 
 
