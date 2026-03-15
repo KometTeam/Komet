@@ -37,6 +37,8 @@ dependencies:
   dart_lz4: ^1.0.0
   msgpack_dart: ^1.0.1
   logger: ^2.6.2
+  google_fonts: ^6.2.1
+  material_symbols_icons: ^4.2906.0
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +61,8 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/komet.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
