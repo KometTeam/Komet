@@ -10,7 +10,18 @@ import '../core/transport/receiver.dart';
 import '../core/transport/sender.dart';
 import '../core/utils/logger.dart';
 
-enum SessionState { disconnected, connecting, connected, online }
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
+
+enum SessionState { 
+  disconnected, 
+  connecting,
+  connected, 
+  online 
+}
 
 /// Клиент API.
 ///
@@ -39,7 +50,7 @@ class Api {
   /// Подключается к серверу, шлёт хэндшейк, запускает пинг.
   Future<void> connect() async {
     if (_sessionState != SessionState.disconnected) return;
-
+    // Ставим автоматический реконнект и статус подключения
     _autoReconnect = true;
     _setSessionState(SessionState.connecting);
 
@@ -88,27 +99,75 @@ class Api {
   }
 
   /// Отправляет хэндшейк (opcode 6).
-  Future<Packet> sendHandshake() {
-    // TODO: заменить захардкоженные данные на реальные
+  Future<Packet> sendHandshake() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+
+    // Если платформа Linux или Windows, то ставим DESKTOP, если нет, то проверяем на Android или IOS;
+    String deviceType = (Platform.isLinux || Platform.isWindows) ? "DESKTOP" : (Platform.isAndroid) ? "ANDROID" : "IOS";
+    String osVersion = "";
+    String deviceName = "Unknown";
+    String architecture = "arm64";
+
+    tz.initializeTimeZones();
+
+    final now = DateTime.now();
+    String timezone = "Europe/Moscow";
+
+    tz.initializeTimeZones();
+    final timeZoneName = await FlutterTimezone.getLocalTimezone();
+    timezone = timeZoneName.identifier;
+
+    // На каждой платформе свое инфо, поэтому делаем такую проверку
+    if (Platform.isLinux) {
+      LinuxDeviceInfo linuxInfo = await deviceInfo.linuxInfo;
+
+      osVersion = linuxInfo.name;
+      // Platform.version содержит в себе что-то такое
+      // 3.11.1 (stable) (Tue Feb 24 00:03:07 2026 -0800) on "linux_x64"
+      // Поэтому мы находим '_', прибавляем к его индексу 1 и берем символы до length - 1
+      architecture = Platform.version.substring(Platform.version.indexOf('_') + 1, Platform.version.length - 1);
+    } else if (Platform.isIOS) {
+      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+
+      osVersion = iosInfo.systemVersion;
+      deviceName = iosInfo.utsname.machine;
+    } else if (Platform.isAndroid) {
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      
+      osVersion = "Android ${androidInfo.version.release}";
+      deviceName = "${androidInfo.manufacturer} ${androidInfo.model}";
+      architecture =  androidInfo.supportedAbis.first;
+    } else if (Platform.isWindows) {
+      WindowsDeviceInfo windowsInfo = await deviceInfo.windowsInfo;    
+
+      osVersion = windowsInfo.productName;
+      architecture = Platform.version.substring(Platform.version.indexOf('_') + 1, Platform.version.length - 1);
+    }
+    
+    print(deviceType);
     final payload = <dynamic, dynamic>{
       'mt_instanceid': '550e8400-e29b-41d4-a716-446655440000',
       'clientSessionId': 42,
       'deviceId': 'a1b2c3d4e5f6a7b8',
       'userAgent': {
-        'deviceType': "ANDROID",
-        'locale': 'en',
-        'deviceLocale': 'en_US',
-        'osVersion': 'Ondroid 14',
-        'deviceName': 'KometPhone',
+        'deviceType': deviceType,
+        // Первые два символа из locale это и есть нужный нам аргумент
+        'locale': "ru",
+        'deviceLocale': Platform.localeName.substring(0, 2),
+        'osVersion': osVersion,
+        'deviceName': deviceName,
         'appVersion': '26.8.1',
         'screen': '1920x1080',
-        'timezone': 'Europe/Moscow',
+        // 'screen': screenSize.width + 'x' + screenSize.height,
+        'timezone': timezone,
         'pushDeviceType': 'GCM',
-        'arch': 'arm64',
+        'arch': architecture,
         'buildNumber': 6606,
       },
     };
 
+    print(payload);
+    print(Platform.version);
     return sendRequest(Opcode.sessionInit, payload);
   }
 
@@ -142,7 +201,8 @@ class Api {
     _stateController.close();
   }
 
-    // Внутрянка
+  // Внутрянка
+
 
   void _setSessionState(SessionState state) {
     if (_sessionState == state) return;
