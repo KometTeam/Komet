@@ -4,7 +4,7 @@ import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
 import '../utils/logger.dart';
 
-/// ver(1) + cmd(2) + seq(1) + opcode(2) + packedLen(4) = 10
+/// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
 const int headerSize = 10;
 const int _maxDecompressedSize = 1048576; // 1 MB
 
@@ -12,18 +12,19 @@ const int _maxDecompressedSize = 1048576; // 1 MB
 abstract class CmdType {
   static const int request = 0; // запрос клиента
   static const int push = 1; // пуш от сервера
-  static const int ok = 0x100; // ответ: ок
-  static const int notFound = 0x200; // ответ: не найдено
-  static const int error = 0x300; // ответ: ошибка
+
+  static const int ok = 1; // ответ: ок
+  static const int notFound = 2; // ответ: не найдено
+  static const int error = 3; // ответ: ошибка
 }
 
-/// Бинарный пакет
+/// Распакованный бинарный пакет
 ///
 /// Формат заголовка (10 байт):
 /// ```
-/// [0]      ver       — версия протокола (uint8)
-/// [1..2]   cmd       — тип команды (uint16 BE)
-/// [3]      seq       — порядковый номер 0..255 (uint8)
+/// [0]      ver       — версия протокола (uint8) (по умолчанию 10)
+/// [1]   cmd       — тип команды (uint8) (при отправке от клиента равно 0)
+/// [2..3]      seq       — порядковый номер (uint16 BE)
 /// [4..5]   opcode    — код операции (uint16 BE)
 /// [6..9]   packedLen — флаг сжатия [6] + длина payload [7..9] (uint32 BE)
 /// [10..]   payload   — данные в MsgPack, опционально сжатые LZ4
@@ -56,8 +57,8 @@ class Packet {
 Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
   final header = ByteData(headerSize);
   header.setUint8(0, 10);
-  header.setUint16(1, CmdType.request, Endian.big);
-  header.setUint8(3, seq);
+  header.setUint8(1, CmdType.request);
+  header.setUint16(2, seq, Endian.big);
   header.setUint16(4, opcode, Endian.big);
 
   final payloadBytes = msgpack.serialize(payload);
@@ -69,28 +70,38 @@ Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
 
 /// Распаковка пакета от сервера
 Packet unpackPacket(Uint8List packet) {
-  final data = ByteData.view(
+  // Для удобства расшифровки пакета переводим в ByteData
+  ByteData packetData = ByteData.view(
     packet.buffer,
     packet.offsetInBytes,
     packet.lengthInBytes,
   );
 
-  final apiVer = data.getUint8(0);
-  final cmd = data.getUint16(1, Endian.big);
-  final seq = data.getUint8(3);
-  final opcode = data.getUint16(4, Endian.big);
-  final packedLen = data.getUint32(6, Endian.big);
+  // Объяснение каждой переменной смотри в классе Packet
 
+  // API версия и cmd представляют из себя 8 битные числа
+  final apiVer = packetData.getUint8(0) & 0xFF;
+  final cmd = packetData.getUint8(1) & 0xFF;
+
+  // Sequence и OPCode представляют из себя 16 битные числа
+  final seq = packetData.getUint16(2) & 0xFFFF;
+  final opcode = packetData.getUint16(4) & 0xFFFF;
+
+  // После базовых переменных идет длина пакета, является 32 битным числом
+  final packedLen = packetData.getUint32(6);
+
+  // Compression flag показывает, сжат ли payload
   final compFlag = packedLen >> 24;
+  
+  // Длина payload'а 
   final payloadLength = packedLen & 0xFFFFFF;
 
-  var payloadBytes = Uint8List.sublistView(
-    packet,
-    headerSize,
-    headerSize + payloadLength,
-  );
-  dynamic payload;
+  // Байты payload'а, могут быть сжаты LZ4
+  var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
 
+  dynamic payload;
+  print(compFlag);
+  // Если payload пустой, ничего не делаем (так может быть при получении пинга)
   if (payloadBytes.isNotEmpty) {
     if (compFlag != 0) {
       try {
@@ -98,6 +109,7 @@ Packet unpackPacket(Uint8List packet) {
           payloadBytes,
           decompressedSize: _maxDecompressedSize,
         );
+        
       } catch (_) {
         // dart_lz4 не умеет block-формат, фолбэк на ручной декомпрессор
         try {
@@ -110,7 +122,7 @@ Packet unpackPacket(Uint8List packet) {
 
     try {
       payload = msgpack.deserialize(payloadBytes);
-    } catch (e) {
+    } catch (e) { 
       logger.e("Ошибка десериализации MsgPack: $e", error: e);
     }
   }
