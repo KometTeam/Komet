@@ -1,0 +1,228 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import '../chats/chat_list_screen.dart';
+
+class CodeConfirmationScreen extends StatefulWidget {
+  final String phoneNumber;
+
+  const CodeConfirmationScreen({super.key, required this.phoneNumber});
+
+  @override
+  State<CodeConfirmationScreen> createState() => _CodeConfirmationScreenState();
+}
+
+class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
+  final TextEditingController _codeController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  int _timerSeconds = 30;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _codeController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timerSeconds = 30;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_timerSeconds > 0) {
+          _timerSeconds--;
+        } else {
+          _timer?.cancel();
+        }
+      });
+    });
+  }
+
+  void _resendCode() {
+    if (_timerSeconds == 0) {
+      _startTimer();
+      // TODO: Implement actual resend logic here
+      print('Resending code to ${widget.phoneNumber}');
+    }
+  }
+
+  void _navigateToChats() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const ChatListScreen()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D0D12),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white70),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              Text(
+                widget.phoneNumber,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Outfit',
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Мы отправили SMS с кодом подтверждения на ваш номер телефона.',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Stack(
+                children: [
+                  Opacity(
+                    opacity: 0,
+                    child: SizedBox(
+                      height: 0,
+                      width: 0,
+                      child: TextField(
+                        controller: _codeController,
+                        focusNode: _focusNode,
+                        keyboardType: TextInputType.number,
+                        autofillHints: const [AutofillHints.oneTimeCode],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(5),
+                        ],
+                        onChanged: (value) {
+                          setState(() {});
+                          if (value.length == 5) {
+                            _navigateToChats();
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+
+                  GestureDetector(
+                    onTap: () => _focusNode.requestFocus(),
+                    child: FittedBox(
+                      child: Row(
+                        children: List.generate(5, (index) {
+                          bool isFocused = _codeController.text.length == index && _focusNode.hasFocus;
+                          bool hasValue = _codeController.text.length > index;
+                          String char = hasValue ? _codeController.text[index] : '';
+
+                          return Container(
+                            width: 44,
+                            height: 54,
+                            margin: EdgeInsets.only(right: index == 4 ? 0 : 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E1E2A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isFocused
+                                    ? const Color(0xFFBEC2FF)
+                                    : (hasValue ? Colors.white24 : Colors.transparent),
+                                width: 1.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 100),
+                              transitionBuilder: (Widget child, Animation<double> animation) {
+                                return ScaleTransition(
+                                  scale: animation,
+                                  child: FadeTransition(opacity: animation, child: child),
+                                );
+                              },
+                              child: Text(
+                                char,
+                                key: ValueKey<String>(char + index.toString()),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: _resendCode,
+                child: Text(
+                  _timerSeconds > 0 
+                      ? 'Отправить повторно через $_timerSeconds сек.' 
+                      : 'Отправить код по SMS',
+                  style: const TextStyle(
+                    color: Color(0xFF63A9F5),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  FloatingActionButton(
+                    onPressed: () {
+                      if (_codeController.text.length == 5) {
+                        _navigateToChats();
+                      }
+                    },
+                    backgroundColor: _codeController.text.length == 5
+                        ? const Color(0xffc1c4ff)
+                        : const Color(0xFF1E1E2A),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(50),
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward,
+                      color: _codeController.text.length == 5 ? Colors.black : Colors.white24,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
