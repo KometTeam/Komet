@@ -112,21 +112,21 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                         physics: const BouncingScrollPhysics(),
                         children: [
-                          _buildCategoryChip('Все чаты'),
+                          _buildFolderChip('Все чаты'),
                           const SizedBox(width: 8),
-                          _buildCategoryChip('Контакты'),
+                          _buildFolderChip('Контакты'),
                           const SizedBox(width: 8),
-                          _buildCategoryChip('Пидоры'),
+                          _buildFolderChip('Пидоры'),
                           const SizedBox(width: 8),
-                          _buildCategoryChip('Каналы'),
+                          _buildFolderChip('Каналы'),
                           const SizedBox(width: 8),
-                          _buildCategoryChip('Группы'),
+                          _buildFolderChip('Группы'),
                           const SizedBox(width: 8),
-                          _buildCategoryChip('Боты'),
+                          _buildFolderChip('Боты'),
                           const SizedBox(width: 8),
-                          _buildCategoryChip('Избранное'),
+                          _buildFolderChip('Избранное'),
                           const SizedBox(width: 8),
-                          _buildCategoryChip('Архив'),
+                          _buildFolderChip('Архив'),
                         ],
                       ),
                     ),
@@ -306,7 +306,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  Widget _buildCategoryChip(String title) {
+  Widget _buildFolderChip(String title) {
     bool isSelected = _selectedCategory == title;
     return GestureDetector(
       onTap: () => setState(() => _selectedCategory = title),
