@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        textTheme: GoogleFonts.outfitTextTheme(
+        textTheme: GoogleFonts.interTextTheme(
           ThemeData.dark().textTheme,
         ),
       ),

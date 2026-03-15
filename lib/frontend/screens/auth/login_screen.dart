@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'code_confirmation_screen.dart';
 
@@ -13,7 +14,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
-  String? _errorText;
+  bool _isPhoneValid = false;
 
   void _showTOS(BuildContext context) {
     showModalBottomSheet(
@@ -38,12 +39,12 @@ class _LoginScreenState extends State<LoginScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Условия использования',
-                    style: TextStyle(
+                    style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 20,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   IconButton(
@@ -166,25 +167,102 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _validateAndSubmit() {
-    setState(() {
-      final phone = _phoneController.text.replaceAll(RegExp(r'\D'), '');
-      if (phone.isEmpty) {
-        _errorText = 'Пожалуйста, введите номер телефона';
-      } else if (phone.length < 10) {
-        _errorText = 'Номер телефона слишком короткий';
-      } else {
-        _errorText = null;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CodeConfirmationScreen(
-              phoneNumber: '+7 ${_phoneController.text}',
+  void _showPhoneConfirmationDialog(String formattedPhone) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim1, anim2, child) {
+        final curve = Curves.easeOutQuart.transform(anim1.value);
+        return Opacity(
+          opacity: anim1.value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - curve)),
+            child: Transform.scale(
+              scale: 0.8 + (0.2 * curve),
+              child: AlertDialog(
+                backgroundColor: const Color(0xFF1E1E2A),
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Это правильный номер?',
+                      style: GoogleFonts.inter(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '+7 $formattedPhone',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          'Изменить',
+                          style: TextStyle(
+                            color: Color(0xFFAFAFFF),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CodeConfirmationScreen(
+                                phoneNumber: '+7 $formattedPhone',
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Готово',
+                          style: TextStyle(
+                            color: Color(0xFFAFAFFF),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
-      }
-    });
+      },
+    );
+  }
+
+  void _validateAndSubmit() {
+    _showPhoneConfirmationDialog(_phoneController.text);
   }
 
   @override
@@ -242,9 +320,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: Colors.white,
                               ),
                               const SizedBox(height: 16),
-                              const Text(
+                              Text(
                                 'Войдите в Komet',
-                                style: TextStyle(
+                                style: GoogleFonts.inter(
                                   color: Colors.white,
                                   fontSize: 20,
                                   fontWeight: FontWeight.w500,
@@ -279,58 +357,55 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                          _buildInputField(
-                            label: 'Номер телефона',
-                            isError: _errorText != null,
-                            errorText: _errorText,
-                            content: Row(
-                              children: [
-                                const Text(
-                                  '+7',
-                                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
-                                ),
-                                const SizedBox(width: 12),
-                                Container(
-                                  width: 1,
-                                  height: 24,
-                                  color: Colors.white24,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _phoneController,
-                                    keyboardType: TextInputType.phone,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      _PhoneInputFormatter(),
-                                    ],
-                                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
-                                    decoration: const InputDecoration(
-                                      hintText: '(000) 000-00-00',
-                                      hintStyle: TextStyle(color: Colors.white38, fontSize: 15, fontWeight: FontWeight.w400),
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                    onChanged: (value) {
-                                      if (_errorText != null) {
-                                        setState(() {
-                                          _errorText = null;
-                                        });
-                                      }
-                                    },
+                            _buildInputField(
+                              label: 'Номер телефона',
+                              content: Row(
+                                children: [
+                                  const Text(
+                                    '+7',
+                                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    width: 1,
+                                    height: 24,
+                                    color: Colors.white24,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _phoneController,
+                                      keyboardType: TextInputType.phone,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        _PhoneInputFormatter(),
+                                      ],
+                                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
+                                      decoration: const InputDecoration(
+                                        hintText: '(000) 000-00-00',
+                                        hintStyle: TextStyle(color: Colors.white38, fontSize: 15, fontWeight: FontWeight.w400),
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                      onChanged: (value) {
+                                        final digits = value.replaceAll(RegExp(r'\D'), '');
+                                        setState(() {
+                                          _isPhoneValid = digits.length == 10;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
                         const SizedBox(height: 24),
                         TextButton(
                           onPressed: () {},
-                          child: const Text(
+                          child: Text(
                             'Другие способы входа',
-                            style: TextStyle(
-                              color: Color(0xFFAFAFFF),
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFFAFAFFF),
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                               height: 1.4,
@@ -346,20 +421,29 @@ class _LoginScreenState extends State<LoginScreen> {
                                 padding: const EdgeInsets.only(bottom: 24.0),
                                 child: RichText(
                                   text: TextSpan(
-                                    style: const TextStyle(
+                                    style: GoogleFonts.inter(
                                       color: Colors.white,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w500,
                                       height: 1.4,
-                                      fontFamily: 'Outfit',
                                     ),
                                     children: [
-                                      const TextSpan(text: 'Продолжая, вы соглашаетесь с\n'),
+                                      TextSpan(
+                                        text: 'Продолжая, вы соглашаетесь с \n',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          height: 1.4,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
                                       TextSpan(
                                         text: 'пользовательскими соглашениями',
-                                        style: const TextStyle(
-                                          color: Color(0xFFAFAFFF),
-                                          fontWeight: FontWeight.w500,
+                                        style: GoogleFonts.inter(
+                                          color: const Color(0xFFAFAFFF),
+                                          fontSize: 14,
+                                          height: 1.4,
+                                          fontWeight: FontWeight.w400,
                                         ),
                                         recognizer: TapGestureRecognizer()
                                           ..onTap = () => _showTOS(context),
@@ -372,12 +456,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 16.0),
                                 child: FloatingActionButton(
-                                  onPressed: _validateAndSubmit,
-                                  backgroundColor: const Color(0xffc1c4ff),
+                                  onPressed: _isPhoneValid ? _validateAndSubmit : null,
+                                  backgroundColor: _isPhoneValid ? const Color(0xffc1c4ff) : Colors.white10,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
                                   ),
-                                  child: const Icon(Icons.arrow_forward, color: Colors.black),
+                                  child: Icon(Icons.arrow_forward, color: _isPhoneValid ? Colors.black : Colors.white24),
                                 ),
                               ),
                             ],
@@ -400,8 +484,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildInputField({
     required String label,
     required Widget content,
-    bool isError = false,
-    String? errorText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,7 +497,7 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: isError ? Colors.redAccent : const Color(0xFFBEC2FF),
+                  color: const Color(0xFFBEC2FF),
                   width: 1.5,
                 ),
                 borderRadius: BorderRadius.circular(50),
@@ -430,8 +512,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   label,
-                  style: TextStyle(
-                    color: isError ? Colors.redAccent : const Color(0xFFBEC2FF),
+                  style: const TextStyle(
+                    color: Color(0xFFBEC2FF),
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
@@ -440,20 +522,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
-        if (isError && errorText != null) ...[
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 16),
-            child: Text(
-              errorText,
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
