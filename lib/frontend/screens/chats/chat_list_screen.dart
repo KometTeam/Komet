@@ -314,13 +314,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFC1C4FF) : const Color(0xFF1E1E2A),
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Colors.black : Colors.white54,
-            fontSize: 13,
+            color: isSelected ? Colors.black : Color(0xFFC1C4FF),
+            fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),

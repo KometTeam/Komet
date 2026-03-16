@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:komet/core/config/countries.dart';
 import 'code_confirmation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,7 +15,88 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  late CountryName _selectedCountry;
   bool _isPhoneValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCountry = countriesByCode['RU'] ?? allCountries.first;
+  }
+
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E2A),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 1.0,
+        snap: true,
+        snapSizes: const [0.7, 1.0],
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Выберите страну',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Symbols.close, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: allCountries.length,
+                itemBuilder: (context, index) {
+                  final country = allCountries[index];
+                  return ListTile(
+                    leading: Text(
+                      country.phoneCode,
+                      style: const TextStyle(color: Colors.white54, fontSize: 14),
+                    ),
+                    title: Text(
+                      country.ru,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    onTap: () {
+                      setState(() {
+                        _selectedCountry = country;
+                        _phoneController.clear();
+                        _isPhoneValid = false;
+                      });
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showTOS(BuildContext context) {
     showModalBottomSheet(
@@ -205,8 +287,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '+7 $formattedPhone',
-                      style: const TextStyle(
+                      '${_selectedCountry.phoneCode} $formattedPhone',
+                      style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
@@ -220,10 +302,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text(
+                        child: Text(
                           'Изменить',
-                          style: TextStyle(
-                            color: Color(0xFFAFAFFF),
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFFAFAFFF),
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
@@ -236,15 +318,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => CodeConfirmationScreen(
-                                phoneNumber: '+7 $formattedPhone',
+                                phoneNumber: '${_selectedCountry.phoneCode} $formattedPhone',
                               ),
                             ),
                           );
                         },
-                        child: const Text(
+                        child: Text(
                           'Готово',
-                          style: TextStyle(
-                            color: Color(0xFFAFAFFF),
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFFAFAFFF),
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
@@ -288,7 +370,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 44),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
@@ -310,7 +392,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 74),
                         Center(
                           child: Column(
                             children: [
@@ -324,7 +406,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 'Войдите в Komet',
                                 style: GoogleFonts.inter(
                                   color: Colors.white,
-                                  fontSize: 20,
+                                  fontSize: 32,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -334,7 +416,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.white70,
-                                  fontSize: 13,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w400,
                                   height: 1.4,
                                 ),
@@ -342,29 +424,41 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        _buildInputField(
-                          label: 'Страна',
-                          content: Row(
-                            children: [
-                              const Text(
-                                'Россия',
-                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
-                              ),
-                              const Spacer(),
-                              const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
-                            ],
+                        const SizedBox(height: 48),
+                        InkWell(
+                          onTap: _showCountryPicker,
+                          borderRadius: BorderRadius.circular(50),
+                          child: _buildInputField(
+                            label: 'Страна',
+                            content: Row(
+                              children: [
+                                Text(
+                                  _selectedCountry.ru,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                                const Spacer(),
+                                const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 40),
                             _buildInputField(
                               label: 'Номер телефона',
                               content: Row(
                                 children: [
-                                  const Text(
-                                    '+7',
-                                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
-                                  ),
+                                   Text(
+                                     _selectedCountry.phoneCode,
+                                     style: GoogleFonts.inter(
+                                       color: Colors.white,
+                                       fontSize: 15,
+                                       fontWeight: FontWeight.w400,
+                                     ),
+                                   ),
                                   const SizedBox(width: 12),
                                   Container(
                                     width: 1,
@@ -378,7 +472,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       keyboardType: TextInputType.phone,
                                       inputFormatters: [
                                         FilteringTextInputFormatter.digitsOnly,
-                                        _PhoneInputFormatter(),
+                                        _PhoneInputFormatter(_selectedCountry),
                                       ],
                                       style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
                                       decoration: const InputDecoration(
@@ -391,7 +485,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       onChanged: (value) {
                                         final digits = value.replaceAll(RegExp(r'\D'), '');
                                         setState(() {
-                                          _isPhoneValid = digits.length == 10;
+                                          _isPhoneValid = digits.length == _selectedCountry.phoneDigits;
                                         });
                                       },
                                     ),
@@ -423,7 +517,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   text: TextSpan(
                                     style: GoogleFonts.inter(
                                       color: Colors.white,
-                                      fontSize: 11,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w500,
                                       height: 1.4,
                                     ),
@@ -512,8 +606,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFFBEC2FF),
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFFBEC2FF),
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
@@ -528,6 +622,9 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _PhoneInputFormatter extends TextInputFormatter {
+  final CountryName country;
+  _PhoneInputFormatter(this.country);
+
   @override
   TextEditingValue formatEditUpdate(
       TextEditingValue oldValue, TextEditingValue newValue) {
@@ -540,14 +637,33 @@ class _PhoneInputFormatter extends TextInputFormatter {
       }
     }
 
-    if (text.length > 10) text = text.substring(0, 10);
+    if (text.length > country.phoneDigits) {
+      text = text.substring(0, country.phoneDigits);
+    }
 
     final buffer = StringBuffer();
-    for (int i = 0; i < text.length; i++) {
-      if (i == 0) buffer.write('(');
-      buffer.write(text[i]);
-      if (i == 2) buffer.write(') ');
-      if (i == 5) buffer.write('-');
+    int digitIdx = 0;
+
+    for (int i = 0; i < country.phoneGroupSizes.length; i++) {
+      if (digitIdx >= text.length) break;
+
+      buffer.write(country.phoneGroupSeparators[i]);
+
+      final groupSize = country.phoneGroupSizes[i];
+      final remainingDigits = text.length - digitIdx;
+      final digitsToTake = remainingDigits < groupSize ? remainingDigits : groupSize;
+
+      buffer.write(text.substring(digitIdx, digitIdx + digitsToTake));
+      digitIdx += digitsToTake;
+
+      if (digitIdx == text.length && i < country.phoneGroupSeparators.length - 1) {
+      }
+    }
+
+    if (digitIdx == text.length && text.length == country.phoneDigits) {
+        if (country.phoneGroupSeparators.length > country.phoneGroupSizes.length) {
+            buffer.write(country.phoneGroupSeparators.last);
+        }
     }
 
     final formattedText = buffer.toString();
