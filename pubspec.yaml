@@ -39,6 +39,7 @@ dependencies:
   logger: ^2.6.2
   google_fonts: ^6.2.1
   material_symbols_icons: ^4.2906.0
+  dynamic_color: ^1.8.1
 
 dev_dependencies:
   flutter_test:
