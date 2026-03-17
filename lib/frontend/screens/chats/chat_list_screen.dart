@@ -15,8 +15,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D12),
+      backgroundColor: cs.surface,
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -29,10 +30,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'Подключение...',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: cs.onSurface,
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
                             fontFamily: 'Outfit',
@@ -40,9 +41,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         ),
                         IconButton(
                           onPressed: () {},
-                          icon: const Icon(
+                          icon: Icon(
                             Symbols.more_vert,
-                            color: Colors.white54,
+                            color: cs.outline,
                             weight: 400,
                           ),
                         ),
@@ -63,27 +64,26 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ),
                   ),
                 ),
-
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   sliver: SliverToBoxAdapter(
                     child: Container(
                       height: 44,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E1E2A),
+                        color: cs.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(50),
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Symbols.search, color: Colors.white38, size: 20, weight: 400),
-                          SizedBox(width: 10),
+                          Icon(Symbols.search, color: cs.outline, size: 20, weight: 400),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: TextField(
-                              style: TextStyle(color: Colors.white, fontSize: 15),
+                              style: TextStyle(color: cs.onSurface, fontSize: 15),
                               decoration: InputDecoration(
                                 hintText: 'Поиск',
-                                hintStyle: TextStyle(color: Colors.white38, fontSize: 15),
+                                hintStyle: TextStyle(color: cs.outline, fontSize: 15),
                                 border: InputBorder.none,
                                 isDense: true,
                                 contentPadding: EdgeInsets.zero,
@@ -95,7 +95,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ),
                   ),
                 ),
-
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: 48,
@@ -187,11 +186,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 height: 68,
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E28),
+                  color: cs.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(34),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -200,17 +199,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     double totalWidth = constraints.maxWidth;
-                    
+
                     double totalWeight = 5.2;
                     double unitWidth = totalWidth / totalWeight;
                     double activeWidth = unitWidth * 2.2;
                     double inactiveWidth = unitWidth * 1.0;
-                    
+
                     double leftOffset = 0;
                     for (int i = 0; i < _currentNavIndex; i++) {
                       leftOffset += inactiveWidth;
                     }
-                    
+
                     return Stack(
                       children: [
                         AnimatedPositioned(
@@ -222,7 +221,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           width: activeWidth - 8,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFFBEC2FF),
+                              color: cs.primary,
                               borderRadius: BorderRadius.circular(26),
                             ),
                           ),
@@ -237,7 +236,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               case 2: icon = Symbols.person_pin; label = 'Контакты'; break;
                               default: icon = Symbols.settings; label = 'Настройки';
                             }
-                            
+
                             bool isSelected = _currentNavIndex == index;
                             return AnimatedContainer(
                               duration: const Duration(milliseconds: 350),
@@ -261,11 +260,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
               bottom: 110,
               child: FloatingActionButton(
                 onPressed: () {},
-                backgroundColor: const Color(0xFFC1C4FF),
+                backgroundColor: cs.primaryContainer,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Symbols.add, color: Colors.black, size: 28, weight: 400),
+                child: Icon(Symbols.add, color: cs.onPrimaryContainer, size: 28, weight: 400),
               ),
             ),
           ],
@@ -275,6 +274,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildStoryItem(String name, String imageUrl, bool hasUpdate) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(right: 16),
       child: Column(
@@ -284,8 +284,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: hasUpdate
-                  ? Border.all(color: const Color(0xFFC1C4FF), width: 2)
-                  : Border.all(color: Colors.white10),
+                  ? Border.all(color: cs.primary, width: 2)
+                  : Border.all(color: cs.outlineVariant),
             ),
             child: CircleAvatar(
               radius: 26,
@@ -295,8 +295,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
           const SizedBox(height: 6),
           Text(
             name,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: cs.onSurface,
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -307,19 +307,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildFolderChip(String title) {
+    final cs = Theme.of(context).colorScheme;
     bool isSelected = _selectedCategory == title;
     return GestureDetector(
       onTap: () => setState(() => _selectedCategory = title),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFC1C4FF) : const Color(0xFF1E1E2A),
+          color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Colors.black : Color(0xFFC1C4FF),
+            color: isSelected ? cs.onPrimaryContainer : cs.primary,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -339,6 +340,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     int unreadCount = 0,
     bool isMuted = false,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
       leading: Stack(
@@ -355,9 +357,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC1C4FF),
+                  color: cs.primary,
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF0D0D12), width: 2),
+                  border: Border.all(color: cs.surface, width: 2),
                 ),
               ),
             ),
@@ -368,20 +370,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
           Expanded(
             child: Text(
               name,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: cs.onSurface,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
           if (isMuted)
-            const Icon(Symbols.notifications_off, color: Colors.white24, size: 14, weight: 400),
+            Icon(Symbols.notifications_off, color: cs.outlineVariant, size: 14, weight: 400),
           const SizedBox(width: 8),
           Text(
             time,
-            style: const TextStyle(
-              color: Colors.white38,
+            style: TextStyle(
+              color: cs.outline,
               fontSize: 12,
             ),
           ),
@@ -395,7 +397,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               child: Text(
                 message,
                 style: TextStyle(
-                  color: isTyping ? const Color(0xFFC1C4FF) : Colors.white54,
+                  color: isTyping ? cs.primary : cs.outline,
                   fontSize: 14,
                   fontWeight: isTyping ? FontWeight.w500 : FontWeight.w400,
                 ),
@@ -407,20 +409,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isMuted ? Colors.white10 : const Color(0xFF1E1E2A),
+                  color: isMuted ? cs.surfaceContainerHighest : cs.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   unreadCount.toString(),
                   style: TextStyle(
-                    color: isMuted ? Colors.white38 : Colors.white,
+                    color: isMuted ? cs.outline : cs.onSurface,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               )
             else if (isRead)
-              const Icon(Symbols.done_all, color: Color(0xFFC1C4FF), size: 16, weight: 400),
+              Icon(Symbols.done_all, color: cs.primary, size: 16, weight: 400),
           ],
         ),
       ),
@@ -428,6 +430,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildNavItem(int index, IconData icon, String label) {
+    final cs = Theme.of(context).colorScheme;
     bool isSelected = _currentNavIndex == index;
     return GestureDetector(
       onTap: () => setState(() => _currentNavIndex = index),
@@ -441,7 +444,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? Colors.black : Colors.white,
+                color: isSelected ? cs.onPrimary : cs.onSurface,
                 size: 20,
                 weight: 400,
                 fill: isSelected ? 1.0 : 0.0,
@@ -459,8 +462,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       const SizedBox(width: 4),
                       Text(
                         label,
-                        style: const TextStyle(
-                          color: Colors.black,
+                        style: TextStyle(
+                          color: cs.onPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),

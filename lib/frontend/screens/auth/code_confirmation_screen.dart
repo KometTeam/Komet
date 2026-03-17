@@ -53,7 +53,6 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
   void _resendCode() {
     if (_timerSeconds == 0) {
       _startTimer();
-      // TODO: Implement actual resend logic here
       print('Resending code to ${widget.phoneNumber}');
     }
   }
@@ -68,13 +67,14 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D12),
+      backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white70),
+          icon: Icon(Icons.arrow_back, color: cs.onSurfaceVariant),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -88,16 +88,16 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
               Text(
                 widget.phoneNumber,
                 style: GoogleFonts.inter(
-                  color: Colors.white,
+                  color: cs.onSurface,
                   fontSize: 22,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Мы отправили SMS с кодом подтверждения на ваш номер телефона.',
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: cs.outline,
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
                   height: 1.4,
@@ -129,7 +129,6 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                       ),
                     ),
                   ),
-
                   GestureDetector(
                     onTap: () => _focusNode.requestFocus(),
                     child: FittedBox(
@@ -144,12 +143,12 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                             height: 54,
                             margin: EdgeInsets.only(right: index == 4 ? 0 : 10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1E1E2A),
+                              color: cs.surfaceContainerHigh,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: isFocused
-                                    ? const Color(0xFFBEC2FF)
-                                    : (hasValue ? Colors.white24 : Colors.transparent),
+                                    ? cs.primary
+                                    : (hasValue ? cs.outlineVariant : Colors.transparent),
                                 width: 1.5,
                               ),
                             ),
@@ -165,8 +164,8 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                               child: Text(
                                 char,
                                 key: ValueKey<String>(char + index.toString()),
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: cs.onSurface,
                                   fontSize: 20,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -183,11 +182,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
               GestureDetector(
                 onTap: _resendCode,
                 child: Text(
-                  _timerSeconds > 0 
-                      ? 'Отправить повторно через $_timerSeconds сек.' 
+                  _timerSeconds > 0
+                      ? 'Отправить повторно через $_timerSeconds сек.'
                       : 'Отправить код по SMS',
-                  style: const TextStyle(
-                    color: Color(0xFF63A9F5),
+                  style: TextStyle(
+                    color: cs.tertiary,
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
@@ -204,15 +203,15 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                       }
                     },
                     backgroundColor: _codeController.text.length == 5
-                        ? const Color(0xffc1c4ff)
-                        : const Color(0xFF1E1E2A),
+                        ? cs.primaryContainer
+                        : cs.surfaceContainerHighest,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(50),
                     ),
                     child: Icon(
                       Icons.arrow_forward,
-                      color: _codeController.text.length == 5 ? Colors.black : Colors.white24,
+                      color: _codeController.text.length == 5 ? cs.onPrimaryContainer : cs.onSurfaceVariant,
                     ),
                   ),
                 ],

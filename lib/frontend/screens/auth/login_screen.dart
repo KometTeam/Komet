@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
 import 'code_confirmation_screen.dart';
+import 'select_country_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,228 +25,176 @@ class _LoginScreenState extends State<LoginScreen> {
     _selectedCountry = countriesByCode['RU'] ?? allCountries.first;
   }
 
-  void _showCountryPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E2A),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 1.0,
-        snap: true,
-        snapSizes: const [0.7, 1.0],
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Выберите страну',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Symbols.close, color: Colors.white70),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: allCountries.length,
-                itemBuilder: (context, index) {
-                  final country = allCountries[index];
-                  return ListTile(
-                    leading: Text(
-                      country.phoneCode,
-                      style: const TextStyle(color: Colors.white54, fontSize: 14),
-                    ),
-                    title: Text(
-                      country.ru,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    onTap: () {
-                      setState(() {
-                        _selectedCountry = country;
-                        _phoneController.clear();
-                        _isPhoneValid = false;
-                      });
-                      Navigator.pop(context);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
+  void _showCountryPicker() async {
+    final result = await Navigator.push<CountryName>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SelectCountryScreen(
+          selectedCountry: _selectedCountry,
         ),
       ),
     );
+    if (result != null) {
+      setState(() {
+        _selectedCountry = result;
+        _phoneController.clear();
+        _isPhoneValid = false;
+      });
+    }
   }
 
   void _showTOS(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E2A),
+      backgroundColor: cs.surfaceContainerHigh,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 1.0,
-        snap: true,
-        snapSizes: const [0.7, 1.0],
-        expand: false,
-        builder: (context, scrollController) => Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Условия использования',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Symbols.close, color: Colors.white70),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  children: const [
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 1.0,
+          snap: true,
+          snapSizes: const [0.7, 1.0],
+          expand: false,
+          builder: (context, scrollController) => Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                     Text(
-                      'Условия использования неофициального клиента на MAX, именуемым "KometClient" или же "Komet"\n\n'
-                      '1. Статус и отношения\n'
-                      '1.1. «Komet» (далее — «Приложение») — неофициальное стороннее приложение, не имеющее отношения к ООО «Коммуникационная платформа" (правообладатель сервиса «MAX").\n'
-                      '1.2. Разработчики Приложения не являются партнёрами, сотрудниками или аффилированными лицами ООО «Коммуникационная платформа».\n'
-                      '1.3. Все упоминания торговых марок «MAX» и связанных сервисов принадлежат их правообладателям.\n\n'
-                      '2. Условия использования\n'
-                      '2.1. Используя Приложение «Komet», вы:\n'
-                      '• Автоматически подтверждаете согласие с официальным Пользовательским соглашением «MAX» (https://legal.max.ru/ps)\n'
-                      '• Осознаёте, что использование неофициального клиента может привести к блокировке аккаунта со стороны ООО «Коммуникационная платформа»;\n'
-                      '• Принимаете на себя все риски, связанные с использованием Приложения.\n'
-                      '2.2. Строго запрещено:\n'
-                      '• Использовать Приложение «Komet» для распространения запрещённого контента;\n'
-                      '• Осуществлять массовые рассылки (спам);\n'
-                      '• Нарушать законодательство РФ и международное право;\n'
-                      '• Предпринимать попытки взлома или нарушения работы оригинального сервиса «MAX».\n'
-                      '2.3. Техническая реализация соответствует принципу добросовестного использования (свободное использование) и не нарушает исключительные права правообладателя в соответствии с статьёй 1273 ГК РФ.\n'
-                      '2.4. Особенности технического взаимодействия:\n'
-                      '• Приложение «Komet» использует публично доступные методы взаимодействия с сервисом «MAX», аналогичные веб-версии (https://web.max.ru)\n'
-                      '• Все запросы выполняются в рамках добросовестного использования для обеспечения совместимости;\n'
-                      '• Разработчики не осуществляют обход технических средств защиты и не декомпилируют оригинальное ПО.\n\n'
-                      '3. Технические аспекты\n'
-                      '3.1. Приложение «Komet» использует только публично доступные методы взаимодействия с сервисом «MAX» через официальные конечные точки.\n'
-                      '3.2. Все запросы выполняются в рамках добросовестного использования (fair use) для обеспечения совместимости.\n'
-                      '3.3. Разработчики не несут ответственности за:\n'
-                      '• Изменения в API оригинального сервиса;\n'
-                      '• Блокировку аккаунтов пользователей;\n'
-                      '• Функциональные ограничения, вызванные действиями ООО «Коммуникационная платформа».\n\n'
-                      '4. Конфиденциальность\n'
-                      '4.1. Приложение «Komet» не хранит и не обрабатывает персональные данные пользователей.\n'
-                      '4.2. Все данные авторизации передаются напрямую серверам ООО «Коммуникационная платформа».\n'
-                      '4.3. Разработчики не имеют доступа к логинам, паролям, переписке и другим персональным данным пользователей.\n\n'
-                      '5. Ответственность и ограничения\n'
-                      '5.1. Приложение «Komet» предоставляется «как есть» (as is) без гарантий работоспособности.\n'
-                      '5.2. Разработчики вправе прекратить поддержку Приложения в любой момент без объяснения причин.\n\n'
-                      '6. Правовые основания\n'
-                      '6.1. Разработка и распространение Приложения «Komet» осуществляются в соответствии с:\n'
-                      '• Статья 1280.3 ГК РФ — декомпилирование программы для обеспечения совместимости;\n'
-                      '• Статья 1229 ГК РФ — ограничения исключительного права в информационных целях;\n'
-                      '• Федеральный закон № 149‑ФЗ «Об информации» — использование общедоступной информации;\n'
-                      '• Право на межоперабельность (Directive (EU) 2019/790) — обеспечение взаимодействия программ.\n'
-                      '6.2. Взаимодействие с сервисом «MAX» осуществляется исключительно через:\n'
-                      '• Публичные API‑интерфейсы, доступные через веб‑версию сервиса;\n'
-                      '• Методы обратной разработки, разрешённые ст. 1280.3 ГК РФ для целей совместимости;\n'
-                      '• Открытые протоколы взаимодействия, не защищённые техническими средствами охраны.\n'
-                      '6.3. Приложение «Komet» не обходит технические средства защиты и не нарушает нормальную работу оригинального сервиса, что соответствует требованиям статьи 1299 ГК РФ.\n\n'
-                      '7. Заключительные положения\n'
-                      '7.1. Используя Приложение «Komet», вы соглашаетесь с тем, что:\n'
-                      '• Единственным правомочным способом использования сервиса «MAX» является применение официальных клиентов;\n'
-                      '• Все претензии по работе сервиса должны направляться в ООО «Коммуникационная платформа»;\n'
-                      '• Разработчики Приложения не несут ответственности за любые косвенные или прямые убытки.\n'
-                      '7.2. Настоящее соглашение может быть изменено без предварительного уведомления пользователей.\n\n'
-                      '8. Функции безопасности и конфиденциальности\n'
-                      '8.1. Приложение «Komet» включает инструменты защиты приватности:\n'
-                      '• Подмена данных сессии — для предотвращения отслеживания пользователя с помощью продвинутых инструментов Open‑Source‑Intelligence (OSINT);\n'
-                      '• Система прокси‑подключений — для обеспечения безопасности сетевого взаимодействия;\n'
-                      '• Ограничение телеметрии — для минимизации передачи диагностических данных.\n'
-                      '8.2. Данные функции:\n'
-                      '• Направлены исключительно на защиту конфиденциальности пользователей;\n'
-                      '• Не используются для обхода систем безопасности оригинального сервиса;\n'
-                      '• Реализованы в рамках статьи 152.1 ГК РФ о защите частной жизни.\n'
-                      '8.3. Разработчики не несут ответственности за:\n'
-                      '• Блокировки, связанные с использованием инструментов конфиденциальности;\n'
-                      '• Изменения в работе сервиса при активации данных функций.\n'
-                      '8.4. Функции экспорта и импорта сессии\n'
-                      '8.4.1. Приложение «Komet» предоставляет возможность экспорта и импорта данных сессии для:\n'
-                      '• Обеспечения переносимости данных между устройствами пользователя\n'
-                      '• Резервного копирования учетных данных\n'
-                      '• Восстановления доступа при утере устройства\n'
-                      '8.4.2. Особенности реализации:\n'
-                      '• Экспорт сессии осуществляется без привязки к номеру телефона\n'
-                      '• Данные сессии защищаются паролем и шифрованием по алгоритмам AES‑256\n'
-                      '• Ключ шифрования известен только пользователю и не сохраняется в приложении\n'
-                      '8.4.3. Техническая реализация экспорта сессии:\n'
-                      '• Экспорт сессии осуществляется через токен авторизации для идентификации в сервисе\n'
-                      '• Используется подмена параметров сессии для сохранения контекста аутентификации\n'
-                      '• Интеграция настроек прокси для обеспечения единой конфигурации подключения\n'
-                      '• Импортированная сессия маскирует источник подключения через указанные прокси‑настройки\n'
-                      '• Серверы оригинального сервиса не получают данных о смене устройства пользователя\n'
-                      '• Шифрование применяется ко всему пакету данных (сессия + прокси‑конфиг)\n'
-                      '8.4.4. Правовые основания:\n'
-                      '• Статья 6 ФЗ‑152 «О персональных данных» — обработка данных с согласия субъекта\n'
-                      '• Статья 434 ГК РФ — право на выбор формы сделки (электронная форма хранения учетных данных)\n'
-                      '• Принцип минимизации данных — сбор только необходимой для работы информации\n'
-                      '• Использование токена не является несанкционированным доступом (ст. 272 УК РФ не нарушается)\n'
-                      '• Подмена сессии — легитимный метод сохранения аутентификации (аналог браузерных cookies)\n'
-                      '• Маскировка IP‑адреса — законный способ защиты персональных данных (ст. 6 ФЗ‑152)\n'
-                      '8.4.5. Ограничения ответственности:\n'
-                      '• Пользователь самостоятельно несет ответственность за сохранность пароля и резервных копий\n'
-                      '• Разработчики не имеют доступа к зашифрованным данным сессии\n'
-                      '• Восстановление утерянных паролей невозможно в целях безопасности\n'
-                      '• Ключи шифрования не хранятся в приложении и известны только пользователю',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        height: 1.5,
+                      'Условия использования',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
                       ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Symbols.close, color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    children: [
+                      Text(
+                        'Условия использования неофициального клиента на MAX, именуемым "KometClient" или же "Komet"\n\n'
+                        '1. Статус и отношения\n'
+                        '1.1. «Komet» (далее — «Приложение») — неофициальное стороннее приложение, не имеющее отношения к ООО «Коммуникационная платформа" (правообладатель сервиса «MAX").\n'
+                        '1.2. Разработчики Приложения не являются партнёрами, сотрудниками или аффилированными лицами ООО «Коммуникационная платформа».\n'
+                        '1.3. Все упоминания торговых марок «MAX» и связанных сервисов принадлежат их правообладателям.\n\n'
+                        '2. Условия использования\n'
+                        '2.1. Используя Приложение «Komet», вы:\n'
+                        '• Автоматически подтверждаете согласие с официальным Пользовательским соглашением «MAX» (https://legal.max.ru/ps)\n'
+                        '• Осознаёте, что использование неофициального клиента может привести к блокировке аккаунта со стороны ООО «Коммуникационная платформа»;\n'
+                        '• Принимаете на себя все риски, связанные с использованием Приложения.\n'
+                        '2.2. Строго запрещено:\n'
+                        '• Использовать Приложение «Komet» для распространения запрещённого контента;\n'
+                        '• Осуществлять массовые рассылки (спам);\n'
+                        '• Нарушать законодательство РФ и международное право;\n'
+                        '• Предпринимать попытки взлома или нарушения работы оригинального сервиса «MAX».\n'
+                        '2.3. Техническая реализация соответствует принципу добросовестного использования (свободное использование) и не нарушает исключительные права правообладателя в соответствии с статьёй 1273 ГК РФ.\n'
+                        '2.4. Особенности технического взаимодействия:\n'
+                        '• Приложение «Komet» использует публично доступные методы взаимодействия с сервисом «MAX», аналогичные веб-версии (https://web.max.ru)\n'
+                        '• Все запросы выполняются в рамках добросовестного использования для обеспечения совместимости;\n'
+                        '• Разработчики не осуществляют обход технических средств защиты и не декомпилируют оригинальное ПО.\n\n'
+                        '3. Технические аспекты\n'
+                        '3.1. Приложение «Komet» использует только публично доступные методы взаимодействия с сервисом «MAX» через официальные конечные точки.\n'
+                        '3.2. Все запросы выполняются в рамках добросовестного использования (fair use) для обеспечения совместимости.\n'
+                        '3.3. Разработчики не несут ответственности за:\n'
+                        '• Изменения в API оригинального сервиса;\n'
+                        '• Блокировку аккаунтов пользователей;\n'
+                        '• Функциональные ограничения, вызванные действиями ООО «Коммуникационная платформа».\n\n'
+                        '4. Конфиденциальность\n'
+                        '4.1. Приложение «Komet» не хранит и не обрабатывает персональные данные пользователей.\n'
+                        '4.2. Все данные авторизации передаются напрямую серверам ООО «Коммуникационная платформа».\n'
+                        '4.3. Разработчики не имеют доступа к логинам, паролям, переписке и другим персональным данным пользователей.\n\n'
+                        '5. Ответственность и ограничения\n'
+                        '5.1. Приложение «Komet» предоставляется «как есть» (as is) без гарантий работоспособности.\n'
+                        '5.2. Разработчики вправе прекратить поддержку Приложения в любой момент без объяснения причин.\n\n'
+                        '6. Правовые основания\n'
+                        '6.1. Разработка и распространение Приложения «Komet» осуществляются в соответствии с:\n'
+                        '• Статья 1280.3 ГК РФ — декомпилирование программы для обеспечения совместимости;\n'
+                        '• Статья 1229 ГК РФ — ограничения исключительного права в информационных целях;\n'
+                        '• Федеральный закон № 149‑ФЗ «Об информации» — использование общедоступной информации;\n'
+                        '• Право на межоперабельность (Directive (EU) 2019/790) — обеспечение взаимодействия программ.\n'
+                        '6.2. Взаимодействие с сервисом «MAX» осуществляется исключительно через:\n'
+                        '• Публичные API‑интерфейсы, доступные через веб‑версию сервиса;\n'
+                        '• Методы обратной разработки, разрешённые ст. 1280.3 ГК РФ для целей совместимости;\n'
+                        '• Открытые протоколы взаимодействия, не защищённые техническими средствами охраны.\n'
+                        '6.3. Приложение «Komet» не обходит технические средства защиты и не нарушает нормальную работу оригинального сервиса, что соответствует требованиям статьи 1299 ГК РФ.\n\n'
+                        '7. Заключительные положения\n'
+                        '7.1. Используя Приложение «Komet», вы соглашаетесь с тем, что:\n'
+                        '• Единственным правомочным способом использования сервиса «MAX» является применение официальных клиентов;\n'
+                        '• Все претензии по работе сервиса должны направляться в ООО «Коммуникационная платформа»;\n'
+                        '• Разработчики Приложения не несут ответственности за любые косвенные или прямые убытки.\n'
+                        '7.2. Настоящее соглашение может быть изменено без предварительного уведомления пользователей.\n\n'
+                        '8. Функции безопасности и конфиденциальности\n'
+                        '8.1. Приложение «Komet» включает инструменты защиты приватности:\n'
+                        '• Подмена данных сессии — для предотвращения отслеживания пользователя с помощью продвинутых инструментов Open‑Source‑Intelligence (OSINT);\n'
+                        '• Система прокси‑подключений — для обеспечения безопасности сетевого взаимодействия;\n'
+                        '• Ограничение телеметрии — для минимизации передачи диагностических данных.\n'
+                        '8.2. Данные функции:\n'
+                        '• Направлены исключительно на защиту конфиденциальности пользователей;\n'
+                        '• Не используются для обхода систем безопасности оригинального сервиса;\n'
+                        '• Реализованы в рамках статьи 152.1 ГК РФ о защите частной жизни.\n'
+                        '8.3. Разработчики не несут ответственности за:\n'
+                        '• Блокировки, связанные с использованием инструментов конфиденциальности;\n'
+                        '• Изменения в работе сервиса при активации данных функций.\n'
+                        '8.4. Функции экспорта и импорта сессии\n'
+                        '8.4.1. Приложение «Komet» предоставляет возможность экспорта и импорта данных сессии для:\n'
+                        '• Обеспечения переносимости данных между устройствами пользователя\n'
+                        '• Резервного копирования учетных данных\n'
+                        '• Восстановления доступа при утере устройства\n'
+                        '8.4.2. Особенности реализации:\n'
+                        '• Экспорт сессии осуществляется без привязки к номеру телефона\n'
+                        '• Данные сессии защищаются паролем и шифрованием по алгоритмам AES‑256\n'
+                        '• Ключ шифрования известен только пользователю и не сохраняется в приложении\n'
+                        '8.4.3. Техническая реализация экспорта сессии:\n'
+                        '• Экспорт сессии осуществляется через токен авторизации для идентификации в сервисе\n'
+                        '• Используется подмена параметров сессии для сохранения контекста аутентификации\n'
+                        '• Интеграция настроек прокси для обеспечения единой конфигурации подключения\n'
+                        '• Импортированная сессия маскирует источник подключения через указанные прокси‑настройки\n'
+                        '• Серверы оригинального сервиса не получают данных о смене устройства пользователя\n'
+                        '• Шифрование применяется ко всему пакету данных (сессия + прокси‑конфиг)\n'
+                        '8.4.4. Правовые основания:\n'
+                        '• Статья 6 ФЗ‑152 «О персональных данных» — обработка данных с согласия субъекта\n'
+                        '• Статья 434 ГК РФ — право на выбор формы сделки (электронная форма хранения учетных данных)\n'
+                        '• Принцип минимизации данных — сбор только необходимой для работы информации\n'
+                        '• Использование токена не является несанкционированным доступом (ст. 272 УК РФ не нарушается)\n'
+                        '• Подмена сессии — легитимный метод сохранения аутентификации (аналог браузерных cookies)\n'
+                        '• Маскировка IP‑адреса — законный способ защиты персональных данных (ст. 6 ФЗ‑152)\n'
+                        '8.4.5. Ограничения ответственности:\n'
+                        '• Пользователь самостоятельно несет ответственность за сохранность пароля и резервных копий\n'
+                        '• Разработчики не имеют доступа к зашифрованным данным сессии\n'
+                        '• Восстановление утерянных паролей невозможно в целях безопасности\n'
+                        '• Ключи шифрования не хранятся в приложении и известны только пользователю',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -258,6 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim1, anim2, child) {
+        final cs = Theme.of(context).colorScheme;
         final curve = Curves.easeOutQuart.transform(anim1.value);
         return Opacity(
           opacity: anim1.value,
@@ -266,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Transform.scale(
               scale: 0.8 + (0.2 * curve),
               child: AlertDialog(
-                backgroundColor: const Color(0xFF1E1E2A),
+                backgroundColor: cs.surfaceContainerHigh,
                 surfaceTintColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -280,7 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       'Это правильный номер?',
                       style: GoogleFonts.inter(
-                        color: Colors.white70,
+                        color: cs.onSurfaceVariant,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -289,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       '${_selectedCountry.phoneCode} $formattedPhone',
                       style: GoogleFonts.inter(
-                        color: Colors.white,
+                        color: cs.onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                       ),
@@ -305,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Text(
                           'Изменить',
                           style: GoogleFonts.inter(
-                            color: const Color(0xFFAFAFFF),
+                            color: cs.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
@@ -326,7 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Text(
                           'Готово',
                           style: GoogleFonts.inter(
-                            color: const Color(0xFFAFAFFF),
+                            color: cs.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
@@ -349,8 +299,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D12),
+      backgroundColor: cs.surface,
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onVerticalDragEnd: (details) {
@@ -376,17 +327,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             IconButton(
                               onPressed: () {},
-                              icon: const Icon(
+                              icon: Icon(
                                 Symbols.admin_panel_settings,
-                                color: Colors.white70,
+                                color: cs.onSurfaceVariant,
                                 weight: 400,
                               ),
                             ),
                             IconButton(
                               onPressed: () {},
-                              icon: const Icon(
+                              icon: Icon(
                                 Symbols.language,
-                                color: Colors.white70,
+                                color: cs.onSurfaceVariant,
                                 weight: 400,
                               ),
                             ),
@@ -399,23 +350,23 @@ class _LoginScreenState extends State<LoginScreen> {
                               Image.asset(
                                 'assets/komet.png',
                                 height: 80,
-                                color: Colors.white,
+                                color: cs.onSurface,
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 'Войдите в Komet',
                                 style: GoogleFonts.inter(
-                                  color: Colors.white,
+                                  color: cs.onSurface,
                                   fontSize: 32,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'Проверьте код страны и введите свой\nномер телефона.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Colors.white70,
+                                  color: cs.onSurfaceVariant,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w400,
                                   height: 1.4,
@@ -435,13 +386,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Text(
                                   _selectedCountry.ru,
                                   style: GoogleFonts.inter(
-                                    color: Colors.white,
+                                    color: cs.onSurface,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w400,
                                   ),
                                 ),
                                 const Spacer(),
-                                const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
+                                Icon(Icons.keyboard_arrow_down, color: cs.onSurfaceVariant),
                               ],
                             ),
                           ),
@@ -454,7 +405,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                    Text(
                                      _selectedCountry.phoneCode,
                                      style: GoogleFonts.inter(
-                                       color: Colors.white,
+                                       color: cs.onSurface,
                                        fontSize: 15,
                                        fontWeight: FontWeight.w400,
                                      ),
@@ -463,7 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   Container(
                                     width: 1,
                                     height: 24,
-                                    color: Colors.white24,
+                                    color: cs.outlineVariant,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -474,10 +425,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                         FilteringTextInputFormatter.digitsOnly,
                                         _PhoneInputFormatter(_selectedCountry),
                                       ],
-                                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
-                                      decoration: const InputDecoration(
+                                      style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w400),
+                                      decoration: InputDecoration(
                                         hintText: '(000) 000-00-00',
-                                        hintStyle: TextStyle(color: Colors.white38, fontSize: 15, fontWeight: FontWeight.w400),
+                                        hintStyle: TextStyle(color: cs.outline, fontSize: 15, fontWeight: FontWeight.w400),
                                         border: InputBorder.none,
                                         isDense: true,
                                         contentPadding: EdgeInsets.zero,
@@ -499,7 +450,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Text(
                             'Другие способы входа',
                             style: GoogleFonts.inter(
-                              color: const Color(0xFFAFAFFF),
+                              color: cs.primary,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                               height: 1.4,
@@ -516,7 +467,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: RichText(
                                   text: TextSpan(
                                     style: GoogleFonts.inter(
-                                      color: Colors.white,
+                                      color: cs.onSurface,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
                                       height: 1.4,
@@ -525,7 +476,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       TextSpan(
                                         text: 'Продолжая, вы соглашаетесь с \n',
                                         style: GoogleFonts.inter(
-                                          color: Colors.white,
+                                          color: cs.onSurface,
                                           fontSize: 14,
                                           height: 1.4,
                                           fontWeight: FontWeight.w400,
@@ -534,7 +485,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       TextSpan(
                                         text: 'пользовательскими соглашениями',
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFFAFAFFF),
+                                          color: cs.primary,
                                           fontSize: 14,
                                           height: 1.4,
                                           fontWeight: FontWeight.w400,
@@ -551,11 +502,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 padding: const EdgeInsets.only(bottom: 16.0),
                                 child: FloatingActionButton(
                                   onPressed: _isPhoneValid ? _validateAndSubmit : null,
-                                  backgroundColor: _isPhoneValid ? const Color(0xffc1c4ff) : Colors.white10,
+                                  backgroundColor: _isPhoneValid ? cs.primaryContainer : cs.surfaceContainerHighest,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
                                   ),
-                                  child: Icon(Icons.arrow_forward, color: _isPhoneValid ? Colors.black : Colors.white24),
+                                  child: Icon(Icons.arrow_forward, color: _isPhoneValid ? cs.onPrimaryContainer : cs.onSurfaceVariant),
                                 ),
                               ),
                             ],
@@ -574,11 +525,11 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-
   Widget _buildInputField({
     required String label,
     required Widget content,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -591,7 +542,7 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: const Color(0xFFBEC2FF),
+                  color: cs.primary,
                   width: 1.5,
                 ),
                 borderRadius: BorderRadius.circular(50),
@@ -602,12 +553,12 @@ class _LoginScreenState extends State<LoginScreen> {
               top: -10,
               left: 20,
               child: Container(
-                color: const Color(0xFF0D0D12),
+                color: cs.surface,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   label,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFFBEC2FF),
+                    color: cs.primary,
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
