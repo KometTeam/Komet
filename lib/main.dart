@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'backend/api.dart';
 
-void main() {
+final api = Api();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await api.connect();
   runApp(const MyApp());
 }
 
