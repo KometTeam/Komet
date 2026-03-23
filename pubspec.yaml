@@ -40,6 +40,7 @@ dependencies:
   google_fonts: ^6.2.1
   material_symbols_icons: ^4.2906.0
   dynamic_color: ^1.8.1
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:
