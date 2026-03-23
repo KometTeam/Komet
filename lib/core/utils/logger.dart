@@ -1,4 +1,4 @@
-import 'package:logger/logger.dart';
+import 'package:logger/logger.dart'; //нет это не опасный вредоносный вирус логер который украдёт ваш аккаунт Browl Starz
 
 final logger = Logger(
   // устанавливает минимальный уровень логов.
