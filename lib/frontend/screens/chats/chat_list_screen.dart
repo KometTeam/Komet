@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
+import 'chat_screen.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -20,6 +23,27 @@ class _ChatListScreenState extends State<ChatListScreen>
   int _currentNavIndex = 0;
   bool _isFabOpen = false;
   late AnimationController _fabController;
+  final Set<String> _selectedChats = {};
+  final ScrollController _scrollController = ScrollController();
+  double _pullRatio = 0.0; // 0.0 = folded (hidden row), 1.0 = fully expanded
+
+  bool get _isSelectionMode => _selectedChats.isNotEmpty;
+
+  void _toggleSelection(String chatId) {
+    setState(() {
+      if (_selectedChats.contains(chatId)) {
+        _selectedChats.remove(chatId);
+      } else {
+        _selectedChats.add(chatId);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedChats.clear();
+    });
+  }
 
   @override
   void initState() {
@@ -28,11 +52,31 @@ class _ChatListScreenState extends State<ChatListScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      final double offset = _scrollController.offset;
+      if (offset < 0) {
+        final newRatio = (offset.abs() / 80.0).clamp(0.0, 1.0);
+        if (newRatio != _pullRatio) {
+          setState(() {
+            _pullRatio = newRatio;
+          });
+        }
+      } else if (_pullRatio > 0) {
+        setState(() {
+          _pullRatio = 0.0;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     _fabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -59,226 +103,328 @@ class _ChatListScreenState extends State<ChatListScreen>
             IndexedStack(
               index: _currentNavIndex,
               children: [
-                CustomScrollView(
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      sliver: SliverToBoxAdapter(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Подключение...',
-                              style: TextStyle(
-                                color: cs.onSurface,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Outfit',
-                              ),
+                Listener(
+                  onPointerSignal: (pointerSignal) {
+                    if (pointerSignal is PointerScrollEvent) {
+                      if (_scrollController.hasClients &&
+                          _scrollController.offset <= 0) {
+                        if (pointerSignal.scrollDelta.dy < 0) {
+                          // Scrolled UP (pulling down)
+                          setState(() {
+                            _pullRatio = (_pullRatio + 0.2).clamp(0.0, 1.0);
+                          });
+                        } else if (pointerSignal.scrollDelta.dy > 0 &&
+                            _pullRatio > 0) {
+                          // Scrolled DOWN (folding up)
+                          setState(() {
+                            _pullRatio = (_pullRatio - 0.2).clamp(0.0, 1.0);
+                          });
+                        }
+                      }
+                    }
+                  },
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          height: _isSelectionMode
+                              ? 0
+                              : (132 + (96 * _pullRatio)),
+                          color: Colors.transparent,
+                          clipBehavior: Clip.hardEdge,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            transform: Matrix4.translationValues(
+                              0,
+                              _isSelectionMode ? -100 : 0,
+                              0,
                             ),
-                            PopupMenuButton<int>(
-                              icon: Icon(
-                                Symbols.more_vert,
-                                color: cs.outline,
-                                weight: 400,
-                              ),
-                              offset: const Offset(0, 48),
-                              elevation: 4,
-                              color: cs.surfaceContainerHigh,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              itemBuilder: (context) => [
-                                _buildPopupMenuItem(
-                                  1,
-                                  'Кнопка 1',
-                                  Symbols.settings,
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    12,
+                                    20,
+                                    4,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          if (_pullRatio < 0.8)
+                                            Opacity(
+                                              opacity: 1.0 - _pullRatio,
+                                              child: Container(
+                                                width: 50 * (1.0 - _pullRatio),
+                                                height: 32,
+                                                margin: const EdgeInsets.only(
+                                                  right: 8,
+                                                ),
+                                                child: Stack(
+                                                  children: [
+                                                    _buildFoldedStory(
+                                                      'https://i.pravatar.cc/150?u=dasha',
+                                                      0,
+                                                    ),
+                                                    _buildFoldedStory(
+                                                      'https://i.pravatar.cc/150?u=mastika',
+                                                      1,
+                                                    ),
+                                                    _buildFoldedStory(
+                                                      'https://i.pravatar.cc/150?u=stas',
+                                                      2,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          Text(
+                                            'Подключение...',
+                                            style: TextStyle(
+                                              color: cs.onSurface,
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w600,
+                                              fontFamily: 'Outfit',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      PopupMenuButton<int>(
+                                        icon: Icon(
+                                          Symbols.more_vert,
+                                          color: cs.outline,
+                                          weight: 400,
+                                        ),
+                                        offset: const Offset(0, 48),
+                                        elevation: 4,
+                                        color: cs.surfaceContainerHigh,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                        itemBuilder: (context) => [
+                                          _buildPopupMenuItem(
+                                            1,
+                                            'Кнопка 1',
+                                            Symbols.settings,
+                                          ),
+                                          _buildPopupMenuItem(
+                                            2,
+                                            'Кнопка 2',
+                                            Symbols.notifications,
+                                          ),
+                                          _buildPopupMenuItem(
+                                            3,
+                                            'Кнопка 3',
+                                            Symbols.shield,
+                                          ),
+                                          _buildPopupMenuItem(
+                                            4,
+                                            'Кнопка 4',
+                                            Symbols.info,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                _buildPopupMenuItem(
-                                  2,
-                                  'Кнопка 2',
-                                  Symbols.notifications,
+                                SizedBox(
+                                  height: 96 * _pullRatio,
+                                  child: Opacity(
+                                    opacity: _pullRatio,
+                                    child: ListView(
+                                      scrollDirection: Axis.horizontal,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                      ),
+                                      children: [
+                                        _buildStoryItem(
+                                          'Даша',
+                                          'https://i.pravatar.cc/150?u=dasha',
+                                          true,
+                                        ),
+                                        _buildStoryItem(
+                                          'Мастика',
+                                          'https://i.pravatar.cc/150?u=mastika',
+                                          false,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                                _buildPopupMenuItem(
-                                  3,
-                                  'Кнопка 3',
-                                  Symbols.shield,
-                                ),
-                                _buildPopupMenuItem(
-                                  4,
-                                  'Кнопка 4',
-                                  Symbols.info,
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    4,
+                                    20,
+                                    12,
+                                  ),
+                                  child: Container(
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: cs.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(50),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Symbols.search,
+                                          color: cs.outline,
+                                          size: 20,
+                                          weight: 400,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: TextField(
+                                            style: TextStyle(
+                                              color: cs.onSurface,
+                                              fontSize: 15,
+                                            ),
+                                            decoration: InputDecoration(
+                                              hintText: 'Поиск',
+                                              hintStyle: TextStyle(
+                                                color: cs.outline,
+                                                fontSize: 15,
+                                              ),
+                                              border: InputBorder.none,
+                                              isDense: true,
+                                              contentPadding: EdgeInsets.zero,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ],
-                              onSelected: (value) {
-                                // Action handler
-                              },
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 96,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          children: [
-                            _buildStoryItem(
-                              'Даша',
-                              'https://i.pravatar.cc/150?u=dasha',
-                              true,
-                            ),
-                            _buildStoryItem(
-                              'Мастика',
-                              'https://i.pravatar.cc/150?u=mastika',
-                              false,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: Container(
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(50),
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Symbols.search,
-                                color: cs.outline,
-                                size: 20,
-                                weight: 400,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: TextField(
-                                  style: TextStyle(
-                                    color: cs.onSurface,
-                                    fontSize: 15,
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: EdgeInsets.only(
+                          top: _isSelectionMode ? 64 : 0,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            height: 48,
+                            child: ScrollConfiguration(
+                              behavior: ScrollConfiguration.of(context)
+                                  .copyWith(
+                                    dragDevices: {
+                                      ui.PointerDeviceKind.touch,
+                                      ui.PointerDeviceKind.mouse,
+                                      ui.PointerDeviceKind.trackpad,
+                                    },
                                   ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Поиск',
-                                    hintStyle: TextStyle(
-                                      color: cs.outline,
-                                      fontSize: 15,
-                                    ),
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 8,
                                 ),
+                                physics: const BouncingScrollPhysics(),
+                                children: [
+                                  _buildFolderChip('Все чаты'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Контакты'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Пидоры'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Каналы'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Группы'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Боты'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Избранное'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Архив'),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 48,
-                        child: ScrollConfiguration(
-                          behavior: ScrollConfiguration.of(context).copyWith(
-                            dragDevices: {
-                              ui.PointerDeviceKind.touch,
-                              ui.PointerDeviceKind.mouse,
-                              ui.PointerDeviceKind.trackpad,
-                            },
-                          ),
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 8,
                             ),
-                            physics: const BouncingScrollPhysics(),
-                            children: [
-                              _buildFolderChip('Все чаты'),
-                              const SizedBox(width: 8),
-                              _buildFolderChip('Контакты'),
-                              const SizedBox(width: 8),
-                              _buildFolderChip('Пидоры'),
-                              const SizedBox(width: 8),
-                              _buildFolderChip('Каналы'),
-                              const SizedBox(width: 8),
-                              _buildFolderChip('Группы'),
-                              const SizedBox(width: 8),
-                              _buildFolderChip('Боты'),
-                              const SizedBox(width: 8),
-                              _buildFolderChip('Избранное'),
-                              const SizedBox(width: 8),
-                              _buildFolderChip('Архив'),
-                            ],
                           ),
                         ),
                       ),
-                    ),
-                    SliverList(
-                      delegate: SliverChildListDelegate([
-                        _buildChatItem(
-                          'Станислав',
-                          'Хорошо',
-                          '10:07',
-                          'https://i.pravatar.cc/150?u=stas',
-                          isOnline: true,
-                          isRead: true,
-                        ),
-                        _buildChatItem(
-                          'Илья',
-                          'печатает...',
-                          '10:07',
-                          'https://i.pravatar.cc/150?u=ilya',
-                          isOnline: true,
-                          isTyping: true,
-                          unreadCount: 1,
-                        ),
-                        _buildChatItem(
-                          'Вероника',
-                          'Спасибо',
-                          '09:56',
-                          'https://i.pravatar.cc/150?u=veronika',
-                          isRead: true,
-                        ),
-                        _buildChatItem(
-                          'Komet Client',
-                          'Кстати. Смотрите, какую шту...',
-                          '09:56',
-                          'https://i.pravatar.cc/150?u=komet',
-                          unreadCount: 5,
-                          isMuted: true,
-                        ),
-                        _buildChatItem(
-                          '4-й подъезд',
-                          'Людмила: Сколько?',
-                          '09:34',
-                          'https://i.pravatar.cc/150?u=podezd',
-                          unreadCount: 78,
-                          isMuted: true,
-                        ),
-                        const SizedBox(height: 100),
-                      ]),
-                    ),
-                  ],
-                ),
+                      SliverList(
+                        delegate: SliverChildListDelegate([
+                          _buildChatItem(
+                            'stas',
+                            'Станислав',
+                            'Хорошо',
+                            '10:07',
+                            'https://i.pravatar.cc/150?u=stas',
+                            isOnline: true,
+                            isRead: true,
+                          ),
+                          _buildChatItem(
+                            'ilya',
+                            'Илья',
+                            'печатает...',
+                            '10:07',
+                            'https://i.pravatar.cc/150?u=ilya',
+                            isOnline: true,
+                            isTyping: true,
+                            unreadCount: 1,
+                          ),
+                          _buildChatItem(
+                            'veronika',
+                            'Вероника',
+                            'Спасибо',
+                            '09:56',
+                            'https://i.pravatar.cc/150?u=veronika',
+                            isRead: true,
+                          ),
+                          _buildChatItem(
+                            'komet',
+                            'Komet Client',
+                            'Кстати. Смотрите, какую шту...',
+                            '09:56',
+                            'https://i.pravatar.cc/150?u=komet',
+                            unreadCount: 5,
+                            isMuted: true,
+                          ),
+                          _buildChatItem(
+                            'podezd',
+                            '4-й подъезд',
+                            'Людмила: Сколько?',
+                            '09:34',
+                            'https://i.pravatar.cc/150?u=podezd',
+                            unreadCount: 78,
+                            isMuted: true,
+                          ),
+                        ]),
+                      ),
+                    ],
+                  ), // CustomScrollView
+                ), // Listener
                 const CallsTab(),
                 const ContactsTab(),
                 const SettingsTab(),
               ],
             ),
-            Positioned(
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
               left: 8,
               right: 8,
-              bottom: 24.0,
+              bottom: _isSelectionMode ? -100 : 24.0,
               child: RepaintBoundary(
                 child: Container(
                   height: 68,
@@ -386,45 +532,98 @@ class _ChatListScreenState extends State<ChatListScreen>
                           ),
                         ),
                       ),
-                    if (_fabController.value > 0)
+                    if (!_isSelectionMode) ...[
+                      if (_fabController.value > 0)
+                        Positioned(
+                          right: 20,
+                          bottom: 110 + 74,
+                          child: RepaintBoundary(
+                            child: Transform.scale(
+                              scale: val,
+                              alignment: Alignment.bottomRight,
+                              child: Opacity(
+                                opacity: val > 0.5 ? (val - 0.5) * 2 : 0,
+                                child: _buildFabMenu(),
+                              ),
+                            ),
+                          ),
+                        ),
                       Positioned(
                         right: 20,
-                        bottom: 110 + 74,
-                        child: RepaintBoundary(
-                          child: Transform.scale(
-                            scale: val,
-                            alignment: Alignment.bottomRight,
-                            child: Opacity(
-                              opacity: val > 0.5 ? (val - 0.5) * 2 : 0,
-                              child: _buildFabMenu(),
+                        bottom: 110,
+                        child: FloatingActionButton(
+                          onPressed: _toggleFab,
+                          backgroundColor: cs.primaryContainer,
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Transform.rotate(
+                            angle: val * (pi / 4),
+                            child: Icon(
+                              Symbols.add,
+                              color: cs.onPrimaryContainer,
+                              size: 28,
+                              weight: 400,
                             ),
                           ),
                         ),
                       ),
-                    Positioned(
-                      right: 20,
-                      bottom: 110,
-                      child: FloatingActionButton(
-                        onPressed: _toggleFab,
-                        backgroundColor: cs.primaryContainer,
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Transform.rotate(
-                          angle: val * (pi / 4),
-                          child: Icon(
-                            Symbols.add,
-                            color: cs.onPrimaryContainer,
-                            size: 28,
-                            weight: 400,
-                          ),
-                        ),
-                      ),
-                    ),
+                    ],
                   ],
                 );
               },
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              top: _isSelectionMode ? 0 : -80,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 64,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Symbols.arrow_back, color: cs.onSurface),
+                      onPressed: _clearSelection,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _selectedChats.length.toString(),
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(Symbols.delete, color: cs.onSurface),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Symbols.archive, color: cs.onSurface),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Symbols.volume_off, color: cs.onSurface),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -489,6 +688,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _buildChatItem(
+    String id,
     String name,
     String message,
     String time,
@@ -500,87 +700,139 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isMuted = false,
   }) {
     final cs = Theme.of(context).colorScheme;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      leading: Stack(
-        children: [
-          CircleAvatar(radius: 24, backgroundImage: NetworkImage(imageUrl)),
-          if (isOnline)
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: cs.surface, width: 2),
-                ),
-              ),
+    final isSelected = _selectedChats.contains(id);
+
+    return InkWell(
+      onTap: () {
+        if (_isSelectionMode) {
+          _toggleSelection(id);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(name: name, imageUrl: imageUrl),
             ),
-        ],
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              name,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+          );
+        }
+      },
+      onLongPress: () => _toggleSelection(id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        color: isSelected ? cs.primary.withOpacity(0.08) : Colors.transparent,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 2,
           ),
-          if (isMuted)
-            Icon(
-              Symbols.notifications_off,
-              color: cs.outlineVariant,
-              size: 14,
-              weight: 400,
-            ),
-          const SizedBox(width: 8),
-          Text(time, style: TextStyle(color: cs.outline, fontSize: 12)),
-        ],
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: isTyping ? cs.primary : cs.outline,
-                  fontSize: 14,
-                  fontWeight: isTyping ? FontWeight.w500 : FontWeight.w400,
+          leading: Stack(
+            children: [
+              CircleAvatar(radius: 24, backgroundImage: NetworkImage(imageUrl)),
+              if (isSelected)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.surface, width: 2),
+                    ),
+                    child: Icon(
+                      Symbols.check,
+                      color: cs.onPrimary,
+                      size: 14,
+                      weight: 600,
+                    ),
+                  ),
+                )
+              else if (isOnline)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.surface, width: 2),
+                    ),
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (unreadCount > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isMuted
-                      ? cs.surfaceContainerHighest
-                      : cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(10),
-                ),
+            ],
+          ),
+          title: Row(
+            children: [
+              Expanded(
                 child: Text(
-                  unreadCount.toString(),
+                  name,
                   style: TextStyle(
-                    color: isMuted ? cs.outline : cs.onSurface,
-                    fontSize: 11,
+                    color: cs.onSurface,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-              )
-            else if (isRead)
-              Icon(Symbols.done_all, color: cs.primary, size: 16, weight: 400),
-          ],
+              ),
+              if (isMuted)
+                Icon(
+                  Symbols.notifications_off,
+                  color: cs.outlineVariant,
+                  size: 14,
+                  weight: 400,
+                ),
+              const SizedBox(width: 8),
+              Text(time, style: TextStyle(color: cs.outline, fontSize: 12)),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: isTyping ? cs.primary : cs.outline,
+                      fontSize: 14,
+                      fontWeight: isTyping ? FontWeight.w500 : FontWeight.w400,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (unreadCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isMuted
+                          ? cs.surfaceContainerHighest
+                          : cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      unreadCount.toString(),
+                      style: TextStyle(
+                        color: isMuted ? cs.outline : cs.onSurface,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                else if (isRead)
+                  Icon(
+                    Symbols.done_all,
+                    color: cs.primary,
+                    size: 16,
+                    weight: 400,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -711,6 +963,22 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFoldedStory(String imageUrl, int index) {
+    return Positioned(
+      left: index * 12.0,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 2),
+        ),
+        child: CircleAvatar(
+          radius: 12,
+          backgroundImage: NetworkImage(imageUrl),
+        ),
       ),
     );
   }
