@@ -7,85 +7,8 @@ import 'package:komet/core/config/countries.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'select_country_screen.dart';
-
-void _showCustomNotification(BuildContext context, String message) {
-  final overlay = Overlay.of(context);
-  final entry = OverlayEntry(
-    builder: (context) => _CustomNotification(message: message),
-  );
-  overlay.insert(entry);
-  Future.delayed(const Duration(milliseconds: 1900), () {
-    entry.remove();
-  });
-}
-
-class _CustomNotification extends StatefulWidget {
-  final String message;
-  const _CustomNotification({required this.message});
-
-  @override
-  State<_CustomNotification> createState() => _CustomNotificationState();
-}
-
-class _CustomNotificationState extends State<_CustomNotification>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _opacity;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-      reverseDuration: const Duration(milliseconds: 300),
-    );
-    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
-    _controller.forward();
-    Future.delayed(const Duration(milliseconds: 1600), () {
-      if (mounted) _controller.reverse();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Positioned(
-      bottom: 60,
-      left: 0,
-      right: 0,
-      child: Material(
-        color: Colors.transparent,
-        child: Center(
-          child: FadeTransition(
-            opacity: _opacity,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: Text(
-                widget.message,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+import 'spoff_redacted_screen.dart';
+import '../../widgets/custom_notification.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -482,10 +405,70 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _validateAndSubmit() {
     if (!_isTOSRead) {
-      _showCustomNotification(context, 'Соглащение прочитай щегол');
+      showCustomNotification(context, 'Соглащение прочитай щегол');
       return;
     }
     _showPhoneConfirmationDialog(_phoneController.text);
+  }
+
+  void _showSecurityOptions(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: 24.0,
+              horizontal: 16.0,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(Symbols.security, color: cs.onSurface),
+                  title: Text(
+                    'Подделка спуфа',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SpoffRedactedScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Symbols.vpn_lock, color: cs.onSurface),
+                  title: Text(
+                    'Прокси',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showOtherLoginMethods(BuildContext context) {
@@ -588,7 +571,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               IconButton(
-                                onPressed: () {},
+                                onPressed: () => _showSecurityOptions(context),
                                 icon: Icon(
                                   Symbols.admin_panel_settings,
                                   color: cs.onSurfaceVariant,

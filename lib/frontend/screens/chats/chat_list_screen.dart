@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'dart:math';
 import 'dart:ui' as ui;
+
+import '../calls/calls_tab.dart';
+import '../contacts/contacts_tab.dart';
+import '../profile/settings_tab.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -9,9 +14,38 @@ class ChatListScreen extends StatefulWidget {
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends State<ChatListScreen>
+    with SingleTickerProviderStateMixin {
   String _selectedCategory = 'Все чаты';
   int _currentNavIndex = 0;
+  bool _isFabOpen = false;
+  late AnimationController _fabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+  }
+
+  @override
+  void dispose() {
+    _fabController.dispose();
+    super.dispose();
+  }
+
+  void _toggleFab() {
+    setState(() {
+      _isFabOpen = !_isFabOpen;
+      if (_isFabOpen) {
+        _fabController.forward();
+      } else {
+        _fabController.reverse();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,250 +56,375 @@ class _ChatListScreenState extends State<ChatListScreen> {
         bottom: false,
         child: Stack(
           children: [
-            CustomScrollView(
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                  sliver: SliverToBoxAdapter(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Подключение...',
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Outfit',
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: Icon(
-                            Symbols.more_vert,
-                            color: cs.outline,
-                            weight: 400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 96,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      children: [
-                        _buildStoryItem('Даша', 'https://i.pravatar.cc/150?u=dasha', true),
-                        _buildStoryItem('Мастика', 'https://i.pravatar.cc/150?u=mastika', false),
-                      ],
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  sliver: SliverToBoxAdapter(
-                    child: Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Icon(Symbols.search, color: cs.outline, size: 20, weight: 400),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              style: TextStyle(color: cs.onSurface, fontSize: 15),
-                              decoration: InputDecoration(
-                                hintText: 'Поиск',
-                                hintStyle: TextStyle(color: cs.outline, fontSize: 15),
-                                border: InputBorder.none,
-                                isDense: true,
-                                contentPadding: EdgeInsets.zero,
+            IndexedStack(
+              index: _currentNavIndex,
+              children: [
+                CustomScrollView(
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      sliver: SliverToBoxAdapter(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Подключение...',
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Outfit',
                               ),
                             ),
+                            PopupMenuButton<int>(
+                              icon: Icon(
+                                Symbols.more_vert,
+                                color: cs.outline,
+                                weight: 400,
+                              ),
+                              offset: const Offset(0, 48),
+                              elevation: 4,
+                              color: cs.surfaceContainerHigh,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              itemBuilder: (context) => [
+                                _buildPopupMenuItem(
+                                  1,
+                                  'Кнопка 1',
+                                  Symbols.settings,
+                                ),
+                                _buildPopupMenuItem(
+                                  2,
+                                  'Кнопка 2',
+                                  Symbols.notifications,
+                                ),
+                                _buildPopupMenuItem(
+                                  3,
+                                  'Кнопка 3',
+                                  Symbols.shield,
+                                ),
+                                _buildPopupMenuItem(
+                                  4,
+                                  'Кнопка 4',
+                                  Symbols.info,
+                                ),
+                              ],
+                              onSelected: (value) {
+                                // Action handler
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 96,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          children: [
+                            _buildStoryItem(
+                              'Даша',
+                              'https://i.pravatar.cc/150?u=dasha',
+                              true,
+                            ),
+                            _buildStoryItem(
+                              'Мастика',
+                              'https://i.pravatar.cc/150?u=mastika',
+                              false,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: Container(
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(50),
                           ),
-                        ],
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Symbols.search,
+                                color: cs.outline,
+                                size: 20,
+                                weight: 400,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 15,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Поиск',
+                                    hintStyle: TextStyle(
+                                      color: cs.outline,
+                                      fontSize: 15,
+                                    ),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 48,
-                    child: ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(context).copyWith(
-                        dragDevices: {
-                          ui.PointerDeviceKind.touch,
-                          ui.PointerDeviceKind.mouse,
-                          ui.PointerDeviceKind.trackpad,
-                        },
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 48,
+                        child: ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(context).copyWith(
+                            dragDevices: {
+                              ui.PointerDeviceKind.touch,
+                              ui.PointerDeviceKind.mouse,
+                              ui.PointerDeviceKind.trackpad,
+                            },
+                          ),
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
+                            physics: const BouncingScrollPhysics(),
+                            children: [
+                              _buildFolderChip('Все чаты'),
+                              const SizedBox(width: 8),
+                              _buildFolderChip('Контакты'),
+                              const SizedBox(width: 8),
+                              _buildFolderChip('Пидоры'),
+                              const SizedBox(width: 8),
+                              _buildFolderChip('Каналы'),
+                              const SizedBox(width: 8),
+                              _buildFolderChip('Группы'),
+                              const SizedBox(width: 8),
+                              _buildFolderChip('Боты'),
+                              const SizedBox(width: 8),
+                              _buildFolderChip('Избранное'),
+                              const SizedBox(width: 8),
+                              _buildFolderChip('Архив'),
+                            ],
+                          ),
+                        ),
                       ),
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        physics: const BouncingScrollPhysics(),
-                        children: [
-                          _buildFolderChip('Все чаты'),
-                          const SizedBox(width: 8),
-                          _buildFolderChip('Контакты'),
-                          const SizedBox(width: 8),
-                          _buildFolderChip('Пидоры'),
-                          const SizedBox(width: 8),
-                          _buildFolderChip('Каналы'),
-                          const SizedBox(width: 8),
-                          _buildFolderChip('Группы'),
-                          const SizedBox(width: 8),
-                          _buildFolderChip('Боты'),
-                          const SizedBox(width: 8),
-                          _buildFolderChip('Избранное'),
-                          const SizedBox(width: 8),
-                          _buildFolderChip('Архив'),
-                        ],
-                      ),
                     ),
-                  ),
+                    SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildChatItem(
+                          'Станислав',
+                          'Хорошо',
+                          '10:07',
+                          'https://i.pravatar.cc/150?u=stas',
+                          isOnline: true,
+                          isRead: true,
+                        ),
+                        _buildChatItem(
+                          'Илья',
+                          'печатает...',
+                          '10:07',
+                          'https://i.pravatar.cc/150?u=ilya',
+                          isOnline: true,
+                          isTyping: true,
+                          unreadCount: 1,
+                        ),
+                        _buildChatItem(
+                          'Вероника',
+                          'Спасибо',
+                          '09:56',
+                          'https://i.pravatar.cc/150?u=veronika',
+                          isRead: true,
+                        ),
+                        _buildChatItem(
+                          'Komet Client',
+                          'Кстати. Смотрите, какую шту...',
+                          '09:56',
+                          'https://i.pravatar.cc/150?u=komet',
+                          unreadCount: 5,
+                          isMuted: true,
+                        ),
+                        _buildChatItem(
+                          '4-й подъезд',
+                          'Людмила: Сколько?',
+                          '09:34',
+                          'https://i.pravatar.cc/150?u=podezd',
+                          unreadCount: 78,
+                          isMuted: true,
+                        ),
+                        const SizedBox(height: 100),
+                      ]),
+                    ),
+                  ],
                 ),
-                SliverList(
-                  delegate: SliverChildListDelegate([
-                    _buildChatItem(
-                      'Станислав',
-                      'Хорошо',
-                      '10:07',
-                      'https://i.pravatar.cc/150?u=stas',
-                      isOnline: true,
-                      isRead: true,
-                    ),
-                    _buildChatItem(
-                      'Илья',
-                      'печатает...',
-                      '10:07',
-                      'https://i.pravatar.cc/150?u=ilya',
-                      isOnline: true,
-                      isTyping: true,
-                      unreadCount: 1,
-                    ),
-                    _buildChatItem(
-                      'Вероника',
-                      'Спасибо',
-                      '09:56',
-                      'https://i.pravatar.cc/150?u=veronika',
-                      isRead: true,
-                    ),
-                    _buildChatItem(
-                      'Komet Client',
-                      'Кстати. Смотрите, какую шту...',
-                      '09:56',
-                      'https://i.pravatar.cc/150?u=komet',
-                      unreadCount: 5,
-                      isMuted: true,
-                    ),
-                    _buildChatItem(
-                      '4-й подъезд',
-                      'Людмила: Сколько?',
-                      '09:34',
-                      'https://i.pravatar.cc/150?u=podezd',
-                      unreadCount: 78,
-                      isMuted: true,
-                    ),
-                    const SizedBox(height: 100),
-                  ]),
-                ),
+                const CallsTab(),
+                const ContactsTab(),
+                const SettingsTab(),
               ],
             ),
             Positioned(
               left: 8,
               right: 8,
-              bottom: 24,
-              child: Container(
-                height: 68,
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(34),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    double totalWidth = constraints.maxWidth;
+              bottom: 24.0,
+              child: RepaintBoundary(
+                child: Container(
+                  height: 68,
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(34),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      double totalWidth = constraints.maxWidth;
 
-                    double totalWeight = 5.2;
-                    double unitWidth = totalWidth / totalWeight;
-                    double activeWidth = unitWidth * 2.2;
-                    double inactiveWidth = unitWidth * 1.0;
+                      double totalWeight = 5.2;
+                      double unitWidth = totalWidth / totalWeight;
+                      double activeWidth = unitWidth * 2.2;
+                      double inactiveWidth = unitWidth * 1.0;
 
-                    double leftOffset = 0;
-                    for (int i = 0; i < _currentNavIndex; i++) {
-                      leftOffset += inactiveWidth;
-                    }
+                      double leftOffset = 0;
+                      for (int i = 0; i < _currentNavIndex; i++) {
+                        leftOffset += inactiveWidth;
+                      }
 
-                    return Stack(
-                      children: [
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.easeOutCubic,
-                          left: leftOffset + 4,
-                          top: 8,
-                          bottom: 8,
-                          width: activeWidth - 8,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: cs.primary,
-                              borderRadius: BorderRadius.circular(26),
+                      return Stack(
+                        children: [
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeOutCubic,
+                            left: leftOffset + 4,
+                            top: 8,
+                            bottom: 8,
+                            width: activeWidth - 8,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: cs.primary,
+                                borderRadius: BorderRadius.circular(26),
+                              ),
                             ),
                           ),
-                        ),
-                        Row(
-                          children: List.generate(4, (index) {
-                            IconData icon;
-                            String label;
-                            switch (index) {
-                              case 0: icon = Symbols.chat_bubble; label = 'Чаты'; break;
-                              case 1: icon = Symbols.call; label = 'Звонки'; break;
-                              case 2: icon = Symbols.person_pin; label = 'Контакты'; break;
-                              default: icon = Symbols.settings; label = 'Настройки';
-                            }
+                          Row(
+                            children: List.generate(4, (index) {
+                              IconData icon;
+                              String label;
+                              switch (index) {
+                                case 0:
+                                  icon = Symbols.chat_bubble;
+                                  label = 'Чаты';
+                                  break;
+                                case 1:
+                                  icon = Symbols.call;
+                                  label = 'Звонки';
+                                  break;
+                                case 2:
+                                  icon = Symbols.person_pin;
+                                  label = 'Контакты';
+                                  break;
+                                default:
+                                  icon = Symbols.settings;
+                                  label = 'Настройки';
+                              }
 
-                            bool isSelected = _currentNavIndex == index;
-                            return AnimatedContainer(
-                              duration: const Duration(milliseconds: 350),
-                              curve: Curves.easeOutCubic,
-                              width: isSelected ? (activeWidth - 0.5) : (inactiveWidth - 0.5),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(26),
-                                child: _buildNavItem(index, icon, label),
-                              ),
-                            );
-                          }),
-                        ),
-                      ],
-                    );
-                  },
+                              bool isSelected = _currentNavIndex == index;
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOutCubic,
+                                width: isSelected
+                                    ? (activeWidth - 0.5)
+                                    : (inactiveWidth - 0.5),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(26),
+                                  child: _buildNavItem(index, icon, label),
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
-            Positioned(
-              right: 20,
-              bottom: 110,
-              child: FloatingActionButton(
-                onPressed: () {},
-                backgroundColor: cs.primaryContainer,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Icon(Symbols.add, color: cs.onPrimaryContainer, size: 28, weight: 400),
-              ),
+            AnimatedBuilder(
+              animation: _fabController,
+              builder: (context, child) {
+                final double val = Curves.easeOutCubic.transform(
+                  _fabController.value,
+                );
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    if (_fabController.value > 0)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: _toggleFab,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            color: Colors.black.withValues(alpha: val * 0.2),
+                          ),
+                        ),
+                      ),
+                    if (_fabController.value > 0)
+                      Positioned(
+                        right: 20,
+                        bottom: 110 + 74,
+                        child: RepaintBoundary(
+                          child: Transform.scale(
+                            scale: val,
+                            alignment: Alignment.bottomRight,
+                            child: Opacity(
+                              opacity: val > 0.5 ? (val - 0.5) * 2 : 0,
+                              child: _buildFabMenu(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      right: 20,
+                      bottom: 110,
+                      child: FloatingActionButton(
+                        onPressed: _toggleFab,
+                        backgroundColor: cs.primaryContainer,
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Transform.rotate(
+                          angle: val * (pi / 4),
+                          child: Icon(
+                            Symbols.add,
+                            color: cs.onPrimaryContainer,
+                            size: 28,
+                            weight: 400,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -345,10 +504,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
       leading: Stack(
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundImage: NetworkImage(imageUrl),
-          ),
+          CircleAvatar(radius: 24, backgroundImage: NetworkImage(imageUrl)),
           if (isOnline)
             Positioned(
               right: 0,
@@ -378,15 +534,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ),
           if (isMuted)
-            Icon(Symbols.notifications_off, color: cs.outlineVariant, size: 14, weight: 400),
-          const SizedBox(width: 8),
-          Text(
-            time,
-            style: TextStyle(
-              color: cs.outline,
-              fontSize: 12,
+            Icon(
+              Symbols.notifications_off,
+              color: cs.outlineVariant,
+              size: 14,
+              weight: 400,
             ),
-          ),
+          const SizedBox(width: 8),
+          Text(time, style: TextStyle(color: cs.outline, fontSize: 12)),
         ],
       ),
       subtitle: Padding(
@@ -409,7 +564,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isMuted ? cs.surfaceContainerHighest : cs.surfaceContainerHigh,
+                  color: isMuted
+                      ? cs.surfaceContainerHighest
+                      : cs.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -475,6 +632,85 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFabMenu() {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFabMenuItem(Symbols.search, 'Найти по номеру'),
+          _buildFabMenuItem(Symbols.group_add, 'Добавить группу'),
+          _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFabMenuItem(IconData icon, String title) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () {
+        // Action logic here
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: cs.onSurface, size: 22),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<int> _buildPopupMenuItem(
+    int value,
+    String title,
+    IconData icon,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    return PopupMenuItem<int>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, color: cs.onSurface, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
