@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'backend/api.dart';
+import 'core/storage/app_database.dart';
 
 final api = Api();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppDatabase.init();
   await api.connect();
   runApp(const MyApp());
 }
