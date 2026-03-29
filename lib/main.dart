@@ -1,9 +1,12 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:komet/frontend/screens/auth/login_screen.dart';
+import 'backend/api.dart';
+
+final api = Api();
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await api.connect();
   runApp(const MyApp());
 }
 

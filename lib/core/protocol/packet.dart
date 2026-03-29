@@ -4,132 +4,182 @@ import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
 import '../utils/logger.dart';
 
-final int apiVersion = 10;
-int seq = 1;
+/// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
+const int headerSize = 10;
+const int _maxDecompressedSize = 1048576; // 1 MB
 
-/*
-  Базовый класс пакета
+/// Типы команд в протоколе
+abstract class CmdType {
+  static const int request = 0; // запрос клиента
+  static const int push = 1; // пуш от сервера
 
-  api - версия API (по умолчанию 10 для сокета)
-  cmd - от кого был прислан пакет (
-  0 - клиент (если отправляется серверу)
-  1 - сервер
-  3 - отправляется вместе с ошибкой)
-  seq - счёт пакетов (начинается с 1)
-  opcode - показывает, для чего отправляется пакет (подробнее в /lib/core/protocol/opcode_map.dart)
-  payload - содержимое пакета (отправляется с сервера ввиде msgpack)
-*/
+  static const int ok = 1; // ответ: ок
+  static const int notFound = 2; // ответ: не найдено
+  static const int error = 3; // ответ: ошибка
+}
+
+/// Распакованный бинарный пакет
+///
+/// Формат заголовка (10 байт):
+/// ```
+/// [0]      ver       — версия протокола (uint8) (по умолчанию 10)
+/// [1]   cmd       — тип команды (uint8) (при отправке от клиента равно 0)
+/// [2..3]      seq       — порядковый номер (uint16 BE)
+/// [4..5]   opcode    — код операции (uint16 BE)
+/// [6..9]   packedLen — флаг сжатия [6] + длина payload [7..9] (uint32 BE)
+/// [10..]   payload   — данные в MsgPack, опционально сжатые LZ4
+/// ```
 class Packet {
   int api;
   int cmd;
   int seq;
   int opcode;
-  Map<dynamic, dynamic> payload;
+  dynamic payload;
 
   Packet({
     this.api = 10,
     this.cmd = 0,
-    this.seq = 1,
+    this.seq = 0,
     this.opcode = 0,
-    this.payload = const {},
+    this.payload,
   });
 
-  /// Выводит пакет в консоль
-  void printPacket() {
-    logger.i(
-      "Api: $api\nCmd: $cmd\nSeq: $seq\nOPCode: $opcode\nPayload: $payload",
-    );
-  }
+  bool get isOk => cmd == CmdType.ok;
+  bool get isError => cmd == CmdType.error;
+  bool get isPush => cmd == CmdType.push;
+
+  @override
+  String toString() =>
+      'Packet(ver=$api cmd=$cmd seq=$seq opcode=$opcode payload=$payload)';
 }
 
-/// Функция запаковки пакета
-/// Принимает только opcode и payload, так как api и cmd
-/// константы (10 и 0 соответственно), а seq считается менеджером сокета
-/// Возращает запакованный пакет
-Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload) {
-  // Объяснение каждой переменной смотри в классе Packet
+/// Упаковка пакета для отправки на сервер
+Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
+  final header = ByteData(headerSize);
+  header.setUint8(0, 10);
+  header.setUint8(1, CmdType.request);
+  header.setUint16(2, seq, Endian.big);
+  header.setUint16(4, opcode, Endian.big);
 
-  final apiVerB = Uint8List(1)..[0] = apiVersion;
-  final cmdB = Uint8List(1)..[0] = 0;
-  final seqB = Uint8List(2)..buffer.asByteData().setUint16(0, seq, Endian.big);
-  final opcodeB = Uint8List(2)
-    ..buffer.asByteData().setUint16(0, opcode, Endian.big);
-
-  // Перед получением длины пакуем в msgpack
   final payloadBytes = msgpack.serialize(payload);
   final payloadLen = payloadBytes.length & 0xFFFFFF;
+  header.setUint32(6, payloadLen, Endian.big);
 
-  final payloadLenB = Uint8List(4)
-    ..buffer.asByteData().setUint32(0, payloadLen, Endian.big);
-
-  return Uint8List.fromList(
-    apiVerB + cmdB + seqB + opcodeB + payloadLenB + payloadBytes,
-  );
+  return Uint8List.fromList(header.buffer.asUint8List() + payloadBytes);
 }
 
-/// Функция распаковки пакета
-/// Принимает байты пакета, которые отправляет сервер
-/// Возращает Packet
+/// Распаковка пакета от сервера
 Packet unpackPacket(Uint8List packet) {
   // Для удобства расшифровки пакета переводим в ByteData
-  ByteData packetData = ByteData.view(packet.buffer);
+  ByteData packetData = ByteData.view(
+    packet.buffer,
+    packet.offsetInBytes,
+    packet.lengthInBytes,
+  );
 
   // Объяснение каждой переменной смотри в классе Packet
 
   // API версия и cmd представляют из себя 8 битные числа
-  var apiVer = packetData.getUint8(0) & 0xFF;
-  var cmd = packetData.getUint8(1) & 0xFF;
+  final apiVer = packetData.getUint8(0) & 0xFF;
+  final cmd = packetData.getUint8(1) & 0xFF;
 
   // Sequence и OPCode представляют из себя 16 битные числа
-  var seq = packetData.getUint16(2) & 0xFFFF;
-  var opcode = packetData.getUint16(4) & 0xFFFF;
+  final seq = packetData.getUint16(2) & 0xFFFF;
+  final opcode = packetData.getUint16(4) & 0xFFFF;
 
   // После базовых переменных идет длина пакета, является 32 битным числом
-  var packedLen = packetData.getUint32(6);
+  final packedLen = packetData.getUint32(6);
 
   // Compression flag показывает, сжат ли payload
-  var compFlag = packedLen >> 24;
-
-  // Длина payload'а
-  var payloadLength = packedLen & 0xFFFFFF;
+  final compFlag = packedLen >> 24;
+  
+  // Длина payload'а 
+  final payloadLength = packedLen & 0xFFFFFF;
 
   // Байты payload'а, могут быть сжаты LZ4
   var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
 
-  var payload = {};
-
+  dynamic payload;
+  print(compFlag);
   // Если payload пустой, ничего не делаем (так может быть при получении пинга)
-  if (payloadBytes.buffer.lengthInBytes > 0) {
-    // Если пакет сжат, используем LZ4
+  if (payloadBytes.isNotEmpty) {
     if (compFlag != 0) {
       try {
-        final decompressedBytes = lz4Decompress(
+        payloadBytes = lz4Decompress(
           payloadBytes,
-          decompressedSize: 99999,
+          decompressedSize: _maxDecompressedSize,
         );
-
-        payloadBytes = decompressedBytes;
-      } catch (e) {
-        logger.e("Ошибка при декомпрессировании: $e", error: e);
+        
+      } catch (_) {
+        // dart_lz4 не умеет block-формат, фолбэк на ручной декомпрессор
+        try {
+          payloadBytes = _lz4BlockDecompress(payloadBytes, _maxDecompressedSize);
+        } catch (e) {
+          logger.e("Ошибка декомпрессии LZ4: $e", error: e);
+        }
       }
     }
 
-    // Пробуем десериализовать msgpack
     try {
       payload = msgpack.deserialize(payloadBytes);
-    } catch (e) {
-      logger.e("Ошибка при десериализации msgpack: $e", error: e);
+    } catch (e) { 
+      logger.e("Ошибка десериализации MsgPack: $e", error: e);
     }
   }
 
-  // Собираем целый пакет и возращаем его
-  final fullPacket = Packet(
+  return Packet(
     api: apiVer,
     cmd: cmd,
     seq: seq,
     opcode: opcode,
     payload: payload,
   );
+}
 
-  return fullPacket;
+/// LZ4 block декомпрессия (без frame-заголовка).
+/// Сервер шлёт именно block-формат, dart_lz4 его не поддерживает.
+Uint8List _lz4BlockDecompress(Uint8List src, int maxSize) {
+  final dst = BytesBuilder(copy: false);
+  int pos = 0;
+
+  while (pos < src.length) {
+    final token = src[pos++];
+    var litLen = token >> 4;
+
+    if (litLen == 15) {
+      while (pos < src.length) {
+        final b = src[pos++];
+        litLen += b;
+        if (b != 255) break;
+      }
+    }
+
+    if (litLen > 0) {
+      dst.add(src.sublist(pos, pos + litLen));
+      pos += litLen;
+    }
+
+    if (pos >= src.length) break;
+
+    final offset = src[pos] | (src[pos + 1] << 8);
+    pos += 2;
+    if (offset == 0) throw StateError('LZ4: offset = 0');
+
+    var matchLen = (token & 0x0F) + 4;
+    if ((token & 0x0F) == 0x0F) {
+      while (pos < src.length) {
+        final b = src[pos++];
+        matchLen += b;
+        if (b != 255) break;
+      }
+    }
+
+    final out = dst.toBytes();
+    final start = out.length - offset;
+    dst.add(List<int>.generate(matchLen, (i) => out[start + (i % offset)]));
+
+    if (dst.length > maxSize) throw StateError('LZ4: превышен лимит');
+  }
+
+  return dst.toBytes();
 }
