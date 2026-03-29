@@ -1,6 +1,7 @@
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 
 enum AuthRequestType {
@@ -86,7 +87,15 @@ class AccountModule {
       throw Exception('verifyCode: неожиданный тип payload: ${data.runtimeType}');
     }
 
-    return VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
+    final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
+
+    final sessionToken = result.loginToken ?? result.registerToken;
+    if (sessionToken != null) {
+      await TokenStorage.save(sessionToken);
+      logger.i('Токен сохранён в хранилище');
+    }
+
+    return result;
   }
 
   Future<RequestCodeResult> _requestCodeInternal(
