@@ -1,0 +1,985 @@
+import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'dart:math';
+import 'dart:ui' as ui;
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
+import 'chat_screen.dart';
+
+import '../calls/calls_tab.dart';
+import '../contacts/contacts_tab.dart';
+import '../profile/settings_tab.dart';
+
+class ChatListScreen extends StatefulWidget {
+  const ChatListScreen({super.key});
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen>
+    with SingleTickerProviderStateMixin {
+  String _selectedCategory = 'Все чаты';
+  int _currentNavIndex = 0;
+  bool _isFabOpen = false;
+  late AnimationController _fabController;
+  final Set<String> _selectedChats = {};
+  final ScrollController _scrollController = ScrollController();
+  double _pullRatio = 0.0; // 0.0 = folded (hidden row), 1.0 = fully expanded
+
+  bool get _isSelectionMode => _selectedChats.isNotEmpty;
+
+  void _toggleSelection(String chatId) {
+    setState(() {
+      if (_selectedChats.contains(chatId)) {
+        _selectedChats.remove(chatId);
+      } else {
+        _selectedChats.add(chatId);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedChats.clear();
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      final double offset = _scrollController.offset;
+      if (offset < 0) {
+        final newRatio = (offset.abs() / 80.0).clamp(0.0, 1.0);
+        if (newRatio != _pullRatio) {
+          setState(() {
+            _pullRatio = newRatio;
+          });
+        }
+      } else if (_pullRatio > 0) {
+        setState(() {
+          _pullRatio = 0.0;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _fabController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _toggleFab() {
+    setState(() {
+      _isFabOpen = !_isFabOpen;
+      if (_isFabOpen) {
+        _fabController.forward();
+      } else {
+        _fabController.reverse();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            IndexedStack(
+              index: _currentNavIndex,
+              children: [
+                Listener(
+                  onPointerSignal: (pointerSignal) {
+                    if (pointerSignal is PointerScrollEvent) {
+                      if (_scrollController.hasClients &&
+                          _scrollController.offset <= 0) {
+                        if (pointerSignal.scrollDelta.dy < 0) {
+                          // Scrolled UP (pulling down)
+                          setState(() {
+                            _pullRatio = (_pullRatio + 0.2).clamp(0.0, 1.0);
+                          });
+                        } else if (pointerSignal.scrollDelta.dy > 0 &&
+                            _pullRatio > 0) {
+                          // Scrolled DOWN (folding up)
+                          setState(() {
+                            _pullRatio = (_pullRatio - 0.2).clamp(0.0, 1.0);
+                          });
+                        }
+                      }
+                    }
+                  },
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          height: _isSelectionMode
+                              ? 0
+                              : (132 + (96 * _pullRatio)),
+                          color: Colors.transparent,
+                          clipBehavior: Clip.hardEdge,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            transform: Matrix4.translationValues(
+                              0,
+                              _isSelectionMode ? -100 : 0,
+                              0,
+                            ),
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    12,
+                                    20,
+                                    4,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          if (_pullRatio < 0.8)
+                                            Opacity(
+                                              opacity: 1.0 - _pullRatio,
+                                              child: Container(
+                                                width: 50 * (1.0 - _pullRatio),
+                                                height: 32,
+                                                margin: const EdgeInsets.only(
+                                                  right: 8,
+                                                ),
+                                                child: Stack(
+                                                  children: [
+                                                    _buildFoldedStory(
+                                                      'https://i.pravatar.cc/150?u=dasha',
+                                                      0,
+                                                    ),
+                                                    _buildFoldedStory(
+                                                      'https://i.pravatar.cc/150?u=mastika',
+                                                      1,
+                                                    ),
+                                                    _buildFoldedStory(
+                                                      'https://i.pravatar.cc/150?u=stas',
+                                                      2,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          Text(
+                                            'Подключение...',
+                                            style: TextStyle(
+                                              color: cs.onSurface,
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w600,
+                                              fontFamily: 'Outfit',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      PopupMenuButton<int>(
+                                        icon: Icon(
+                                          Symbols.more_vert,
+                                          color: cs.outline,
+                                          weight: 400,
+                                        ),
+                                        offset: const Offset(0, 48),
+                                        elevation: 4,
+                                        color: cs.surfaceContainerHigh,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                        itemBuilder: (context) => [
+                                          _buildPopupMenuItem(
+                                            1,
+                                            'Кнопка 1',
+                                            Symbols.settings,
+                                          ),
+                                          _buildPopupMenuItem(
+                                            2,
+                                            'Кнопка 2',
+                                            Symbols.notifications,
+                                          ),
+                                          _buildPopupMenuItem(
+                                            3,
+                                            'Кнопка 3',
+                                            Symbols.shield,
+                                          ),
+                                          _buildPopupMenuItem(
+                                            4,
+                                            'Кнопка 4',
+                                            Symbols.info,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 96 * _pullRatio,
+                                  child: Opacity(
+                                    opacity: _pullRatio,
+                                    child: ListView(
+                                      scrollDirection: Axis.horizontal,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                      ),
+                                      children: [
+                                        _buildStoryItem(
+                                          'Даша',
+                                          'https://i.pravatar.cc/150?u=dasha',
+                                          true,
+                                        ),
+                                        _buildStoryItem(
+                                          'Мастика',
+                                          'https://i.pravatar.cc/150?u=mastika',
+                                          false,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    4,
+                                    20,
+                                    12,
+                                  ),
+                                  child: Container(
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: cs.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(50),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Symbols.search,
+                                          color: cs.outline,
+                                          size: 20,
+                                          weight: 400,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: TextField(
+                                            style: TextStyle(
+                                              color: cs.onSurface,
+                                              fontSize: 15,
+                                            ),
+                                            decoration: InputDecoration(
+                                              hintText: 'Поиск',
+                                              hintStyle: TextStyle(
+                                                color: cs.outline,
+                                                fontSize: 15,
+                                              ),
+                                              border: InputBorder.none,
+                                              isDense: true,
+                                              contentPadding: EdgeInsets.zero,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: EdgeInsets.only(
+                          top: _isSelectionMode ? 64 : 0,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            height: 48,
+                            child: ScrollConfiguration(
+                              behavior: ScrollConfiguration.of(context)
+                                  .copyWith(
+                                    dragDevices: {
+                                      ui.PointerDeviceKind.touch,
+                                      ui.PointerDeviceKind.mouse,
+                                      ui.PointerDeviceKind.trackpad,
+                                    },
+                                  ),
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 8,
+                                ),
+                                physics: const BouncingScrollPhysics(),
+                                children: [
+                                  _buildFolderChip('Все чаты'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Контакты'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Пидоры'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Каналы'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Группы'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Боты'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Избранное'),
+                                  const SizedBox(width: 8),
+                                  _buildFolderChip('Архив'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverList(
+                        delegate: SliverChildListDelegate([
+                          _buildChatItem(
+                            'stas',
+                            'Станислав',
+                            'Хорошо',
+                            '10:07',
+                            'https://i.pravatar.cc/150?u=stas',
+                            isOnline: true,
+                            isRead: true,
+                          ),
+                          _buildChatItem(
+                            'ilya',
+                            'Илья',
+                            'печатает...',
+                            '10:07',
+                            'https://i.pravatar.cc/150?u=ilya',
+                            isOnline: true,
+                            isTyping: true,
+                            unreadCount: 1,
+                          ),
+                          _buildChatItem(
+                            'veronika',
+                            'Вероника',
+                            'Спасибо',
+                            '09:56',
+                            'https://i.pravatar.cc/150?u=veronika',
+                            isRead: true,
+                          ),
+                          _buildChatItem(
+                            'komet',
+                            'Komet Client',
+                            'Кстати. Смотрите, какую шту...',
+                            '09:56',
+                            'https://i.pravatar.cc/150?u=komet',
+                            unreadCount: 5,
+                            isMuted: true,
+                          ),
+                          _buildChatItem(
+                            'podezd',
+                            '4-й подъезд',
+                            'Людмила: Сколько?',
+                            '09:34',
+                            'https://i.pravatar.cc/150?u=podezd',
+                            unreadCount: 78,
+                            isMuted: true,
+                          ),
+                        ]),
+                      ),
+                    ],
+                  ), // CustomScrollView
+                ), // Listener
+                const CallsTab(),
+                const ContactsTab(),
+                const SettingsTab(),
+              ],
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              left: 8,
+              right: 8,
+              bottom: _isSelectionMode ? -100 : 24.0,
+              child: RepaintBoundary(
+                child: Container(
+                  height: 68,
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(34),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      double totalWidth = constraints.maxWidth;
+
+                      double totalWeight = 5.2;
+                      double unitWidth = totalWidth / totalWeight;
+                      double activeWidth = unitWidth * 2.2;
+                      double inactiveWidth = unitWidth * 1.0;
+
+                      double leftOffset = 0;
+                      for (int i = 0; i < _currentNavIndex; i++) {
+                        leftOffset += inactiveWidth;
+                      }
+
+                      return Stack(
+                        children: [
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeOutCubic,
+                            left: leftOffset + 4,
+                            top: 8,
+                            bottom: 8,
+                            width: activeWidth - 8,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: cs.primary,
+                                borderRadius: BorderRadius.circular(26),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: List.generate(4, (index) {
+                              IconData icon;
+                              String label;
+                              switch (index) {
+                                case 0:
+                                  icon = Symbols.chat_bubble;
+                                  label = 'Чаты';
+                                  break;
+                                case 1:
+                                  icon = Symbols.call;
+                                  label = 'Звонки';
+                                  break;
+                                case 2:
+                                  icon = Symbols.person_pin;
+                                  label = 'Контакты';
+                                  break;
+                                default:
+                                  icon = Symbols.settings;
+                                  label = 'Настройки';
+                              }
+
+                              bool isSelected = _currentNavIndex == index;
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOutCubic,
+                                width: isSelected
+                                    ? (activeWidth - 0.5)
+                                    : (inactiveWidth - 0.5),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(26),
+                                  child: _buildNavItem(index, icon, label),
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _fabController,
+              builder: (context, child) {
+                final double val = Curves.easeOutCubic.transform(
+                  _fabController.value,
+                );
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    if (_fabController.value > 0)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: _toggleFab,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            color: Colors.black.withValues(alpha: val * 0.2),
+                          ),
+                        ),
+                      ),
+                    if (!_isSelectionMode) ...[
+                      if (_fabController.value > 0)
+                        Positioned(
+                          right: 20,
+                          bottom: 110 + 74,
+                          child: RepaintBoundary(
+                            child: Transform.scale(
+                              scale: val,
+                              alignment: Alignment.bottomRight,
+                              child: Opacity(
+                                opacity: val > 0.5 ? (val - 0.5) * 2 : 0,
+                                child: _buildFabMenu(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        right: 20,
+                        bottom: 110,
+                        child: FloatingActionButton(
+                          onPressed: _toggleFab,
+                          backgroundColor: cs.primaryContainer,
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Transform.rotate(
+                            angle: val * (pi / 4),
+                            child: Icon(
+                              Symbols.add,
+                              color: cs.onPrimaryContainer,
+                              size: 28,
+                              weight: 400,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              top: _isSelectionMode ? 0 : -80,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 64,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Symbols.arrow_back, color: cs.onSurface),
+                      onPressed: _clearSelection,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _selectedChats.length.toString(),
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(Symbols.delete, color: cs.onSurface),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Symbols.archive, color: cs.onSurface),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Symbols.volume_off, color: cs.onSurface),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryItem(String name, String imageUrl, bool hasUpdate) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(2.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: hasUpdate
+                  ? Border.all(color: cs.primary, width: 2)
+                  : Border.all(color: cs.outlineVariant),
+            ),
+            child: CircleAvatar(
+              radius: 26,
+              backgroundImage: NetworkImage(imageUrl),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            name,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFolderChip(String title) {
+    final cs = Theme.of(context).colorScheme;
+    bool isSelected = _selectedCategory == title;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedCategory = title),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? cs.onPrimaryContainer : cs.primary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatItem(
+    String id,
+    String name,
+    String message,
+    String time,
+    String imageUrl, {
+    bool isOnline = false,
+    bool isTyping = false,
+    bool isRead = false,
+    int unreadCount = 0,
+    bool isMuted = false,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final isSelected = _selectedChats.contains(id);
+
+    return InkWell(
+      onTap: () {
+        if (_isSelectionMode) {
+          _toggleSelection(id);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(name: name, imageUrl: imageUrl),
+            ),
+          );
+        }
+      },
+      onLongPress: () => _toggleSelection(id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        color: isSelected ? cs.primary.withOpacity(0.08) : Colors.transparent,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 2,
+          ),
+          leading: Stack(
+            children: [
+              CircleAvatar(radius: 24, backgroundImage: NetworkImage(imageUrl)),
+              if (isSelected)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.surface, width: 2),
+                    ),
+                    child: Icon(
+                      Symbols.check,
+                      color: cs.onPrimary,
+                      size: 14,
+                      weight: 600,
+                    ),
+                  ),
+                )
+              else if (isOnline)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.surface, width: 2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (isMuted)
+                Icon(
+                  Symbols.notifications_off,
+                  color: cs.outlineVariant,
+                  size: 14,
+                  weight: 400,
+                ),
+              const SizedBox(width: 8),
+              Text(time, style: TextStyle(color: cs.outline, fontSize: 12)),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: isTyping ? cs.primary : cs.outline,
+                      fontSize: 14,
+                      fontWeight: isTyping ? FontWeight.w500 : FontWeight.w400,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (unreadCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isMuted
+                          ? cs.surfaceContainerHighest
+                          : cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      unreadCount.toString(),
+                      style: TextStyle(
+                        color: isMuted ? cs.outline : cs.onSurface,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                else if (isRead)
+                  Icon(
+                    Symbols.done_all,
+                    color: cs.primary,
+                    size: 16,
+                    weight: 400,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final cs = Theme.of(context).colorScheme;
+    bool isSelected = _currentNavIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _currentNavIndex = index),
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? cs.onPrimary : cs.onSurface,
+                size: 20,
+                weight: 400,
+                fill: isSelected ? 1.0 : 0.0,
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                width: isSelected ? null : 0,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: isSelected ? 1.0 : 0.0,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(width: 4),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: cs.onPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFabMenu() {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFabMenuItem(Symbols.search, 'Найти по номеру'),
+          _buildFabMenuItem(Symbols.group_add, 'Добавить группу'),
+          _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFabMenuItem(IconData icon, String title) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () {
+        // Action logic here
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: cs.onSurface, size: 22),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<int> _buildPopupMenuItem(
+    int value,
+    String title,
+    IconData icon,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    return PopupMenuItem<int>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, color: cs.onSurface, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFoldedStory(String imageUrl, int index) {
+    return Positioned(
+      left: index * 12.0,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 2),
+        ),
+        child: CircleAvatar(
+          radius: 12,
+          backgroundImage: NetworkImage(imageUrl),
+        ),
+      ),
+    );
+  }
+}
