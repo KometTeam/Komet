@@ -4,6 +4,7 @@ import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
+import 'chats.dart';
 
 enum AuthRequestType {
   startAuth('START_AUTH'),
@@ -347,6 +348,7 @@ class AccountModule {
     logger.i('Профиль сохранён: id=${profile.id}, name=${profile.firstName}');
 
     await _saveSyncState(data, serverTime, profile.id);
+    await ChatsModule.syncFromLoginPayload(data, profile.id, profile.id);
 
     return LoginResult(
       profile: profile,
