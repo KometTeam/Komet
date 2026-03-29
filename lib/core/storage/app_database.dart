@@ -118,7 +118,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 2,
+      version: 3,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -128,6 +128,9 @@ class AppDatabase {
           );
           await db.execute('DROP TABLE IF EXISTS sync_state');
           await db.execute(_syncStateSchema);
+        }
+        if (oldVersion < 3) {
+          await db.execute(_chatsCacheSchema);
         }
       },
     );
@@ -150,6 +153,7 @@ class AppDatabase {
       )
     ''');
     await db.execute(_syncStateSchema);
+    await db.execute(_chatsCacheSchema);
   }
 
   static const _syncStateSchema = '''
@@ -158,6 +162,24 @@ class AppDatabase {
       key        TEXT    NOT NULL,
       value      TEXT    NOT NULL,
       PRIMARY KEY (account_id, key)
+    )
+  ''';
+
+  static const _chatsCacheSchema = '''
+    CREATE TABLE chats_cache (
+      id              INTEGER NOT NULL,
+      account_id      INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      type            TEXT    NOT NULL,
+      title           TEXT,
+      icon_url        TEXT,
+      last_msg_id     INTEGER,
+      last_msg_time   INTEGER,
+      last_msg_text   TEXT,
+      last_msg_sender INTEGER,
+      unread_count    INTEGER NOT NULL DEFAULT 0,
+      last_event_time INTEGER NOT NULL DEFAULT 0,
+      cached_at       INTEGER NOT NULL,
+      PRIMARY KEY (id, account_id)
     )
   ''';
 
@@ -257,5 +279,31 @@ class AppDatabase {
   static Future<void> close() async {
     await _db?.close();
     _db = null;
+  }
+
+  // Chats cache 
+
+  static Future<void> saveChats(List<Map<String, dynamic>> rows) async {
+    final db = await _instance;
+    final batch = db.batch();
+    for (final row in rows) {
+      batch.insert('chats_cache', row, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  static Future<List<Map<String, dynamic>>> loadChats(int accountId) async {
+    final db = await _instance;
+    return db.query(
+      'chats_cache',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+      orderBy: 'last_event_time DESC',
+    );
+  }
+
+  static Future<void> clearChatsCache(int accountId) async {
+    final db = await _instance;
+    await db.delete('chats_cache', where: 'account_id = ?', whereArgs: [accountId]);
   }
 }
