@@ -70,7 +70,9 @@ class Api {
     _reconnectAttempts = 0;
 
     try {
+      logger.d('Начинаем хэндшейк...');
       final response = await sendHandshake();
+      logger.d('Ответ на хэндшейк получен: ${response.opcode}');
       if (response.isOk) {
         _setSessionState(SessionState.online);
         _startPinging();
@@ -107,11 +109,15 @@ class Api {
     String architecture = "arm64";
 
     tz.initializeTimeZones();
+    logger.d('Определяем таймзону...');
     final timezone = await FlutterTimezone.getLocalTimezone();
+    logger.d('Таймзона: $timezone');
 
     // На каждой платформе свое инфо, поэтому делаем такую проверку
     if (Platform.isLinux) {
+      logger.d('Получаем инфо о Linux...');
       LinuxDeviceInfo linuxInfo = await deviceInfo.linuxInfo;
+      logger.d('Linux инфо получено');
 
       osVersion = linuxInfo.name;
       // Platform.version содержит в себе что-то такое
@@ -166,6 +172,7 @@ class Api {
 
     logger.d(payload);
     logger.d(Platform.version);
+    logger.d('Отправляем sessionInit...');
     return sendRequest(Opcode.sessionInit, payload);
   }
 
