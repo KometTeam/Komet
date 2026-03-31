@@ -1,6 +1,8 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'backend/api.dart';
+import 'frontend/screens/auth/login_screen.dart';
 
 final api = Api();
 
@@ -36,10 +38,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final baseScheme = darkDynamic ?? ColorScheme.fromSeed(
-          seedColor: _fallbackSeed,
-          brightness: Brightness.dark,
-        );
+        final baseScheme =
+            darkDynamic ??
+            ColorScheme.fromSeed(
+              seedColor: _fallbackSeed,
+              brightness: Brightness.dark,
+            );
 
         final darkScheme = _adjustScheme(baseScheme);
 
@@ -49,9 +53,7 @@ class MyApp extends StatelessWidget {
           theme: ThemeData(
             useMaterial3: true,
             colorScheme: darkScheme,
-            textTheme: GoogleFonts.interTextTheme(
-              ThemeData.dark().textTheme,
-            ),
+            textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
           ),
           home: const LoginScreen(),
         );

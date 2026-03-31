@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:komet/core/utils/logger.dart';
 import '../chats/chat_list_screen.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
@@ -53,7 +54,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
   void _resendCode() {
     if (_timerSeconds == 0) {
       _startTimer();
-      print('Resending code to ${widget.phoneNumber}');
+      logger.d('Resending code to ${widget.phoneNumber}');
     }
   }
 
@@ -134,9 +135,13 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                     child: FittedBox(
                       child: Row(
                         children: List.generate(5, (index) {
-                          bool isFocused = _codeController.text.length == index && _focusNode.hasFocus;
+                          bool isFocused =
+                              _codeController.text.length == index &&
+                              _focusNode.hasFocus;
                           bool hasValue = _codeController.text.length > index;
-                          String char = hasValue ? _codeController.text[index] : '';
+                          String char = hasValue
+                              ? _codeController.text[index]
+                              : '';
 
                           return Container(
                             width: 44,
@@ -148,19 +153,25 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                               border: Border.all(
                                 color: isFocused
                                     ? cs.primary
-                                    : (hasValue ? cs.outlineVariant : Colors.transparent),
+                                    : (hasValue
+                                          ? cs.outlineVariant
+                                          : Colors.transparent),
                                 width: 1.5,
                               ),
                             ),
                             alignment: Alignment.center,
                             child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 100),
-                              transitionBuilder: (Widget child, Animation<double> animation) {
-                                return ScaleTransition(
-                                  scale: animation,
-                                  child: FadeTransition(opacity: animation, child: child),
-                                );
-                              },
+                              transitionBuilder:
+                                  (Widget child, Animation<double> animation) {
+                                    return ScaleTransition(
+                                      scale: animation,
+                                      child: FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
                               child: Text(
                                 char,
                                 key: ValueKey<String>(char + index.toString()),
@@ -211,7 +222,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                     ),
                     child: Icon(
                       Icons.arrow_forward,
-                      color: _codeController.text.length == 5 ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+                      color: _codeController.text.length == 5
+                          ? cs.onPrimaryContainer
+                          : cs.onSurfaceVariant,
                     ),
                   ),
                 ],

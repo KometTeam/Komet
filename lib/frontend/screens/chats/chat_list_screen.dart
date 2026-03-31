@@ -3,7 +3,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart';
 import 'chat_screen.dart';
 
 import '../calls/calls_tab.dart';
@@ -587,7 +586,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   color: cs.surface,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 10,
                       offset: const Offset(0, 2),
                     ),
@@ -718,7 +717,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       onLongPress: () => _toggleSelection(id),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        color: isSelected ? cs.primary.withOpacity(0.08) : Colors.transparent,
+        color: isSelected
+            ? cs.primary.withValues(alpha: 0.08)
+            : Colors.transparent,
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,

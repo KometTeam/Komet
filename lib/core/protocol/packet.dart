@@ -100,7 +100,7 @@ Packet unpackPacket(Uint8List packet) {
   var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
 
   dynamic payload;
-  print(compFlag);
+  logger.d(compFlag);
   // Если payload пустой, ничего не делаем (так может быть при получении пинга)
   if (payloadBytes.isNotEmpty) {
     if (compFlag != 0) {

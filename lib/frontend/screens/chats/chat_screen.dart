@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'dart:ui';
 
 class ChatScreen extends StatefulWidget {
   final String name;
@@ -44,7 +43,7 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B1B1B).withOpacity(0.8),
+        backgroundColor: const Color(0xFF1B1B1B).withValues(alpha: 0.8),
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
@@ -150,10 +149,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   maxHeight: 180,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1B1B1B).withOpacity(0.9),
+                  color: const Color(0xFF1B1B1B).withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     width: 0.5,
                   ),
                 ),
@@ -166,7 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     Icon(
                       Symbols.face,
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.white.withValues(alpha: 0.7),
                       size: 24,
                       weight: 400,
                     ),
@@ -205,7 +204,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 padding: const EdgeInsets.only(left: 12),
                                 child: Icon(
                                   Symbols.attachment,
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                   size: 24,
                                   weight: 400,
                                 ),

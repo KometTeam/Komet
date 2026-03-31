@@ -2,7 +2,7 @@ name: komet
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -41,6 +41,9 @@ dependencies:
   material_symbols_icons: ^4.2906.0
   dynamic_color: ^1.8.1
   shared_preferences: ^2.5.4
+  device_info_plus: ^12.3.0
+  timezone: ^0.11.0
+  flutter_timezone: ^5.0.0
 
 dev_dependencies:
   flutter_test:
@@ -58,7 +61,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
