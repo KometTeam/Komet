@@ -44,6 +44,10 @@ dependencies:
   sqflite: ^2.4.2
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
+  google_fonts: ^6.2.1
+  material_symbols_icons: ^4.2906.0
+  dynamic_color: ^1.8.1
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +70,8 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/komet.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
