@@ -3,11 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../chats/chat_list_screen.dart';
+import 'password_2fa_screen.dart';
+import '../../../main.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
+  final String token;
 
-  const CodeConfirmationScreen({super.key, required this.phoneNumber});
+  const CodeConfirmationScreen({
+    super.key, 
+    required this.phoneNumber,
+    required this.token,
+  });
 
   @override
   State<CodeConfirmationScreen> createState() => _CodeConfirmationScreenState();
@@ -53,16 +60,64 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
   void _resendCode() {
     if (_timerSeconds == 0) {
       _startTimer();
+      // TODO: вызвать accountModule.resendCode
       print('Resending code to ${widget.phoneNumber}');
     }
   }
 
+  Future<void> _verifyCode() async {
+    if (_codeController.text.length != 6) return;
+
+    try {
+      final result = await accountModule.verifyCode(
+        _codeController.text,
+        widget.token,
+      );
+
+      if (!mounted) return;
+
+      if (result.requiresPassword) {
+        final trackId = result.challengeTrackId;
+        
+        if (trackId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка: отсутствуют данные для 2FA')),
+          );
+          return;
+        }
+        
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Password2FAScreen(
+              trackId: trackId,
+              hint: result.challengeHint,
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Если 2FA не требуется, делаем login
+      final loginResult = await accountModule.login();
+      
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const ChatListScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
   void _navigateToChats() {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const ChatListScreen()),
-      (route) => false,
-    );
+    _verifyCode();
   }
 
   @override
@@ -118,11 +173,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                         autofillHints: const [AutofillHints.oneTimeCode],
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(5),
+                          LengthLimitingTextInputFormatter(6),
                         ],
                         onChanged: (value) {
                           setState(() {});
-                          if (value.length == 5) {
+                          if (value.length == 6) {
                             _navigateToChats();
                           }
                         },
@@ -131,9 +186,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                   ),
                   GestureDetector(
                     onTap: () => _focusNode.requestFocus(),
-                    child: FittedBox(
+                    child:                       FittedBox(
                       child: Row(
-                        children: List.generate(5, (index) {
+                        children: List.generate(6, (index) {
                           bool isFocused = _codeController.text.length == index && _focusNode.hasFocus;
                           bool hasValue = _codeController.text.length > index;
                           String char = hasValue ? _codeController.text[index] : '';
@@ -141,7 +196,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                           return Container(
                             width: 44,
                             height: 54,
-                            margin: EdgeInsets.only(right: index == 4 ? 0 : 10),
+                            margin: EdgeInsets.only(right: index == 5 ? 0 : 10),
                             decoration: BoxDecoration(
                               color: cs.surfaceContainerHigh,
                               borderRadius: BorderRadius.circular(8),
@@ -198,11 +253,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                 children: [
                   FloatingActionButton(
                     onPressed: () {
-                      if (_codeController.text.length == 5) {
+                      if (_codeController.text.length == 6) {
                         _navigateToChats();
                       }
                     },
-                    backgroundColor: _codeController.text.length == 5
+                    backgroundColor: _codeController.text.length == 6
                         ? cs.primaryContainer
                         : cs.surfaceContainerHighest,
                     elevation: 0,
@@ -211,7 +266,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                     ),
                     child: Icon(
                       Icons.arrow_forward,
-                      color: _codeController.text.length == 5 ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+                      color: _codeController.text.length == 6 ? cs.onPrimaryContainer : cs.onSurfaceVariant,
                     ),
                   ),
                 ],

@@ -9,6 +9,7 @@ import 'code_confirmation_screen.dart';
 import 'select_country_screen.dart';
 import 'spoff_redacted_screen.dart';
 import '../../widgets/custom_notification.dart';
+import '../../../main.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -371,17 +372,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CodeConfirmationScreen(
-                                phoneNumber:
-                                    '${_selectedCountry.phoneCode} $formattedPhone',
-                              ),
-                            ),
-                          );
+                          
+                          final fullPhone = '${_selectedCountry.phoneCode}${_phoneController.text}';
+                          
+                          try {
+                            final result = await accountModule.requestCode(fullPhone);
+                            
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CodeConfirmationScreen(
+                                    phoneNumber: '${_selectedCountry.phoneCode} $formattedPhone',
+                                    token: result.token,
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              showCustomNotification(context, 'Ошибка: $e');
+                            }
+                          }
                         },
                         child: Text(
                           'Готово',
