@@ -120,7 +120,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 5,
+      version: 6,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -140,6 +140,9 @@ class AppDatabase {
         if (oldVersion < 5) {
           await db.execute('DROP TABLE IF EXISTS chats_cache');
           await db.execute(_chatsCacheSchema);
+        }
+        if (oldVersion < 6) {
+          await db.execute(_messagesSchema);
         }
       },
     );
@@ -164,6 +167,7 @@ class AppDatabase {
     await db.execute(_syncStateSchema);
     await db.execute(_chatsCacheSchema);
     await db.execute(_contactsSchema);
+    await db.execute(_messagesSchema);
   }
 
   static const _contactsSchema = '''
@@ -208,6 +212,21 @@ class AppDatabase {
       is_online       INTEGER NOT NULL DEFAULT 0,
       seen_time       INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, account_id)
+    )
+  ''';
+
+  static const _messagesSchema = '''
+    CREATE TABLE messages (
+      id         TEXT    NOT NULL,
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      chat_id    INTEGER NOT NULL,
+      sender_id  INTEGER NOT NULL,
+      text       TEXT,
+      time       INTEGER NOT NULL,
+      status     TEXT,
+      payload    TEXT,
+      PRIMARY KEY (id, account_id),
+      FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
     )
   ''';
 
@@ -358,6 +377,47 @@ class AppDatabase {
       'contacts',
       where: 'account_id = ?',
       whereArgs: [accountId],
+    );
+  }
+
+  static Future<void> saveMessages(List<Map<String, dynamic>> rows) async {
+    final db = await _instance;
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      for (final row in rows) {
+        batch.insert(
+          'messages',
+          row,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessages(
+    int accountId,
+    int chatId, {
+    int? limit,
+    int? offset,
+  }) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: 'account_id = ? AND chat_id = ?',
+      whereArgs: [accountId, chatId],
+      orderBy: 'time DESC',
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  static Future<void> clearMessages(int accountId, int chatId) async {
+    final db = await _instance;
+    await db.delete(
+      'messages',
+      where: 'account_id = ? AND chat_id = ?',
+      whereArgs: [accountId, chatId],
     );
   }
 }
