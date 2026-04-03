@@ -91,16 +91,19 @@ class _StartupScreenState extends State<_StartupScreen> {
       return;
     }
 
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ChatListScreen()),
+      );
+    }
+
     try {
       await accountModule.login(accountId: accountId);
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const ChatListScreen()),
-        );
-      }
-    } catch (_) {
-      _goToLogin();
+    } catch (e) {
+      debugPrint(
+        'Background auto-login failed (safe to ignore if offline): $e',
+      );
     }
   }
 

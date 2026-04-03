@@ -97,7 +97,6 @@ class MessagesModule {
     final List<CachedMessage> results = [];
     final List<Map<String, dynamic>> rows = [];
 
-    // Обрабатываем сообщения "кусочками", чтобы не фризить UI при маппинге большого количества данных
     for (var i = 0; i < messagesData.length; i++) {
       final m = messagesData[i];
       if (m is! Map) continue;
@@ -108,7 +107,6 @@ class MessagesModule {
         rows.add(msg.toDbRow());
       }
 
-      // Каждые 20 сообщений даем UI-потоку "дохнуть" и отрисовать кадр
       if (i > 0 && i % 20 == 0) {
         await Future.delayed(Duration.zero);
       }
