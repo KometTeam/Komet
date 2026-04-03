@@ -26,6 +26,12 @@ class _ChatListScreenState extends State<ChatListScreen>
     with TickerProviderStateMixin {
   String _selectedCategory = 'Все чаты';
   int _currentNavIndex = 0;
+  bool _navDragging = false;
+  double _navDragDx = 0;
+  double _navDragBaseLeft = 0;
+  late AnimationController _navPageAnimController;
+  double _navPageAnimStart = 0;
+  double _navPageAnimEnd = 0;
   bool _isFabOpen = false;
   bool _showCacheWarning = false;
   late AnimationController _fabController;
@@ -83,6 +89,13 @@ class _ChatListScreenState extends State<ChatListScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    _navPageAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+      value: 1.0,
+    )..addListener(() {
+        if (mounted) setState(() {});
+      });
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -345,12 +358,48 @@ class _ChatListScreenState extends State<ChatListScreen>
   void dispose() {
     _stateSub?.cancel();
     _fabController.dispose();
+    _navPageAnimController.dispose();
     _storiesRevealController
       ..removeListener(_onStoriesRevealTick)
       ..removeStatusListener(_onStoriesRevealStatus)
       ..dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  double _effectivePageNavRowT({
+    required double inactiveWidth,
+    required double Function(int index) bubbleLeftForIndex,
+  }) {
+    if (_navDragging) {
+      final left = (_navDragBaseLeft + _navDragDx)
+          .clamp(bubbleLeftForIndex(0), bubbleLeftForIndex(3));
+      return ((left - 4) / inactiveWidth).clamp(0.0, 3.0);
+    }
+    if (_navPageAnimController.isAnimating) {
+      final t =
+          Curves.easeOutCubic.transform(_navPageAnimController.value);
+      return ui.lerpDouble(_navPageAnimStart, _navPageAnimEnd, t)!;
+    }
+    return _currentNavIndex.toDouble();
+  }
+
+  void _onNavTabSelected(int index) {
+    if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
+      return;
+    }
+    double fromT;
+    if (_navPageAnimController.isAnimating) {
+      final t =
+          Curves.easeOutCubic.transform(_navPageAnimController.value);
+      fromT = ui.lerpDouble(_navPageAnimStart, _navPageAnimEnd, t)!;
+    } else {
+      fromT = _currentNavIndex.toDouble();
+    }
+    _navPageAnimStart = fromT;
+    _navPageAnimEnd = index.toDouble();
+    setState(() => _currentNavIndex = index);
+    _navPageAnimController.forward(from: 0);
   }
 
   void _toggleFab() {
@@ -616,6 +665,252 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Widget _buildChatsTabBody() {
+    return Listener(
+      onPointerSignal: (pointerSignal) {
+        if (pointerSignal is PointerScrollEvent) {
+          if (_scrollController.hasClients && _scrollController.offset <= 0) {
+            if (pointerSignal.scrollDelta.dy < 0) {
+              _startStoriesAutoReveal(max(_pullRatio, 0.18));
+            } else if (pointerSignal.scrollDelta.dy > 0 && _pullRatio > 0) {
+              _startStoriesAutoClose();
+            }
+          }
+        }
+      },
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onStoriesScrollNotification,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildPinnedChatsHeader(context),
+            Expanded(
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                slivers: [
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (_isInitialLoading) {
+                          return _buildChatShimmer();
+                        }
+                        final chat = _chats[index];
+                        return _buildChatItem(
+                          chat.id.toString(),
+                          chat.title ?? 'Чат',
+                          chat.lastMsgText ?? '',
+                          _formatTime(chat.lastMsgTime),
+                          (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                              ? chat.iconUrl!
+                              : '',
+                          isOnline: chat.isOnline,
+                          unreadCount: chat.unreadCount,
+                          isMuted: chat.dontDisturbUntil > 0,
+                        );
+                      },
+                      childCount:
+                          _isInitialLoading ? 10 : _chats.length,
+                    ),
+                  ),
+                  const SliverPadding(
+                    padding: EdgeInsets.only(bottom: 100),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDockedBottomNav(ColorScheme cs, double navInnerW) {
+    final totalWeight = 5.2;
+    final unitWidth = navInnerW / totalWeight;
+    final activeWidth = unitWidth * 2.2;
+    final inactiveWidth = unitWidth * 1.0;
+
+    double bubbleLeftForIndex(int index) {
+      double lo = 0;
+      for (int i = 0; i < index; i++) {
+        lo += inactiveWidth;
+      }
+      return lo + 4;
+    }
+
+    final leftOffset = bubbleLeftForIndex(_currentNavIndex);
+    final bubbleW = activeWidth - 8;
+    final minBubbleLeft = bubbleLeftForIndex(0);
+    final maxBubbleLeft = bubbleLeftForIndex(3);
+
+    final bubbleLeft = _navDragging
+        ? (_navDragBaseLeft + _navDragDx)
+            .clamp(minBubbleLeft, maxBubbleLeft)
+        : leftOffset;
+
+    final navRowT =
+        ((bubbleLeft - 4) / inactiveWidth).clamp(0.0, 3.0);
+
+    double navInterpolatedWidth(int tabIndex, double rowT) {
+      final rt = rowT.clamp(0.0, 3.0);
+      final i0 = rt.floor().clamp(0, 3);
+      final i1 = rt.ceil().clamp(0, 3);
+      final frac = i0 == i1 ? 0.0 : (rt - i0);
+      double at(int sel, int tab) =>
+          (tab == sel) ? (activeWidth - 0.5) : (inactiveWidth - 0.5);
+      return at(i0, tabIndex) + (at(i1, tabIndex) - at(i0, tabIndex)) * frac;
+    }
+
+    int indexForBubbleLeft(double left) {
+      final cx = left + bubbleW / 2;
+      var best = 0;
+      var bestD = double.infinity;
+      for (var i = 0; i < 4; i++) {
+        final c = bubbleLeftForIndex(i) + bubbleW / 2;
+        final d = (c - cx).abs();
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      return best;
+    }
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      left: 8,
+      right: 8,
+      bottom: _isSelectionMode ? -100 : 10.0,
+      child: RepaintBoundary(
+        child: Container(
+          height: 68,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(34),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: (_) {
+              if (_isSelectionMode) return;
+              _navPageAnimController.stop();
+              _navPageAnimController.value = 1.0;
+              setState(() {
+                _navDragging = true;
+                _navDragDx = 0;
+                _navDragBaseLeft = bubbleLeftForIndex(_currentNavIndex);
+              });
+            },
+            onHorizontalDragUpdate: (details) {
+              if (!_navDragging) return;
+              setState(() {
+                _navDragDx += details.delta.dx;
+              });
+            },
+            onHorizontalDragEnd: (_) {
+              if (!_navDragging) return;
+              final left = (_navDragBaseLeft + _navDragDx)
+                  .clamp(minBubbleLeft, maxBubbleLeft);
+              final next = indexForBubbleLeft(left);
+              setState(() {
+                _currentNavIndex = next;
+                _navDragging = false;
+                _navDragDx = 0;
+              });
+            },
+            onHorizontalDragCancel: () {
+              if (!_navDragging) return;
+              setState(() {
+                _navDragging = false;
+                _navDragDx = 0;
+              });
+            },
+            child: Stack(
+              children: [
+                AnimatedPositioned(
+                  duration: _navDragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 350),
+                  curve: Curves.easeOutCubic,
+                  left: bubbleLeft,
+                  top: 8,
+                  bottom: 8,
+                  width: bubbleW,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: List.generate(4, (index) {
+                    IconData icon;
+                    String label;
+                    switch (index) {
+                      case 0:
+                        icon = Symbols.chat_bubble;
+                        label = 'Чаты';
+                        break;
+                      case 1:
+                        icon = Symbols.call;
+                        label = 'Звонки';
+                        break;
+                      case 2:
+                        icon = Symbols.person_pin;
+                        label = 'Контакты';
+                        break;
+                      default:
+                        icon = Symbols.settings;
+                        label = 'Настройки';
+                    }
+
+                    final isSelected = _currentNavIndex == index;
+                    final visualSel = navRowT.round().clamp(0, 3);
+                    return AnimatedContainer(
+                      duration: _navDragging
+                          ? Duration.zero
+                          : const Duration(milliseconds: 350),
+                      curve: Curves.easeOutCubic,
+                      width: _navDragging
+                          ? navInterpolatedWidth(index, navRowT)
+                          : (isSelected
+                              ? (activeWidth - 0.5)
+                              : (inactiveWidth - 0.5)),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(26),
+                        child: _buildNavItem(
+                          index,
+                          icon,
+                          label,
+                          selectedOverride: _navDragging
+                              ? (index == visualSel)
+                              : null,
+                          instant: _navDragging,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -623,286 +918,201 @@ class _ChatListScreenState extends State<ChatListScreen>
       backgroundColor: cs.surface,
       body: SafeArea(
         bottom: false,
-        child: Stack(
-          children: [
-            IndexedStack(
-              index: _currentNavIndex,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final pageW = constraints.maxWidth;
+            final pageH = constraints.maxHeight;
+            final navInnerW = pageW - 20;
+            final totalWeight = 5.2;
+            final unitWidth = navInnerW / totalWeight;
+            final inactiveWidth = unitWidth * 1.0;
+            double bubbleLeftForPageT(int index) {
+              double lo = 0;
+              for (int i = 0; i < index; i++) {
+                lo += inactiveWidth;
+              }
+              return lo + 4;
+            }
+
+            final pageDisplayT = _effectivePageNavRowT(
+              inactiveWidth: inactiveWidth,
+              bubbleLeftForIndex: bubbleLeftForPageT,
+            );
+
+            final showChatsFab = !_isSelectionMode &&
+                (_navDragging || _navPageAnimController.isAnimating
+                    ? pageDisplayT < 1.0
+                    : _currentNavIndex == 0);
+
+            return Stack(
               children: [
-                Listener(
-                  onPointerSignal: (pointerSignal) {
-                    if (pointerSignal is PointerScrollEvent) {
-                      if (_scrollController.hasClients &&
-                          _scrollController.offset <= 0) {
-                        if (pointerSignal.scrollDelta.dy < 0) {
-                          _startStoriesAutoReveal(max(_pullRatio, 0.18));
-                        } else if (pointerSignal.scrollDelta.dy > 0 &&
-                            _pullRatio > 0) {
-                          _startStoriesAutoClose();
-                        }
-                      }
-                    }
-                  },
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: _onStoriesScrollNotification,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildPinnedChatsHeader(context),
-                        Expanded(
-                          child: CustomScrollView(
-                            controller: _scrollController,
-                            physics: const BouncingScrollPhysics(
-                              parent: AlwaysScrollableScrollPhysics(),
-                            ),
-                            slivers: [
-                              SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    if (_isInitialLoading) {
-                                      return _buildChatShimmer();
-                                    }
-                                    final chat = _chats[index];
-                                    return _buildChatItem(
-                                      chat.id.toString(),
-                                      chat.title ?? 'Чат',
-                                      chat.lastMsgText ?? '',
-                                      _formatTime(chat.lastMsgTime),
-                                      (chat.iconUrl != null &&
-                                              chat.iconUrl!.isNotEmpty)
-                                          ? chat.iconUrl!
-                                          : '',
-                                      isOnline: chat.isOnline,
-                                      unreadCount: chat.unreadCount,
-                                      isMuted: chat.dontDisturbUntil > 0,
-                                    );
-                                  },
-                                  childCount: _isInitialLoading
-                                      ? 10
-                                      : _chats.length,
+                ClipRect(
+                  child: SizedBox(
+                    width: pageW,
+                    height: pageH,
+                    child: UnconstrainedBox(
+                      constrainedAxis: Axis.vertical,
+                      alignment: Alignment.topLeft,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: pageW * 4,
+                        height: pageH,
+                        child: Transform.translate(
+                          offset: Offset(-pageDisplayT * pageW, 0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              RepaintBoundary(
+                                child: SizedBox(
+                                  width: pageW,
+                                  height: pageH,
+                                  child: _buildChatsTabBody(),
                                 ),
                               ),
-                              const SliverPadding(
-                                padding: EdgeInsets.only(bottom: 100),
+                              RepaintBoundary(
+                                child: SizedBox(
+                                  width: pageW,
+                                  height: pageH,
+                                  child: const CallsTab(),
+                                ),
+                              ),
+                              RepaintBoundary(
+                                child: SizedBox(
+                                  width: pageW,
+                                  height: pageH,
+                                  child: const ContactsTab(),
+                                ),
+                              ),
+                              RepaintBoundary(
+                                child: SizedBox(
+                                  width: pageW,
+                                  height: pageH,
+                                  child: const SettingsTab(),
+                                ),
                               ),
                             ],
                           ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _buildDockedBottomNav(cs, navInnerW),
+                ListenableBuilder(
+                  listenable: _fabController,
+                  builder: (context, child) {
+                    final double val = Curves.easeOutCubic.transform(
+                      _fabController.value,
+                    );
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        if (_fabController.value > 0)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              onTap: _toggleFab,
+                              behavior: HitTestBehavior.opaque,
+                              child: Container(
+                                color: Colors.black.withValues(alpha: val * 0.2),
+                              ),
+                            ),
+                          ),
+                        if (showChatsFab) ...[
+                          if (_fabController.value > 0)
+                            Positioned(
+                              right: 20,
+                              bottom: 90 + 74,
+                              child: RepaintBoundary(
+                                child: Transform.scale(
+                                  scale: val,
+                                  alignment: Alignment.bottomRight,
+                                  child: Opacity(
+                                    opacity: val > 0.5 ? (val - 0.5) * 2 : 0,
+                                    child: _buildFabMenu(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          Positioned(
+                            right: 20,
+                            bottom: 90,
+                            child: FloatingActionButton(
+                              onPressed: _toggleFab,
+                              backgroundColor: cs.primaryContainer,
+                              elevation: 4,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Transform.rotate(
+                                angle: val * (pi / 4),
+                                child: Icon(
+                                  Symbols.add,
+                                  color: cs.onPrimaryContainer,
+                                  size: 28,
+                                  weight: 400,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  top: _isSelectionMode ? 0 : -80,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 64,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Symbols.arrow_back, color: cs.onSurface),
+                          onPressed: _clearSelection,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedChats.length.toString(),
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(Symbols.delete, color: cs.onSurface),
+                          onPressed: () {},
+                        ),
+                        IconButton(
+                          icon: Icon(Symbols.archive, color: cs.onSurface),
+                          onPressed: () {},
+                        ),
+                        IconButton(
+                          icon: Icon(Symbols.volume_off, color: cs.onSurface),
+                          onPressed: () {},
                         ),
                       ],
                     ),
                   ),
                 ),
-                const CallsTab(),
-                const ContactsTab(),
-                const SettingsTab(),
               ],
-            ),
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              left: 8,
-              right: 8,
-              bottom: _isSelectionMode ? -100 : 10.0,
-              child: RepaintBoundary(
-                child: Container(
-                  height: 68,
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(34),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      double totalWidth = constraints.maxWidth;
-
-                      double totalWeight = 5.2;
-                      double unitWidth = totalWidth / totalWeight;
-                      double activeWidth = unitWidth * 2.2;
-                      double inactiveWidth = unitWidth * 1.0;
-
-                      double leftOffset = 0;
-                      for (int i = 0; i < _currentNavIndex; i++) {
-                        leftOffset += inactiveWidth;
-                      }
-
-                      return Stack(
-                        children: [
-                          AnimatedPositioned(
-                            duration: const Duration(milliseconds: 350),
-                            curve: Curves.easeOutCubic,
-                            left: leftOffset + 4,
-                            top: 8,
-                            bottom: 8,
-                            width: activeWidth - 8,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: cs.primary,
-                                borderRadius: BorderRadius.circular(26),
-                              ),
-                            ),
-                          ),
-                          Row(
-                            children: List.generate(4, (index) {
-                              IconData icon;
-                              String label;
-                              switch (index) {
-                                case 0:
-                                  icon = Symbols.chat_bubble;
-                                  label = 'Чаты';
-                                  break;
-                                case 1:
-                                  icon = Symbols.call;
-                                  label = 'Звонки';
-                                  break;
-                                case 2:
-                                  icon = Symbols.person_pin;
-                                  label = 'Контакты';
-                                  break;
-                                default:
-                                  icon = Symbols.settings;
-                                  label = 'Настройки';
-                              }
-
-                              bool isSelected = _currentNavIndex == index;
-                              return AnimatedContainer(
-                                duration: const Duration(milliseconds: 350),
-                                curve: Curves.easeOutCubic,
-                                width: isSelected
-                                    ? (activeWidth - 0.5)
-                                    : (inactiveWidth - 0.5),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(26),
-                                  child: _buildNavItem(index, icon, label),
-                                ),
-                              );
-                            }),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-            AnimatedBuilder(
-              animation: _fabController,
-              builder: (context, child) {
-                final double val = Curves.easeOutCubic.transform(
-                  _fabController.value,
-                );
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    if (_fabController.value > 0)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          onTap: _toggleFab,
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            color: Colors.black.withValues(alpha: val * 0.2),
-                          ),
-                        ),
-                      ),
-                    if (!_isSelectionMode && _currentNavIndex == 0) ...[
-                      if (_fabController.value > 0)
-                        Positioned(
-                          right: 20,
-                          bottom: 90 + 74,
-                          child: RepaintBoundary(
-                            child: Transform.scale(
-                              scale: val,
-                              alignment: Alignment.bottomRight,
-                              child: Opacity(
-                                opacity: val > 0.5 ? (val - 0.5) * 2 : 0,
-                                child: _buildFabMenu(),
-                              ),
-                            ),
-                          ),
-                        ),
-                      Positioned(
-                        right: 20,
-                        bottom: 90,
-                        child: FloatingActionButton(
-                          onPressed: _toggleFab,
-                          backgroundColor: cs.primaryContainer,
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Transform.rotate(
-                            angle: val * (pi / 4),
-                            child: Icon(
-                              Symbols.add,
-                              color: cs.onPrimaryContainer,
-                              size: 28,
-                              weight: 400,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              top: _isSelectionMode ? 0 : -80,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 64,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(Symbols.arrow_back, color: cs.onSurface),
-                      onPressed: _clearSelection,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _selectedChats.length.toString(),
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(Symbols.delete, color: cs.onSurface),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: Icon(Symbols.archive, color: cs.onSurface),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: Icon(Symbols.volume_off, color: cs.onSurface),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -1142,11 +1352,22 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(
+    int index,
+    IconData icon,
+    String label, {
+    bool? selectedOverride,
+    bool instant = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
-    bool isSelected = _currentNavIndex == index;
+    final bool isSelected =
+        selectedOverride ?? (_currentNavIndex == index);
+    final Duration animDur =
+        instant ? Duration.zero : const Duration(milliseconds: 350);
+    final Duration opacityDur =
+        instant ? Duration.zero : const Duration(milliseconds: 200);
     return GestureDetector(
-      onTap: () => setState(() => _currentNavIndex = index),
+      onTap: () => _onNavTabSelected(index),
       behavior: HitTestBehavior.opaque,
       child: Center(
         child: FittedBox(
@@ -1163,11 +1384,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                 fill: isSelected ? 1.0 : 0.0,
               ),
               AnimatedContainer(
-                duration: const Duration(milliseconds: 350),
+                duration: animDur,
                 curve: Curves.easeOutCubic,
                 width: isSelected ? null : 0,
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
+                  duration: opacityDur,
                   opacity: isSelected ? 1.0 : 0.0,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
