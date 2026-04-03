@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../core/config/config.dart';
+import '../core/config/countries.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/transport/connection.dart';
@@ -32,6 +33,11 @@ class Api {
   Map<dynamic, dynamic>? _userAgent;
 
   Map<dynamic, dynamic>? get userAgent => _userAgent;
+
+  List<CountryName>? _registrationCountries;
+
+  List<CountryName> get registrationCountries =>
+      _registrationCountries ?? allCountries;
 
   Stream<SessionState> get stateStream => _stateController.stream;
   SessionState get state => _sessionState;
@@ -76,6 +82,7 @@ class Api {
     try {
       final response = await sendHandshake();
       if (response.isOk) {
+        _registrationCountries = _parseRegistrationCountries(response.payload);
         _setSessionState(SessionState.online);
         _startPinging();
         logger.i('Сессия онлайн, хэндшейк ок');
@@ -228,6 +235,28 @@ class Api {
         _sender.send(_connection, Opcode.ping, {});
       }
     });
+  }
+
+  static List<CountryName>? _parseRegistrationCountries(dynamic payload) {
+    if (payload is! Map) return null;
+    final raw = payload['reg-country-code'];
+    if (raw is! List || raw.isEmpty) return null;
+    final codes = <String>[];
+    for (final e in raw) {
+      if (e is String && e.isNotEmpty) codes.add(e.toUpperCase());
+    }
+    if (codes.isEmpty) return null;
+    var list = countriesInServerOrder(codes);
+    if (list.isEmpty) return null;
+
+    final loc = payload['location'];
+    if (loc is String && loc.length == 2) {
+      final home = countriesByCode[loc.toUpperCase()];
+      if (home != null && !list.any((c) => c.code == home.code)) {
+        list = [home, ...list];
+      }
+    }
+    return list;
   }
 
   void _scheduleReconnect() {

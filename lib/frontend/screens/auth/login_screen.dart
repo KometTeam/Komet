@@ -33,7 +33,17 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _selectedCountry = countriesByCode['RU'] ?? allCountries.first;
+    _clampCountryToAllowed();
     _checkTOS();
+  }
+
+  void _clampCountryToAllowed() {
+    final allowed = api.registrationCountries;
+    if (allowed.any((c) => c.code == _selectedCountry.code)) return;
+    _selectedCountry = allowed.firstWhere(
+      (c) => c.code == 'RU',
+      orElse: () => allowed.first,
+    );
   }
 
   @override
@@ -66,8 +76,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final result = await Navigator.push<CountryName>(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            SelectCountryScreen(selectedCountry: _selectedCountry),
+        builder: (context) => SelectCountryScreen(
+          selectedCountry: _selectedCountry,
+          countries: api.registrationCountries,
+        ),
       ),
     );
     if (result != null) {
