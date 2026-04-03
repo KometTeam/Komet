@@ -38,7 +38,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   double _closeAnimBegin = 0.0;
   bool _storiesAnimClosing = false;
   bool _storiesDockedOpen = false;
-  double _storiesCloseIntentAccum = 0.0;
+  DateTime _storiesRevealLayoutSettleUntil = DateTime.fromMillisecondsSinceEpoch(0);
   ProfileData? _profile;
   List<CachedChat> _chats = [];
   SessionState _sessionState = SessionState.disconnected;
@@ -219,6 +219,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         } else {
           _pullRatio = 1.0;
           _storiesDockedOpen = true;
+          _storiesRevealLayoutSettleUntil = DateTime.now().add(
+            const Duration(milliseconds: 520),
+          );
         }
       });
     }
@@ -235,6 +238,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         _pullRatio = 1.0;
         _storiesDockedOpen = true;
       });
+      _storiesRevealLayoutSettleUntil = DateTime.now().add(
+        const Duration(milliseconds: 520),
+      );
       return;
     }
     _revealAnimBegin = from;
@@ -252,7 +258,6 @@ class _ChatListScreenState extends State<ChatListScreen>
       return;
     }
     if (_storiesAnimClosing && _storiesRevealController.isAnimating) return;
-    _storiesCloseIntentAccum = 0.0;
     _storiesRevealController.stop();
     _storiesAnimClosing = true;
     final from = _pullRatio.clamp(0.0, 1.0);
@@ -277,26 +282,20 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (n is! ScrollUpdateNotification) return false;
     if (!_scrollController.hasClients) return false;
     if (!_storiesDockedOpen || _storiesRevealController.isAnimating) {
-      _storiesCloseIntentAccum = 0.0;
+      return false;
+    }
+    if (!DateTime.now().isAfter(_storiesRevealLayoutSettleUntil)) {
+      return false;
+    }
+    if (n.dragDetails == null) {
       return false;
     }
     final m = n.metrics;
     if (m.axis != Axis.vertical) return false;
-    if (m.pixels > m.minScrollExtent + 1.0) {
-      _storiesCloseIntentAccum = 0.0;
-      return false;
-    }
+    if (m.pixels > m.minScrollExtent + 1.0) return false;
     final d = n.scrollDelta;
-    if (d == null) return false;
-    if (d > 0) {
-      _storiesCloseIntentAccum = 0.0;
-      return false;
-    }
-    _storiesCloseIntentAccum += -d;
-    if (_storiesCloseIntentAccum >= _kStoriesPullTriggerPx) {
-      _storiesCloseIntentAccum = 0.0;
-      _startStoriesAutoClose();
-    }
+    if (d == null || d <= 0) return false;
+    _startStoriesAutoClose();
     return false;
   }
 
@@ -324,6 +323,11 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
         }
       } else {
+        if (_storiesDockedOpen &&
+            offset > 12 &&
+            DateTime.now().isAfter(_storiesRevealLayoutSettleUntil)) {
+          _startStoriesAutoClose();
+        }
         if (_storiesDockedOpen || _storiesRevealController.isAnimating) {
           return;
         }
