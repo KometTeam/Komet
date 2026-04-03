@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../chats/chat_list_screen.dart';
@@ -109,7 +110,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         final trackId = result.challengeTrackId;
 
         if (trackId == null) {
-          showCustomNotification(context, 'Ошибка: отсутствуют данные для 2FA');
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.codeError2faMissing,
+          );
           return;
         }
 
@@ -141,6 +145,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final hasError = _errorMessage != null;
 
     return Scaffold(
@@ -170,7 +175,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
               ),
               const SizedBox(height: 12),
               Text(
-                'Мы отправили SMS с кодом подтверждения на ваш номер телефона.',
+                l10n.codeConfirmationSmsSent,
                 style: TextStyle(
                   color: cs.outline,
                   fontSize: 15,
@@ -326,8 +331,8 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                   ),
                   child: Text(
                     _timerSeconds > 0
-                        ? 'Отправить повторно через $_timerSeconds сек.'
-                        : 'Отправить код по SMS',
+                        ? l10n.codeResendInSeconds(_timerSeconds)
+                        : l10n.codeResendSms,
                   ),
                 ),
               ),

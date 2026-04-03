@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 class SelectCountryScreen extends StatefulWidget {
   final CountryName selectedCountry;
@@ -41,6 +42,8 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final lang = Localizations.localeOf(context).languageCode;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -61,7 +64,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
                   fontWeight: FontWeight.w400,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Поиск страны...',
+                  hintText: l10n.selectCountrySearchHint,
                   hintStyle: GoogleFonts.inter(
                     color: cs.onSurfaceVariant,
                     fontSize: 18,
@@ -72,7 +75,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
                 onChanged: _filterCountries,
               )
             : Text(
-                'Выберите страну',
+                l10n.selectCountryTitle,
                 style: GoogleFonts.inter(
                   color: cs.onSurface,
                   fontSize: 20,
@@ -114,7 +117,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
               ),
             ),
             title: Text(
-              country.ru,
+              lang == 'ru' ? country.ru : country.en,
               style: GoogleFonts.inter(
                 color: cs.onSurface,
                 fontSize: 16,

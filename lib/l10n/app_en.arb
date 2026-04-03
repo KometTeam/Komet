@@ -1,0 +1,37 @@
+{
+  "@@locale": "en",
+  "loginTitle": "Sign in to Komet",
+  "loginSubtitle": "Check your country code and enter your\nphone number.",
+  "loginCountry": "Country",
+  "loginPhoneNumber": "Phone number",
+  "loginPhoneHint": "(000) 000-00-00",
+  "loginOtherSignInMethods": "Other sign-in methods",
+  "loginTermsIntro": "By continuing, you agree to \n",
+  "loginTermsLink": "the terms of use",
+  "loginTermsOfUse": "Terms of use",
+  "loginConfirmPhoneTitle": "Is this the correct number?",
+  "loginEdit": "Change",
+  "loginDone": "Done",
+  "loginReadTermsNotification": "Please read the terms of use first",
+  "loginSpoofRedacted": "Spoof redaction",
+  "loginProxy": "Proxy",
+  "loginSignInWithQr": "Sign in with QR code",
+  "loginSignInWithToken": "Sign in with token",
+  "loginSignInWithSessionFile": "Sign in with session file",
+  "loginLanguage": "Language",
+  "languageNameRu": "Русский",
+  "languageNameEn": "English",
+  "selectCountryTitle": "Select country",
+  "selectCountrySearchHint": "Search countries…",
+  "codeConfirmationSmsSent": "We sent an SMS with a verification code to your phone number.",
+  "codeResendInSeconds": "Resend in {seconds} s.",
+  "@codeResendInSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "codeResendSms": "Resend code via SMS",
+  "codeError2faMissing": "Error: missing data for 2FA"
+}

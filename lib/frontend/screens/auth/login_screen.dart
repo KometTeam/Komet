@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
+import 'package:komet/l10n/app_localizations.dart';
+import 'package:komet/l10n/terms_of_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'select_country_screen.dart';
@@ -77,8 +79,82 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  String _countryDisplayName(CountryName country) {
+    final lang = Localizations.localeOf(context).languageCode;
+    return lang == 'ru' ? country.ru : country.en;
+  }
+
+  void _showLanguagePicker() {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final appContext = context;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: 24.0,
+              horizontal: 16.0,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 8),
+                  child: Text(
+                    l10n.loginLanguage,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  title: Text(
+                    l10n.languageNameRu,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    KometApp.stateOf(appContext)?.applyLocale(const Locale('ru'));
+                  },
+                ),
+                ListTile(
+                  title: Text(
+                    l10n.languageNameEn,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    KometApp.stateOf(appContext)?.applyLocale(const Locale('en'));
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showTOS(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final termsLocale = Localizations.localeOf(context);
     showModalBottomSheet(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
@@ -107,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Условия использования',
+                          AppLocalizations.of(context)!.loginTermsOfUse,
                           style: GoogleFonts.inter(
                             color: cs.onSurface,
                             fontSize: 20,
@@ -147,99 +223,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: ListView(
                           controller: scrollController,
                           children: [
-                            //У мя вопрос а тут точно номера статей верные???
                             Text(
-                              'Условия использования неофициального клиента на MAX, именуемым "KometClient" или же "Komet"\n\n'
-                              '1. Статус и отношения\n'
-                              '1.1. «Komet» (далее — «Приложение») — неофициальное стороннее приложение, не имеющее отношения к ООО «Коммуникационная платформа" (правообладатель сервиса «MAX").\n'
-                              '1.2. Разработчики Приложения не являются партнёрами, сотрудниками или аффилированными лицами ООО «Коммуникационная платформа».\n'
-                              '1.3. Все упоминания торговых марок «MAX» и связанных сервисов принадлежат их правообладателям.\n\n'
-                              '2. Условия использования\n'
-                              '2.1. Используя Приложение «Komet», вы:\n'
-                              '• Автоматически подтверждаете согласие с официальным Пользовательским соглашением «MAX» (https://legal.max.ru/ps)\n'
-                              '• Осознаёте, что использование неофициального клиента может привести к блокировке аккаунта со стороны ООО «Коммуникационная платформа»;\n'
-                              '• Принимаете на себя все риски, связанные с использованием Приложения.\n'
-                              '2.2. Строго запрещено:\n'
-                              '• Использовать Приложение «Komet» для распространения запрещённого контента;\n'
-                              '• Осуществлять массовые рассылки (спам);\n'
-                              '• Нарушать законодательство РФ и международное право;\n'
-                              '• Предпринимать попытки взлома или нарушения работы оригинального сервиса «MAX».\n'
-                              '2.3. Техническая реализация соответствует принципу добросовестного использования (свободное использование) и не нарушает исключительные права правообладателя в соответствии с статьёй 1273 ГК РФ.\n'
-                              '2.4. Особенности технического взаимодействия:\n'
-                              '• Приложение «Komet» использует публично доступные методы взаимодействия с сервисом «MAX», аналогичные веб-версии (https://web.max.ru)\n'
-                              '• Все запросы выполняются в рамках добросовестного использования для обеспечения совместимости;\n'
-                              '• Разработчики не осуществляют обход технических средств защиты и не декомпилируют оригинальное ПО.\n\n'
-                              '3. Технические аспекты\n'
-                              '3.1. Приложение «Komet» использует только публично доступные методы взаимодействия с сервисом «MAX» через официальные конечные точки.\n'
-                              '3.2. Все запросы выполняются в рамках добросовестного использования (fair use) для обеспечения совместимости.\n'
-                              '3.3. Разработчики не несут ответственности за:\n'
-                              '• Изменения в API оригинального сервиса;\n'
-                              '• Блокировку аккаунтов пользователей;\n'
-                              '• Функциональные ограничения, вызванные действиями ООО «Коммуникационная платформа».\n\n'
-                              '4. Конфиденциальность\n'
-                              '4.1. Приложение «Komet» не хранит и не обрабатывает персональные данные пользователей.\n'
-                              '4.2. Все данные авторизации передаются напрямую серверам ООО «Коммуникационная платформа».\n'
-                              '4.3. Разработчики не имеют доступа к логинам, паролям, переписке и другим персональным данным пользователей.\n\n'
-                              '5. Ответственность и ограничения\n'
-                              '5.1. Приложение «Komet» предоставляется «как есть» (as is) без гарантий работоспособности.\n'
-                              '5.2. Разработчики вправе прекратить поддержку Приложения в любой момент без объяснения причин.\n\n'
-                              '6. Правовые основания\n'
-                              '6.1. Разработка и распространение Приложения «Komet» осуществляются в соответствии с:\n'
-                              '• Статья 1280.3 ГК РФ — декомпилирование программы для обеспечения совместимости;\n'
-                              '• Статья 1229 ГК РФ — ограничения исключительного права в информационных целях;\n'
-                              '• Федеральный закон № 149‑ФЗ «Об информации» — использование общедоступной информации;\n'
-                              '• Право на межоперабельность (Directive (EU) 2019/790) — обеспечение взаимодействия программ.\n'
-                              '6.2. Взаимодействие с сервисом «MAX» осуществляется исключительно через:\n'
-                              '• Публичные API‑интерфейсы, доступные через веб‑версию сервиса;\n'
-                              '• Методы обратной разработки, разрешённые ст. 1280.3 ГК РФ для целей совместимости;\n'
-                              '• Открытые протоколы взаимодействия, не защищённые техническими средствами охраны.\n'
-                              '6.3. Приложение «Komet» не обходит технические средства защиты и не нарушает нормальную работу оригинального сервиса, что соответствует требованиям статьи 1299 ГК РФ.\n\n'
-                              '7. Заключительные положения\n'
-                              '7.1. Используя Приложение «Komet», вы соглашаетесь с тем, что:\n'
-                              '• Единственным правомочным способом использования сервиса «MAX» является применение официальных клиентов;\n'
-                              '• Все претензии по работе сервиса должны направляться в ООО «Коммуникационная платформа»;\n'
-                              '• Разработчики Приложения не несут ответственности за любые косвенные или прямые убытки.\n'
-                              '7.2. Настоящее соглашение может быть изменено без предварительного уведомления пользователей.\n\n'
-                              '8. Функции безопасности и конфиденциальности\n'
-                              '8.1. Приложение «Komet» включает инструменты защиты приватности:\n'
-                              '• Подмена данных сессии — для предотвращения отслеживания пользователя с помощью продвинутых инструментов Open‑Source‑Intelligence (OSINT);\n'
-                              '• Система прокси‑подключений — для обеспечения безопасности сетевого взаимодействия;\n'
-                              '• Ограничение телеметрии — для минимизации передачи диагностических данных.\n'
-                              '8.2. Данные функции:\n'
-                              '• Направлены исключительно на защиту конфиденциальности пользователей;\n'
-                              '• Не используются для обхода систем безопасности оригинального сервиса;\n'
-                              '• Реализованы в рамках статьи 152.1 ГК РФ о защите частной жизни.\n'
-                              '8.3. Разработчики не несут ответственности за:\n'
-                              '• Блокировки, связанные с использованием инструментов конфиденциальности;\n'
-                              '• Изменения в работе сервиса при активации данных функций.\n'
-                              '8.4. Функции экспорта и импорта сессии\n'
-                              '8.4.1. Приложение «Komet» предоставляет возможность экспорта и импорта данных сессии для:\n'
-                              '• Обеспечения переносимости данных между устройствами пользователя\n'
-                              '• Резервного копирования учетных данных\n'
-                              '• Восстановления доступа при утере устройства\n'
-                              '8.4.2. Особенности реализации:\n'
-                              '• Экспорт сессии осуществляется без привязки к номеру телефона\n'
-                              '• Данные сессии защищаются паролем и шифрованием по алгоритмам AES‑256\n'
-                              '• Ключ шифрования известен только пользователю и не сохраняется в приложении\n'
-                              '8.4.3. Техническая реализация экспорта сессии:\n'
-                              '• Экспорт сессии осуществляется через токен авторизации для идентификации в сервисе\n'
-                              '• Используется подмена параметров сессии для сохранения контекста аутентификации\n'
-                              '• Интеграция настроек прокси для обеспечения единой конфигурации подключения\n'
-                              '• Импортированная сессия маскирует источник подключения через указанные прокси‑настройки\n'
-                              '• Серверы оригинального сервиса не получают данных о смене устройства пользователя\n'
-                              '• Шифрование применяется ко всему пакету данных (сессия + прокси‑конфиг)\n'
-                              '8.4.4. Правовые основания:\n'
-                              '• Статья 6 ФЗ‑152 «О персональных данных» — обработка данных с согласия субъекта\n'
-                              '• Статья 434 ГК РФ — право на выбор формы сделки (электронная форма хранения учетных данных)\n'
-                              '• Принцип минимизации данных — сбор только необходимой для работы информации\n'
-                              '• Использование токена не является несанкционированным доступом (ст. 272 УК РФ не нарушается)\n'
-                              '• Подмена сессии — легитимный метод сохранения аутентификации (аналог браузерных cookies)\n'
-                              '• Маскировка IP‑адреса — законный способ защиты персональных данных (ст. 6 ФЗ‑152)\n'
-                              '8.4.5. Ограничения ответственности:\n'
-                              '• Пользователь самостоятельно несет ответственность за сохранность пароля и резервных копий\n'
-                              '• Разработчики не имеют доступа к зашифрованным данным сессии\n'
-                              '• Восстановление утерянных паролей невозможно в целях безопасности\n'
-                              '• Ключи шифрования не хранятся в приложении и известны только пользователю',
+                              termsOfServiceBody(termsLocale),
                               style: TextStyle(
                                 color: cs.onSurfaceVariant,
                                 fontSize: 14,
@@ -328,6 +313,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showPhoneConfirmationDialog(String formattedPhone) {
     final screenContext = context;
+    final l10n = AppLocalizations.of(screenContext)!;
 
     showGeneralDialog(
       context: screenContext,
@@ -358,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Это правильный номер?',
+                      l10n.loginConfirmPhoneTitle,
                       style: GoogleFonts.inter(
                         color: cs.onSurfaceVariant,
                         fontSize: 14,
@@ -383,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: Text(
-                          'Изменить',
+                          l10n.loginEdit,
                           style: GoogleFonts.inter(
                             color: cs.primary,
                             fontSize: 15,
@@ -403,26 +389,24 @@ class _LoginScreenState extends State<LoginScreen> {
                               fullPhone,
                             );
 
-                            if (mounted) {
-                              Navigator.push(
-                                screenContext,
-                                MaterialPageRoute(
-                                  builder: (context) => CodeConfirmationScreen(
-                                    phoneNumber:
-                                        '${_selectedCountry.phoneCode} $formattedPhone',
-                                    token: result.token,
-                                  ),
+                            if (!screenContext.mounted) return;
+                            Navigator.push(
+                              screenContext,
+                              MaterialPageRoute(
+                                builder: (context) => CodeConfirmationScreen(
+                                  phoneNumber:
+                                      '${_selectedCountry.phoneCode} $formattedPhone',
+                                  token: result.token,
                                 ),
-                              );
-                            }
+                              ),
+                            );
                           } catch (e) {
-                            if (mounted) {
-                              _showPhoneError(e.toString());
-                            }
+                            if (!screenContext.mounted) return;
+                            _showPhoneError(e.toString());
                           }
                         },
                         child: Text(
-                          'Готово',
+                          l10n.loginDone,
                           style: GoogleFonts.inter(
                             color: cs.primary,
                             fontSize: 15,
@@ -443,7 +427,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _validateAndSubmit() {
     if (!_isTOSRead) {
-      showCustomNotification(context, 'Соглащение прочитай щегол');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.loginReadTermsNotification,
+      );
       return;
     }
     _showPhoneConfirmationDialog(_phoneController.text);
@@ -451,6 +438,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showSecurityOptions(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
@@ -470,7 +458,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   leading: Icon(Symbols.security, color: cs.onSurface),
                   title: Text(
-                    'Подделка спуфа',
+                    l10n.loginSpoofRedacted,
                     style: GoogleFonts.inter(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -490,7 +478,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   leading: Icon(Symbols.vpn_lock, color: cs.onSurface),
                   title: Text(
-                    'Прокси',
+                    l10n.loginProxy,
                     style: GoogleFonts.inter(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -511,6 +499,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showOtherLoginMethods(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
@@ -530,7 +519,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   leading: Icon(Symbols.qr_code_2, color: cs.onSurface),
                   title: Text(
-                    'По QR code',
+                    l10n.loginSignInWithQr,
                     style: GoogleFonts.inter(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -544,7 +533,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   leading: Icon(Symbols.key, color: cs.onSurface),
                   title: Text(
-                    'По токену',
+                    l10n.loginSignInWithToken,
                     style: GoogleFonts.inter(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -558,7 +547,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   leading: Icon(Symbols.description, color: cs.onSurface),
                   title: Text(
-                    'По файлу сессии',
+                    l10n.loginSignInWithSessionFile,
                     style: GoogleFonts.inter(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -580,6 +569,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       body: GestureDetector(
@@ -617,7 +607,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               IconButton(
-                                onPressed: () {},
+                                onPressed: _showLanguagePicker,
                                 icon: Icon(
                                   Symbols.language,
                                   color: cs.onSurfaceVariant,
@@ -637,7 +627,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Войдите в Komet',
+                                  l10n.loginTitle,
                                   style: GoogleFonts.inter(
                                     color: cs.onSurface,
                                     fontSize: 32,
@@ -646,7 +636,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Проверьте код страны и введите свой\nномер телефона.',
+                                  l10n.loginSubtitle,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: cs.onSurfaceVariant,
@@ -663,11 +653,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             onTap: _showCountryPicker,
                             borderRadius: BorderRadius.circular(50),
                             child: _buildInputField(
-                              label: 'Страна',
+                              label: l10n.loginCountry,
                               content: Row(
                                 children: [
                                   Text(
-                                    _selectedCountry.ru,
+                                    _countryDisplayName(_selectedCountry),
                                     style: GoogleFonts.inter(
                                       color: cs.onSurface,
                                       fontSize: 15,
@@ -685,7 +675,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 40),
                           _buildInputField(
-                            label: 'Номер телефона',
+                            label: l10n.loginPhoneNumber,
                             content: Row(
                               children: [
                                 Text(
@@ -717,7 +707,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       fontWeight: FontWeight.w400,
                                     ),
                                     decoration: InputDecoration(
-                                      hintText: '(000) 000-00-00',
+                                      hintText: l10n.loginPhoneHint,
                                       hintStyle: TextStyle(
                                         color: cs.outline,
                                         fontSize: 15,
@@ -768,7 +758,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextButton(
                             onPressed: () => _showOtherLoginMethods(context),
                             child: Text(
-                              'Другие способы входа',
+                              l10n.loginOtherSignInMethods,
                               style: GoogleFonts.inter(
                                 color: cs.primary,
                                 fontSize: 14,
@@ -794,8 +784,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                       children: [
                                         TextSpan(
-                                          text:
-                                              'Продолжая, вы соглашаетесь с \n',
+                                          text: l10n.loginTermsIntro,
                                           style: GoogleFonts.inter(
                                             color: cs.onSurface,
                                             fontSize: 14,
@@ -804,8 +793,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                         ),
                                         TextSpan(
-                                          text:
-                                              'пользовательскими соглашениями',
+                                          text: l10n.loginTermsLink,
                                           style: GoogleFonts.inter(
                                             color: cs.primary,
                                             fontSize: 14,

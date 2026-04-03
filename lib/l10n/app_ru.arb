@@ -1,0 +1,37 @@
+{
+  "@@locale": "ru",
+  "loginTitle": "Войдите в Komet",
+  "loginSubtitle": "Проверьте код страны и введите свой\nномер телефона.",
+  "loginCountry": "Страна",
+  "loginPhoneNumber": "Номер телефона",
+  "loginPhoneHint": "(000) 000-00-00",
+  "loginOtherSignInMethods": "Другие способы входа",
+  "loginTermsIntro": "Продолжая, вы соглашаетесь с \n",
+  "loginTermsLink": "пользовательскими соглашениями",
+  "loginTermsOfUse": "Условия использования",
+  "loginConfirmPhoneTitle": "Это правильный номер?",
+  "loginEdit": "Изменить",
+  "loginDone": "Готово",
+  "loginReadTermsNotification": "Сначала прочитайте условия использования",
+  "loginSpoofRedacted": "Подделка спуфа",
+  "loginProxy": "Прокси",
+  "loginSignInWithQr": "По QR code",
+  "loginSignInWithToken": "По токену",
+  "loginSignInWithSessionFile": "По файлу сессии",
+  "loginLanguage": "Язык",
+  "languageNameRu": "Русский",
+  "languageNameEn": "English",
+  "selectCountryTitle": "Выберите страну",
+  "selectCountrySearchHint": "Поиск страны…",
+  "codeConfirmationSmsSent": "Мы отправили SMS с кодом подтверждения на ваш номер телефона.",
+  "codeResendInSeconds": "Отправить повторно через {seconds} сек.",
+  "@codeResendInSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "codeResendSms": "Отправить код по SMS",
+  "codeError2faMissing": "Ошибка: отсутствуют данные для 2FA"
+}
