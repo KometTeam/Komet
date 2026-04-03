@@ -243,7 +243,6 @@ class AccountModule {
   Future<TwoFactorResult> checkPassword({
     required String password,
     required String trackId,
-    required int accountId,
   }) async {
     _ensureOnline();
 
@@ -252,7 +251,7 @@ class AccountModule {
       'password': password,
     };
 
-    logger.i('Проверка 2FA-пароля для аккаунта $accountId');
+    logger.i('Проверка 2FA-пароля');
 
     final packet = await _api.sendRequest(
       Opcode.authLoginCheckPassword,
@@ -285,9 +284,22 @@ class AccountModule {
       throw Exception('checkPassword: отсутствует токен в ответе');
     }
 
-    await TokenStorage.saveToken(loginToken, accountId);
-    await TokenStorage.setActiveAccount(accountId);
-    logger.i('2FA пройдена, токен аккаунта $accountId сохранён');
+    final profileData = data['profile'];
+    int? accountId;
+    if (profileData is Map) {
+      final contact = profileData['contact'];
+      if (contact is Map) {
+        accountId = contact['id'] as int?;
+      }
+    }
+
+    if (accountId != null) {
+      await TokenStorage.saveToken(loginToken, accountId);
+      await TokenStorage.setActiveAccount(accountId);
+      logger.i('2FA пройдена, токен аккаунта $accountId сохранён');
+    } else {
+      logger.w('2FA пройдена, но accountId не получен из ответа');
+    }
 
     return TwoFactorResult(loginToken: loginToken);
   }
@@ -298,8 +310,7 @@ class AccountModule {
   ) {
     final payload = <dynamic, dynamic>{
       'token': token,
-      'interactive': true,
-      'exp': {'chatsCountGroups': '0b32'},
+      'interactive': true
     };
 
     if (sync != null) {

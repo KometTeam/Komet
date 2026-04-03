@@ -1,9 +1,13 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'backend/api.dart';
+import 'backend/modules/account.dart';
 import 'core/storage/app_database.dart';
+import 'frontend/screens/auth/login_screen.dart';
 
 final api = Api();
+final accountModule = AccountModule(api);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
