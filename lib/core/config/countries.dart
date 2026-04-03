@@ -33,6 +33,15 @@ final Map<String, CountryName> countriesByCode = {
   for (final country in allCountries) country.code: country,
 };
 
+List<CountryName> countriesInServerOrder(Iterable<String> codes) {
+  final out = <CountryName>[];
+  for (final raw in codes) {
+    final c = countriesByCode[raw.toUpperCase()];
+    if (c != null) out.add(c);
+  }
+  return out;
+}
+
 /// Пример использования:
 /// ```dart
 /// final country = exampleCountryLookup('RU');
