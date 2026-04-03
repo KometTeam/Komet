@@ -1,6 +1,8 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:komet/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/messages.dart';
@@ -13,19 +15,65 @@ final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
 
+Future<Locale> _loadInitialLocale() async {
+  final prefs = await SharedPreferences.getInstance();
+  final code = prefs.getString('app_locale');
+  if (code != null && (code == 'en' || code == 'ru')) {
+    return Locale(code);
+  }
+  final platform = WidgetsBinding.instance.platformDispatcher.locale;
+  if (platform.languageCode == 'en' || platform.languageCode == 'ru') {
+    return Locale(platform.languageCode);
+  }
+  return const Locale('ru');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppDatabase.init();
   await api.connect();
-  runApp(const MyApp());
+  final initialLocale = await _loadInitialLocale();
+  runApp(KometApp(initialLocale: initialLocale));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class KometApp extends StatefulWidget {
+  const KometApp({super.key, required this.initialLocale});
 
+  final Locale initialLocale;
+
+  static KometAppState? stateOf(BuildContext context) {
+    return context.findAncestorStateOfType<KometAppState>();
+  }
+
+  @override
+  State<KometApp> createState() => KometAppState();
+}
+
+class KometAppState extends State<KometApp> {
   static const _fallbackSeed = Color(0xFFC1C4FF);
 
-  static ColorScheme _adjustScheme(ColorScheme base) {
+  late Locale _locale;
+
+  @override
+  void initState() {
+    super.initState();
+    _locale = widget.initialLocale;
+  }
+
+  Future<void> applyLocale(Locale locale) async {
+    if (!AppLocalizations.supportedLocales.any(
+      (l) => l.languageCode == locale.languageCode,
+    )) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_locale', locale.languageCode);
+    if (mounted) {
+      setState(() => _locale = locale);
+    }
+  }
+
+  ColorScheme _adjustScheme(ColorScheme base) {
     return base.copyWith(
       surface: Color.alphaBlend(
         base.primary.withValues(alpha: 0.05),
@@ -58,6 +106,9 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Komet',
           debugShowCheckedModeBanner: false,
+          locale: _locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: ThemeData(
             useMaterial3: true,
             colorScheme: darkScheme,
