@@ -53,8 +53,9 @@ class PacketDispatcher {
     if (packet.cmd == CmdType.ok ||
         packet.cmd == CmdType.error ||
         packet.cmd == CmdType.notFound) {
-      final status = packet.isOk ? 'OK' : packet.isError ? 'ERR' : 'NOT_FOUND';
-      logger.i('<= [$tag] seq=${packet.seq} $status\n   payload: ${packet.payload}');
+      logger.i(
+        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${packet.payload}}',
+      );
 
       final completer = _pendingRequests.remove(packet.seq);
       _requestTimestamps.remove(packet.seq);
@@ -72,7 +73,9 @@ class PacketDispatcher {
         completer.complete(packet);
       }
     } else if (packet.isPush) {
-      logger.i('<= push [$tag] ${packet.payload}');
+      logger.i(
+        '<= push {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${packet.payload}}',
+      );
       _pushHandlers[packet.opcode]?.call(packet);
       _pushController.add(packet);
     }

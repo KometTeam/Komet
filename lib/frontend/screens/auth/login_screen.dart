@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,12 +24,21 @@ class _LoginScreenState extends State<LoginScreen> {
   late CountryName _selectedCountry;
   bool _isPhoneValid = false;
   bool _isTOSRead = false;
+  String? _phoneError;
+  Timer? _phoneErrorTimer;
 
   @override
   void initState() {
     super.initState();
     _selectedCountry = countriesByCode['RU'] ?? allCountries.first;
     _checkTOS();
+  }
+
+  @override
+  void dispose() {
+    _phoneErrorTimer?.cancel();
+    _phoneController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkTOS() async {
@@ -308,9 +318,19 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _showPhoneError(String message) {
+    _phoneErrorTimer?.cancel();
+    setState(() => _phoneError = message);
+    _phoneErrorTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _phoneError = null);
+    });
+  }
+
   void _showPhoneConfirmationDialog(String formattedPhone) {
+    final screenContext = context;
+
     showGeneralDialog(
-      context: context,
+      context: screenContext,
       barrierDismissible: true,
       barrierLabel: '',
       barrierColor: Colors.black54,
@@ -374,18 +394,22 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextButton(
                         onPressed: () async {
                           Navigator.pop(context);
-                          
-                          final fullPhone = '${_selectedCountry.phoneCode}${_phoneController.text}';
-                          
+
+                          final fullPhone =
+                              '${_selectedCountry.phoneCode}${_phoneController.text}';
+
                           try {
-                            final result = await accountModule.requestCode(fullPhone);
-                            
+                            final result = await accountModule.requestCode(
+                              fullPhone,
+                            );
+
                             if (mounted) {
                               Navigator.push(
-                                context,
+                                screenContext,
                                 MaterialPageRoute(
                                   builder: (context) => CodeConfirmationScreen(
-                                    phoneNumber: '${_selectedCountry.phoneCode} $formattedPhone',
+                                    phoneNumber:
+                                        '${_selectedCountry.phoneCode} $formattedPhone',
                                     token: result.token,
                                   ),
                                 ),
@@ -393,7 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           } catch (e) {
                             if (mounted) {
-                              showCustomNotification(context, 'Ошибка: $e');
+                              _showPhoneError(e.toString());
                             }
                           }
                         },
@@ -719,7 +743,28 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 8),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.topLeft,
+                            child: _phoneError != null
+                                ? Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      _phoneError!,
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                          const SizedBox(height: 16),
                           TextButton(
                             onPressed: () => _showOtherLoginMethods(context),
                             child: Text(

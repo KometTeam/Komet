@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
@@ -9,6 +10,10 @@ import 'chat_screen.dart';
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
 import '../profile/settings_tab.dart';
+import '../../../backend/api.dart';
+import '../../../backend/modules/chats.dart';
+import '../../../core/storage/app_database.dart';
+import '../../../main.dart' show api;
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -25,7 +30,12 @@ class _ChatListScreenState extends State<ChatListScreen>
   late AnimationController _fabController;
   final Set<String> _selectedChats = {};
   final ScrollController _scrollController = ScrollController();
-  double _pullRatio = 0.0; // 0.0 = folded (hidden row), 1.0 = fully expanded
+  double _pullRatio = 0.0;
+  ProfileData? _profile;
+  List<CachedChat> _chats = [];
+  SessionState _sessionState = SessionState.disconnected;
+  StreamSubscription? _stateSub;
+  bool _shouldCollapseSearch = false;
 
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
 
@@ -36,12 +46,21 @@ class _ChatListScreenState extends State<ChatListScreen>
       } else {
         _selectedChats.add(chatId);
       }
+
+      if (_isSelectionMode) {
+        if (_scrollController.hasClients && _scrollController.offset < 132) {
+          _shouldCollapseSearch = true;
+        }
+      } else {
+        _shouldCollapseSearch = false;
+      }
     });
   }
 
   void _clearSelection() {
     setState(() {
       _selectedChats.clear();
+      _shouldCollapseSearch = false;
     });
   }
 
@@ -53,11 +72,45 @@ class _ChatListScreenState extends State<ChatListScreen>
       duration: const Duration(milliseconds: 350),
     );
     _scrollController.addListener(_onScroll);
+
+    _sessionState = api.state;
+    _stateSub = api.stateStream.listen((state) {
+      if (mounted) setState(() => _sessionState = state);
+    });
+
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final p = await AppDatabase.loadActiveProfile();
+    if (p != null) {
+      final chats = await ChatsModule.getChats(p.id);
+      if (mounted) {
+        setState(() {
+          _profile = p;
+          _chats = chats;
+        });
+      }
+    }
+  }
+
+  String _formatTime(int? timestamp) {
+    if (timestamp == null || timestamp == 0) return '';
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   void _onScroll() {
     if (_scrollController.hasClients) {
       final double offset = _scrollController.offset;
+      if (_isSelectionMode && !_shouldCollapseSearch && offset < 132) {
+        setState(() {
+          _shouldCollapseSearch = true;
+        });
+      }
+
       if (offset < 0) {
         final newRatio = (offset.abs() / 80.0).clamp(0.0, 1.0);
         if (newRatio != _pullRatio) {
@@ -75,6 +128,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   @override
   void dispose() {
+    _stateSub?.cancel();
     _fabController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -133,9 +187,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           curve: Curves.easeOutCubic,
-                          height: _isSelectionMode
+                          height: _shouldCollapseSearch
                               ? 0
-                              : (132 + (96 * _pullRatio)),
+                              : (100 + (96 * _pullRatio)),
                           color: Colors.transparent,
                           clipBehavior: Clip.hardEdge,
                           child: AnimatedContainer(
@@ -143,7 +197,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             curve: Curves.easeOutCubic,
                             transform: Matrix4.translationValues(
                               0,
-                              _isSelectionMode ? -100 : 0,
+                              _shouldCollapseSearch ? -100 : 0,
                               0,
                             ),
                             child: Column(
@@ -153,7 +207,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                     20,
                                     12,
                                     20,
-                                    4,
+                                    2,
                                   ),
                                   child: Row(
                                     mainAxisAlignment:
@@ -189,7 +243,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                               ),
                                             ),
                                           Text(
-                                            'Подключение...',
+                                            _sessionState == SessionState.online
+                                                ? (_profile?.firstName ?? 'Чат')
+                                                : 'Подключение...',
                                             style: TextStyle(
                                               color: cs.onSurface,
                                               fontSize: 20,
@@ -266,9 +322,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     20,
-                                    4,
+                                    2,
                                     20,
-                                    12,
+                                    8,
                                   ),
                                   child: Container(
                                     height: 44,
@@ -316,9 +372,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ),
                       SliverPadding(
-                        padding: EdgeInsets.only(
-                          top: _isSelectionMode ? 64 : 0,
-                        ),
+                        padding: EdgeInsets.zero,
                         sliver: SliverToBoxAdapter(
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
@@ -337,7 +391,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 scrollDirection: Axis.horizontal,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 20,
-                                  vertical: 8,
+                                  vertical: 4,
                                 ),
                                 physics: const BouncingScrollPhysics(),
                                 children: [
@@ -363,53 +417,24 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ),
                       SliverList(
-                        delegate: SliverChildListDelegate([
-                          _buildChatItem(
-                            'stas',
-                            'Станислав',
-                            'Хорошо',
-                            '10:07',
-                            'https://i.pravatar.cc/150?u=stas',
-                            isOnline: true,
-                            isRead: true,
-                          ),
-                          _buildChatItem(
-                            'ilya',
-                            'Илья',
-                            'печатает...',
-                            '10:07',
-                            'https://i.pravatar.cc/150?u=ilya',
-                            isOnline: true,
-                            isTyping: true,
-                            unreadCount: 1,
-                          ),
-                          _buildChatItem(
-                            'veronika',
-                            'Вероника',
-                            'Спасибо',
-                            '09:56',
-                            'https://i.pravatar.cc/150?u=veronika',
-                            isRead: true,
-                          ),
-                          _buildChatItem(
-                            'komet',
-                            'Komet Client',
-                            'Кстати. Смотрите, какую шту...',
-                            '09:56',
-                            'https://i.pravatar.cc/150?u=komet',
-                            unreadCount: 5,
-                            isMuted: true,
-                          ),
-                          _buildChatItem(
-                            'podezd',
-                            '4-й подъезд',
-                            'Людмила: Сколько?',
-                            '09:34',
-                            'https://i.pravatar.cc/150?u=podezd',
-                            unreadCount: 78,
-                            isMuted: true,
-                          ),
-                        ]),
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final chat = _chats[index];
+                          return _buildChatItem(
+                            chat.id.toString(),
+                            chat.title ?? 'Чат',
+                            chat.lastMsgText ?? '',
+                            _formatTime(chat.lastMsgTime),
+                            (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                                ? chat.iconUrl!
+                                : '',
+                            isOnline: chat.isOnline,
+                            unreadCount: chat.unreadCount,
+                            isMuted: chat.dontDisturbUntil > 0,
+                          );
+                        }, childCount: _chats.length),
+                      ),
+                      const SliverPadding(
+                        padding: EdgeInsets.only(bottom: 120),
                       ),
                     ],
                   ), // CustomScrollView
@@ -532,7 +557,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           ),
                         ),
                       ),
-                    if (!_isSelectionMode) ...[
+                    if (!_isSelectionMode && _currentNavIndex == 0) ...[
                       if (_fabController.value > 0)
                         Positioned(
                           right: 20,
@@ -726,7 +751,22 @@ class _ChatListScreenState extends State<ChatListScreen>
           ),
           leading: Stack(
             children: [
-              CircleAvatar(radius: 24, backgroundImage: NetworkImage(imageUrl)),
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: cs.surfaceContainerHighest,
+                backgroundImage: imageUrl.isNotEmpty
+                    ? NetworkImage(imageUrl)
+                    : null,
+                child: imageUrl.isEmpty
+                    ? Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 20,
+                        ),
+                      )
+                    : null,
+              ),
               if (isSelected)
                 Positioned(
                   right: -2,

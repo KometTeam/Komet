@@ -16,12 +16,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
 
-enum SessionState { 
-  disconnected, 
-  connecting,
-  connected, 
-  online 
-}
+enum SessionState { disconnected, connecting, connected, online }
 
 /// Клиент API.
 ///
@@ -34,6 +29,9 @@ class Api {
 
   SessionState _sessionState = SessionState.disconnected;
   final _stateController = StreamController<SessionState>.broadcast();
+  Map<dynamic, dynamic>? _userAgent;
+
+  Map<dynamic, dynamic>? get userAgent => _userAgent;
 
   Stream<SessionState> get stateStream => _stateController.stream;
   SessionState get state => _sessionState;
@@ -98,86 +96,77 @@ class Api {
     _setSessionState(SessionState.disconnected);
   }
 
-  /// Отправляет хэндшейк (opcode 6).
   Future<Packet> sendHandshake() async {
-    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    final deviceInfo = DeviceInfoPlugin();
 
-    // Если платформа Linux или Windows, то ставим DESKTOP, если нет, то проверяем на Android или IOS;
-    String deviceType = (Platform.isLinux || Platform.isWindows) ? "DESKTOP" : (Platform.isAndroid) ? "ANDROID" : "IOS";
-    String osVersion = "";
-    String deviceName = "Unknown";
-    String architecture = "arm64";
-
-    tz.initializeTimeZones();
-
-    final now = DateTime.now();
-    String timezone = "Europe/Moscow";
+    final deviceType = (Platform.isLinux || Platform.isWindows)
+        ? 'DESKTOP'
+        : (Platform.isAndroid)
+        ? 'ANDROID'
+        : 'IOS';
+    String osVersion = '';
+    String deviceName = 'Unknown';
+    String architecture = 'arm64';
 
     tz.initializeTimeZones();
     final timeZoneName = await FlutterTimezone.getLocalTimezone();
-    timezone = timeZoneName.identifier;
+    final timezone = timeZoneName.identifier;
 
-    // На каждой платформе свое инфо, поэтому делаем такую проверку
     if (Platform.isLinux) {
-      LinuxDeviceInfo linuxInfo = await deviceInfo.linuxInfo;
-
+      final linuxInfo = await deviceInfo.linuxInfo;
       osVersion = linuxInfo.name;
-      // Platform.version содержит в себе что-то такое
-      // 3.11.1 (stable) (Tue Feb 24 00:03:07 2026 -0800) on "linux_x64"
-      // Поэтому мы находим '_', прибавляем к его индексу 1 и берем символы до length - 1
-      architecture = Platform.version.substring(Platform.version.indexOf('_') + 1, Platform.version.length - 1);
+      architecture = Platform.version.substring(
+        Platform.version.indexOf('_') + 1,
+        Platform.version.length - 1,
+      );
     } else if (Platform.isIOS) {
-      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-
+      final iosInfo = await deviceInfo.iosInfo;
       osVersion = iosInfo.systemVersion;
       deviceName = iosInfo.utsname.machine;
     } else if (Platform.isAndroid) {
-      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-      
-      osVersion = "Android ${androidInfo.version.release}";
-      deviceName = "${androidInfo.manufacturer} ${androidInfo.model}";
-      architecture =  androidInfo.supportedAbis.first;
+      final androidInfo = await deviceInfo.androidInfo;
+      osVersion = 'Android ${androidInfo.version.release}';
+      deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
+      architecture = androidInfo.supportedAbis.first;
     } else if (Platform.isWindows) {
-      WindowsDeviceInfo windowsInfo = await deviceInfo.windowsInfo;    
-
+      final windowsInfo = await deviceInfo.windowsInfo;
       osVersion = windowsInfo.productName;
-      architecture = Platform.version.substring(Platform.version.indexOf('_') + 1, Platform.version.length - 1);
+      architecture = Platform.version.substring(
+        Platform.version.indexOf('_') + 1,
+        Platform.version.length - 1,
+      );
     }
-    
-    print(deviceType);
+
+    _userAgent = {
+      'deviceType': deviceType,
+      'locale': 'ru',
+      'deviceLocale': Platform.localeName.substring(0, 2),
+      'osVersion': osVersion,
+      'deviceName': deviceName,
+      'appVersion': '26.8.1',
+      'screen': '1920x1080',
+      'timezone': timezone,
+      'pushDeviceType': 'GCM',
+      'arch': architecture,
+      'buildNumber': 6606,
+    };
+
     final payload = <dynamic, dynamic>{
       'mt_instanceid': '550e8400-e29b-41d4-a716-446655440000',
       'clientSessionId': 42,
       'deviceId': 'a1b2c3d4e5f6a7b8',
-      'userAgent': {
-        'deviceType': deviceType,
-        // Первые два символа из locale это и есть нужный нам аргумент
-        'locale': "ru",
-        'deviceLocale': Platform.localeName.substring(0, 2),
-        'osVersion': osVersion,
-        'deviceName': deviceName,
-        'appVersion': '26.8.1',
-        'screen': '1920x1080',
-        // 'screen': screenSize.width + 'x' + screenSize.height,
-        'timezone': timezone,
-        'pushDeviceType': 'GCM',
-        'arch': architecture,
-        'buildNumber': 6606,
-      },
+      'userAgent': _userAgent,
     };
 
-    print(payload);
-    print(Platform.version);
     return sendRequest(Opcode.sessionInit, payload);
   }
 
   /// Отправляет запрос и ждёт ответ от сервера.
-  Future<Packet> sendRequest(
-    int opcode,
-    Map<dynamic, dynamic> payload,
-  ) {
+  Future<Packet> sendRequest(int opcode, Map<dynamic, dynamic> payload) {
     final seq = _sender.send(_connection, opcode, payload);
-    return _dispatcher.registerPending(seq).timeout(
+    return _dispatcher
+        .registerPending(seq)
+        .timeout(
           ServerConfig.requestTimeout,
           onTimeout: () =>
               throw TimeoutException('${Opcode.name(opcode)} таймаут'),
@@ -202,7 +191,6 @@ class Api {
   }
 
   // Внутрянка
-
 
   void _setSessionState(SessionState state) {
     if (_sessionState == state) return;

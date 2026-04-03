@@ -35,10 +35,12 @@ class ProfileData {
     String? lastName;
 
     if (names is List && names.isNotEmpty) {
-      final name = names.firstWhere(
-        (n) => n is Map && n['type'] == 'ONEME',
-        orElse: () => names.first,
-      ) as Map;
+      final name =
+          names.firstWhere(
+                (n) => n is Map && n['type'] == 'ONEME',
+                orElse: () => names.first,
+              )
+              as Map;
       firstName = (name['firstName'] as String?) ?? '';
       lastName = name['lastName'] as String?;
     }
@@ -73,17 +75,17 @@ class ProfileData {
   }
 
   Map<String, dynamic> toDbRow() => {
-        'id': id,
-        'first_name': firstName,
-        'last_name': lastName,
-        'phone': phone,
-        'photo_id': photoId,
-        'base_url': baseUrl,
-        'base_raw_url': baseRawUrl,
-        'country': country,
-        'account_status': accountStatus,
-        'update_time': updateTime,
-      };
+    'id': id,
+    'first_name': firstName,
+    'last_name': lastName,
+    'phone': phone,
+    'photo_id': photoId,
+    'base_url': baseUrl,
+    'base_raw_url': baseRawUrl,
+    'country': country,
+    'account_status': accountStatus,
+    'update_time': updateTime,
+  };
 }
 
 abstract class SyncKey {
@@ -118,7 +120,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 3,
+      version: 5,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -130,6 +132,13 @@ class AppDatabase {
           await db.execute(_syncStateSchema);
         }
         if (oldVersion < 3) {
+          await db.execute(_chatsCacheSchema);
+        }
+        if (oldVersion < 4) {
+          await db.execute(_contactsSchema);
+        }
+        if (oldVersion < 5) {
+          await db.execute('DROP TABLE IF EXISTS chats_cache');
           await db.execute(_chatsCacheSchema);
         }
       },
@@ -154,7 +163,22 @@ class AppDatabase {
     ''');
     await db.execute(_syncStateSchema);
     await db.execute(_chatsCacheSchema);
+    await db.execute(_contactsSchema);
   }
+
+  static const _contactsSchema = '''
+    CREATE TABLE contacts (
+      id           INTEGER PRIMARY KEY,
+      account_id   INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      first_name   TEXT    NOT NULL,
+      last_name    TEXT,
+      phone        INTEGER NOT NULL,
+      photo_id     INTEGER,
+      base_url     TEXT,
+      base_raw_url TEXT,
+      update_time  INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
 
   static const _syncStateSchema = '''
     CREATE TABLE sync_state (
@@ -179,6 +203,10 @@ class AppDatabase {
       unread_count    INTEGER NOT NULL DEFAULT 0,
       last_event_time INTEGER NOT NULL DEFAULT 0,
       cached_at       INTEGER NOT NULL,
+      fav_index       INTEGER,
+      dont_disturb_until INTEGER NOT NULL DEFAULT 0,
+      is_online       INTEGER NOT NULL DEFAULT 0,
+      seen_time       INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -212,11 +240,7 @@ class AppDatabase {
 
   static Future<ProfileData?> loadActiveProfile() async {
     final db = await _instance;
-    final rows = await db.query(
-      'profile',
-      where: 'is_active = 1',
-      limit: 1,
-    );
+    final rows = await db.query('profile', where: 'is_active = 1', limit: 1);
     if (rows.isEmpty) return null;
     return ProfileData.fromDbRow(rows.first);
   }
@@ -245,11 +269,11 @@ class AppDatabase {
     String value,
   ) async {
     final db = await _instance;
-    await db.insert(
-      'sync_state',
-      {'account_id': accountId, 'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('sync_state', {
+      'account_id': accountId,
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<String?> getSyncValue(int accountId, String key) async {
@@ -281,13 +305,17 @@ class AppDatabase {
     _db = null;
   }
 
-  // Chats cache 
+  // Chats cache
 
   static Future<void> saveChats(List<Map<String, dynamic>> rows) async {
     final db = await _instance;
     final batch = db.batch();
     for (final row in rows) {
-      batch.insert('chats_cache', row, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert(
+        'chats_cache',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
     await batch.commit(noResult: true);
   }
@@ -304,6 +332,32 @@ class AppDatabase {
 
   static Future<void> clearChatsCache(int accountId) async {
     final db = await _instance;
-    await db.delete('chats_cache', where: 'account_id = ?', whereArgs: [accountId]);
+    await db.delete(
+      'chats_cache',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+  }
+
+  static Future<void> saveContacts(List<Map<String, dynamic>> rows) async {
+    final db = await _instance;
+    final batch = db.batch();
+    for (final row in rows) {
+      batch.insert(
+        'contacts',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  static Future<List<Map<String, dynamic>>> loadContacts(int accountId) async {
+    final db = await _instance;
+    return db.query(
+      'contacts',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
   }
 }

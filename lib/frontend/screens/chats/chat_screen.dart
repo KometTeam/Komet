@@ -58,10 +58,20 @@ class _ChatScreenState extends State<ChatScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: NetworkImage(widget.imageUrl),
-            ),
+            if (widget.imageUrl.isNotEmpty)
+              CircleAvatar(
+                radius: 18,
+                backgroundImage: NetworkImage(widget.imageUrl),
+              )
+            else
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.blueGrey,
+                child: Text(
+                  widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -111,11 +121,17 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.network(
-              'https://images.unsplash.com/photo-1579546929518-9e396f3cc809',
-              fit: BoxFit.cover,
-              opacity: const AlwaysStoppedAnimation(0.4),
-            ),
+            child: widget.imageUrl.isNotEmpty
+                ? Image.network(
+                    widget.imageUrl,
+                    fit: BoxFit.cover,
+                    opacity: const AlwaysStoppedAnimation(0.4),
+                  )
+                : Image.network(
+                    'https://images.unsplash.com/photo-1579546929518-9e396f3cc809',
+                    fit: BoxFit.cover,
+                    opacity: const AlwaysStoppedAnimation(0.4),
+                  ),
           ),
           const Positioned.fill(
             child: DecoratedBox(

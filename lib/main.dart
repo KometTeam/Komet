@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'backend/api.dart';
 import 'backend/modules/account.dart';
 import 'core/storage/app_database.dart';
+import 'core/storage/token_storage.dart';
 import 'frontend/screens/auth/login_screen.dart';
+import 'frontend/screens/chats/chat_list_screen.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
@@ -42,10 +44,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final baseScheme = darkDynamic ?? ColorScheme.fromSeed(
-          seedColor: _fallbackSeed,
-          brightness: Brightness.dark,
-        );
+        final baseScheme =
+            darkDynamic ??
+            ColorScheme.fromSeed(
+              seedColor: _fallbackSeed,
+              brightness: Brightness.dark,
+            );
 
         final darkScheme = _adjustScheme(baseScheme);
 
@@ -55,13 +59,66 @@ class MyApp extends StatelessWidget {
           theme: ThemeData(
             useMaterial3: true,
             colorScheme: darkScheme,
-            textTheme: GoogleFonts.interTextTheme(
-              ThemeData.dark().textTheme,
-            ),
+            textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
           ),
-          home: const LoginScreen(),
+          home: const _StartupScreen(),
         );
       },
+    );
+  }
+}
+
+class _StartupScreen extends StatefulWidget {
+  const _StartupScreen();
+
+  @override
+  State<_StartupScreen> createState() => _StartupScreenState();
+}
+
+class _StartupScreenState extends State<_StartupScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _tryAutoLogin();
+  }
+
+  Future<void> _tryAutoLogin() async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      _goToLogin();
+      return;
+    }
+
+    try {
+      await accountModule.login(accountId: accountId);
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ChatListScreen()),
+        );
+      }
+    } catch (_) {
+      _goToLogin();
+    }
+  }
+
+  void _goToLogin() {
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: Center(
+        child: CircularProgressIndicator(color: cs.primary, strokeWidth: 2),
+      ),
     );
   }
 }

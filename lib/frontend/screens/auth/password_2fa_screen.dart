@@ -2,16 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../chats/chat_list_screen.dart';
 import '../../../main.dart';
+import '../../widgets/custom_notification.dart';
 
 class Password2FAScreen extends StatefulWidget {
   final String trackId;
   final String? hint;
 
-  const Password2FAScreen({
-    super.key,
-    required this.trackId,
-    this.hint,
-  });
+  const Password2FAScreen({super.key, required this.trackId, this.hint});
 
   @override
   State<Password2FAScreen> createState() => _Password2FAScreenState();
@@ -43,8 +40,7 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
 
       if (!mounted) return;
 
-      // После успешной 2FA делаем login
-      final loginResult = await accountModule.login();
+      await accountModule.login();
 
       if (!mounted) return;
 
@@ -60,9 +56,7 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Неверный пароль: $e')),
-      );
+      showCustomNotification(context, 'Неверный пароль: $e');
     }
   }
 
@@ -131,7 +125,9 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
                   ),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                      _isPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                       color: cs.onSurfaceVariant,
                     ),
                     onPressed: () {
