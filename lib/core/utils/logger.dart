@@ -1,9 +1,8 @@
-import 'package:logger/logger.dart'; //нет это не опасный вредоносный вирус логер который украдёт ваш аккаунт Browl Starz
+import 'package:logger/logger.dart';
+import 'package:flutter/foundation.dart';
 
 final logger = Logger(
-  // устанавливает минимальный уровень логов.
-  // доступны уровни: all, trace, debug, info, warning, error, fatal, off
-  level: Level.all,
+  level: kReleaseMode ? Level.info : Level.all,
   printer: PrettyPrinter(
     methodCount: 0,
     errorMethodCount: 5,

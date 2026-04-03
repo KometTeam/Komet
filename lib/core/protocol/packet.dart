@@ -100,8 +100,7 @@ Packet unpackPacket(Uint8List packet) {
   var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
 
   dynamic payload;
-  print(compFlag);
-  // Если payload пустой, ничего не делаем (так может быть при получении пинга)
+  
   if (payloadBytes.isNotEmpty) {
     if (compFlag != 0) {
       try {
@@ -111,11 +110,10 @@ Packet unpackPacket(Uint8List packet) {
         );
         
       } catch (_) {
-        // dart_lz4 не умеет block-формат, фолбэк на ручной декомпрессор
         try {
           payloadBytes = _lz4BlockDecompress(payloadBytes, _maxDecompressedSize);
         } catch (e) {
-          logger.e("Ошибка декомпрессии LZ4: $e", error: e);
+          logger.e("LZ4 decompression error: $e", error: e);
         }
       }
     }
@@ -123,7 +121,9 @@ Packet unpackPacket(Uint8List packet) {
     try {
       payload = msgpack.deserialize(payloadBytes);
     } catch (e) { 
-      logger.e("Ошибка десериализации MsgPack: $e", error: e);
+      if (payloadBytes.isNotEmpty) {
+        logger.e("MsgPack deserialization error: $e", error: e);
+      }
     }
   }
 
