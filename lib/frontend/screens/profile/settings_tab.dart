@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
+import 'devices_screen.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -69,13 +70,27 @@ class _SettingsTabState extends State<SettingsTab> {
                 child: _buildSection(
                   context,
                   cs,
-                  items: const [
-                    _SettingsItem(
+                  items: [
+                    const _SettingsItem(
                       icon: Symbols.notifications_active,
                       label: 'Уведомления и звук',
                     ),
-                    _SettingsItem(icon: Symbols.lock, label: 'Безопасность'),
-                    _SettingsItem(icon: Symbols.devices, label: 'Устройства'),
+                    const _SettingsItem(
+                      icon: Symbols.lock,
+                      label: 'Безопасность',
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.devices,
+                      label: 'Устройства',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const DevicesScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -231,7 +246,7 @@ class _SettingsTabState extends State<SettingsTab> {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () {},
+            onTap: item.onTap ?? () {},
             borderRadius: isLast
                 ? const BorderRadius.vertical(bottom: Radius.circular(20))
                 : null,
@@ -284,8 +299,9 @@ class _SettingsTabState extends State<SettingsTab> {
 class _SettingsItem {
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 
-  const _SettingsItem({required this.icon, required this.label});
+  const _SettingsItem({required this.icon, required this.label, this.onTap});
 }
 
 class _PhoneSpoiler extends StatefulWidget {

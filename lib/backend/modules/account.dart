@@ -112,6 +112,35 @@ class LoginSyncParams {
   }
 }
 
+class SessionInfo {
+  final int? id;
+  final String client;
+  final String location;
+  final bool current;
+  final int time;
+  final String info;
+
+  const SessionInfo({
+    this.id,
+    required this.client,
+    required this.location,
+    required this.current,
+    required this.time,
+    required this.info,
+  });
+
+  factory SessionInfo.fromMap(Map<dynamic, dynamic> map) {
+    return SessionInfo(
+      id: map['id'],
+      client: map['client'] ?? '',
+      location: map['location'] ?? '',
+      current: map['current'] ?? false,
+      time: map['time'] ?? 0,
+      info: map['info'] ?? '',
+    );
+  }
+}
+
 class LoginResult {
   final ProfileData profile;
   final String? updatedToken;
@@ -210,6 +239,24 @@ class AccountModule {
       data.cast<dynamic, dynamic>(),
       resolvedAccountId,
     );
+  }
+
+  Future<List<SessionInfo>> getSessions() async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.sessionsInfo, {});
+    _checkPacketError(packet, 'getSessions');
+    final data = packet.payload;
+    if (data is! Map || data['sessions'] is! List) return [];
+    final sessions = data['sessions'] as List;
+    return sessions
+        .map((s) => SessionInfo.fromMap(s as Map<dynamic, dynamic>))
+        .toList();
+  }
+
+  Future<void> terminateOtherSessions() async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.sessionsClose, {});
+    _checkPacketError(packet, 'terminateOtherSessions');
   }
 
   Future<ProfileData> switchAccount(int accountId) async {
