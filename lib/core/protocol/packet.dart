@@ -3,8 +3,6 @@ import 'dart:isolate';
 import 'package:dart_lz4/dart_lz4.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
-import '../utils/logger.dart';
-
 /// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
 const int headerSize = 10;
 const int _maxDecompressedSize = 1048576; // 1 MB

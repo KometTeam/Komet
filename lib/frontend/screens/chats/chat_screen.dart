@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
+import '../../../backend/api.dart';
+import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -25,6 +28,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _hasText = false;
   bool _isLoading = true;
   late AnimationController _shimmerController;
+  List<CachedMessage> _messages = [];
 
   @override
   void initState() {
@@ -34,17 +38,45 @@ class _ChatScreenState extends State<ChatScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
+
     _loadHistory();
   }
 
   Future<void> _loadHistory() async {
+    final activeProfile = await AppDatabase.loadActiveProfile();
+    final myId = activeProfile?.id ?? 0;
+
+    final cachedRows = await AppDatabase.loadMessages(
+      myId,
+      widget.chatId,
+      limit: 100,
+    );
+    if (mounted && cachedRows.isNotEmpty) {
+      setState(() {
+        _messages = cachedRows.map((r) => CachedMessage.fromDbRow(r)).toList();
+        if (api.state == SessionState.online) {
+          _isLoading = false;
+        }
+      });
+    }
+
     try {
-      final activeProfile = await AppDatabase.loadActiveProfile();
-      final myId = activeProfile?.id ?? 0;
       await messagesModule.fetchHistory(myId, widget.chatId);
+      final updatedRows = await AppDatabase.loadMessages(
+        myId,
+        widget.chatId,
+        limit: 100,
+      );
+      if (mounted) {
+        setState(() {
+          _messages = updatedRows
+              .map((r) => CachedMessage.fromDbRow(r))
+              .toList();
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      debugPrint('Background history fetch failed: $e');
-    } finally {
+      debugPrint('Error fetching history: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -148,7 +180,9 @@ class _ChatScreenState extends State<ChatScreen>
       body: Column(
         children: [
           Expanded(
-            child: _isLoading
+            child:
+                _isLoading ||
+                    (_messages.isEmpty && api.state != SessionState.online)
                 ? _buildShimmerLoading()
                 : const SizedBox.shrink(),
           ),

@@ -23,10 +23,11 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   String _selectedCategory = 'Все чаты';
   int _currentNavIndex = 0;
   bool _isFabOpen = false;
+  bool _showCacheWarning = false;
   late AnimationController _fabController;
   final Set<String> _selectedChats = {};
   final ScrollController _scrollController = ScrollController();
@@ -64,6 +65,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     });
   }
 
+  bool _isInitialLoading = true;
+  late AnimationController _shimmerController;
+
   @override
   void initState() {
     super.initState();
@@ -71,11 +75,26 @@ class _ChatListScreenState extends State<ChatListScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+
     _scrollController.addListener(_onScroll);
 
     _sessionState = api.state;
     _stateSub = api.stateStream.listen((state) {
-      if (mounted) setState(() => _sessionState = state);
+      if (mounted) {
+        setState(() {
+          _sessionState = state;
+          if (state == SessionState.disconnected && _chats.isNotEmpty) {
+            _showCacheWarning = true;
+          }
+          if (state == SessionState.online) {
+            _showCacheWarning = false;
+          }
+        });
+      }
     });
 
     _loadProfile();
@@ -89,6 +108,13 @@ class _ChatListScreenState extends State<ChatListScreen>
         setState(() {
           _profile = p;
           _chats = chats;
+          _isInitialLoading = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _isInitialLoading = false;
         });
       }
     }
@@ -100,6 +126,59 @@ class _ChatListScreenState extends State<ChatListScreen>
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+
+  Widget _buildChatShimmer() {
+    final cs = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        final opacity = 0.3 + 0.3 * sin(_shimmerController.value * pi * 2);
+        return Opacity(
+          opacity: opacity,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _onScroll() {
@@ -319,6 +398,49 @@ class _ChatListScreenState extends State<ChatListScreen>
                                     ),
                                   ),
                                 ),
+                                if (_showCacheWarning)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      20,
+                                      0,
+                                      20,
+                                      8,
+                                    ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: cs.errorContainer.withOpacity(
+                                          0.3,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: cs.error.withOpacity(0.2),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Symbols.cloud_off,
+                                            size: 18,
+                                            color: cs.error,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          const Expanded(
+                                            child: Text(
+                                              'Ошибка соединения, сейчас вы смотрите КЕШ',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     20,
@@ -418,6 +540,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                       ),
                       SliverList(
                         delegate: SliverChildBuilderDelegate((context, index) {
+                          if (_isInitialLoading) {
+                            return _buildChatShimmer();
+                          }
                           final chat = _chats[index];
                           return _buildChatItem(
                             chat.id.toString(),
@@ -431,10 +556,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                             unreadCount: chat.unreadCount,
                             isMuted: chat.dontDisturbUntil > 0,
                           );
-                        }, childCount: _chats.length),
+                        }, childCount: _isInitialLoading ? 10 : _chats.length),
                       ),
                       const SliverPadding(
-                        padding: EdgeInsets.only(bottom: 120),
+                        padding: EdgeInsets.only(bottom: 100),
                       ),
                     ],
                   ), // CustomScrollView
@@ -449,7 +574,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               curve: Curves.easeOutCubic,
               left: 8,
               right: 8,
-              bottom: _isSelectionMode ? -100 : 24.0,
+              bottom: _isSelectionMode ? -100 : 10.0,
               child: RepaintBoundary(
                 child: Container(
                   height: 68,
@@ -561,7 +686,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       if (_fabController.value > 0)
                         Positioned(
                           right: 20,
-                          bottom: 110 + 74,
+                          bottom: 90 + 74,
                           child: RepaintBoundary(
                             child: Transform.scale(
                               scale: val,
@@ -575,7 +700,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       Positioned(
                         right: 20,
-                        bottom: 110,
+                        bottom: 90,
                         child: FloatingActionButton(
                           onPressed: _toggleFab,
                           backgroundColor: cs.primaryContainer,
