@@ -38,7 +38,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   double _closeAnimBegin = 0.0;
   bool _storiesAnimClosing = false;
   bool _storiesDockedOpen = false;
-  DateTime _storiesRevealLayoutSettleUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _storiesRevealLayoutSettleUntil =
+      DateTime.fromMillisecondsSinceEpoch(0);
   ProfileData? _profile;
   List<CachedChat> _chats = [];
   SessionState _sessionState = SessionState.disconnected;
@@ -363,6 +364,258 @@ class _ChatListScreenState extends State<ChatListScreen>
     });
   }
 
+  Widget _buildPinnedChatsHeader(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: cs.surface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRect(
+            clipBehavior: Clip.hardEdge,
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: _shouldCollapseSearch
+                  ? const SizedBox(width: double.infinity, height: 0)
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 2),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  if (_pullRatio < 0.8)
+                                    Opacity(
+                                      opacity: 1.0 - _pullRatio,
+                                      child: Container(
+                                        width: 50 * (1.0 - _pullRatio),
+                                        height: 32,
+                                        margin: const EdgeInsets.only(right: 8),
+                                        child: Stack(
+                                          children: [
+                                            _buildFoldedStory(
+                                              'https://i.pravatar.cc/150?u=dasha',
+                                              0,
+                                            ),
+                                            _buildFoldedStory(
+                                              'https://i.pravatar.cc/150?u=mastika',
+                                              1,
+                                            ),
+                                            _buildFoldedStory(
+                                              'https://i.pravatar.cc/150?u=stas',
+                                              2,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  Text(
+                                    _sessionState == SessionState.online
+                                        ? (_profile?.firstName ?? 'Чат')
+                                        : 'Подключение...',
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Outfit',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              PopupMenuButton<int>(
+                                icon: Icon(
+                                  Symbols.more_vert,
+                                  color: cs.outline,
+                                  weight: 400,
+                                ),
+                                offset: const Offset(0, 48),
+                                elevation: 4,
+                                color: cs.surfaceContainerHigh,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                itemBuilder: (context) => [
+                                  _buildPopupMenuItem(
+                                    1,
+                                    'Кнопка 1',
+                                    Symbols.settings,
+                                  ),
+                                  _buildPopupMenuItem(
+                                    2,
+                                    'Кнопка 2',
+                                    Symbols.notifications,
+                                  ),
+                                  _buildPopupMenuItem(
+                                    3,
+                                    'Кнопка 3',
+                                    Symbols.shield,
+                                  ),
+                                  _buildPopupMenuItem(
+                                    4,
+                                    'Кнопка 4',
+                                    Symbols.info,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          height: 96 * _pullRatio,
+                          child: Opacity(
+                            opacity: _pullRatio,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              children: [
+                                _buildStoryItem(
+                                  'Даша',
+                                  'https://i.pravatar.cc/150?u=dasha',
+                                  true,
+                                ),
+                                _buildStoryItem(
+                                  'Мастика',
+                                  'https://i.pravatar.cc/150?u=mastika',
+                                  false,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_showCacheWarning)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cs.errorContainer.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: cs.error.withOpacity(0.2),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Symbols.cloud_off,
+                                    size: 18,
+                                    color: cs.error,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Text(
+                                      'Ошибка соединения, сейчас вы смотрите КЕШ',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(50),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Symbols.search,
+                                  color: cs.outline,
+                                  size: 20,
+                                  weight: 400,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextField(
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 15,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: 'Поиск',
+                                      hintStyle: TextStyle(
+                                        color: cs.outline,
+                                        fontSize: 15,
+                                      ),
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            height: 48,
+            color: cs.surface,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {
+                  ui.PointerDeviceKind.touch,
+                  ui.PointerDeviceKind.mouse,
+                  ui.PointerDeviceKind.trackpad,
+                },
+              ),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 4,
+                ),
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  _buildFolderChip('Все чаты'),
+                  const SizedBox(width: 8),
+                  _buildFolderChip('Контакты'),
+                  const SizedBox(width: 8),
+                  _buildFolderChip('Пидоры'),
+                  const SizedBox(width: 8),
+                  _buildFolderChip('Каналы'),
+                  const SizedBox(width: 8),
+                  _buildFolderChip('Группы'),
+                  const SizedBox(width: 8),
+                  _buildFolderChip('Боты'),
+                  const SizedBox(width: 8),
+                  _buildFolderChip('Избранное'),
+                  const SizedBox(width: 8),
+                  _buildFolderChip('Архив'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -391,325 +644,48 @@ class _ChatListScreenState extends State<ChatListScreen>
                   },
                   child: NotificationListener<ScrollNotification>(
                     onNotification: _onStoriesScrollNotification,
-                    child: CustomScrollView(
-                      controller: _scrollController,
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: ClipRect(
-                            clipBehavior: Clip.hardEdge,
-                            child: AnimatedSize(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutCubic,
-                              alignment: Alignment.topCenter,
-                              child: _shouldCollapseSearch
-                                  ? const SizedBox(
-                                      width: double.infinity,
-                                      height: 0,
-                                    )
-                                  : Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        Padding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                            20,
-                                            12,
-                                            20,
-                                            2,
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  if (_pullRatio < 0.8)
-                                                    Opacity(
-                                                      opacity: 1.0 - _pullRatio,
-                                                      child: Container(
-                                                        width:
-                                                            50 *
-                                                            (1.0 - _pullRatio),
-                                                        height: 32,
-                                                        margin:
-                                                            const EdgeInsets.only(
-                                                              right: 8,
-                                                            ),
-                                                        child: Stack(
-                                                          children: [
-                                                            _buildFoldedStory(
-                                                              'https://i.pravatar.cc/150?u=dasha',
-                                                              0,
-                                                            ),
-                                                            _buildFoldedStory(
-                                                              'https://i.pravatar.cc/150?u=mastika',
-                                                              1,
-                                                            ),
-                                                            _buildFoldedStory(
-                                                              'https://i.pravatar.cc/150?u=stas',
-                                                              2,
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  Text(
-                                                    _sessionState ==
-                                                            SessionState.online
-                                                        ? (_profile
-                                                                  ?.firstName ??
-                                                              'Чат')
-                                                        : 'Подключение...',
-                                                    style: TextStyle(
-                                                      color: cs.onSurface,
-                                                      fontSize: 20,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontFamily: 'Outfit',
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              PopupMenuButton<int>(
-                                                icon: Icon(
-                                                  Symbols.more_vert,
-                                                  color: cs.outline,
-                                                  weight: 400,
-                                                ),
-                                                offset: const Offset(0, 48),
-                                                elevation: 4,
-                                                color: cs.surfaceContainerHigh,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(16),
-                                                ),
-                                                itemBuilder: (context) => [
-                                                  _buildPopupMenuItem(
-                                                    1,
-                                                    'Кнопка 1',
-                                                    Symbols.settings,
-                                                  ),
-                                                  _buildPopupMenuItem(
-                                                    2,
-                                                    'Кнопка 2',
-                                                    Symbols.notifications,
-                                                  ),
-                                                  _buildPopupMenuItem(
-                                                    3,
-                                                    'Кнопка 3',
-                                                    Symbols.shield,
-                                                  ),
-                                                  _buildPopupMenuItem(
-                                                    4,
-                                                    'Кнопка 4',
-                                                    Symbols.info,
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          height: 96 * _pullRatio,
-                                          child: Opacity(
-                                            opacity: _pullRatio,
-                                            child: ListView(
-                                              scrollDirection: Axis.horizontal,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 20,
-                                                  ),
-                                              children: [
-                                                _buildStoryItem(
-                                                  'Даша',
-                                                  'https://i.pravatar.cc/150?u=dasha',
-                                                  true,
-                                                ),
-                                                _buildStoryItem(
-                                                  'Мастика',
-                                                  'https://i.pravatar.cc/150?u=mastika',
-                                                  false,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        if (_showCacheWarning)
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                              20,
-                                              0,
-                                              20,
-                                              8,
-                                            ),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 8,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: cs.errorContainer
-                                                    .withOpacity(0.3),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: cs.error.withOpacity(
-                                                    0.2,
-                                                  ),
-                                                ),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Symbols.cloud_off,
-                                                    size: 18,
-                                                    color: cs.error,
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  const Expanded(
-                                                    child: Text(
-                                                      'Ошибка соединения, сейчас вы смотрите КЕШ',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        Padding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                            20,
-                                            2,
-                                            20,
-                                            8,
-                                          ),
-                                          child: Container(
-                                            height: 44,
-                                            decoration: BoxDecoration(
-                                              color: cs.surfaceContainerHighest,
-                                              borderRadius:
-                                                  BorderRadius.circular(50),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  Symbols.search,
-                                                  color: cs.outline,
-                                                  size: 20,
-                                                  weight: 400,
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: TextField(
-                                                    style: TextStyle(
-                                                      color: cs.onSurface,
-                                                      fontSize: 15,
-                                                    ),
-                                                    decoration: InputDecoration(
-                                                      hintText: 'Поиск',
-                                                      hintStyle: TextStyle(
-                                                        color: cs.outline,
-                                                        fontSize: 15,
-                                                      ),
-                                                      border: InputBorder.none,
-                                                      isDense: true,
-                                                      contentPadding:
-                                                          EdgeInsets.zero,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildPinnedChatsHeader(context),
+                        Expanded(
+                          child: CustomScrollView(
+                            controller: _scrollController,
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
                             ),
-                          ),
-                        ),
-                        SliverPadding(
-                          padding: EdgeInsets.zero,
-                          sliver: SliverToBoxAdapter(
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeOutCubic,
-                              height: 48,
-                              child: ScrollConfiguration(
-                                behavior: ScrollConfiguration.of(context)
-                                    .copyWith(
-                                      dragDevices: {
-                                        ui.PointerDeviceKind.touch,
-                                        ui.PointerDeviceKind.mouse,
-                                        ui.PointerDeviceKind.trackpad,
-                                      },
-                                    ),
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 4,
-                                  ),
-                                  physics: const BouncingScrollPhysics(),
-                                  children: [
-                                    _buildFolderChip('Все чаты'),
-                                    const SizedBox(width: 8),
-                                    _buildFolderChip('Контакты'),
-                                    const SizedBox(width: 8),
-                                    _buildFolderChip('Пидоры'),
-                                    const SizedBox(width: 8),
-                                    _buildFolderChip('Каналы'),
-                                    const SizedBox(width: 8),
-                                    _buildFolderChip('Группы'),
-                                    const SizedBox(width: 8),
-                                    _buildFolderChip('Боты'),
-                                    const SizedBox(width: 8),
-                                    _buildFolderChip('Избранное'),
-                                    const SizedBox(width: 8),
-                                    _buildFolderChip('Архив'),
-                                  ],
+                            slivers: [
+                              SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    if (_isInitialLoading) {
+                                      return _buildChatShimmer();
+                                    }
+                                    final chat = _chats[index];
+                                    return _buildChatItem(
+                                      chat.id.toString(),
+                                      chat.title ?? 'Чат',
+                                      chat.lastMsgText ?? '',
+                                      _formatTime(chat.lastMsgTime),
+                                      (chat.iconUrl != null &&
+                                              chat.iconUrl!.isNotEmpty)
+                                          ? chat.iconUrl!
+                                          : '',
+                                      isOnline: chat.isOnline,
+                                      unreadCount: chat.unreadCount,
+                                      isMuted: chat.dontDisturbUntil > 0,
+                                    );
+                                  },
+                                  childCount: _isInitialLoading
+                                      ? 10
+                                      : _chats.length,
                                 ),
                               ),
-                            ),
+                              const SliverPadding(
+                                padding: EdgeInsets.only(bottom: 100),
+                              ),
+                            ],
                           ),
-                        ),
-                        SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              if (_isInitialLoading) {
-                                return _buildChatShimmer();
-                              }
-                              final chat = _chats[index];
-                              return _buildChatItem(
-                                chat.id.toString(),
-                                chat.title ?? 'Чат',
-                                chat.lastMsgText ?? '',
-                                _formatTime(chat.lastMsgTime),
-                                (chat.iconUrl != null &&
-                                        chat.iconUrl!.isNotEmpty)
-                                    ? chat.iconUrl!
-                                    : '',
-                                isOnline: chat.isOnline,
-                                unreadCount: chat.unreadCount,
-                                isMuted: chat.dontDisturbUntil > 0,
-                              );
-                            },
-                            childCount: _isInitialLoading ? 10 : _chats.length,
-                          ),
-                        ),
-                        const SliverPadding(
-                          padding: EdgeInsets.only(bottom: 100),
                         ),
                       ],
                     ),
