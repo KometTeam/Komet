@@ -199,8 +199,8 @@ class Api {
     logger.i('Сессия: ${state.name}');
   }
 
-  void _onDataReceived(Uint8List data) {
-    for (final packet in _receiver.feed(data)) {
+  Future<void> _onDataReceived(Uint8List data) async {
+    await for (final packet in _receiver.feed(data)) {
       _dispatcher.dispatch(packet);
     }
   }

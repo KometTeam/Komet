@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'backend/api.dart';
 import 'backend/modules/account.dart';
+import 'backend/modules/messages.dart';
 import 'core/storage/app_database.dart';
 import 'core/storage/token_storage.dart';
 import 'frontend/screens/auth/login_screen.dart';
@@ -10,6 +11,7 @@ import 'frontend/screens/chats/chat_list_screen.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
+final messagesModule = MessagesModule(api);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

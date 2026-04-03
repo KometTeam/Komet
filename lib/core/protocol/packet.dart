@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:isolate';
 import 'package:dart_lz4/dart_lz4.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
@@ -69,71 +70,75 @@ Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
 }
 
 /// Распаковка пакета от сервера
-Packet unpackPacket(Uint8List packet) {
-  // Для удобства расшифровки пакета переводим в ByteData
-  ByteData packetData = ByteData.view(
-    packet.buffer,
-    packet.offsetInBytes,
-    packet.lengthInBytes,
-  );
+Future<Packet> unpackPacket(Uint8List packet) async {
+  return Isolate.run(() {
+    // Для удобства расшифровки пакета переводим в ByteData
+    ByteData packetData = ByteData.view(
+      packet.buffer,
+      packet.offsetInBytes,
+      packet.lengthInBytes,
+    );
 
-  // Объяснение каждой переменной смотри в классе Packet
+    // API версия и cmd представляют из себя 8 битные числа
+    final apiVer = packetData.getUint8(0) & 0xFF;
+    final cmd = packetData.getUint8(1) & 0xFF;
 
-  // API версия и cmd представляют из себя 8 битные числа
-  final apiVer = packetData.getUint8(0) & 0xFF;
-  final cmd = packetData.getUint8(1) & 0xFF;
+    // Sequence и OPCode представляют из себя 16 битные числа
+    final seq = packetData.getUint16(2) & 0xFFFF;
+    final opcode = packetData.getUint16(4) & 0xFFFF;
 
-  // Sequence и OPCode представляют из себя 16 битные числа
-  final seq = packetData.getUint16(2) & 0xFFFF;
-  final opcode = packetData.getUint16(4) & 0xFFFF;
+    // После базовых переменных идет длина пакета, является 32 битным числом
+    final packedLen = packetData.getUint32(6);
 
-  // После базовых переменных идет длина пакета, является 32 битным числом
-  final packedLen = packetData.getUint32(6);
+    // Compression flag показывает, сжат ли payload
+    final compFlag = packedLen >> 24;
 
-  // Compression flag показывает, сжат ли payload
-  final compFlag = packedLen >> 24;
-  
-  // Длина payload'а 
-  final payloadLength = packedLen & 0xFFFFFF;
+    // Длина payload'а
+    final payloadLength = packedLen & 0xFFFFFF;
 
-  // Байты payload'а, могут быть сжаты LZ4
-  var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
+    // Байты payload'а, могут быть сжаты LZ4
+    var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
 
-  dynamic payload;
-  
-  if (payloadBytes.isNotEmpty) {
-    if (compFlag != 0) {
-      try {
-        payloadBytes = lz4Decompress(
-          payloadBytes,
-          decompressedSize: _maxDecompressedSize,
-        );
-        
-      } catch (_) {
+    dynamic payload;
+
+    if (payloadBytes.isNotEmpty) {
+      if (compFlag != 0) {
         try {
-          payloadBytes = _lz4BlockDecompress(payloadBytes, _maxDecompressedSize);
-        } catch (e) {
-          logger.e("LZ4 decompression error: $e", error: e);
+          payloadBytes = lz4Decompress(
+            payloadBytes,
+            decompressedSize: _maxDecompressedSize,
+          );
+        } catch (_) {
+          try {
+            payloadBytes = _lz4BlockDecompress(
+              payloadBytes,
+              _maxDecompressedSize,
+            );
+          } catch (e) {
+            // В изоляте нельзя использовать логгер, который пишет в терминал через зависимости Flutter,
+            // но простой print или throw сработает
+            print("LZ4 decompression error: $e");
+          }
+        }
+      }
+
+      try {
+        payload = msgpack.deserialize(payloadBytes);
+      } catch (e) {
+        if (payloadBytes.isNotEmpty) {
+          print("MsgPack deserialization error: $e");
         }
       }
     }
 
-    try {
-      payload = msgpack.deserialize(payloadBytes);
-    } catch (e) { 
-      if (payloadBytes.isNotEmpty) {
-        logger.e("MsgPack deserialization error: $e", error: e);
-      }
-    }
-  }
-
-  return Packet(
-    api: apiVer,
-    cmd: cmd,
-    seq: seq,
-    opcode: opcode,
-    payload: payload,
-  );
+    return Packet(
+      api: apiVer,
+      cmd: cmd,
+      seq: seq,
+      opcode: opcode,
+      payload: payload,
+    );
+  });
 }
 
 /// LZ4 block декомпрессия (без frame-заголовка).

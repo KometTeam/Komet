@@ -735,7 +735,11 @@ class _ChatListScreenState extends State<ChatListScreen>
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ChatScreen(name: name, imageUrl: imageUrl),
+              builder: (context) => ChatScreen(
+                chatId: int.parse(id),
+                name: name,
+                imageUrl: imageUrl,
+              ),
             ),
           );
         }

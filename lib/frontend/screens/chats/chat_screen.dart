@@ -1,31 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'dart:ui';
+import '../../../main.dart';
+import '../../../core/storage/app_database.dart';
 
 class ChatScreen extends StatefulWidget {
+  final int chatId;
   final String name;
   final String imageUrl;
 
-  const ChatScreen({super.key, required this.name, required this.imageUrl});
+  const ChatScreen({
+    super.key,
+    required this.chatId,
+    required this.name,
+    required this.imageUrl,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
   bool _hasText = false;
+  bool _isLoading = true;
+  late AnimationController _shimmerController;
 
   @override
   void initState() {
     super.initState();
     _messageController.addListener(_onTextChanged);
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final activeProfile = await AppDatabase.loadActiveProfile();
+      final myId = activeProfile?.id ?? 0;
+      await messagesModule.fetchHistory(myId, widget.chatId);
+    } catch (e) {
+      debugPrint('Background history fetch failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
+    _shimmerController.dispose();
     super.dispose();
   }
 
@@ -42,9 +74,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B1B1B).withOpacity(0.8),
+        backgroundColor: const Color(0xFF1B1B1B),
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
@@ -77,21 +108,17 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        widget.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Outfit',
-                        ),
-                      ),
-                    ],
+                  Text(
+                    widget.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Outfit',
+                    ),
                   ),
                   const Text(
-                    'Connecting...',
+                    'last seen recently',
                     style: TextStyle(
                       color: Colors.grey,
                       fontSize: 12,
@@ -118,35 +145,109 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          Positioned.fill(
-            child: widget.imageUrl.isNotEmpty
-                ? Image.network(
-                    widget.imageUrl,
-                    fit: BoxFit.cover,
-                    opacity: const AlwaysStoppedAnimation(0.4),
-                  )
-                : Image.network(
-                    'https://images.unsplash.com/photo-1579546929518-9e396f3cc809',
-                    fit: BoxFit.cover,
-                    opacity: const AlwaysStoppedAnimation(0.4),
-                  ),
+          Expanded(
+            child: _isLoading
+                ? _buildShimmerLoading()
+                : const SizedBox.shrink(),
           ),
-          const Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black87],
-                ),
-              ),
-            ),
-          ),
-          Column(children: [const Spacer(), _buildInputArea(context)]),
+          _buildInputArea(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildShimmerLoading() {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        final opacity = 0.3 + (0.4 * _shimmerController.value);
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: 8,
+          physics: const NeverScrollableScrollPhysics(),
+          itemBuilder: (context, index) {
+            final hasImage = index % 3 == 0;
+            final hasReactions = index % 2 == 0;
+            final width1 = 60.0 + (index * 15 % 50);
+            final width2 = 120.0 + (index * 25 % 80);
+
+            return Opacity(
+              opacity: opacity,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF2B2B2B),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: width1,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2B2B2B),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            width: width2,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2B2B2B),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          if (hasImage) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2B2B2B),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ],
+                          if (hasReactions) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: List.generate(
+                                3,
+                                (i) => Container(
+                                  width: 32,
+                                  height: 16,
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF2B2B2B),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -160,7 +261,6 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
                 constraints: const BoxConstraints(
                   minHeight: 54,
                   maxHeight: 180,
@@ -173,10 +273,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     width: 0.5,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 0,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -205,7 +302,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           border: InputBorder.none,
                           isDense: true,
-                          contentPadding: EdgeInsets.zero,
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 14,
+                          ), // Выравниваем по Y
                         ),
                       ),
                     ),
