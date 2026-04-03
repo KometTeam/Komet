@@ -52,6 +52,26 @@ class Packet {
       'Packet(ver=$api cmd=$cmd seq=$seq opcode=$opcode payload=$payload)';
 }
 
+class PacketError implements Exception {
+  final String message;
+  const PacketError(this.message);
+  @override
+  String toString() => message;
+}
+
+String messageFromErrorPayload(dynamic payload) {
+  if (payload is Map) {
+    for (final key in ['localizedMessage', 'message', 'title']) {
+      final v = payload[key];
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    }
+    return 'Неизвестная ошибка';
+  }
+  if (payload == null) return 'Неизвестная ошибка';
+  final s = payload.toString();
+  return s.isNotEmpty ? s : 'Неизвестная ошибка';
+}
+
 /// Упаковка пакета для отправки на сервер
 Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
   final header = ByteData(headerSize);
