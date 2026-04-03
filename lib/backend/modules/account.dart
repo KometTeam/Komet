@@ -5,6 +5,14 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import 'chats.dart';
+import 'contacts.dart';
+
+class ServerException implements Exception {
+  final String message;
+  const ServerException(this.message);
+  @override
+  String toString() => message;
+}
 
 enum AuthRequestType {
   startAuth('START_AUTH'),
@@ -115,11 +123,13 @@ class LoginResult {
   final ProfileData profile;
   final String? updatedToken;
   final int serverTime;
+  final Map<dynamic, dynamic> raw;
 
   const LoginResult({
     required this.profile,
     required this.updatedToken,
     required this.serverTime,
+    required this.raw,
   });
 }
 
@@ -131,14 +141,12 @@ class AccountModule {
   Future<RequestCodeResult> requestCode(
     String phone, {
     String language = 'ru',
-  }) =>
-      _requestCodeInternal(phone, AuthRequestType.startAuth, language);
+  }) => _requestCodeInternal(phone, AuthRequestType.startAuth, language);
 
   Future<RequestCodeResult> resendCode(
     String phone, {
     String language = 'ru',
-  }) =>
-      _requestCodeInternal(phone, AuthRequestType.resend, language);
+  }) => _requestCodeInternal(phone, AuthRequestType.resend, language);
 
   Future<VerifyCodeResult> verifyCode(String code, String token) async {
     _ensureOnline();
@@ -157,7 +165,9 @@ class AccountModule {
 
     final data = packet.payload;
     if (data is! Map) {
-      throw Exception('verifyCode: неожиданный тип payload: ${data.runtimeType}');
+      throw Exception(
+        'verifyCode: неожиданный тип payload: ${data.runtimeType}',
+      );
     }
 
     final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
@@ -181,7 +191,8 @@ class AccountModule {
   }) async {
     _ensureOnline();
 
-    final resolvedAccountId = accountId ?? await TokenStorage.getActiveAccountId();
+    final resolvedAccountId =
+        accountId ?? await TokenStorage.getActiveAccountId();
     if (resolvedAccountId == null) {
       throw StateError('login: нет активного аккаунта');
     }
@@ -191,13 +202,7 @@ class AccountModule {
       throw StateError('login: нет токена для аккаунта $resolvedAccountId');
     }
 
-    final resolvedSyncParams =
-        syncParams ?? await LoginSyncParams.fromDatabase(resolvedAccountId);
-
-    final requestPayload = _buildLoginPayload(authToken, resolvedSyncParams);
-
-    logger.i('LOGIN opcode=${Opcode.login} '
-        'account=$resolvedAccountId warm=${resolvedSyncParams != null}');
+    final requestPayload = _buildLoginPayload(authToken, syncParams);
 
     final packet = await _api.sendRequest(Opcode.login, requestPayload);
 
@@ -262,7 +267,9 @@ class AccountModule {
 
     final data = packet.payload;
     if (data is! Map) {
-      throw Exception('checkPassword: неожиданный тип payload: ${data.runtimeType}');
+      throw Exception(
+        'checkPassword: неожиданный тип payload: ${data.runtimeType}',
+      );
     }
 
     if (data['error'] != null) {
@@ -310,7 +317,8 @@ class AccountModule {
   ) {
     final payload = <dynamic, dynamic>{
       'token': token,
-      'interactive': true
+      'interactive': true,
+      if (_api.userAgent != null) 'userAgent': _api.userAgent,
     };
 
     if (sync != null) {
@@ -342,7 +350,6 @@ class AccountModule {
     final updatedToken = data['token'] as String?;
     if (updatedToken != null) {
       await TokenStorage.saveToken(updatedToken, accountId);
-      logger.i('Обновлённый токен аккаунта $accountId сохранён');
     }
 
     final profileMap = data['profile'];
@@ -356,15 +363,16 @@ class AccountModule {
     final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
     await AppDatabase.saveProfile(profile);
     await AppDatabase.setActiveAccount(profile.id);
-    logger.i('Профиль сохранён: id=${profile.id}, name=${profile.firstName}');
 
     await _saveSyncState(data, serverTime, profile.id);
+    await ContactsModule.syncFromLoginPayload(data, profile.id);
     await ChatsModule.syncFromLoginPayload(data, profile.id, profile.id);
 
     return LoginResult(
       profile: profile,
       updatedToken: updatedToken,
       serverTime: serverTime,
+      raw: data,
     );
   }
 
@@ -415,7 +423,9 @@ class AccountModule {
 
     final data = packet.payload;
     if (data is! Map) {
-      throw Exception('requestCode: неожиданный тип payload: ${data.runtimeType}');
+      throw Exception(
+        'requestCode: неожиданный тип payload: ${data.runtimeType}',
+      );
     }
 
     final token = data['token'];
@@ -439,8 +449,8 @@ class AccountModule {
     if (packet.isError) {
       final errMsg = packet.payload is Map
           ? (packet.payload as Map)['message'] ?? packet.payload.toString()
-          : packet.payload?.toString() ?? 'unknown error';
-      throw Exception('$method: ошибка от сервера — $errMsg');
+          : packet.payload?.toString() ?? 'Неизвестная ошибка';
+      throw ServerException(errMsg.toString());
     }
   }
 }
