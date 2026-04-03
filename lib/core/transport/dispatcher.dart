@@ -68,7 +68,9 @@ class PacketDispatcher {
       }
 
       if (packet.isError) {
-        completer.completeError(packet);
+        completer.completeError(
+          PacketError(messageFromErrorPayload(packet.payload)),
+        );
       } else {
         completer.complete(packet);
       }

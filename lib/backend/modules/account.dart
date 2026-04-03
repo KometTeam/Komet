@@ -7,13 +7,6 @@ import '../../core/utils/logger.dart';
 import 'chats.dart';
 import 'contacts.dart';
 
-class ServerException implements Exception {
-  final String message;
-  const ServerException(this.message);
-  @override
-  String toString() => message;
-}
-
 enum AuthRequestType {
   startAuth('START_AUTH'),
   resend('RESEND'),
@@ -447,10 +440,7 @@ class AccountModule {
 
   void _checkPacketError(Packet packet, String method) {
     if (packet.isError) {
-      final errMsg = packet.payload is Map
-          ? (packet.payload as Map)['message'] ?? packet.payload.toString()
-          : packet.payload?.toString() ?? 'Неизвестная ошибка';
-      throw ServerException(errMsg.toString());
+      throw PacketError(messageFromErrorPayload(packet.payload));
     }
   }
 }

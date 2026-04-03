@@ -306,8 +306,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                             _errorMessage!,
                             style: TextStyle(
                               color: cs.error,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              height: 1.35,
                             ),
                           ),
                         ),
