@@ -1,5 +1,41 @@
 import '../../core/storage/app_database.dart';
 
+class CachedContact {
+  final int id;
+  final int accountId;
+  final String firstName;
+  final String? lastName;
+  final int phone;
+  final int? photoId;
+  final String? baseUrl;
+  final String? baseRawUrl;
+  final int updateTime;
+
+  const CachedContact({
+    required this.id,
+    required this.accountId,
+    required this.firstName,
+    this.lastName,
+    required this.phone,
+    this.photoId,
+    this.baseUrl,
+    this.baseRawUrl,
+    required this.updateTime,
+  });
+
+  factory CachedContact.fromDbRow(Map<String, dynamic> row) => CachedContact(
+    id: row['id'] as int,
+    accountId: row['account_id'] as int,
+    firstName: row['first_name'] as String,
+    lastName: row['last_name'] as String?,
+    phone: row['phone'] as int,
+    photoId: row['photo_id'] as int?,
+    baseUrl: row['base_url'] as String?,
+    baseRawUrl: row['base_raw_url'] as String?,
+    updateTime: row['update_time'] as int,
+  );
+}
+
 class ContactsModule {
   static Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
@@ -17,6 +53,11 @@ class ContactsModule {
     if (rows.isNotEmpty) {
       await AppDatabase.saveContacts(rows);
     }
+  }
+
+  static Future<List<CachedContact>> getContacts(int accountId) async {
+    final rows = await AppDatabase.loadContacts(accountId);
+    return rows.map(CachedContact.fromDbRow).toList();
   }
 
   static Map<String, dynamic>? _parseContact(
