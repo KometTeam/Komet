@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
 import 'devices_screen.dart';
+import 'security_screen.dart';
+import 'spoof_screen.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -75,9 +77,29 @@ class _SettingsTabState extends State<SettingsTab> {
                       icon: Symbols.notifications_active,
                       label: 'Уведомления и звук',
                     ),
-                    const _SettingsItem(
+                    _SettingsItem(
+                      icon: Symbols.shield_lock,
+                      label: 'Подделка данных',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SpoofScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsItem(
                       icon: Symbols.lock,
                       label: 'Безопасность',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SecurityScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _SettingsItem(
                       icon: Symbols.devices,
