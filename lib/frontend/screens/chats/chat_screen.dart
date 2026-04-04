@@ -104,18 +104,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B1B1B),
+        backgroundColor: cs.surfaceContainerHigh,
+        foregroundColor: cs.onSurface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
+        iconTheme: IconThemeData(color: cs.onSurface),
         leading: IconButton(
-          icon: const Icon(
-            Symbols.arrow_back,
-            color: Colors.white,
-            weight: 400,
-          ),
+          icon: const Icon(Symbols.arrow_back, weight: 400),
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
@@ -129,10 +128,13 @@ class _ChatScreenState extends State<ChatScreen>
             else
               CircleAvatar(
                 radius: 18,
-                backgroundColor: Colors.blueGrey,
+                backgroundColor: cs.primaryContainer,
                 child: Text(
                   widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(
+                    color: cs.onPrimaryContainer,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             const SizedBox(width: 12),
@@ -142,17 +144,17 @@ class _ChatScreenState extends State<ChatScreen>
                 children: [
                   Text(
                     widget.name,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       fontFamily: 'Outfit',
                     ),
                   ),
-                  const Text(
+                  Text(
                     'last seen recently',
                     style: TextStyle(
-                      color: Colors.grey,
+                      color: cs.onSurfaceVariant,
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
                     ),
@@ -164,15 +166,11 @@ class _ChatScreenState extends State<ChatScreen>
         ),
         actions: [
           IconButton(
-            icon: const Icon(Symbols.call, color: Colors.white, weight: 400),
+            icon: const Icon(Symbols.call, weight: 400),
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(
-              Symbols.more_vert,
-              color: Colors.white,
-              weight: 400,
-            ),
+            icon: const Icon(Symbols.more_vert, weight: 400),
             onPressed: () {},
           ),
         ],
@@ -196,6 +194,8 @@ class _ChatScreenState extends State<ChatScreen>
     return AnimatedBuilder(
       animation: _shimmerController,
       builder: (context, child) {
+        final cs = Theme.of(context).colorScheme;
+        final placeholder = cs.surfaceContainerHighest;
         final opacity = 0.3 + (0.4 * _shimmerController.value);
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -217,8 +217,8 @@ class _ChatScreenState extends State<ChatScreen>
                     Container(
                       width: 36,
                       height: 36,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF2B2B2B),
+                      decoration: BoxDecoration(
+                        color: placeholder,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -231,7 +231,7 @@ class _ChatScreenState extends State<ChatScreen>
                             width: width1,
                             height: 10,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2B2B2B),
+                              color: placeholder,
                               borderRadius: BorderRadius.circular(5),
                             ),
                           ),
@@ -240,7 +240,7 @@ class _ChatScreenState extends State<ChatScreen>
                             width: width2,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2B2B2B),
+                              color: placeholder,
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
@@ -250,7 +250,7 @@ class _ChatScreenState extends State<ChatScreen>
                               width: double.infinity,
                               height: 120,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF2B2B2B),
+                                color: placeholder,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
@@ -265,7 +265,7 @@ class _ChatScreenState extends State<ChatScreen>
                                   height: 16,
                                   margin: const EdgeInsets.only(right: 6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2B2B2B),
+                                    color: placeholder,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
@@ -286,6 +286,8 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildInputArea(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -300,10 +302,13 @@ class _ChatScreenState extends State<ChatScreen>
                   maxHeight: 180,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1B1B1B).withOpacity(0.9),
+                  color: Color.alphaBlend(
+                    cs.surfaceContainerHighest.withValues(alpha: 0.92),
+                    cs.surface,
+                  ),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.1),
+                    color: cs.outlineVariant.withValues(alpha: 0.5),
                     width: 0.5,
                   ),
                 ),
@@ -313,7 +318,7 @@ class _ChatScreenState extends State<ChatScreen>
                   children: [
                     Icon(
                       Symbols.face,
-                      color: Colors.white.withOpacity(0.7),
+                      color: mutedIcon,
                       size: 24,
                       weight: 400,
                     ),
@@ -321,24 +326,24 @@ class _ChatScreenState extends State<ChatScreen>
                     Expanded(
                       child: TextField(
                         controller: _messageController,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: cs.onSurface,
                           fontSize: 16,
                         ),
                         maxLines: null,
                         keyboardType: TextInputType.multiline,
                         textAlignVertical: TextAlignVertical.center,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Message',
                           hintStyle: TextStyle(
-                            color: Colors.grey,
+                            color: cs.onSurfaceVariant,
                             fontSize: 16,
                           ),
                           border: InputBorder.none,
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             vertical: 14,
-                          ), // Выравниваем по Y
+                          ),
                         ),
                       ),
                     ),
@@ -354,7 +359,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 padding: const EdgeInsets.only(left: 12),
                                 child: Icon(
                                   Symbols.attachment,
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: mutedIcon,
                                   size: 24,
                                   weight: 400,
                                 ),
@@ -370,13 +375,13 @@ class _ChatScreenState extends State<ChatScreen>
               width: 54,
               height: 54,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: Color(0xFF2B2B2B),
+              decoration: BoxDecoration(
+                color: _hasText ? cs.primary : cs.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 _hasText ? Symbols.send : Symbols.mic,
-                color: Colors.white,
+                color: _hasText ? cs.onPrimary : cs.onSurface,
                 size: 24,
                 weight: 400,
               ),

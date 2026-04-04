@@ -201,7 +201,7 @@ class _DevicesScreenState extends State<DevicesScreen>
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF15151D),
+                color: cs.surfaceContainerHighest,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: cs.onSurface.withValues(alpha: 0.1),
