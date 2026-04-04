@@ -502,14 +502,17 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         child: Stack(
                                           children: [
                                             _buildFoldedStory(
+                                              cs,
                                               'https://i.pravatar.cc/150?u=dasha',
                                               0,
                                             ),
                                             _buildFoldedStory(
+                                              cs,
                                               'https://i.pravatar.cc/150?u=mastika',
                                               1,
                                             ),
                                             _buildFoldedStory(
+                                              cs,
                                               'https://i.pravatar.cc/150?u=stas',
                                               2,
                                             ),
@@ -1316,7 +1319,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                           Symbols.check,
                           color: cs.onPrimary,
                           size: 14,
-                          weight: 600,
                         ),
                       ),
                     )
@@ -1471,8 +1473,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                 icon,
                 color: isSelected ? cs.onPrimary : cs.onSurface,
                 size: 20,
-                weight: 400,
-                fill: isSelected ? 1.0 : 0.0,
               ),
               AnimatedContainer(
                 duration: animDur,
@@ -1583,13 +1583,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildFoldedStory(String imageUrl, int index) {
+  Widget _buildFoldedStory(ColorScheme cs, String imageUrl, int index) {
     return Positioned(
       left: index * 12.0,
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.black, width: 2),
+          border: Border.all(color: cs.surface, width: 2),
         ),
         child: CircleAvatar(
           radius: 12,

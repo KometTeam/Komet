@@ -100,7 +100,7 @@ class KometAppState extends State<KometApp> {
     }
   }
 
-  ColorScheme _adjustScheme(ColorScheme base) {
+  ColorScheme _adjustDarkScheme(ColorScheme base) {
     return base.copyWith(
       surface: Color.alphaBlend(
         base.primary.withValues(alpha: 0.05),
@@ -117,29 +117,63 @@ class KometAppState extends State<KometApp> {
     );
   }
 
+  ColorScheme _adjustLightScheme(ColorScheme base) {
+    return base.copyWith(
+      surface: Color.alphaBlend(
+        base.primary.withValues(alpha: 0.06),
+        const Color(0xFFF5F5FA),
+      ),
+      surfaceContainerHigh: Color.alphaBlend(
+        base.primary.withValues(alpha: 0.08),
+        const Color(0xFFEAEAF2),
+      ),
+      surfaceContainerHighest: Color.alphaBlend(
+        base.primary.withValues(alpha: 0.11),
+        const Color(0xFFDEDEE8),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final baseScheme =
+        final lightBase =
+            lightDynamic ??
+            ColorScheme.fromSeed(
+              seedColor: _fallbackSeed,
+              brightness: Brightness.light,
+            );
+        final darkBase =
             darkDynamic ??
             ColorScheme.fromSeed(
               seedColor: _fallbackSeed,
               brightness: Brightness.dark,
             );
 
-        final darkScheme = _adjustScheme(baseScheme);
+        final lightScheme = _adjustLightScheme(lightBase);
+        final darkScheme = _adjustDarkScheme(darkBase);
 
         return MaterialApp(
           title: 'Komet',
           debugShowCheckedModeBanner: false,
           locale: _locale,
+          themeMode: ThemeMode.system,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: ThemeData(
             useMaterial3: true,
+            colorScheme: lightScheme,
+            textTheme: GoogleFonts.interTextTheme(
+              ThemeData(brightness: Brightness.light).textTheme,
+            ),
+          ),
+          darkTheme: ThemeData(
+            useMaterial3: true,
             colorScheme: darkScheme,
-            textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+            textTheme: GoogleFonts.interTextTheme(
+              ThemeData(brightness: Brightness.dark).textTheme,
+            ),
           ),
           navigatorKey: KometApp.navigatorKey,
           home: const _StartupScreen(),
