@@ -201,8 +201,21 @@ class _ChatListScreenState extends State<ChatListScreen>
     final p = await AppDatabase.loadActiveProfile();
     if (p != null) {
       final chats = await ChatsModule.getChats(p.id);
-      final folders = await FoldersModule.loadFolders(p.id);
+      var folders = await FoldersModule.loadFolders(p.id);
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
+
+      final allChatsFolder = ChatFolder(
+        id: 'all.chat.folder',
+        title: 'Все чаты',
+        filters: [],
+        hideEmpty: false,
+        widgets: [],
+      );
+
+      if (!folders.any((f) => FoldersModule.isAllChatsFolder(f))) {
+        folders = [allChatsFolder, ...folders];
+      }
+
       final pageCount = folders.isEmpty ? 1 : folders.length;
       _syncFolderChatScrollControllersForCount(pageCount);
       if (mounted) {
@@ -865,40 +878,75 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ),
             ),
           ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            height: 48,
-            color: cs.surface,
-            child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(context).copyWith(
-                dragDevices: {
-                  ui.PointerDeviceKind.touch,
-                  ui.PointerDeviceKind.mouse,
-                  ui.PointerDeviceKind.trackpad,
-                },
-              ),
-              child: _showFoldersShimmer
-                  ? _buildFolderStripShimmer(cs)
-                  : ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 4,
+          if (_folders.length > 1)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              height: 48,
+              color: cs.surface,
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {
+                    ui.PointerDeviceKind.touch,
+                    ui.PointerDeviceKind.mouse,
+                    ui.PointerDeviceKind.trackpad,
+                  },
+                ),
+                child: _showFoldersShimmer
+                    ? _buildFolderStripShimmer(cs)
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final availableWidth = constraints.maxWidth - 40;
+                          final folderCount = _folders.length;
+                          final minWidthPerFolder = 80.0;
+                          final totalMinWidth =
+                              folderCount * minWidthPerFolder +
+                              (folderCount - 1) * 8;
+                          final needsScroll = totalMinWidth > availableWidth;
+
+                          if (needsScroll) {
+                            return ListView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 4,
+                              ),
+                              physics: const BouncingScrollPhysics(),
+                              children: [
+                                for (var i = 0; i < _folders.length; i++) ...[
+                                  if (i > 0) const SizedBox(width: 8),
+                                  _buildFolderChip(
+                                    _folderChipLabel(_folders[i]),
+                                    folderId: _folders[i].id,
+                                  ),
+                                ],
+                              ],
+                            );
+                          } else {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 4,
+                              ),
+                              child: Row(
+                                children: [
+                                  for (var i = 0; i < _folders.length; i++) ...[
+                                    if (i > 0) const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildFolderChip(
+                                        _folderChipLabel(_folders[i]),
+                                        folderId: _folders[i].id,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }
+                        },
                       ),
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        for (var i = 0; i < _folders.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          _buildFolderChip(
-                            _folderChipLabel(_folders[i]),
-                            folderId: _folders[i].id,
-                          ),
-                        ],
-                      ],
-                    ),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -907,6 +955,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   Widget _buildFolderChatPage(int pageIndex) {
     final chats = _chatsForPageIndex(pageIndex);
     final sc = _folderChatScrollControllers[pageIndex];
+    final cs = Theme.of(context).colorScheme;
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification n) {
         if (_currentNavIndex != 0) return false;
@@ -931,26 +980,39 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              if (_isInitialLoading) {
-                return _buildChatShimmer();
-              }
-              final chat = chats[index];
-              return _buildChatItem(
-                chat.id.toString(),
-                chat.title ?? 'Чат',
-                chat.lastMsgText ?? '',
-                _formatTime(chat.lastMsgTime),
-                (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
-                    ? chat.iconUrl!
-                    : '',
-                isOnline: chat.isOnline,
-                unreadCount: chat.unreadCount,
-                isMuted: chat.dontDisturbUntil > 0,
-              );
-            }, childCount: _isInitialLoading ? 10 : chats.length),
-          ),
+          if (chats.isEmpty && !_isInitialLoading)
+            SliverFillRemaining(
+              child: Center(
+                child: Text(
+                  'Кажется, тут пусто...',
+                  style: TextStyle(
+                    color: cs.onSurface.withOpacity(0.6),
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                if (_isInitialLoading) {
+                  return _buildChatShimmer();
+                }
+                final chat = chats[index];
+                return _buildChatItem(
+                  chat.id.toString(),
+                  chat.title ?? 'Чат',
+                  chat.lastMsgText ?? '',
+                  _formatTime(chat.lastMsgTime),
+                  (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                      ? chat.iconUrl!
+                      : '',
+                  isOnline: chat.isOnline,
+                  unreadCount: chat.unreadCount,
+                  isMuted: chat.dontDisturbUntil > 0,
+                );
+              }, childCount: _isInitialLoading ? 10 : chats.length),
+            ),
           SliverPadding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
