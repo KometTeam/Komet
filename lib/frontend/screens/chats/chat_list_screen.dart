@@ -17,9 +17,11 @@ import '../../../main.dart' show api;
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
+  final bool Function() allowPullOverscrollTop;
 
   const _StoriesScrollPhysics({
     required this.blockPositive,
+    required this.allowPullOverscrollTop,
     ScrollPhysics? parent,
   }) : super(parent: parent);
 
@@ -27,6 +29,7 @@ class _StoriesScrollPhysics extends BouncingScrollPhysics {
   _StoriesScrollPhysics applyTo(ScrollPhysics? ancestor) {
     return _StoriesScrollPhysics(
       blockPositive: blockPositive,
+      allowPullOverscrollTop: allowPullOverscrollTop,
       parent: buildParent(ancestor),
     );
   }
@@ -35,6 +38,11 @@ class _StoriesScrollPhysics extends BouncingScrollPhysics {
   double applyBoundaryConditions(ScrollMetrics position, double value) {
     if (blockPositive() && value > 0.0) {
       return value - max(0.0, position.pixels);
+    }
+    if (!allowPullOverscrollTop() &&
+        value < position.minScrollExtent &&
+        position.pixels <= position.minScrollExtent) {
+      return value - position.minScrollExtent;
     }
     return super.applyBoundaryConditions(position, value);
   }
@@ -69,6 +77,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   double _closeAnimBegin = 0.0;
   bool _storiesAnimClosing = false;
   bool _storiesDockedOpen = false;
+  bool _storiesOverscrollRevealArmed = true;
   DateTime _storiesRevealLayoutSettleUntil =
       DateTime.fromMillisecondsSinceEpoch(0);
   ProfileData? _profile;
@@ -111,6 +120,15 @@ class _ChatListScreenState extends State<ChatListScreen>
       return true;
     }
     return false;
+  }
+
+  bool _allowStoriesPullOverscrollTop() {
+    if (_storiesDockedOpen ||
+        _storiesRevealController.isAnimating ||
+        _pullRatio > 0) {
+      return true;
+    }
+    return _storiesOverscrollRevealArmed;
   }
 
   late AnimationController _shimmerController;
@@ -267,6 +285,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           _pullRatio = 0.0;
           _storiesDockedOpen = false;
           _storiesAnimClosing = false;
+          _storiesOverscrollRevealArmed = true;
         } else {
           _pullRatio = 1.0;
           _storiesDockedOpen = true;
@@ -320,6 +339,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         _pullRatio = 0.0;
         _storiesDockedOpen = false;
         _storiesAnimClosing = false;
+        _storiesOverscrollRevealArmed = true;
       });
       return;
     }
@@ -334,6 +354,15 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _onStoriesScrollNotification(ScrollNotification n) {
     if (_currentNavIndex != 0) return false;
     if (!_scrollController.hasClients) return false;
+
+    if (n is ScrollEndNotification) {
+      if (_scrollController.offset <= 0.5) {
+        setState(() {
+          _storiesOverscrollRevealArmed = true;
+        });
+      }
+      return false;
+    }
 
     if (n is OverscrollNotification && n.overscroll > 0) {
       if ((_storiesDockedOpen ||
@@ -375,6 +404,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
 
       if (offset < 0) {
+        if (!_allowStoriesPullOverscrollTop()) {
+          return;
+        }
         final dragRatio = (offset.abs() / 80.0).clamp(0.0, 1.0);
         if (_storiesRevealController.isAnimating) {
           return;
@@ -397,9 +429,16 @@ class _ChatListScreenState extends State<ChatListScreen>
         if (_storiesDockedOpen || _storiesRevealController.isAnimating) {
           return;
         }
-        if (_pullRatio > 0) {
+        final disarm = offset > 3 && _storiesOverscrollRevealArmed;
+        final clearPull = _pullRatio > 0;
+        if (disarm || clearPull) {
           setState(() {
-            _pullRatio = 0.0;
+            if (disarm) {
+              _storiesOverscrollRevealArmed = false;
+            }
+            if (clearPull) {
+              _pullRatio = 0.0;
+            }
           });
         }
       }
@@ -735,7 +774,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
           if (_scrollController.hasClients && _scrollController.offset <= 0) {
             if (pointerSignal.scrollDelta.dy < 0) {
-              _startStoriesAutoReveal(max(_pullRatio, 0.18));
+              if (_allowStoriesPullOverscrollTop()) {
+                _startStoriesAutoReveal(max(_pullRatio, 0.18));
+              }
             } else if (pointerSignal.scrollDelta.dy > 0 && _pullRatio > 0) {
               _startStoriesAutoClose();
             }
@@ -753,6 +794,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 controller: _scrollController,
                 physics: _StoriesScrollPhysics(
                   blockPositive: _shouldBlockPositiveScroll,
+                  allowPullOverscrollTop: _allowStoriesPullOverscrollTop,
                   parent: const AlwaysScrollableScrollPhysics(),
                 ),
                 slivers: [
