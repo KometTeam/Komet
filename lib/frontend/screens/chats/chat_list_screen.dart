@@ -200,40 +200,43 @@ class _ChatListScreenState extends State<ChatListScreen>
         return Opacity(
           opacity: opacity,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(
               children: [
                 Container(
-                  width: 50,
-                  height: 50,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHighest,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(7),
+                  child: SizedBox(
+                    height: 48,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(5),
+                        Container(
+                          width: double.infinity,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1274,134 +1277,165 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         color: isSelected ? cs.primary.withOpacity(0.08) : Colors.transparent,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 2,
-          ),
-          leading: Stack(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: cs.surfaceContainerHighest,
-                backgroundImage: imageUrl.isNotEmpty
-                    ? NetworkImage(imageUrl)
-                    : null,
-                child: imageUrl.isEmpty
-                    ? Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 20,
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: cs.surfaceContainerHighest,
+                    backgroundImage: imageUrl.isNotEmpty
+                        ? NetworkImage(imageUrl)
+                        : null,
+                    child: imageUrl.isEmpty
+                        ? Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 20,
+                            ),
+                          )
+                        : null,
+                  ),
+                  if (isSelected)
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: cs.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: cs.surface, width: 2),
                         ),
-                      )
-                    : null,
-              ),
-              if (isSelected)
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: cs.surface, width: 2),
-                    ),
-                    child: Icon(
-                      Symbols.check,
-                      color: cs.onPrimary,
-                      size: 14,
-                      weight: 600,
-                    ),
-                  ),
-                )
-              else if (isOnline)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: cs.surface, width: 2),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  name,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (isMuted)
-                Icon(
-                  Symbols.notifications_off,
-                  color: cs.outlineVariant,
-                  size: 14,
-                  weight: 400,
-                ),
-              const SizedBox(width: 8),
-              Text(time, style: TextStyle(color: cs.outline, fontSize: 12)),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    message,
-                    style: TextStyle(
-                      color: isTyping ? cs.primary : cs.outline,
-                      fontSize: 14,
-                      fontWeight: isTyping ? FontWeight.w500 : FontWeight.w400,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (unreadCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isMuted
-                          ? cs.surfaceContainerHighest
-                          : cs.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      unreadCount.toString(),
-                      style: TextStyle(
-                        color: isMuted ? cs.outline : cs.onSurface,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        child: Icon(
+                          Symbols.check,
+                          color: cs.onPrimary,
+                          size: 14,
+                          weight: 600,
+                        ),
+                      ),
+                    )
+                  else if (isOnline)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: cs.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: cs.surface, width: 2),
+                        ),
                       ),
                     ),
-                  )
-                else if (isRead)
-                  Icon(
-                    Symbols.done_all,
-                    color: cs.primary,
-                    size: 16,
-                    weight: 400,
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.1,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isMuted) ...[
+                              const SizedBox(width: 4),
+                              Icon(
+                                Symbols.notifications_off,
+                                color: cs.outlineVariant,
+                                size: 14,
+                                weight: 400,
+                              ),
+                            ],
+                            const SizedBox(width: 8),
+                            Text(
+                              time,
+                              style: TextStyle(color: cs.outline, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                message,
+                                style: TextStyle(
+                                  color: isTyping ? cs.primary : cs.outline,
+                                  fontSize: 14,
+                                  fontWeight: isTyping
+                                      ? FontWeight.w500
+                                      : FontWeight.w400,
+                                  height: 1.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (unreadCount > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isMuted
+                                      ? cs.surfaceContainerHighest
+                                      : cs.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  unreadCount.toString(),
+                                  style: TextStyle(
+                                    color: isMuted ? cs.outline : cs.onSurface,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              )
+                            else if (isRead)
+                              Icon(
+                                Symbols.done_all,
+                                color: cs.primary,
+                                size: 16,
+                                weight: 400,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-              ],
-            ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
