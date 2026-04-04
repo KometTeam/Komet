@@ -32,12 +32,6 @@ class _CallsTabState extends State<CallsTab> {
     final callsModule = CallsModule(api);
     final calls = await callsModule.fetchHistory(p.id, p.id);
 
-    print('DEBUG UI: Received ${calls.length} calls');
-    for (final call in calls.take(3)) {
-      print('DEBUG UI: Call name="${call.name}", peerId=${call.peerId}');
-    }
-
-    // Группируем подряд идущие звонки одному и тому же абоненту в один день с одним и тем же статусом
     final List<CallLogEntry> grouped = [];
     for (final call in calls) {
       if (grouped.isNotEmpty &&
@@ -169,7 +163,7 @@ class _CallsTabState extends State<CallsTab> {
                       ? Image.network(
                           call.avatarUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, _, ___) =>
+                          errorBuilder: (context, error, stackTrace) =>
                               _buildPlaceholderAvatar(cs, call.name),
                         )
                       : _buildPlaceholderAvatar(cs, call.name),
