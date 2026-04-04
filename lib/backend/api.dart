@@ -30,6 +30,8 @@ class Api {
 
   SessionState _sessionState = SessionState.disconnected;
   final _stateController = StreamController<SessionState>.broadcast();
+  final _sessionExpiredController =
+      StreamController<SessionExpiredException>.broadcast();
   Map<dynamic, dynamic>? _userAgent;
 
   Map<dynamic, dynamic>? get userAgent => _userAgent;
@@ -40,6 +42,8 @@ class Api {
       _registrationCountries ?? allCountries;
 
   Stream<SessionState> get stateStream => _stateController.stream;
+  Stream<SessionExpiredException> get sessionExpiredStream =>
+      _sessionExpiredController.stream;
   SessionState get state => _sessionState;
 
   StreamSubscription<Uint8List>? _dataSubscription;
@@ -195,6 +199,7 @@ class Api {
     _dispatcher.dispose();
     _connection.dispose();
     _stateController.close();
+    _sessionExpiredController.close();
   }
 
   // Внутрянка
@@ -208,6 +213,13 @@ class Api {
 
   Future<void> _onDataReceived(Uint8List data) async {
     await for (final packet in _receiver.feed(data)) {
+      if (packet.isError &&
+          packet.payload is Map &&
+          packet.payload['message'] == 'FAIL_LOGIN_TOKEN') {
+        _sessionExpiredController.add(
+          SessionExpiredException(messageFromErrorPayload(packet.payload)),
+        );
+      }
       _dispatcher.dispatch(packet);
     }
   }
