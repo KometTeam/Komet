@@ -252,7 +252,7 @@ class _DevicesScreenState extends State<DevicesScreen>
               (session) => _buildDeviceItem(
                 context,
                 cs,
-                id: session.id ?? 0,
+                id: session.uniqueId,
                 title: session.client + (session.current ? ' (текущая)' : ''),
                 platform: session.info,
                 location: session.location,

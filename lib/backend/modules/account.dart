@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
@@ -16,6 +17,8 @@ enum AuthRequestType {
   const AuthRequestType(this.value);
   final String value;
 }
+
+enum LoginStatus { idle, loading, success, error }
 
 class RequestCodeResult {
   final String token;
@@ -39,10 +42,8 @@ class VerifyCodeResult {
     return c is Map ? c.cast<dynamic, dynamic>() : null;
   }
 
-  /// trackId из passwordChallenge — передаётся в [AccountModule.checkPassword].
   String? get challengeTrackId => passwordChallenge?['trackId'] as String?;
 
-  /// Подсказка к паролю из passwordChallenge.
   String? get challengeHint => passwordChallenge?['hint'] as String?;
 
   int? get accountId {
@@ -68,8 +69,6 @@ class TwoFactorResult {
   const TwoFactorResult({required this.loginToken});
 }
 
-/// При отсутствии [LoginSyncParams] в [AccountModule.login] сервер вернёт
-/// полный снимок данных (cold start), иначе только дельту (warm start).
 class LoginSyncParams {
   final int chatsSync;
   final int contactsSync;
@@ -131,7 +130,9 @@ class SessionInfo {
 
   factory SessionInfo.fromMap(Map<dynamic, dynamic> map) {
     return SessionInfo(
-      id: map['id'],
+      id: map['id'] is int
+          ? map['id']
+          : (int.tryParse(map['id']?.toString() ?? '')),
       client: map['client'] ?? '',
       location: map['location'] ?? '',
       current: map['current'] ?? false,
@@ -139,6 +140,23 @@ class SessionInfo {
       info: map['info'] ?? '',
     );
   }
+
+  int get uniqueId => Object.hash(id, client, time, info);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SessionInfo &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          client == other.client &&
+          location == other.location &&
+          current == other.current &&
+          time == other.time &&
+          info == other.info;
+
+  @override
+  int get hashCode => Object.hash(id, client, location, current, time, info);
 }
 
 class LoginResult {
@@ -157,8 +175,11 @@ class LoginResult {
 
 class AccountModule {
   final Api _api;
+  final _loginStatusController = StreamController<LoginStatus>.broadcast();
 
   AccountModule(this._api);
+
+  Stream<LoginStatus> get loginStatusStream => _loginStatusController.stream;
 
   Future<RequestCodeResult> requestCode(
     String phone, {
@@ -200,7 +221,6 @@ class AccountModule {
     if (sessionToken != null && accountId != null) {
       await TokenStorage.saveToken(sessionToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
-      logger.i('Токен аккаунта $accountId сохранён, установлен активным');
     }
 
     return result;
@@ -226,19 +246,27 @@ class AccountModule {
 
     final requestPayload = _buildLoginPayload(authToken, syncParams);
 
-    final packet = await _api.sendRequest(Opcode.login, requestPayload);
+    _loginStatusController.add(LoginStatus.loading);
+    try {
+      final packet = await _api.sendRequest(Opcode.login, requestPayload);
 
-    _checkPacketError(packet, 'login');
+      _checkPacketError(packet, 'login');
 
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception('login: неожиданный тип payload: ${data.runtimeType}');
+      final data = packet.payload;
+      if (data is! Map) {
+        throw Exception('login: неожиданный тип payload: ${data.runtimeType}');
+      }
+
+      final result = await _processLoginResponse(
+        data.cast<dynamic, dynamic>(),
+        resolvedAccountId,
+      );
+      _loginStatusController.add(LoginStatus.success);
+      return result;
+    } catch (e) {
+      _loginStatusController.add(LoginStatus.error);
+      rethrow;
     }
-
-    return _processLoginResponse(
-      data.cast<dynamic, dynamic>(),
-      resolvedAccountId,
-    );
   }
 
   Future<List<SessionInfo>> getSessions() async {
@@ -278,13 +306,6 @@ class AccountModule {
     logger.i('Аккаунт $accountId удалён локально');
   }
 
-  /// Проверяет 2FA-пароль (opcode 115).
-  ///
-  /// [trackId] — из [VerifyCodeResult.challengeTrackId].
-  /// [accountId] — из [VerifyCodeResult.accountId].
-  ///
-  /// При неверном пароле бросает [Exception].
-  /// При успехе сохраняет токен и устанавливает аккаунт активным.
   Future<TwoFactorResult> checkPassword({
     required String password,
     required String trackId,
@@ -487,7 +508,11 @@ class AccountModule {
 
   void _checkPacketError(Packet packet, String method) {
     if (packet.isError) {
-      throw PacketError(messageFromErrorPayload(packet.payload));
+      final payload = packet.payload;
+      if (payload is Map && payload['message'] == 'FAIL_LOGIN_TOKEN') {
+        throw SessionExpiredException(messageFromErrorPayload(payload));
+      }
+      throw PacketError(messageFromErrorPayload(payload));
     }
   }
 }

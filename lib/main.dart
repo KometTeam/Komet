@@ -8,8 +8,10 @@ import 'backend/modules/account.dart';
 import 'backend/modules/messages.dart';
 import 'core/storage/app_database.dart';
 import 'core/storage/token_storage.dart';
+import 'core/protocol/packet.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/screens/chats/chat_list_screen.dart';
+import 'frontend/widgets/custom_notification.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
@@ -40,6 +42,7 @@ class KometApp extends StatefulWidget {
   const KometApp({super.key, required this.initialLocale});
 
   final Locale initialLocale;
+  static final navigatorKey = GlobalKey<NavigatorState>();
 
   static KometAppState? stateOf(BuildContext context) {
     return context.findAncestorStateOfType<KometAppState>();
@@ -53,11 +56,35 @@ class KometAppState extends State<KometApp> {
   static const _fallbackSeed = Color(0xFFC1C4FF);
 
   late Locale _locale;
+  bool _isLoggingOut = false;
 
   @override
   void initState() {
     super.initState();
     _locale = widget.initialLocale;
+    api.sessionExpiredStream.listen((SessionExpiredException e) async {
+      if (_isLoggingOut) return;
+      _isLoggingOut = true;
+
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        await accountModule.removeAccount(accountId);
+      }
+
+      final navState = KometApp.navigatorKey.currentState;
+      if (navState != null) {
+        final overlayContext = navState.overlay?.context;
+        if (overlayContext != null) {
+          showCustomNotification(overlayContext, e.message);
+        }
+
+        await navState.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+      _isLoggingOut = false;
+    });
   }
 
   Future<void> applyLocale(Locale locale) async {
@@ -114,6 +141,7 @@ class KometAppState extends State<KometApp> {
             colorScheme: darkScheme,
             textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
           ),
+          navigatorKey: KometApp.navigatorKey,
           home: const _StartupScreen(),
         );
       },
@@ -151,11 +179,7 @@ class _StartupScreenState extends State<_StartupScreen> {
 
     try {
       await accountModule.login(accountId: accountId);
-    } catch (e) {
-      debugPrint(
-        'Background auto-login failed (safe to ignore if offline): $e',
-      );
-    }
+    } catch (_) {}
   }
 
   void _goToLogin() {

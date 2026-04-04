@@ -137,8 +137,6 @@ class ChatsModule {
   static Future<void> clearCache(int accountId) =>
       AppDatabase.clearChatsCache(accountId);
 
-  // internal
-
   static Map<int, Map<dynamic, dynamic>> _buildContactsMap(dynamic contacts) {
     if (contacts is! List) return {};
     final result = <int, Map<dynamic, dynamic>>{};

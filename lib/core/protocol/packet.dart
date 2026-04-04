@@ -59,6 +59,10 @@ class PacketError implements Exception {
   String toString() => message;
 }
 
+class SessionExpiredException extends PacketError {
+  const SessionExpiredException(super.message);
+}
+
 String messageFromErrorPayload(dynamic payload) {
   if (payload is Map) {
     for (final key in ['localizedMessage', 'message', 'title']) {

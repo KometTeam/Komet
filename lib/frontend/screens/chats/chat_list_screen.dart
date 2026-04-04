@@ -15,6 +15,31 @@ import '../../../backend/modules/chats.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../main.dart' show api;
 
+class _StoriesScrollPhysics extends BouncingScrollPhysics {
+  final bool Function() blockPositive;
+
+  const _StoriesScrollPhysics({
+    required this.blockPositive,
+    ScrollPhysics? parent,
+  }) : super(parent: parent);
+
+  @override
+  _StoriesScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _StoriesScrollPhysics(
+      blockPositive: blockPositive,
+      parent: buildParent(ancestor),
+    );
+  }
+
+  @override
+  double applyBoundaryConditions(ScrollMetrics position, double value) {
+    if (blockPositive() && value > 0.0) {
+      return value - max(0.0, position.pixels);
+    }
+    return super.applyBoundaryConditions(position, value);
+  }
+}
+
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
@@ -62,13 +87,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         _selectedChats.add(chatId);
       }
 
-      if (_isSelectionMode) {
-        if (_scrollController.hasClients && _scrollController.offset < 132) {
-          _shouldCollapseSearch = true;
-        }
-      } else {
-        _shouldCollapseSearch = false;
-      }
+      _shouldCollapseSearch = _isSelectionMode;
     });
   }
 
@@ -80,6 +99,20 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   bool _isInitialLoading = true;
+  DateTime _storiesLockdownUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool _shouldBlockPositiveScroll() {
+    if (_pullRatio > 0 ||
+        _storiesDockedOpen ||
+        _storiesRevealController.isAnimating) {
+      return true;
+    }
+    if (DateTime.now().isBefore(_storiesLockdownUntil)) {
+      return true;
+    }
+    return false;
+  }
+
   late AnimationController _shimmerController;
 
   @override
@@ -89,13 +122,14 @@ class _ChatListScreenState extends State<ChatListScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    _navPageAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-      value: 1.0,
-    )..addListener(() {
-        if (mounted) setState(() {});
-      });
+    _navPageAnimController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 350),
+          value: 1.0,
+        )..addListener(() {
+          if (mounted) setState(() {});
+        });
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -272,6 +306,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       return;
     }
     if (_storiesAnimClosing && _storiesRevealController.isAnimating) return;
+    _storiesLockdownUntil = DateTime.now().add(
+      const Duration(milliseconds: 800),
+    );
     _storiesRevealController.stop();
     _storiesAnimClosing = true;
     final from = _pullRatio.clamp(0.0, 1.0);
@@ -293,8 +330,20 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   bool _onStoriesScrollNotification(ScrollNotification n) {
     if (_currentNavIndex != 0) return false;
-    if (n is! ScrollUpdateNotification) return false;
     if (!_scrollController.hasClients) return false;
+
+    if (n is OverscrollNotification && n.overscroll > 0) {
+      if ((_storiesDockedOpen ||
+              _storiesRevealController.isAnimating ||
+              _pullRatio > 0) &&
+          !_storiesAnimClosing &&
+          DateTime.now().isAfter(_storiesRevealLayoutSettleUntil)) {
+        _startStoriesAutoClose();
+      }
+      return false;
+    }
+
+    if (n is! ScrollUpdateNotification) return false;
     if (!_storiesDockedOpen || _storiesRevealController.isAnimating) {
       return false;
     }
@@ -372,13 +421,14 @@ class _ChatListScreenState extends State<ChatListScreen>
     required double Function(int index) bubbleLeftForIndex,
   }) {
     if (_navDragging) {
-      final left = (_navDragBaseLeft + _navDragDx)
-          .clamp(bubbleLeftForIndex(0), bubbleLeftForIndex(3));
+      final left = (_navDragBaseLeft + _navDragDx).clamp(
+        bubbleLeftForIndex(0),
+        bubbleLeftForIndex(3),
+      );
       return ((left - 4) / inactiveWidth).clamp(0.0, 3.0);
     }
     if (_navPageAnimController.isAnimating) {
-      final t =
-          Curves.easeOutCubic.transform(_navPageAnimController.value);
+      final t = Curves.easeOutCubic.transform(_navPageAnimController.value);
       return ui.lerpDouble(_navPageAnimStart, _navPageAnimEnd, t)!;
     }
     return _currentNavIndex.toDouble();
@@ -390,8 +440,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     double fromT;
     if (_navPageAnimController.isAnimating) {
-      final t =
-          Curves.easeOutCubic.transform(_navPageAnimController.value);
+      final t = Curves.easeOutCubic.transform(_navPageAnimController.value);
       fromT = ui.lerpDouble(_navPageAnimStart, _navPageAnimEnd, t)!;
     } else {
       fromT = _currentNavIndex.toDouble();
@@ -428,7 +477,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
               child: _shouldCollapseSearch
-                  ? const SizedBox(width: double.infinity, height: 0)
+                  ? const SizedBox(width: double.infinity, height: 52)
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -667,8 +716,17 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   Widget _buildChatsTabBody() {
     return Listener(
+      onPointerDown: (_) {
+        _storiesLockdownUntil = DateTime.fromMillisecondsSinceEpoch(0);
+      },
       onPointerSignal: (pointerSignal) {
         if (pointerSignal is PointerScrollEvent) {
+          if (_shouldBlockPositiveScroll() &&
+              pointerSignal.scrollDelta.dy > 0) {
+            _storiesLockdownUntil = DateTime.now().add(
+              const Duration(milliseconds: 300),
+            );
+          }
           if (_scrollController.hasClients && _scrollController.offset <= 0) {
             if (pointerSignal.scrollDelta.dy < 0) {
               _startStoriesAutoReveal(max(_pullRatio, 0.18));
@@ -687,37 +745,32 @@ class _ChatListScreenState extends State<ChatListScreen>
             Expanded(
               child: CustomScrollView(
                 controller: _scrollController,
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
+                physics: _StoriesScrollPhysics(
+                  blockPositive: _shouldBlockPositiveScroll,
+                  parent: const AlwaysScrollableScrollPhysics(),
                 ),
                 slivers: [
                   SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        if (_isInitialLoading) {
-                          return _buildChatShimmer();
-                        }
-                        final chat = _chats[index];
-                        return _buildChatItem(
-                          chat.id.toString(),
-                          chat.title ?? 'Чат',
-                          chat.lastMsgText ?? '',
-                          _formatTime(chat.lastMsgTime),
-                          (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
-                              ? chat.iconUrl!
-                              : '',
-                          isOnline: chat.isOnline,
-                          unreadCount: chat.unreadCount,
-                          isMuted: chat.dontDisturbUntil > 0,
-                        );
-                      },
-                      childCount:
-                          _isInitialLoading ? 10 : _chats.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      if (_isInitialLoading) {
+                        return _buildChatShimmer();
+                      }
+                      final chat = _chats[index];
+                      return _buildChatItem(
+                        chat.id.toString(),
+                        chat.title ?? 'Чат',
+                        chat.lastMsgText ?? '',
+                        _formatTime(chat.lastMsgTime),
+                        (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                            ? chat.iconUrl!
+                            : '',
+                        isOnline: chat.isOnline,
+                        unreadCount: chat.unreadCount,
+                        isMuted: chat.dontDisturbUntil > 0,
+                      );
+                    }, childCount: _isInitialLoading ? 10 : _chats.length),
                   ),
-                  const SliverPadding(
-                    padding: EdgeInsets.only(bottom: 100),
-                  ),
+                  const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
                 ],
               ),
             ),
@@ -747,12 +800,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     final maxBubbleLeft = bubbleLeftForIndex(3);
 
     final bubbleLeft = _navDragging
-        ? (_navDragBaseLeft + _navDragDx)
-            .clamp(minBubbleLeft, maxBubbleLeft)
+        ? (_navDragBaseLeft + _navDragDx).clamp(minBubbleLeft, maxBubbleLeft)
         : leftOffset;
 
-    final navRowT =
-        ((bubbleLeft - 4) / inactiveWidth).clamp(0.0, 3.0);
+    final navRowT = ((bubbleLeft - 4) / inactiveWidth).clamp(0.0, 3.0);
 
     double navInterpolatedWidth(int tabIndex, double rowT) {
       final rt = rowT.clamp(0.0, 3.0);
@@ -820,8 +871,10 @@ class _ChatListScreenState extends State<ChatListScreen>
             },
             onHorizontalDragEnd: (_) {
               if (!_navDragging) return;
-              final left = (_navDragBaseLeft + _navDragDx)
-                  .clamp(minBubbleLeft, maxBubbleLeft);
+              final left = (_navDragBaseLeft + _navDragDx).clamp(
+                minBubbleLeft,
+                maxBubbleLeft,
+              );
               final next = indexForBubbleLeft(left);
               setState(() {
                 _currentNavIndex = next;
@@ -886,8 +939,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                       width: _navDragging
                           ? navInterpolatedWidth(index, navRowT)
                           : (isSelected
-                              ? (activeWidth - 0.5)
-                              : (inactiveWidth - 0.5)),
+                                ? (activeWidth - 0.5)
+                                : (inactiveWidth - 0.5)),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(26),
                         child: _buildNavItem(
@@ -939,7 +992,8 @@ class _ChatListScreenState extends State<ChatListScreen>
               bubbleLeftForIndex: bubbleLeftForPageT,
             );
 
-            final showChatsFab = !_isSelectionMode &&
+            final showChatsFab =
+                !_isSelectionMode &&
                 (_navDragging || _navPageAnimController.isAnimating
                     ? pageDisplayT < 1.0
                     : _currentNavIndex == 0);
@@ -950,10 +1004,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                   child: SizedBox(
                     width: pageW,
                     height: pageH,
-                    child: UnconstrainedBox(
-                      constrainedAxis: Axis.vertical,
+                    child: OverflowBox(
                       alignment: Alignment.topLeft,
-                      clipBehavior: Clip.hardEdge,
+                      maxWidth: pageW * 4,
+                      maxHeight: pageH,
                       child: SizedBox(
                         width: pageW * 4,
                         height: pageH,
@@ -1013,7 +1067,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                               onTap: _toggleFab,
                               behavior: HitTestBehavior.opaque,
                               child: Container(
-                                color: Colors.black.withValues(alpha: val * 0.2),
+                                color: Colors.black.withValues(
+                                  alpha: val * 0.2,
+                                ),
                               ),
                             ),
                           ),
@@ -1066,7 +1122,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   left: 0,
                   right: 0,
                   child: Container(
-                    height: 64,
+                    height: 52,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
                       color: cs.surface,
@@ -1360,12 +1416,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool instant = false,
   }) {
     final cs = Theme.of(context).colorScheme;
-    final bool isSelected =
-        selectedOverride ?? (_currentNavIndex == index);
-    final Duration animDur =
-        instant ? Duration.zero : const Duration(milliseconds: 350);
-    final Duration opacityDur =
-        instant ? Duration.zero : const Duration(milliseconds: 200);
+    final bool isSelected = selectedOverride ?? (_currentNavIndex == index);
+    final Duration animDur = instant
+        ? Duration.zero
+        : const Duration(milliseconds: 350);
+    final Duration opacityDur = instant
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
     return GestureDetector(
       onTap: () => _onNavTabSelected(index),
       behavior: HitTestBehavior.opaque,
