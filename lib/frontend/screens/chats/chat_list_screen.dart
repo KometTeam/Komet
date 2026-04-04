@@ -776,7 +776,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                       );
                     }, childCount: _isInitialLoading ? 10 : _chats.length),
                   ),
-                  const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+                  SliverPadding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -786,7 +790,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildDockedBottomNav(ColorScheme cs, double navInnerW) {
+  Widget _buildDockedBottomNav(
+    ColorScheme cs,
+    double navInnerW,
+    double bottomInset,
+  ) {
     final totalWeight = 5.2;
     final unitWidth = navInnerW / totalWeight;
     final activeWidth = unitWidth * 2.2;
@@ -841,7 +849,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       curve: Curves.easeOutCubic,
       left: 8,
       right: 8,
-      bottom: _isSelectionMode ? -100 : 10.0,
+      bottom: _isSelectionMode ? -100 : bottomInset + 10.0,
       child: RepaintBoundary(
         child: Container(
           height: 68,
@@ -979,6 +987,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
             final navInnerW = pageW - 20;
@@ -1057,7 +1066,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ),
                   ),
                 ),
-                _buildDockedBottomNav(cs, navInnerW),
+                _buildDockedBottomNav(cs, navInnerW, bottomInset),
                 ListenableBuilder(
                   listenable: _fabController,
                   builder: (context, child) {
@@ -1083,7 +1092,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           if (_fabController.value > 0)
                             Positioned(
                               right: 20,
-                              bottom: 90 + 74,
+                              bottom: bottomInset + 90 + 74,
                               child: RepaintBoundary(
                                 child: Transform.scale(
                                   scale: val,
@@ -1097,7 +1106,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           Positioned(
                             right: 20,
-                            bottom: 90,
+                            bottom: bottomInset + 90,
                             child: FloatingActionButton(
                               onPressed: _toggleFab,
                               backgroundColor: cs.primaryContainer,
