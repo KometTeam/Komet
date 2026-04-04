@@ -87,7 +87,7 @@ class _ContactsTabState extends State<ContactsTab> {
                       ? Image.network(
                           contact.baseUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, _, ___) =>
+                          errorBuilder: (context, error, stackTrace) =>
                               _buildPlaceholderAvatar(cs, nameToDisplay),
                         )
                       : _buildPlaceholderAvatar(cs, nameToDisplay),

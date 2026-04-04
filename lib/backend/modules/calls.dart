@@ -1,5 +1,4 @@
 // Backend module for parsing calls from Komet platform
-import '../../core/storage/app_database.dart';
 import 'contacts.dart';
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
@@ -57,10 +56,6 @@ class CallsModule {
     final recentContacts = await ContactsModule.getContacts(accountId);
     final contactsMap = {for (final c in recentContacts) c.id: c};
 
-    print('DEBUG: Loaded ${recentContacts.length} contacts');
-    print('DEBUG: Contact IDs: ${contactsMap.keys.toList()}');
-    print('DEBUG: Current user ID: $currentUserId');
-
     final List<CallLogEntry> extractedCalls = [];
 
     for (final item in history.whereType<Map>()) {
@@ -90,13 +85,7 @@ class CallsModule {
         peerId = senderId;
       }
 
-      print(
-        'DEBUG: Call - isOutgoing: $isOutgoing, peerId: $peerId, senderId: $senderId',
-      );
       final contact = contactsMap[peerId];
-      print(
-        'DEBUG: Contact found: ${contact != null}, firstName: "${contact?.firstName}", lastName: "${contact?.lastName}"',
-      );
       final status = _parseCallStatus(callAttach, isOutgoing);
       final time = (msg['time'] as int?) ?? 0;
       final msgId =
@@ -106,8 +95,6 @@ class CallsModule {
       final name = contact?.firstName != null
           ? '${contact!.firstName} ${contact.lastName ?? ''}'.trim()
           : 'Неизвестный';
-
-      print('DEBUG: Creating CallLogEntry with name: "$name"');
 
       extractedCalls.add(
         CallLogEntry(
@@ -139,8 +126,9 @@ class CallsModule {
       if (hangupType == 'CANCELED' ||
           hangupType == 'REJECTED' ||
           hangupType == 'MISSED' ||
-          duration == 0)
+          duration == 0) {
         return CallStatus.missed;
+      }
       return CallStatus.incoming;
     }
   }

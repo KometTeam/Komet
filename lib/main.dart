@@ -74,7 +74,7 @@ class KometAppState extends State<KometApp> {
       final navState = KometApp.navigatorKey.currentState;
       if (navState != null) {
         final overlayContext = navState.overlay?.context;
-        if (overlayContext != null) {
+        if (overlayContext != null && overlayContext.mounted) {
           showCustomNotification(overlayContext, e.message);
         }
 

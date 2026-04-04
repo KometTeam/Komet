@@ -137,9 +137,7 @@ Future<Packet> unpackPacket(Uint8List packet) async {
               _maxDecompressedSize,
             );
           } catch (e) {
-            // В изоляте нельзя использовать логгер, который пишет в терминал через зависимости Flutter,
-            // но простой print или throw сработает
-            print("LZ4 decompression error: $e");
+            throw Exception("LZ4 decompression error: $e");
           }
         }
       }
@@ -148,7 +146,7 @@ Future<Packet> unpackPacket(Uint8List packet) async {
         payload = msgpack.deserialize(payloadBytes);
       } catch (e) {
         if (payloadBytes.isNotEmpty) {
-          print("MsgPack deserialization error: $e");
+          throw Exception("MsgPack deserialization error: $e");
         }
       }
     }

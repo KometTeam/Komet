@@ -14,7 +14,6 @@ import '../core/utils/logger.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
 import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
 
 enum SessionState { disconnected, connecting, connected, online }
@@ -279,7 +278,7 @@ class Api {
 
     final delaySec = (2 * (1 << _reconnectAttempts)).clamp(2, 30);
     _reconnectAttempts++;
-    logger.i('Реконнект через ${delaySec}с (попытка $_reconnectAttempts)');
+    logger.i('Реконнект через $delaySecс (попытка $_reconnectAttempts)');
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: delaySec), connect);

@@ -151,7 +151,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   ? Image.network(
                       _profile!.baseUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, _, __) =>
+                      errorBuilder: (context, error, stackTrace) =>
                           _buildPlaceholderAvatar(cs, name),
                     )
                   : _buildPlaceholderAvatar(cs, name),
