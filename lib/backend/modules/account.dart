@@ -7,6 +7,7 @@ import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import 'chats.dart';
 import 'contacts.dart';
+import 'folders.dart';
 
 enum AuthRequestType {
   startAuth('START_AUTH'),
@@ -428,6 +429,19 @@ class AccountModule {
     await _saveSyncState(data, serverTime, profile.id);
     await ContactsModule.syncFromLoginPayload(data, profile.id);
     await ChatsModule.syncFromLoginPayload(data, profile.id, profile.id);
+
+    final config = data['config'];
+    if (config is Map) {
+      await FoldersModule.applyFromLoginConfig(
+        profile.id,
+        config.cast<dynamic, dynamic>(),
+      );
+    }
+    try {
+      await FoldersModule.syncFromServer(_api, profile.id);
+    } catch (e) {
+      logger.w('Папки чатов: $e');
+    }
 
     return LoginResult(
       profile: profile,

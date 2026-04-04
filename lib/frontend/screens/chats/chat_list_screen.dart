@@ -11,9 +11,12 @@ import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
 import '../profile/settings_tab.dart';
 import '../../../backend/api.dart';
+import '../../../backend/models/chat_folder.dart';
+import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
+import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
-import '../../../main.dart' show api;
+import '../../../main.dart' show accountModule, api;
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -57,7 +60,8 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen>
     with TickerProviderStateMixin {
-  String _selectedCategory = 'Все чаты';
+  String? _selectedFolderId;
+  List<ChatFolder> _folders = [];
   int _currentNavIndex = 0;
   bool _navDragging = false;
   double _navDragDx = 0;
@@ -69,7 +73,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _showCacheWarning = false;
   late AnimationController _fabController;
   final Set<String> _selectedChats = {};
-  final ScrollController _scrollController = ScrollController();
+  late PageController _folderPageController;
+  final List<ScrollController> _folderChatScrollControllers = [];
+  final List<VoidCallback> _folderChatScrollListenerFns = [];
   double _pullRatio = 0.0;
   static const double _kStoriesPullTriggerPx = 16.0;
   late AnimationController _storiesRevealController;
@@ -84,6 +90,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   List<CachedChat> _chats = [];
   SessionState _sessionState = SessionState.disconnected;
   StreamSubscription? _stateSub;
+  StreamSubscription<LoginStatus>? _loginSub;
+  bool? _foldersListKnown;
   bool _shouldCollapseSearch = false;
 
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
@@ -161,7 +169,8 @@ class _ChatListScreenState extends State<ChatListScreen>
           ..addListener(_onStoriesRevealTick)
           ..addStatusListener(_onStoriesRevealStatus);
 
-    _scrollController.addListener(_onScroll);
+    _folderPageController = PageController();
+    _syncFolderChatScrollControllers();
 
     _sessionState = api.state;
     _stateSub = api.stateStream.listen((state) {
@@ -175,29 +184,217 @@ class _ChatListScreenState extends State<ChatListScreen>
             _showCacheWarning = false;
           }
         });
+        if (state == SessionState.online) {
+          _reloadChatsAndFolders();
+        }
       }
     });
 
-    _loadProfile();
+    _loginSub = accountModule.loginStatusStream.listen((status) {
+      if (status == LoginStatus.success) {
+        _reloadChatsAndFolders();
+      }
+    });
+    _reloadChatsAndFolders();
   }
 
-  Future<void> _loadProfile() async {
+  Future<void> _reloadChatsAndFolders() async {
     final p = await AppDatabase.loadActiveProfile();
     if (p != null) {
       final chats = await ChatsModule.getChats(p.id);
+      final folders = await FoldersModule.loadFolders(p.id);
+      final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
+      final pageCount = folders.isEmpty ? 1 : folders.length;
+      _syncFolderChatScrollControllersForCount(pageCount);
       if (mounted) {
         setState(() {
           _profile = p;
           _chats = chats;
+          _folders = folders;
+          _foldersListKnown = foldersKnown;
+          if (_selectedFolderId != null &&
+              !_folders.any((f) => f.id == _selectedFolderId)) {
+            _selectedFolderId = null;
+          }
+          if (_folders.isNotEmpty) {
+            final preferred = FoldersModule.preferredInitialFolderId(_folders);
+            if (_selectedFolderId == null ||
+                !_folders.any((f) => f.id == _selectedFolderId)) {
+              _selectedFolderId = preferred;
+            }
+          } else {
+            _selectedFolderId = null;
+          }
           _isInitialLoading = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _jumpFolderPageToSelection();
         });
       }
     } else {
+      _syncFolderChatScrollControllersForCount(1);
       if (mounted) {
         setState(() {
+          _folders = [];
+          _selectedFolderId = null;
+          _foldersListKnown = null;
           _isInitialLoading = false;
         });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _jumpFolderPageToSelection();
+        });
       }
+    }
+  }
+
+  bool get _showFoldersShimmer {
+    if (_profile == null) return false;
+    if (_foldersListKnown != false) return false;
+    return _sessionState != SessionState.disconnected;
+  }
+
+  int get _folderPageCount => _folders.isEmpty ? 1 : _folders.length;
+
+  int get _selectedFolderIndex {
+    if (_folders.isEmpty) return 0;
+    final i = _folders.indexWhere((f) => f.id == _selectedFolderId);
+    if (i >= 0) return i;
+    return 0;
+  }
+
+  int _folderIndexForId(String? id) {
+    if (_folders.isEmpty) return 0;
+    if (id == null) return 0;
+    final i = _folders.indexWhere((f) => f.id == id);
+    if (i >= 0) return i;
+    final pref = FoldersModule.preferredInitialFolderId(_folders);
+    if (pref != null) {
+      final j = _folders.indexWhere((f) => f.id == pref);
+      if (j >= 0) return j;
+    }
+    return 0;
+  }
+
+  List<CachedChat> _chatsForPageIndex(int pageIndex) {
+    if (_folders.isEmpty) return _chats;
+    if (pageIndex < 0 || pageIndex >= _folders.length) return _chats;
+    final folder = _folders[pageIndex];
+    if (FoldersModule.isAllChatsFolder(folder)) return _chats;
+    return _chats
+        .where((c) => FoldersModule.chatMatchesFolder(c, folder))
+        .toList();
+  }
+
+  void _syncFolderChatScrollControllers() {
+    _syncFolderChatScrollControllersForCount(_folderPageCount);
+  }
+
+  void _syncFolderChatScrollControllersForCount(int n) {
+    while (_folderChatScrollControllers.length < n) {
+      final i = _folderChatScrollControllers.length;
+      void fn() => _onFolderChatScrollAt(i);
+      final c = ScrollController();
+      c.addListener(fn);
+      _folderChatScrollControllers.add(c);
+      _folderChatScrollListenerFns.add(fn);
+    }
+    while (_folderChatScrollControllers.length > n) {
+      final c = _folderChatScrollControllers.removeLast();
+      final fn = _folderChatScrollListenerFns.removeLast();
+      c.removeListener(fn);
+      c.dispose();
+    }
+  }
+
+  bool _isChatScrollControllerActive(int index) {
+    if (_folderPageCount <= 1) return index == 0;
+    if (!_folderPageController.hasClients) {
+      return index == _selectedFolderIndex;
+    }
+    final p = _folderPageController.page;
+    if (p == null) return index == _selectedFolderIndex;
+    final r = p.round().clamp(0, _folderPageCount - 1);
+    return r == index;
+  }
+
+  void _onFolderChatScrollAt(int index) {
+    if (!_isChatScrollControllerActive(index)) return;
+    if (index < 0 || index >= _folderChatScrollControllers.length) return;
+    final c = _folderChatScrollControllers[index];
+    _applyChatScrollOffset(c);
+  }
+
+  void _applyChatScrollOffset(ScrollController c) {
+    if (!c.hasClients) return;
+    final double offset = c.offset;
+    if (_isSelectionMode && !_shouldCollapseSearch && offset < 132) {
+      setState(() {
+        _shouldCollapseSearch = true;
+      });
+    }
+
+    if (offset < 0) {
+      if (!_allowStoriesPullOverscrollTop()) {
+        return;
+      }
+      final dragRatio = (offset.abs() / 80.0).clamp(0.0, 1.0);
+      if (_storiesRevealController.isAnimating) {
+        return;
+      }
+      if (!_storiesDockedOpen && offset.abs() >= _kStoriesPullTriggerPx) {
+        _startStoriesAutoReveal(dragRatio);
+      } else if (!_storiesDockedOpen) {
+        if (dragRatio != _pullRatio) {
+          setState(() {
+            _pullRatio = dragRatio;
+          });
+        }
+      }
+    } else {
+      if (_storiesDockedOpen &&
+          offset > 12 &&
+          DateTime.now().isAfter(_storiesRevealLayoutSettleUntil)) {
+        _startStoriesAutoClose();
+      }
+      if (_storiesDockedOpen || _storiesRevealController.isAnimating) {
+        return;
+      }
+      final disarm = offset > 3 && _storiesOverscrollRevealArmed;
+      final clearPull = _pullRatio > 0;
+      if (disarm || clearPull) {
+        setState(() {
+          if (disarm) {
+            _storiesOverscrollRevealArmed = false;
+          }
+          if (clearPull) {
+            _pullRatio = 0.0;
+          }
+        });
+      }
+    }
+  }
+
+  ScrollController? _activeChatScrollController() {
+    if (_folderChatScrollControllers.isEmpty) return null;
+    if (!_folderPageController.hasClients) {
+      return _folderChatScrollControllers.first;
+    }
+    final p = _folderPageController.page;
+    final i = (p != null
+            ? p.round()
+            : _selectedFolderIndex)
+        .clamp(0, _folderChatScrollControllers.length - 1);
+    return _folderChatScrollControllers[i];
+  }
+
+  void _jumpFolderPageToSelection() {
+    if (!_folderPageController.hasClients) return;
+    final target = _folderIndexForId(_selectedFolderId);
+    final current = _folderPageController.page?.round();
+    if (current != target) {
+      _folderPageController.jumpToPage(target);
     }
   }
 
@@ -351,12 +548,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     _storiesRevealController.forward(from: 0);
   }
 
-  bool _onStoriesScrollNotification(ScrollNotification n) {
+  bool _handleStoriesScrollNotification(ScrollNotification n) {
     if (_currentNavIndex != 0) return false;
-    if (!_scrollController.hasClients) return false;
 
     if (n is ScrollEndNotification) {
-      if (_scrollController.offset <= 0.5) {
+      if (n.metrics.pixels <= 0.5) {
         setState(() {
           _storiesOverscrollRevealArmed = true;
         });
@@ -394,59 +590,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     return false;
   }
 
-  void _onScroll() {
-    if (_scrollController.hasClients) {
-      final double offset = _scrollController.offset;
-      if (_isSelectionMode && !_shouldCollapseSearch && offset < 132) {
-        setState(() {
-          _shouldCollapseSearch = true;
-        });
-      }
-
-      if (offset < 0) {
-        if (!_allowStoriesPullOverscrollTop()) {
-          return;
-        }
-        final dragRatio = (offset.abs() / 80.0).clamp(0.0, 1.0);
-        if (_storiesRevealController.isAnimating) {
-          return;
-        }
-        if (!_storiesDockedOpen && offset.abs() >= _kStoriesPullTriggerPx) {
-          _startStoriesAutoReveal(dragRatio);
-        } else if (!_storiesDockedOpen) {
-          if (dragRatio != _pullRatio) {
-            setState(() {
-              _pullRatio = dragRatio;
-            });
-          }
-        }
-      } else {
-        if (_storiesDockedOpen &&
-            offset > 12 &&
-            DateTime.now().isAfter(_storiesRevealLayoutSettleUntil)) {
-          _startStoriesAutoClose();
-        }
-        if (_storiesDockedOpen || _storiesRevealController.isAnimating) {
-          return;
-        }
-        final disarm = offset > 3 && _storiesOverscrollRevealArmed;
-        final clearPull = _pullRatio > 0;
-        if (disarm || clearPull) {
-          setState(() {
-            if (disarm) {
-              _storiesOverscrollRevealArmed = false;
-            }
-            if (clearPull) {
-              _pullRatio = 0.0;
-            }
-          });
-        }
-      }
-    }
-  }
-
   @override
   void dispose() {
+    _loginSub?.cancel();
     _stateSub?.cancel();
     _fabController.dispose();
     _navPageAnimController.dispose();
@@ -454,7 +600,13 @@ class _ChatListScreenState extends State<ChatListScreen>
       ..removeListener(_onStoriesRevealTick)
       ..removeStatusListener(_onStoriesRevealStatus)
       ..dispose();
-    _scrollController.dispose();
+    _folderPageController.dispose();
+    while (_folderChatScrollControllers.isNotEmpty) {
+      final c = _folderChatScrollControllers.removeLast();
+      final fn = _folderChatScrollListenerFns.removeLast();
+      c.removeListener(fn);
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -727,31 +879,85 @@ class _ChatListScreenState extends State<ChatListScreen>
                   ui.PointerDeviceKind.trackpad,
                 },
               ),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 4,
-                ),
-                physics: const BouncingScrollPhysics(),
-                children: [
-                  _buildFolderChip('Все чаты'),
-                  const SizedBox(width: 8),
-                  _buildFolderChip('Контакты'),
-                  const SizedBox(width: 8),
-                  _buildFolderChip('Пидоры'),
-                  const SizedBox(width: 8),
-                  _buildFolderChip('Каналы'),
-                  const SizedBox(width: 8),
-                  _buildFolderChip('Группы'),
-                  const SizedBox(width: 8),
-                  _buildFolderChip('Боты'),
-                  const SizedBox(width: 8),
-                  _buildFolderChip('Избранное'),
-                  const SizedBox(width: 8),
-                  _buildFolderChip('Архив'),
-                ],
-              ),
+              child: _showFoldersShimmer
+                  ? _buildFolderStripShimmer(cs)
+                  : ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 4,
+                      ),
+                      physics: const BouncingScrollPhysics(),
+                      children: [
+                        for (var i = 0; i < _folders.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 8),
+                          _buildFolderChip(
+                            _folderChipLabel(_folders[i]),
+                            folderId: _folders[i].id,
+                          ),
+                        ],
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFolderChatPage(int pageIndex) {
+    final chats = _chatsForPageIndex(pageIndex);
+    final sc = _folderChatScrollControllers[pageIndex];
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification n) {
+        if (_currentNavIndex != 0) return false;
+        if (!_folderPageController.hasClients) {
+          if (pageIndex != _selectedFolderIndex) return false;
+        } else {
+          final p = _folderPageController.page;
+          if (p == null) {
+            if (pageIndex != _selectedFolderIndex) return false;
+          } else {
+            final r = p.round().clamp(0, _folderPageCount - 1);
+            if (r != pageIndex) return false;
+          }
+        }
+        return _handleStoriesScrollNotification(n);
+      },
+      child: CustomScrollView(
+        controller: sc,
+        physics: _StoriesScrollPhysics(
+          blockPositive: _shouldBlockPositiveScroll,
+          allowPullOverscrollTop: _allowStoriesPullOverscrollTop,
+          parent: const AlwaysScrollableScrollPhysics(),
+        ),
+        slivers: [
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (_isInitialLoading) {
+                  return _buildChatShimmer();
+                }
+                final chat = chats[index];
+                return _buildChatItem(
+                  chat.id.toString(),
+                  chat.title ?? 'Чат',
+                  chat.lastMsgText ?? '',
+                  _formatTime(chat.lastMsgTime),
+                  (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                      ? chat.iconUrl!
+                      : '',
+                  isOnline: chat.isOnline,
+                  unreadCount: chat.unreadCount,
+                  isMuted: chat.dontDisturbUntil > 0,
+                );
+              },
+              childCount: _isInitialLoading ? 10 : chats.length,
+            ),
+          ),
+          SliverPadding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
             ),
           ),
         ],
@@ -772,7 +978,8 @@ class _ChatListScreenState extends State<ChatListScreen>
               const Duration(milliseconds: 300),
             );
           }
-          if (_scrollController.hasClients && _scrollController.offset <= 0) {
+          final ac = _activeChatScrollController();
+          if (ac != null && ac.hasClients && ac.offset <= 0) {
             if (pointerSignal.scrollDelta.dy < 0) {
               if (_allowStoriesPullOverscrollTop()) {
                 _startStoriesAutoReveal(max(_pullRatio, 0.18));
@@ -783,51 +990,30 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
         }
       },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: _onStoriesScrollNotification,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildPinnedChatsHeader(context),
-            Expanded(
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: _StoriesScrollPhysics(
-                  blockPositive: _shouldBlockPositiveScroll,
-                  allowPullOverscrollTop: _allowStoriesPullOverscrollTop,
-                  parent: const AlwaysScrollableScrollPhysics(),
-                ),
-                slivers: [
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      if (_isInitialLoading) {
-                        return _buildChatShimmer();
-                      }
-                      final chat = _chats[index];
-                      return _buildChatItem(
-                        chat.id.toString(),
-                        chat.title ?? 'Чат',
-                        chat.lastMsgText ?? '',
-                        _formatTime(chat.lastMsgTime),
-                        (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
-                            ? chat.iconUrl!
-                            : '',
-                        isOnline: chat.isOnline,
-                        unreadCount: chat.unreadCount,
-                        isMuted: chat.dontDisturbUntil > 0,
-                      );
-                    }, childCount: _isInitialLoading ? 10 : _chats.length),
-                  ),
-                  SliverPadding(
-                    padding: EdgeInsets.only(
-                      bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
-                    ),
-                  ),
-                ],
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildPinnedChatsHeader(context),
+          Expanded(
+            child: PageView.builder(
+              controller: _folderPageController,
+              physics: _folderPageCount <= 1
+                  ? const NeverScrollableScrollPhysics()
+                  : const BouncingScrollPhysics(),
+              onPageChanged: (i) {
+                if (_folders.isEmpty) return;
+                if (i < 0 || i >= _folders.length) return;
+                setState(() {
+                  _selectedFolderId = _folders[i].id;
+                });
+              },
+              itemCount: _folderPageCount,
+              itemBuilder: (context, pageIndex) {
+                return _buildFolderChatPage(pageIndex);
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1272,11 +1458,70 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildFolderChip(String title) {
+  String _folderChipLabel(ChatFolder f) {
+    final e = f.emoji;
+    if (e != null && e.isNotEmpty) return '$e ${f.title}';
+    return f.title;
+  }
+
+  Widget _buildFolderStripShimmer(ColorScheme cs) {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        final opacity = 0.3 + 0.3 * sin(_shimmerController.value * pi * 2);
+        return Opacity(
+          opacity: opacity,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            physics: const BouncingScrollPhysics(),
+            children: [
+              _folderShimmerPill(cs, 88),
+              const SizedBox(width: 8),
+              _folderShimmerPill(cs, 72),
+              const SizedBox(width: 8),
+              _folderShimmerPill(cs, 96),
+              const SizedBox(width: 8),
+              _folderShimmerPill(cs, 64),
+              const SizedBox(width: 8),
+              _folderShimmerPill(cs, 80),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _folderShimmerPill(ColorScheme cs, double width) {
+    return Container(
+      width: width,
+      height: 32,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
+  }
+
+  Widget _buildFolderChip(String title, {required String folderId}) {
     final cs = Theme.of(context).colorScheme;
-    bool isSelected = _selectedCategory == title;
+    final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
-      onTap: () => setState(() => _selectedCategory = title),
+      onTap: () {
+        final i = _folders.indexWhere((f) => f.id == folderId);
+        if (i < 0) return;
+        setState(() => _selectedFolderId = folderId);
+        if (_folderPageController.hasClients) {
+          final cur = _folderPageController.page?.round();
+          if (cur != i) {
+            _folderPageController.animateToPage(
+              i,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+            );
+          }
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
