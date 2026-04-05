@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
+import '../../models/attachment.dart';
 
 class CachedMessage {
   final String id;
@@ -12,6 +14,7 @@ class CachedMessage {
   final int time;
   final String? status;
   final Map<String, dynamic>? payload;
+  final List<MessageAttachment>? attachments;
 
   const CachedMessage({
     required this.id,
@@ -22,6 +25,7 @@ class CachedMessage {
     required this.time,
     this.status,
     this.payload,
+    this.attachments,
   });
 
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
@@ -33,6 +37,16 @@ class CachedMessage {
       } catch (_) {}
     }
 
+    List<MessageAttachment>? attachments;
+    if (payload != null) {
+      final attaches = payload['attaches'] as List?;
+      if (attaches != null) {
+        attachments = attaches
+            .map((a) => MessageAttachment.fromMap(a as Map<String, dynamic>))
+            .toList();
+      }
+    }
+
     return CachedMessage(
       id: row['id'] as String,
       accountId: row['account_id'] as int,
@@ -42,6 +56,7 @@ class CachedMessage {
       time: row['time'] as int,
       status: row['status'] as String?,
       payload: payload,
+      attachments: attachments,
     );
   }
 
@@ -143,6 +158,15 @@ class MessagesModule {
     final id = m['id']?.toString();
     if (id == null) return null;
 
+    final attaches = m['attaches'] as List?;
+    List<MessageAttachment>? attachments;
+    if (attaches != null) {
+      attachments = attaches
+          .whereType<Map>()
+          .map((a) => MessageAttachment.fromMap(a.cast<String, dynamic>()))
+          .toList();
+    }
+
     return CachedMessage(
       id: id,
       accountId: accountId,
@@ -152,6 +176,7 @@ class MessagesModule {
       time: (m['time'] as int?) ?? 0,
       status: m['status'] as String?,
       payload: m.cast<String, dynamic>(),
+      attachments: attachments,
     );
   }
 
@@ -159,5 +184,119 @@ class MessagesModule {
     final payload = {'chatId': chatId, 'text': text};
 
     await _api.sendRequest(Opcode.msgSend, payload);
+  }
+
+  Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
+    try {
+      final response = await _api.sendRequest(Opcode.fileDownload, {
+        'url': baseUrl,
+        'token': photoToken,
+      });
+
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      final content = data['content'];
+      if (content is String) {
+        return Uri.parse(content).host.isNotEmpty ? null : null;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> getPhotoUrl(String baseUrl, String photoToken) async {
+    try {
+      final response = await _api.sendRequest(Opcode.fileDownload, {
+        'url': baseUrl,
+        'token': photoToken,
+      });
+
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      return data['content'] as String?;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> downloadVideo(String baseUrl, String videoToken) async {
+    try {
+      final response = await _api.sendRequest(Opcode.fileDownload, {
+        'url': baseUrl,
+        'token': videoToken,
+      });
+
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      final content = data['content'];
+      if (content is String) {
+        return Uri.parse(content).host.isNotEmpty ? null : null;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> getVideoUrl(String baseUrl, String videoToken) async {
+    try {
+      final response = await _api.sendRequest(Opcode.fileDownload, {
+        'url': baseUrl,
+        'token': videoToken,
+      });
+
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      return data['content'] as String?;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> downloadFile(String baseUrl, String fileToken) async {
+    try {
+      final response = await _api.sendRequest(Opcode.fileDownload, {
+        'url': baseUrl,
+        'token': fileToken,
+      });
+
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      final content = data['content'];
+      if (content is String) {
+        return Uri.parse(content).host.isNotEmpty ? null : null;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> getFileUrl(String baseUrl, String fileToken) async {
+    try {
+      final response = await _api.sendRequest(Opcode.fileDownload, {
+        'url': baseUrl,
+        'token': fileToken,
+      });
+
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      return data['content'] as String?;
+    } catch (e) {
+      return null;
+    }
   }
 }
