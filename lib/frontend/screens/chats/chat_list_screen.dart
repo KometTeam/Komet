@@ -1581,6 +1581,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         }
       },
       child: Container(
+        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
@@ -1588,6 +1589,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
         child: Text(
           title,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: isSelected ? cs.onPrimaryContainer : cs.primary,
             fontSize: 14,
