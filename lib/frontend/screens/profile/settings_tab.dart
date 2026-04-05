@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
+import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
@@ -17,12 +20,40 @@ class _SettingsTabState extends State<SettingsTab> {
   ProfileData? _profile;
   bool _isPhoneVisible = false;
   String? _appVersionLabel;
+  bool _debugMenuVisible = false;
+  int _versionSecretTapCount = 0;
+  Timer? _versionSecretTapResetTimer;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
     _loadAppVersion();
+  }
+
+  @override
+  void dispose() {
+    _versionSecretTapResetTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleVersionSecretTapReset() {
+    _versionSecretTapResetTimer?.cancel();
+    _versionSecretTapResetTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _versionSecretTapCount = 0);
+    });
+  }
+
+  void _onVersionLabelTap() {
+    _scheduleVersionSecretTapReset();
+    setState(() {
+      _versionSecretTapCount++;
+      if (_versionSecretTapCount >= 7) {
+        _versionSecretTapCount = 0;
+        _versionSecretTapResetTimer?.cancel();
+        _debugMenuVisible = !_debugMenuVisible;
+      }
+    });
   }
 
   Future<void> _loadProfile() async {
@@ -127,18 +158,86 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
               ),
             ),
+            SliverToBoxAdapter(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 340),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  return ClipRect(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: animation.value.clamp(0.0, 1.0),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                layoutBuilder: (currentChild, previousChildren) {
+                  return Stack(
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      ...previousChildren,
+                      ?currentChild,
+                    ],
+                  );
+                },
+                child: _debugMenuVisible
+                    ? KeyedSubtree(
+                        key: const ValueKey('developers_settings_row'),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: _buildSection(
+                            context,
+                            cs,
+                            items: [
+                              _SettingsItem(
+                                icon: Symbols.construction,
+                                label: 'Для разработчиков',
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const DebugMenuScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(
+                        key: ValueKey('developers_settings_hidden'),
+                      ),
+              ),
+            ),
             if (_appVersionLabel != null)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
                   child: Center(
-                    child: Text(
-                      _appVersionLabel!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _onVersionLabelTap,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          _appVersionLabel!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
                       ),
                     ),
                   ),
