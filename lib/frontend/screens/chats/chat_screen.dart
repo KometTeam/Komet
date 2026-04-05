@@ -5,6 +5,7 @@ import '../../../main.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
+import '../../widgets/message_bubble.dart';
 
 class ChatScreen extends StatefulWidget {
   final int chatId;
@@ -25,10 +26,13 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   bool _hasText = false;
   bool _isLoading = true;
+  bool _isSending = false;
   late AnimationController _shimmerController;
   List<CachedMessage> _messages = [];
+  int _myId = 0;
 
   @override
   void initState() {
@@ -44,16 +48,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _loadHistory() async {
     final activeProfile = await AppDatabase.loadActiveProfile();
-    final myId = activeProfile?.id ?? 0;
+    _myId = activeProfile?.id ?? 0;
 
     final cachedRows = await AppDatabase.loadMessages(
-      myId,
+      _myId,
       widget.chatId,
       limit: 100,
     );
     if (mounted && cachedRows.isNotEmpty) {
       setState(() {
         _messages = cachedRows.map((r) => CachedMessage.fromDbRow(r)).toList();
+        _messages.sort((a, b) => a.time.compareTo(b.time));
         if (api.state == SessionState.online) {
           _isLoading = false;
         }
@@ -61,9 +66,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     try {
-      await messagesModule.fetchHistory(myId, widget.chatId);
+      await messagesModule.fetchHistory(_myId, widget.chatId);
       final updatedRows = await AppDatabase.loadMessages(
-        myId,
+        _myId,
         widget.chatId,
         limit: 100,
       );
@@ -72,6 +77,7 @@ class _ChatScreenState extends State<ChatScreen>
           _messages = updatedRows
               .map((r) => CachedMessage.fromDbRow(r))
               .toList();
+          _messages.sort((a, b) => a.time.compareTo(b.time));
           _isLoading = false;
         });
       }
@@ -89,6 +95,7 @@ class _ChatScreenState extends State<ChatScreen>
   void dispose() {
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
+    _scrollController.dispose();
     _shimmerController.dispose();
     super.dispose();
   }
@@ -100,6 +107,73 @@ class _ChatScreenState extends State<ChatScreen>
         _hasText = newHasText;
       });
     }
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _myId == 0) return;
+
+    setState(() {
+      _isSending = true;
+    });
+
+    try {
+      final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      final tempMessage = CachedMessage(
+        id: tempId,
+        accountId: _myId,
+        chatId: widget.chatId,
+        senderId: _myId,
+        text: text,
+        time: now,
+        status: 'sending',
+      );
+
+      setState(() {
+        _messages.add(tempMessage);
+        _messageController.clear();
+        _hasText = false;
+      });
+
+      _scrollToBottom();
+
+      await messagesModule.sendMessage(_myId, widget.chatId, text);
+
+      final index = _messages.indexWhere((m) => m.id == tempId);
+      if (index != -1) {
+        setState(() {
+          _messages[index] = CachedMessage(
+            id: tempId,
+            accountId: _myId,
+            chatId: widget.chatId,
+            senderId: _myId,
+            text: text,
+            time: now,
+            status: 'sent',
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Error sending message: $e');
+    } finally {
+      setState(() {
+        _isSending = false;
+      });
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -131,10 +205,7 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: cs.primaryContainer,
                 child: Text(
                   widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                  style: TextStyle(
-                    color: cs.onPrimaryContainer,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: cs.onPrimaryContainer, fontSize: 12),
                 ),
               ),
             const SizedBox(width: 12),
@@ -178,15 +249,51 @@ class _ChatScreenState extends State<ChatScreen>
       body: Column(
         children: [
           Expanded(
-            child:
-                _isLoading ||
-                    (_messages.isEmpty && api.state != SessionState.online)
+            child: _isLoading && _messages.isEmpty
                 ? _buildShimmerLoading()
-                : const SizedBox.shrink(),
+                : _buildMessagesList(),
           ),
           _buildInputArea(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildMessagesList() {
+    if (_messages.isEmpty) {
+      return Center(
+        child: Text(
+          'No messages yet',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      reverse: true,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: _messages.length,
+      itemBuilder: (context, index) {
+        final message = _messages[_messages.length - 1 - index];
+        final isMe = message.senderId == _myId;
+        final prevMessage = index < _messages.length - 1
+            ? _messages[_messages.length - 2 - index]
+            : null;
+        final nextMessage = index > 0
+            ? _messages[_messages.length - index]
+            : null;
+
+        return MessageBubble(
+          message: message,
+          isMe: isMe,
+          myId: _myId,
+          prevMessage: prevMessage,
+          nextMessage: nextMessage,
+        );
+      },
     );
   }
 
@@ -316,20 +423,12 @@ class _ChatScreenState extends State<ChatScreen>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Icon(
-                      Symbols.face,
-                      color: mutedIcon,
-                      size: 24,
-                      weight: 400,
-                    ),
+                    Icon(Symbols.face, color: mutedIcon, size: 24, weight: 400),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
                         controller: _messageController,
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(color: cs.onSurface, fontSize: 16),
                         maxLines: null,
                         keyboardType: TextInputType.multiline,
                         textAlignVertical: TextAlignVertical.center,
@@ -379,11 +478,14 @@ class _ChatScreenState extends State<ChatScreen>
                 color: _hasText ? cs.primary : cs.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                _hasText ? Symbols.send : Symbols.mic,
-                color: _hasText ? cs.onPrimary : cs.onSurface,
-                size: 24,
-                weight: 400,
+              child: GestureDetector(
+                onTap: _hasText ? _sendMessage : null,
+                child: Icon(
+                  _hasText ? Symbols.send : Symbols.mic,
+                  color: _hasText ? cs.onPrimary : cs.onSurface,
+                  size: 24,
+                  weight: 400,
+                ),
               ),
             ),
           ],

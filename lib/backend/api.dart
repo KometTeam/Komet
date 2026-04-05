@@ -12,9 +12,9 @@ import '../core/transport/sender.dart';
 import '../core/utils/logger.dart';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'dart:io';
-import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'dart:io';
 
 enum SessionState { disconnected, connecting, connected, online }
 
@@ -237,6 +237,19 @@ class Api {
     _socketStateSubscription = null;
     _receiver.reset();
     _dispatcher.clearPending();
+  }
+
+  Future<void> reconnectAndLogin() async {
+    await connect();
+    if (_sessionState == SessionState.online && _onReconnectCallback != null) {
+      _onReconnectCallback!();
+    }
+  }
+
+  void Function()? _onReconnectCallback;
+
+  void setReconnectCallback(void Function() callback) {
+    _onReconnectCallback = callback;
   }
 
   void _startPinging() {
