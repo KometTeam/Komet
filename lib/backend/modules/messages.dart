@@ -151,11 +151,13 @@ class MessagesModule {
       text: m['text'] as String?,
       time: (m['time'] as int?) ?? 0,
       status: m['status'] as String?,
-      payload: m
-          .cast<
-            String,
-            dynamic
-          >(), // Сохраняем весь пакет для гибкости (аттачи и т.д.)
+      payload: m.cast<String, dynamic>(),
     );
+  }
+
+  Future<void> sendMessage(int accountId, int chatId, String text) async {
+    final payload = {'chatId': chatId, 'text': text};
+
+    await _api.sendRequest(Opcode.msgSend, payload);
   }
 }

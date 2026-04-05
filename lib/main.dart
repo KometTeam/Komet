@@ -62,6 +62,14 @@ class KometAppState extends State<KometApp> {
   void initState() {
     super.initState();
     _locale = widget.initialLocale;
+
+    api.setReconnectCallback(() async {
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        await accountModule.login(accountId: accountId);
+      }
+    });
+
     api.sessionExpiredStream.listen((SessionExpiredException e) async {
       if (_isLoggingOut) return;
       _isLoggingOut = true;
