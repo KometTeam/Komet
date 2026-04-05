@@ -21,9 +21,6 @@ class MessageBubble extends StatelessWidget {
       return false;
     final hasPhoto = message.attachments!.any((a) => a is PhotoAttachment);
     final hasCaption = message.text != null && message.text!.isNotEmpty;
-    debugPrint(
-      'DEBUG _hasPhotoWithCaption: hasPhoto=$hasPhoto, hasCaption=$hasCaption, text="${message.text}", shape=$shape',
-    );
     return hasPhoto && hasCaption;
   }
 
@@ -81,6 +78,7 @@ class MessageBubble extends StatelessWidget {
   MessageType get contentType {
     if (message.attachments != null && message.attachments!.isNotEmpty) {
       final first = message.attachments!.first;
+      if (first is UnknownAttachment) return MessageType.text;
       if (first.type == AttachmentType.audio) return MessageType.voice;
       return MessageType.attachment;
     }
@@ -251,16 +249,7 @@ class MessageBubble extends StatelessWidget {
             return const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
         }
       case MessageType.attachment:
-        switch (shape) {
-          case BubbleShape.groupedMiddle:
-            return const EdgeInsets.all(0);
-          case BubbleShape.singleTop:
-            return const EdgeInsets.all(0);
-          case BubbleShape.singleBottom:
-            return const EdgeInsets.all(0);
-          case BubbleShape.singleMiddle:
-            return const EdgeInsets.all(0);
-        }
+        return const EdgeInsets.all(0);
       case MessageType.voice:
         switch (shape) {
           case BubbleShape.groupedMiddle:
@@ -395,7 +384,12 @@ class MessageBubble extends StatelessWidget {
     }
 
     if (count == 1) {
-      return IntrinsicWidth(
+      final photo = photos[0];
+      final pw = photo.width?.toDouble() ?? 200;
+      final photoWidth = pw.clamp(photoMinSize, photoMaxSize);
+
+      return SizedBox(
+        width: photoWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,7 +404,7 @@ class MessageBubble extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Expanded(child: _buildCaption(ctx)),
+                  Flexible(child: _buildCaption(ctx)),
                   _buildMeta(ctx),
                 ],
               ),
@@ -744,68 +738,82 @@ class MessageBubble extends StatelessWidget {
         ? Colors.white
         : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
     final subtitleColor = isMe
-        ? Colors.white.withValues(alpha: 0.7)
+        ? Colors.white.withValues(alpha: 0.65)
         : (isDark ? cs.onSurfaceVariant : const Color(0xFF8E8E93));
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Container(
-          width: 220,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isMe
-                ? Colors.white.withValues(alpha: 0.15)
-                : (isDark ? cs.surface : const Color(0xFFFFFFFF)),
-            borderRadius: BorderRadius.circular(12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: isMe
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : cs.primaryContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Symbols.description,
+              color: isMe ? Colors.white : cs.primary,
+              size: 20,
+            ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isMe
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                child: Icon(
-                  Symbols.file_download,
-                  color: isMe ? Colors.white : cs.primary,
-                  size: 22,
+                const SizedBox(height: 2),
+                Text(
+                  sizeStr,
+                  style: TextStyle(
+                    color: subtitleColor,
+                    fontSize: 12,
+                    height: 1.2,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Скачать • $sizeStr',
-                      style: TextStyle(color: subtitleColor, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        _buildMeta(ctx),
-      ],
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: isMe
+                    ? Colors.white.withValues(alpha: 0.15)
+                    : (isDark
+                          ? cs.surfaceContainerHighest
+                          : const Color(0xFFE5E5EA)),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Symbols.download,
+                color: isMe ? Colors.white : cs.primary,
+                size: 18,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
