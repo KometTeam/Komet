@@ -1,12 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
+import '../../models/attachment.dart';
 
 enum MessageType { text, attachment, voice }
 
 enum BubbleShape { singleTop, singleBottom, singleMiddle, groupedMiddle }
 
 class MessageBubble extends StatelessWidget {
+  static const double photoMaxSize = 280.0;
+  static const double photoMinSize = 100.0;
+  static const double photoBorderRadius = 12.0;
+  static const double bubbleBorderRadius = 20.0;
+  static const double captionPaddingHorizontal = 6.0;
+  static const double captionPaddingRight = 4.0;
+  static const double compactTimePadding = 8.0;
+
+  bool get _hasPhotoWithCaption {
+    if (message.attachments == null || message.attachments!.isEmpty)
+      return false;
+    final hasPhoto = message.attachments!.any((a) => a is PhotoAttachment);
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    debugPrint(
+      'DEBUG _hasPhotoWithCaption: hasPhoto=$hasPhoto, hasCaption=$hasCaption, text="${message.text}", shape=$shape',
+    );
+    return hasPhoto && hasCaption;
+  }
+
+  bool get _hasMultiplePhotosNoCaption {
+    if (message.attachments == null || message.attachments!.isEmpty)
+      return false;
+    final photoCount = message.attachments!.whereType<PhotoAttachment>().length;
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    return photoCount >= 2 && !hasCaption;
+  }
+
   final CachedMessage message;
   final bool isMe;
   final int myId;
@@ -51,12 +79,14 @@ class MessageBubble extends StatelessWidget {
   }
 
   MessageType get contentType {
+    if (message.attachments != null && message.attachments!.isNotEmpty) {
+      final first = message.attachments!.first;
+      if (first.type == AttachmentType.audio) return MessageType.voice;
+      return MessageType.attachment;
+    }
+
     final payload = message.payload;
     if (payload == null) return MessageType.text;
-
-    final attachments = payload['attachments'];
-    if (attachments is List && attachments.isNotEmpty)
-      return MessageType.attachment;
 
     final voice = payload['voice'];
     if (voice != null) return MessageType.voice;
@@ -66,34 +96,61 @@ class MessageBubble extends StatelessWidget {
 
   // скругление уже смешариков т.е сообщений, те которые isme ? .. Это наши, после : это чужие
   BorderRadius get _borderRadius {
+    final topRadius = Radius.circular(bubbleBorderRadius);
+    final bottomRadius = Radius.circular(bubbleBorderRadius);
+    final smallRadius = const Radius.circular(4);
+
+    if (_hasPhotoWithCaption &&
+        (shape == BubbleShape.singleTop ||
+            shape == BubbleShape.singleMiddle ||
+            shape == BubbleShape.singleBottom)) {
+      return BorderRadius.only(
+        topLeft: topRadius,
+        topRight: isMe ? topRadius : topRadius,
+        bottomLeft: smallRadius,
+        bottomRight: smallRadius,
+      );
+    }
+
+    if (_hasMultiplePhotosNoCaption &&
+        (shape == BubbleShape.singleBottom ||
+            shape == BubbleShape.singleMiddle)) {
+      return BorderRadius.only(
+        topLeft: smallRadius,
+        topRight: smallRadius,
+        bottomLeft: isMe ? smallRadius : smallRadius,
+        bottomRight: isMe ? smallRadius : bottomRadius,
+      );
+    }
+
     switch (shape) {
       case BubbleShape.singleTop:
         return BorderRadius.only(
-          topLeft: isMe ? Radius.circular(20) : Radius.circular(4),
-          topRight: isMe ? Radius.circular(4) : Radius.circular(20),
-          bottomLeft: isMe ? Radius.circular(4) : Radius.circular(4),
-          bottomRight: isMe ? Radius.circular(4) : Radius.circular(4),
+          topLeft: isMe ? topRadius : smallRadius,
+          topRight: isMe ? smallRadius : topRadius,
+          bottomLeft: smallRadius,
+          bottomRight: smallRadius,
         );
       case BubbleShape.singleBottom:
         return BorderRadius.only(
-          topLeft: isMe ? Radius.circular(4) : Radius.circular(4),
-          topRight: isMe ? Radius.circular(4) : Radius.circular(4),
-          bottomLeft: isMe ? Radius.circular(20) : Radius.circular(4),
-          bottomRight: isMe ? Radius.circular(4) : Radius.circular(20),
+          topLeft: smallRadius,
+          topRight: smallRadius,
+          bottomLeft: isMe ? topRadius : smallRadius,
+          bottomRight: isMe ? smallRadius : topRadius,
         );
       case BubbleShape.singleMiddle:
         return BorderRadius.only(
-          topLeft: isMe ? Radius.circular(20) : Radius.circular(20),
-          topRight: isMe ? Radius.circular(20) : Radius.circular(20),
-          bottomLeft: isMe ? Radius.circular(20) : Radius.circular(4),
-          bottomRight: isMe ? Radius.circular(4) : Radius.circular(20),
+          topLeft: topRadius,
+          topRight: topRadius,
+          bottomLeft: isMe ? topRadius : smallRadius,
+          bottomRight: isMe ? smallRadius : topRadius,
         );
       case BubbleShape.groupedMiddle:
         return BorderRadius.only(
-          topLeft: isMe ? Radius.circular(20) : Radius.circular(4),
-          topRight: isMe ? Radius.circular(4) : Radius.circular(4),
-          bottomLeft: isMe ? Radius.circular(20) : Radius.circular(4),
-          bottomRight: isMe ? Radius.circular(4) : Radius.circular(4),
+          topLeft: isMe ? topRadius : smallRadius,
+          topRight: isMe ? smallRadius : smallRadius,
+          bottomLeft: isMe ? topRadius : smallRadius,
+          bottomRight: isMe ? smallRadius : smallRadius,
         );
     }
   }
@@ -288,7 +345,7 @@ class MessageBubble extends StatelessWidget {
             _formatTime(message.time),
             style: TextStyle(
               color: textColor.withValues(alpha: 0.7),
-              fontSize: 11,
+              fontSize: 10,
             ),
           ),
         ),
@@ -298,156 +355,392 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildAttachmentContent(BuildContext context) {
-    final payload = message.payload;
-    final attachments = payload?['attachments'] as List?;
+    final attachments = message.attachments;
     if (attachments == null || attachments.isEmpty) {
       return _buildTextContent(context);
     }
 
-    final attachment = attachments.first as Map<String, dynamic>?;
-    if (attachment == null) return _buildTextContent(context);
-
-    final type = attachment['type'] as String?;
-    final url = attachment['url'] ?? attachment['path'];
-    final thumbnail = attachment['thumbnail'];
-
-    if (type == 'image' || type == 'photo') {
-      return _buildImageAttachment(context, url, thumbnail);
-    } else if (type == 'video') {
-      return _buildVideoAttachment(context, url, attachment['duration']);
-    } else if (type == 'file') {
-      return _buildFileAttachment(context, attachment['name'] ?? 'File', url);
+    final photos = attachments.whereType<PhotoAttachment>().toList();
+    if (photos.isEmpty) {
+      return _buildGenericAttachment(context, attachments.first);
     }
 
-    return _buildTextContent(context);
+    return _buildPhotoContent(context, photos);
   }
 
-  Widget _buildImageAttachment(
-    BuildContext ctx,
-    dynamic url,
-    dynamic thumbnail,
-  ) {
-    final cs = Theme.of(ctx).colorScheme;
-    final imageUrl = url?.toString() ?? '';
-    final thumbUrl = thumbnail?.toString() ?? '';
+  Widget _buildPhotoContent(BuildContext ctx, List<PhotoAttachment> photos) {
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final count = photos.length;
+
+    Widget photosWidget;
+    if (count == 1) {
+      photosWidget = _buildSinglePhoto(ctx, photos[0]);
+    } else if (count == 2) {
+      photosWidget = _buildTwoPhotos(ctx, photos[0], photos[1]);
+    } else {
+      photosWidget = _buildPhotoGrid(ctx, photos);
+    }
+
+    if (!hasCaption) {
+      return Stack(
+        children: [
+          photosWidget,
+          Positioned(
+            bottom: compactTimePadding,
+            right: compactTimePadding,
+            child: _buildCompactTime(ctx),
+          ),
+        ],
+      );
+    }
+
+    if (count == 1) {
+      return IntrinsicWidth(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            photosWidget,
+            Padding(
+              padding: const EdgeInsets.only(
+                left: captionPaddingHorizontal,
+                right: captionPaddingRight,
+                bottom: 6,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(child: _buildCaption(ctx)),
+                  _buildMeta(ctx),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(
+        photosWidget,
+        Padding(
+          padding: const EdgeInsets.only(
+            left: captionPaddingHorizontal,
+            right: captionPaddingRight,
+            bottom: 6,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              if (thumbUrl.isNotEmpty)
-                Image.network(
-                  thumbUrl,
-                  width: 200,
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _buildImagePlaceholder(cs),
-                )
-              else if (imageUrl.isNotEmpty)
-                Image.network(
-                  imageUrl,
-                  width: 200,
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _buildImagePlaceholder(cs),
-                )
-              else
-                _buildImagePlaceholder(cs),
-              if (imageUrl.isNotEmpty)
-                Positioned.fill(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(onTap: () {}),
-                  ),
-                ),
+              Expanded(child: _buildCaption(ctx)),
+              _buildMeta(ctx),
             ],
           ),
         ),
-        const SizedBox(height: 6),
-        _buildMeta(ctx),
       ],
     );
   }
 
-  Widget _buildImagePlaceholder(ColorScheme cs) {
-    return Container(
-      width: 200,
-      height: 200,
-      color: cs.surfaceContainerHighest,
-      child: Icon(Symbols.image, size: 48, color: cs.onSurfaceVariant),
+  Widget _buildSinglePhoto(BuildContext ctx, PhotoAttachment photo) {
+    final imageUrl = photo.baseUrl ?? '';
+    final width = photo.width?.toDouble() ?? 200;
+    final height = photo.height?.toDouble() ?? 200;
+
+    final constrainedWidth = width.clamp(photoMinSize, photoMaxSize);
+    final constrainedHeight = height.clamp(photoMinSize, photoMaxSize);
+
+    final bool matchTop = _hasPhotoWithCaption;
+    final bool matchBottom = !_hasPhotoWithCaption;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.only(
+        topLeft: Radius.circular(
+          matchTop ? bubbleBorderRadius : photoBorderRadius,
+        ),
+        topRight: Radius.circular(
+          matchTop ? bubbleBorderRadius : photoBorderRadius,
+        ),
+        bottomLeft: Radius.circular(
+          matchBottom ? (isMe ? bubbleBorderRadius : 4) : 4,
+        ),
+        bottomRight: Radius.circular(
+          matchBottom ? (isMe ? 4 : bubbleBorderRadius) : 4,
+        ),
+      ),
+      child: Stack(
+        children: [
+          if (imageUrl.isNotEmpty)
+            Image.network(
+              imageUrl,
+              width: constrainedWidth,
+              height: constrainedHeight,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _buildPhotoPlaceholder(
+                ctx,
+                constrainedWidth,
+                constrainedHeight,
+              ),
+            )
+          else
+            _buildPhotoPlaceholder(ctx, constrainedWidth, constrainedHeight),
+          Positioned.fill(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(onTap: () => _openPhotoViewer(ctx, photo)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildVideoAttachment(
+  Widget _buildTwoPhotos(
     BuildContext ctx,
-    dynamic url,
-    dynamic duration,
+    PhotoAttachment p1,
+    PhotoAttachment p2,
   ) {
-    final cs = Theme.of(ctx).colorScheme;
-    final videoUrl = url?.toString() ?? '';
-    final durationSec = duration as int? ?? 0;
-    final durationStr = _formatDuration(durationSec);
+    final matchTop =
+        _hasMultiplePhotosNoCaption && shape == BubbleShape.singleTop;
+    final matchBottom =
+        _hasMultiplePhotosNoCaption && shape == BubbleShape.singleBottom;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(
-            children: [
-              Container(
-                width: 200,
-                height: 150,
-                color: cs.surfaceContainerHighest,
-                child: Icon(
-                  Symbols.videocam,
-                  size: 48,
-                  color: cs.onSurfaceVariant,
-                ),
+    return ClipRRect(
+      borderRadius: BorderRadius.only(
+        topLeft: Radius.circular(
+          matchTop ? bubbleBorderRadius : photoBorderRadius,
+        ),
+        topRight: Radius.circular(
+          matchTop ? bubbleBorderRadius : photoBorderRadius,
+        ),
+        bottomLeft: Radius.circular(matchBottom ? 4 : photoBorderRadius),
+        bottomRight: Radius.circular(
+          matchBottom ? (isMe ? 4 : bubbleBorderRadius) : photoBorderRadius,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildPhotoTile(ctx, p1),
+          const SizedBox(width: 2),
+          _buildPhotoTile(ctx, p2),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoGrid(BuildContext ctx, List<PhotoAttachment> photos) {
+    final displayCount = photos.length > 4 ? 4 : photos.length;
+    final remaining = photos.length - 4;
+
+    final matchTop =
+        _hasMultiplePhotosNoCaption && shape == BubbleShape.singleTop;
+    final matchBottom =
+        _hasMultiplePhotosNoCaption && shape == BubbleShape.singleBottom;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.only(
+        topLeft: Radius.circular(
+          matchTop ? bubbleBorderRadius : photoBorderRadius,
+        ),
+        topRight: Radius.circular(
+          matchTop ? bubbleBorderRadius : photoBorderRadius,
+        ),
+        bottomLeft: Radius.circular(matchBottom ? 4 : photoBorderRadius),
+        bottomRight: Radius.circular(
+          matchBottom ? (isMe ? 4 : bubbleBorderRadius) : photoBorderRadius,
+        ),
+      ),
+      child: GridView.count(
+        crossAxisCount: 2,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        children: List.generate(displayCount, (i) {
+          if (i == 3 && remaining > 0) {
+            return _buildPhotoTileWithOverlay(ctx, photos[i], '+$remaining');
+          }
+          return _buildPhotoTile(ctx, photos[i]);
+        }),
+      ),
+    );
+  }
+
+  Widget _buildPhotoTile(BuildContext ctx, PhotoAttachment photo) {
+    final imageUrl = photo.baseUrl ?? '';
+    return Expanded(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Stack(
+          children: [
+            if (imageUrl.isNotEmpty)
+              Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) =>
+                    _buildPhotoPlaceholder(ctx, 100, 100),
+              )
+            else
+              _buildPhotoPlaceholder(ctx, 100, 100),
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(onTap: () => _openPhotoViewer(ctx, photo)),
               ),
-              Positioned(
-                bottom: 8,
-                left: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoTileWithOverlay(
+    BuildContext ctx,
+    PhotoAttachment photo,
+    String overlay,
+  ) {
+    final imageUrl = photo.baseUrl ?? '';
+    return Expanded(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Stack(
+          children: [
+            if (imageUrl.isNotEmpty)
+              Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) =>
+                    _buildPhotoPlaceholder(ctx, 100, 100),
+              )
+            else
+              _buildPhotoPlaceholder(ctx, 100, 100),
+            Positioned.fill(
+              child: Container(
+                color: Colors.black45,
+                child: Center(
                   child: Text(
-                    durationStr,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    overlay,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
-              if (videoUrl.isNotEmpty)
-                Positioned.fill(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(onTap: () {}),
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const SizedBox(height: 6),
-        _buildMeta(ctx),
-      ],
+      ),
     );
   }
 
-  Widget _buildFileAttachment(BuildContext ctx, String fileName, dynamic url) {
+  Widget _buildPhotoPlaceholder(
+    BuildContext ctx,
+    double w,
+    double h, {
+    VoidCallback? onRetry,
+  }) {
+    final cs = Theme.of(ctx).colorScheme;
+    return Container(
+      width: w,
+      height: h,
+      color: cs.surfaceContainerHighest,
+      child: onRetry != null
+          ? Center(
+              child: IconButton(
+                icon: Icon(Symbols.refresh, color: cs.onSurfaceVariant),
+                onPressed: onRetry,
+                tooltip: 'Retry',
+              ),
+            )
+          : Center(
+              child: Icon(Symbols.image, size: 48, color: cs.onSurfaceVariant),
+            ),
+    );
+  }
+
+  Widget _buildCaption(BuildContext ctx) {
     final cs = Theme.of(ctx).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
     final textColor = isMe
         ? Colors.white
         : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
+
+    return Text(
+      message.text ?? '',
+      style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
+    );
+  }
+
+  Widget _buildGenericAttachment(
+    BuildContext ctx,
+    MessageAttachment attachment,
+  ) {
+    final cs = Theme.of(ctx).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final textColor = isMe
+        ? Colors.white
+        : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
+
+    switch (attachment.type) {
+      case AttachmentType.video:
+        return _buildVideoAttachment(ctx, attachment);
+      case AttachmentType.file:
+        return _buildFileAttachment(ctx, attachment);
+      case AttachmentType.sticker:
+        return _buildStickerAttachment(ctx, attachment);
+      default:
+        return _buildTextContent(ctx);
+    }
+  }
+
+  Widget _buildVideoAttachment(BuildContext ctx, MessageAttachment video) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(photoBorderRadius),
+          child: Stack(
+            children: [
+              Container(
+                width: 200,
+                height: 150,
+                color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                child: Icon(
+                  Symbols.videocam,
+                  size: 48,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Positioned.fill(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(onTap: () {}),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        _buildMeta(ctx),
+      ],
+    );
+  }
+
+  Widget _buildFileAttachment(BuildContext ctx, MessageAttachment file) {
+    final cs = Theme.of(ctx).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final textColor = isMe
+        ? Colors.white
+        : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
+    final name = (file as dynamic).name as String? ?? 'File';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -459,7 +752,7 @@ class MessageBubble extends StatelessWidget {
             color: isMe
                 ? Colors.white.withValues(alpha: 0.15)
                 : (isDark ? cs.surface : const Color(0xFFFFFFFF)),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(photoBorderRadius),
             border: Border.all(
               color: isMe
                   ? Colors.white.withValues(alpha: 0.3)
@@ -489,7 +782,7 @@ class MessageBubble extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      fileName,
+                      name,
                       style: TextStyle(
                         color: textColor,
                         fontSize: 14,
@@ -516,6 +809,33 @@ class MessageBubble extends StatelessWidget {
         _buildMeta(ctx),
       ],
     );
+  }
+
+  Widget _buildStickerAttachment(BuildContext ctx, MessageAttachment sticker) {
+    final preview = (sticker as dynamic).previewData as String? ?? '';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(photoBorderRadius),
+      child: Stack(
+        children: [
+          if (preview.isNotEmpty)
+            Image.network(
+              preview,
+              width: 150,
+              height: 150,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  _buildPhotoPlaceholder(ctx, 150, 150),
+            )
+          else
+            _buildPhotoPlaceholder(ctx, 150, 150),
+        ],
+      ),
+    );
+  }
+
+  void _openPhotoViewer(BuildContext ctx, PhotoAttachment photo) {
+    // TODO: Open photo viewer
   }
 
   Widget _buildVoiceContent(BuildContext context) {
@@ -553,6 +873,7 @@ class MessageBubble extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Text(
             _formatTime(message.time),
@@ -560,6 +881,31 @@ class MessageBubble extends StatelessWidget {
           ),
           if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(context)],
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompactTime(BuildContext ctx) {
+    final cs = Theme.of(ctx).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final bgColor = isMe
+        ? Colors.black.withValues(alpha: 0.4)
+        : Colors.black.withValues(alpha: 0.5);
+    final textColor = Colors.white;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        _formatTime(message.time),
+        style: TextStyle(
+          color: textColor,
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
