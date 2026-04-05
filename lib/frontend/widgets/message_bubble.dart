@@ -737,12 +737,18 @@ class MessageBubble extends StatelessWidget {
   Widget _buildFileAttachment(BuildContext ctx, MessageAttachment file) {
     final cs = Theme.of(ctx).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
+    final name = (file as dynamic).name as String? ?? 'File';
+    final size = (file as dynamic).size as int? ?? 0;
+    final sizeStr = _formatFileSize(size);
     final textColor = isMe
         ? Colors.white
         : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
-    final name = (file as dynamic).name as String? ?? 'File';
+    final subtitleColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : (isDark ? cs.onSurfaceVariant : const Color(0xFF8E8E93));
 
-    return Column(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Container(
@@ -752,12 +758,7 @@ class MessageBubble extends StatelessWidget {
             color: isMe
                 ? Colors.white.withValues(alpha: 0.15)
                 : (isDark ? cs.surface : const Color(0xFFFFFFFF)),
-            borderRadius: BorderRadius.circular(photoBorderRadius),
-            border: Border.all(
-              color: isMe
-                  ? Colors.white.withValues(alpha: 0.3)
-                  : cs.outlineVariant.withValues(alpha: 0.5),
-            ),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
@@ -771,15 +772,16 @@ class MessageBubble extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  Symbols.description,
+                  Symbols.file_download,
                   color: isMe ? Colors.white : cs.primary,
-                  size: 20,
+                  size: 22,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       name,
@@ -788,16 +790,13 @@ class MessageBubble extends StatelessWidget {
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Tap to download',
-                      style: TextStyle(
-                        color: textColor.withValues(alpha: 0.6),
-                        fontSize: 12,
-                      ),
+                      'Скачать • $sizeStr',
+                      style: TextStyle(color: subtitleColor, fontSize: 12),
                     ),
                   ],
                 ),
@@ -805,10 +804,15 @@ class MessageBubble extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 6),
         _buildMeta(ctx),
       ],
     );
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} МБ';
   }
 
   Widget _buildStickerAttachment(BuildContext ctx, MessageAttachment sticker) {
