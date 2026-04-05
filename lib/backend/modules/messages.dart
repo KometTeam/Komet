@@ -180,8 +180,22 @@ class MessagesModule {
     );
   }
 
-  Future<void> sendMessage(int accountId, int chatId, String text) async {
-    final payload = {'chatId': chatId, 'text': text};
+  Future<void> sendMessage(
+    int accountId,
+    int chatId,
+    String text, {
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'text': text,
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'elements': [],
+        'attaches': [],
+      },
+      'notify': notify,
+    };
 
     await _api.sendRequest(Opcode.msgSend, payload);
   }
