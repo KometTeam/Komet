@@ -41,6 +41,10 @@ abstract class MessageAttachment {
         return LocationAttachment.fromMap(map);
       case 'CONTROL':
         return ControlAttachment.fromMap(map);
+      case 'SHARE':
+        return FileAttachment.fromMap(map);
+      case 'INLINE_KEYBOARD':
+        return UnknownAttachment(map);
       default:
         return UnknownAttachment(map);
     }
@@ -125,8 +129,19 @@ class VideoAttachment extends MessageAttachment {
   }) : super(type: AttachmentType.video);
 
   factory VideoAttachment.fromMap(Map<String, dynamic> map) {
+    String? previewStr;
+    final previewRaw = map['previewData'];
+    if (previewRaw is String) {
+      previewStr = previewRaw;
+    } else if (previewRaw is List) {
+      try {
+        final bytes = List<int>.from(previewRaw);
+        previewStr = String.fromCharCodes(bytes);
+      } catch (_) {}
+    }
+
     return VideoAttachment(
-      previewData: map['previewData'] as String?,
+      previewData: previewStr,
       baseUrl: map['baseUrl'] as String?,
       videoId: map['videoId'] as int?,
       videoToken: map['videoToken'] as String?,
@@ -170,8 +185,19 @@ class AudioAttachment extends MessageAttachment {
   }) : super(type: AttachmentType.audio);
 
   factory AudioAttachment.fromMap(Map<String, dynamic> map) {
+    String? previewStr;
+    final previewRaw = map['previewData'];
+    if (previewRaw is String) {
+      previewStr = previewRaw;
+    } else if (previewRaw is List) {
+      try {
+        final bytes = List<int>.from(previewRaw);
+        previewStr = String.fromCharCodes(bytes);
+      } catch (_) {}
+    }
+
     return AudioAttachment(
-      previewData: map['previewData'] as String?,
+      previewData: previewStr,
       baseUrl: map['baseUrl'] as String?,
       audioId: map['audioId'] as int?,
       audioToken: map['audioToken'] as String?,
@@ -211,8 +237,19 @@ class FileAttachment extends MessageAttachment {
   }) : super(type: AttachmentType.file);
 
   factory FileAttachment.fromMap(Map<String, dynamic> map) {
+    String? previewStr;
+    final previewRaw = map['previewData'];
+    if (previewRaw is String) {
+      previewStr = previewRaw;
+    } else if (previewRaw is List) {
+      try {
+        final bytes = List<int>.from(previewRaw);
+        previewStr = String.fromCharCodes(bytes);
+      } catch (_) {}
+    }
+
     return FileAttachment(
-      previewData: map['previewData'] as String?,
+      previewData: previewStr,
       baseUrl: map['baseUrl'] as String?,
       fileId: map['fileId'] as int?,
       fileToken: map['fileToken'] as String?,
@@ -250,8 +287,19 @@ class StickerAttachment extends MessageAttachment {
   }) : super(type: AttachmentType.sticker);
 
   factory StickerAttachment.fromMap(Map<String, dynamic> map) {
+    String? previewStr;
+    final previewRaw = map['previewData'];
+    if (previewRaw is String) {
+      previewStr = previewRaw;
+    } else if (previewRaw is List) {
+      try {
+        final bytes = List<int>.from(previewRaw);
+        previewStr = String.fromCharCodes(bytes);
+      } catch (_) {}
+    }
+
     return StickerAttachment(
-      previewData: map['previewData'] as String?,
+      previewData: previewStr,
       baseUrl: map['baseUrl'] as String?,
       stickerId: map['stickerId'] as String?,
       stickerPackId: map['stickerPackId'] as String?,
