@@ -9,6 +9,7 @@ import 'backend/modules/messages.dart';
 import 'core/storage/app_database.dart';
 import 'core/storage/token_storage.dart';
 import 'core/protocol/packet.dart';
+import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/screens/chats/chat_list_screen.dart';
 import 'frontend/widgets/custom_notification.dart';
@@ -35,13 +36,25 @@ void main() async {
   await AppDatabase.init();
   await api.connect();
   final initialLocale = await _loadInitialLocale();
-  runApp(KometApp(initialLocale: initialLocale));
+  final prefs = await SharedPreferences.getInstance();
+  final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
+  runApp(
+    KometApp(
+      initialLocale: initialLocale,
+      initialFpsOverlay: initialFpsOverlay,
+    ),
+  );
 }
 
 class KometApp extends StatefulWidget {
-  const KometApp({super.key, required this.initialLocale});
+  const KometApp({
+    super.key,
+    required this.initialLocale,
+    this.initialFpsOverlay = false,
+  });
 
   final Locale initialLocale;
+  final bool initialFpsOverlay;
   static final navigatorKey = GlobalKey<NavigatorState>();
 
   static KometAppState? stateOf(BuildContext context) {
@@ -57,6 +70,8 @@ class KometAppState extends State<KometApp> {
 
   late Locale _locale;
   bool _isLoggingOut = false;
+  late final ValueNotifier<bool> fpsOverlayEnabled =
+      ValueNotifier(widget.initialFpsOverlay);
 
   @override
   void initState() {
@@ -93,6 +108,19 @@ class KometAppState extends State<KometApp> {
       }
       _isLoggingOut = false;
     });
+  }
+
+  @override
+  void dispose() {
+    fpsOverlayEnabled.dispose();
+    super.dispose();
+  }
+
+  Future<void> setFpsOverlayEnabled(bool value) async {
+    if (fpsOverlayEnabled.value == value) return;
+    fpsOverlayEnabled.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dev_fps_overlay', value);
   }
 
   Future<void> applyLocale(Locale locale) async {
@@ -184,6 +212,21 @@ class KometAppState extends State<KometApp> {
             ),
           ),
           navigatorKey: KometApp.navigatorKey,
+          builder: (context, child) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: fpsOverlayEnabled,
+              builder: (context, fpsOn, _) {
+                return Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    child ?? const SizedBox.shrink(),
+                    if (fpsOn) const FpsOverlayLayer(),
+                  ],
+                );
+              },
+            );
+          },
           home: const _StartupScreen(),
         );
       },
