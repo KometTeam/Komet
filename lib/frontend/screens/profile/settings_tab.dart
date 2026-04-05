@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
 import 'devices_screen.dart';
 import 'security_screen.dart';
@@ -16,16 +16,26 @@ class SettingsTab extends StatefulWidget {
 class _SettingsTabState extends State<SettingsTab> {
   ProfileData? _profile;
   bool _isPhoneVisible = false;
+  String? _appVersionLabel;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadAppVersion();
   }
 
   Future<void> _loadProfile() async {
     final p = await AppDatabase.loadActiveProfile();
     if (mounted) setState(() => _profile = p);
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _appVersionLabel = 'Версия ${info.version} (${info.buildNumber})';
+    });
   }
 
   @override
@@ -117,6 +127,23 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
               ),
             ),
+            if (_appVersionLabel != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
+                  child: Center(
+                    child: Text(
+                      _appVersionLabel!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),

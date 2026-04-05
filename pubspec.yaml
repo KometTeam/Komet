@@ -51,6 +51,7 @@ dependencies:
   material_symbols_icons: ^4.2906.0
   dynamic_color: ^1.8.1
   shared_preferences: ^2.5.4
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:
