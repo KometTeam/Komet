@@ -288,6 +288,22 @@ class AccountModule {
     _checkPacketError(packet, 'terminateOtherSessions');
   }
 
+  Future<void> authorizeWebQrLogin(String qrLink) async {
+    _ensureOnline();
+    final link = qrLink.trim();
+    if (link.isEmpty) {
+      throw ArgumentError('Пустая ссылка из QR');
+    }
+
+    await _api.sendRequest(Opcode.ping, {'interactive': true});
+    await _api.sendRequest(Opcode.sessionsInfo, {});
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final packet = await _api.sendRequest(Opcode.authQrApprove, {
+      'qrLink': link,
+    });
+    _checkPacketError(packet, 'authorizeWebQrLogin');
+  }
+
   Future<ProfileData> switchAccount(int accountId) async {
     final profile = await AppDatabase.loadProfile(accountId);
     if (profile == null) {
