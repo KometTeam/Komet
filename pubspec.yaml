@@ -53,6 +53,7 @@ dependencies:
   shared_preferences: ^2.5.4
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
+  smart_auth: ^3.2.0
 
 dev_dependencies:
   flutter_test:

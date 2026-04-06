@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginTitle.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to Komet'**
+  /// **'Log in to Komet'**
   String get loginTitle;
 
   /// No description provided for @loginSubtitle.
@@ -134,22 +134,16 @@ abstract class AppLocalizations {
   /// **'Other sign-in methods'**
   String get loginOtherSignInMethods;
 
-  /// No description provided for @loginTermsIntro.
-  ///
-  /// In en, this message translates to:
-  /// **'By continuing, you agree to \n'**
-  String get loginTermsIntro;
-
   /// No description provided for @loginTermsLink.
   ///
   /// In en, this message translates to:
-  /// **'the terms of use'**
+  /// **'Terms of Use «Komet»'**
   String get loginTermsLink;
 
   /// No description provided for @loginTermsOfUse.
   ///
   /// In en, this message translates to:
-  /// **'Terms of use'**
+  /// **'Terms of Use «Komet»'**
   String get loginTermsOfUse;
 
   /// No description provided for @loginConfirmPhoneTitle.
@@ -173,7 +167,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginReadTermsNotification.
   ///
   /// In en, this message translates to:
-  /// **'Please read the terms of use first'**
+  /// **'Please read the Terms of Use «Komet»'**
   String get loginReadTermsNotification;
 
   /// No description provided for @loginSpoofRedacted.
@@ -191,19 +185,19 @@ abstract class AppLocalizations {
   /// No description provided for @loginSignInWithQr.
   ///
   /// In en, this message translates to:
-  /// **'Sign in with QR code'**
+  /// **'Log in with QR code'**
   String get loginSignInWithQr;
 
   /// No description provided for @loginSignInWithToken.
   ///
   /// In en, this message translates to:
-  /// **'Sign in with token'**
+  /// **'Log in with token'**
   String get loginSignInWithToken;
 
   /// No description provided for @loginSignInWithSessionFile.
   ///
   /// In en, this message translates to:
-  /// **'Sign in with session file'**
+  /// **'Log in with session file'**
   String get loginSignInWithSessionFile;
 
   /// No description provided for @loginLanguage.
