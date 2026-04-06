@@ -14,6 +14,7 @@ class ProfileData {
   final String country;
   final int accountStatus;
   final int updateTime;
+  final List<int>? profileOptions;
 
   ProfileData({
     required this.id,
@@ -26,6 +27,7 @@ class ProfileData {
     required this.country,
     required this.accountStatus,
     required this.updateTime,
+    this.profileOptions,
   });
 
   factory ProfileData.fromServerMap(Map<dynamic, dynamic> contact) {
@@ -44,6 +46,12 @@ class ProfileData {
       lastName = name['lastName'] as String?;
     }
 
+    final profileOptionsRaw = contact['profileOptions'];
+    List<int>? profileOptions;
+    if (profileOptionsRaw is List) {
+      profileOptions = profileOptionsRaw.map((e) => e as int).toList();
+    }
+
     return ProfileData(
       id: contact['id'] as int,
       firstName: firstName,
@@ -55,21 +63,31 @@ class ProfileData {
       country: (contact['country'] as String?) ?? '',
       accountStatus: (contact['accountStatus'] as int?) ?? 0,
       updateTime: (contact['updateTime'] as int?) ?? 0,
+      profileOptions: profileOptions,
     );
   }
 
   factory ProfileData.fromDbRow(Map<String, dynamic> row) {
+    final profileOptionsStr = row['profile_options'] as String?;
+    List<int>? profileOptions;
+    if (profileOptionsStr != null && profileOptionsStr.isNotEmpty) {
+      profileOptions = profileOptionsStr
+          .split(',')
+          .map((e) => int.parse(e.trim()))
+          .toList();
+    }
     return ProfileData(
       id: row['id'] as int,
-      firstName: row['first_name'] as String,
+      firstName: (row['first_name'] as String?) ?? '',
       lastName: row['last_name'] as String?,
-      phone: row['phone'] as int,
+      phone: (row['phone'] as int?) ?? 0,
       photoId: row['photo_id'] as int?,
       baseUrl: row['base_url'] as String?,
       baseRawUrl: row['base_raw_url'] as String?,
-      country: row['country'] as String,
-      accountStatus: row['account_status'] as int,
-      updateTime: row['update_time'] as int,
+      country: (row['country'] as String?) ?? '',
+      accountStatus: (row['account_status'] as int?) ?? 0,
+      updateTime: (row['update_time'] as int?) ?? 0,
+      profileOptions: profileOptions,
     );
   }
 
@@ -84,6 +102,7 @@ class ProfileData {
     'country': country,
     'account_status': accountStatus,
     'update_time': updateTime,
+    'profile_options': profileOptions?.join(','),
   };
 }
 
@@ -119,7 +138,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 6,
+      version: 7,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -143,6 +162,11 @@ class AppDatabase {
         if (oldVersion < 6) {
           await db.execute(_messagesSchema);
         }
+        if (oldVersion < 7) {
+          await db.execute(
+            'ALTER TABLE profile ADD COLUMN profile_options TEXT',
+          );
+        }
       },
     );
   }
@@ -160,7 +184,8 @@ class AppDatabase {
         country      TEXT    NOT NULL DEFAULT '',
         account_status INTEGER NOT NULL DEFAULT 0,
         update_time  INTEGER NOT NULL DEFAULT 0,
-        is_active    INTEGER NOT NULL DEFAULT 0
+        is_active    INTEGER NOT NULL DEFAULT 0,
+        profile_options TEXT
       )
     ''');
     await db.execute(_syncStateSchema);
@@ -316,6 +341,30 @@ class AppDatabase {
     return {
       for (final row in rows) row['key'] as String: row['value'] as String,
     };
+  }
+
+  static Future<void> savePrivacyConfig(
+    int accountId,
+    String jsonConfig,
+  ) async {
+    final db = await _instance;
+    await db.insert('sync_state', {
+      'account_id': accountId,
+      'key': 'privacy_config',
+      'value': jsonConfig,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<String?> getPrivacyConfig(int accountId) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'sync_state',
+      where: 'account_id = ? AND key = ?',
+      whereArgs: [accountId, 'privacy_config'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String;
   }
 
   static Future<void> close() async {
