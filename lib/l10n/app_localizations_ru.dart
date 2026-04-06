@@ -28,13 +28,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginOtherSignInMethods => 'Другие способы входа';
 
   @override
-  String get loginTermsIntro => 'Продолжая, вы соглашаетесь с \n';
+  String get loginTermsLink => 'Условия использования «Komet»';
 
   @override
-  String get loginTermsLink => 'пользовательскими соглашениями';
-
-  @override
-  String get loginTermsOfUse => 'Условия использования';
+  String get loginTermsOfUse => 'Условия использования «Komet»';
 
   @override
   String get loginConfirmPhoneTitle => 'Это правильный номер?';
@@ -47,7 +44,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get loginReadTermsNotification =>
-      'Сначала прочитайте условия использования';
+      'Сначала прочитайте условия использования «Komet»';
 
   @override
   String get loginSpoofRedacted => 'Подделка спуфа';

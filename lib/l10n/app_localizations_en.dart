@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get loginTitle => 'Sign in to Komet';
+  String get loginTitle => 'Log in to Komet';
 
   @override
   String get loginSubtitle =>
@@ -28,13 +28,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginOtherSignInMethods => 'Other sign-in methods';
 
   @override
-  String get loginTermsIntro => 'By continuing, you agree to \n';
+  String get loginTermsLink => 'Terms of Use «Komet»';
 
   @override
-  String get loginTermsLink => 'the terms of use';
-
-  @override
-  String get loginTermsOfUse => 'Terms of use';
+  String get loginTermsOfUse => 'Terms of Use «Komet»';
 
   @override
   String get loginConfirmPhoneTitle => 'Is this the correct number?';
@@ -46,7 +43,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginDone => 'Done';
 
   @override
-  String get loginReadTermsNotification => 'Please read the terms of use first';
+  String get loginReadTermsNotification =>
+      'Please read the Terms of Use «Komet»';
 
   @override
   String get loginSpoofRedacted => 'Spoof redaction';
@@ -55,13 +53,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginProxy => 'Proxy';
 
   @override
-  String get loginSignInWithQr => 'Sign in with QR code';
+  String get loginSignInWithQr => 'Log in with QR code';
 
   @override
-  String get loginSignInWithToken => 'Sign in with token';
+  String get loginSignInWithToken => 'Log in with token';
 
   @override
-  String get loginSignInWithSessionFile => 'Sign in with session file';
+  String get loginSignInWithSessionFile => 'Log in with session file';
 
   @override
   String get loginLanguage => 'Language';
