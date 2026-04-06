@@ -796,6 +796,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                       children: [
                                         TextSpan(
+                                          text: l10n.loginTermsIntro,
+                                          style: GoogleFonts.inter(
+                                            color: cs.onSurface,
+                                            fontSize: 14,
+                                            height: 1.4,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                        TextSpan(
                                           text: l10n.loginTermsLink,
                                           style: GoogleFonts.inter(
                                             color: cs.primary,
