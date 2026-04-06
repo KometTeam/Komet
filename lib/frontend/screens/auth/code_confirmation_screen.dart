@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:smart_auth/smart_auth.dart';
 import '../chats/chat_list_screen.dart';
 import 'password_2fa_screen.dart';
 import '../../../main.dart';
@@ -28,11 +26,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     with TickerProviderStateMixin {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final SmartAuth _smartAuth = SmartAuth.instance;
   int _timerSeconds = 30;
   Timer? _timer;
   Timer? _errorTimer;
-  bool _isListeningSmsConsent = false;
 
   String? _errorMessage;
   late AnimationController _shakeController;
@@ -45,7 +41,6 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
-    _startSmsCodeListener();
 
     _shakeController = AnimationController(
       vsync: this,
@@ -61,63 +56,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.linear));
   }
 
-  Future<void> _startSmsCodeListener() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
-    if (_isListeningSmsConsent) return;
-
-    _isListeningSmsConsent = true;
-    final result = await _smartAuth.getSmsWithUserConsentApi(matcher: r'\d{6}');
-    _isListeningSmsConsent = false;
-
-    if (!mounted || !result.hasData) return;
-
-    final receivedCode = result.data?.code;
-    if (receivedCode == null || receivedCode.isEmpty) return;
-
-    _applyAutoFillCode(receivedCode);
-  }
-
-  Future<void> _restartSmsCodeListener() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
-    await _smartAuth.removeUserConsentApiListener();
-    _isListeningSmsConsent = false;
-    await _startSmsCodeListener();
-  }
-
-  void _handleCodeChanged(String value) {
-    setState(() {
-      if (_errorMessage != null) {
-        _errorMessage = null;
-      }
-    });
-    if (value.length == 6) {
-      _verifyCode();
-    }
-  }
-
-  void _applyAutoFillCode(String rawCode) {
-    final digitsOnly = rawCode.replaceAll(RegExp(r'\D'), '');
-    if (digitsOnly.isEmpty) return;
-
-    final nextCode = digitsOnly.length <= 6
-        ? digitsOnly
-        : digitsOnly.substring(0, 6);
-
-    if (_codeController.text == nextCode) return;
-
-    _codeController.value = TextEditingValue(
-      text: nextCode,
-      selection: TextSelection.collapsed(offset: nextCode.length),
-    );
-
-    _handleCodeChanged(nextCode);
-  }
-
   @override
   void dispose() {
     _timer?.cancel();
     _errorTimer?.cancel();
-    unawaited(_smartAuth.removeUserConsentApiListener());
     _shakeController.dispose();
     _codeController.dispose();
     _focusNode.dispose();
@@ -150,7 +92,6 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   void _resendCode() {
     if (_timerSeconds == 0) {
       _startTimer();
-      unawaited(_restartSmsCodeListener());
     }
   }
 
@@ -265,7 +206,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(6),
                           ],
-                          onChanged: _handleCodeChanged,
+                          onChanged: (value) {
+                            if (hasError) setState(() => _errorMessage = null);
+                            setState(() {});
+                            if (value.length == 6) _verifyCode();
+                          },
                         ),
                       ),
                     ),
