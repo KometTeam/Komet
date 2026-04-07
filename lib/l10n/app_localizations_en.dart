@@ -22,9 +22,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginPhoneNumber => 'Phone number';
 
   @override
-  String get loginPhoneHint => '(000) 000-00-00';
-
-  @override
   String get loginOtherSignInMethods => 'Other sign-in methods';
 
   @override

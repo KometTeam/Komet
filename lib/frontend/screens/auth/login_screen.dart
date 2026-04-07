@@ -97,6 +97,10 @@ class _LoginScreenState extends State<LoginScreen> {
     return lang == 'ru' ? country.ru : country.en;
   }
 
+  String _phoneMaskHint(CountryName country) {
+    return country.phoneMask.replaceAll('#', '0');
+  }
+
   void _showLanguagePicker() {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -740,6 +744,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: TextField(
+                                    key: ValueKey(_selectedCountry.code),
                                     controller: _phoneController,
                                     keyboardType: TextInputType.phone,
                                     inputFormatters: [
@@ -752,7 +757,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       fontWeight: FontWeight.w400,
                                     ),
                                     decoration: InputDecoration(
-                                      hintText: l10n.loginPhoneHint,
+                                      hintText: _phoneMaskHint(_selectedCountry),
                                       hintStyle: TextStyle(
                                         color: cs.outline,
                                         fontSize: 15,

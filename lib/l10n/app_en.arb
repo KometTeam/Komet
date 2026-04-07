@@ -4,7 +4,6 @@
   "loginSubtitle": "Check your country code and enter your\nphone number.",
   "loginCountry": "Country",
   "loginPhoneNumber": "Phone number",
-  "loginPhoneHint": "(000) 000-00-00",
   "loginOtherSignInMethods": "Other sign-in methods",
   "loginTermsIntro": "By continuing, you agree to \n",
   "loginTermsLink": "the terms of use",
