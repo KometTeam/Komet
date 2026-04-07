@@ -56,6 +56,34 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginProxy => 'Прокси';
 
   @override
+  String get loginChangeServer => 'Смена сервера';
+
+  @override
+  String get serverSettingsTitle => 'Сервер';
+
+  @override
+  String get serverHostLabel => 'Хост';
+
+  @override
+  String get serverPortLabel => 'Порт';
+
+  @override
+  String get serverApply => 'Применить и переподключиться';
+
+  @override
+  String get serverUseDefault => 'Сбросить к умолчанию';
+
+  @override
+  String get serverInvalidHostOrPort =>
+      'Укажите корректный хост и порт (1–65535)';
+
+  @override
+  String get serverSettingsSaved => 'Настройки сервера применены';
+
+  @override
+  String get serverReconnectFailed => 'Не удалось подключиться к серверу';
+
+  @override
   String get loginSignInWithQr => 'По QR code';
 
   @override

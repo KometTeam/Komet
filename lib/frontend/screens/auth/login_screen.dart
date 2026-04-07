@@ -10,6 +10,7 @@ import 'package:komet/l10n/terms_of_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'select_country_screen.dart';
+import 'server_settings_sheet.dart';
 import 'spoff_redacted_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../../main.dart';
@@ -448,6 +449,23 @@ class _LoginScreenState extends State<LoginScreen> {
     _showPhoneConfirmationDialog(_phoneController.text);
   }
 
+  void _showServerSettingsSheet(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: const ServerSettingsSheet(),
+        );
+      },
+    );
+  }
+
   void _showSecurityOptions(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -457,7 +475,7 @@ class _LoginScreenState extends State<LoginScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(
@@ -478,7 +496,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -498,7 +516,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Symbols.dns, color: cs.onSurface),
+                  title: Text(
+                    l10n.loginChangeServer,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showServerSettingsSheet(context);
                   },
                 ),
               ],
