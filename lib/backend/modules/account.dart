@@ -10,6 +10,11 @@ import 'chats.dart';
 import 'contacts.dart';
 import 'folders.dart';
 
+String _normalizeAuthPhone(String phone) {
+  final digits = phone.replaceAll(RegExp(r'\D'), '');
+  return '+$digits';
+}
+
 class PrivacyConfig {
   final String searchByPhone;
   final String incomingCall;
@@ -976,13 +981,15 @@ class AccountModule {
   ) async {
     _ensureOnline();
 
+    final normalizedPhone = _normalizeAuthPhone(phone);
+
     final payload = <dynamic, dynamic>{
-      'phone': phone,
+      'phone': normalizedPhone,
       'type': type.value,
       'language': language,
     };
 
-    logger.i('Запрос OTP-кода: phone=$phone type=${type.value}');
+    logger.i('Запрос OTP-кода: phone=$normalizedPhone type=${type.value}');
 
     final packet = await _api.sendRequest(Opcode.authRequest, payload);
 
