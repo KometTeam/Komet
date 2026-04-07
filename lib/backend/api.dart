@@ -70,7 +70,8 @@ class Api {
     });
 
     try {
-      await _connection.connect(ServerConfig.host, ServerConfig.port);
+      final endpoint = await ServerConfig.loadEndpoint();
+      await _connection.connect(endpoint.host, endpoint.port);
     } catch (e) {
       logger.e('Не удалось подключиться: $e');
       _cleanup();

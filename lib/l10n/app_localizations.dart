@@ -188,6 +188,60 @@ abstract class AppLocalizations {
   /// **'Proxy'**
   String get loginProxy;
 
+  /// No description provided for @loginChangeServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Change server'**
+  String get loginChangeServer;
+
+  /// No description provided for @serverSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get serverSettingsTitle;
+
+  /// No description provided for @serverHostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get serverHostLabel;
+
+  /// No description provided for @serverPortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get serverPortLabel;
+
+  /// No description provided for @serverApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply and reconnect'**
+  String get serverApply;
+
+  /// No description provided for @serverUseDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get serverUseDefault;
+
+  /// No description provided for @serverInvalidHostOrPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid host and port (1–65535)'**
+  String get serverInvalidHostOrPort;
+
+  /// No description provided for @serverSettingsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Server settings applied'**
+  String get serverSettingsSaved;
+
+  /// No description provided for @serverReconnectFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect to the server'**
+  String get serverReconnectFailed;
+
   /// No description provided for @loginSignInWithQr.
   ///
   /// In en, this message translates to:

@@ -55,6 +55,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginProxy => 'Proxy';
 
   @override
+  String get loginChangeServer => 'Change server';
+
+  @override
+  String get serverSettingsTitle => 'Server';
+
+  @override
+  String get serverHostLabel => 'Host';
+
+  @override
+  String get serverPortLabel => 'Port';
+
+  @override
+  String get serverApply => 'Apply and reconnect';
+
+  @override
+  String get serverUseDefault => 'Reset to default';
+
+  @override
+  String get serverInvalidHostOrPort => 'Enter a valid host and port (1–65535)';
+
+  @override
+  String get serverSettingsSaved => 'Server settings applied';
+
+  @override
+  String get serverReconnectFailed => 'Could not connect to the server';
+
+  @override
   String get loginSignInWithQr => 'Sign in with QR code';
 
   @override
