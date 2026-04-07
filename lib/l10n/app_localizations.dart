@@ -122,12 +122,6 @@ abstract class AppLocalizations {
   /// **'Phone number'**
   String get loginPhoneNumber;
 
-  /// No description provided for @loginPhoneHint.
-  ///
-  /// In en, this message translates to:
-  /// **'(000) 000-00-00'**
-  String get loginPhoneHint;
-
   /// No description provided for @loginOtherSignInMethods.
   ///
   /// In en, this message translates to:

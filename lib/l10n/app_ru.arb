@@ -4,7 +4,6 @@
   "loginSubtitle": "Проверьте код страны и введите свой\nномер телефона.",
   "loginCountry": "Страна",
   "loginPhoneNumber": "Номер телефона",
-  "loginPhoneHint": "(000) 000-00-00",
   "loginOtherSignInMethods": "Другие способы входа",
   "loginTermsIntro": "Продолжая, вы соглашаетесь с \n",
   "loginTermsLink": "пользовательскими соглашениями",
