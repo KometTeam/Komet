@@ -116,4 +116,41 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get codeError2faMissing => 'Error: missing data for 2FA';
+
+  @override
+  String get proxySettingsTitle => 'Proxy';
+
+  @override
+  String get proxyTypeNone => 'Disabled';
+
+  @override
+  String get proxyTypeSocks5 => 'SOCKS5';
+
+  @override
+  String get proxyTypeHttp => 'HTTP(S)';
+
+  @override
+  String get proxyHostLabel => 'Proxy host';
+
+  @override
+  String get proxyPortLabel => 'Proxy port';
+
+  @override
+  String get proxyUsernameLabel => 'Username (optional)';
+
+  @override
+  String get proxyPasswordLabel => 'Password (optional)';
+
+  @override
+  String get proxyApply => 'Apply and reconnect';
+
+  @override
+  String get proxyDisable => 'Disable proxy';
+
+  @override
+  String get proxySettingsSaved => 'Proxy settings applied';
+
+  @override
+  String get proxyInvalidHostOrPort =>
+      'Enter a valid proxy host and port (1–65535)';
 }

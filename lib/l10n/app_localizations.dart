@@ -307,6 +307,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error: missing data for 2FA'**
   String get codeError2faMissing;
+
+  /// No description provided for @proxySettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy'**
+  String get proxySettingsTitle;
+
+  /// No description provided for @proxyTypeNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get proxyTypeNone;
+
+  /// No description provided for @proxyTypeSocks5.
+  ///
+  /// In en, this message translates to:
+  /// **'SOCKS5'**
+  String get proxyTypeSocks5;
+
+  /// No description provided for @proxyTypeHttp.
+  ///
+  /// In en, this message translates to:
+  /// **'HTTP(S)'**
+  String get proxyTypeHttp;
+
+  /// No description provided for @proxyHostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy host'**
+  String get proxyHostLabel;
+
+  /// No description provided for @proxyPortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy port'**
+  String get proxyPortLabel;
+
+  /// No description provided for @proxyUsernameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Username (optional)'**
+  String get proxyUsernameLabel;
+
+  /// No description provided for @proxyPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Password (optional)'**
+  String get proxyPasswordLabel;
+
+  /// No description provided for @proxyApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply and reconnect'**
+  String get proxyApply;
+
+  /// No description provided for @proxyDisable.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable proxy'**
+  String get proxyDisable;
+
+  /// No description provided for @proxySettingsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy settings applied'**
+  String get proxySettingsSaved;
+
+  /// No description provided for @proxyInvalidHostOrPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid proxy host and port (1–65535)'**
+  String get proxyInvalidHostOrPort;
 }
 
 class _AppLocalizationsDelegate

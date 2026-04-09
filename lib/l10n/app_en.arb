@@ -41,5 +41,18 @@
     }
   },
   "codeResendSms": "Resend code via SMS",
-  "codeError2faMissing": "Error: missing data for 2FA"
+  "codeError2faMissing": "Error: missing data for 2FA",
+
+  "proxySettingsTitle": "Proxy",
+  "proxyTypeNone": "Disabled",
+  "proxyTypeSocks5": "SOCKS5",
+  "proxyTypeHttp": "HTTP(S)",
+  "proxyHostLabel": "Proxy host",
+  "proxyPortLabel": "Proxy port",
+  "proxyUsernameLabel": "Username (optional)",
+  "proxyPasswordLabel": "Password (optional)",
+  "proxyApply": "Apply and reconnect",
+  "proxyDisable": "Disable proxy",
+  "proxySettingsSaved": "Proxy settings applied",
+  "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)"
 }
