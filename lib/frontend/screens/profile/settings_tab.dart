@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
+import '../auth/proxy_settings_sheet.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'security_screen.dart';
@@ -117,6 +118,28 @@ class _SettingsTabState extends State<SettingsTab> {
                     const _SettingsItem(
                       icon: Symbols.notifications_active,
                       label: 'Уведомления и звук',
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.vpn_lock,
+                      label: 'Прокси',
+                      onTap: () {
+                        final cs = Theme.of(context).colorScheme;
+                        showModalBottomSheet<void>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: cs.surfaceContainerHigh,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(24),
+                            ),
+                          ),
+                          builder: (_) {
+                            return SafeArea(
+                              child: const ProxySettingsSheet(),
+                            );
+                          },
+                        );
+                      },
                     ),
                     _SettingsItem(
                       icon: Symbols.shield_lock,

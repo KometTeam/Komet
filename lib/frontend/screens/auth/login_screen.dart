@@ -10,6 +10,7 @@ import 'package:komet/l10n/terms_of_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'select_country_screen.dart';
+import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
 import 'spoff_redacted_screen.dart';
 import '../../widgets/custom_notification.dart';
@@ -470,6 +471,23 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _showProxySettingsSheet(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: const ProxySettingsSheet(),
+        );
+      },
+    );
+  }
+
   void _showSecurityOptions(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -521,6 +539,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(sheetContext);
+                    _showProxySettingsSheet(context);
                   },
                 ),
                 ListTile(

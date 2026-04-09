@@ -118,4 +118,41 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get codeError2faMissing => 'Ошибка: отсутствуют данные для 2FA';
+
+  @override
+  String get proxySettingsTitle => 'Прокси';
+
+  @override
+  String get proxyTypeNone => 'Выключен';
+
+  @override
+  String get proxyTypeSocks5 => 'SOCKS5';
+
+  @override
+  String get proxyTypeHttp => 'HTTP(S)';
+
+  @override
+  String get proxyHostLabel => 'Хост прокси';
+
+  @override
+  String get proxyPortLabel => 'Порт прокси';
+
+  @override
+  String get proxyUsernameLabel => 'Логин (необязательно)';
+
+  @override
+  String get proxyPasswordLabel => 'Пароль (необязательно)';
+
+  @override
+  String get proxyApply => 'Применить и переподключиться';
+
+  @override
+  String get proxyDisable => 'Отключить прокси';
+
+  @override
+  String get proxySettingsSaved => 'Настройки прокси применены';
+
+  @override
+  String get proxyInvalidHostOrPort =>
+      'Укажите корректный хост и порт прокси (1–65535)';
 }
