@@ -53,9 +53,14 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       await prefs.setString(ServerConfig.prefHostKey, host);
       await prefs.setInt(ServerConfig.prefPortKey, port);
       await api.disconnect();
-      await api.connect();
+      api.connect(); 
+      final online = await api.stateStream
+          .firstWhere((s) =>
+              s == SessionState.online || s == SessionState.disconnected)
+          .timeout(const Duration(seconds: 15),
+              onTimeout: () => SessionState.disconnected);
       if (!mounted) return;
-      if (api.state == SessionState.online) {
+      if (online == SessionState.online) {
         showCustomNotification(context, l10n.serverSettingsSaved);
       } else {
         showCustomNotification(context, l10n.serverReconnectFailed);
@@ -74,9 +79,14 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       _hostController.text = ServerConfig.defaultHost;
       _portController.text = '${ServerConfig.defaultPort}';
       await api.disconnect();
-      await api.connect();
+      api.connect();
+      final online = await api.stateStream
+          .firstWhere((s) =>
+              s == SessionState.online || s == SessionState.disconnected)
+          .timeout(const Duration(seconds: 15),
+              onTimeout: () => SessionState.disconnected);
       if (!mounted) return;
-      if (api.state == SessionState.online) {
+      if (online == SessionState.online) {
         showCustomNotification(context, l10n.serverSettingsSaved);
       } else {
         showCustomNotification(context, l10n.serverReconnectFailed);

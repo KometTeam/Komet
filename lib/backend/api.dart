@@ -74,9 +74,11 @@ class Api {
       await _connection.connect(endpoint.host, endpoint.port);
     } catch (e) {
       logger.e('Не удалось подключиться: $e');
-      _cleanup();
-      _setSessionState(SessionState.disconnected);
-      _scheduleReconnect();
+      if (_sessionState != SessionState.disconnected) {
+        _cleanup();
+        _setSessionState(SessionState.disconnected);
+        _scheduleReconnect();
+      }
       return;
     }
 
