@@ -12,8 +12,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginTitle => 'Войдите в Komet';
 
   @override
-  String get loginSubtitle =>
-      'Проверьте код страны и введите свой\nномер телефона.';
+  String get loginSubtitle => 'Проверьте код страны и введите свой\nномер телефона.';
 
   @override
   String get loginCountry => 'Страна';
@@ -43,8 +42,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginDone => 'Готово';
 
   @override
-  String get loginReadTermsNotification =>
-      'Сначала прочитайте условия использования';
+  String get loginReadTermsNotification => 'Сначала прочитайте условия использования';
 
   @override
   String get loginSpoofRedacted => 'Подделка спуфа';
@@ -71,8 +69,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get serverUseDefault => 'Сбросить к умолчанию';
 
   @override
-  String get serverInvalidHostOrPort =>
-      'Укажите корректный хост и порт (1–65535)';
+  String get serverInvalidHostOrPort => 'Укажите корректный хост и порт (1–65535)';
 
   @override
   String get serverSettingsSaved => 'Настройки сервера применены';
@@ -105,8 +102,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get selectCountrySearchHint => 'Поиск страны…';
 
   @override
-  String get codeConfirmationSmsSent =>
-      'Мы отправили SMS с кодом подтверждения на ваш номер телефона.';
+  String get codeConfirmationSmsSent => 'Мы отправили SMS с кодом подтверждения на ваш номер телефона.';
 
   @override
   String codeResendInSeconds(int seconds) {
@@ -153,6 +149,5 @@ class AppLocalizationsRu extends AppLocalizations {
   String get proxySettingsSaved => 'Настройки прокси применены';
 
   @override
-  String get proxyInvalidHostOrPort =>
-      'Укажите корректный хост и порт прокси (1–65535)';
+  String get proxyInvalidHostOrPort => 'Укажите корректный хост и порт прокси (1–65535)';
 }

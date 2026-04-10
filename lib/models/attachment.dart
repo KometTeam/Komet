@@ -436,6 +436,7 @@ class ControlAttachment extends MessageAttachment {
 class ForwardedMessageAttachment extends MessageAttachment {
   final int originalSenderId;
   final String? originalSenderName;
+  final String? originalSenderAvatar;
   final String? originalMessageId;
   final int? originalTime;
   final String? originalText;
@@ -445,6 +446,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
   const ForwardedMessageAttachment({
     required this.originalSenderId,
     this.originalSenderName,
+    this.originalSenderAvatar,
     this.originalMessageId,
     this.originalTime,
     this.originalText,
@@ -493,6 +495,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
     '_type': 'FORWARD',
     'originalSenderId': originalSenderId,
     'originalSenderName': originalSenderName,
+    'originalSenderAvatar': originalSenderAvatar,
     'originalMessageId': originalMessageId,
     'originalTime': originalTime,
     'originalText': originalText,

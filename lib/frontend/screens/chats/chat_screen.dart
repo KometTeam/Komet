@@ -6,6 +6,7 @@ import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../models/attachment.dart';
+import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../widgets/message_bubble.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -183,6 +184,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     for (final id in forwardIds) {
       final name = await messagesModule.searchContactById(id);
+      final avatar = ContactCache.getAvatar(id);
       if (name != null && mounted) {
         setState(() {
           for (var i = 0; i < _messages.length; i++) {
@@ -195,6 +197,7 @@ class _ChatScreenState extends State<ChatScreen>
                   return ForwardedMessageAttachment(
                     originalSenderId: id,
                     originalSenderName: name,
+                    originalSenderAvatar: avatar,
                     originalMessageId: a.originalMessageId,
                     originalTime: a.originalTime,
                     originalText: a.originalText,

@@ -6,13 +6,21 @@ import '../../core/storage/app_database.dart';
 import '../../models/attachment.dart';
 
 class ContactCache {
-  static final Map<int, String> _cache = {};
+  static final Map<int, String> _nameCache = {};
+  static final Map<int, String> _avatarCache = {};
 
   static void put(int id, String name) {
-    _cache[id] = name;
+    _nameCache[id] = name;
   }
 
-  static String? get(int id) => _cache[id];
+  static void putAvatar(int id, String? baseUrl) {
+    if (baseUrl != null) {
+      _avatarCache[id] = baseUrl;
+    }
+  }
+
+  static String? get(int id) => _nameCache[id];
+  static String? getAvatar(int id) => _avatarCache[id];
 }
 
 class CachedMessage {
@@ -371,6 +379,10 @@ class MessagesModule {
                   ? '$firstName $lastName'
                   : firstName;
               ContactCache.put(contactId, fullName);
+
+              final baseUrl = contact['baseUrl'] as String?;
+              ContactCache.putAvatar(contactId, baseUrl);
+
               return fullName;
             }
           }
