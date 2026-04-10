@@ -182,7 +182,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
       if (_selectedMethod == SpoofingMethod.full) {
         _timezoneController.text = preset.timezone;
-        _localeController.text = preset.locale;
+        _localeController.text = preset.locale.split(RegExp(r'[-_]')).first;
       }
     });
 
