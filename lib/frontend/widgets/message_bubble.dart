@@ -360,12 +360,14 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
     Color textColor,
   ) {
+    final cs = Theme.of(context).colorScheme;
     final headerColor = isMe
         ? Colors.white.withValues(alpha: 0.7)
-        : Theme.of(context).colorScheme.onSurfaceVariant;
+        : cs.onSurfaceVariant;
 
     final senderName = forwarded.originalSenderName;
     final displaySender = senderName ?? forwarded.originalSenderId.toString();
+    final senderAvatar = forwarded.originalSenderAvatar;
     final origText = forwarded.originalText;
     final hasOrigText = origText != null && origText.isNotEmpty;
 
@@ -378,6 +380,24 @@ class MessageBubble extends StatelessWidget {
           children: [
             Icon(Symbols.forward, size: 14, color: headerColor),
             const SizedBox(width: 4),
+            if (senderAvatar != null && senderAvatar.isNotEmpty)
+              CircleAvatar(
+                radius: 10,
+                backgroundImage: NetworkImage(senderAvatar),
+                backgroundColor: cs.primaryContainer,
+              )
+            else
+              CircleAvatar(
+                radius: 10,
+                backgroundColor: cs.primaryContainer,
+                child: Text(
+                  displaySender.isNotEmpty
+                      ? displaySender[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                ),
+              ),
+            const SizedBox(width: 6),
             Text(
               displaySender,
               style: TextStyle(
@@ -580,11 +600,13 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
     List<PhotoAttachment> photos,
   ) {
+    final cs = Theme.of(context).colorScheme;
     final headerColor = isMe
         ? Colors.white.withValues(alpha: 0.7)
-        : Theme.of(context).colorScheme.onSurfaceVariant;
+        : cs.onSurfaceVariant;
     final senderName = forwarded.originalSenderName;
     final displaySender = senderName ?? forwarded.originalSenderId.toString();
+    final senderAvatar = forwarded.originalSenderAvatar;
     final hasCaption = message.text != null && message.text!.isNotEmpty;
 
     return Column(
@@ -598,6 +620,24 @@ class MessageBubble extends StatelessWidget {
             children: [
               Icon(Symbols.forward, size: 14, color: headerColor),
               const SizedBox(width: 4),
+              if (senderAvatar != null && senderAvatar.isNotEmpty)
+                CircleAvatar(
+                  radius: 10,
+                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundColor: cs.primaryContainer,
+                )
+              else
+                CircleAvatar(
+                  radius: 10,
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(
+                    displaySender.isNotEmpty
+                        ? displaySender[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                  ),
+                ),
+              const SizedBox(width: 6),
               Text(
                 displaySender,
                 style: TextStyle(

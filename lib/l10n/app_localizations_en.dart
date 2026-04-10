@@ -12,8 +12,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginTitle => 'Sign in to Komet';
 
   @override
-  String get loginSubtitle =>
-      'Check your country code and enter your\nphone number.';
+  String get loginSubtitle => 'Check your country code and enter your\nphone number.';
 
   @override
   String get loginCountry => 'Country';
@@ -103,8 +102,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectCountrySearchHint => 'Search countries…';
 
   @override
-  String get codeConfirmationSmsSent =>
-      'We sent an SMS with a verification code to your phone number.';
+  String get codeConfirmationSmsSent => 'We sent an SMS with a verification code to your phone number.';
 
   @override
   String codeResendInSeconds(int seconds) {
@@ -151,6 +149,5 @@ class AppLocalizationsEn extends AppLocalizations {
   String get proxySettingsSaved => 'Proxy settings applied';
 
   @override
-  String get proxyInvalidHostOrPort =>
-      'Enter a valid proxy host and port (1–65535)';
+  String get proxyInvalidHostOrPort => 'Enter a valid proxy host and port (1–65535)';
 }
