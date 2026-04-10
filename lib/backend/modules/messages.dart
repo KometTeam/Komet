@@ -350,24 +350,30 @@ class MessagesModule {
 
     try {
       final response = await _api.sendRequest(Opcode.contactInfo, {
-        'id': contactId,
+        'contactIds': [contactId],
       });
 
       if (!response.isOk) return null;
       final data = response.payload;
       if (data is! Map) return null;
 
-      final names = data['names'] as List?;
-      if (names != null && names.isNotEmpty) {
-        final name = names.first;
-        if (name is Map) {
-          final firstName = name['firstName'] as String? ?? '';
-          final lastName = name['lastName'] as String?;
-          final fullName = lastName != null
-              ? '$firstName $lastName'
-              : firstName;
-          ContactCache.put(contactId, fullName);
-          return fullName;
+      final contacts = data['contacts'] as List?;
+      if (contacts != null && contacts.isNotEmpty) {
+        final contact = contacts.first;
+        if (contact is Map) {
+          final names = contact['names'] as List?;
+          if (names != null && names.isNotEmpty) {
+            final name = names.first;
+            if (name is Map) {
+              final firstName = name['firstName'] as String? ?? '';
+              final lastName = name['lastName'] as String?;
+              final fullName = lastName != null
+                  ? '$firstName $lastName'
+                  : firstName;
+              ContactCache.put(contactId, fullName);
+              return fullName;
+            }
+          }
         }
       }
     } catch (e) {
