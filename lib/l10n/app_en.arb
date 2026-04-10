@@ -12,7 +12,7 @@
   "loginEdit": "Change",
   "loginDone": "Done",
   "loginReadTermsNotification": "Please read the terms of use first",
-  "loginSpoofRedacted": "Spoof redaction",
+  "loginSpoofRedacted": "Spoofing",
   "loginProxy": "Proxy",
   "loginChangeServer": "Change server",
   "serverSettingsTitle": "Server",
@@ -54,5 +54,49 @@
   "proxyApply": "Apply and reconnect",
   "proxyDisable": "Disable proxy",
   "proxySettingsSaved": "Proxy settings applied",
-  "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)"
+  "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)",
+
+  "spoofScreenTitle": "Session spoofing",
+  "spoofInfoHint": "Tap \"Generate\":\n• Short tap: random preset.\n• Long press: real device data.",
+  "spoofMethodTitle": "Spoofing method",
+  "spoofMethodPartial": "Partial",
+  "spoofMethodFull": "Full",
+  "spoofMethodPartialDescription": "Recommended method. Random data is used, but your real timezone and locale are kept for plausibility.",
+  "spoofMethodFullDescription": "All data including timezone and locale is generated randomly. Use this method at your own risk!",
+  "spoofDeviceTypeTitle": "Device type",
+  "spoofDeviceTypeDescription": "Choose a device type for preset generation. Tapping \"Generate\" will only use presets of the selected type.",
+  "spoofDeviceTypeLabel": "Device type",
+  "spoofMainSectionTitle": "Main data",
+  "spoofFieldDeviceName": "Device name",
+  "spoofFieldOsVersion": "OS version",
+  "spoofRegionalSectionTitle": "Regional data",
+  "spoofFieldScreen": "Screen resolution",
+  "spoofFieldTimezone": "Timezone",
+  "spoofFieldLocale": "Locale",
+  "spoofIdentifiersSectionTitle": "Identifiers",
+  "spoofIdentifiersDescription": "mt_instanceid and clientSessionId are generated automatically on every app launch. Only the Device ID can be changed.",
+  "spoofFieldDeviceId": "Device ID",
+  "spoofRegenerateIdTooltip": "Generate a new ID",
+  "spoofFieldAppVersion": "App version",
+  "spoofFieldBuildNumber": "Build number",
+  "spoofFieldArchitecture": "Architecture",
+  "spoofButtonGenerate": "Generate",
+  "spoofButtonApply": "Apply",
+  "spoofDialogUnsureTitle": "Are you sure?",
+  "spoofDialogUnsureContent": "The app may become unstable due to API incompatibility",
+  "spoofDialogCancel": "Cancel",
+  "spoofDialogYes": "Yes",
+  "spoofDialogApplyTitle": "Apply settings?",
+  "spoofDialogApplyContent": "Need to reconnect the app, ok?",
+  "spoofDialogApplyDeny": "No",
+  "spoofDialogApplyConfirm": "Ok!",
+  "spoofErrorApplyFailed": "Failed to apply settings: {error}",
+  "@spoofErrorApplyFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileMenuSpoof": "Spoofing"
 }

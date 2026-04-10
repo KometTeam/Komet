@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../l10n/app_localizations.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
@@ -143,7 +144,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     ),
                     _SettingsItem(
                       icon: Symbols.shield_lock,
-                      label: 'Подделка данных',
+                      label: AppLocalizations.of(context)!.profileMenuSpoof,
                       onTap: () {
                         Navigator.push(
                           context,

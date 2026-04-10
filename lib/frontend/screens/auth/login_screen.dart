@@ -12,7 +12,7 @@ import 'code_confirmation_screen.dart';
 import 'select_country_screen.dart';
 import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
-import 'spoff_redacted_screen.dart';
+import '../profile/spoof_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../../main.dart';
 
@@ -522,7 +522,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const SpoffRedactedScreen(),
+                        builder: (context) => const SpoofScreen(),
                       ),
                     );
                   },

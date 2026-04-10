@@ -12,7 +12,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginTitle => 'Sign in to Komet';
 
   @override
-  String get loginSubtitle => 'Check your country code and enter your\nphone number.';
+  String get loginSubtitle =>
+      'Check your country code and enter your\nphone number.';
 
   @override
   String get loginCountry => 'Country';
@@ -45,7 +46,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginReadTermsNotification => 'Please read the terms of use first';
 
   @override
-  String get loginSpoofRedacted => 'Spoof redaction';
+  String get loginSpoofRedacted => 'Spoofing';
 
   @override
   String get loginProxy => 'Proxy';
@@ -102,7 +103,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectCountrySearchHint => 'Search countries…';
 
   @override
-  String get codeConfirmationSmsSent => 'We sent an SMS with a verification code to your phone number.';
+  String get codeConfirmationSmsSent =>
+      'We sent an SMS with a verification code to your phone number.';
 
   @override
   String codeResendInSeconds(int seconds) {
@@ -149,5 +151,122 @@ class AppLocalizationsEn extends AppLocalizations {
   String get proxySettingsSaved => 'Proxy settings applied';
 
   @override
-  String get proxyInvalidHostOrPort => 'Enter a valid proxy host and port (1–65535)';
+  String get proxyInvalidHostOrPort =>
+      'Enter a valid proxy host and port (1–65535)';
+
+  @override
+  String get spoofScreenTitle => 'Session spoofing';
+
+  @override
+  String get spoofInfoHint =>
+      'Tap \"Generate\":\n• Short tap: random preset.\n• Long press: real device data.';
+
+  @override
+  String get spoofMethodTitle => 'Spoofing method';
+
+  @override
+  String get spoofMethodPartial => 'Partial';
+
+  @override
+  String get spoofMethodFull => 'Full';
+
+  @override
+  String get spoofMethodPartialDescription =>
+      'Recommended method. Random data is used, but your real timezone and locale are kept for plausibility.';
+
+  @override
+  String get spoofMethodFullDescription =>
+      'All data including timezone and locale is generated randomly. Use this method at your own risk!';
+
+  @override
+  String get spoofDeviceTypeTitle => 'Device type';
+
+  @override
+  String get spoofDeviceTypeDescription =>
+      'Choose a device type for preset generation. Tapping \"Generate\" will only use presets of the selected type.';
+
+  @override
+  String get spoofDeviceTypeLabel => 'Device type';
+
+  @override
+  String get spoofMainSectionTitle => 'Main data';
+
+  @override
+  String get spoofFieldDeviceName => 'Device name';
+
+  @override
+  String get spoofFieldOsVersion => 'OS version';
+
+  @override
+  String get spoofRegionalSectionTitle => 'Regional data';
+
+  @override
+  String get spoofFieldScreen => 'Screen resolution';
+
+  @override
+  String get spoofFieldTimezone => 'Timezone';
+
+  @override
+  String get spoofFieldLocale => 'Locale';
+
+  @override
+  String get spoofIdentifiersSectionTitle => 'Identifiers';
+
+  @override
+  String get spoofIdentifiersDescription =>
+      'mt_instanceid and clientSessionId are generated automatically on every app launch. Only the Device ID can be changed.';
+
+  @override
+  String get spoofFieldDeviceId => 'Device ID';
+
+  @override
+  String get spoofRegenerateIdTooltip => 'Generate a new ID';
+
+  @override
+  String get spoofFieldAppVersion => 'App version';
+
+  @override
+  String get spoofFieldBuildNumber => 'Build number';
+
+  @override
+  String get spoofFieldArchitecture => 'Architecture';
+
+  @override
+  String get spoofButtonGenerate => 'Generate';
+
+  @override
+  String get spoofButtonApply => 'Apply';
+
+  @override
+  String get spoofDialogUnsureTitle => 'Are you sure?';
+
+  @override
+  String get spoofDialogUnsureContent =>
+      'The app may become unstable due to API incompatibility';
+
+  @override
+  String get spoofDialogCancel => 'Cancel';
+
+  @override
+  String get spoofDialogYes => 'Yes';
+
+  @override
+  String get spoofDialogApplyTitle => 'Apply settings?';
+
+  @override
+  String get spoofDialogApplyContent => 'Need to reconnect the app, ok?';
+
+  @override
+  String get spoofDialogApplyDeny => 'No';
+
+  @override
+  String get spoofDialogApplyConfirm => 'Ok!';
+
+  @override
+  String spoofErrorApplyFailed(String error) {
+    return 'Failed to apply settings: $error';
+  }
+
+  @override
+  String get profileMenuSpoof => 'Spoofing';
 }
