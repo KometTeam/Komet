@@ -1,9 +1,19 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
 import '../../models/attachment.dart';
+
+class ContactCache {
+  static final Map<int, String> _cache = {};
+
+  static void put(int id, String name) {
+    _cache[id] = name;
+  }
+
+  static String? get(int id) => _cache[id];
+}
 
 class CachedMessage {
   final String id;
@@ -39,11 +49,20 @@ class CachedMessage {
 
     List<MessageAttachment>? attachments;
     if (payload != null) {
-      final attaches = payload['attaches'] as List?;
-      if (attaches != null) {
-        attachments = attaches
-            .map((a) => MessageAttachment.fromMap(a as Map<String, dynamic>))
-            .toList();
+      final linkType = payload['link']?['type'] as String?;
+      if (linkType == 'FORWARD') {
+        attachments = [ForwardedMessageAttachment.fromMap(payload)];
+      } else {
+        final attaches = payload['attaches'] as List?;
+        if (attaches != null) {
+          attachments = attaches
+              .map(
+                (a) => MessageAttachment.fromMap(
+                  Map<String, dynamic>.from(a as Map),
+                ),
+              )
+              .toList();
+        }
       }
     }
 
@@ -158,13 +177,24 @@ class MessagesModule {
     final id = m['id']?.toString();
     if (id == null) return null;
 
-    final attaches = m['attaches'] as List?;
+    final linkRaw = m['link'];
+    String? linkType;
+    if (linkRaw is Map) {
+      linkType = linkRaw['type'] as String?;
+    }
+
     List<MessageAttachment>? attachments;
-    if (attaches != null) {
-      attachments = attaches
-          .whereType<Map>()
-          .map((a) => MessageAttachment.fromMap(a.cast<String, dynamic>()))
-          .toList();
+    if (linkType == 'FORWARD') {
+      final fwdMap = Map<String, dynamic>.from(m.cast());
+      attachments = [ForwardedMessageAttachment.fromMap(fwdMap)];
+    } else {
+      final attaches = m['attaches'] as List?;
+      if (attaches != null) {
+        attachments = attaches
+            .whereType<Map>()
+            .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+            .toList();
+      }
     }
 
     return CachedMessage(
@@ -175,7 +205,7 @@ class MessagesModule {
       text: m['text'] as String?,
       time: (m['time'] as int?) ?? 0,
       status: m['status'] as String?,
-      payload: m.cast<String, dynamic>(),
+      payload: Map<String, dynamic>.from(m.cast()),
       attachments: attachments,
     );
   }
@@ -312,5 +342,37 @@ class MessagesModule {
     } catch (e) {
       return null;
     }
+  }
+
+  Future<String?> searchContactById(int contactId) async {
+    final cached = ContactCache.get(contactId);
+    if (cached != null) return cached;
+
+    try {
+      final response = await _api.sendRequest(Opcode.contactInfo, {
+        'id': contactId,
+      });
+
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      final names = data['names'] as List?;
+      if (names != null && names.isNotEmpty) {
+        final name = names.first;
+        if (name is Map) {
+          final firstName = name['firstName'] as String? ?? '';
+          final lastName = name['lastName'] as String?;
+          final fullName = lastName != null
+              ? '$firstName $lastName'
+              : firstName;
+          ContactCache.put(contactId, fullName);
+          return fullName;
+        }
+      }
+    } catch (e) {
+      debugPrint('searchContactById error: $e');
+    }
+    return null;
   }
 }

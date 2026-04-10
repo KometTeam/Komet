@@ -5,6 +5,7 @@ import '../../../main.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -81,6 +82,7 @@ class _ChatScreenState extends State<ChatScreen>
           _isLoading = false;
         });
       }
+      _loadForwardedSenderNames();
     } catch (e) {
       debugPrint('Error fetching history: $e');
       if (mounted) {
@@ -161,6 +163,62 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() {
         _isSending = false;
       });
+    }
+  }
+
+  Future<void> _loadForwardedSenderNames() async {
+    final forwardIds = <int>{};
+    for (final msg in _messages) {
+      if (msg.attachments != null) {
+        for (final a in msg.attachments!) {
+          if (a is ForwardedMessageAttachment) {
+            if (a.originalSenderName == null) {
+              forwardIds.add(a.originalSenderId);
+            }
+          }
+        }
+      }
+    }
+    if (forwardIds.isEmpty) return;
+
+    for (final id in forwardIds) {
+      final name = await messagesModule.searchContactById(id);
+      if (name != null && mounted) {
+        setState(() {
+          for (var i = 0; i < _messages.length; i++) {
+            final msg = _messages[i];
+            if (msg.attachments != null) {
+              final newAttaches = msg.attachments!.map((a) {
+                if (a is ForwardedMessageAttachment &&
+                    a.originalSenderId == id &&
+                    a.originalSenderName == null) {
+                  return ForwardedMessageAttachment(
+                    originalSenderId: id,
+                    originalSenderName: name,
+                    originalMessageId: a.originalMessageId,
+                    originalTime: a.originalTime,
+                    originalText: a.originalText,
+                    originalChatId: a.originalChatId,
+                    originalAttachments: a.originalAttachments,
+                  );
+                }
+                return a;
+              }).toList();
+              _messages[i] = CachedMessage(
+                id: msg.id,
+                accountId: msg.accountId,
+                chatId: msg.chatId,
+                senderId: msg.senderId,
+                text: msg.text,
+                time: msg.time,
+                status: msg.status,
+                payload: msg.payload,
+                attachments: newAttaches,
+              );
+            }
+          }
+        });
+      }
     }
   }
 
