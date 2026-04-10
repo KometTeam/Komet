@@ -12,7 +12,7 @@
   "loginEdit": "Изменить",
   "loginDone": "Готово",
   "loginReadTermsNotification": "Сначала прочитайте условия использования",
-  "loginSpoofRedacted": "Подделка спуфа",
+  "loginSpoofRedacted": "Подмена данных",
   "loginProxy": "Прокси",
   "loginChangeServer": "Смена сервера",
   "serverSettingsTitle": "Сервер",
@@ -54,5 +54,49 @@
   "proxyApply": "Применить и переподключиться",
   "proxyDisable": "Отключить прокси",
   "proxySettingsSaved": "Настройки прокси применены",
-  "proxyInvalidHostOrPort": "Укажите корректный хост и порт прокси (1–65535)"
+  "proxyInvalidHostOrPort": "Укажите корректный хост и порт прокси (1–65535)",
+
+  "spoofScreenTitle": "Подмена данных сессии",
+  "spoofInfoHint": "Нажмите \"Сгенерировать\":\n• Короткое нажатие: случайный пресет.\n• Длинное нажатие: реальные данные.",
+  "spoofMethodTitle": "Метод подмены",
+  "spoofMethodPartial": "Частичный",
+  "spoofMethodFull": "Полный",
+  "spoofMethodPartialDescription": "Рекомендуемый метод. Используются случайные данные, но ваш реальный часовой пояс и локаль для большей правдоподобности.",
+  "spoofMethodFullDescription": "Все данные, включая часовой пояс и локаль, генерируются случайно. Использование этого метода на ваш страх и риск!",
+  "spoofDeviceTypeTitle": "Тип устройства",
+  "spoofDeviceTypeDescription": "Выберите тип устройства для генерации пресетов. При нажатии \"Сгенерировать\" будут использоваться только пресеты выбранного типа.",
+  "spoofDeviceTypeLabel": "Тип устройства",
+  "spoofMainSectionTitle": "Основные данные",
+  "spoofFieldDeviceName": "Имя устройства",
+  "spoofFieldOsVersion": "Версия ОС",
+  "spoofRegionalSectionTitle": "Региональные данные",
+  "spoofFieldScreen": "Разрешение экрана",
+  "spoofFieldTimezone": "Часовой пояс",
+  "spoofFieldLocale": "Локаль",
+  "spoofIdentifiersSectionTitle": "Идентификаторы",
+  "spoofIdentifiersDescription": "mt_instanceid и clientSessionId генерируются автоматически при каждом запуске приложения. Изменить можно только Device ID.",
+  "spoofFieldDeviceId": "ID Устройства",
+  "spoofRegenerateIdTooltip": "Сгенерировать новый ID",
+  "spoofFieldAppVersion": "Версия приложения",
+  "spoofFieldBuildNumber": "Build Number",
+  "spoofFieldArchitecture": "Архитектура",
+  "spoofButtonGenerate": "Сгенерировать",
+  "spoofButtonApply": "Применить",
+  "spoofDialogUnsureTitle": "Ты уверен?",
+  "spoofDialogUnsureContent": "Приложение может начать работать нестабильно из-за несовместимости API",
+  "spoofDialogCancel": "Отмена",
+  "spoofDialogYes": "Да",
+  "spoofDialogApplyTitle": "Применить настройки?",
+  "spoofDialogApplyContent": "Нужно перезайти в приложение, ок?",
+  "spoofDialogApplyDeny": "Не",
+  "spoofDialogApplyConfirm": "Ок!",
+  "spoofErrorApplyFailed": "Ошибка при применении настроек: {error}",
+  "@spoofErrorApplyFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileMenuSpoof": "Подмена данных"
 }

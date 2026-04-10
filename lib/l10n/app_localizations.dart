@@ -62,7 +62,8 @@ import 'app_localizations_ru.dart';
 /// be consistent with the languages listed in the AppLocalizations.supportedLocales
 /// property.
 abstract class AppLocalizations {
-  AppLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  AppLocalizations(String locale)
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -70,7 +71,8 @@ abstract class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -82,17 +84,18 @@ abstract class AppLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
-    delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ];
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
+      <LocalizationsDelegate<dynamic>>[
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
-    Locale('ru')
+    Locale('ru'),
   ];
 
   /// No description provided for @loginTitle.
@@ -170,7 +173,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginSpoofRedacted.
   ///
   /// In en, this message translates to:
-  /// **'Spoof redaction'**
+  /// **'Spoofing'**
   String get loginSpoofRedacted;
 
   /// No description provided for @loginProxy.
@@ -376,9 +379,226 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter a valid proxy host and port (1–65535)'**
   String get proxyInvalidHostOrPort;
+
+  /// No description provided for @spoofScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Session spoofing'**
+  String get spoofScreenTitle;
+
+  /// No description provided for @spoofInfoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap \"Generate\":\n• Short tap: random preset.\n• Long press: real device data.'**
+  String get spoofInfoHint;
+
+  /// No description provided for @spoofMethodTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Spoofing method'**
+  String get spoofMethodTitle;
+
+  /// No description provided for @spoofMethodPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial'**
+  String get spoofMethodPartial;
+
+  /// No description provided for @spoofMethodFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full'**
+  String get spoofMethodFull;
+
+  /// No description provided for @spoofMethodPartialDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended method. Random data is used, but your real timezone and locale are kept for plausibility.'**
+  String get spoofMethodPartialDescription;
+
+  /// No description provided for @spoofMethodFullDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'All data including timezone and locale is generated randomly. Use this method at your own risk!'**
+  String get spoofMethodFullDescription;
+
+  /// No description provided for @spoofDeviceTypeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Device type'**
+  String get spoofDeviceTypeTitle;
+
+  /// No description provided for @spoofDeviceTypeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a device type for preset generation. Tapping \"Generate\" will only use presets of the selected type.'**
+  String get spoofDeviceTypeDescription;
+
+  /// No description provided for @spoofDeviceTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Device type'**
+  String get spoofDeviceTypeLabel;
+
+  /// No description provided for @spoofMainSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Main data'**
+  String get spoofMainSectionTitle;
+
+  /// No description provided for @spoofFieldDeviceName.
+  ///
+  /// In en, this message translates to:
+  /// **'Device name'**
+  String get spoofFieldDeviceName;
+
+  /// No description provided for @spoofFieldOsVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'OS version'**
+  String get spoofFieldOsVersion;
+
+  /// No description provided for @spoofRegionalSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Regional data'**
+  String get spoofRegionalSectionTitle;
+
+  /// No description provided for @spoofFieldScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen resolution'**
+  String get spoofFieldScreen;
+
+  /// No description provided for @spoofFieldTimezone.
+  ///
+  /// In en, this message translates to:
+  /// **'Timezone'**
+  String get spoofFieldTimezone;
+
+  /// No description provided for @spoofFieldLocale.
+  ///
+  /// In en, this message translates to:
+  /// **'Locale'**
+  String get spoofFieldLocale;
+
+  /// No description provided for @spoofIdentifiersSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Identifiers'**
+  String get spoofIdentifiersSectionTitle;
+
+  /// No description provided for @spoofIdentifiersDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'mt_instanceid and clientSessionId are generated automatically on every app launch. Only the Device ID can be changed.'**
+  String get spoofIdentifiersDescription;
+
+  /// No description provided for @spoofFieldDeviceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Device ID'**
+  String get spoofFieldDeviceId;
+
+  /// No description provided for @spoofRegenerateIdTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate a new ID'**
+  String get spoofRegenerateIdTooltip;
+
+  /// No description provided for @spoofFieldAppVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'App version'**
+  String get spoofFieldAppVersion;
+
+  /// No description provided for @spoofFieldBuildNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Build number'**
+  String get spoofFieldBuildNumber;
+
+  /// No description provided for @spoofFieldArchitecture.
+  ///
+  /// In en, this message translates to:
+  /// **'Architecture'**
+  String get spoofFieldArchitecture;
+
+  /// No description provided for @spoofButtonGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate'**
+  String get spoofButtonGenerate;
+
+  /// No description provided for @spoofButtonApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get spoofButtonApply;
+
+  /// No description provided for @spoofDialogUnsureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure?'**
+  String get spoofDialogUnsureTitle;
+
+  /// No description provided for @spoofDialogUnsureContent.
+  ///
+  /// In en, this message translates to:
+  /// **'The app may become unstable due to API incompatibility'**
+  String get spoofDialogUnsureContent;
+
+  /// No description provided for @spoofDialogCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get spoofDialogCancel;
+
+  /// No description provided for @spoofDialogYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get spoofDialogYes;
+
+  /// No description provided for @spoofDialogApplyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply settings?'**
+  String get spoofDialogApplyTitle;
+
+  /// No description provided for @spoofDialogApplyContent.
+  ///
+  /// In en, this message translates to:
+  /// **'Need to reconnect the app, ok?'**
+  String get spoofDialogApplyContent;
+
+  /// No description provided for @spoofDialogApplyDeny.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get spoofDialogApplyDeny;
+
+  /// No description provided for @spoofDialogApplyConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Ok!'**
+  String get spoofDialogApplyConfirm;
+
+  /// No description provided for @spoofErrorApplyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to apply settings: {error}'**
+  String spoofErrorApplyFailed(String error);
+
+  /// No description provided for @profileMenuSpoof.
+  ///
+  /// In en, this message translates to:
+  /// **'Spoofing'**
+  String get profileMenuSpoof;
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -387,25 +607,26 @@ class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> 
   }
 
   @override
-  bool isSupported(Locale locale) => <String>['en', 'ru'].contains(locale.languageCode);
+  bool isSupported(Locale locale) =>
+      <String>['en', 'ru'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
-
-
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en': return AppLocalizationsEn();
-    case 'ru': return AppLocalizationsRu();
+    case 'en':
+      return AppLocalizationsEn();
+    case 'ru':
+      return AppLocalizationsRu();
   }
 
   throw FlutterError(
     'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
     'an issue with the localizations generation tool. Please file an issue '
     'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.'
+    'that was used.',
   );
 }

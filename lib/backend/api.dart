@@ -5,6 +5,7 @@ import '../core/config/config.dart';
 import '../core/config/countries.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
+import '../core/storage/spoofing_service.dart';
 import '../core/transport/connection.dart';
 import '../core/transport/dispatcher.dart';
 import '../core/transport/receiver.dart';
@@ -112,7 +113,7 @@ class Api {
   Future<Packet> sendHandshake() async {
     final deviceInfo = DeviceInfoPlugin();
 
-    final deviceType = (Platform.isLinux || Platform.isWindows)
+    String deviceType = (Platform.isLinux || Platform.isWindows)
         ? 'DESKTOP'
         : (Platform.isAndroid)
         ? 'ANDROID'
@@ -120,10 +121,16 @@ class Api {
     String osVersion = '';
     String deviceName = 'Unknown';
     String architecture = 'arm64';
+    String appVersion = SpoofingService.hardcodedAppVersion;
+    int buildNumber = SpoofingService.hardcodedBuildNumber;
+    String screen = '1920x1080';
 
     tz.initializeTimeZones();
     final timeZoneName = await FlutterTimezone.getLocalTimezone();
-    final timezone = timeZoneName.identifier;
+    String timezone = timeZoneName.identifier;
+    String locale = 'ru';
+    String deviceLocale = Platform.localeName.substring(0, 2);
+    String deviceId = 'a1b2c3d4e5f6a7b8';
 
     if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
@@ -150,24 +157,54 @@ class Api {
       );
     }
 
+    final spoofed = await SpoofingService.getSpoofedSessionData();
+    if (spoofed != null) {
+      deviceType = (spoofed['device_type'] as String?) ?? deviceType;
+      final sDeviceName = spoofed['device_name'] as String?;
+      if (sDeviceName != null && sDeviceName.isNotEmpty) {
+        deviceName = sDeviceName;
+      }
+      final sOsVersion = spoofed['os_version'] as String?;
+      if (sOsVersion != null && sOsVersion.isNotEmpty) osVersion = sOsVersion;
+      final sScreen = spoofed['screen'] as String?;
+      if (sScreen != null && sScreen.isNotEmpty) screen = sScreen;
+      final sTimezone = spoofed['timezone'] as String?;
+      if (sTimezone != null && sTimezone.isNotEmpty) timezone = sTimezone;
+      final sLocale = spoofed['locale'] as String?;
+      if (sLocale != null && sLocale.isNotEmpty) {
+        locale = sLocale;
+        deviceLocale = sLocale.split(RegExp(r'[-_]')).first;
+      }
+      final sDeviceId = spoofed['device_id'] as String?;
+      if (sDeviceId != null && sDeviceId.isNotEmpty) deviceId = sDeviceId;
+      appVersion = (spoofed['app_version'] as String?) ?? appVersion;
+      architecture = (spoofed['arch'] as String?) ?? architecture;
+      final sBuild = spoofed['build_number'];
+      if (sBuild is int) {
+        buildNumber = sBuild;
+      } else if (sBuild is String) {
+        buildNumber = int.tryParse(sBuild) ?? buildNumber;
+      }
+    }
+
     _userAgent = {
       'deviceType': deviceType,
-      'locale': 'ru',
-      'deviceLocale': Platform.localeName.substring(0, 2),
+      'locale': locale,
+      'deviceLocale': deviceLocale,
       'osVersion': osVersion,
       'deviceName': deviceName,
-      'appVersion': '26.8.1',
-      'screen': '1920x1080',
+      'appVersion': appVersion,
+      'screen': screen,
       'timezone': timezone,
       'pushDeviceType': 'GCM',
       'arch': architecture,
-      'buildNumber': 6606,
+      'buildNumber': buildNumber,
     };
 
     final payload = <dynamic, dynamic>{
       'mt_instanceid': '550e8400-e29b-41d4-a716-446655440000',
       'clientSessionId': 42,
-      'deviceId': 'a1b2c3d4e5f6a7b8',
+      'deviceId': deviceId,
       'userAgent': _userAgent,
     };
 
