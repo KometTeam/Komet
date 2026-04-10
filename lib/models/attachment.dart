@@ -433,6 +433,73 @@ class ControlAttachment extends MessageAttachment {
   };
 }
 
+class ForwardedMessageAttachment extends MessageAttachment {
+  final int originalSenderId;
+  final String? originalSenderName;
+  final String? originalMessageId;
+  final int? originalTime;
+  final String? originalText;
+  final int? originalChatId;
+  final List<MessageAttachment>? originalAttachments;
+
+  const ForwardedMessageAttachment({
+    required this.originalSenderId,
+    this.originalSenderName,
+    this.originalMessageId,
+    this.originalTime,
+    this.originalText,
+    this.originalChatId,
+    this.originalAttachments,
+  }) : super(type: AttachmentType.photo);
+
+  factory ForwardedMessageAttachment.fromMap(Map<String, dynamic> map) {
+    final linkRaw = map['link'];
+    Map<String, dynamic>? link;
+    if (linkRaw is Map) {
+      link = Map<String, dynamic>.from(linkRaw);
+    }
+
+    Map<String, dynamic>? message;
+    if (link != null) {
+      final msgRaw = link['message'];
+      if (msgRaw is Map) {
+        message = Map<String, dynamic>.from(msgRaw);
+      }
+    }
+
+    List<MessageAttachment>? originalAttaches;
+    if (message != null) {
+      final attaches = message['attaches'] as List?;
+      if (attaches != null) {
+        originalAttaches = attaches
+            .whereType<Map>()
+            .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+            .toList();
+      }
+    }
+
+    return ForwardedMessageAttachment(
+      originalSenderId: (message?['sender'] as int?) ?? 0,
+      originalMessageId: message?['id']?.toString(),
+      originalTime: message?['time'] as int?,
+      originalText: message?['text'] as String?,
+      originalChatId: link?['chatId'] as int?,
+      originalAttachments: originalAttaches,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toMap() => {
+    '_type': 'FORWARD',
+    'originalSenderId': originalSenderId,
+    'originalSenderName': originalSenderName,
+    'originalMessageId': originalMessageId,
+    'originalTime': originalTime,
+    'originalText': originalText,
+    'originalChatId': originalChatId,
+  };
+}
+
 class UnknownAttachment extends MessageAttachment {
   final Map<String, dynamic> rawData;
 

@@ -78,6 +78,7 @@ class MessageBubble extends StatelessWidget {
   MessageType get contentType {
     if (message.attachments != null && message.attachments!.isNotEmpty) {
       final first = message.attachments!.first;
+      if (first is ForwardedMessageAttachment) return MessageType.text;
       if (first is UnknownAttachment) return MessageType.text;
       if (first.type == AttachmentType.audio) return MessageType.voice;
       return MessageType.attachment;
@@ -317,14 +318,26 @@ class MessageBubble extends StatelessWidget {
         ? Colors.white
         : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
 
+    final forwarded = _getForwardedAttachment();
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Flexible(
-          child: Text(
-            message.text ?? '',
-            style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (forwarded != null) ...[
+                _buildForwardedHeader(context, forwarded),
+                const SizedBox(height: 4),
+              ],
+              Text(
+                message.text ?? '',
+                style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
+              ),
+            ],
           ),
         ),
         const SizedBox(width: 8),
@@ -343,9 +356,73 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  ForwardedMessageAttachment? _getForwardedAttachment() {
+    if (message.attachments == null || message.attachments!.isEmpty)
+      return null;
+    for (final a in message.attachments!) {
+      if (a is ForwardedMessageAttachment) return a;
+    }
+    return null;
+  }
+
+  Widget _buildForwardedHeader(
+    BuildContext context,
+    ForwardedMessageAttachment forwarded,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final textColor = isMe
+        ? Colors.white
+        : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
+    final headerColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : (isDark ? cs.onSurfaceVariant : const Color(0xFF8E8E93));
+
+    final senderName = forwarded.originalSenderName;
+    final displaySender = senderName ?? forwarded.originalSenderId.toString();
+    final origText = forwarded.originalText;
+    final hasOrigText = origText != null && origText.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Symbols.forward, size: 14, color: headerColor),
+            const SizedBox(width: 4),
+            Text(
+              displaySender,
+              style: TextStyle(
+                color: headerColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        if (hasOrigText) ...[
+          const SizedBox(height: 2),
+          Text(
+            origText,
+            style: TextStyle(color: textColor, fontSize: 14),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildAttachmentContent(BuildContext context) {
     final attachments = message.attachments;
     if (attachments == null || attachments.isEmpty) {
+      return _buildTextContent(context);
+    }
+
+    final first = attachments.first;
+    if (first is ForwardedMessageAttachment) {
       return _buildTextContent(context);
     }
 
