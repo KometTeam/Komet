@@ -78,7 +78,13 @@ class MessageBubble extends StatelessWidget {
   MessageType get contentType {
     if (message.attachments != null && message.attachments!.isNotEmpty) {
       final first = message.attachments!.first;
-      if (first is ForwardedMessageAttachment) return MessageType.text;
+      if (first is ForwardedMessageAttachment) {
+        final fwd = first;
+        final hasPhoto =
+            fwd.originalAttachments != null &&
+            fwd.originalAttachments!.any((a) => a is PhotoAttachment);
+        return hasPhoto ? MessageType.attachment : MessageType.text;
+      }
       if (first is UnknownAttachment) return MessageType.text;
       if (first.type == AttachmentType.audio) return MessageType.voice;
       return MessageType.attachment;
@@ -319,26 +325,19 @@ class MessageBubble extends StatelessWidget {
         : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
 
     final forwarded = _getForwardedAttachment();
+    final isForwarded = forwarded != null;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (forwarded != null) ...[
-                _buildForwardedHeader(context, forwarded),
-                const SizedBox(height: 4),
-              ],
-              Text(
-                message.text ?? '',
-                style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
-              ),
-            ],
-          ),
+          child: isForwarded
+              ? _buildForwardedInlineText(context, forwarded, textColor)
+              : Text(
+                  message.text ?? '',
+                  style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
+                ),
         ),
         const SizedBox(width: 8),
         Padding(
@@ -352,6 +351,58 @@ class MessageBubble extends StatelessWidget {
           ),
         ),
         if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(context)],
+      ],
+    );
+  }
+
+  Widget _buildForwardedInlineText(
+    BuildContext context,
+    ForwardedMessageAttachment forwarded,
+    Color textColor,
+  ) {
+    final headerColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+
+    final senderName = forwarded.originalSenderName;
+    final displaySender = senderName ?? forwarded.originalSenderId.toString();
+    final origText = forwarded.originalText;
+    final hasOrigText = origText != null && origText.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Symbols.forward, size: 14, color: headerColor),
+            const SizedBox(width: 4),
+            Text(
+              displaySender,
+              style: TextStyle(
+                color: headerColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        if (hasOrigText) ...[
+          const SizedBox(height: 2),
+          Text(
+            origText,
+            style: TextStyle(color: textColor, fontSize: 14),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ] else ...[
+          const SizedBox(height: 2),
+          Text(
+            message.text ?? '',
+            style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
+          ),
+        ],
       ],
     );
   }
@@ -387,20 +438,23 @@ class MessageBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Symbols.forward, size: 14, color: headerColor),
-            const SizedBox(width: 4),
-            Text(
-              displaySender,
-              style: TextStyle(
-                color: headerColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+        Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Symbols.forward, size: 14, color: headerColor),
+              const SizedBox(width: 4),
+              Text(
+                displaySender,
+                style: TextStyle(
+                  color: headerColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         if (hasOrigText) ...[
           const SizedBox(height: 2),
@@ -423,6 +477,13 @@ class MessageBubble extends StatelessWidget {
 
     final first = attachments.first;
     if (first is ForwardedMessageAttachment) {
+      final fwd = first;
+      final photos = fwd.originalAttachments
+          ?.whereType<PhotoAttachment>()
+          .toList();
+      if (photos != null && photos.isNotEmpty) {
+        return _buildForwardedPhotoContent(context, fwd, photos);
+      }
       return _buildTextContent(context);
     }
 
@@ -510,6 +571,60 @@ class MessageBubble extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildForwardedPhotoContent(
+    BuildContext context,
+    ForwardedMessageAttachment forwarded,
+    List<PhotoAttachment> photos,
+  ) {
+    final headerColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    final senderName = forwarded.originalSenderName;
+    final displaySender = senderName ?? forwarded.originalSenderId.toString();
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Symbols.forward, size: 14, color: headerColor),
+              const SizedBox(width: 4),
+              Text(
+                displaySender,
+                style: TextStyle(
+                  color: headerColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (hasCaption) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(
+              message.text ?? '',
+              style: TextStyle(
+                color: isMe ? Colors.white : const Color(0xFF1C1C1E),
+                fontSize: 16,
+                height: 1.3,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+        ],
+        _buildPhotoContent(context, photos),
       ],
     );
   }
