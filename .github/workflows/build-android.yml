@@ -39,7 +39,7 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
+        
       - name: Configure Gradle
         run: |
           mkdir -p ~/.gradle
