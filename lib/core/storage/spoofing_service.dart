@@ -18,10 +18,9 @@ class SpoofingService {
       'locale': prefs.getString('spoof_locale'),
       'device_id': prefs.getString('spoof_deviceid'),
       'device_type': prefs.getString('spoof_devicetype'),
-      'app_version': prefs.getString('spoof_appversion') ?? hardcodedAppVersion,
+      'app_version': hardcodedAppVersion,
       'arch': prefs.getString('spoof_arch') ?? 'arm64-v8a',
-      'build_number':
-          prefs.getInt('spoof_buildnumber') ?? hardcodedBuildNumber,
+      'build_number': hardcodedBuildNumber,
     };
   }
 }
