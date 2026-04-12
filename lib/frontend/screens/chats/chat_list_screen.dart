@@ -199,7 +199,20 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   Future<void> _reloadChatsAndFolders() async {
     final p = await AppDatabase.loadActiveProfile();
-    if (p != null) {
+    if (p == null) {
+      _syncFolderChatScrollControllersForCount(1);
+      if (mounted) {
+        setState(() {
+          _folders = [];
+          _selectedFolderId = null;
+          _foldersListKnown = null;
+          _isInitialLoading = false;
+        });
+      }
+      return;
+    }
+
+    try {
       final chats = await ChatsModule.getChats(p.id);
       var folders = await FoldersModule.loadFolders(p.id);
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
@@ -244,7 +257,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           _jumpFolderPageToSelection();
         });
       }
-    } else {
+    } catch (_) {
       _syncFolderChatScrollControllersForCount(1);
       if (mounted) {
         setState(() {
@@ -253,6 +266,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           _foldersListKnown = null;
           _isInitialLoading = false;
         });
+      }
+    } finally {
+      if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _jumpFolderPageToSelection();

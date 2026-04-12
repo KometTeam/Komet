@@ -431,7 +431,7 @@ abstract class AppLocalizations {
   /// No description provided for @spoofDeviceTypeDescription.
   ///
   /// In en, this message translates to:
-  /// **'Choose a device type for preset generation. Tapping \"Generate\" will only use presets of the selected type.'**
+  /// **'This field is not changeable, to avoid token association issues'**
   String get spoofDeviceTypeDescription;
 
   /// No description provided for @spoofDeviceTypeLabel.
@@ -571,6 +571,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Need to reconnect the app, ok?'**
   String get spoofDialogApplyContent;
+
+  /// No description provided for @spoofDialogApplyWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Your spoof will change immediately. But due to MAX specifics, you must re-login to the account for it to become visible'**
+  String get spoofDialogApplyWarning;
+
+  /// No description provided for @spoofDialogReloginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Done!'**
+  String get spoofDialogReloginTitle;
+
+  /// No description provided for @spoofDialogReloginContent.
+  ///
+  /// In en, this message translates to:
+  /// **'Due to MAX specifics, your spoof is changed, but changes will be visible only after re-login.'**
+  String get spoofDialogReloginContent;
+
+  /// No description provided for @spoofDialogReloginWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-login now?'**
+  String get spoofDialogReloginWarning;
+
+  /// No description provided for @spoofDialogReloginDeny.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get spoofDialogReloginDeny;
+
+  /// No description provided for @spoofDialogReloginConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-login now'**
+  String get spoofDialogReloginConfirm;
 
   /// No description provided for @spoofDialogApplyDeny.
   ///

@@ -65,6 +65,10 @@ class SessionExpiredException extends PacketError {
 
 String messageFromErrorPayload(dynamic payload) {
   if (payload is Map) {
+    final msg = payload['message'];
+    if (msg == 'FAIL_WRONG_PASSWORD' || msg == 'FAIL_LOGIN_TOKEN') {
+      return 'Ваш токен был отклонён сервером, хм... Попробуйте войти ещё раз.';
+    }
     for (final key in ['localizedMessage', 'message', 'title']) {
       final v = payload[key];
       if (v is String && v.trim().isNotEmpty) return v.trim();
