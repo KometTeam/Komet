@@ -32,6 +32,7 @@ class Api {
   final _stateController = StreamController<SessionState>.broadcast();
   final _sessionExpiredController =
       StreamController<SessionExpiredException>.broadcast();
+  final _handshakeSuccessController = StreamController<String>.broadcast();
   Map<dynamic, dynamic>? _userAgent;
 
   Map<dynamic, dynamic>? get userAgent => _userAgent;
@@ -44,6 +45,8 @@ class Api {
   Stream<SessionState> get stateStream => _stateController.stream;
   Stream<SessionExpiredException> get sessionExpiredStream =>
       _sessionExpiredController.stream;
+  Stream<String> get handshakeSuccessStream =>
+      _handshakeSuccessController.stream;
   SessionState get state => _sessionState;
 
   StreamSubscription<Uint8List>? _dataSubscription;
@@ -93,6 +96,12 @@ class Api {
         _setSessionState(SessionState.online);
         _startPinging();
         logger.i('Сессия онлайн, хэндшейк ок');
+        _handshakeSuccessController.add(
+          response.payload['device_name'] as String? ?? 'Unknown',
+        );
+        if (_onReconnectCallback != null) {
+          _onReconnectCallback!();
+        }
       } else {
         logger.e('Хэндшейк отклонён: ${response.payload}');
       }
@@ -254,7 +263,8 @@ class Api {
     await for (final packet in _receiver.feed(data)) {
       if (packet.isError &&
           packet.payload is Map &&
-          packet.payload['message'] == 'FAIL_LOGIN_TOKEN') {
+          (packet.payload['message'] == 'FAIL_LOGIN_TOKEN' ||
+              packet.payload['message'] == 'FAIL_WRONG_PASSWORD')) {
         _sessionExpiredController.add(
           SessionExpiredException(messageFromErrorPayload(packet.payload)),
         );
@@ -277,13 +287,11 @@ class Api {
     _socketStateSubscription = null;
     _receiver.reset();
     _dispatcher.clearPending();
+    _handshakeSuccessController.add('disconnected');
   }
 
   Future<void> reconnectAndLogin() async {
     await connect();
-    if (_sessionState == SessionState.online && _onReconnectCallback != null) {
-      _onReconnectCallback!();
-    }
   }
 
   void Function()? _onReconnectCallback;

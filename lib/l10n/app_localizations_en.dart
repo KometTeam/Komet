@@ -183,7 +183,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spoofDeviceTypeDescription =>
-      'Choose a device type for preset generation. Tapping \"Generate\" will only use presets of the selected type.';
+      'This field is not changeable, to avoid token association issues';
 
   @override
   String get spoofDeviceTypeLabel => 'Device type';
@@ -255,6 +255,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spoofDialogApplyContent => 'Need to reconnect the app, ok?';
+
+  @override
+  String get spoofDialogApplyWarning =>
+      'Your spoof will change immediately. But due to MAX specifics, you must re-login to the account for it to become visible';
+
+  @override
+  String get spoofDialogReloginTitle => 'Done!';
+
+  @override
+  String get spoofDialogReloginContent =>
+      'Due to MAX specifics, your spoof is changed, but changes will be visible only after re-login.';
+
+  @override
+  String get spoofDialogReloginWarning => 'Re-login now?';
+
+  @override
+  String get spoofDialogReloginDeny => 'Later';
+
+  @override
+  String get spoofDialogReloginConfirm => 'Re-login now';
 
   @override
   String get spoofDialogApplyDeny => 'No';

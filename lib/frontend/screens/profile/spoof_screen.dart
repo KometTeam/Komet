@@ -9,8 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/config/device_presets.dart';
 import '../../../core/storage/spoofing_service.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../auth/login_screen.dart';
 
 enum SpoofingMethod { partial, full }
 
@@ -127,18 +129,9 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _deviceNameController.text =
           '${androidInfo.manufacturer} ${androidInfo.model}';
       _osVersionController.text = 'Android ${androidInfo.version.release}';
-      _selectedDeviceType = 'ANDROID';
       _selectedArch = androidInfo.supportedAbis.isNotEmpty
           ? androidInfo.supportedAbis.first
           : 'arm64-v8a';
-      _buildNumberController.text = '$_hardcodedBuildNumber';
-    } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      _deviceNameController.text = iosInfo.name;
-      _osVersionController.text =
-          '${iosInfo.systemName} ${iosInfo.systemVersion}';
-      _selectedDeviceType = 'IOS';
-      _selectedArch = 'arm64';
       _buildNumberController.text = '$_hardcodedBuildNumber';
     } else {
       await _applyGeneratedData();
@@ -168,15 +161,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _appVersionController.text = _hardcodedVersion;
       _deviceIdController.text = _generateDeviceId();
 
-      _selectedDeviceType = preset.deviceType;
-
-      if (preset.deviceType == 'ANDROID') {
-        _selectedArch = 'arm64-v8a';
-      } else if (preset.deviceType == 'IOS') {
-        _selectedArch = 'arm64';
-      } else {
-        _selectedArch = 'x86_64';
-      }
+      _selectedArch = 'arm64-v8a';
       _buildNumberController.text = '$_hardcodedBuildNumber';
 
       if (_selectedMethod == SpoofingMethod.full) {
@@ -247,32 +232,76 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.spoofDialogApplyTitle),
-        content: Text(l10n.spoofDialogApplyContent),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.spoofDialogApplyContent),
+            const SizedBox(height: 12),
+            Text(
+              l10n.spoofDialogApplyWarning,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop('cancel'),
             child: Text(l10n.spoofDialogApplyDeny),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('relogin'),
+            child: Text(l10n.spoofDialogReloginConfirm),
+          ),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(context).pop('apply'),
             child: Text(l10n.spoofDialogApplyConfirm),
           ),
         ],
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (!mounted || confirmed == null) return;
+
+    if (confirmed == 'relogin') {
+      final prefs = await SharedPreferences.getInstance();
+      await _saveAllData(prefs);
+      await api.disconnect();
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        await TokenStorage.deleteToken(accountId);
+      }
+      await prefs.setBool('spoofing_enabled', true);
+      await api.connect();
+      if (mounted) {
+        final navState = KometApp.navigatorKey.currentState;
+        if (navState != null) {
+          await navState.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+      }
+      return;
+    }
+
+    if (confirmed != 'apply') return;
 
     await _saveAllData(prefs);
 
     try {
       await api.disconnect();
       await api.connect();
-      if (mounted) Navigator.of(context).pop();
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -452,33 +481,31 @@ class _SpoofScreenState extends State<SpoofScreen> {
               text: l10n.spoofDeviceTypeDescription,
             ),
             const SizedBox(height: 12),
-            _buildChipSelector<String>(
-              options: const [
-                _ChipOption('ANDROID', 'ANDROID', Icons.android_outlined),
-                _ChipOption('IOS', 'iOS', Icons.phone_iphone_outlined),
-                _ChipOption(
-                  'DESKTOP',
+            Row(
+              children: [
+                _buildDisabledChip('ANDROID', Icons.android_outlined, theme),
+                const SizedBox(width: 8),
+                _buildDisabledChip('iOS', Icons.phone_iphone_outlined, theme),
+                const SizedBox(width: 8),
+                _buildDisabledChip(
                   'Desktop',
                   Icons.desktop_windows_outlined,
+                  theme,
                 ),
               ],
-              selected: _selectedDeviceType,
-              onSelected: (value) {
-                setState(() {
-                  _selectedDeviceType = value;
-                  if (value == 'ANDROID') {
-                    _selectedArch = 'arm64-v8a';
-                  } else if (value == 'IOS') {
-                    _selectedArch = 'arm64';
-                  } else {
-                    _selectedArch = 'x86_64';
-                  }
-                });
-              },
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDisabledChip(String label, IconData icon, ThemeData theme) {
+    return Chip(
+      label: Text(label),
+      avatar: Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+      side: BorderSide(color: theme.colorScheme.outlineVariant),
     );
   }
 

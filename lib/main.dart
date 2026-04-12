@@ -36,6 +36,7 @@ void main() async {
   await AppDatabase.init();
   await api.connect();
   final initialLocale = await _loadInitialLocale();
+
   final prefs = await SharedPreferences.getInstance();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   runApp(
@@ -70,8 +71,9 @@ class KometAppState extends State<KometApp> {
 
   late Locale _locale;
   bool _isLoggingOut = false;
-  late final ValueNotifier<bool> fpsOverlayEnabled =
-      ValueNotifier(widget.initialFpsOverlay);
+  late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
+    widget.initialFpsOverlay,
+  );
 
   @override
   void initState() {
@@ -79,10 +81,14 @@ class KometAppState extends State<KometApp> {
     _locale = widget.initialLocale;
 
     api.setReconnectCallback(() async {
-      final accountId = await TokenStorage.getActiveAccountId();
-      if (accountId != null) {
-        await accountModule.login(accountId: accountId);
-      }
+      try {
+        final accountId = await TokenStorage.getActiveAccountId();
+        if (accountId != null &&
+            await TokenStorage.readToken(accountId) != null) {
+          final token = await TokenStorage.readToken(accountId);
+          await accountModule.login(accountId: accountId, token: token);
+        }
+      } catch (_) {}
     });
 
     api.sessionExpiredStream.listen((SessionExpiredException e) async {
@@ -250,7 +256,7 @@ class _StartupScreenState extends State<_StartupScreen> {
 
   Future<void> _tryAutoLogin() async {
     final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) {
+    if (accountId == null || await TokenStorage.readToken(accountId) == null) {
       _goToLogin();
       return;
     }

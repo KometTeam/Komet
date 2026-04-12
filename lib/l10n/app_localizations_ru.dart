@@ -185,7 +185,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofDeviceTypeDescription =>
-      'Выберите тип устройства для генерации пресетов. При нажатии \"Сгенерировать\" будут использоваться только пресеты выбранного типа.';
+      'Данное поле не изменяемое, во избежании проблем с ассоциацией токена';
 
   @override
   String get spoofDeviceTypeLabel => 'Тип устройства';
@@ -257,6 +257,26 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofDialogApplyContent => 'Нужно перезайти в приложение, ок?';
+
+  @override
+  String get spoofDialogApplyWarning =>
+      'Ваш спуф изменится сразу. Но из-за особенностей МАХ, для того что-бы это стало заметно, вы должны перелогиниться в аккаунт';
+
+  @override
+  String get spoofDialogReloginTitle => 'Готово!';
+
+  @override
+  String get spoofDialogReloginContent =>
+      'Из-за особенности МАХ, ваш спуф изменён, но видны изменения будут только при перезаходе в аккаунт.';
+
+  @override
+  String get spoofDialogReloginWarning => 'Перезайти сейчас?';
+
+  @override
+  String get spoofDialogReloginDeny => 'Позже';
+
+  @override
+  String get spoofDialogReloginConfirm => 'Перелогиниться сейчас';
 
   @override
   String get spoofDialogApplyDeny => 'Не';

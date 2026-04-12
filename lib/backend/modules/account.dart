@@ -1022,7 +1022,9 @@ class AccountModule {
   void _checkPacketError(Packet packet, String method) {
     if (packet.isError) {
       final payload = packet.payload;
-      if (payload is Map && payload['message'] == 'FAIL_LOGIN_TOKEN') {
+      if (payload is Map &&
+          (payload['message'] == 'FAIL_LOGIN_TOKEN' ||
+              payload['message'] == 'FAIL_WRONG_PASSWORD')) {
         throw SessionExpiredException(messageFromErrorPayload(payload));
       }
       throw PacketError(messageFromErrorPayload(payload));
