@@ -23,8 +23,7 @@ class SpoofScreen extends StatefulWidget {
 
 class _SpoofScreenState extends State<SpoofScreen> {
   static const String _hardcodedVersion = SpoofingService.hardcodedAppVersion;
-  static const int _hardcodedBuildNumber =
-      SpoofingService.hardcodedBuildNumber;
+  static const int _hardcodedBuildNumber = SpoofingService.hardcodedBuildNumber;
 
   final _random = Random();
   final _deviceNameController = TextEditingController();
@@ -219,7 +218,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
       'device_id': prefs.getString('spoof_deviceid') ?? '',
       'device_type': prefs.getString('spoof_devicetype') ?? 'ANDROID',
       'arch': prefs.getString('spoof_arch') ?? '',
-      'build_number': prefs.getInt('spoof_buildnumber')?.toString() ?? '',
     };
 
     final newValues = {
@@ -231,12 +229,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       'device_id': _deviceIdController.text,
       'device_type': _selectedDeviceType,
       'arch': _selectedArch,
-      'build_number': _buildNumberController.text,
     };
-
-    final oldAppVersion =
-        prefs.getString('spoof_appversion') ?? _hardcodedVersion;
-    final newAppVersion = _appVersionController.text;
 
     bool otherDataChanged = false;
     for (final key in oldValues.keys) {
@@ -246,33 +239,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       }
     }
 
-    final appVersionChanged = oldAppVersion != newAppVersion;
-    final isChangingAwayFromHardcoded = newAppVersion != _hardcodedVersion;
-
-    if (appVersionChanged && isChangingAwayFromHardcoded) {
-      if (!mounted) return;
-      final l10n = AppLocalizations.of(context)!;
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(l10n.spoofDialogUnsureTitle),
-          content: Text(l10n.spoofDialogUnsureContent),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(l10n.spoofDialogCancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(l10n.spoofDialogYes),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-    }
-
-    if (appVersionChanged && !otherDataChanged) {
+    if (!otherDataChanged) {
       await _saveAllData(prefs);
       if (mounted) Navigator.of(context).pop();
       return;
@@ -329,12 +296,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
     await prefs.setString('spoof_locale', _localeController.text);
     await prefs.setString('spoof_deviceid', _deviceIdController.text);
     await prefs.setString('spoof_devicetype', _selectedDeviceType);
-    await prefs.setString('spoof_appversion', _appVersionController.text);
     await prefs.setString('spoof_arch', _selectedArch);
-    await prefs.setInt(
-      'spoof_buildnumber',
-      int.tryParse(_buildNumberController.text) ?? _hardcodedBuildNumber,
-    );
   }
 
   void _generateNewDeviceId() {
@@ -360,10 +322,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.spoofScreenTitle),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text(l10n.spoofScreenTitle), centerTitle: true),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -642,18 +601,21 @@ class _SpoofScreenState extends State<SpoofScreen> {
             TextField(
               controller: _deviceIdController,
               decoration:
-                  _inputDecoration(l10n.spoofFieldDeviceId, Icons.tag_outlined)
-                      .copyWith(
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.autorenew_outlined),
-                          tooltip: l10n.spoofRegenerateIdTooltip,
-                          onPressed: _generateNewDeviceId,
-                        ),
-                      ),
+                  _inputDecoration(
+                    l10n.spoofFieldDeviceId,
+                    Icons.tag_outlined,
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.autorenew_outlined),
+                      tooltip: l10n.spoofRegenerateIdTooltip,
+                      onPressed: _generateNewDeviceId,
+                    ),
+                  ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _appVersionController,
+              enabled: false,
               decoration: _inputDecoration(
                 l10n.spoofFieldAppVersion,
                 Icons.info_outline_rounded,
@@ -662,6 +624,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _buildNumberController,
+              enabled: false,
               keyboardType: TextInputType.number,
               decoration: _inputDecoration(
                 l10n.spoofFieldBuildNumber,
@@ -693,8 +656,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
                 _ChipOption('arm64', 'arm64', Icons.memory_outlined),
               ],
               selected: _selectedArch,
-              onSelected: (value) =>
-                  setState(() => _selectedArch = value),
+              onSelected: (value) => setState(() => _selectedArch = value),
             ),
           ],
         ),
