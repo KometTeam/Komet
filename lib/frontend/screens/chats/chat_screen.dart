@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:komet/backend/modules/chats.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
@@ -35,7 +36,8 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _shimmerController;
   List<CachedMessage> _messages = [];
   int _myId = 0;
-
+  CachedChat? chat;
+  
   @override
   void initState() {
     super.initState();
@@ -51,6 +53,11 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _loadHistory() async {
     final activeProfile = await AppDatabase.loadActiveProfile();
     _myId = activeProfile?.id ?? 0;
+    ChatsModule.getChat(_myId, widget.chatId).then((value) {
+      chat = value[0];
+    }).catchError((error) {
+
+    });
 
     final cachedRows = await AppDatabase.loadMessages(
       _myId,
@@ -240,6 +247,10 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    
+    // TODO: Локализация
+    // TODO: Cклонения
+    String? status = chat?.type == "CHAT" ? "${chat?.participants.length.toString()} участников" : "last seen recently";
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -284,7 +295,7 @@ class _ChatScreenState extends State<ChatScreen>
                     ),
                   ),
                   Text(
-                    'last seen recently',
+                    status ?? "",
                     style: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 12,
@@ -353,6 +364,7 @@ class _ChatScreenState extends State<ChatScreen>
           myId: _myId,
           prevMessage: prevMessage,
           nextMessage: nextMessage,
+          chatType: chat!.type,
         );
       },
     );

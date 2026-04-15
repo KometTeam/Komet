@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:komet/backend/modules/messages.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
@@ -15,7 +16,7 @@ import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
-import '../../../main.dart' show accountModule, api;
+import '../../../main.dart' show accountModule, api, messagesModule;
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -60,40 +61,49 @@ class ChatListScreen extends StatefulWidget {
 class _ChatListScreenState extends State<ChatListScreen>
     with TickerProviderStateMixin {
   String? _selectedFolderId;
+
   List<ChatFolder> _folders = [];
+
   int _currentNavIndex = 0;
-  bool _navDragging = false;
-  double _navDragDx = 0;
-  double _navDragBaseLeft = 0;
-  late AnimationController _navPageAnimController;
+
   double _navPageAnimStart = 0;
   double _navPageAnimEnd = 0;
-  bool _isFabOpen = false;
-  bool _showCacheWarning = false;
-  late AnimationController _fabController;
-  final Set<String> _selectedChats = {};
-  late PageController _folderPageController;
-  final List<ScrollController> _folderChatScrollControllers = [];
-  final List<VoidCallback> _folderChatScrollListenerFns = [];
-  double _pullRatio = 0.0;
-  static const double _kStoriesPullTriggerPx = 16.0;
-  late AnimationController _storiesRevealController;
+  double _navDragDx = 0;
+  double _navDragBaseLeft = 0;
   double _revealAnimBegin = 0.0;
   double _closeAnimBegin = 0.0;
+  double _pullRatio = 0.0;
+  static const double _kStoriesPullTriggerPx = 16.0;
+
+  bool _navDragging = false;
+  bool _isFabOpen = false;
+  bool _showCacheWarning = false;
   bool _storiesAnimClosing = false;
   bool _storiesDockedOpen = false;
   bool _storiesOverscrollRevealArmed = true;
+  bool _shouldCollapseSearch = false;
+  bool get _isSelectionMode => _selectedChats.isNotEmpty;
+  bool? _foldersListKnown;
+
+  late AnimationController _navPageAnimController;
+  late AnimationController _fabController;
+  late PageController _folderPageController;
+  late AnimationController _storiesRevealController;
+
+  final List<ScrollController> _folderChatScrollControllers = [];
+  final List<VoidCallback> _folderChatScrollListenerFns = [];
+  final Set<String> _selectedChats = {};
+
   DateTime _storiesRevealLayoutSettleUntil =
       DateTime.fromMillisecondsSinceEpoch(0);
   ProfileData? _profile;
+
   List<CachedChat> _chats = [];
+
   SessionState _sessionState = SessionState.disconnected;
+
   StreamSubscription? _stateSub;
   StreamSubscription<LoginStatus>? _loginSub;
-  bool? _foldersListKnown;
-  bool _shouldCollapseSearch = false;
-
-  bool get _isSelectionMode => _selectedChats.isNotEmpty;
 
   void _toggleSelection(String chatId) {
     setState(() {
@@ -1015,18 +1025,60 @@ class _ChatListScreenState extends State<ChatListScreen>
                   return _buildChatShimmer();
                 }
                 final chat = chats[index];
-                return _buildChatItem(
-                  chat.id.toString(),
-                  chat.title ?? 'Чат',
-                  chat.lastMsgText ?? '',
-                  _formatTime(chat.lastMsgTime),
-                  (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
-                      ? chat.iconUrl!
-                      : '',
-                  isOnline: chat.isOnline,
-                  unreadCount: chat.unreadCount,
-                  isMuted: chat.dontDisturbUntil > 0,
-                );
+
+                if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
+                  final secondId = chat.participants.entries.where((entry) => entry.key != _profile?.id).first.key;
+                  // TODO: Нормальное кеширование контактов
+                  final ss = messagesModule.searchContactById(secondId);
+                  final name = ContactCache.get(secondId);
+                  final avatar = ContactCache.getAvatar(secondId);
+
+                  return _buildChatItem(
+                    chat.id.toString(),
+                    name ?? "Пользователь",
+                    chat.lastMsgText?.replaceAll('\n', ' ') ?? '',
+                    _formatTime(chat.lastMsgTime),
+                    avatar ?? "",
+                    isOnline: chat.isOnline,
+                    unreadCount: chat.unreadCount,
+                    isMuted: chat.dontDisturbUntil > 0,
+                  );
+                } else {
+                  if (chat.lastMsgSenderId != null ) {
+                    final ss = messagesModule.searchContactById(chat.lastMsgSenderId!);
+                  }
+                  
+                  final name = chat.lastMsgSenderId != null
+                      ? ContactCache.get(chat.lastMsgSenderId!)
+                      : null;
+
+                  final avatar = chat.lastMsgSenderId != null
+                      ? ContactCache.getAvatar(chat.lastMsgSenderId!)
+                      : null;
+
+                  String fullMsg = "";
+
+                  if (name?.isNotEmpty == true && chat.id != 0) {
+                    fullMsg += "$name: ";
+                  }
+                  
+                  if (chat.lastMsgText?.isNotEmpty == true) {
+                    fullMsg += chat.lastMsgText ?? "";
+                  }
+
+                  return _buildChatItem(
+                    chat.id.toString(),
+                    chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
+                    fullMsg,
+                    _formatTime(chat.lastMsgTime),
+                    (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                        ? chat.iconUrl!
+                        : '',
+                    isOnline: chat.isOnline,
+                    unreadCount: chat.unreadCount,
+                    isMuted: chat.dontDisturbUntil > 0,
+                  );
+                }
               }, childCount: _isInitialLoading ? 10 : chats.length),
             ),
           SliverPadding(
