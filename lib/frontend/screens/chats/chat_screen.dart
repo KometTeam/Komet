@@ -203,6 +203,7 @@ class _ChatScreenState extends State<ChatScreen>
                     originalText: a.originalText,
                     originalChatId: a.originalChatId,
                     originalAttachments: a.originalAttachments,
+                    originalContact: a.originalContact,
                   );
                 }
                 return a;
