@@ -325,6 +325,9 @@ class ContactAttachment extends MessageAttachment {
   final String? firstName;
   final String? lastName;
   final String? phoneNumber;
+  final String? photoUrl;
+  final int? contactId;
+  final String? name;
 
   const ContactAttachment({
     super.previewData,
@@ -334,6 +337,9 @@ class ContactAttachment extends MessageAttachment {
     this.firstName,
     this.lastName,
     this.phoneNumber,
+    this.photoUrl,
+    this.contactId,
+    this.name,
   }) : super(type: AttachmentType.contact);
 
   factory ContactAttachment.fromMap(Map<String, dynamic> map) {
@@ -344,6 +350,9 @@ class ContactAttachment extends MessageAttachment {
       firstName: map['firstName'] as String?,
       lastName: map['lastName'] as String?,
       phoneNumber: map['phoneNumber'] as String?,
+      photoUrl: map['photoUrl'] as String?,
+      contactId: map['contactId'] as int?,
+      name: map['name'] as String?,
     );
   }
 
@@ -356,6 +365,9 @@ class ContactAttachment extends MessageAttachment {
     'firstName': firstName,
     'lastName': lastName,
     'phoneNumber': phoneNumber,
+    'photoUrl': photoUrl,
+    'contactId': contactId,
+    'name': name,
   };
 }
 
@@ -442,6 +454,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
   final String? originalText;
   final int? originalChatId;
   final List<MessageAttachment>? originalAttachments;
+  final ContactAttachment? originalContact;
 
   const ForwardedMessageAttachment({
     required this.originalSenderId,
@@ -452,6 +465,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
     this.originalText,
     this.originalChatId,
     this.originalAttachments,
+    this.originalContact,
   }) : super(type: AttachmentType.photo);
 
   factory ForwardedMessageAttachment.fromMap(Map<String, dynamic> map) {
@@ -470,11 +484,25 @@ class ForwardedMessageAttachment extends MessageAttachment {
     }
 
     List<MessageAttachment>? originalAttaches;
+    ContactAttachment? originalContact;
     if (message != null) {
       final attaches = message['attaches'] as List?;
       if (attaches != null) {
+        final contactAttaches = attaches
+            .whereType<Map>()
+            .where((a) => (a['_type'] as String?)?.toUpperCase() == 'CONTACT')
+            .toList();
+        if (contactAttaches.isNotEmpty) {
+          originalContact = ContactAttachment.fromMap(
+            Map<String, dynamic>.from(contactAttaches.first),
+          );
+        }
         originalAttaches = attaches
             .whereType<Map>()
+            .where((a) {
+              final type = (a['_type'] as String?)?.toUpperCase();
+              return type != 'CONTACT';
+            })
             .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
             .toList();
       }
@@ -487,6 +515,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
       originalText: message?['text'] as String?,
       originalChatId: link?['chatId'] as int?,
       originalAttachments: originalAttaches,
+      originalContact: originalContact,
     );
   }
 
