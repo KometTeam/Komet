@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/main.dart';
+import 'package:flutter/foundation.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
 import '../../models/attachment.dart';
@@ -85,11 +86,17 @@ class MessageBubble extends StatelessWidget {
       final first = message.attachments!.first;
       if (first is ForwardedMessageAttachment) {
         final fwd = first;
+        final hasContact = fwd.originalContact != null;
         final hasPhoto =
             fwd.originalAttachments != null &&
             fwd.originalAttachments!.any((a) => a is PhotoAttachment);
-        return hasPhoto ? MessageType.attachment : MessageType.text;
+        final hasOther =
+            fwd.originalAttachments != null &&
+            fwd.originalAttachments!.isNotEmpty;
+        if (hasContact || hasPhoto || hasOther) return MessageType.attachment;
+        return MessageType.text;
       }
+      if (first is ContactAttachment) return MessageType.attachment;
       if (first is UnknownAttachment) return MessageType.text;
       if (first.type == AttachmentType.audio) return MessageType.voice;
       return MessageType.attachment;
@@ -364,8 +371,16 @@ class MessageBubble extends StatelessWidget {
         ? Colors.white
         : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
 
+    final attachments = message.attachments;
+    final isForwardedContact =
+        attachments != null &&
+        attachments.isNotEmpty &&
+        attachments.first is ForwardedMessageAttachment &&
+        (attachments.first as ForwardedMessageAttachment).originalContact !=
+            null;
+
     final forwarded = _getForwardedAttachment();
-    final isForwarded = forwarded != null;
+    final isForwarded = forwarded != null && !isForwardedContact;
 
     // TODO: Нормальное кеширование контактов
     final ss = messagesModule.searchContactById(message.senderId);
@@ -554,13 +569,25 @@ class MessageBubble extends StatelessWidget {
     final first = attachments.first;
     if (first is ForwardedMessageAttachment) {
       final fwd = first;
+      if (fwd.originalContact != null) {
+        return _buildForwardedContactContent(context, fwd);
+      }
       final photos = fwd.originalAttachments
           ?.whereType<PhotoAttachment>()
           .toList();
       if (photos != null && photos.isNotEmpty) {
         return _buildForwardedPhotoContent(context, fwd, photos);
       }
+      final files = fwd.originalAttachments;
+      if (files != null && files.isNotEmpty) {
+        return _buildForwardedGenericContent(context, fwd, files);
+      }
       return _buildTextContent(context);
+    }
+
+    final contacts = attachments.whereType<ContactAttachment>().toList();
+    if (contacts.isNotEmpty) {
+      return _buildContactAttachment(context, contacts.first);
     }
 
     final photos = attachments.whereType<PhotoAttachment>().toList();
@@ -721,6 +748,136 @@ class MessageBubble extends StatelessWidget {
           const SizedBox(height: 6),
         ],
         _buildPhotoContent(context, photos),
+      ],
+    );
+  }
+
+  Widget _buildForwardedFileContent(
+    BuildContext context,
+    ForwardedMessageAttachment forwarded,
+    List<FileAttachment> files,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final headerColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : cs.onSurfaceVariant;
+    final displaySender =
+        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
+    final senderAvatar = forwarded.originalSenderAvatar;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Symbols.forward, size: 14, color: headerColor),
+              const SizedBox(width: 4),
+              if (senderAvatar != null && senderAvatar.isNotEmpty)
+                CircleAvatar(
+                  radius: 10,
+                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundColor: cs.primaryContainer,
+                )
+              else
+                CircleAvatar(
+                  radius: 10,
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(
+                    displaySender.isNotEmpty
+                        ? displaySender[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                  ),
+                ),
+              const SizedBox(width: 6),
+              Text(
+                displaySender,
+                style: TextStyle(
+                  color: headerColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        ...files.map((file) => _buildFileAttachment(context, file)),
+      ],
+    );
+  }
+
+  Widget _buildForwardedGenericContent(
+    BuildContext context,
+    ForwardedMessageAttachment forwarded,
+    List<MessageAttachment> attachments,
+  ) {
+    debugPrint('DEBUG: _buildForwardedGenericContent called');
+    debugPrint('DEBUG: attachments count: ${attachments.length}');
+    for (var i = 0; i < attachments.length; i++) {
+      debugPrint('DEBUG: attachment[$i] type: ${attachments[i].runtimeType}');
+      debugPrint('DEBUG: attachment[$i] type field: ${attachments[i].type}');
+    }
+
+    final cs = Theme.of(context).colorScheme;
+    final headerColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : cs.onSurfaceVariant;
+    final displaySender =
+        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
+    final senderAvatar = forwarded.originalSenderAvatar;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Symbols.forward, size: 14, color: headerColor),
+              const SizedBox(width: 4),
+              if (senderAvatar != null && senderAvatar.isNotEmpty)
+                CircleAvatar(
+                  radius: 10,
+                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundColor: cs.primaryContainer,
+                )
+              else
+                CircleAvatar(
+                  radius: 10,
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(
+                    displaySender.isNotEmpty
+                        ? displaySender[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                  ),
+                ),
+              const SizedBox(width: 6),
+              Text(
+                displaySender,
+                style: TextStyle(
+                  color: headerColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        ...attachments.map((a) {
+          if (a is FileAttachment) {
+            return _buildFileAttachment(context, a);
+          }
+          return const SizedBox.shrink();
+        }),
       ],
     );
   }
@@ -1131,6 +1288,247 @@ class MessageBubble extends StatelessWidget {
             _buildPhotoPlaceholder(ctx, 150, 150),
         ],
       ),
+    );
+  }
+
+  Widget _buildContactAttachment(BuildContext ctx, MessageAttachment contact) {
+    final cs = Theme.of(ctx).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final contactData = contact as ContactAttachment;
+
+    final firstName = contactData.firstName ?? '';
+    final lastName = contactData.lastName ?? '';
+    final hasFirstName = firstName.isNotEmpty;
+    final hasLastName = lastName.isNotEmpty;
+
+    final name = (hasFirstName || hasLastName)
+        ? '${hasFirstName ? firstName : ''}${hasLastName ? ' $lastName' : ''}'
+              .trim()
+        : (contactData.name ?? 'Contact');
+    final photoUrl = contactData.photoUrl ?? contactData.baseUrl;
+
+    final textColor = isMe
+        ? Colors.white
+        : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
+    final subtitleColor = isMe
+        ? Colors.white.withValues(alpha: 0.65)
+        : (isDark ? cs.onSurfaceVariant : const Color(0xFF8E8E93));
+    final bgColor = isMe
+        ? Colors.white.withValues(alpha: 0.2)
+        : (isDark ? cs.surfaceContainerHighest : const Color(0xFFE5E5EA));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: photoUrl != null && photoUrl.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.network(
+                      photoUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Symbols.person,
+                        color: isMe ? Colors.white : cs.primary,
+                        size: 24,
+                      ),
+                    ),
+                  )
+                : Icon(
+                    Symbols.person,
+                    color: isMe ? Colors.white : cs.primary,
+                    size: 24,
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name.isNotEmpty ? name : 'Contact',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (contactData.phoneNumber != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    contactData.phoneNumber!,
+                    style: TextStyle(
+                      color: subtitleColor,
+                      fontSize: 12,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForwardedContactContent(
+    BuildContext context,
+    ForwardedMessageAttachment forwarded,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final contact = forwarded.originalContact!;
+
+    final firstName = contact.firstName ?? '';
+    final lastName = contact.lastName ?? '';
+    final hasFirstName = firstName.isNotEmpty;
+    final hasLastName = lastName.isNotEmpty;
+
+    final name = (hasFirstName || hasLastName)
+        ? '${hasFirstName ? firstName : ''}${hasLastName ? ' $lastName' : ''}'
+              .trim()
+        : (contact.name ?? 'Contact');
+    final photoUrl = contact.photoUrl ?? contact.baseUrl;
+
+    final textColor = isMe
+        ? Colors.white
+        : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
+    final subtitleColor = isMe
+        ? Colors.white.withValues(alpha: 0.65)
+        : (isDark ? cs.onSurfaceVariant : const Color(0xFF8E8E93));
+    final bgColor = isMe
+        ? Colors.white.withValues(alpha: 0.2)
+        : (isDark ? cs.surfaceContainerHighest : const Color(0xFFE5E5EA));
+    final headerColor = isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : cs.onSurfaceVariant;
+
+    final displaySender =
+        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
+    final senderAvatar = forwarded.originalSenderAvatar;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Symbols.forward, size: 14, color: headerColor),
+              const SizedBox(width: 4),
+              if (senderAvatar != null && senderAvatar.isNotEmpty)
+                CircleAvatar(
+                  radius: 10,
+                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundColor: cs.primaryContainer,
+                )
+              else
+                CircleAvatar(
+                  radius: 10,
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(
+                    displaySender.isNotEmpty
+                        ? displaySender[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                  ),
+                ),
+              const SizedBox(width: 6),
+              Text(
+                displaySender,
+                style: TextStyle(
+                  color: headerColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: photoUrl != null && photoUrl.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.network(
+                          photoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Symbols.person,
+                            color: isMe ? Colors.white : cs.primary,
+                            size: 24,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        Symbols.person,
+                        color: isMe ? Colors.white : cs.primary,
+                        size: 24,
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name.isNotEmpty ? name : 'Contact',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (contact.phoneNumber != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        contact.phoneNumber!,
+                        style: TextStyle(
+                          color: subtitleColor,
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
