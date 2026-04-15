@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:komet/core/utils/logger.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -138,7 +139,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 7,
+      version: 8,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -165,6 +166,11 @@ class AppDatabase {
         if (oldVersion < 7) {
           await db.execute(
             'ALTER TABLE profile ADD COLUMN profile_options TEXT',
+          );
+        }
+        if (oldVersion < 8) {
+            await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN participants TEXT',
           );
         }
       },
@@ -235,6 +241,7 @@ class AppDatabase {
       dont_disturb_until INTEGER NOT NULL DEFAULT 0,
       is_online       INTEGER NOT NULL DEFAULT 0,
       seen_time       INTEGER NOT NULL DEFAULT 0,
+      participants    TEXT NOT NULL DEFAULT "",
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -375,18 +382,32 @@ class AppDatabase {
   // Chats cache
 
   static Future<void> saveChats(List<Map<String, dynamic>> rows) async {
-    final db = await _instance;
-    final batch = db.batch();
-    for (final row in rows) {
-      batch.insert(
-        'chats_cache',
-        row,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+    try {
+      final db = await _instance;
+      final batch = db.batch();
+      for (final row in rows) {
+        batch.insert(
+          'chats_cache',
+          row,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (e) {
+      logger.e("Ошибка при сохранении чата: $e");
     }
-    await batch.commit(noResult: true);
   }
 
+  static Future<List<Map<String, dynamic>>> loadChat(int accountId, int chatId) async {
+    final db = await _instance;
+    return db.query(
+      'chats_cache',
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, chatId],
+      orderBy: 'last_event_time DESC',
+    );
+  }
+  
   static Future<List<Map<String, dynamic>>> loadChats(int accountId) async {
     final db = await _instance;
     return db.query(

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:komet/backend/modules/chats.dart';
+import 'package:komet/backend/modules/contacts.dart';
+import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
 import '../../models/attachment.dart';
@@ -37,6 +40,7 @@ class MessageBubble extends StatelessWidget {
   final int myId;
   final CachedMessage? prevMessage;
   final CachedMessage? nextMessage;
+  final String chatType;
 
   const MessageBubble({
     super.key,
@@ -45,6 +49,7 @@ class MessageBubble extends StatelessWidget {
     required this.myId,
     this.prevMessage,
     this.nextMessage,
+    required this.chatType
   });
 
   bool get isGroupedWithNext {
@@ -277,6 +282,11 @@ class MessageBubble extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
 
+    // TODO: Нормальное кеширование контактов
+    final ss = messagesModule.searchContactById(message.senderId);
+    String? senderAvatar = ContactCache.getAvatar(message.senderId);
+    String? displaySender = ContactCache.get(message.senderId);
+
     return Padding(
       padding: EdgeInsets.only(
         left: isMe ? 60 : 12,
@@ -285,22 +295,52 @@ class MessageBubble extends StatelessWidget {
         bottom: bottomMargin,
       ),
       child: Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
-          ),
-          decoration: BoxDecoration(
-            color: isMe
-                ? (isDark ? const Color(0xFF2C5F8D) : const Color(0xFF007AFF))
-                : (isDark
-                      ? cs.surfaceContainerHighest
-                      : const Color(0xFFE9E9EB)),
-            borderRadius: _borderRadius,
-          ),
-          padding: padding,
-          child: _buildContent(context),
-        ),
+        child: Row(
+          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          spacing: 8.0,
+          children: [
+            if (senderAvatar != null && senderAvatar.isNotEmpty && !isMe && chatType != "DIALOG"
+             && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
+              CircleAvatar(
+                radius: 15,
+                backgroundImage: NetworkImage(senderAvatar),
+                backgroundColor: cs.primaryContainer,
+              )
+            else if (displaySender != null && !isMe && chatType != "DIALOG"
+             && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
+              CircleAvatar(
+                radius: 15,
+                backgroundColor: cs.primaryContainer,
+                child: Text(
+                  displaySender!.isNotEmpty
+                      ? displaySender[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                ),
+              )
+            // Заглушка для паддинга
+            else
+              CircleAvatar(
+                radius: 15,
+                backgroundColor: Color(0x00000000)
+              ),
+            Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              decoration: BoxDecoration(
+                color: isMe
+                    ? (isDark ? const Color(0xFF2C5F8D) : const Color(0xFF007AFF))
+                    : (isDark
+                          ? cs.surfaceContainerHighest
+                          : const Color(0xFFE9E9EB)),
+                borderRadius: _borderRadius,
+              ),
+              padding: padding,
+              child: _buildContent(context),
+            ),
+          ],
+        )
       ),
     );
   }
@@ -327,30 +367,46 @@ class MessageBubble extends StatelessWidget {
     final forwarded = _getForwardedAttachment();
     final isForwarded = forwarded != null;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
+    // TODO: Нормальное кеширование контактов
+    final ss = messagesModule.searchContactById(message.senderId);
+    String? displaySender = ContactCache.get(message.senderId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          child: isForwarded
-              ? _buildForwardedInlineText(context, forwarded, textColor)
-              : Text(
-                  message.text ?? '',
-                  style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
-                ),
+        if (message.senderId != message.accountId && prevMessage?.senderId != message.senderId)
+        Text(
+          displaySender ?? "",
+          textAlign: TextAlign.left,
+          // TODO: Получение цветов по хешу ника
+          style: TextStyle(color: cs.onPrimaryContainer)
         ),
-        const SizedBox(width: 8),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 2),
-          child: Text(
-            _formatTime(message.time),
-            style: TextStyle(
-              color: textColor.withValues(alpha: 0.7),
-              fontSize: 10,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Flexible(
+              child: isForwarded
+                  ? _buildForwardedInlineText(context, forwarded, textColor)
+                  : Text(
+                      message.text ?? '',
+                      style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
+                    ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                _formatTime(message.time),
+                style: TextStyle(
+                  color: textColor.withValues(alpha: 0.7),
+                  fontSize: 10,
+                ),
+              ),
+            ),
+            if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(context)],
+          ],
         ),
-        if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(context)],
       ],
     );
   }

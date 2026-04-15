@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import '../../core/storage/app_database.dart';
+import '../../core/utils/logger.dart';
 
 class CachedChat {
   final int id;
@@ -17,6 +20,7 @@ class CachedChat {
   final int dontDisturbUntil;
   final bool isOnline;
   final int seenTime;
+  final Map<int, int> participants;
 
   const CachedChat({
     required this.id,
@@ -35,6 +39,7 @@ class CachedChat {
     required this.dontDisturbUntil,
     required this.isOnline,
     required this.seenTime,
+    required this.participants,
   });
 
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
@@ -54,6 +59,8 @@ class CachedChat {
     dontDisturbUntil: row['dont_disturb_until'] as int,
     isOnline: (row['is_online'] as int) == 1,
     seenTime: row['seen_time'] as int,
+    // watafuc
+    participants:  Map<String, int>.from(jsonDecode(row['participants'])).map((k, v) => MapEntry(int.parse(k), v))
   );
 
   Map<String, dynamic> toDbRow() => {
@@ -73,6 +80,7 @@ class CachedChat {
     'dont_disturb_until': dontDisturbUntil,
     'is_online': isOnline ? 1 : 0,
     'seen_time': seenTime,
+    'participants': jsonEncode(participants.map((k, v) => MapEntry(k.toString(), v)))
   };
 }
 
@@ -87,51 +95,72 @@ class ChatsModule {
     int accountId,
     int currentUserId,
   ) async {
-    final chats = data['chats'];
-    if (chats is! List || chats.isEmpty) return;
+    try {
+      final chats = data['chats'];
+      if (chats is! List || chats.isEmpty) return;
 
-    final contactsMap = _buildContactsMap(data['contacts']);
-    // Config contains mute setup and fav indexes: config -> chats -> id
-    final configMap = data['config'] is Map ? data['config'] as Map : {};
-    final chatsConfig = configMap['chats'] is Map
-        ? configMap['chats'] as Map
-        : {};
-    // Presence for online statuses
-    final presenceMap = data['presence'] is Map ? data['presence'] as Map : {};
-    final cachedAt = DateTime.now().millisecondsSinceEpoch;
+      final contactsMap = _buildContactsMap(data['contacts']);
+      // Config contains mute setup and fav indexes: config -> chats -> id
+      final configMap = data['config'] is Map ? data['config'] as Map : {};
+      final chatsConfig = configMap['chats'] is Map
+          ? configMap['chats'] as Map
+          : {};
+      // Presence for online statuses
+      final presenceMap = data['presence'] is Map ? data['presence'] as Map : {};
+      final cachedAt = DateTime.now().millisecondsSinceEpoch;
 
-    final existingRows = await AppDatabase.loadChats(accountId);
-    final existing = {
-      for (final row in existingRows)
-        row['id'] as int: CachedChat.fromDbRow(row),
-    };
+      final existingRows = await AppDatabase.loadChats(accountId);
+      final existing = {
+        for (final row in existingRows)
+          row['id'] as int: CachedChat.fromDbRow(row),
+      };
 
-    final rows = chats
-        .whereType<Map>()
-        .map(
-          (c) => _parseChat(
-            c.cast<dynamic, dynamic>(),
-            accountId,
-            currentUserId,
-            contactsMap,
-            chatsConfig,
-            presenceMap,
-            existing,
-            cachedAt,
-          ),
-        )
-        .whereType<CachedChat>()
-        .map((c) => c.toDbRow())
-        .toList();
+      final rows = chats
+          .whereType<Map>()
+          .map(
+            (c) => _parseChat(
+              c.cast<dynamic, dynamic>(),
+              accountId,
+              currentUserId,
+              contactsMap,
+              chatsConfig,
+              presenceMap,
+              existing,
+              cachedAt,
+            ),
+          )
+          .whereType<CachedChat>()
+          .map((c) => c.toDbRow())
+          .toList();
 
-    if (rows.isNotEmpty) {
-      await AppDatabase.saveChats(rows);
+      if (rows.isNotEmpty) {
+        await AppDatabase.saveChats(rows);
+      }
+    } catch (e) {
+      logger.e("Ошибка при синке: $e");
     }
   }
 
   static Future<List<CachedChat>> getChats(int accountId) async {
-    final rows = await AppDatabase.loadChats(accountId);
-    return rows.map(CachedChat.fromDbRow).toList();
+    try {
+      final rows = await AppDatabase.loadChats(accountId);
+      
+      return rows.map(CachedChat.fromDbRow).toList();
+    } catch (e) {
+      logger.e("Ошибка при получении чатов: $e");
+      return [];
+    }
+  }
+  static Future<List<CachedChat>> getChat(int accountId, int chatId) async {
+    try {
+      final rows = await AppDatabase.loadChat(accountId, chatId);
+      
+      return rows.map(CachedChat.fromDbRow).toList();
+    } catch (e) {
+      logger.e("Ошибка при получении чата: $e");
+
+      return [];
+    }
   }
 
   static Future<void> clearCache(int accountId) =>
@@ -157,80 +186,88 @@ class ChatsModule {
     Map<int, CachedChat> existing,
     int cachedAt,
   ) {
-    final id = chat['id'];
-    if (id is! int) return null;
+    try {
+        final id = chat['id'];
+        if (id is! int) return null;
 
-    final type = (chat['type'] as String?) ?? 'DIALOG';
-    int? otherId;
+        final type = (chat['type'] as String?) ?? 'DIALOG';
+        int? otherId;
 
-    String? title;
-    String? iconUrl;
+        String? title;
+        String? iconUrl;
 
-    if (type == 'DIALOG') {
-      otherId = _otherParticipantId(chat['participants'], currentUserId);
-      final contact = otherId != null ? contactsMap[otherId] : null;
+        if (type == 'DIALOG') {
+          otherId = _otherParticipantId(chat['participants'], currentUserId);
+          final contact = otherId != null ? contactsMap[otherId] : null;
 
-      if (contact != null) {
-        title = _nameFromContact(contact);
-        iconUrl = contact['baseUrl'] as String?;
-      } else {
-        title = existing[id]?.title;
-        iconUrl = existing[id]?.iconUrl;
-      }
-    } else {
-      title = chat['title'] as String?;
-      iconUrl = chat['baseIconUrl'] as String?;
+          if (contact != null) {
+            title = _nameFromContact(contact);
+            iconUrl = contact['baseUrl'] as String?;
+          } else {
+            title = existing[id]?.title;
+            iconUrl = existing[id]?.iconUrl;
+          }
+        } else {
+          title = chat['title'] as String?;
+          iconUrl = chat['baseIconUrl'] as String?;
+        }
+
+        final lastMsg = chat['lastMessage'];
+        int? lastMsgId;
+        int? lastMsgTime;
+        String? lastMsgText;
+        int? lastMsgSenderId;
+
+        if (lastMsg is Map) {
+          lastMsgId = lastMsg['id'] as int?;
+          lastMsgTime = lastMsg['time'] as int?;
+          lastMsgText = lastMsg['text'] as String?;
+          lastMsgSenderId = lastMsg['sender'] as int?;
+        }
+
+        final config = chatsConfig[id.toString()] ?? chatsConfig[id];
+        int? favIndex;
+        int dontDisturbUntil = 0;
+        if (config is Map) {
+          favIndex = config['favIndex'] as int?;
+          dontDisturbUntil = (config['dontDisturbUntil'] as int?) ?? 0;
+        }
+
+        int seenTime = 0;
+        bool isOnline = false;
+        if (type == 'DIALOG' && otherId != null) {
+          final presence = presenceMap[otherId.toString()] ?? presenceMap[otherId];
+          if (presence is Map) {
+            seenTime = (presence['seen'] as int?) ?? 0;
+            isOnline = (presence['status'] as int?) == 1;
+          }
+        }
+        Map<int, int> participants = Map<int, int>.from(chat['participants']);
+
+        return CachedChat(
+          id: id,
+          accountId: accountId,
+          type: type,
+          title: title,
+          iconUrl: iconUrl,
+          lastMsgId: lastMsgId,
+          lastMsgTime: lastMsgTime,
+          lastMsgText: lastMsgText,
+          lastMsgSenderId: lastMsgSenderId,
+          unreadCount: (chat['newMessages'] as int?) ?? 0,
+          lastEventTime: (chat['lastEventTime'] as int?) ?? 0,
+          cachedAt: cachedAt,
+          favIndex: favIndex,
+          dontDisturbUntil: dontDisturbUntil,
+          isOnline: isOnline,
+          seenTime: seenTime,
+          participants: participants
+        );
+    } catch (e) {
+      logger.e("Ошибка при парсинге чата: $e");
+
+      return null;
     }
-
-    final lastMsg = chat['lastMessage'];
-    int? lastMsgId;
-    int? lastMsgTime;
-    String? lastMsgText;
-    int? lastMsgSenderId;
-
-    if (lastMsg is Map) {
-      lastMsgId = lastMsg['id'] as int?;
-      lastMsgTime = lastMsg['time'] as int?;
-      lastMsgText = lastMsg['text'] as String?;
-      lastMsgSenderId = lastMsg['sender'] as int?;
-    }
-
-    final config = chatsConfig[id.toString()] ?? chatsConfig[id];
-    int? favIndex;
-    int dontDisturbUntil = 0;
-    if (config is Map) {
-      favIndex = config['favIndex'] as int?;
-      dontDisturbUntil = (config['dontDisturbUntil'] as int?) ?? 0;
-    }
-
-    int seenTime = 0;
-    bool isOnline = false;
-    if (type == 'DIALOG' && otherId != null) {
-      final presence = presenceMap[otherId.toString()] ?? presenceMap[otherId];
-      if (presence is Map) {
-        seenTime = (presence['seen'] as int?) ?? 0;
-        isOnline = (presence['status'] as int?) == 1;
-      }
-    }
-
-    return CachedChat(
-      id: id,
-      accountId: accountId,
-      type: type,
-      title: title,
-      iconUrl: iconUrl,
-      lastMsgId: lastMsgId,
-      lastMsgTime: lastMsgTime,
-      lastMsgText: lastMsgText,
-      lastMsgSenderId: lastMsgSenderId,
-      unreadCount: (chat['newMessages'] as int?) ?? 0,
-      lastEventTime: (chat['lastEventTime'] as int?) ?? 0,
-      cachedAt: cachedAt,
-      favIndex: favIndex,
-      dontDisturbUntil: dontDisturbUntil,
-      isOnline: isOnline,
-      seenTime: seenTime,
-    );
   }
 
   static int? _otherParticipantId(dynamic participants, int currentUserId) {
