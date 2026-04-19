@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 class SelectCountryScreen extends StatefulWidget {
   final CountryName selectedCountry;
+  final List<CountryName> countries;
 
-  const SelectCountryScreen({super.key, required this.selectedCountry});
+  SelectCountryScreen({
+    super.key,
+    required this.selectedCountry,
+    List<CountryName>? countries,
+  }) : countries = countries ?? allCountries;
 
   @override
   State<SelectCountryScreen> createState() => _SelectCountryScreenState();
@@ -15,7 +21,13 @@ class SelectCountryScreen extends StatefulWidget {
 class _SelectCountryScreenState extends State<SelectCountryScreen> {
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
-  List<CountryName> _filteredCountries = allCountries;
+  late List<CountryName> _filteredCountries;
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredCountries = widget.countries;
+  }
 
   @override
   void dispose() {
@@ -26,10 +38,10 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
   void _filterCountries(String query) {
     setState(() {
       if (query.isEmpty) {
-        _filteredCountries = allCountries;
+        _filteredCountries = widget.countries;
       } else {
         final q = query.toLowerCase();
-        _filteredCountries = allCountries.where((c) {
+        _filteredCountries = widget.countries.where((c) {
           return c.ru.toLowerCase().contains(q) ||
               c.en.toLowerCase().contains(q) ||
               c.phoneCode.contains(q);
@@ -41,6 +53,8 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final lang = Localizations.localeOf(context).languageCode;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -61,7 +75,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
                   fontWeight: FontWeight.w400,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Поиск страны...',
+                  hintText: l10n.selectCountrySearchHint,
                   hintStyle: GoogleFonts.inter(
                     color: cs.onSurfaceVariant,
                     fontSize: 18,
@@ -72,7 +86,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
                 onChanged: _filterCountries,
               )
             : Text(
-                'Выберите страну',
+                l10n.selectCountryTitle,
                 style: GoogleFonts.inter(
                   color: cs.onSurface,
                   fontSize: 20,
@@ -87,7 +101,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
                 _isSearching = !_isSearching;
                 if (!_isSearching) {
                   _searchController.clear();
-                  _filteredCountries = allCountries;
+                  _filteredCountries = widget.countries;
                 }
               });
             },
@@ -114,7 +128,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
               ),
             ),
             title: Text(
-              country.ru,
+              lang == 'ru' ? country.ru : country.en,
               style: GoogleFonts.inter(
                 color: cs.onSurface,
                 fontSize: 16,

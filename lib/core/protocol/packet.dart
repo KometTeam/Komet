@@ -1,8 +1,7 @@
 import 'dart:typed_data';
+import 'dart:isolate';
 import 'package:dart_lz4/dart_lz4.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
-
-import '../utils/logger.dart';
 
 /// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
 const int headerSize = 10;
@@ -53,6 +52,34 @@ class Packet {
       'Packet(ver=$api cmd=$cmd seq=$seq opcode=$opcode payload=$payload)';
 }
 
+class PacketError implements Exception {
+  final String message;
+  const PacketError(this.message);
+  @override
+  String toString() => message;
+}
+
+class SessionExpiredException extends PacketError {
+  const SessionExpiredException(super.message);
+}
+
+String messageFromErrorPayload(dynamic payload) {
+  if (payload is Map) {
+    final msg = payload['message'];
+    if (msg == 'FAIL_WRONG_PASSWORD' || msg == 'FAIL_LOGIN_TOKEN') {
+      return 'Ваш токен был отклонён сервером, хм... Попробуйте войти ещё раз.';
+    }
+    for (final key in ['localizedMessage', 'message', 'title']) {
+      final v = payload[key];
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    }
+    return 'Неизвестная ошибка';
+  }
+  if (payload == null) return 'Неизвестная ошибка';
+  final s = payload.toString();
+  return s.isNotEmpty ? s : 'Неизвестная ошибка';
+}
+
 /// Упаковка пакета для отправки на сервер
 Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
   final header = ByteData(headerSize);
@@ -69,71 +96,73 @@ Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
 }
 
 /// Распаковка пакета от сервера
-Packet unpackPacket(Uint8List packet) {
-  // Для удобства расшифровки пакета переводим в ByteData
-  ByteData packetData = ByteData.view(
-    packet.buffer,
-    packet.offsetInBytes,
-    packet.lengthInBytes,
-  );
+Future<Packet> unpackPacket(Uint8List packet) async {
+  return Isolate.run(() {
+    // Для удобства расшифровки пакета переводим в ByteData
+    ByteData packetData = ByteData.view(
+      packet.buffer,
+      packet.offsetInBytes,
+      packet.lengthInBytes,
+    );
 
-  // Объяснение каждой переменной смотри в классе Packet
+    // API версия и cmd представляют из себя 8 битные числа
+    final apiVer = packetData.getUint8(0) & 0xFF;
+    final cmd = packetData.getUint8(1) & 0xFF;
 
-  // API версия и cmd представляют из себя 8 битные числа
-  final apiVer = packetData.getUint8(0) & 0xFF;
-  final cmd = packetData.getUint8(1) & 0xFF;
+    // Sequence и OPCode представляют из себя 16 битные числа
+    final seq = packetData.getUint16(2) & 0xFFFF;
+    final opcode = packetData.getUint16(4) & 0xFFFF;
 
-  // Sequence и OPCode представляют из себя 16 битные числа
-  final seq = packetData.getUint16(2) & 0xFFFF;
-  final opcode = packetData.getUint16(4) & 0xFFFF;
+    // После базовых переменных идет длина пакета, является 32 битным числом
+    final packedLen = packetData.getUint32(6);
 
-  // После базовых переменных идет длина пакета, является 32 битным числом
-  final packedLen = packetData.getUint32(6);
+    // Compression flag показывает, сжат ли payload
+    final compFlag = packedLen >> 24;
 
-  // Compression flag показывает, сжат ли payload
-  final compFlag = packedLen >> 24;
-  
-  // Длина payload'а 
-  final payloadLength = packedLen & 0xFFFFFF;
+    // Длина payload'а
+    final payloadLength = packedLen & 0xFFFFFF;
 
-  // Байты payload'а, могут быть сжаты LZ4
-  var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
+    // Байты payload'а, могут быть сжаты LZ4
+    var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
 
-  dynamic payload;
-  
-  if (payloadBytes.isNotEmpty) {
-    if (compFlag != 0) {
-      try {
-        payloadBytes = lz4Decompress(
-          payloadBytes,
-          decompressedSize: _maxDecompressedSize,
-        );
-        
-      } catch (_) {
+    dynamic payload;
+
+    if (payloadBytes.isNotEmpty) {
+      if (compFlag != 0) {
         try {
-          payloadBytes = _lz4BlockDecompress(payloadBytes, _maxDecompressedSize);
-        } catch (e) {
-          logger.e("LZ4 decompression error: $e", error: e);
+          payloadBytes = lz4Decompress(
+            payloadBytes,
+            decompressedSize: _maxDecompressedSize,
+          );
+        } catch (_) {
+          try {
+            payloadBytes = _lz4BlockDecompress(
+              payloadBytes,
+              _maxDecompressedSize,
+            );
+          } catch (e) {
+            throw Exception("LZ4 decompression error: $e");
+          }
+        }
+      }
+
+      try {
+        payload = msgpack.deserialize(payloadBytes);
+      } catch (e) {
+        if (payloadBytes.isNotEmpty) {
+          throw Exception("MsgPack deserialization error: $e");
         }
       }
     }
 
-    try {
-      payload = msgpack.deserialize(payloadBytes);
-    } catch (e) { 
-      if (payloadBytes.isNotEmpty) {
-        logger.e("MsgPack deserialization error: $e", error: e);
-      }
-    }
-  }
-
-  return Packet(
-    api: apiVer,
-    cmd: cmd,
-    seq: seq,
-    opcode: opcode,
-    payload: payload,
-  );
+    return Packet(
+      api: apiVer,
+      cmd: cmd,
+      seq: seq,
+      opcode: opcode,
+      payload: payload,
+    );
+  });
 }
 
 /// LZ4 block декомпрессия (без frame-заголовка).

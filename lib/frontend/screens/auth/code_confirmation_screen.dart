@@ -1,17 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../chats/chat_list_screen.dart';
 import 'password_2fa_screen.dart';
 import '../../../main.dart';
+import '../../widgets/custom_notification.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
   final String token;
 
   const CodeConfirmationScreen({
-    super.key, 
+    super.key,
     required this.phoneNumber,
     required this.token,
   });
@@ -20,11 +22,17 @@ class CodeConfirmationScreen extends StatefulWidget {
   State<CodeConfirmationScreen> createState() => _CodeConfirmationScreenState();
 }
 
-class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
+class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   int _timerSeconds = 30;
   Timer? _timer;
+  Timer? _errorTimer;
+
+  String? _errorMessage;
+  late AnimationController _shakeController;
+  late Animation<double> _shakeAnimation;
 
   @override
   void initState() {
@@ -33,11 +41,26 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
+
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _shakeAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -8.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -8.0, end: 8.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 8.0, end: -8.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -8.0, end: 8.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 8.0, end: -4.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.linear));
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _errorTimer?.cancel();
+    _shakeController.dispose();
     _codeController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -57,11 +80,18 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
     });
   }
 
+  void _showError(String message) {
+    _errorTimer?.cancel();
+    _shakeController.forward(from: 0);
+    setState(() => _errorMessage = message);
+    _errorTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _errorMessage = null);
+    });
+  }
+
   void _resendCode() {
     if (_timerSeconds == 0) {
       _startTimer();
-      // TODO: вызвать accountModule.resendCode
-      print('Resending code to ${widget.phoneNumber}');
     }
   }
 
@@ -78,29 +108,27 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
 
       if (result.requiresPassword) {
         final trackId = result.challengeTrackId;
-        
+
         if (trackId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка: отсутствуют данные для 2FA')),
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.codeError2faMissing,
           );
           return;
         }
-        
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => Password2FAScreen(
-              trackId: trackId,
-              hint: result.challengeHint,
-            ),
+            builder: (context) =>
+                Password2FAScreen(trackId: trackId, hint: result.challengeHint),
           ),
         );
         return;
       }
 
-      // Если 2FA не требуется, делаем login
-      final loginResult = await accountModule.login();
-      
+      await accountModule.login();
+
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
@@ -110,19 +138,16 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
-      );
+      _showError(e.toString());
     }
-  }
-
-  void _navigateToChats() {
-    _verifyCode();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final hasError = _errorMessage != null;
+
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -150,7 +175,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Мы отправили SMS с кодом подтверждения на ваш номер телефона.',
+                l10n.codeConfirmationSmsSent,
                 style: TextStyle(
                   color: cs.outline,
                   fontSize: 15,
@@ -159,91 +184,155 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Stack(
-                children: [
-                  Opacity(
-                    opacity: 0,
-                    child: SizedBox(
-                      height: 0,
-                      width: 0,
-                      child: TextField(
-                        controller: _codeController,
-                        focusNode: _focusNode,
-                        keyboardType: TextInputType.number,
-                        autofillHints: const [AutofillHints.oneTimeCode],
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(6),
-                        ],
-                        onChanged: (value) {
-                          setState(() {});
-                          if (value.length == 6) {
-                            _navigateToChats();
-                          }
-                        },
+              AnimatedBuilder(
+                animation: _shakeAnimation,
+                builder: (context, child) => Transform.translate(
+                  offset: Offset(_shakeAnimation.value, 0),
+                  child: child,
+                ),
+                child: Stack(
+                  children: [
+                    Opacity(
+                      opacity: 0,
+                      child: SizedBox(
+                        height: 0,
+                        width: 0,
+                        child: TextField(
+                          controller: _codeController,
+                          focusNode: _focusNode,
+                          keyboardType: TextInputType.number,
+                          autofillHints: const [AutofillHints.oneTimeCode],
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(6),
+                          ],
+                          onChanged: (value) {
+                            if (hasError) setState(() => _errorMessage = null);
+                            setState(() {});
+                            if (value.length == 6) _verifyCode();
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: () => _focusNode.requestFocus(),
-                    child:                       FittedBox(
-                      child: Row(
-                        children: List.generate(6, (index) {
-                          bool isFocused = _codeController.text.length == index && _focusNode.hasFocus;
-                          bool hasValue = _codeController.text.length > index;
-                          String char = hasValue ? _codeController.text[index] : '';
+                    GestureDetector(
+                      onTap: () => _focusNode.requestFocus(),
+                      child: FittedBox(
+                        child: Row(
+                          children: List.generate(6, (index) {
+                            final isFocused =
+                                _codeController.text.length == index &&
+                                _focusNode.hasFocus;
+                            final hasValue =
+                                _codeController.text.length > index;
+                            final char = hasValue
+                                ? _codeController.text[index]
+                                : '';
 
-                          return Container(
-                            width: 44,
-                            height: 54,
-                            margin: EdgeInsets.only(right: index == 5 ? 0 : 10),
-                            decoration: BoxDecoration(
-                              color: cs.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isFocused
-                                    ? cs.primary
-                                    : (hasValue ? cs.outlineVariant : Colors.transparent),
-                                width: 1.5,
+                            Color borderColor;
+                            if (hasError && hasValue) {
+                              borderColor = cs.error;
+                            } else if (isFocused) {
+                              borderColor = cs.primary;
+                            } else if (hasValue) {
+                              borderColor = cs.outlineVariant;
+                            } else {
+                              borderColor = Colors.transparent;
+                            }
+
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 44,
+                              height: 54,
+                              margin: EdgeInsets.only(
+                                right: index == 5 ? 0 : 10,
                               ),
-                            ),
-                            alignment: Alignment.center,
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 100),
-                              transitionBuilder: (Widget child, Animation<double> animation) {
-                                return ScaleTransition(
-                                  scale: animation,
-                                  child: FadeTransition(opacity: animation, child: child),
-                                );
-                              },
-                              child: Text(
-                                char,
-                                key: ValueKey<String>(char + index.toString()),
-                                style: TextStyle(
-                                  color: cs.onSurface,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
+                              decoration: BoxDecoration(
+                                color: hasError && hasValue
+                                    ? cs.error.withValues(alpha: 0.1)
+                                    : cs.surfaceContainerHigh,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: borderColor,
+                                  width: 1.5,
                                 ),
                               ),
-                            ),
-                          );
-                        }),
+                              alignment: Alignment.center,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 100),
+                                transitionBuilder:
+                                    (
+                                      Widget child,
+                                      Animation<double> animation,
+                                    ) {
+                                      return ScaleTransition(
+                                        scale: animation,
+                                        child: FadeTransition(
+                                          opacity: animation,
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                child: Text(
+                                  char,
+                                  key: ValueKey<String>(
+                                    char +
+                                        index.toString() +
+                                        (hasError ? 'e' : ''),
+                                  ),
+                                  style: TextStyle(
+                                    color: hasError && hasValue
+                                        ? cs.error
+                                        : cs.onSurface,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topLeft,
+                child: hasError
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: AnimatedOpacity(
+                          opacity: hasError ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              color: cs.error,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
               GestureDetector(
                 onTap: _resendCode,
-                child: Text(
-                  _timerSeconds > 0
-                      ? 'Отправить повторно через $_timerSeconds сек.'
-                      : 'Отправить код по SMS',
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
                   style: TextStyle(
-                    color: cs.tertiary,
+                    color: _timerSeconds > 0 ? cs.outline : cs.tertiary,
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
+                  ),
+                  child: Text(
+                    _timerSeconds > 0
+                        ? l10n.codeResendInSeconds(_timerSeconds)
+                        : l10n.codeResendSms,
                   ),
                 ),
               ),
@@ -253,9 +342,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                 children: [
                   FloatingActionButton(
                     onPressed: () {
-                      if (_codeController.text.length == 6) {
-                        _navigateToChats();
-                      }
+                      if (_codeController.text.length == 6) _verifyCode();
                     },
                     backgroundColor: _codeController.text.length == 6
                         ? cs.primaryContainer
@@ -266,7 +353,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen> {
                     ),
                     child: Icon(
                       Icons.arrow_forward,
-                      color: _codeController.text.length == 6 ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+                      color: _codeController.text.length == 6
+                          ? cs.onPrimaryContainer
+                          : cs.onSurfaceVariant,
                     ),
                   ),
                 ],

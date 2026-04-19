@@ -33,6 +33,15 @@ final Map<String, CountryName> countriesByCode = {
   for (final country in allCountries) country.code: country,
 };
 
+List<CountryName> countriesInServerOrder(Iterable<String> codes) {
+  final out = <CountryName>[];
+  for (final raw in codes) {
+    final c = countriesByCode[raw.toUpperCase()];
+    if (c != null) out.add(c);
+  }
+  return out;
+}
+
 /// Пример использования:
 /// ```dart
 /// final country = exampleCountryLookup('RU');
@@ -157,7 +166,7 @@ const String _countriesEnJson = '''[
 {"id": 348, "alpha2": "hu", "alpha3": "hun", "name": "Hungary", "phoneCode": "+36", "phoneDigits": 9, "phoneMask": "## ### ####", "phoneGroupSizes": [2, 3, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 352, "alpha2": "is", "alpha3": "isl", "name": "Iceland", "phoneCode": "+354", "phoneDigits": 7, "phoneMask": "### ####", "phoneGroupSizes": [3, 4], "phoneGroupSeparators": ["", " ", ""]},
 {"id": 356, "alpha2": "in", "alpha3": "ind", "name": "India", "phoneCode": "+91", "phoneDigits": 10, "phoneMask": "##### #####", "phoneGroupSizes": [5, 5], "phoneGroupSeparators": ["", " ", ""]},
-{"id": 360, "alpha2": "id", "alpha3": "idn", "name": "Indonesia", "phoneCode": "+62", "phoneDigits": 10, "phoneMask": "### #### ####", "phoneGroupSizes": [3, 4, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
+{"id": 360, "alpha2": "id", "alpha3": "idn", "name": "Indonesia", "phoneCode": "+62", "phoneDigits": 11, "phoneMask": "### #### ####", "phoneGroupSizes": [3, 4, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 364, "alpha2": "ir", "alpha3": "irn", "name": "Iran, Islamic Republic of", "phoneCode": "+98", "phoneDigits": 10, "phoneMask": "### ### ####", "phoneGroupSizes": [3, 3, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 368, "alpha2": "iq", "alpha3": "irq", "name": "Iraq", "phoneCode": "+964", "phoneDigits": 10, "phoneMask": "### ### ####", "phoneGroupSizes": [3, 3, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 372, "alpha2": "ie", "alpha3": "irl", "name": "Ireland", "phoneCode": "+353", "phoneDigits": 9, "phoneMask": "## ### ####", "phoneGroupSizes": [2, 3, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
@@ -333,7 +342,7 @@ const String _countriesRuJson = '''[
 {"id": 716, "alpha2": "zw", "alpha3": "zwe", "name": "Зимбабве", "phoneCode": "+263", "phoneDigits": 9, "phoneMask": "## ### ####", "phoneGroupSizes": [2, 3, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 376, "alpha2": "il", "alpha3": "isr", "name": "Израиль", "phoneCode": "+972", "phoneDigits": 9, "phoneMask": "##-###-####", "phoneGroupSizes": [2, 3, 4], "phoneGroupSeparators": ["", "-", "-", ""]},
 {"id": 356, "alpha2": "in", "alpha3": "ind", "name": "Индия", "phoneCode": "+91", "phoneDigits": 10, "phoneMask": "##### #####", "phoneGroupSizes": [5, 5], "phoneGroupSeparators": ["", " ", ""]},
-{"id": 360, "alpha2": "id", "alpha3": "idn", "name": "Индонезия", "phoneCode": "+62", "phoneDigits": 10, "phoneMask": "### #### ####", "phoneGroupSizes": [3, 4, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
+{"id": 360, "alpha2": "id", "alpha3": "idn", "name": "Индонезия", "phoneCode": "+62", "phoneDigits": 11, "phoneMask": "### #### ####", "phoneGroupSizes": [3, 4, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 400, "alpha2": "jo", "alpha3": "jor", "name": "Иордания", "phoneCode": "+962", "phoneDigits": 9, "phoneMask": "# #### ####", "phoneGroupSizes": [1, 4, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 368, "alpha2": "iq", "alpha3": "irq", "name": "Ирак", "phoneCode": "+964", "phoneDigits": 10, "phoneMask": "### ### ####", "phoneGroupSizes": [3, 3, 4], "phoneGroupSeparators": ["", " ", " ", ""]},
 {"id": 364, "alpha2": "ir", "alpha3": "irn", "name": "Иран", "phoneCode": "+98", "phoneDigits": 10, "phoneMask": "### ### ####", "phoneGroupSizes": [3, 3, 4], "phoneGroupSeparators": ["", " ", " ", ""]},

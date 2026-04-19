@@ -1,27 +1,32 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TokenStorage {
   static const _tokenPrefix = 'auth_token_';
   static const _activeAccountKey = 'active_account_id';
 
-  static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-  );
+  static Future<void> saveToken(String token, int accountId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_tokenPrefix$accountId', token);
+  }
 
-  static Future<void> saveToken(String token, int accountId) =>
-      _storage.write(key: '$_tokenPrefix$accountId', value: token);
+  static Future<String?> readToken(int accountId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('$_tokenPrefix$accountId');
+  }
 
-  static Future<String?> readToken(int accountId) =>
-      _storage.read(key: '$_tokenPrefix$accountId');
+  static Future<void> deleteToken(int accountId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_tokenPrefix$accountId');
+  }
 
-  static Future<void> deleteToken(int accountId) =>
-      _storage.delete(key: '$_tokenPrefix$accountId');
-
-  static Future<void> setActiveAccount(int accountId) =>
-      _storage.write(key: _activeAccountKey, value: accountId.toString());
+  static Future<void> setActiveAccount(int accountId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_activeAccountKey, accountId.toString());
+  }
 
   static Future<int?> getActiveAccountId() async {
-    final val = await _storage.read(key: _activeAccountKey);
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getString(_activeAccountKey);
     return val != null ? int.tryParse(val) : null;
   }
 
@@ -31,12 +36,12 @@ class TokenStorage {
     return readToken(id);
   }
 
-  /// Удаляет токен аккаунта и, если он был активным, сбрасывает активный аккаунт.
   static Future<void> deleteAccount(int accountId) async {
     await deleteToken(accountId);
     final activeId = await getActiveAccountId();
     if (activeId == accountId) {
-      await _storage.delete(key: _activeAccountKey);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_activeAccountKey);
     }
   }
 }

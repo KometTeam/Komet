@@ -10,21 +10,21 @@ class PacketReceiver {
 
   static const int _maxBufferSize = 2 * 1024 * 1024; // 2 мегабуйта
 
-  /// Добавляет байты в буфер, возвращает все собранные пакеты.
+  /// Добавляет байты в буфер, возвращает поток собранных пакетов.
   /// Неполные данные остаются в буфере до следующего вызова.
-  List<Packet> feed(Uint8List data) {
+  Stream<Packet> feed(Uint8List data) async* {
     final newBuffer = Uint8List(_buffer.length + data.length);
     newBuffer.setAll(0, _buffer);
     newBuffer.setAll(_buffer.length, data);
     _buffer = newBuffer;
 
     if (_buffer.length > _maxBufferSize) {
-      logger.e('PacketReceiver: переполнение буфера (${_buffer.length} B), сброс');
+      logger.e(
+        'PacketReceiver: переполнение буфера (${_buffer.length} B), сброс',
+      );
       reset();
-      return [];
+      return;
     }
-
-    final packets = <Packet>[];
 
     while (_buffer.length >= headerSize) {
       final bd = ByteData.view(
@@ -42,13 +42,11 @@ class PacketReceiver {
       _buffer = _buffer.sublist(totalLength);
 
       try {
-        packets.add(unpackPacket(packetBytes));
+        yield await unpackPacket(packetBytes);
       } catch (e) {
         logger.e('PacketReceiver: ошибка распаковки: $e');
       }
     }
-
-    return packets;
   }
 
   void reset() {

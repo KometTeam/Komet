@@ -1,12 +1,88 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import '../../../core/storage/app_database.dart';
+import '../../../l10n/app_localizations.dart';
+import '../auth/proxy_settings_sheet.dart';
+import 'debug_menu_screen.dart';
+import 'devices_screen.dart';
+import 'security_screen.dart';
+import 'spoof_screen.dart';
 
-class SettingsTab extends StatelessWidget {
+class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
+
+  @override
+  State<SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<SettingsTab> {
+  ProfileData? _profile;
+  bool _isPhoneVisible = false;
+  String? _appVersionLabel;
+  bool _debugMenuVisible = false;
+  int _versionSecretTapCount = 0;
+  Timer? _versionSecretTapResetTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+    _loadAppVersion();
+  }
+
+  @override
+  void dispose() {
+    _versionSecretTapResetTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleVersionSecretTapReset() {
+    _versionSecretTapResetTimer?.cancel();
+    _versionSecretTapResetTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _versionSecretTapCount = 0);
+    });
+  }
+
+  void _onVersionLabelTap() {
+    _scheduleVersionSecretTapReset();
+    setState(() {
+      _versionSecretTapCount++;
+      if (_versionSecretTapCount >= 7) {
+        _versionSecretTapCount = 0;
+        _versionSecretTapResetTimer?.cancel();
+        _debugMenuVisible = !_debugMenuVisible;
+      }
+    });
+  }
+
+  Future<void> _loadProfile() async {
+    final p = await AppDatabase.loadActiveProfile();
+    if (mounted) setState(() => _profile = p);
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _appVersionLabel = 'Версия ${info.version} (${info.buildNumber})';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    if (_profile == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final String fullName =
+        '${_profile!.firstName}${_profile!.lastName != null ? ' ${_profile!.lastName}' : ''}';
+    final String phone = '+${_profile!.phone}';
+
     return Scaffold(
       backgroundColor: cs.surface,
       body: SafeArea(
@@ -14,7 +90,9 @@ class SettingsTab extends StatelessWidget {
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(child: _buildHeader(context, cs)),
+            SliverToBoxAdapter(
+              child: _buildHeader(context, cs, fullName, phone),
+            ),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -25,7 +103,7 @@ class SettingsTab extends StatelessWidget {
                     _SettingsItem(icon: Symbols.badge, label: 'Цифровой ID'),
                     _SettingsItem(
                       icon: Symbols.language,
-                      label: 'Войти в сферум',
+                      label: 'Войти в Сферум',
                     ),
                   ],
                 ),
@@ -37,17 +115,158 @@ class SettingsTab extends StatelessWidget {
                 child: _buildSection(
                   context,
                   cs,
-                  items: const [
-                    _SettingsItem(
+                  items: [
+                    const _SettingsItem(
                       icon: Symbols.notifications_active,
                       label: 'Уведомления и звук',
                     ),
-                    _SettingsItem(icon: Symbols.lock, label: 'Безопасность'),
-                    _SettingsItem(icon: Symbols.devices, label: 'Устройства'),
+                    _SettingsItem(
+                      icon: Symbols.vpn_lock,
+                      label: 'Прокси',
+                      onTap: () {
+                        final cs = Theme.of(context).colorScheme;
+                        showModalBottomSheet<void>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: cs.surfaceContainerHigh,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(24),
+                            ),
+                          ),
+                          builder: (_) {
+                            return SafeArea(
+                              child: const ProxySettingsSheet(),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.shield_lock,
+                      label: AppLocalizations.of(context)!.profileMenuSpoof,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SpoofScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.lock,
+                      label: 'Безопасность',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SecurityScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.devices,
+                      label: 'Устройства',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const DevicesScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
             ),
+            SliverToBoxAdapter(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 340),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  return ClipRect(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: animation.value.clamp(0.0, 1.0),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                layoutBuilder: (currentChild, previousChildren) {
+                  return Stack(
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      ...previousChildren,
+                      ?currentChild,
+                    ],
+                  );
+                },
+                child: _debugMenuVisible
+                    ? KeyedSubtree(
+                        key: const ValueKey('developers_settings_row'),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: _buildSection(
+                            context,
+                            cs,
+                            items: [
+                              _SettingsItem(
+                                icon: Symbols.construction,
+                                label: 'Для разработчиков',
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const DebugMenuScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(
+                        key: ValueKey('developers_settings_hidden'),
+                      ),
+              ),
+            ),
+            if (_appVersionLabel != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
+                  child: Center(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _onVersionLabelTap,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          _appVersionLabel!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
@@ -55,7 +274,12 @@ class SettingsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, ColorScheme cs) {
+  Widget _buildHeader(
+    BuildContext context,
+    ColorScheme cs,
+    String name,
+    String phone,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
       child: Column(
@@ -95,23 +319,19 @@ class SettingsTab extends StatelessWidget {
               ),
             ),
             child: ClipOval(
-              child: Image.network(
-                'https://i.pravatar.cc/150?u=ilya',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => CircleAvatar(
-                  backgroundColor: cs.primaryContainer,
-                  child: Icon(
-                    Symbols.person,
-                    color: cs.onPrimaryContainer,
-                    size: 40,
-                  ),
-                ),
-              ),
+              child: _profile?.baseUrl != null && _profile!.baseUrl!.isNotEmpty
+                  ? Image.network(
+                      _profile!.baseUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _buildPlaceholderAvatar(cs, name),
+                    )
+                  : _buildPlaceholderAvatar(cs, name),
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'Илья Беларуских',
+            name,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 20,
@@ -119,16 +339,50 @@ class SettingsTab extends StatelessWidget {
               fontFamily: 'Outfit',
             ),
           ),
-          const SizedBox(height: 3),
-          Text(
-            '@everrnyan',
-            style: TextStyle(
-              color: cs.onSurfaceVariant,
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-            ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _isPhoneVisible = !_isPhoneVisible),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: _PhoneSpoiler(
+                    text: phone,
+                    isVisible: _isPhoneVisible,
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                _isPhoneVisible ? Symbols.visibility : Symbols.visibility_off,
+                size: 14,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderAvatar(ColorScheme cs, String name) {
+    return Container(
+      color: cs.primaryContainer,
+      alignment: Alignment.center,
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : '?',
+        style: TextStyle(
+          color: cs.onPrimaryContainer,
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -138,20 +392,17 @@ class SettingsTab extends StatelessWidget {
     ColorScheme cs, {
     required List<_SettingsItem> items,
   }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: List.generate(items.length, (index) {
-            final item = items[index];
-            final isLast = index == items.length - 1;
-            return _buildSettingsRow(context, cs, item, isLast: isLast);
-          }),
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: List.generate(items.length, (index) {
+          final item = items[index];
+          final isLast = index == items.length - 1;
+          return _buildSettingsRow(context, cs, item, isLast: isLast);
+        }),
       ),
     );
   }
@@ -167,7 +418,10 @@ class SettingsTab extends StatelessWidget {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () {},
+            onTap: item.onTap ?? () {},
+            borderRadius: isLast
+                ? const BorderRadius.vertical(bottom: Radius.circular(20))
+                : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
               child: Row(
@@ -217,6 +471,97 @@ class SettingsTab extends StatelessWidget {
 class _SettingsItem {
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 
-  const _SettingsItem({required this.icon, required this.label});
+  const _SettingsItem({required this.icon, required this.label, this.onTap});
+}
+
+class _PhoneSpoiler extends StatefulWidget {
+  final String text;
+  final bool isVisible;
+  final TextStyle style;
+
+  const _PhoneSpoiler({
+    required this.text,
+    required this.isVisible,
+    required this.style,
+  });
+
+  @override
+  State<_PhoneSpoiler> createState() => _PhoneSpoilerState();
+}
+
+class _PhoneSpoilerState extends State<_PhoneSpoiler>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedCrossFade(
+      duration: const Duration(milliseconds: 200),
+      crossFadeState: widget.isVisible
+          ? CrossFadeState.showSecond
+          : CrossFadeState.showFirst,
+      firstChild: SizedBox(
+        child: CustomPaint(
+          size: const Size(110, 16),
+          painter: _SpoilerPainter(_controller, widget.style.color!),
+        ),
+      ),
+      secondChild: Text(widget.text, style: widget.style),
+    );
+  }
+}
+
+class _SpoilerPainter extends CustomPainter {
+  final Animation<double> animation;
+  final Color color;
+
+  _SpoilerPainter(this.animation, this.color) : super(repaint: animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.15)
+      ..style = PaintingStyle.fill;
+
+    // Draw the background
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        const Radius.circular(4),
+      ),
+      paint,
+    );
+
+    // Draw "noisy" particles
+    final particlePaint = Paint()..style = PaintingStyle.fill;
+
+    // Simple noise effect with dots using animation value for movement
+    for (int i = 0; i < 60; i++) {
+      double dx = (i * 17.5 + animation.value * 20) % size.width;
+      double dy = (i * 13.7 + animation.value * 15) % size.height;
+      double opacity = (0.2 + 0.3 * (i % 5) / 5.0).clamp(0.0, 1.0);
+      particlePaint.color = color.withValues(alpha: opacity);
+      canvas.drawCircle(Offset(dx, dy), 1.2, particlePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SpoilerPainter oldDelegate) => true;
 }

@@ -2,7 +2,7 @@
 ///
 /// Naming follows the server-side convention.
 /// Use [Opcode.name] to get a human-readable label for logging.
-/// 
+///
 /// файл писла нейронка (я че ебанутый чтоль чтобы вручную хуярить опкоды и их значения)
 abstract class Opcode {
   // ── Session ────────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ abstract class Opcode {
   // ── Sessions ───────────────────────────────────────────────────────
   static const int sessionsInfo = 96; // Запрос активных сессий
   static const int sessionsClose = 97; // Закрытие всех сессий
-  static const int phoneBind_request = 98; // Запрос привязки телефона
+  static const int phoneBindRequest = 98; // Запрос привязки телефона
   static const int phoneBindConfirm = 99; // Подтверждение привязки телефона
 
   // ── Bots ───────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ abstract class Opcode {
     audioPlay: 'AUDIO_PLAY',
     sessionsInfo: 'SESSIONS_INFO',
     sessionsClose: 'SESSIONS_CLOSE',
-    phoneBind_request: 'PHONE_BIND_REQUEST',
+    phoneBindRequest: 'PHONE_BIND_REQUEST',
     phoneBindConfirm: 'PHONE_BIND_CONFIRM',
     chatComplain: 'CHAT_COMPLAIN',
     msgSendCallback: 'MSG_SEND_CALLBACK',
