@@ -14,12 +14,14 @@ class ChatScreen extends StatefulWidget {
   final int chatId;
   final String name;
   final String imageUrl;
+  final String chatType;
 
   const ChatScreen({
     super.key,
     required this.chatId,
     required this.name,
     required this.imageUrl,
+    required this.chatType,
   });
 
   @override
@@ -469,6 +471,43 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildInputArea(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
+
+    if (widget.chatType == "CHANNEL") {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  cs.surfaceContainerHighest.withValues(alpha: 0.92),
+                  cs.surface,
+                ),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.5),
+                  width: 0.5,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  'Отключить уведомления',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
