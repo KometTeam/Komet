@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void showCustomNotification(BuildContext context, String message) {
-  final overlay = Overlay.of(context);
+  showCustomNotificationOnOverlay(Overlay.of(context), message);
+}
+
+void showCustomNotificationOnOverlay(OverlayState overlay, String message) {
   final entry = OverlayEntry(
     builder: (context) => CustomNotification(message: message),
   );
