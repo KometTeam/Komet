@@ -296,41 +296,41 @@ class MessageBubble extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.only(
-        left: isMe ? 60 : 12,
-        right: isMe ? 12 : 60,
+        left: isMe ? 12 : 12,
+        right: isMe ? 12 : 12,
         top: topMargin,
         bottom: bottomMargin,
       ),
       child: Align(
         child: Row(
           mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-          spacing: 8.0,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (senderAvatar != null && senderAvatar.isNotEmpty && !isMe && chatType != "DIALOG"
-             && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
-              CircleAvatar(
-                radius: 15,
-                backgroundImage: NetworkImage(senderAvatar),
-                backgroundColor: cs.primaryContainer,
-              )
-            else if (displaySender != null && !isMe && chatType != "DIALOG"
-             && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
-              CircleAvatar(
-                radius: 15,
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  displaySender!.isNotEmpty
-                      ? displaySender[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
-                ),
-              )
-            // Заглушка для паддинга
-            else
-              CircleAvatar(
-                radius: 15,
-                backgroundColor: Color(0x00000000)
-              ),
+            if (!isMe && chatType == "CHAT" && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
+              ...(senderAvatar != null && senderAvatar.isNotEmpty)
+                ? [
+                    CircleAvatar(
+                      radius: 15,
+                      backgroundImage: NetworkImage(senderAvatar),
+                      backgroundColor: cs.primaryContainer,
+                    )
+                  ]
+                : [
+                    CircleAvatar(
+                      radius: 15,
+                      backgroundColor: cs.primaryContainer,
+                      child: Text(
+                        displaySender != null && displaySender.isNotEmpty
+                            ? displaySender[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                      ),
+                    )
+                  ]
+            else if (!isMe && chatType != "CHAT")
+              SizedBox(width: 0)
+            else if (!isMe)
+              CircleAvatar(radius: 15, backgroundColor: Color(0x00000000)),
             Container(
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
@@ -389,11 +389,10 @@ class MessageBubble extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (message.senderId != message.accountId && prevMessage?.senderId != message.senderId)
+        if (message.senderId != message.accountId && prevMessage?.senderId != message.senderId && chatType == "CHAT")
         Text(
           displaySender ?? "",
           textAlign: TextAlign.left,
-          // TODO: Получение цветов по хешу ника
           style: TextStyle(color: cs.onPrimaryContainer)
         ),
         Row(

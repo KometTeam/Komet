@@ -1042,6 +1042,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    chatType: "DIALOG",
                   );
                 } else {
                   if (chat.lastMsgSenderId != null ) {
@@ -1077,6 +1078,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    chatType: chat.type,
                   );
                 }
               }, childCount: _isInitialLoading ? 10 : chats.length),
@@ -1679,6 +1681,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isRead = false,
     int unreadCount = 0,
     bool isMuted = false,
+    String chatType = "CHAT",
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -1688,16 +1691,17 @@ class _ChatListScreenState extends State<ChatListScreen>
         if (_isSelectionMode) {
           _toggleSelection(id);
         } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                chatId: int.parse(id),
-                name: name,
-                imageUrl: imageUrl,
+Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(
+                  chatId: int.parse(id),
+                  name: name,
+                  imageUrl: imageUrl,
+                  chatType: chatType,
+                ),
               ),
-            ),
-          );
+            );
         }
       },
       onLongPress: () => _toggleSelection(id),
