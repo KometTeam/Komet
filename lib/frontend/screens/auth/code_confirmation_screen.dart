@@ -34,13 +34,14 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
+  bool _keyboardScheduled = false;
+  Animation<double>? _routeAnimation;
+  AnimationStatusListener? _routeAnimationListener;
+
   @override
   void initState() {
     super.initState();
     _startTimer();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
-    });
 
     _shakeController = AnimationController(
       vsync: this,
@@ -57,13 +58,52 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleKeyboardOpen();
+  }
+
+  @override
   void dispose() {
+    if (_routeAnimationListener != null) {
+      _routeAnimation?.removeStatusListener(_routeAnimationListener!);
+    }
     _timer?.cancel();
     _errorTimer?.cancel();
     _shakeController.dispose();
     _codeController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _scheduleKeyboardOpen() {
+    if (_keyboardScheduled) return;
+    _keyboardScheduled = true;
+
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.status == AnimationStatus.completed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openKeyboard();
+      });
+      return;
+    }
+
+    _routeAnimation = animation;
+    _routeAnimationListener = (status) {
+      if (status == AnimationStatus.completed) {
+        animation.removeStatusListener(_routeAnimationListener!);
+        _routeAnimationListener = null;
+        if (mounted) _openKeyboard();
+      }
+    };
+    animation.addStatusListener(_routeAnimationListener!);
+  }
+
+  void _openKeyboard() {
+    if (!_focusNode.hasFocus) {
+      _focusNode.requestFocus();
+    }
+    SystemChannels.textInput.invokeMethod<void>('TextInput.show');
   }
 
   void _startTimer() {
@@ -215,7 +255,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => _focusNode.requestFocus(),
+                      onTap: _openKeyboard,
                       child: FittedBox(
                         child: Row(
                           children: List.generate(6, (index) {
