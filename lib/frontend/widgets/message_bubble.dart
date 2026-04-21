@@ -289,8 +289,6 @@ class MessageBubble extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
 
-    // TODO: Нормальное кеширование контактов
-    final ss = messagesModule.searchContactById(message.senderId);
     String? senderAvatar = ContactCache.getAvatar(message.senderId);
     String? displaySender = ContactCache.get(message.senderId);
 
@@ -382,8 +380,6 @@ class MessageBubble extends StatelessWidget {
     final forwarded = _getForwardedAttachment();
     final isForwarded = forwarded != null && !isForwardedContact;
 
-    // TODO: Нормальное кеширование контактов
-    final ss = messagesModule.searchContactById(message.senderId);
     String? displaySender = ContactCache.get(message.senderId);
 
     return Column(

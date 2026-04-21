@@ -1028,8 +1028,6 @@ class _ChatListScreenState extends State<ChatListScreen>
 
                 if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
                   final secondId = chat.participants.entries.where((entry) => entry.key != _profile?.id).first.key;
-                  // TODO: Нормальное кеширование контактов
-                  final ss = messagesModule.searchContactById(secondId);
                   final name = ContactCache.get(secondId);
                   final avatar = ContactCache.getAvatar(secondId);
 
@@ -1045,10 +1043,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                     chatType: "DIALOG",
                   );
                 } else {
-                  if (chat.lastMsgSenderId != null ) {
-                    final ss = messagesModule.searchContactById(chat.lastMsgSenderId!);
-                  }
-                  
                   final name = chat.lastMsgSenderId != null
                       ? ContactCache.get(chat.lastMsgSenderId!)
                       : null;

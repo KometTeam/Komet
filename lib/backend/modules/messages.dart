@@ -75,13 +75,13 @@ class CachedMessage {
     }
 
     return CachedMessage(
-      id: row['id'] as String,
-      accountId: row['account_id'] as int,
-      chatId: row['chat_id'] as int,
-      senderId: row['sender_id'] as int,
-      text: row['text'] as String?,
-      time: row['time'] as int,
-      status: row['status'] as String?,
+      id: row['id']?.toString() ?? '',
+      accountId: row['account_id'] is int ? row['account_id'] as int : int.tryParse(row['account_id']?.toString() ?? '') ?? 0,
+      chatId: row['chat_id'] is int ? row['chat_id'] as int : int.tryParse(row['chat_id']?.toString() ?? '') ?? 0,
+      senderId: row['sender_id'] is int ? row['sender_id'] as int : int.tryParse(row['sender_id']?.toString() ?? '') ?? 0,
+      text: row['text']?.toString(),
+      time: row['time'] is int ? row['time'] as int : int.tryParse(row['time']?.toString() ?? '') ?? 0,
+      status: row['status']?.toString(),
       payload: payload,
       attachments: attachments,
     );
@@ -209,13 +209,20 @@ class MessagesModule {
       id: id,
       accountId: accountId,
       chatId: chatId,
-      senderId: (m['sender'] as int?) ?? 0,
-      text: m['text'] as String?,
-      time: (m['time'] as int?) ?? 0,
-      status: m['status'] as String?,
+      senderId: _parseIntField(m['sender']),
+      text: m['text']?.toString(),
+      time: _parseIntField(m['time']),
+      status: m['status']?.toString(),
       payload: Map<String, dynamic>.from(m.cast()),
       attachments: attachments,
     );
+  }
+
+  int _parseIntField(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return int.tryParse(value.toString()) ?? 0;
   }
 
   Future<void> sendMessage(
@@ -355,6 +362,8 @@ class MessagesModule {
   Future<String?> searchContactById(int contactId) async {
     final cached = ContactCache.get(contactId);
     if (cached != null) return cached;
+
+    if (_api.state != SessionState.online) return null;
 
     try {
       final response = await _api.sendRequest(Opcode.contactInfo, {
