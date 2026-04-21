@@ -344,15 +344,15 @@ class ContactAttachment extends MessageAttachment {
 
   factory ContactAttachment.fromMap(Map<String, dynamic> map) {
     return ContactAttachment(
-      previewData: map['previewData'] as String?,
-      baseUrl: map['baseUrl'] as String?,
-      userId: map['userId'] as String?,
-      firstName: map['firstName'] as String?,
-      lastName: map['lastName'] as String?,
-      phoneNumber: map['phoneNumber'] as String?,
-      photoUrl: map['photoUrl'] as String?,
-      contactId: map['contactId'] as int?,
-      name: map['name'] as String?,
+      previewData: map['previewData']?.toString(),
+      baseUrl: map['baseUrl']?.toString(),
+      userId: map['userId']?.toString(),
+      firstName: map['firstName']?.toString(),
+      lastName: map['lastName']?.toString(),
+      phoneNumber: map['phoneNumber']?.toString(),
+      photoUrl: map['photoUrl']?.toString(),
+      contactId: map['contactId'] is int ? map['contactId'] as int : int.tryParse(map['contactId']?.toString() ?? ''),
+      name: map['name']?.toString(),
     );
   }
 
@@ -426,11 +426,11 @@ class ControlAttachment extends MessageAttachment {
 
   factory ControlAttachment.fromMap(Map<String, dynamic> map) {
     return ControlAttachment(
-      previewData: map['previewData'] as String?,
-      baseUrl: map['baseUrl'] as String?,
-      event: map['event'] as String?,
-      title: map['title'] as String?,
-      userIds: (map['userIds'] as List?)?.cast<int>(),
+      previewData: map['previewData']?.toString(),
+      baseUrl: map['baseUrl']?.toString(),
+      event: map['event']?.toString(),
+      title: map['title']?.toString(),
+      userIds: (map['userIds'] as List?)?.map((e) => e is int ? e : int.tryParse(e?.toString() ?? '') ?? 0).toList(),
     );
   }
 
