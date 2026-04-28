@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart';
+import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
@@ -256,71 +257,84 @@ class _ChatScreenState extends State<ChatScreen>
     String? status = chat?.type == "CHAT" ? "${chat?.participants.length.toString()} участников" : "last seen recently";
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
-        backgroundColor: cs.surfaceContainerHigh,
-        foregroundColor: cs.onSurface,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: cs.onSurface),
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back, weight: 400),
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            if (widget.imageUrl.isNotEmpty)
-              CircleAvatar(
-                radius: 18,
-                backgroundImage: NetworkImage(widget.imageUrl),
-              )
-            else
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                  style: TextStyle(color: cs.onPrimaryContainer, fontSize: 12),
-                ),
-              ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.name,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Outfit',
-                    ),
-                  ),
-                  Text(
-                    status ?? "",
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(kToolbarHeight), 
+        child: InkWell(
+          onTap: () => Navigator.push(
+            context, 
+            MaterialPageRoute(builder: (context) => ChatInfoScreen(
+              chatId: widget.chatId, 
+              name: widget.name,
+              imageUrl: widget.imageUrl,
+              chatType: widget.chatType)
+            )
+          ),
+          child:  AppBar(
+            backgroundColor: cs.surfaceContainerHigh,
+            foregroundColor: cs.onSurface,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            iconTheme: IconThemeData(color: cs.onSurface),
+            leading: IconButton(
+              icon: const Icon(Symbols.arrow_back, weight: 400),
+              onPressed: () => Navigator.pop(context),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Symbols.call, weight: 400),
-            onPressed: () {},
+            titleSpacing: 0,
+            title: Row(
+              children: [
+                if (widget.imageUrl.isNotEmpty)
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundImage: NetworkImage(widget.imageUrl),
+                  )
+                else
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: cs.primaryContainer,
+                    child: Text(
+                      widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+                      style: TextStyle(color: cs.onPrimaryContainer, fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.name,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Outfit',
+                        ),
+                      ),
+                      Text(
+                        status ?? "",
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Symbols.call, weight: 400),
+                onPressed: () {},
+              ),
+              IconButton(
+                icon: const Icon(Symbols.more_vert, weight: 400),
+                onPressed: () {},
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Symbols.more_vert, weight: 400),
-            onPressed: () {},
-          ),
-        ],
-      ),
+        )),
       body: Column(
         children: [
           Expanded(
