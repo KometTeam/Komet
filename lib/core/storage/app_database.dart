@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:komet/core/utils/logger.dart';
@@ -72,10 +73,15 @@ class ProfileData {
     final profileOptionsStr = row['profile_options'] as String?;
     List<int>? profileOptions;
     if (profileOptionsStr != null && profileOptionsStr.isNotEmpty) {
-      profileOptions = profileOptionsStr
-          .split(',')
-          .map((e) => int.parse(e.trim()))
-          .toList();
+      try {
+        profileOptions = profileOptionsStr
+            .split(',')
+            .where((e) => e.trim().isNotEmpty)
+            .map((e) => int.parse(e.trim()))
+            .toList();
+      } catch (_) {
+        profileOptions = null;
+      }
     }
     return ProfileData(
       id: row['id'] as int,
@@ -130,8 +136,20 @@ class AppDatabase {
     }
   }
 
+  static Completer<Database>? _initCompleter;
+
   static Future<Database> get _instance async {
-    _db ??= await _open();
+    if (_db != null) return _db!;
+    if (_initCompleter != null) return _initCompleter!.future;
+    _initCompleter = Completer<Database>();
+    try {
+      _db = await _open();
+      _initCompleter!.complete(_db!);
+    } catch (e) {
+      _initCompleter!.completeError(e);
+      _initCompleter = null;
+      rethrow;
+    }
     return _db!;
   }
 

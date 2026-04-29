@@ -72,12 +72,12 @@ class ContactsModule {
 
     final names = contact['names'];
     if (names is List && names.isNotEmpty) {
-      final name =
-          names.firstWhere(
-                (n) => n is Map && n['type'] == 'ONEME',
-                orElse: () => names.first,
-              )
-              as Map;
+      final nameRaw = names.firstWhere(
+        (n) => n is Map && n['type'] == 'ONEME',
+        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+      );
+      if (nameRaw is! Map) return null;
+      final name = nameRaw;
       firstName = (name['firstName'] as String?) ?? '';
       lastName = name['lastName'] as String?;
     }

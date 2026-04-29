@@ -3,6 +3,21 @@ import 'dart:convert';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 
+Map<int, int> _parseParticipants(dynamic raw) {
+  try {
+    final decoded = raw is String ? jsonDecode(raw) : raw;
+    if (decoded is Map) {
+      return decoded.map((k, v) => MapEntry(
+        k is int ? k : int.parse(k.toString()),
+        v is int ? v : int.tryParse(v.toString()) ?? 0,
+      ));
+    }
+  } catch (e) {
+    logger.e('Failed to parse participants: $e');
+  }
+  return {};
+}
+
 class CachedChat {
   final int id;
   final int accountId;
@@ -59,8 +74,7 @@ class CachedChat {
     dontDisturbUntil: row['dont_disturb_until'] as int,
     isOnline: (row['is_online'] as int) == 1,
     seenTime: row['seen_time'] as int,
-    // watafuc
-    participants:  Map<String, int>.from(jsonDecode(row['participants'])).map((k, v) => MapEntry(int.parse(k), v))
+    participants: _parseParticipants(row['participants'])
   );
 
   Map<String, dynamic> toDbRow() => {
@@ -242,7 +256,7 @@ class ChatsModule {
             isOnline = (presence['status'] as int?) == 1;
           }
         }
-        Map<int, int> participants = Map<int, int>.from(chat['participants']);
+        Map<int, int> participants = _parseParticipants(chat['participants']);
 
         return CachedChat(
           id: id,
@@ -282,12 +296,12 @@ class ChatsModule {
   static String? _nameFromContact(Map<dynamic, dynamic> contact) {
     final names = contact['names'];
     if (names is! List || names.isEmpty) return null;
-    final name =
-        names.firstWhere(
-              (n) => n is Map && n['type'] == 'ONEME',
-              orElse: () => names.first,
-            )
-            as Map;
+    final nameRaw = names.firstWhere(
+      (n) => n is Map && n['type'] == 'ONEME',
+      orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+    );
+    if (nameRaw is! Map) return null;
+    final name = nameRaw;
     return name['name'] as String?;
   }
 }

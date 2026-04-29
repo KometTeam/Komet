@@ -638,6 +638,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       ..removeListener(_onStoriesRevealTick)
       ..removeStatusListener(_onStoriesRevealStatus)
       ..dispose();
+    _shimmerController.dispose();
     _folderPageController.dispose();
     while (_folderChatScrollControllers.isNotEmpty) {
       final c = _folderChatScrollControllers.removeLast();

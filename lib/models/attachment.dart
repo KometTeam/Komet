@@ -136,7 +136,8 @@ class VideoAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 
@@ -192,7 +193,8 @@ class AudioAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 
@@ -244,7 +246,8 @@ class FileAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 
@@ -294,7 +297,8 @@ class StickerAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 

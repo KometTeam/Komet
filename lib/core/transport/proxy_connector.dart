@@ -60,8 +60,8 @@ class ProxyConnector {
         if (!useAuth) {
           throw SocketException('SOCKS5: прокси требует аутентификацию');
         }
-        final usernameBytes = utf8.encode(settings.username!);
-        final passwordBytes = utf8.encode(settings.password!);
+        final usernameBytes = utf8.encode(settings.username ?? '');
+        final passwordBytes = utf8.encode(settings.password ?? '');
         final authPacket = BytesBuilder()
           ..addByte(0x01)
           ..addByte(usernameBytes.length)
@@ -175,7 +175,10 @@ class ProxyConnector {
       final responseStr = utf8.decode(headerBytes, allowMalformed: true);
       final statusLine = responseStr.split('\r\n').first;
       final parts = statusLine.split(' ');
-      final statusCode = parts.length >= 2 ? int.tryParse(parts[1]) ?? 0 : 0;
+      if (parts.length < 2) {
+        throw SocketException('HTTP CONNECT: некорректный ответ: $statusLine');
+      }
+      final statusCode = int.tryParse(parts[1]) ?? 0;
       if (statusCode != 200) {
         throw SocketException(
           'HTTP CONNECT: прокси вернул статус $statusCode',
@@ -201,10 +204,17 @@ class ProxyConnector {
     RawSocket proxySocket,
     _RawSocketIO io,
   ) async {
-    final server = await RawServerSocket.bind(
-      InternetAddress.loopbackIPv4,
-      0,
-    );
+    RawServerSocket? server;
+    try {
+      server = await RawServerSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+    } catch (e) {
+      io.dispose();
+      proxySocket.close();
+      rethrow;
+    }
     final clientSide = await RawSocket.connect(
       InternetAddress.loopbackIPv4,
       server.port,

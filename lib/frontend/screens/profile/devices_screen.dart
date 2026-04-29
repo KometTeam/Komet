@@ -271,8 +271,9 @@ class _DevicesScreenState extends State<DevicesScreen>
       setState(() => _loadingIps.add(id));
     }
 
+    HttpClient? client;
     try {
-      final client = HttpClient();
+      client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 5);
       final request = await client.getUrl(
         Uri.parse(
@@ -296,6 +297,8 @@ class _DevicesScreenState extends State<DevicesScreen>
         setState(() => _loadingIps.remove(id));
         showCustomNotification(context, 'Ошибка IP: $e');
       }
+    } finally {
+      client?.close();
     }
   }
 

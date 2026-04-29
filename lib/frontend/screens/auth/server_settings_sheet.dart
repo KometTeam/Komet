@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -53,7 +55,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       await prefs.setString(ServerConfig.prefHostKey, host);
       await prefs.setInt(ServerConfig.prefPortKey, port);
       await api.disconnect();
-      api.connect(); 
+      unawaited(api.connect());
       final online = await api.stateStream
           .firstWhere((s) =>
               s == SessionState.online || s == SessionState.disconnected)

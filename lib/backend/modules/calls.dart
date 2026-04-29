@@ -92,8 +92,8 @@ class CallsModule {
           msg['id']?.toString() ??
           DateTime.now().millisecondsSinceEpoch.toString();
 
-      final name = contact?.firstName != null
-          ? '${contact!.firstName} ${contact.lastName ?? ''}'.trim()
+      final name = (contact != null && contact.firstName.isNotEmpty)
+          ? '${contact.firstName} ${contact.lastName ?? ''}'.trim()
           : 'Неизвестный';
 
       extractedCalls.add(

@@ -289,7 +289,7 @@ class LoginSyncParams {
       draftsSync: int.tryParse(values[SyncKey.draftsSync] ?? '') ?? 0,
       bannersSync: int.tryParse(values[SyncKey.bannersSync] ?? '') ?? 0,
       presenceSync: int.tryParse(values[SyncKey.presenceSync] ?? '') ?? -1,
-      lastLogin: int.parse(lastLogin),
+      lastLogin: int.tryParse(lastLogin) ?? 0,
       configHash: values[SyncKey.configHash],
       chatCacheFingerprint: values[SyncKey.chatCacheFingerprint],
     );
@@ -646,19 +646,25 @@ class AccountModule {
 
   Future<ProfileData> _processProfileUpdate(Packet packet) async {
     _api.registerPushHandler(Opcode.notifProfile, (p) {});
-    await for (final push in _api.pushStream.where(
-      (p) => p.opcode == Opcode.notifProfile,
-    )) {
-      final payload = push.payload;
-      if (payload is Map) {
-        final profile = payload['profile'];
-        if (profile is Map) {
-          final contact = profile['contact'];
-          if (contact is Map) {
-            return ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    try {
+      await for (final push in _api.pushStream
+          .where((p) => p.opcode == Opcode.notifProfile)
+          .timeout(const Duration(seconds: 15))) {
+        final payload = push.payload;
+        if (payload is Map) {
+          final profile = payload['profile'];
+          if (profile is Map) {
+            final contact = profile['contact'];
+            if (contact is Map) {
+              return ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+            }
           }
         }
       }
+    } on TimeoutException {
+      throw Exception('Таймаут ожидания обновления профиля');
+    } finally {
+      _api.unregisterPushHandler(Opcode.notifProfile);
     }
     throw Exception('Не удалось получить обновлённый профиль');
   }

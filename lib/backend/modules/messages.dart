@@ -155,7 +155,9 @@ class MessagesModule {
     }
 
     if (rows.isNotEmpty) {
-      AppDatabase.saveMessages(rows).ignore();
+      AppDatabase.saveMessages(rows).catchError((e) {
+        debugPrint('saveMessages error: $e');
+      });
     }
 
     return results;
@@ -257,9 +259,8 @@ class MessagesModule {
       if (data is! Map) return null;
 
       final content = data['content'];
-      if (content is String) {
-        return Uri.parse(content).host.isNotEmpty ? null : null;
-      }
+      if (content is Uint8List) return content;
+      if (content is List<int>) return Uint8List.fromList(content);
       return null;
     } catch (e) {
       return null;
@@ -295,9 +296,8 @@ class MessagesModule {
       if (data is! Map) return null;
 
       final content = data['content'];
-      if (content is String) {
-        return Uri.parse(content).host.isNotEmpty ? null : null;
-      }
+      if (content is Uint8List) return content;
+      if (content is List<int>) return Uint8List.fromList(content);
       return null;
     } catch (e) {
       return null;
@@ -333,9 +333,8 @@ class MessagesModule {
       if (data is! Map) return null;
 
       final content = data['content'];
-      if (content is String) {
-        return Uri.parse(content).host.isNotEmpty ? null : null;
-      }
+      if (content is Uint8List) return content;
+      if (content is List<int>) return Uint8List.fromList(content);
       return null;
     } catch (e) {
       return null;
