@@ -1255,6 +1255,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               });
             },
             child: Stack(
+              clipBehavior: Clip.hardEdge,
               children: [
                 AnimatedPositioned(
                   duration: _navDragging
