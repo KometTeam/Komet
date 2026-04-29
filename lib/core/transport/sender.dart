@@ -8,7 +8,7 @@ class PacketSender {
   int get currentSeq => _seq;
 
   int _nextSeq() {
-    _seq = (_seq + 1) % 256;
+    _seq = (_seq + 1) % 65536;
     return _seq;
   }
 

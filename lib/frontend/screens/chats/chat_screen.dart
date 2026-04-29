@@ -381,7 +381,7 @@ class _ChatScreenState extends State<ChatScreen>
           myId: _myId,
           prevMessage: prevMessage,
           nextMessage: nextMessage,
-          chatType: chat!.type,
+          chatType: chat?.type ?? 'CHAT',
         );
       },
     );

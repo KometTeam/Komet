@@ -190,6 +190,7 @@ Uint8List _lz4BlockDecompress(Uint8List src, int maxSize) {
 
     if (pos >= src.length) break;
 
+    if (pos + 1 >= src.length) throw StateError('LZ4: unexpected end of input');
     final offset = src[pos] | (src[pos + 1] << 8);
     pos += 2;
     if (offset == 0) throw StateError('LZ4: offset = 0');
