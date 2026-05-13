@@ -290,66 +290,70 @@ class MessageBubble extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
 
-    // TODO: Нормальное кеширование контактов
-    final ss = messagesModule.searchContactById(message.senderId);
     String? senderAvatar = ContactCache.getAvatar(message.senderId);
     String? displaySender = ContactCache.get(message.senderId);
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: isMe ? 60 : 12,
-        right: isMe ? 12 : 60,
-        top: topMargin,
-        bottom: bottomMargin,
-      ),
-      child: Align(
-        child: Row(
-          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-          spacing: 8.0,
-          children: [
-            if (senderAvatar != null && senderAvatar.isNotEmpty && !isMe && chatType != "DIALOG"
-             && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
-              CircleAvatar(
-                radius: 15,
-                backgroundImage: CachedNetworkImageProvider(senderAvatar),
-                backgroundColor: cs.primaryContainer,
-              )
-            else if (displaySender != null && !isMe && chatType != "DIALOG"
-             && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
-              CircleAvatar(
-                radius: 15,
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  displaySender!.isNotEmpty
-                      ? displaySender[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+    return GestureDetector(
+      // TODO: действия с сообщением
+      onTap: () => print("test"),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: isMe ? 12 : 12,
+          right: isMe ? 12 : 12,
+          top: topMargin,
+          bottom: bottomMargin,
+        ),
+        child: Align(
+          child: Row(
+            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            spacing: 8,
+
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isMe && chatType == "CHAT" && nextMessage?.senderId != message.senderId && prevMessage?.senderId == message.senderId)
+                ...(senderAvatar != null && senderAvatar.isNotEmpty)
+                  ? [
+                      CircleAvatar(
+                        radius: 15,
+                        backgroundImage: CachedNetworkImageProvider(senderAvatar),
+                        backgroundColor: cs.primaryContainer,
+                      )
+                    ]
+                  : [
+                      CircleAvatar(
+                        radius: 15,
+                        backgroundColor: cs.primaryContainer,
+                        child: Text(
+                          displaySender != null && displaySender.isNotEmpty
+                              ? displaySender[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+                        ),
+                      )
+                    ]
+              else if (!isMe && chatType != "CHAT")
+                SizedBox(width: 0)
+              else if (!isMe)
+                CircleAvatar(radius: 15, backgroundColor: Color(0x00000000)),
+              Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.75,
                 ),
-              )
-            // Заглушка для паддинга
-            else
-              CircleAvatar(
-                radius: 15,
-                backgroundColor: Color(0x00000000)
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? (isDark ? const Color(0xFF2C5F8D) : const Color(0xFF007AFF))
+                      : (isDark
+                            ? cs.surfaceContainerHighest
+                            : const Color(0xFFE9E9EB)),
+                  borderRadius: _borderRadius,
+                ),
+                padding: padding,
+                child: _buildContent(context),
               ),
-            Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
-              ),
-              decoration: BoxDecoration(
-                color: isMe
-                    ? (isDark ? const Color(0xFF2C5F8D) : const Color(0xFF007AFF))
-                    : (isDark
-                          ? cs.surfaceContainerHighest
-                          : const Color(0xFFE9E9EB)),
-                borderRadius: _borderRadius,
-              ),
-              padding: padding,
-              child: _buildContent(context),
-            ),
-          ],
-        )
-      ),
+            ],
+          )
+        ),
+      )
     );
   }
 
@@ -383,18 +387,15 @@ class MessageBubble extends StatelessWidget {
     final forwarded = _getForwardedAttachment();
     final isForwarded = forwarded != null && !isForwardedContact;
 
-    // TODO: Нормальное кеширование контактов
-    final ss = messagesModule.searchContactById(message.senderId);
     String? displaySender = ContactCache.get(message.senderId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (message.senderId != message.accountId && prevMessage?.senderId != message.senderId)
+        if (message.senderId != message.accountId && prevMessage?.senderId != message.senderId && chatType == "CHAT")
         Text(
           displaySender ?? "",
           textAlign: TextAlign.left,
-          // TODO: Получение цветов по хешу ника
           style: TextStyle(color: cs.onPrimaryContainer)
         ),
         Row(

@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
+import 'info_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
 
@@ -97,14 +98,26 @@ class _SettingsTabState extends State<SettingsTab> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: _buildSection(
+child: _buildSection(
                   context,
                   cs,
-                  items: const [
-                    _SettingsItem(icon: Symbols.badge, label: 'Цифровой ID'),
-                    _SettingsItem(
+                  items: [
+                    const _SettingsItem(icon: Symbols.badge, label: 'Цифровой ID'),
+                    const _SettingsItem(
                       icon: Symbols.language,
                       label: 'Войти в Сферум',
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.info,
+                      label: 'Info',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const InfoScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

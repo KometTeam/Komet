@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart';
+import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
@@ -15,12 +16,14 @@ class ChatScreen extends StatefulWidget {
   final int chatId;
   final String name;
   final String imageUrl;
+  final String chatType;
 
   const ChatScreen({
     super.key,
     required this.chatId,
     required this.name,
     required this.imageUrl,
+    required this.chatType,
   });
 
   @override
@@ -255,71 +258,84 @@ class _ChatScreenState extends State<ChatScreen>
     String? status = chat?.type == "CHAT" ? "${chat?.participants.length.toString()} участников" : "last seen recently";
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
-        backgroundColor: cs.surfaceContainerHigh,
-        foregroundColor: cs.onSurface,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: cs.onSurface),
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back, weight: 400),
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            if (widget.imageUrl.isNotEmpty)
-              CircleAvatar(
-                radius: 18,
-                backgroundImage: CachedNetworkImageProvider(widget.imageUrl),
-              )
-            else
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                  style: TextStyle(color: cs.onPrimaryContainer, fontSize: 12),
-                ),
-              ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.name,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Outfit',
-                    ),
-                  ),
-                  Text(
-                    status ?? "",
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(kToolbarHeight),
+        child: InkWell(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => ChatInfoScreen(
+              chatId: widget.chatId,
+              name: widget.name,
+              imageUrl: widget.imageUrl,
+              chatType: widget.chatType)
+            )
+          ),
+          child: AppBar(
+            backgroundColor: cs.surfaceContainerHigh,
+            foregroundColor: cs.onSurface,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            iconTheme: IconThemeData(color: cs.onSurface),
+            leading: IconButton(
+              icon: const Icon(Symbols.arrow_back, weight: 400),
+              onPressed: () => Navigator.pop(context),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Symbols.call, weight: 400),
-            onPressed: () {},
+            titleSpacing: 0,
+            title: Row(
+              children: [
+                if (widget.imageUrl.isNotEmpty)
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundImage: CachedNetworkImageProvider(widget.imageUrl),
+                  )
+                else
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: cs.primaryContainer,
+                    child: Text(
+                      widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+                      style: TextStyle(color: cs.onPrimaryContainer, fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.name,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Outfit',
+                        ),
+                      ),
+                      Text(
+                        status ?? "",
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Symbols.call, weight: 400),
+                onPressed: () {},
+              ),
+              IconButton(
+                icon: const Icon(Symbols.more_vert, weight: 400),
+                onPressed: () {},
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Symbols.more_vert, weight: 400),
-            onPressed: () {},
-          ),
-        ],
-      ),
+        )),
       body: Column(
         children: [
           Expanded(
@@ -366,7 +382,7 @@ class _ChatScreenState extends State<ChatScreen>
           myId: _myId,
           prevMessage: prevMessage,
           nextMessage: nextMessage,
-          chatType: chat!.type,
+          chatType: chat?.type ?? 'CHAT',
         );
       },
     );
@@ -470,6 +486,43 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildInputArea(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
+
+    if (widget.chatType == "CHANNEL") {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  cs.surfaceContainerHighest.withValues(alpha: 0.92),
+                  cs.surface,
+                ),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.5),
+                  width: 0.5,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  'Отключить уведомления',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),

@@ -25,7 +25,7 @@ class ChatFolder {
 
   factory ChatFolder.fromJson(Map<String, dynamic> json) {
     return ChatFolder(
-      id: json['id'].toString(),
+      id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       emoji: json['emoji']?.toString(),
       include: (json['include'] as List<dynamic>?)

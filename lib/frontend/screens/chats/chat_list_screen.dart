@@ -665,6 +665,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       ..removeListener(_onStoriesRevealTick)
       ..removeStatusListener(_onStoriesRevealStatus)
       ..dispose();
+    _shimmerController.dispose();
     _folderPageController.dispose();
     while (_folderChatScrollControllers.isNotEmpty) {
       final c = _folderChatScrollControllers.removeLast();
@@ -1070,6 +1071,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    chatType: "DIALOG",
                   );
                 } else {
                   final name = chat.lastMsgSenderId != null
@@ -1101,6 +1103,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    chatType: chat.type,
                   );
                 }
               }, childCount: _isInitialLoading ? 10 : chats.length),
@@ -1282,6 +1285,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               });
             },
             child: Stack(
+              clipBehavior: Clip.hardEdge,
               children: [
                 AnimatedPositioned(
                   duration: _navDragging
@@ -1714,6 +1718,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isRead = false,
     int unreadCount = 0,
     bool isMuted = false,
+    String chatType = "CHAT",
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -1723,16 +1728,17 @@ class _ChatListScreenState extends State<ChatListScreen>
         if (_isSelectionMode) {
           _toggleSelection(id);
         } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                chatId: int.parse(id),
-                name: name,
-                imageUrl: imageUrl,
+Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(
+                  chatId: int.parse(id),
+                  name: name,
+                  imageUrl: imageUrl,
+                  chatType: chatType,
+                ),
               ),
-            ),
-          );
+            );
         }
       },
       onLongPress: () => _toggleSelection(id),

@@ -99,7 +99,9 @@ class Connection {
     if (socket != null) {
       try {
         socket.close();
-      } catch (_) {}
+      } catch (e) {
+        logger.w('Ошибка при закрытии сокета: $e');
+      }
     }
 
     _setState(SocketState.disconnected);

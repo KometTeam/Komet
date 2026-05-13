@@ -237,6 +237,11 @@ class Api {
     _dispatcher.registerHandler(opcode, handler);
   }
 
+  /// Снимает обработчик пушей с указанного опкода.
+  void unregisterPushHandler(int opcode) {
+    _dispatcher.unregisterHandler(opcode);
+  }
+
   /// Стрим всех входящих пушей от сервера.
   Stream<Packet> get pushStream => _dispatcher.pushStream;
 
@@ -248,6 +253,7 @@ class Api {
     _connection.dispose();
     _stateController.close();
     _sessionExpiredController.close();
+    _handshakeSuccessController.close();
   }
 
   // Внутрянка

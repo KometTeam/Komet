@@ -631,6 +631,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Spoofing'**
   String get profileMenuSpoof;
+
+  /// No description provided for @infoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get infoTitle;
+
+  /// No description provided for @infoAccountSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get infoAccountSection;
+
+  /// No description provided for @infoServerSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get infoServerSection;
+
+  /// No description provided for @infoUserSection.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get infoUserSection;
+
+  /// No description provided for @infoYMapSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Y-Map'**
+  String get infoYMapSection;
+
+  /// No description provided for @infoFileUploadTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'file-upload-unsupported-types'**
+  String get infoFileUploadTypes;
+
+  /// No description provided for @infoWhiteListLinks.
+  ///
+  /// In en, this message translates to:
+  /// **'white-list-links'**
+  String get infoWhiteListLinks;
+
+  /// No description provided for @infoRegistrationTime.
+  ///
+  /// In en, this message translates to:
+  /// **'registrationTime'**
+  String get infoRegistrationTime;
+
+  /// No description provided for @infoCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'country'**
+  String get infoCountry;
+
+  /// No description provided for @infoVideoChatHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'videoChatHistory'**
+  String get infoVideoChatHistory;
+
+  /// No description provided for @infoUpdateTime.
+  ///
+  /// In en, this message translates to:
+  /// **'updateTime'**
+  String get infoUpdateTime;
+
+  /// No description provided for @infoId.
+  ///
+  /// In en, this message translates to:
+  /// **'id'**
+  String get infoId;
+
+  /// No description provided for @infoChatMarker.
+  ///
+  /// In en, this message translates to:
+  /// **'chatMarker'**
+  String get infoChatMarker;
+
+  /// No description provided for @infoAccountRemovalEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'account-removal-enabled'**
+  String get infoAccountRemovalEnabled;
+
+  /// No description provided for @infoImageSize.
+  ///
+  /// In en, this message translates to:
+  /// **'image-size'**
+  String get infoImageSize;
+
+  /// No description provided for @infoGce.
+  ///
+  /// In en, this message translates to:
+  /// **'gce'**
+  String get infoGce;
+
+  /// No description provided for @infoGcce.
+  ///
+  /// In en, this message translates to:
+  /// **'gcce'**
+  String get infoGcce;
+
+  /// No description provided for @infoMaxMsgLength.
+  ///
+  /// In en, this message translates to:
+  /// **'max-msg-length'**
+  String get infoMaxMsgLength;
+
+  /// No description provided for @infoQuotesEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'quotes-enabled'**
+  String get infoQuotesEnabled;
+
+  /// No description provided for @infoCallsEndpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'calls-endpoint'**
+  String get infoCallsEndpoint;
+
+  /// No description provided for @infoSendLocationEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'send-location-enabled'**
+  String get infoSendLocationEnabled;
+
+  /// No description provided for @infoLgce.
+  ///
+  /// In en, this message translates to:
+  /// **'lgce'**
+  String get infoLgce;
+
+  /// No description provided for @infoWud.
+  ///
+  /// In en, this message translates to:
+  /// **'wud'**
+  String get infoWud;
+
+  /// No description provided for @infoVideoMsgEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'video-msg-enabled'**
+  String get infoVideoMsgEnabled;
+
+  /// No description provided for @infoGrse.
+  ///
+  /// In en, this message translates to:
+  /// **'grse'**
+  String get infoGrse;
+
+  /// No description provided for @infoEditTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'edit-timeout'**
+  String get infoEditTimeout;
+
+  /// No description provided for @infoImageQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'image-quality'**
+  String get infoImageQuality;
+
+  /// No description provided for @infoUnsafeFilesAlert.
+  ///
+  /// In en, this message translates to:
+  /// **'unsafe-files-alert'**
+  String get infoUnsafeFilesAlert;
+
+  /// No description provided for @infoAccountNicknameEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'account-nickname-enabled'**
+  String get infoAccountNicknameEnabled;
+
+  /// No description provided for @infoMentionsEntityNamesLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'mentions_entity_names_limit'**
+  String get infoMentionsEntityNamesLimit;
+
+  /// No description provided for @infoReactionsEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'reactions-enabled'**
+  String get infoReactionsEnabled;
+
+  /// No description provided for @infoTile.
+  ///
+  /// In en, this message translates to:
+  /// **'tile'**
+  String get infoTile;
+
+  /// No description provided for @infoGeocoder.
+  ///
+  /// In en, this message translates to:
+  /// **'geocoder'**
+  String get infoGeocoder;
+
+  /// No description provided for @infoStatic.
+  ///
+  /// In en, this message translates to:
+  /// **'static'**
+  String get infoStatic;
+
+  /// No description provided for @chatInfoSubscribers.
+  ///
+  /// In en, this message translates to:
+  /// **'subscribers:'**
+  String get chatInfoSubscribers;
+
+  /// No description provided for @chatInfoInvitedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'invited by:'**
+  String get chatInfoInvitedBy;
+
+  /// No description provided for @chatInfoLink.
+  ///
+  /// In en, this message translates to:
+  /// **'link:'**
+  String get chatInfoLink;
+
+  /// No description provided for @chatInfoOfficial.
+  ///
+  /// In en, this message translates to:
+  /// **'official:'**
+  String get chatInfoOfficial;
+
+  /// No description provided for @chatInfoComments.
+  ///
+  /// In en, this message translates to:
+  /// **'comments:'**
+  String get chatInfoComments;
+
+  /// No description provided for @chatInfoAplus.
+  ///
+  /// In en, this message translates to:
+  /// **'approved by Roskomnadzor:'**
+  String get chatInfoAplus;
+
+  /// No description provided for @chatInfoSignAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'admin signature:'**
+  String get chatInfoSignAdmin;
+
+  /// No description provided for @chatInfoLastChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'last changed:'**
+  String get chatInfoLastChanged;
+
+  /// No description provided for @chatInfoJoinTime.
+  ///
+  /// In en, this message translates to:
+  /// **'joined:'**
+  String get chatInfoJoinTime;
+
+  /// No description provided for @chatInfoCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'created:'**
+  String get chatInfoCreated;
+
+  /// No description provided for @chatInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get chatInfoTitle;
+
+  /// No description provided for @chatInfoMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'members:'**
+  String get chatInfoMembers;
+
+  /// No description provided for @chatInfoLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'last seen recently'**
+  String get chatInfoLastSeen;
+
+  /// No description provided for @chatInfoHasBots.
+  ///
+  /// In en, this message translates to:
+  /// **'has bots:'**
+  String get chatInfoHasBots;
+
+  /// No description provided for @chatInfoBlockedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'blocked in group:'**
+  String get chatInfoBlockedCount;
+
+  /// No description provided for @chatInfoOfficialStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'official status:'**
+  String get chatInfoOfficialStatus;
+
+  /// No description provided for @chatInfoJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'joined:'**
+  String get chatInfoJoined;
+
+  /// No description provided for @chatInfoGroupCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'group created:'**
+  String get chatInfoGroupCreated;
+
+  /// No description provided for @chatInfoGroupOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'group owner:'**
+  String get chatInfoGroupOwner;
+
+  /// No description provided for @chatInfoDialogStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'dialog started:'**
+  String get chatInfoDialogStarted;
 }
 
 class _AppLocalizationsDelegate

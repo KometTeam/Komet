@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -71,6 +73,7 @@ class KometAppState extends State<KometApp> {
 
   late Locale _locale;
   bool _isLoggingOut = false;
+  StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
     widget.initialFpsOverlay,
   );
@@ -83,15 +86,16 @@ class KometAppState extends State<KometApp> {
     api.setReconnectCallback(() async {
       try {
         final accountId = await TokenStorage.getActiveAccountId();
-        if (accountId != null &&
-            await TokenStorage.readToken(accountId) != null) {
+        if (accountId != null) {
           final token = await TokenStorage.readToken(accountId);
-          await accountModule.login(accountId: accountId, token: token);
+          if (token != null) {
+            await accountModule.login(accountId: accountId, token: token);
+          }
         }
       } catch (_) {}
     });
 
-    api.sessionExpiredStream.listen((SessionExpiredException e) async {
+    _sessionExpiredSub = api.sessionExpiredStream.listen((SessionExpiredException e) async {
       if (_isLoggingOut) return;
       _isLoggingOut = true;
 
@@ -118,6 +122,7 @@ class KometAppState extends State<KometApp> {
 
   @override
   void dispose() {
+    _sessionExpiredSub?.cancel();
     fpsOverlayEnabled.dispose();
     super.dispose();
   }
