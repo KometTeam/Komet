@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -93,6 +94,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   final List<ScrollController> _folderChatScrollControllers = [];
   final List<VoidCallback> _folderChatScrollListenerFns = [];
   final Set<String> _selectedChats = {};
+  final Set<int> _inflightContactIds = {};
 
   DateTime _storiesRevealLayoutSettleUntil =
       DateTime.fromMillisecondsSinceEpoch(0);
@@ -157,14 +159,11 @@ class _ChatListScreenState extends State<ChatListScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    _navPageAnimController =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 350),
-          value: 1.0,
-        )..addListener(() {
-          if (mounted) setState(() {});
-        });
+    _navPageAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+      value: 1.0,
+    );
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -262,6 +261,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
           _isInitialLoading = false;
         });
+        _prefetchContactsForChats(chats);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _jumpFolderPageToSelection();
@@ -313,6 +313,33 @@ class _ChatListScreenState extends State<ChatListScreen>
       if (j >= 0) return j;
     }
     return 0;
+  }
+
+  void _prefetchContactsForChats(List<CachedChat> chats) {
+    final myId = _profile?.id;
+    final ids = <int>{};
+    for (final chat in chats) {
+      if (chat.type == 'DIALOG' && chat.id != 0) {
+        for (final entry in chat.participants.entries) {
+          if (entry.key != myId) {
+            ids.add(entry.key);
+            break;
+          }
+        }
+      }
+      final senderId = chat.lastMsgSenderId;
+      if (senderId != null) ids.add(senderId);
+    }
+    ids.removeWhere((id) => ContactCache.get(id) != null);
+    ids.removeAll(_inflightContactIds);
+    if (ids.isEmpty) return;
+    _inflightContactIds.addAll(ids);
+    for (final id in ids) {
+      messagesModule.searchContactById(id).whenComplete(() {
+        _inflightContactIds.remove(id);
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
@@ -1028,7 +1055,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                 final chat = chats[index];
 
                 if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
-                  final secondId = chat.participants.entries.where((entry) => entry.key != _profile?.id).first.key;
+                  final secondId = chat.participants.entries
+                      .where((entry) => entry.key != _profile?.id)
+                      .first
+                      .key;
                   final name = ContactCache.get(secondId);
                   final avatar = ContactCache.getAvatar(secondId);
 
@@ -1354,17 +1384,6 @@ class _ChatListScreenState extends State<ChatListScreen>
               return lo + 4;
             }
 
-            final pageDisplayT = _effectivePageNavRowT(
-              inactiveWidth: inactiveWidth,
-              bubbleLeftForIndex: bubbleLeftForPageT,
-            );
-
-            final showChatsFab =
-                !_isSelectionMode &&
-                (_navDragging || _navPageAnimController.isAnimating
-                    ? pageDisplayT < 1.0
-                    : _currentNavIndex == 0);
-
             return Stack(
               children: [
                 ClipRect(
@@ -1378,8 +1397,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                       child: SizedBox(
                         width: pageW * 4,
                         height: pageH,
-                        child: Transform.translate(
-                          offset: Offset(-pageDisplayT * pageW, 0),
+                        child: AnimatedBuilder(
+                          animation: _navPageAnimController,
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -1413,15 +1432,37 @@ class _ChatListScreenState extends State<ChatListScreen>
                               ),
                             ],
                           ),
+                          builder: (context, child) {
+                            final pageDisplayT = _effectivePageNavRowT(
+                              inactiveWidth: inactiveWidth,
+                              bubbleLeftForIndex: bubbleLeftForPageT,
+                            );
+                            return Transform.translate(
+                              offset: Offset(-pageDisplayT * pageW, 0),
+                              child: child,
+                            );
+                          },
                         ),
                       ),
                     ),
                   ),
                 ),
                 _buildDockedBottomNav(cs, navInnerW, bottomInset),
-                ListenableBuilder(
-                  listenable: _fabController,
-                  builder: (context, child) {
+                AnimatedBuilder(
+                  animation: Listenable.merge([
+                    _fabController,
+                    _navPageAnimController,
+                  ]),
+                  builder: (context, _) {
+                    final pageDisplayT = _effectivePageNavRowT(
+                      inactiveWidth: inactiveWidth,
+                      bubbleLeftForIndex: bubbleLeftForPageT,
+                    );
+                    final showChatsFab =
+                        !_isSelectionMode &&
+                        (_navDragging || _navPageAnimController.isAnimating
+                            ? pageDisplayT < 1.0
+                            : _currentNavIndex == 0);
                     final double val = Curves.easeOutCubic.transform(
                       _fabController.value,
                     );
@@ -1563,7 +1604,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
                 child: CircleAvatar(
                   radius: 26,
-                  backgroundImage: NetworkImage(imageUrl),
+                  backgroundImage: CachedNetworkImageProvider(imageUrl),
                 ),
               ),
               const SizedBox(height: 6),
@@ -1717,7 +1758,7 @@ Navigator.push(
                     radius: 24,
                     backgroundColor: cs.surfaceContainerHighest,
                     backgroundImage: imageUrl.isNotEmpty
-                        ? NetworkImage(imageUrl)
+                        ? CachedNetworkImageProvider(imageUrl)
                         : null,
                     child: imageUrl.isEmpty
                         ? Text(
@@ -2019,7 +2060,7 @@ Navigator.push(
         ),
         child: CircleAvatar(
           radius: 12,
-          backgroundImage: NetworkImage(imageUrl),
+          backgroundImage: CachedNetworkImageProvider(imageUrl),
         ),
       ),
     );

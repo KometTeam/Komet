@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -333,10 +334,11 @@ child: _buildSection(
             ),
             child: ClipOval(
               child: _profile?.baseUrl != null && _profile!.baseUrl!.isNotEmpty
-                  ? Image.network(
-                      _profile!.baseUrl!,
+                  ? CachedNetworkImage(
+                      imageUrl: _profile!.baseUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
+                      fadeInDuration: const Duration(milliseconds: 120),
+                      errorWidget: (context, url, error) =>
                           _buildPlaceholderAvatar(cs, name),
                     )
                   : _buildPlaceholderAvatar(cs, name),
@@ -514,7 +516,21 @@ class _PhoneSpoilerState extends State<_PhoneSpoiler>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat();
+    );
+    if (!widget.isVisible) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PhoneSpoiler oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isVisible == oldWidget.isVisible) return;
+    if (widget.isVisible) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override

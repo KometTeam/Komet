@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/contacts.dart';
@@ -314,7 +315,7 @@ class MessageBubble extends StatelessWidget {
                   ? [
                       CircleAvatar(
                         radius: 15,
-                        backgroundImage: NetworkImage(senderAvatar),
+                        backgroundImage: CachedNetworkImageProvider(senderAvatar),
                         backgroundColor: cs.primaryContainer,
                       )
                     ]
@@ -455,7 +456,7 @@ class MessageBubble extends StatelessWidget {
             if (senderAvatar != null && senderAvatar.isNotEmpty)
               CircleAvatar(
                 radius: 10,
-                backgroundImage: NetworkImage(senderAvatar),
+                backgroundImage: CachedNetworkImageProvider(senderAvatar),
                 backgroundColor: cs.primaryContainer,
               )
             else
@@ -707,7 +708,7 @@ class MessageBubble extends StatelessWidget {
               if (senderAvatar != null && senderAvatar.isNotEmpty)
                 CircleAvatar(
                   radius: 10,
-                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundImage: CachedNetworkImageProvider(senderAvatar),
                   backgroundColor: cs.primaryContainer,
                 )
               else
@@ -780,7 +781,7 @@ class MessageBubble extends StatelessWidget {
               if (senderAvatar != null && senderAvatar.isNotEmpty)
                 CircleAvatar(
                   radius: 10,
-                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundImage: CachedNetworkImageProvider(senderAvatar),
                   backgroundColor: cs.primaryContainer,
                 )
               else
@@ -846,7 +847,7 @@ class MessageBubble extends StatelessWidget {
               if (senderAvatar != null && senderAvatar.isNotEmpty)
                 CircleAvatar(
                   radius: 10,
-                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundImage: CachedNetworkImageProvider(senderAvatar),
                   backgroundColor: cs.primaryContainer,
                 )
               else
@@ -912,12 +913,13 @@ class MessageBubble extends StatelessWidget {
       child: Stack(
         children: [
           if (imageUrl.isNotEmpty)
-            Image.network(
-              imageUrl,
+            CachedNetworkImage(
+              imageUrl: imageUrl,
               width: constrainedWidth,
               height: constrainedHeight,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildPhotoPlaceholder(
+              fadeInDuration: const Duration(milliseconds: 120),
+              errorWidget: (_, __, ___) => _buildPhotoPlaceholder(
                 ctx,
                 constrainedWidth,
                 constrainedHeight,
@@ -1016,12 +1018,13 @@ class MessageBubble extends StatelessWidget {
         child: Stack(
           children: [
             if (imageUrl.isNotEmpty)
-              Image.network(
-                imageUrl,
+              CachedNetworkImage(
+                imageUrl: imageUrl,
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
-                errorBuilder: (_, __, ___) =>
+                fadeInDuration: const Duration(milliseconds: 120),
+                errorWidget: (_, __, ___) =>
                     _buildPhotoPlaceholder(ctx, 100, 100),
               )
             else
@@ -1050,12 +1053,13 @@ class MessageBubble extends StatelessWidget {
         child: Stack(
           children: [
             if (imageUrl.isNotEmpty)
-              Image.network(
-                imageUrl,
+              CachedNetworkImage(
+                imageUrl: imageUrl,
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
-                errorBuilder: (_, __, ___) =>
+                fadeInDuration: const Duration(milliseconds: 120),
+                errorWidget: (_, __, ___) =>
                     _buildPhotoPlaceholder(ctx, 100, 100),
               )
             else
@@ -1277,12 +1281,13 @@ class MessageBubble extends StatelessWidget {
       child: Stack(
         children: [
           if (preview.isNotEmpty)
-            Image.network(
-              preview,
+            CachedNetworkImage(
+              imageUrl: preview,
               width: 150,
               height: 150,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
+              fadeInDuration: const Duration(milliseconds: 120),
+              errorWidget: (_, __, ___) =>
                   _buildPhotoPlaceholder(ctx, 150, 150),
             )
           else
@@ -1334,10 +1339,11 @@ class MessageBubble extends StatelessWidget {
             child: photoUrl != null && photoUrl.isNotEmpty
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(24),
-                    child: Image.network(
-                      photoUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: photoUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
+                      fadeInDuration: const Duration(milliseconds: 120),
+                      errorWidget: (_, __, ___) => Icon(
                         Symbols.person,
                         color: isMe ? Colors.white : cs.primary,
                         size: 24,
@@ -1436,7 +1442,7 @@ class MessageBubble extends StatelessWidget {
               if (senderAvatar != null && senderAvatar.isNotEmpty)
                 CircleAvatar(
                   radius: 10,
-                  backgroundImage: NetworkImage(senderAvatar),
+                  backgroundImage: CachedNetworkImageProvider(senderAvatar),
                   backgroundColor: cs.primaryContainer,
                 )
               else
@@ -1479,10 +1485,11 @@ class MessageBubble extends StatelessWidget {
                 child: photoUrl != null && photoUrl.isNotEmpty
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(24),
-                        child: Image.network(
-                          photoUrl,
+                        child: CachedNetworkImage(
+                          imageUrl: photoUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Icon(
+                          fadeInDuration: const Duration(milliseconds: 120),
+                          errorWidget: (_, __, ___) => Icon(
                             Symbols.person,
                             color: isMe ? Colors.white : cs.primary,
                             size: 24,

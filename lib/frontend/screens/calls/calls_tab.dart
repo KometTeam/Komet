@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show api;
@@ -166,10 +167,11 @@ class _CallsTabState extends State<CallsTab> {
                 ),
                 child: ClipOval(
                   child: call.avatarUrl != null && call.avatarUrl!.isNotEmpty
-                      ? Image.network(
-                          call.avatarUrl!,
+                      ? CachedNetworkImage(
+                          imageUrl: call.avatarUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
+                          fadeInDuration: const Duration(milliseconds: 120),
+                          errorWidget: (context, url, error) =>
                               _buildPlaceholderAvatar(cs, call.name),
                         )
                       : _buildPlaceholderAvatar(cs, call.name),

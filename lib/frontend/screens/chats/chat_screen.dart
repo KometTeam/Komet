@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -258,18 +259,18 @@ class _ChatScreenState extends State<ChatScreen>
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(kToolbarHeight), 
+        preferredSize: Size.fromHeight(kToolbarHeight),
         child: InkWell(
           onTap: () => Navigator.push(
-            context, 
+            context,
             MaterialPageRoute(builder: (context) => ChatInfoScreen(
-              chatId: widget.chatId, 
+              chatId: widget.chatId,
               name: widget.name,
               imageUrl: widget.imageUrl,
               chatType: widget.chatType)
             )
           ),
-          child:  AppBar(
+          child: AppBar(
             backgroundColor: cs.surfaceContainerHigh,
             foregroundColor: cs.onSurface,
             elevation: 0,
@@ -285,7 +286,7 @@ class _ChatScreenState extends State<ChatScreen>
                 if (widget.imageUrl.isNotEmpty)
                   CircleAvatar(
                     radius: 18,
-                    backgroundImage: NetworkImage(widget.imageUrl),
+                    backgroundImage: CachedNetworkImageProvider(widget.imageUrl),
                   )
                 else
                   CircleAvatar(
