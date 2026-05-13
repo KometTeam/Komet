@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -270,7 +271,7 @@ class _ChatScreenState extends State<ChatScreen>
             if (widget.imageUrl.isNotEmpty)
               CircleAvatar(
                 radius: 18,
-                backgroundImage: NetworkImage(widget.imageUrl),
+                backgroundImage: CachedNetworkImageProvider(widget.imageUrl),
               )
             else
               CircleAvatar(
