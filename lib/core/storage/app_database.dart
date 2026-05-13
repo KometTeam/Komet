@@ -98,7 +98,7 @@ class ProfileData {
     );
   }
 
-  Map<String, dynamic> toDbRow() => {
+  Map<String, dynamic> toDbRow({bool isActive = false}) => {
     'id': id,
     'first_name': firstName,
     'last_name': lastName,
@@ -109,6 +109,7 @@ class ProfileData {
     'country': country,
     'account_status': accountStatus,
     'update_time': updateTime,
+    'is_active': isActive ? 1 : 0,
     'profile_options': profileOptions?.join(','),
   };
 }
@@ -280,11 +281,11 @@ class AppDatabase {
     )
   ''';
 
-  static Future<void> saveProfile(ProfileData profile) async {
+  static Future<void> saveProfile(ProfileData profile, {bool isActive = true}) async {
     final db = await _instance;
     await db.insert(
       'profile',
-      profile.toDbRow(),
+      profile.toDbRow(isActive: isActive),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }

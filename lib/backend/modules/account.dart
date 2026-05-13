@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart' show Locale;
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
@@ -429,6 +430,82 @@ class AccountModule {
       await AppDatabase.savePrivacyConfig(accountId, config.toJson());
     }
     return config;
+  }
+
+  Future<ProfileData> updateProfileName(String firstName, String? lastName) async {
+    _ensureOnline();
+    final payload = <dynamic, dynamic>{
+      'firstName': firstName,
+    };
+    if (lastName != null) payload['lastName'] = lastName;
+    final packet = await _api.sendRequest(Opcode.profile, payload);
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final profile = data['profile'] as Map?;
+    if (profile == null) throw Exception('No profile in response');
+    final contact = profile['contact'] as Map?;
+    if (contact == null) throw Exception('No contact in response');
+    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(newProfile, isActive: true);
+    return newProfile;
+  }
+
+  Future<ProfileData> updateProfileAvatar(String photoToken, String avatarType) async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.profile, {
+      'photoToken': photoToken,
+      'avatarType': avatarType,
+    });
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final profile = data['profile'] as Map?;
+    if (profile == null) throw Exception('No profile in response');
+    final contact = profile['contact'] as Map?;
+    if (contact == null) throw Exception('No contact in response');
+    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(newProfile, isActive: true);
+    return newProfile;
+  }
+
+  Future<String> getAvatarUploadUrl() async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.photoUpload, {
+      'count': 1,
+      'profile': true,
+    });
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final url = data['url'] as String?;
+    if (url == null) throw Exception('No url in response');
+    return url;
+  }
+
+  Future<ProfileData> removeProfilePhoto(int photoId) async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.removeContactPhoto, {
+      'photoId': photoId,
+    });
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final profile = data['profile'] as Map?;
+    if (profile == null) throw Exception('No profile in response');
+    final contact = profile['contact'] as Map?;
+    if (contact == null) throw Exception('No contact in response');
+    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(newProfile, isActive: true);
+    return newProfile;
   }
 
   // 2FA Creation (when not set)
@@ -931,7 +1008,7 @@ class AccountModule {
       throw Exception('login: отсутствует profile.contact в ответе');
     }
     final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-    await AppDatabase.saveProfile(profile);
+    await AppDatabase.saveProfile(profile, isActive: true);
     await AppDatabase.setActiveAccount(profile.id);
 
     await _saveSyncState(data, serverTime, profile.id);

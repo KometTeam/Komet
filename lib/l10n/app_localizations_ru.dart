@@ -453,4 +453,19 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatInfoDialogStarted => 'ЛС начат в:';
+
+  @override
+  String get editProfileTitle => 'Редактирование профиля';
+
+  @override
+  String get editProfileSave => 'Сохранить';
+
+  @override
+  String get editProfileFirstName => 'Имя';
+
+  @override
+  String get editProfileLastName => 'Фамилия';
+
+  @override
+  String get editProfileRemovePhoto => 'Удалить фото';
 }
