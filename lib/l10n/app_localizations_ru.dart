@@ -291,4 +291,166 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get profileMenuSpoof => 'Подмена данных';
+
+  @override
+  String get infoTitle => 'Info';
+
+  @override
+  String get infoAccountSection => 'Аккаунт';
+
+  @override
+  String get infoServerSection => 'Сервер';
+
+  @override
+  String get infoUserSection => 'Пользователь';
+
+  @override
+  String get infoYMapSection => 'Y-Map';
+
+  @override
+  String get infoFileUploadTypes => 'запрещённые типы файлов';
+
+  @override
+  String get infoWhiteListLinks => 'безопасные ссылки';
+
+  @override
+  String get infoRegistrationTime => 'Дата регистрации:';
+
+  @override
+  String get infoCountry => 'Регион аккаунта:';
+
+  @override
+  String get infoVideoChatHistory => 'videoChatHistory';
+
+  @override
+  String get infoUpdateTime => 'Последнее обновление аватарки:';
+
+  @override
+  String get infoId => 'id аккаунта:';
+
+  @override
+  String get infoChatMarker => 'chatMarker';
+
+  @override
+  String get infoAccountRemovalEnabled => 'Мгновенное удаление аккаунта:';
+
+  @override
+  String get infoImageSize => 'image-size';
+
+  @override
+  String get infoGce => 'gce';
+
+  @override
+  String get infoGcce => 'gcce';
+
+  @override
+  String get infoMaxMsgLength => 'макс. длина сообщения:';
+
+  @override
+  String get infoQuotesEnabled => 'quotes-enabled';
+
+  @override
+  String get infoCallsEndpoint => 'calls-endpoint';
+
+  @override
+  String get infoSendLocationEnabled => 'отправка гео.:';
+
+  @override
+  String get infoLgce => 'lgce';
+
+  @override
+  String get infoWud => 'wud';
+
+  @override
+  String get infoVideoMsgEnabled => 'Кружки:';
+
+  @override
+  String get infoGrse => 'grse';
+
+  @override
+  String get infoEditTimeout => 'Можно редактировать сообщение в течении:';
+
+  @override
+  String get infoImageQuality => 'image-quality';
+
+  @override
+  String get infoUnsafeFilesAlert => 'unsafe-files-alert';
+
+  @override
+  String get infoAccountNicknameEnabled => 'account-nickname-enabled';
+
+  @override
+  String get infoMentionsEntityNamesLimit => 'макс. кол-во упоминаний:';
+
+  @override
+  String get infoReactionsEnabled => 'reactions-enabled';
+
+  @override
+  String get infoTile => 'tile';
+
+  @override
+  String get infoGeocoder => 'geocoder';
+
+  @override
+  String get infoStatic => 'static';
+
+  @override
+  String get chatInfoSubscribers => 'подписчиков:';
+
+  @override
+  String get chatInfoInvitedBy => 'Приглашён от:';
+
+  @override
+  String get chatInfoLink => 'ссылка:';
+
+  @override
+  String get chatInfoOfficial => 'оффициальный:';
+
+  @override
+  String get chatInfoComments => 'комментарии:';
+
+  @override
+  String get chatInfoAplus => 'подтверждён Роскомнадзором:';
+
+  @override
+  String get chatInfoSignAdmin => 'Подпись админов:';
+
+  @override
+  String get chatInfoLastChanged => 'последнее изменение:';
+
+  @override
+  String get chatInfoJoinTime => 'заход в канал:';
+
+  @override
+  String get chatInfoCreated => 'канал создан:';
+
+  @override
+  String get chatInfoTitle => 'Информация';
+
+  @override
+  String get chatInfoMembers => 'участников:';
+
+  @override
+  String get chatInfoLastSeen => 'был(а) недавно';
+
+  @override
+  String get chatInfoHasBots => 'Есть боты:';
+
+  @override
+  String get chatInfoBlockedCount => 'в ЧС группы:';
+
+  @override
+  String get chatInfoOfficialStatus => 'Официальный статус:';
+
+  @override
+  String get chatInfoJoined => 'Зашли в:';
+
+  @override
+  String get chatInfoGroupCreated => 'Группа создана в:';
+
+  @override
+  String get chatInfoGroupOwner => 'Создатель группы:';
+
+  @override
+  String get chatInfoDialogStarted => 'ЛС начат в:';
 }
