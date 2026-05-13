@@ -115,11 +115,11 @@ class _InfoScreenState extends State<InfoScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         _buildSectionTitle(l10n.infoAccountSection, cs),
-        ...accountKeys.entries.map((e) => _buildRow(e.key, e.value, _formatValue(info[e.key]), cs)),
+        ...accountKeys.entries.map((e) => _buildRow(e.key, e.value, _formatValue(info[e.key], e.key), cs)),
 
         const SizedBox(height: 16),
         _buildSectionTitle(l10n.infoServerSection, cs),
-        ...serverKeys.entries.map((e) => _buildRow(e.key, e.value, _formatValue(server?[e.key]), cs)),
+        ...serverKeys.entries.map((e) => _buildRow(e.key, e.value, _formatValue(server?[e.key], e.key), cs)),
 
         const SizedBox(height: 8),
         _buildSectionTitle(l10n.infoYMapSection, cs),
@@ -240,34 +240,30 @@ class _InfoScreenState extends State<InfoScreen> {
     );
   }
 
-  String _formatValue(dynamic value) {
+  String _formatValue(dynamic value, String key) {
     if (value == null) return '-';
     if (value is Map && value.containsKey('chatMarker')) {
       final ts = value['chatMarker'] as int?;
-      if (ts != null) {
-        final dt = DateTime.fromMillisecondsSinceEpoch(ts);
-        return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
-            '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
-      }
-      return '-';
+      return ts != null ? _formatTs(ts) : '-';
     }
-    if (value is int && value > 1000000000000) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(value);
-      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
-          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
-    }
-    if (value is int && value > 86400) {
+    if (value is int && value > 1000000000000) return _formatTs(value);
+    if (key == 'edit-timeout' && value is int && value > 0) {
       final weeks = value ~/ 604800;
       final days = (value % 604800) ~/ 86400;
-      if (weeks > 0) {
-        return '$weeks ${_w(weeks)} ${days > 0 ? '$days ${_d(days)}' : ''}'.trim();
-      }
+      if (weeks > 0) return '$weeks ${_w(weeks)} ${days > 0 ? '$days ${_d(days)}' : ''}'.trim();
       final h = value ~/ 3600;
       final m = (value % 3600) ~/ 60;
       if (h > 0) return '${h}h ${m}m';
       return '${m}m';
     }
     return value.toString();
+  }
+
+  String _formatTs(int ts) {
+    if (ts < 1000000000000) return ts.toString();
+    final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
   }
 
   String _w(int n) {

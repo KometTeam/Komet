@@ -159,5 +159,10 @@
   "chatInfoJoined": "Зашли в:",
   "chatInfoGroupCreated": "Группа создана в:",
   "chatInfoGroupOwner": "Создатель группы:",
-  "chatInfoDialogStarted": "ЛС начат в:"
+  "chatInfoDialogStarted": "ЛС начат в:",
+  "editProfileTitle": "Редактирование профиля",
+  "editProfileSave": "Сохранить",
+  "editProfileFirstName": "Имя",
+  "editProfileLastName": "Фамилия",
+  "editProfileRemovePhoto": "Удалить фото"
 }

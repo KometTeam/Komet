@@ -6,9 +6,11 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../main.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
+import 'edit_profile_screen.dart';
 import 'info_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
@@ -27,17 +29,25 @@ class _SettingsTabState extends State<SettingsTab> {
   bool _debugMenuVisible = false;
   int _versionSecretTapCount = 0;
   Timer? _versionSecretTapResetTimer;
+  StreamSubscription? _profileUpdateSub;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
     _loadAppVersion();
+    final appState = KometApp.stateOf(context);
+    if (appState != null) {
+      _profileUpdateSub = appState.profileUpdateStream.listen((_) {
+        if (mounted) _loadProfile();
+      });
+    }
   }
 
   @override
   void dispose() {
     _versionSecretTapResetTimer?.cancel();
+    _profileUpdateSub?.cancel();
     super.dispose();
   }
 
@@ -317,7 +327,14 @@ child: _buildSection(
                   size: 22,
                   weight: 400,
                 ),
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const EditProfileScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),

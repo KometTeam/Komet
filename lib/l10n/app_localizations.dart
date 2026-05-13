@@ -955,6 +955,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'dialog started:'**
   String get chatInfoDialogStarted;
+
+  /// No description provided for @editProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get editProfileTitle;
+
+  /// No description provided for @editProfileSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get editProfileSave;
+
+  /// No description provided for @editProfileFirstName.
+  ///
+  /// In en, this message translates to:
+  /// **'First name'**
+  String get editProfileFirstName;
+
+  /// No description provided for @editProfileLastName.
+  ///
+  /// In en, this message translates to:
+  /// **'Last name'**
+  String get editProfileLastName;
+
+  /// No description provided for @editProfileRemovePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get editProfileRemovePhoto;
 }
 
 class _AppLocalizationsDelegate
