@@ -289,4 +289,166 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileMenuSpoof => 'Spoofing';
+
+  @override
+  String get infoTitle => 'Info';
+
+  @override
+  String get infoAccountSection => 'Account';
+
+  @override
+  String get infoServerSection => 'Server';
+
+  @override
+  String get infoUserSection => 'User';
+
+  @override
+  String get infoYMapSection => 'Y-Map';
+
+  @override
+  String get infoFileUploadTypes => 'file-upload-unsupported-types';
+
+  @override
+  String get infoWhiteListLinks => 'white-list-links';
+
+  @override
+  String get infoRegistrationTime => 'registrationTime';
+
+  @override
+  String get infoCountry => 'country';
+
+  @override
+  String get infoVideoChatHistory => 'videoChatHistory';
+
+  @override
+  String get infoUpdateTime => 'updateTime';
+
+  @override
+  String get infoId => 'id';
+
+  @override
+  String get infoChatMarker => 'chatMarker';
+
+  @override
+  String get infoAccountRemovalEnabled => 'account-removal-enabled';
+
+  @override
+  String get infoImageSize => 'image-size';
+
+  @override
+  String get infoGce => 'gce';
+
+  @override
+  String get infoGcce => 'gcce';
+
+  @override
+  String get infoMaxMsgLength => 'max-msg-length';
+
+  @override
+  String get infoQuotesEnabled => 'quotes-enabled';
+
+  @override
+  String get infoCallsEndpoint => 'calls-endpoint';
+
+  @override
+  String get infoSendLocationEnabled => 'send-location-enabled';
+
+  @override
+  String get infoLgce => 'lgce';
+
+  @override
+  String get infoWud => 'wud';
+
+  @override
+  String get infoVideoMsgEnabled => 'video-msg-enabled';
+
+  @override
+  String get infoGrse => 'grse';
+
+  @override
+  String get infoEditTimeout => 'edit-timeout';
+
+  @override
+  String get infoImageQuality => 'image-quality';
+
+  @override
+  String get infoUnsafeFilesAlert => 'unsafe-files-alert';
+
+  @override
+  String get infoAccountNicknameEnabled => 'account-nickname-enabled';
+
+  @override
+  String get infoMentionsEntityNamesLimit => 'mentions_entity_names_limit';
+
+  @override
+  String get infoReactionsEnabled => 'reactions-enabled';
+
+  @override
+  String get infoTile => 'tile';
+
+  @override
+  String get infoGeocoder => 'geocoder';
+
+  @override
+  String get infoStatic => 'static';
+
+  @override
+  String get chatInfoSubscribers => 'subscribers:';
+
+  @override
+  String get chatInfoInvitedBy => 'invited by:';
+
+  @override
+  String get chatInfoLink => 'link:';
+
+  @override
+  String get chatInfoOfficial => 'official:';
+
+  @override
+  String get chatInfoComments => 'comments:';
+
+  @override
+  String get chatInfoAplus => 'approved by Roskomnadzor:';
+
+  @override
+  String get chatInfoSignAdmin => 'admin signature:';
+
+  @override
+  String get chatInfoLastChanged => 'last changed:';
+
+  @override
+  String get chatInfoJoinTime => 'joined:';
+
+  @override
+  String get chatInfoCreated => 'created:';
+
+  @override
+  String get chatInfoTitle => 'Info';
+
+  @override
+  String get chatInfoMembers => 'members:';
+
+  @override
+  String get chatInfoLastSeen => 'last seen recently';
+
+  @override
+  String get chatInfoHasBots => 'has bots:';
+
+  @override
+  String get chatInfoBlockedCount => 'blocked in group:';
+
+  @override
+  String get chatInfoOfficialStatus => 'official status:';
+
+  @override
+  String get chatInfoJoined => 'joined:';
+
+  @override
+  String get chatInfoGroupCreated => 'group created:';
+
+  @override
+  String get chatInfoGroupOwner => 'group owner:';
+
+  @override
+  String get chatInfoDialogStarted => 'dialog started:';
 }

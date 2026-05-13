@@ -124,6 +124,7 @@ abstract class SyncKey {
   static const configHash = 'config_hash';
   static const chatCacheFingerprint = 'chat_cache_fingerprint';
   static const serverTime = 'server_time';
+  static const loginInfo = 'login_info';
 }
 
 class AppDatabase {
@@ -390,6 +391,19 @@ class AppDatabase {
     );
     if (rows.isEmpty) return null;
     return rows.first['value'] as String;
+  }
+
+  static Future<void> saveLoginInfo(int accountId, String jsonInfo) async {
+    final db = await _instance;
+    await db.insert('sync_state', {
+      'account_id': accountId,
+      'key': SyncKey.loginInfo,
+      'value': jsonInfo,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<String?> getLoginInfo(int accountId) async {
+    return getSyncValue(accountId, SyncKey.loginInfo);
   }
 
   static Future<void> close() async {

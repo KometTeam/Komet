@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
+import '../api.dart';
 
 Map<int, int> _parseParticipants(dynamic raw) {
   try {
@@ -303,5 +305,25 @@ class ChatsModule {
     if (nameRaw is! Map) return null;
     final name = nameRaw;
     return name['name'] as String?;
+  }
+
+  static Future<Map<String, dynamic>?> getChatInfo(Api api, int chatId) async {
+    final packet = await api.sendRequest(Opcode.chatInfo, {
+      'chatIds': [chatId],
+    });
+    if (packet.isError) return null;
+    final payload = packet.payload as Map?;
+    final chats = payload?['chats'] as List?;
+    if (chats == null || chats.isEmpty) return null;
+    return Map<String, dynamic>.from(chats.first as Map);
+  }
+
+  static Future<dynamic> searchById(Api api, int userId) async {
+    final packet = await api.sendRequest(Opcode.publicSearch, {
+      'query': userId.toString(),
+      'from': 0,
+      'count': 10,
+    });
+    return packet.payload;
   }
 }

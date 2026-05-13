@@ -222,6 +222,7 @@ class _SecurityScreenState extends State<SecurityScreen>
       case 'CONTACTS':
         return 'Мои контакты';
       case 'NONE':
+      case 'NOBODY':
         return 'Никто';
       default:
         return value;
@@ -481,8 +482,30 @@ class _SecurityScreenState extends State<SecurityScreen>
               icon: Icons.visibility_off_outlined,
               label: 'Видеть статус «в сети»',
               value: _privacyConfig?.hidden == true ? 'Никто' : 'Мои контакты',
-              isLast: true,
+              isLast: false,
               onTap: () => _showHiddenStatusSheet(context, cs),
+            ),
+            _buildOptionRow(
+              cs,
+              icon: Symbols.contact_page,
+              label: 'Видеть мой номер',
+              value: _getPrivacyLabel(
+                _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
+              ),
+              isLast: true,
+              onTap: () => _showOptionSheet(
+                context,
+                cs,
+                title: 'Видеть мой номер',
+                currentValue: _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
+                options: const [
+                  ('ALL', 'Все'),
+                  ('CONTACTS', 'Мои контакты'),
+                  ('NOBODY', 'Никто'),
+                ],
+                onSelect: (value) =>
+                    _updateSetting('PHONE_NUMBER_PRIVACY', value),
+              ),
             ),
           ],
         ],
