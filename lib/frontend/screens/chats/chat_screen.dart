@@ -384,6 +384,7 @@ class _ChatScreenState extends State<ChatScreen>
       itemCount: _messages.length,
       itemBuilder: (context, index) {
         final message = _messages[_messages.length - 1 - index];
+        debugPrint('LIST_ITEM: ${message.id} isControl=${message.isControl} hasAttach=${message.attachments != null}');
         final isMe = message.senderId == _myId;
         final prevMessage = index < _messages.length - 1
             ? _messages[_messages.length - 2 - index]

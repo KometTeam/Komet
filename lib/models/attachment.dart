@@ -431,6 +431,7 @@ class ControlAttachment extends MessageAttachment {
   final String? event;
   final String? title;
   final List<int>? userIds;
+  final int? userId;
 
   const ControlAttachment({
     super.previewData,
@@ -439,15 +440,22 @@ class ControlAttachment extends MessageAttachment {
     this.event,
     this.title,
     this.userIds,
+    this.userId,
   }) : super(type: AttachmentType.control);
 
   factory ControlAttachment.fromMap(Map<String, dynamic> map) {
+    String? title = map['title']?.toString();
+    if ((title == null || title.isEmpty) && map['shortMessage'] != null) {
+      title = map['shortMessage'].toString();
+    }
+
     return ControlAttachment(
       previewData: map['previewData']?.toString(),
       baseUrl: map['baseUrl']?.toString(),
       event: map['event']?.toString(),
-      title: map['title']?.toString(),
+      title: title,
       userIds: (map['userIds'] as List?)?.map((e) => e is int ? e : int.tryParse(e?.toString() ?? '') ?? 0).toList(),
+      userId: map['userId'] is int ? map['userId'] as int : int.tryParse(map['userId']?.toString() ?? ''),
     );
   }
 
@@ -459,6 +467,7 @@ class ControlAttachment extends MessageAttachment {
     'event': event,
     'title': title,
     'userIds': userIds,
+    'userId': userId,
   };
 }
 
