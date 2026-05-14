@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:convert' show utf8;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -77,7 +77,7 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
                 onBadCertificate: (_) => true,
               )
             : proxySocket;
-        statusCode = await _rawPut(socket, uri, fileBytes);
+        statusCode = await _rawPost(socket, uri, fileBytes, file.name);
       } else {
         final socket = await RawSocket.connect(uri.host, uri.port);
         final secureSocket = uri.scheme == 'https'
@@ -87,10 +87,10 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
                 onBadCertificate: (_) => true,
               )
             : socket;
-        statusCode = await _rawPut(secureSocket, uri, fileBytes);
+        statusCode = await _rawPost(secureSocket, uri, fileBytes, file.name);
       }
 
-      if (statusCode == 200 || statusCode == 204) {
+      if (statusCode == 200) {
         await completer.future.timeout(
           const Duration(seconds: 30),
           onTimeout: () {
@@ -125,76 +125,62 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
     }
   }
 
-  Future<int> _rawPut(RawSocket socket, Uri uri, List<int> body) async {
+  Future<int> _rawPost(RawSocket socket, Uri uri, List<int> body, String filename) async {
     final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
     final host = uri.host;
+    final total = body.length;
 
-    // Try HttpClient-based approach first, fall back to raw socket
-    final httpClient = HttpClient();
-    httpClient.badCertificateCallback = (cert, host, port) => true;
+    final request = StringBuffer()
+      ..write('POST $path HTTP/1.1\r\n')
+      ..write('Host: $host\r\n')
+      ..write('Content-Type: application/x-binary; charset=x-user-defined\r\n')
+      ..write('Content-Disposition: attachment; filename=$filename\r\n')
+      ..write('Connection: keep-alive\r\n')
+      ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
+      ..write('Content-Range: bytes 0-${total - 1}/$total\r\n')
+      ..write('Content-Length: $total\r\n')
+      ..write('\r\n');
 
-    try {
-      final request = await httpClient.putUrl(uri);
-      request.headers.contentType = ContentType('application', 'octet-stream');
-      request.add(body is Uint8List ? body : Uint8List.fromList(body));
-      final response = await request.close().timeout(const Duration(minutes: 5));
-      final statusCode = response.statusCode;
-      await response.drain<void>();
-      debugPrint('HTTP Response via HttpClient: $statusCode');
-      socket.close();
-      return statusCode;
-    } catch (e) {
-      debugPrint('HttpClient failed, falling back to raw socket: $e');
-      // Fallback to raw HTTP
-      final rawRequest = StringBuffer()
-        ..write('PUT $path HTTP/1.1\r\n')
-        ..write('Host: $host\r\n')
-        ..write('Content-Type: application/octet-stream\r\n')
-        ..write('Content-Length: ${body.length}\r\n')
-        ..write('Connection: close\r\n')
-        ..write('\r\n');
+    final requestBytes = utf8.encode(request.toString());
+    final allBytes = <int>[...requestBytes, ...(body is Uint8List ? body : Uint8List.fromList(body))];
+    socket.write(Uint8List.fromList(allBytes));
 
-      final requestBytes = utf8.encode(rawRequest.toString());
-      final allBytes = <int>[...requestBytes, ...(body is Uint8List ? body : Uint8List.fromList(body))];
-      socket.write(Uint8List.fromList(allBytes));
+    final responseBytes = <int>[];
+    final completer = Completer<int>();
+    Timer? timer;
 
-      final responseBytes = <int>[];
-      final completer = Completer<int>();
-      Timer? timer;
-
-      socket.listen((event) {
-        if (event == RawSocketEvent.read) {
-          final data = socket.read();
-          if (data != null) responseBytes.addAll(data);
-        } else if (event == RawSocketEvent.readClosed || event == RawSocketEvent.closed) {
-          timer?.cancel();
-          if (responseBytes.isEmpty) {
-            completer.completeError(const SocketException('Пустой ответ сервера'));
-            return;
-          }
-          final headerEnd = _findHeaderEnd(responseBytes);
-          if (headerEnd == -1) {
-            completer.completeError(const SocketException('Не удалось прочитать заголовок ответа'));
-            return;
-          }
-          final headerStr = utf8.decode(responseBytes.sublist(0, headerEnd), allowMalformed: true);
-          final statusLine = headerStr.split('\r\n').first;
-          debugPrint('HTTP Response (raw): $statusLine');
-          final parts = statusLine.split(' ');
-          completer.complete(parts.length >= 2 ? int.tryParse(parts[1]) ?? 0 : 0);
-        }
-      }, onError: (e) {
+    socket.listen((event) {
+      if (event == RawSocketEvent.read) {
+        final data = socket.read();
+        if (data != null) responseBytes.addAll(data);
+      } else if (event == RawSocketEvent.readClosed || event == RawSocketEvent.closed) {
         timer?.cancel();
-        completer.completeError(e);
-      });
+        if (responseBytes.isEmpty) {
+          completer.completeError(const SocketException('Пустой ответ сервера'));
+          return;
+        }
+        final headerEnd = _findHeaderEnd(responseBytes);
+        if (headerEnd == -1) {
+          completer.completeError(const SocketException('Не удалось прочитать заголовок ответа'));
+          return;
+        }
+        final headerStr = utf8.decode(responseBytes.sublist(0, headerEnd), allowMalformed: true);
+        final statusLine = headerStr.split('\r\n').first;
+        debugPrint('HTTP Response: $statusLine');
+        final parts = statusLine.split(' ');
+        completer.complete(parts.length >= 2 ? int.tryParse(parts[1]) ?? 0 : 0);
+      }
+    }, onError: (e) {
+      timer?.cancel();
+      completer.completeError(e);
+    });
 
-      timer = Timer(const Duration(minutes: 5), () {
-        socket.close();
-        completer.completeError(TimeoutException('Тайм-аут загрузки'));
-      });
+    timer = Timer(const Duration(minutes: 5), () {
+      socket.close();
+      completer.completeError(TimeoutException('Тайм-аут загрузки'));
+    });
 
-      return completer.future;
-    }
+    return completer.future;
   }
 
   int _findHeaderEnd(List<int> bytes) {
