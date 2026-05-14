@@ -304,9 +304,9 @@ class StickerAttachment extends MessageAttachment {
 
     return StickerAttachment(
       previewData: previewStr,
-      baseUrl: map['baseUrl'] as String?,
-      stickerId: map['stickerId'] as String?,
-      stickerPackId: map['stickerPackId'] as String?,
+      baseUrl: map['baseUrl']?.toString(),
+      stickerId: map['stickerId']?.toString(),
+      stickerPackId: map['setId']?.toString() ?? map['stickerPackId']?.toString(),
       width: map['width'] as int?,
       height: map['height'] as int?,
     );
