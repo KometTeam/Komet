@@ -159,7 +159,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 8,
+      version: 9,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -191,6 +191,14 @@ class AppDatabase {
         if (oldVersion < 8) {
             await db.execute(
             'ALTER TABLE chats_cache ADD COLUMN participants TEXT',
+          );
+        }
+        if (oldVersion < 9) {
+          await db.execute(
+            'ALTER TABLE contacts ADD COLUMN options TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN options TEXT',
           );
         }
       },
@@ -230,7 +238,8 @@ class AppDatabase {
       photo_id     INTEGER,
       base_url     TEXT,
       base_raw_url TEXT,
-      update_time  INTEGER NOT NULL DEFAULT 0
+      update_time  INTEGER NOT NULL DEFAULT 0,
+      options      TEXT
     )
   ''';
 
@@ -262,6 +271,7 @@ class AppDatabase {
       is_online       INTEGER NOT NULL DEFAULT 0,
       seen_time       INTEGER NOT NULL DEFAULT 0,
       participants    TEXT NOT NULL DEFAULT "",
+      options         TEXT,
       PRIMARY KEY (id, account_id)
     )
   ''';

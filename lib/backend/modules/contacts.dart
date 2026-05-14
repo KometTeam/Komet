@@ -11,6 +11,7 @@ class CachedContact {
   final String? baseUrl;
   final String? baseRawUrl;
   final int updateTime;
+  final Set<String> options;
 
   const CachedContact({
     required this.id,
@@ -22,7 +23,13 @@ class CachedContact {
     this.baseUrl,
     this.baseRawUrl,
     required this.updateTime,
+    this.options = const {},
   });
+
+  bool get isOfficial => options.contains('OFFICIAL');
+  bool get isBot => options.contains('BOT');
+  bool get isServiceAccount => options.contains('SERVICE_ACCOUNT');
+  bool get isVerified => isOfficial || isBot || isServiceAccount;
 
   factory CachedContact.fromDbRow(Map<String, dynamic> row) => CachedContact(
     id: row['id'] as int,
@@ -34,7 +41,13 @@ class CachedContact {
     baseUrl: row['base_url'] as String?,
     baseRawUrl: row['base_raw_url'] as String?,
     updateTime: row['update_time'] as int,
+    options: _decodeOptions(row['options']),
   );
+
+  static Set<String> _decodeOptions(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return const {};
+    return raw.split(',').where((s) => s.isNotEmpty).toSet();
+  }
 }
 
 class ContactsModule {
@@ -126,6 +139,12 @@ class ContactsModule {
       lastName = name['lastName'] as String?;
     }
 
+    final optionsRaw = contact['options'];
+    String? optionsStr;
+    if (optionsRaw is List) {
+      optionsStr = optionsRaw.whereType<String>().join(',');
+    }
+
     return {
       'id': id,
       'account_id': accountId,
@@ -136,6 +155,7 @@ class ContactsModule {
       'base_url': contact['baseUrl'] as String?,
       'base_raw_url': contact['baseRawUrl'] as String?,
       'update_time': (contact['updateTime'] as int?) ?? 0,
+      'options': optionsStr,
     };
   }
 }
