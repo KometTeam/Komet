@@ -33,14 +33,14 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
     });
 
     try {
-      await accountModule.checkPassword(
+      final result = await accountModule.checkPassword(
         password: _passwordController.text,
         trackId: widget.trackId,
       );
 
       if (!mounted) return;
 
-      await accountModule.login();
+      await accountModule.login(token: result.loginToken);
 
       if (!mounted) return;
 
