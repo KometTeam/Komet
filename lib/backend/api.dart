@@ -122,11 +122,7 @@ class Api {
   Future<Packet> sendHandshake() async {
     final deviceInfo = DeviceInfoPlugin();
 
-    String deviceType = (Platform.isLinux || Platform.isWindows)
-        ? 'DESKTOP'
-        : (Platform.isAndroid)
-        ? 'ANDROID'
-        : 'IOS';
+    String deviceType = 'ANDROID';
     String osVersion = '';
     String deviceName = 'Unknown';
     String architecture = 'arm64';
