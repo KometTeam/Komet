@@ -100,6 +100,7 @@ class CachedMessage {
   final String? status;
   final Map<String, dynamic>? payload;
   final List<MessageAttachment>? attachments;
+  final bool isControl;
 
   const CachedMessage({
     required this.id,
@@ -111,6 +112,7 @@ class CachedMessage {
     this.status,
     this.payload,
     this.attachments,
+    this.isControl = false,
   });
 
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
@@ -151,6 +153,7 @@ class CachedMessage {
       status: row['status']?.toString(),
       payload: payload,
       attachments: attachments,
+      isControl: attachments?.any((a) => a.type == AttachmentType.control) ?? false,
     );
   }
 
@@ -261,6 +264,7 @@ class MessagesModule {
     }
 
     List<MessageAttachment>? attachments;
+    bool isControl = false;
     if (linkType == 'FORWARD') {
       final fwdMap = Map<String, dynamic>.from(m.cast());
       attachments = [ForwardedMessageAttachment.fromMap(fwdMap)];
@@ -271,6 +275,11 @@ class MessagesModule {
             .whereType<Map>()
             .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
             .toList();
+        // Detect CONTROL
+        if (attachments.any((a) => a.type == AttachmentType.control)) {
+          isControl = true;
+          debugPrint('CONTROL detected: ${attachments.where((a) => a.type == AttachmentType.control).first}');
+        }
       }
     }
 
@@ -284,6 +293,7 @@ class MessagesModule {
       status: m['status']?.toString(),
       payload: Map<String, dynamic>.from(m.cast()),
       attachments: attachments,
+      isControl: isControl,
     );
   }
 
@@ -367,14 +377,21 @@ class MessagesModule {
   Future<bool> sendFileMessage(
     int chatId,
     int fileId, {
+    String? token,
     bool notify = true,
   }) async {
     final payload = {
       'chatId': chatId,
       'message': {
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'isLive': false,
+        'detectShare': false,
+        'elements': <dynamic>[],
+        'cid': DateTime.now().millisecondsSinceEpoch,
         'attaches': [
-          {'_type': 'FILE', 'fileId': fileId}
+          if (token != null)
+            {'_type': 'FILE', 'token': token}
+          else
+            {'_type': 'FILE', 'fileId': fileId}
         ],
       },
       'notify': notify,

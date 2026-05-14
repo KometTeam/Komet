@@ -46,17 +46,6 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
         return;
       }
 
-      final completer = Completer<void>();
-      void Function(Packet)? handler;
-      handler = (Packet packet) {
-        final payload = packet.payload;
-        if (payload is Map && payload['fileId'] == uploadInfo.fileId) {
-          api.unregisterPushHandler(Opcode.notifAttach);
-          completer.complete();
-        }
-      };
-      api.registerPushHandler(Opcode.notifAttach, (Packet p) => handler!(p));
-
       await api.sendRequest(Opcode.msgTyping, {
         'chatId': widget.chatId,
         'type': 'FILE',
@@ -90,17 +79,61 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
         statusCode = await _rawPost(secureSocket, uri, fileBytes, file.name);
       }
 
-      if (statusCode == 200) {
-        await completer.future.timeout(
-          const Duration(seconds: 30),
+      if (statusCode != 200) {
+        if (mounted) showCustomNotification(context, 'Ошибка загрузки: $statusCode');
+        return;
+      }
+
+      // Wait for notifAttach push
+      final pushCompleter = Completer<void>();
+      void Function(Packet)? pushHandler;
+      pushHandler = (Packet packet) {
+        final payload = packet.payload;
+        if (payload is Map && payload['fileId'] == uploadInfo.fileId) {
+          api.unregisterPushHandler(Opcode.notifAttach);
+          pushCompleter.complete();
+        }
+      };
+      api.registerPushHandler(Opcode.notifAttach, (Packet p) => pushHandler!(p));
+
+      await pushCompleter.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          api.unregisterPushHandler(Opcode.notifAttach);
+          throw TimeoutException('Тайм-аут подтверждения загрузки');
+        },
+      );
+
+      // Retry loop: server may say "attachment in progress" (cmd=3)
+      for (var attempt = 0; attempt < 5; attempt++) {
+        final sent = await messagesModule.sendFileMessage(
+          widget.chatId,
+          uploadInfo.fileId,
+          token: uploadInfo.token,
+        );
+
+        // Listen for push again (another notifAttach may come)
+        final msgCompleter = Completer<bool>();
+        void Function(Packet)? msgHandler;
+        msgHandler = (Packet packet) {
+          final payload = packet.payload;
+          if (payload is Map && payload['fileId'] == uploadInfo.fileId) {
+            api.unregisterPushHandler(Opcode.notifAttach);
+            msgCompleter.complete(true);
+          }
+        };
+        api.registerPushHandler(Opcode.notifAttach, (Packet p) => msgHandler!(p));
+
+        final pushFuture = msgCompleter.future.timeout(
+          const Duration(seconds: 5),
           onTimeout: () {
             api.unregisterPushHandler(Opcode.notifAttach);
-            throw TimeoutException('Тайм-аут подтверждения загрузки');
+            return false;
           },
         );
 
-        final sent = await messagesModule.sendFileMessage(widget.chatId, uploadInfo.fileId);
-        if (sent) {
+        final pushReceived = await pushFuture;
+        if (pushReceived && sent) {
           FileHistoryCache.add(FileHistoryEntry(
             fileId: uploadInfo.fileId,
             url: uploadInfo.url,
@@ -111,13 +144,45 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
             showCustomNotification(context, 'Файл отправлен');
             widget.onClose();
           }
-        } else {
-          if (mounted) showCustomNotification(context, 'Ошибка отправки сообщения');
+          return;
         }
-      } else {
-        api.unregisterPushHandler(Opcode.notifAttach);
-        if (mounted) showCustomNotification(context, 'Ошибка загрузки: $statusCode');
+
+        // If push was received, check if message was sent
+        if (pushReceived) {
+          FileHistoryCache.add(FileHistoryEntry(
+            fileId: uploadInfo.fileId,
+            url: uploadInfo.url,
+            token: uploadInfo.token,
+            sentAt: DateTime.now(),
+          ));
+          if (mounted) {
+            showCustomNotification(context, 'Файл отправлен');
+            widget.onClose();
+          }
+          return;
+        }
+
+        if (!sent) {
+          // msgSend failed, maybe server still processing — wait and retry
+          await Future.delayed(Duration(seconds: 1 + attempt));
+          continue;
+        }
+
+        // Sent ok, no push received (already processed earlier)
+        FileHistoryCache.add(FileHistoryEntry(
+          fileId: uploadInfo.fileId,
+          url: uploadInfo.url,
+          token: uploadInfo.token,
+          sentAt: DateTime.now(),
+        ));
+        if (mounted) {
+          showCustomNotification(context, 'Файл отправлен');
+          widget.onClose();
+        }
+        return;
       }
+
+      if (mounted) showCustomNotification(context, 'Не удалось отправить сообщение');
     } catch (e) {
       if (mounted) showCustomNotification(context, 'Ошибка: $e');
     } finally {

@@ -8,7 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
 import '../../models/attachment.dart';
 
-enum MessageType { text, attachment, voice }
+enum MessageType { text, attachment, voice, control }
 
 enum BubbleShape { singleTop, singleBottom, singleMiddle, groupedMiddle }
 
@@ -56,18 +56,23 @@ class MessageBubble extends StatelessWidget {
 
   bool get isGroupedWithNext {
     if (nextMessage == null) return false;
+    if (message.isControl) return false;
     if (nextMessage!.senderId != message.senderId) return false;
     final timeDiff = nextMessage!.time - message.time;
     return timeDiff < 300000;
   }
 
   BubbleShape get shape {
-    final hasPrevFromMe = prevMessage?.senderId == message.senderId;
+    if (message.isControl) {
+      return BubbleShape.singleMiddle;
+    }
+
+    final hasPrevFromMe = prevMessage?.senderId == message.senderId && !prevMessage!.isControl;
     final prevTimeDiff = hasPrevFromMe
         ? message.time - prevMessage!.time
         : 999999999;
 
-    final hasNextFromMe = nextMessage?.senderId == message.senderId;
+    final hasNextFromMe = nextMessage?.senderId == message.senderId && !nextMessage!.isControl;
     final nextTimeDiff = hasNextFromMe
         ? nextMessage!.time - message.time
         : 999999999;
@@ -83,6 +88,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   MessageType get contentType {
+    if (message.isControl) return MessageType.control;
     if (message.attachments != null && message.attachments!.isNotEmpty) {
       final first = message.attachments!.first;
       if (first is ForwardedMessageAttachment) {
@@ -214,6 +220,8 @@ class MessageBubble extends StatelessWidget {
           case BubbleShape.groupedMiddle:
             return 1;
         }
+      case MessageType.control:
+        return 4;
     }
     return 4;
   }
@@ -221,6 +229,17 @@ class MessageBubble extends StatelessWidget {
   double get bottomMargin {
     switch (contentType) {
       case MessageType.text:
+        switch (shape) {
+          case BubbleShape.singleTop:
+            return 1;
+          case BubbleShape.singleBottom:
+            return 1;
+          case BubbleShape.singleMiddle:
+            return 4;
+          case BubbleShape.groupedMiddle:
+            return 1;
+        }
+      case MessageType.attachment:
         switch (shape) {
           case BubbleShape.singleTop:
             return 1;
@@ -253,6 +272,8 @@ class MessageBubble extends StatelessWidget {
           case BubbleShape.groupedMiddle:
             return 1;
         }
+      case MessageType.control:
+        return 4;
     }
     return 4;
   }
@@ -284,12 +305,22 @@ class MessageBubble extends StatelessWidget {
           case BubbleShape.singleMiddle:
             return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
         }
+      case MessageType.control:
+        return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
     }
     return const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (message.isControl) {
+      debugPrint('BUILD CONTROL: ${message.id}');
+      return Padding(
+        padding: EdgeInsets.only(top: topMargin, bottom: bottomMargin),
+        child: Center(child: _buildControlContent(context)),
+      );
+    }
+
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
 
@@ -362,14 +393,65 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildContent(BuildContext context) {
     switch (contentType) {
+      case MessageType.control:
+        return _buildControlContent(context);
       case MessageType.attachment:
         return _buildAttachmentContent(context);
       case MessageType.voice:
         return _buildVoiceContent(context);
       case MessageType.text:
-      default:
         return _buildTextContent(context);
     }
+  }
+
+  Widget _buildControlContent(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final attachments = message.attachments;
+    if (attachments == null || attachments.isEmpty) return const SizedBox.shrink();
+
+    final control = attachments.first;
+    if (control is! ControlAttachment) return const SizedBox.shrink();
+
+    String? text;
+    switch (control.event) {
+      case 'system':
+        text = control.title;
+        break;
+      case 'new':
+        text = '${ContactCache.get(message.senderId) ?? 'Пользователь'} создал(а) чат';
+        break;
+      case 'add':
+        final names = (control.userIds ?? []).map((id) => ContactCache.get(id) ?? 'Пользователь').join(', ');
+        text = '${ContactCache.get(message.senderId) ?? 'Пользователь'} добавил(а) $names';
+        break;
+      case 'leave':
+        text = '${ContactCache.get(message.senderId) ?? 'Пользователь'} покинул(а) чат';
+        break;
+      case 'joinByLink':
+        text = '${ContactCache.get(message.senderId) ?? 'Пользователь'} присоединился(-ась) к чату';
+        break;
+      default:
+        text = control.title;
+    }
+
+    if (text == null || text.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: cs.onSurfaceVariant,
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 
   Widget _buildTextContent(BuildContext context) {
