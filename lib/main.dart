@@ -82,6 +82,8 @@ class KometAppState extends State<KometApp> {
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
     widget.initialFpsOverlay,
   );
+  final _profileUpdateController = StreamController<void>.broadcast();
+  Stream<void> get profileUpdateStream => _profileUpdateController.stream;
 
   @override
   void initState() {
@@ -128,6 +130,7 @@ class KometAppState extends State<KometApp> {
   @override
   void dispose() {
     _sessionExpiredSub?.cancel();
+    _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     super.dispose();
   }
@@ -150,6 +153,10 @@ class KometAppState extends State<KometApp> {
     if (mounted) {
       setState(() => _locale = locale);
     }
+  }
+
+  void notifyProfileUpdate() {
+    _profileUpdateController.add(null);
   }
 
   ColorScheme _adjustDarkScheme(ColorScheme base) {

@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../main.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
+import 'edit_profile_screen.dart';
 import 'info_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
@@ -26,17 +29,25 @@ class _SettingsTabState extends State<SettingsTab> {
   bool _debugMenuVisible = false;
   int _versionSecretTapCount = 0;
   Timer? _versionSecretTapResetTimer;
+  StreamSubscription? _profileUpdateSub;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
     _loadAppVersion();
+    final appState = KometApp.stateOf(context);
+    if (appState != null) {
+      _profileUpdateSub = appState.profileUpdateStream.listen((_) {
+        if (mounted) _loadProfile();
+      });
+    }
   }
 
   @override
   void dispose() {
     _versionSecretTapResetTimer?.cancel();
+    _profileUpdateSub?.cancel();
     super.dispose();
   }
 
@@ -316,7 +327,14 @@ child: _buildSection(
                   size: 22,
                   weight: 400,
                 ),
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const EditProfileScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -333,10 +351,11 @@ child: _buildSection(
             ),
             child: ClipOval(
               child: _profile?.baseUrl != null && _profile!.baseUrl!.isNotEmpty
-                  ? Image.network(
-                      _profile!.baseUrl!,
+                  ? CachedNetworkImage(
+                      imageUrl: _profile!.baseUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
+                      fadeInDuration: const Duration(milliseconds: 120),
+                      errorWidget: (context, url, error) =>
                           _buildPlaceholderAvatar(cs, name),
                     )
                   : _buildPlaceholderAvatar(cs, name),
@@ -514,7 +533,21 @@ class _PhoneSpoilerState extends State<_PhoneSpoiler>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat();
+    );
+    if (!widget.isVisible) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PhoneSpoiler oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isVisible == oldWidget.isVisible) return;
+    if (widget.isVisible) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override

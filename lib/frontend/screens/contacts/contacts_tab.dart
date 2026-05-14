@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
@@ -84,10 +85,11 @@ class _ContactsTabState extends State<ContactsTab> {
                 ),
                 child: ClipOval(
                   child: contact.baseUrl != null && contact.baseUrl!.isNotEmpty
-                      ? Image.network(
-                          contact.baseUrl!,
+                      ? CachedNetworkImage(
+                          imageUrl: contact.baseUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
+                          fadeInDuration: const Duration(milliseconds: 120),
+                          errorWidget: (context, url, error) =>
                               _buildPlaceholderAvatar(cs, nameToDisplay),
                         )
                       : _buildPlaceholderAvatar(cs, nameToDisplay),

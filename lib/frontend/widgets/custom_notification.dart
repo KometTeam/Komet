@@ -10,7 +10,7 @@ void showCustomNotificationOnOverlay(OverlayState overlay, String message) {
     builder: (context) => CustomNotification(message: message),
   );
   overlay.insert(entry);
-  Future.delayed(const Duration(milliseconds: 1900), () {
+  Future.delayed(const Duration(milliseconds: 2600), () {
     entry.remove();
   });
 }
@@ -38,7 +38,7 @@ class _CustomNotificationState extends State<CustomNotification>
     );
     _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
-    Future.delayed(const Duration(milliseconds: 1600), () {
+    Future.delayed(const Duration(milliseconds: 2300), () {
       if (mounted) _controller.reverse();
     });
   }

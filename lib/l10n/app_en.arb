@@ -159,5 +159,10 @@
   "chatInfoJoined": "joined:",
   "chatInfoGroupCreated": "group created:",
   "chatInfoGroupOwner": "group owner:",
-  "chatInfoDialogStarted": "dialog started:"
+  "chatInfoDialogStarted": "dialog started:",
+  "editProfileTitle": "Edit Profile",
+  "editProfileSave": "Save",
+  "editProfileFirstName": "First name",
+  "editProfileLastName": "Last name",
+  "editProfileRemovePhoto": "Remove photo"
 }

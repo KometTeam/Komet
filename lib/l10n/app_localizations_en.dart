@@ -451,4 +451,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInfoDialogStarted => 'dialog started:';
+
+  @override
+  String get editProfileTitle => 'Edit Profile';
+
+  @override
+  String get editProfileSave => 'Save';
+
+  @override
+  String get editProfileFirstName => 'First name';
+
+  @override
+  String get editProfileLastName => 'Last name';
+
+  @override
+  String get editProfileRemovePhoto => 'Remove photo';
 }
