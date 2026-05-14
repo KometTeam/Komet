@@ -168,9 +168,9 @@ class MessageBubble extends StatelessWidget {
         );
       case BubbleShape.groupedMiddle:
         return BorderRadius.only(
-          topLeft: cornerTL,
+          topLeft: isMe ? cornerTL : smallRadius,
           topRight: smallRadius,
-          bottomLeft: cornerBL,
+          bottomLeft: isMe ? cornerBL : smallRadius,
           bottomRight: smallRadius,
         );
     }

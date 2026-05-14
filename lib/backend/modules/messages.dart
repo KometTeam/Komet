@@ -51,6 +51,45 @@ class TranscriptionCache {
   static bool has(String messageId) => _cache.containsKey(messageId);
 }
 
+class FileHistoryEntry {
+  final int fileId;
+  final String? url;
+  final String? token;
+  final DateTime sentAt;
+
+  FileHistoryEntry({
+    required this.fileId,
+    this.url,
+    this.token,
+    required this.sentAt,
+  });
+}
+
+class FileHistoryCache {
+  static final List<FileHistoryEntry> _history = [];
+
+  static List<FileHistoryEntry> get history => List.unmodifiable(_history);
+
+  static void add(FileHistoryEntry entry) {
+    _history.insert(0, entry);
+    if (_history.length > 50) _history.removeLast();
+  }
+
+  static bool get isEmpty => _history.isEmpty;
+}
+
+class FileUploadInfo {
+  final String url;
+  final int fileId;
+  final String token;
+
+  FileUploadInfo({
+    required this.url,
+    required this.fileId,
+    required this.token,
+  });
+}
+
 class CachedMessage {
   final String id;
   final int accountId;
@@ -302,6 +341,47 @@ class MessagesModule {
     }
 
     return TranscriptionResult(status: transcriptionStatus);
+  }
+
+  Future<FileUploadInfo?> requestUploadUrl({int count = 1}) async {
+    final payload = {'count': count};
+    final response = await _api.sendRequest(Opcode.fileUpload, payload);
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return FileUploadInfo(
+      url: info['url'] as String? ?? '',
+      fileId: info['fileId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  Future<bool> sendFileMessage(
+    int chatId,
+    int fileId, {
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {'_type': 'FILE', 'fileId': fileId}
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    return response.isOk;
   }
 
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
