@@ -198,14 +198,27 @@ class AudioAttachment extends MessageAttachment {
       } catch (_) {}
     }
 
+    String? waveStr;
+    final waveRaw = map['wave'];
+    if (waveRaw is String) {
+      waveStr = waveRaw;
+    } else if (waveRaw is List) {
+      try {
+        final bytes = List<int>.from(waveRaw);
+        final base64 = String.fromCharCodes(bytes);
+        waveStr = 'data:image/webp;base64,$base64';
+      } catch (_) {}
+    }
+
     return AudioAttachment(
       previewData: previewStr,
-      baseUrl: map['baseUrl'] as String?,
+      baseUrl: map['baseUrl']?.toString(),
+      fileUrl: map['url']?.toString(),
       audioId: map['audioId'] as int?,
-      audioToken: map['audioToken'] as String?,
+      audioToken: map['token']?.toString(),
       duration: map['duration'] as int?,
       size: map['size'] as int?,
-      waveform: map['waveform'] as String?,
+      waveform: waveStr,
     );
   }
 

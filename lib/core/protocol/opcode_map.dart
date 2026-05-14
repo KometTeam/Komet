@@ -170,6 +170,10 @@ abstract class Opcode {
   static const int notifBanners = 292; // Баннеры
   static const int notifFolders = 277; // Обновление папок
 
+  // ── Transcription ───────────────────────────────────────────────────
+  static const int audioTranscription = 202; // Запрос транскрибации аудио
+  static const int transcriptionResult = 293; // Результат транскрибации (push)
+
   // ── Misc ───────────────────────────────────────────────────────────
   static const int okToken = 158; // OK-токен
   static const int webAppInitData = 160; // Данные WebApp
@@ -332,6 +336,8 @@ abstract class Opcode {
     notifProfile: 'NOTIF_PROFILE',
     notifBanners: 'NOTIF_BANNERS',
     notifFolders: 'NOTIF_FOLDERS',
+    audioTranscription: 'AUDIO_TRANSCRIPTION',
+    transcriptionResult: 'TRANSCRIPTION_RESULT',
     okToken: 'OK_TOKEN',
     webAppInitData: 'WEB_APP_INIT_DATA',
     complain: 'COMPLAIN',

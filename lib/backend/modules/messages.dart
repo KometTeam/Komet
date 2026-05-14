@@ -23,6 +23,34 @@ class ContactCache {
   static String? getAvatar(int id) => _avatarCache[id];
 }
 
+class TranscriptionResult {
+  final int status;
+  final String? text;
+  final String? messageId;
+  final int? chatId;
+  final int? mediaId;
+
+  TranscriptionResult({
+    required this.status,
+    this.text,
+    this.messageId,
+    this.chatId,
+    this.mediaId,
+  });
+}
+
+class TranscriptionCache {
+  static final Map<String, TranscriptionResult> _cache = {};
+
+  static void put(String messageId, TranscriptionResult result) {
+    _cache[messageId] = result;
+  }
+
+  static TranscriptionResult? get(String messageId) => _cache[messageId];
+
+  static bool has(String messageId) => _cache.containsKey(messageId);
+}
+
 class CachedMessage {
   final String id;
   final int accountId;
@@ -245,6 +273,35 @@ class MessagesModule {
     };
 
     await _api.sendRequest(Opcode.msgSend, payload);
+  }
+
+  Future<TranscriptionResult> requestTranscription(
+    int chatId,
+    int messageId,
+    int mediaId,
+  ) async {
+    final payload = {
+      'chatId': chatId,
+      'messageId': messageId,
+      'mediaId': mediaId,
+    };
+
+    final response = await _api.sendRequest(Opcode.audioTranscription, payload);
+    if (!response.isOk) return TranscriptionResult(status: -1);
+
+    final data = response.payload;
+    if (data is! Map) return TranscriptionResult(status: -1);
+
+    final transcriptionStatus = data['transcriptionStatus'] as int? ?? -1;
+    if (transcriptionStatus == 1) {
+      final text = data['transcription'] as String? ?? '';
+      if (text.isEmpty) {
+        return TranscriptionResult(status: 1, text: 'не удалось распознать текст');
+      }
+      return TranscriptionResult(status: 1, text: text);
+    }
+
+    return TranscriptionResult(status: transcriptionStatus);
   }
 
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {

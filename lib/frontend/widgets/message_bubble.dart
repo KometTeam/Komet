@@ -112,11 +112,14 @@ class MessageBubble extends StatelessWidget {
     return MessageType.text;
   }
 
-  // скругление уже смешариков т.е сообщений, те которые isme ? .. Это наши, после : это чужие
   BorderRadius get _borderRadius {
     final topRadius = Radius.circular(bubbleBorderRadius);
-    final bottomRadius = Radius.circular(bubbleBorderRadius);
     final smallRadius = const Radius.circular(4);
+
+    final cornerTL = isMe ? smallRadius : topRadius;
+    final cornerTR = isMe ? topRadius : smallRadius;
+    final cornerBL = isMe ? smallRadius : topRadius;
+    final cornerBR = isMe ? topRadius : smallRadius;
 
     if (_hasPhotoWithCaption &&
         (shape == BubbleShape.singleTop ||
@@ -124,7 +127,7 @@ class MessageBubble extends StatelessWidget {
             shape == BubbleShape.singleBottom)) {
       return BorderRadius.only(
         topLeft: topRadius,
-        topRight: isMe ? topRadius : topRadius,
+        topRight: topRadius,
         bottomLeft: smallRadius,
         bottomRight: smallRadius,
       );
@@ -136,16 +139,16 @@ class MessageBubble extends StatelessWidget {
       return BorderRadius.only(
         topLeft: smallRadius,
         topRight: smallRadius,
-        bottomLeft: isMe ? smallRadius : smallRadius,
-        bottomRight: isMe ? smallRadius : bottomRadius,
+        bottomLeft: smallRadius,
+        bottomRight: isMe ? smallRadius : topRadius,
       );
     }
 
     switch (shape) {
       case BubbleShape.singleTop:
         return BorderRadius.only(
-          topLeft: isMe ? topRadius : smallRadius,
-          topRight: isMe ? smallRadius : topRadius,
+          topLeft: cornerTL,
+          topRight: cornerTR,
           bottomLeft: smallRadius,
           bottomRight: smallRadius,
         );
@@ -153,22 +156,22 @@ class MessageBubble extends StatelessWidget {
         return BorderRadius.only(
           topLeft: smallRadius,
           topRight: smallRadius,
-          bottomLeft: isMe ? topRadius : smallRadius,
-          bottomRight: isMe ? smallRadius : topRadius,
+          bottomLeft: cornerBL,
+          bottomRight: cornerBR,
         );
       case BubbleShape.singleMiddle:
         return BorderRadius.only(
-          topLeft: topRadius,
-          topRight: topRadius,
-          bottomLeft: isMe ? topRadius : smallRadius,
-          bottomRight: isMe ? smallRadius : topRadius,
+          topLeft: cornerTL,
+          topRight: cornerTR,
+          bottomLeft: cornerBL,
+          bottomRight: cornerBR,
         );
       case BubbleShape.groupedMiddle:
         return BorderRadius.only(
-          topLeft: isMe ? topRadius : smallRadius,
-          topRight: isMe ? smallRadius : smallRadius,
-          bottomLeft: isMe ? topRadius : smallRadius,
-          bottomRight: isMe ? smallRadius : smallRadius,
+          topLeft: cornerTL,
+          topRight: smallRadius,
+          bottomLeft: cornerBL,
+          bottomRight: smallRadius,
         );
     }
   }
@@ -273,13 +276,13 @@ class MessageBubble extends StatelessWidget {
       case MessageType.voice:
         switch (shape) {
           case BubbleShape.groupedMiddle:
-            return const EdgeInsets.symmetric(horizontal: 14, vertical: 6);
+            return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
           case BubbleShape.singleTop:
-            return const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+            return const EdgeInsets.symmetric(horizontal: 14, vertical: 6);
           case BubbleShape.singleBottom:
-            return const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+            return const EdgeInsets.symmetric(horizontal: 14, vertical: 6);
           case BubbleShape.singleMiddle:
-            return const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+            return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
         }
     }
     return const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
@@ -1550,23 +1553,47 @@ class MessageBubble extends StatelessWidget {
     final textColor = isMe
         ? Colors.white
         : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
-    final payload = message.payload;
-    final voice = payload?['voice'] as Map<String, dynamic>?;
-    final duration = voice?['duration'] as int? ?? 0;
-    final url = voice?['url']?.toString() ?? '';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        _VoiceMessageBubble(
-          duration: duration,
-          url: url,
-          textColor: textColor,
-          isMe: isMe,
-        ),
-        const SizedBox(height: 6),
-        _buildMeta(context),
-      ],
+    int duration = 0;
+    String url = '';
+    String? waveData;
+    int? audioId;
+
+    final attaches = message.attachments;
+    if (attaches != null && attaches.isNotEmpty) {
+      for (final a in attaches) {
+        if (a is AudioAttachment) {
+          duration = ((a.duration ?? 0) / 1000).round();
+          url = a.fileUrl ?? a.baseUrl ?? '';
+          waveData = a.waveform;
+          audioId = a.audioId;
+          break;
+        }
+      }
+    }
+
+    if (duration == 0 && url.isEmpty) {
+      final payload = message.payload;
+      final voice = payload?['voice'] as Map<String, dynamic>?;
+      duration = ((voice?['duration'] as int? ?? 0) / 1000).round();
+      url = voice?['url']?.toString() ?? '';
+    }
+
+    final cachedTranscription = TranscriptionCache.get(message.id);
+
+    return _VoiceMessageBubble(
+      duration: duration,
+      url: url,
+      textColor: textColor,
+      isMe: isMe,
+      status: message.status,
+      time: message.time,
+      cs: cs,
+      waveData: waveData,
+      chatId: message.chatId,
+      messageId: message.id,
+      audioId: audioId,
+      preloadedText: cachedTranscription?.text,
     );
   }
 
@@ -1666,12 +1693,28 @@ class _VoiceMessageBubble extends StatefulWidget {
   final String url;
   final Color textColor;
   final bool isMe;
+  final String? status;
+  final int time;
+  final ColorScheme cs;
+  final String? waveData;
+  final int chatId;
+  final String messageId;
+  final int? audioId;
+  final String? preloadedText;
 
   const _VoiceMessageBubble({
     required this.duration,
     required this.url,
     required this.textColor,
     required this.isMe,
+    this.status,
+    required this.time,
+    required this.cs,
+    this.waveData,
+    required this.chatId,
+    required this.messageId,
+    this.audioId,
+    this.preloadedText,
   });
 
   @override
@@ -1681,84 +1724,245 @@ class _VoiceMessageBubble extends StatefulWidget {
 class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
   bool _isPlaying = false;
   double _progress = 0.0;
+  bool _transcriptionVisible = false;
+  String? _transcriptionText;
+  bool _transcriptionLoading = false;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
+  void initState() {
+    super.initState();
+    if (widget.preloadedText != null) {
+      _transcriptionText = widget.preloadedText;
+      _transcriptionVisible = true;
+    }
+  }
 
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
+  String _formatDuration(int seconds) {
+    final min = seconds ~/ 60;
+    final sec = seconds % 60;
+    return '$min:${sec.toString().padLeft(2, '0')}';
+  }
+
+  String _formatTime(int timestamp) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  Widget _buildStatusIcon() {
+    final status = widget.status;
+    IconData icon;
+    Color color;
+
+    if (status == null || status == 'sending' || status == 'pending') {
+      icon = Symbols.check;
+      color = Colors.white54;
+    } else {
+      switch (status) {
+        case 'sent':
+          icon = Symbols.check;
+          color = Colors.white54;
+        case 'delivered':
+          icon = Symbols.done_all;
+          color = Colors.white54;
+        case 'read':
+          icon = Symbols.done_all;
+          color = const Color(0xFF34C759);
+        case 'error':
+          icon = Symbols.error;
+          color = Colors.redAccent;
+        default:
+          icon = Symbols.check;
+          color = Colors.white54;
+      }
+    }
+
+    return Icon(icon, size: 14, color: color);
+  }
+
+  Widget build(BuildContext context) {
+    final isDark = widget.cs.brightness == Brightness.dark;
+    final waveInactiveColor = widget.isMe
+        ? Colors.white.withValues(alpha: 0.35)
+        : (isDark
+              ? widget.cs.surfaceContainerHighest
+              : const Color(0xFFD1D1D6));
+    final waveActiveColor = widget.isMe
+        ? Colors.white.withValues(alpha: 0.7)
+        : widget.cs.primary;
+
+    return SizedBox(
+      width: 240,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: _togglePlay,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: widget.isMe
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : cs.primaryContainer,
-                shape: BoxShape.circle,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: _togglePlay,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: widget.isMe
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : widget.cs.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isPlaying ? Symbols.pause : Symbols.play_arrow,
+                    color: widget.isMe ? Colors.white : widget.cs.primary,
+                    size: 18,
+                  ),
+                ),
               ),
-              child: Icon(
-                _isPlaying ? Symbols.pause : Symbols.play_arrow,
-                color: widget.isMe ? Colors.white : cs.primary,
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
-                  children: [
-                    Container(
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: widget.isMe
-                            ? Colors.white.withValues(alpha: 0.2)
-                            : (isDark
-                                  ? cs.surfaceContainerHighest
-                                  : const Color(0xFFD1D1D6)),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: _progress.clamp(0.0, 1.0),
+              const SizedBox(width: 10),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return GestureDetector(
+                      onTapDown: (details) {
+                        setState(() {
+                          _progress = (details.localPosition.dx /
+                                  constraints.maxWidth)
+                              .clamp(0.0, 1.0);
+                        });
+                      },
+                      onHorizontalDragUpdate: (details) {
+                        setState(() {
+                          _progress = (details.localPosition.dx /
+                                  constraints.maxWidth)
+                              .clamp(0.0, 1.0);
+                        });
+                      },
                       child: Container(
-                        height: 24,
+                        height: 4,
                         decoration: BoxDecoration(
-                          color: widget.isMe
-                              ? Colors.white.withValues(alpha: 0.5)
-                              : cs.primary,
+                          color: waveInactiveColor,
                           borderRadius: BorderRadius.circular(2),
                         ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 24,
-                      child: Center(
-                        child: Text(
-                          _formatDuration(widget.duration),
-                          style: TextStyle(
-                            color: widget.textColor.withValues(alpha: 0.8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: _progress.clamp(0.0, 1.0),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: waveActiveColor,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _requestTranscription,
+                child: SizedBox(
+                  width: 20,
+                  height: 32,
+                  child: Center(
+                    child: _transcriptionLoading
+                        ? SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: widget.textColor.withValues(alpha: 0.6),
+                            ),
+                          )
+                        : Text(
+                            'Т',
+                            style: TextStyle(
+                              color: widget.textColor.withValues(alpha: 0.6),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _formatDuration(widget.duration),
+                style: TextStyle(
+                  color: widget.textColor.withValues(alpha: 0.7),
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  alignment: Alignment.topLeft,
+                  child: _transcriptionVisible
+                      ? Text(
+                          _transcriptionText ?? '',
+                          style: TextStyle(
+                            color: widget.textColor.withValues(alpha: 0.8),
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                          maxLines: 10,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
+              if (!_transcriptionVisible) ...[
+                Text(
+                  _formatTime(widget.time),
+                  style: TextStyle(
+                    color: widget.textColor.withValues(alpha: 0.6),
+                    fontSize: 10,
+                  ),
+                ),
+                if (widget.isMe) ...[
+                  const SizedBox(width: 2),
+                  _buildStatusIcon(),
+                ],
+              ],
+            ],
+          ),
+          if (_transcriptionVisible) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  _formatTime(widget.time),
+                  style: TextStyle(
+                    color: widget.textColor.withValues(alpha: 0.6),
+                    fontSize: 10,
+                  ),
+                ),
+                if (widget.isMe) ...[
+                  const SizedBox(width: 2),
+                  _buildStatusIcon(),
+                ],
               ],
             ),
-          ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildProgressBar(Color inactive, Color active) {
+    return Container(
+      height: 4,
+      decoration: BoxDecoration(
+        color: inactive,
+        borderRadius: BorderRadius.circular(2),
       ),
     );
   }
@@ -1769,9 +1973,56 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
     });
   }
 
-  String _formatDuration(int seconds) {
-    final min = seconds ~/ 60;
-    final sec = seconds % 60;
-    return '$min:${sec.toString().padLeft(2, '0')}';
+  Future<void> _requestTranscription() async {
+    if (widget.audioId == null) return;
+
+    if (_transcriptionVisible && _transcriptionText != null) {
+      setState(() {
+        _transcriptionVisible = false;
+      });
+      return;
+    }
+
+    if (TranscriptionCache.has(widget.messageId)) {
+      final cached = TranscriptionCache.get(widget.messageId)!;
+      setState(() {
+        _transcriptionText = cached.text ?? 'не удалось распознать текст';
+        _transcriptionVisible = true;
+      });
+      return;
+    }
+
+    setState(() {
+      _transcriptionLoading = true;
+    });
+
+    try {
+      final result = await messagesModule.requestTranscription(
+        widget.chatId,
+        int.tryParse(widget.messageId) ?? 0,
+        widget.audioId!,
+      );
+
+      TranscriptionCache.put(widget.messageId, result);
+
+      setState(() {
+        _transcriptionLoading = false;
+        if (result.status == 1) {
+          _transcriptionText = (result.text == null || result.text!.isEmpty)
+              ? 'не удалось распознать текст'
+              : result.text;
+          _transcriptionVisible = true;
+        } else if (result.status == 0) {
+          _transcriptionText = 'транскрибация...';
+          _transcriptionVisible = true;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _transcriptionLoading = false;
+        _transcriptionText = 'ошибка транскрибации';
+        _transcriptionVisible = true;
+      });
+    }
   }
 }
