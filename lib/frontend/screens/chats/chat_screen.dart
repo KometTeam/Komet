@@ -11,6 +11,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../models/attachment.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../widgets/message_bubble.dart';
+import '../../widgets/attachment_panel.dart';
 
 class ChatScreen extends StatefulWidget {
   final int chatId;
@@ -37,6 +38,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _hasText = false;
   bool _isLoading = true;
   bool _isSending = false;
+  bool _showAttachmentPanel = false;
   late AnimationController _shimmerController;
   List<CachedMessage> _messages = [];
   int _myId = 0;
@@ -336,14 +338,28 @@ class _ChatScreenState extends State<ChatScreen>
             ],
           ),
         )),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: _isLoading && _messages.isEmpty
-                ? _buildShimmerLoading()
-                : _buildMessagesList(),
+          Column(
+            children: [
+              Expanded(
+                child: _isLoading && _messages.isEmpty
+                    ? _buildShimmerLoading()
+                    : _buildMessagesList(),
+              ),
+              _buildInputArea(context),
+            ],
           ),
-          _buildInputArea(context),
+          if (_showAttachmentPanel)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AttachmentPanel(
+                chatId: widget.chatId,
+                onClose: () => setState(() => _showAttachmentPanel = false),
+              ),
+            ),
         ],
       ),
     );
@@ -582,13 +598,32 @@ class _ChatScreenState extends State<ChatScreen>
                         opacity: _hasText ? 0 : 1,
                         child: _hasText
                             ? const SizedBox.shrink()
-                            : Padding(
-                                padding: const EdgeInsets.only(left: 12),
-                                child: Icon(
-                                  Symbols.attachment,
-                                  color: mutedIcon,
-                                  size: 24,
-                                  weight: 400,
+                            : GestureDetector(
+                                onTap: _showAttachmentPanel ? null : () => setState(() => _showAttachmentPanel = true),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 12),
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      if (_showAttachmentPanel)
+                                        SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.primary,
+                                          ),
+                                        ),
+                                      Icon(
+                                        Symbols.attachment,
+                                        color: _showAttachmentPanel
+                                            ? cs.onSurfaceVariant.withValues(alpha: 0.3)
+                                            : mutedIcon,
+                                        size: 24,
+                                        weight: 400,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                       ),
