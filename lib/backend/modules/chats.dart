@@ -38,6 +38,7 @@ class CachedChat {
   final bool isOnline;
   final int seenTime;
   final Map<int, int> participants;
+  final Set<String> options;
 
   const CachedChat({
     required this.id,
@@ -57,7 +58,10 @@ class CachedChat {
     required this.isOnline,
     required this.seenTime,
     required this.participants,
+    this.options = const {},
   });
+
+  bool get isOfficial => options.contains('OFFICIAL');
 
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
@@ -76,8 +80,14 @@ class CachedChat {
     dontDisturbUntil: row['dont_disturb_until'] as int,
     isOnline: (row['is_online'] as int) == 1,
     seenTime: row['seen_time'] as int,
-    participants: _parseParticipants(row['participants'])
+    participants: _parseParticipants(row['participants']),
+    options: _decodeOptions(row['options']),
   );
+
+  static Set<String> _decodeOptions(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return const {};
+    return raw.split(',').where((s) => s.isNotEmpty).toSet();
+  }
 
   Map<String, dynamic> toDbRow() => {
     'id': id,
@@ -96,7 +106,8 @@ class CachedChat {
     'dont_disturb_until': dontDisturbUntil,
     'is_online': isOnline ? 1 : 0,
     'seen_time': seenTime,
-    'participants': jsonEncode(participants.map((k, v) => MapEntry(k.toString(), v)))
+    'participants': jsonEncode(participants.map((k, v) => MapEntry(k.toString(), v))),
+    'options': options.isEmpty ? null : options.join(','),
   };
 }
 
@@ -210,6 +221,7 @@ class ChatsModule {
 
         String? title;
         String? iconUrl;
+        Set<String> options = const {};
 
         if (type == 'DIALOG') {
           otherId = _otherParticipantId(chat['participants'], currentUserId);
@@ -218,13 +230,25 @@ class ChatsModule {
           if (contact != null) {
             title = _nameFromContact(contact);
             iconUrl = contact['baseUrl'] as String?;
+            final contactOpts = contact['options'];
+            if (contactOpts is List) {
+              options = contactOpts.whereType<String>().toSet();
+            }
           } else {
             title = existing[id]?.title;
             iconUrl = existing[id]?.iconUrl;
+            options = existing[id]?.options ?? const {};
           }
         } else {
           title = chat['title'] as String?;
           iconUrl = chat['baseIconUrl'] as String?;
+          final chatOpts = chat['options'];
+          if (chatOpts is Map) {
+            options = {
+              for (final entry in chatOpts.entries)
+                if (entry.value == true && entry.key is String) entry.key as String,
+            };
+          }
         }
 
         final lastMsg = chat['lastMessage'];
@@ -276,7 +300,8 @@ class ChatsModule {
           dontDisturbUntil: dontDisturbUntil,
           isOnline: isOnline,
           seenTime: seenTime,
-          participants: participants
+          participants: participants,
+          options: options,
         );
     } catch (e) {
       logger.e("Ошибка при парсинге чата: $e");

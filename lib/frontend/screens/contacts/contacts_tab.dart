@@ -100,15 +100,32 @@ class _ContactsTabState extends State<ContactsTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      nameToDisplay,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            nameToDisplay,
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (contact.isVerified) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Symbols.verified,
+                            color: cs.primary,
+                            size: 16,
+                            weight: 600,
+                            fill: 1,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(

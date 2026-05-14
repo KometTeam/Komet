@@ -304,14 +304,33 @@ class _ChatScreenState extends State<ChatScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.name,
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Outfit',
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.name,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Outfit',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (chat?.isOfficial ?? false) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              Symbols.verified,
+                              color: cs.primary,
+                              size: 16,
+                              weight: 600,
+                              fill: 1,
+                            ),
+                          ],
+                        ],
                       ),
                       Text(
                         status ?? "",

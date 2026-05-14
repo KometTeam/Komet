@@ -1102,6 +1102,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    isVerified: chat.isOfficial,
                     chatType: "DIALOG",
                   );
                 } else {
@@ -1134,6 +1135,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    isVerified: chat.isOfficial,
                     chatType: chat.type,
                   );
                 }
@@ -1749,6 +1751,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isRead = false,
     int unreadCount = 0,
     bool isMuted = false,
+    bool isVerified = false,
     String chatType = "CHAT",
   }) {
     final cs = Theme.of(context).colorScheme;
@@ -1849,16 +1852,33 @@ Navigator.push(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  color: cs.onSurface,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.1,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      name,
+                                      style: TextStyle(
+                                        color: cs.onSurface,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.1,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (isVerified) ...[
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Symbols.verified,
+                                      color: cs.primary,
+                                      size: 16,
+                                      weight: 600,
+                                      fill: 1,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             if (isMuted) ...[
