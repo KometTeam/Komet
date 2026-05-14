@@ -1270,15 +1270,17 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildStickerAttachment(BuildContext ctx, MessageAttachment sticker) {
-    final preview = (sticker as dynamic).previewData as String? ?? '';
+    final url = sticker.baseUrl ?? '';
+    final preview = sticker.previewData ?? '';
+    final imageUrl = url.isNotEmpty ? url : preview;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(photoBorderRadius),
       child: Stack(
         children: [
-          if (preview.isNotEmpty)
+          if (imageUrl.isNotEmpty)
             Image.network(
-              preview,
+              imageUrl,
               width: 150,
               height: 150,
               fit: BoxFit.contain,

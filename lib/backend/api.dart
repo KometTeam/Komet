@@ -266,7 +266,15 @@ class Api {
   }
 
   Future<void> _onDataReceived(Uint8List data) async {
-    await for (final packet in _receiver.feed(data)) {
+    final rawPackets = _receiver.feed(data);
+    for (final raw in rawPackets) {
+      final Packet packet;
+      try {
+        packet = await unpackPacket(raw);
+      } catch (e) {
+        logger.e('PacketReceiver: ошибка распаковки: $e');
+        continue;
+      }
       if (packet.isError &&
           packet.payload is Map &&
           (packet.payload['message'] == 'FAIL_LOGIN_TOKEN' ||

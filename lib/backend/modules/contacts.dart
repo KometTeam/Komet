@@ -1,4 +1,5 @@
 import '../../core/storage/app_database.dart';
+import 'messages.dart';
 
 class CachedContact {
   final int id;
@@ -44,20 +45,63 @@ class ContactsModule {
     final contacts = data['contacts'];
     if (contacts is! List || contacts.isEmpty) return;
 
-    final rows = contacts
-        .whereType<Map>()
-        .map((c) => _parseContact(c.cast<dynamic, dynamic>(), accountId))
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    final rows = <Map<String, dynamic>>[];
+    for (final raw in contacts.whereType<Map>()) {
+      final contact = raw.cast<dynamic, dynamic>();
+      final row = _parseContact(contact, accountId);
+      if (row != null) rows.add(row);
+      _primeContactCache(contact);
+    }
 
     if (rows.isNotEmpty) {
       await AppDatabase.saveContacts(rows);
     }
   }
 
+  static void _primeContactCache(Map<dynamic, dynamic> contact) {
+    final id = contact['id'];
+    if (id is! int) return;
+
+    final names = contact['names'];
+    if (names is List && names.isNotEmpty) {
+      final nameRaw = names.firstWhere(
+        (n) => n is Map && n['type'] == 'ONEME',
+        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+      );
+      if (nameRaw is Map) {
+        final firstName = (nameRaw['firstName'] as String?) ?? '';
+        final lastName = nameRaw['lastName'] as String?;
+        final fullName = (lastName != null && lastName.isNotEmpty)
+            ? '$firstName $lastName'
+            : firstName;
+        if (fullName.isNotEmpty) ContactCache.put(id, fullName);
+      }
+    }
+
+    final baseUrl = contact['baseUrl'] as String?;
+    if (baseUrl != null && baseUrl.isNotEmpty) {
+      ContactCache.putAvatar(id, baseUrl);
+    }
+  }
+
   static Future<List<CachedContact>> getContacts(int accountId) async {
     final rows = await AppDatabase.loadContacts(accountId);
     return rows.map(CachedContact.fromDbRow).toList();
+  }
+
+  /// Прогревает in-memory ContactCache из локальных контактов.
+  /// Нужно вызывать на cold start: иначе кэш пуст до следующего логина.
+  static Future<void> primeCacheFromDb(int accountId) async {
+    final contacts = await getContacts(accountId);
+    for (final c in contacts) {
+      final fullName = (c.lastName != null && c.lastName!.isNotEmpty)
+          ? '${c.firstName} ${c.lastName}'
+          : c.firstName;
+      if (fullName.isNotEmpty) ContactCache.put(c.id, fullName);
+      if (c.baseUrl != null && c.baseUrl!.isNotEmpty) {
+        ContactCache.putAvatar(c.id, c.baseUrl);
+      }
+    }
   }
 
   static Map<String, dynamic>? _parseContact(

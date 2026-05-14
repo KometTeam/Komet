@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:isolate';
 import 'package:dart_lz4/dart_lz4.dart';
+import 'package:es_compression/zstd.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
 /// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
@@ -129,21 +130,7 @@ Future<Packet> unpackPacket(Uint8List packet) async {
 
     if (payloadBytes.isNotEmpty) {
       if (compFlag != 0) {
-        try {
-          payloadBytes = lz4Decompress(
-            payloadBytes,
-            decompressedSize: _maxDecompressedSize,
-          );
-        } catch (_) {
-          try {
-            payloadBytes = _lz4BlockDecompress(
-              payloadBytes,
-              _maxDecompressedSize,
-            );
-          } catch (e) {
-            throw Exception("LZ4 decompression error: $e");
-          }
-        }
+        payloadBytes = _decompressPayload(payloadBytes);
       }
 
       try {
@@ -163,6 +150,44 @@ Future<Packet> unpackPacket(Uint8List packet) async {
       payload: payload,
     );
   });
+}
+
+/// Определяет формат сжатия по magic-number и распаковывает payload.
+/// Сервер может присылать LZ4 block ИЛИ Zstandard в зависимости от ответа.
+Uint8List _decompressPayload(Uint8List src) {
+  // Zstandard: magic 28 B5 2F FD (little-endian)
+  if (src.length >= 4 &&
+      src[0] == 0x28 &&
+      src[1] == 0xB5 &&
+      src[2] == 0x2F &&
+      src[3] == 0xFD) {
+    try {
+      final out = zstd.decode(src);
+      return out is Uint8List ? out : Uint8List.fromList(out);
+    } catch (e) {
+      throw Exception('Zstd decompression error: $e');
+    }
+  }
+
+  // LZ4 frame: magic 04 22 4D 18
+  if (src.length >= 4 &&
+      src[0] == 0x04 &&
+      src[1] == 0x22 &&
+      src[2] == 0x4D &&
+      src[3] == 0x18) {
+    try {
+      return lz4Decompress(src, decompressedSize: _maxDecompressedSize);
+    } catch (e) {
+      throw Exception('LZ4 frame decompression error: $e');
+    }
+  }
+
+  // По умолчанию — LZ4 block (без magic)
+  try {
+    return _lz4BlockDecompress(src, _maxDecompressedSize);
+  } catch (e) {
+    throw Exception('LZ4 block decompression error: $e');
+  }
 }
 
 /// LZ4 block декомпрессия (без frame-заголовка).

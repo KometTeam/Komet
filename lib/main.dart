@@ -7,6 +7,7 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'backend/modules/account.dart';
+import 'backend/modules/contacts.dart';
 import 'backend/modules/messages.dart';
 import 'core/storage/app_database.dart';
 import 'core/storage/token_storage.dart';
@@ -36,6 +37,10 @@ Future<Locale> _loadInitialLocale() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppDatabase.init();
+  final activeAccountId = await TokenStorage.getActiveAccountId();
+  if (activeAccountId != null) {
+    await ContactsModule.primeCacheFromDb(activeAccountId);
+  }
   await api.connect();
   final initialLocale = await _loadInitialLocale();
 

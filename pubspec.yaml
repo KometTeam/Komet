@@ -38,6 +38,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   dart_lz4: ^1.0.0
+  es_compression: ^2.0.15
   msgpack_dart: ^1.0.1
   logger: ^2.6.2
   device_info_plus: 12.3.0

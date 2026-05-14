@@ -160,7 +160,6 @@ class ChatsModule {
   static Future<List<CachedChat>> getChats(int accountId) async {
     try {
       final rows = await AppDatabase.loadChats(accountId);
-      
       return rows.map(CachedChat.fromDbRow).toList();
     } catch (e) {
       logger.e("Ошибка при получении чатов: $e");
