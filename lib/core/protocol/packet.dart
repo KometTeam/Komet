@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'dart:isolate';
 import 'package:dart_lz4/dart_lz4.dart';
-import 'package:es_compression/zstd.dart';
+import 'package:libcompress/libcompress.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
 /// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
@@ -162,8 +162,7 @@ Uint8List _decompressPayload(Uint8List src) {
       src[2] == 0x2F &&
       src[3] == 0xFD) {
     try {
-      final out = zstd.decode(src);
-      return out is Uint8List ? out : Uint8List.fromList(out);
+      return ZstdCodec().decompress(src);
     } catch (e) {
       throw Exception('Zstd decompression error: $e');
     }
