@@ -107,6 +107,37 @@ class _ChatListScreenState extends State<ChatListScreen>
   StreamSubscription? _stateSub;
   StreamSubscription<LoginStatus>? _loginSub;
 
+  Widget? _cachedChatsBody;
+  Object? _chatsBodyCacheKey;
+
+  /// Возвращает дерево вкладки «Чаты», кэшируя его между ребилдами
+  /// родителя. Тап/драг навбара и FAB не трогают эти state-vars,
+  /// поэтому ключ остаётся прежним и subtree не пересобирается.
+  Widget _getChatsBody() {
+    final key = Object.hashAll([
+      identityHashCode(_chats),
+      identityHashCode(_folders),
+      _selectedFolderId,
+      _isInitialLoading,
+      _foldersListKnown,
+      _showCacheWarning,
+      _isSelectionMode,
+      _shouldCollapseSearch,
+      _selectedChats.length,
+      _pullRatio,
+      _storiesDockedOpen,
+      _storiesAnimClosing,
+      _storiesOverscrollRevealArmed,
+      _sessionState,
+      identityHashCode(_profile),
+    ]);
+    if (_cachedChatsBody == null || _chatsBodyCacheKey != key) {
+      _chatsBodyCacheKey = key;
+      _cachedChatsBody = _buildChatsTabBody();
+    }
+    return _cachedChatsBody!;
+  }
+
   void _toggleSelection(String chatId) {
     setState(() {
       if (_selectedChats.contains(chatId)) {
@@ -1406,7 +1437,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 child: SizedBox(
                                   width: pageW,
                                   height: pageH,
-                                  child: _buildChatsTabBody(),
+                                  child: _getChatsBody(),
                                 ),
                               ),
                               RepaintBoundary(
