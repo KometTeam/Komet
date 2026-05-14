@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart' show Locale;
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
@@ -803,15 +802,18 @@ class AccountModule {
   }) async {
     _ensureOnline();
 
-    final resolvedAccountId =
+    int? resolvedAccountId =
         accountId ?? await TokenStorage.getActiveAccountId();
-    if (resolvedAccountId == null) {
-      throw StateError('login: нет активного аккаунта');
-    }
 
-    final authToken = token ?? await TokenStorage.readToken(resolvedAccountId);
+    String? authToken = token;
     if (authToken == null) {
-      throw StateError('login: нет токена для аккаунта $resolvedAccountId');
+      if (resolvedAccountId == null) {
+        throw StateError('login: нет активного аккаунта');
+      }
+      authToken = await TokenStorage.readToken(resolvedAccountId);
+      if (authToken == null) {
+        throw StateError('login: нет токена для аккаунта $resolvedAccountId');
+      }
     }
 
     final requestPayload = _buildLoginPayload(authToken, syncParams);
@@ -827,10 +829,24 @@ class AccountModule {
         throw Exception('login: неожиданный тип payload: ${data.runtimeType}');
       }
 
-      final result = await _processLoginResponse(
-        data.cast<dynamic, dynamic>(),
-        resolvedAccountId,
-      );
+      final dataMap = data.cast<dynamic, dynamic>();
+
+      if (resolvedAccountId == null) {
+        final profileMap = dataMap['profile'];
+        if (profileMap is Map) {
+          final contact = profileMap['contact'];
+          if (contact is Map) {
+            resolvedAccountId = contact['id'] as int?;
+          }
+        }
+        if (resolvedAccountId == null) {
+          throw Exception('login: не удалось определить accountId из ответа');
+        }
+        await TokenStorage.saveToken(authToken, resolvedAccountId);
+        await TokenStorage.setActiveAccount(resolvedAccountId);
+      }
+
+      final result = await _processLoginResponse(dataMap, resolvedAccountId);
       _loginStatusController.add(LoginStatus.success);
       return result;
     } catch (e) {
@@ -938,23 +954,7 @@ class AccountModule {
       throw Exception('checkPassword: отсутствует токен в ответе');
     }
 
-    final profileData = data['profile'];
-    int? accountId;
-    if (profileData is Map) {
-      final contact = profileData['contact'];
-      if (contact is Map) {
-        accountId = contact['id'] as int?;
-      }
-    }
-
-    if (accountId != null) {
-      await TokenStorage.saveToken(loginToken, accountId);
-      await TokenStorage.setActiveAccount(accountId);
-      logger.i('2FA пройдена, токен аккаунта $accountId сохранён');
-    } else {
-      logger.w('2FA пройдена, но accountId не получен из ответа');
-    }
-
+    logger.i('2FA пройдена, получен login-токен');
     return TwoFactorResult(loginToken: loginToken);
   }
 
