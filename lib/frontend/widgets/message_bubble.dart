@@ -6,6 +6,7 @@ import 'package:komet/main.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
+import '../../core/utils/haptics.dart';
 import '../../models/attachment.dart';
 
 enum MessageType { text, attachment, voice, control }
@@ -329,7 +330,7 @@ class MessageBubble extends StatelessWidget {
 
     return GestureDetector(
       // TODO: действия с сообщением
-      onTap: () => print("test"),
+      onTap: () => Haptics.tap(),
       child: Padding(
         padding: EdgeInsets.only(
           left: isMe ? 12 : 12,

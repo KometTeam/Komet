@@ -11,6 +11,7 @@ import 'backend/modules/contacts.dart';
 import 'backend/modules/messages.dart';
 import 'core/storage/app_database.dart';
 import 'core/storage/token_storage.dart';
+import 'core/utils/haptics.dart';
 import 'core/protocol/packet.dart';
 import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/screens/auth/login_screen.dart';
@@ -43,6 +44,8 @@ void main() async {
   }
   await api.connect();
   final initialLocale = await _loadInitialLocale();
+
+  await Haptics.load();
 
   final prefs = await SharedPreferences.getInstance();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;

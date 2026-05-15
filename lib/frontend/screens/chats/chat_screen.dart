@@ -8,6 +8,7 @@ import '../../../main.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/haptics.dart';
 import '../../../models/attachment.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../widgets/message_bubble.dart';
@@ -153,6 +154,10 @@ class _ChatScreenState extends State<ChatScreen>
         _hasText = false;
       });
 
+      // Instant tactile "whoosh" the moment the message leaves the composer,
+      // not after the network round-trip — feedback must feel immediate.
+      Haptics.send();
+
       _scrollToBottom();
 
       await messagesModule.sendMessage(_myId, widget.chatId, text);
@@ -173,6 +178,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
     } catch (e) {
       debugPrint('Error sending message: $e');
+      Haptics.error();
     } finally {
       setState(() {
         _isSending = false;

@@ -12,6 +12,7 @@ import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
 import '../profile/settings_tab.dart';
 import '../../../backend/api.dart';
+import '../../../core/utils/haptics.dart';
 import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
@@ -139,6 +140,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _toggleSelection(String chatId) {
+    Haptics.selection();
     setState(() {
       if (_selectedChats.contains(chatId)) {
         _selectedChats.remove(chatId);
@@ -729,6 +731,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
       return;
     }
+    // Detent "click" when crossing into a different tab.
+    Haptics.selection();
     double fromT;
     if (_navPageAnimController.isAnimating) {
       final t = Curves.easeOutCubic.transform(_navPageAnimController.value);
@@ -743,6 +747,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _toggleFab() {
+    Haptics.tap();
     setState(() {
       _isFabOpen = !_isFabOpen;
       if (_isFabOpen) {
