@@ -57,27 +57,31 @@ jobs:
         with:
           name: komet-android-fcm-universal
           path: build/app/outputs/flutter-apk/app-oneme-release.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
           name: komet-android-fcm-arm64-v8a
-          path: build/app/outputs/flutter-apk/app-oneme-arm64-v8a-release.apk
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-oneme-release.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload armeabi-v7a APK
         uses: actions/upload-artifact@v4
         with:
           name: komet-android-fcm-armeabi-v7a
-          path: build/app/outputs/flutter-apk/app-oneme-armeabi-v7a-release.apk
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-oneme-release.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload x86_64 APK
         uses: actions/upload-artifact@v4
         with:
           name: komet-android-fcm-x86_64
-          path: build/app/outputs/flutter-apk/app-oneme-x86_64-release.apk
+          path: build/app/outputs/flutter-apk/app-x86_64-oneme-release.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Build App Bundle
@@ -88,4 +92,5 @@ jobs:
         with:
           name: komet-android-fcm-aab
           path: build/app/outputs/bundle/onemeRelease/app-oneme-release.aab
+          if-no-files-found: error
           retention-days: 30
