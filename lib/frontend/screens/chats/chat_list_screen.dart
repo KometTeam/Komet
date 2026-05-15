@@ -933,7 +933,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 6),
+                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 14),
                           child: Container(
                             height: 44,
                             decoration: BoxDecoration(
@@ -1078,7 +1078,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 6)),
+          const SliverToBoxAdapter(child: SizedBox(height: 14)),
           if (chats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
@@ -1104,7 +1104,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 // Insert separator row between pinned and regular sections
                 if (hasSeparator && index == pinnedCount) {
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Divider(
                       height: 1,
                       thickness: 0.5,
@@ -1823,7 +1823,7 @@ Navigator.push(
             ? cs.primary.withValues(alpha: 0.08)
             : Colors.transparent,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -2074,12 +2074,26 @@ Navigator.push(
 
   Widget _buildFabMenu() {
     final cs = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _buildFabMenuItem(Symbols.group_add, 'Создать группу'),
+        const SizedBox(height: 4),
+        _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
+        const SizedBox(height: 4),
+        _buildFabMenuItem(Symbols.person_add, 'Создать контакт'),
+      ],
+    );
+  }
+
+  Widget _buildFabMenuItem(IconData icon, String title) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       width: 220,
-      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(100),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -2088,39 +2102,27 @@ Navigator.push(
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildFabMenuItem(Symbols.search, 'Найти по номеру'),
-          _buildFabMenuItem(Symbols.group_add, 'Добавить группу'),
-          _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFabMenuItem(IconData icon, String title) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () {
-        // Action logic here
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, color: cs.onSurface, size: 22),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+      child: InkWell(
+        onTap: () {
+          // Action logic here
+        },
+        borderRadius: BorderRadius.circular(100),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: cs.onSurface, size: 22),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
