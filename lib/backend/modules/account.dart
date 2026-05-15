@@ -210,6 +210,12 @@ enum AuthRequestType {
 
 enum LoginStatus { idle, loading, success, error }
 
+class WrongDeviceTokenException implements Exception {
+  const WrongDeviceTokenException();
+  @override
+  String toString() => 'WrongDeviceTokenException';
+}
+
 class RequestCodeResult {
   final String token;
 
@@ -427,6 +433,33 @@ class AccountModule {
       await AppDatabase.savePrivacyConfig(accountId, config.toJson());
     }
     return config;
+  }
+
+  Future<void> registerPushToken(String pushToken) async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.config, <dynamic, dynamic>{
+      'pushToken': pushToken,
+    });
+    if (packet.isError) {
+      final msg = messageFromErrorPayload(packet.payload).toUpperCase();
+      if (msg.contains('WRONG_DEVICE_TOKEN') ||
+          msg.contains('WRONG.DEVICE.TOKEN')) {
+        throw const WrongDeviceTokenException();
+      }
+      throw PacketError(messageFromErrorPayload(packet.payload));
+    }
+  }
+
+  Future<void> unregisterPushToken(String pushToken) async {
+    if (_api.state != SessionState.online) return;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+    final authToken = await TokenStorage.readToken(accountId);
+    if (authToken == null) return;
+    await _api.sendRequest(Opcode.logout, <dynamic, dynamic>{
+      'token': authToken,
+      'pushToken': pushToken,
+    });
   }
 
   Future<ProfileData> updateProfileName(String firstName, String? lastName) async {

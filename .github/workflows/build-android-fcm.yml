@@ -1,4 +1,4 @@
-name: Build Android
+name: Build Android (FCM)
 
 on:
   workflow_dispatch:
@@ -10,16 +10,16 @@ on:
       - 'lib/**'
       - 'android/**'
       - 'pubspec.yaml'
-      - '.github/workflows/build-android.yml'
+      - '.github/workflows/build-android-fcm.yml'
   pull_request:
     paths:
       - 'lib/**'
       - 'android/**'
       - 'pubspec.yaml'
-      - '.github/workflows/build-android.yml'
+      - '.github/workflows/build-android-fcm.yml'
 
 jobs:
-  build-android:
+  build-android-fcm:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -47,45 +47,45 @@ jobs:
           echo "kotlin.daemon.jvmargs=-Xmx1536m" >> ~/.gradle/gradle.properties
 
       - name: Build Universal APK
-        run: flutter build apk --release --flavor komet
+        run: flutter build apk --release --flavor oneme
 
       - name: Build Split APKs
-        run: flutter build apk --release --split-per-abi --flavor komet
+        run: flutter build apk --release --split-per-abi --flavor oneme
 
       - name: Upload Universal APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-universal
-          path: build/app/outputs/flutter-apk/app-komet-release.apk
+          name: komet-android-fcm-universal
+          path: build/app/outputs/flutter-apk/app-oneme-release.apk
           retention-days: 30
 
       - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-arm64-v8a
-          path: build/app/outputs/flutter-apk/app-komet-arm64-v8a-release.apk
+          name: komet-android-fcm-arm64-v8a
+          path: build/app/outputs/flutter-apk/app-oneme-arm64-v8a-release.apk
           retention-days: 30
 
       - name: Upload armeabi-v7a APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-armeabi-v7a
-          path: build/app/outputs/flutter-apk/app-komet-armeabi-v7a-release.apk
+          name: komet-android-fcm-armeabi-v7a
+          path: build/app/outputs/flutter-apk/app-oneme-armeabi-v7a-release.apk
           retention-days: 30
 
       - name: Upload x86_64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-x86_64
-          path: build/app/outputs/flutter-apk/app-komet-x86_64-release.apk
+          name: komet-android-fcm-x86_64
+          path: build/app/outputs/flutter-apk/app-oneme-x86_64-release.apk
           retention-days: 30
 
       - name: Build App Bundle
-        run: flutter build appbundle --release --flavor komet
+        run: flutter build appbundle --release --flavor oneme
 
       - name: Upload App Bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-aab
-          path: build/app/outputs/bundle/kometRelease/app-komet-release.aab
+          name: komet-android-fcm-aab
+          path: build/app/outputs/bundle/onemeRelease/app-oneme-release.aab
           retention-days: 30

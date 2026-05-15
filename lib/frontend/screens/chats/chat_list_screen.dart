@@ -1085,7 +1085,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 child: Text(
                   'Кажется, тут пусто...',
                   style: TextStyle(
-                    color: cs.onSurface.withOpacity(0.6),
+                    color: cs.onSurface.withValues(alpha: 0.6),
                     fontSize: 16,
                   ),
                 ),
@@ -1144,10 +1144,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                 } else {
                   final name = chat.lastMsgSenderId != null
                       ? ContactCache.get(chat.lastMsgSenderId!)
-                      : null;
-
-                  final avatar = chat.lastMsgSenderId != null
-                      ? ContactCache.getAvatar(chat.lastMsgSenderId!)
                       : null;
 
                   String fullMsg = "";
@@ -2073,7 +2069,6 @@ Navigator.push(
   }
 
   Widget _buildFabMenu() {
-    final cs = Theme.of(context).colorScheme;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,

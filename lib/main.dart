@@ -4,11 +4,13 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:komet/l10n/app_localizations.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/messages.dart';
+import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/storage/token_storage.dart';
 import 'core/utils/haptics.dart';
@@ -43,6 +45,12 @@ void main() async {
     await ContactsModule.primeCacheFromDb(activeAccountId);
   }
   await api.connect();
+
+  final packageInfo = await PackageInfo.fromPlatform();
+  if (packageInfo.packageName == 'ru.oneme.app') {
+    await PushService.instance.init(api: api, account: accountModule);
+  }
+
   final initialLocale = await _loadInitialLocale();
 
   await Haptics.load();
@@ -82,6 +90,7 @@ class KometAppState extends State<KometApp> {
   late Locale _locale;
   bool _isLoggingOut = false;
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
+  StreamSubscription<LoginStatus>? _loginStatusSub;
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
     widget.initialFpsOverlay,
   );
@@ -105,9 +114,17 @@ class KometAppState extends State<KometApp> {
       } catch (_) {}
     });
 
+    _loginStatusSub = accountModule.loginStatusStream.listen((status) {
+      if (status == LoginStatus.success) {
+        PushService.instance.onLoginSuccess();
+      }
+    });
+
     _sessionExpiredSub = api.sessionExpiredStream.listen((SessionExpiredException e) async {
       if (_isLoggingOut) return;
       _isLoggingOut = true;
+
+      await PushService.instance.unregister();
 
       final accountId = await TokenStorage.getActiveAccountId();
       if (accountId != null) {
@@ -133,6 +150,7 @@ class KometAppState extends State<KometApp> {
   @override
   void dispose() {
     _sessionExpiredSub?.cancel();
+    _loginStatusSub?.cancel();
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     super.dispose();

@@ -943,7 +943,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                         fontSize: 14,
                       ),
                     ),
-                  if (trailing != null) trailing,
+                  ?trailing,
                   const SizedBox(width: 4),
                   Icon(
                     Symbols.chevron_right,

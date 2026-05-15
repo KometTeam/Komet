@@ -11,7 +11,6 @@ import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../models/attachment.dart';
-import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../widgets/message_bubble.dart';
 import '../../widgets/attachment_panel.dart';
 

@@ -6,17 +6,23 @@ on:
       - 'main'
 
 jobs:
-  analyze-and-build-all:
+  android:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          flutter-version: '3.41.5'
+          channel: 'stable'
 
       - name: Install dependencies
         run: flutter pub get
@@ -24,8 +30,34 @@ jobs:
       - name: Flutter analyze
         run: flutter analyze
 
+      - name: Configure Gradle
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
+          echo "kotlin.daemon.jvmargs=-Xmx1536m" >> ~/.gradle/gradle.properties
+
       - name: Build Android APK
-        run: flutter build apk --release
+        run: flutter build apk --release --flavor komet
+
+  web-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.5'
+          channel: 'stable'
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+
+      - name: Install dependencies
+        run: flutter pub get
 
       - name: Build Web
         run: flutter build web --release
@@ -33,13 +65,41 @@ jobs:
       - name: Build Linux
         run: flutter build linux --release
 
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.5'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
       - name: Build Windows
         run: flutter build windows --release
 
-      - name: Build iOS (only macOS runners)
-        if: runner.os == 'macOS'
-        run: flutter build ios --release
+  apple:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Build macOS (only macOS runners)
-        if: runner.os == 'macOS'
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.5'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
+
+      - name: Build macOS
         run: flutter build macos --release

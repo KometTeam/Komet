@@ -1,9 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:komet/backend/modules/chats.dart';
-import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/main.dart';
-import 'package:flutter/foundation.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
 import '../../core/utils/haptics.dart';
@@ -23,16 +20,18 @@ class MessageBubble extends StatelessWidget {
   static const double compactTimePadding = 8.0;
 
   bool get _hasPhotoWithCaption {
-    if (message.attachments == null || message.attachments!.isEmpty)
+    if (message.attachments == null || message.attachments!.isEmpty) {
       return false;
+    }
     final hasPhoto = message.attachments!.any((a) => a is PhotoAttachment);
     final hasCaption = message.text != null && message.text!.isNotEmpty;
     return hasPhoto && hasCaption;
   }
 
   bool get _hasMultiplePhotosNoCaption {
-    if (message.attachments == null || message.attachments!.isEmpty)
+    if (message.attachments == null || message.attachments!.isEmpty) {
       return false;
+    }
     final photoCount = message.attachments!.whereType<PhotoAttachment>().length;
     final hasCaption = message.text != null && message.text!.isNotEmpty;
     return photoCount >= 2 && !hasCaption;
@@ -226,23 +225,11 @@ class MessageBubble extends StatelessWidget {
       case MessageType.control:
         return 4;
     }
-    return 4;
   }
 
   double get bottomMargin {
     switch (contentType) {
       case MessageType.text:
-        switch (shape) {
-          case BubbleShape.singleTop:
-            return 1;
-          case BubbleShape.singleBottom:
-            return 1;
-          case BubbleShape.singleMiddle:
-            return 4;
-          case BubbleShape.groupedMiddle:
-            return 1;
-        }
-      case MessageType.attachment:
         switch (shape) {
           case BubbleShape.singleTop:
             return 1;
@@ -278,7 +265,6 @@ class MessageBubble extends StatelessWidget {
       case MessageType.control:
         return 4;
     }
-    return 4;
   }
 
   // Внутренний отступ, размеры типа я хз
@@ -311,7 +297,6 @@ class MessageBubble extends StatelessWidget {
       case MessageType.control:
         return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
     }
-    return const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
   }
 
   @override
@@ -491,7 +476,7 @@ class MessageBubble extends StatelessWidget {
           children: [
             Flexible(
               child: isForwarded
-                  ? _buildForwardedInlineText(context, forwarded!, textColor)
+                  ? _buildForwardedInlineText(context, forwarded, textColor)
                   : Text(
                       message.text ?? '',
                       style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
@@ -590,65 +575,13 @@ class MessageBubble extends StatelessWidget {
   }
 
   ForwardedMessageAttachment? _getForwardedAttachment() {
-    if (message.attachments == null || message.attachments!.isEmpty)
+    if (message.attachments == null || message.attachments!.isEmpty) {
       return null;
+    }
     for (final a in message.attachments!) {
       if (a is ForwardedMessageAttachment) return a;
     }
     return null;
-  }
-
-  Widget _buildForwardedHeader(
-    BuildContext context,
-    ForwardedMessageAttachment forwarded,
-  ) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
-    final textColor = isMe
-        ? Colors.white
-        : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
-    final headerColor = isMe
-        ? Colors.white.withValues(alpha: 0.7)
-        : (isDark ? cs.onSurfaceVariant : const Color(0xFF8E8E93));
-
-    final senderName = forwarded.originalSenderName;
-    final displaySender = senderName ?? forwarded.originalSenderId.toString();
-    final origText = forwarded.originalText;
-    final hasOrigText = origText != null && origText.isNotEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (hasOrigText) ...[
-          const SizedBox(height: 2),
-          Text(
-            origText,
-            style: TextStyle(color: textColor, fontSize: 14),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ],
-    );
   }
 
   Widget _buildAttachmentContent(BuildContext context) {
@@ -843,65 +776,6 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildForwardedFileContent(
-    BuildContext context,
-    ForwardedMessageAttachment forwarded,
-    List<FileAttachment> files,
-  ) {
-    final cs = Theme.of(context).colorScheme;
-    final headerColor = isMe
-        ? Colors.white.withValues(alpha: 0.7)
-        : cs.onSurfaceVariant;
-    final displaySender =
-        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              if (senderAvatar != null && senderAvatar.isNotEmpty)
-                CircleAvatar(
-                  radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(senderAvatar),
-                  backgroundColor: cs.primaryContainer,
-                )
-              else
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: cs.primaryContainer,
-                  child: Text(
-                    displaySender.isNotEmpty
-                        ? displaySender[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
-                  ),
-                ),
-              const SizedBox(width: 6),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        ...files.map((file) => _buildFileAttachment(context, file)),
-      ],
-    );
-  }
-
   Widget _buildForwardedGenericContent(
     BuildContext context,
     ForwardedMessageAttachment forwarded,
@@ -1001,7 +875,7 @@ class MessageBubble extends StatelessWidget {
               height: constrainedHeight,
               fit: BoxFit.cover,
               fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, __, ___) => _buildPhotoPlaceholder(
+              errorWidget: (_, _, _) => _buildPhotoPlaceholder(
                 ctx,
                 constrainedWidth,
                 constrainedHeight,
@@ -1106,7 +980,7 @@ class MessageBubble extends StatelessWidget {
                 width: double.infinity,
                 height: double.infinity,
                 fadeInDuration: const Duration(milliseconds: 120),
-                errorWidget: (_, __, ___) =>
+                errorWidget: (_, _, _) =>
                     _buildPhotoPlaceholder(ctx, 100, 100),
               )
             else
@@ -1141,7 +1015,7 @@ class MessageBubble extends StatelessWidget {
                 width: double.infinity,
                 height: double.infinity,
                 fadeInDuration: const Duration(milliseconds: 120),
-                errorWidget: (_, __, ___) =>
+                errorWidget: (_, _, _) =>
                     _buildPhotoPlaceholder(ctx, 100, 100),
               )
             else
@@ -1209,12 +1083,6 @@ class MessageBubble extends StatelessWidget {
     BuildContext ctx,
     MessageAttachment attachment,
   ) {
-    final cs = Theme.of(ctx).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
-    final textColor = isMe
-        ? Colors.white
-        : (isDark ? cs.onSurface : const Color(0xFF1C1C1E));
-
     switch (attachment.type) {
       case AttachmentType.video:
         return _buildVideoAttachment(ctx, attachment);
@@ -1371,7 +1239,7 @@ class MessageBubble extends StatelessWidget {
               height: 150,
               fit: BoxFit.contain,
               fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, __, ___) =>
+              errorWidget: (_, _, _) =>
                   _buildPhotoPlaceholder(ctx, 150, 150),
             )
           else
@@ -1427,7 +1295,7 @@ class MessageBubble extends StatelessWidget {
                       imageUrl: photoUrl,
                       fit: BoxFit.cover,
                       fadeInDuration: const Duration(milliseconds: 120),
-                      errorWidget: (_, __, ___) => Icon(
+                      errorWidget: (_, _, _) => Icon(
                         Symbols.person,
                         color: isMe ? Colors.white : cs.primary,
                         size: 24,
@@ -1573,7 +1441,7 @@ class MessageBubble extends StatelessWidget {
                           imageUrl: photoUrl,
                           fit: BoxFit.cover,
                           fadeInDuration: const Duration(milliseconds: 120),
-                          errorWidget: (_, __, ___) => Icon(
+                          errorWidget: (_, _, _) => Icon(
                             Symbols.person,
                             color: isMe ? Colors.white : cs.primary,
                             size: 24,
@@ -1680,7 +1548,6 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildMeta(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
     final timeColor = isMe ? Colors.white70 : cs.onSurfaceVariant;
 
     return Padding(
@@ -1700,8 +1567,6 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildCompactTime(BuildContext ctx) {
-    final cs = Theme.of(ctx).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
     final bgColor = isMe
         ? Colors.black.withValues(alpha: 0.4)
         : Colors.black.withValues(alpha: 0.5);
@@ -1760,12 +1625,6 @@ class MessageBubble extends StatelessWidget {
     final hour = dt.hour.toString().padLeft(2, '0');
     final minute = dt.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
-  }
-
-  String _formatDuration(int seconds) {
-    final min = seconds ~/ 60;
-    final sec = seconds % 60;
-    return '$min:${sec.toString().padLeft(2, '0')}';
   }
 }
 
@@ -1866,6 +1725,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
     return Icon(icon, size: 14, color: color);
   }
 
+  @override
   Widget build(BuildContext context) {
     final isDark = widget.cs.brightness == Brightness.dark;
     final waveInactiveColor = widget.isMe
@@ -2038,16 +1898,6 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildProgressBar(Color inactive, Color active) {
-    return Container(
-      height: 4,
-      decoration: BoxDecoration(
-        color: inactive,
-        borderRadius: BorderRadius.circular(2),
       ),
     );
   }

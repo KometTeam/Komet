@@ -15,8 +15,6 @@ class PasswordEntryScreen extends StatefulWidget {
 class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   bool _isLoading = true;
   bool _is2faEnabled = false;
-  String? _email;
-  String? _hint;
 
   @override
   void initState() {
