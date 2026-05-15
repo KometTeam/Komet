@@ -44,6 +44,7 @@ class MessageBubble extends StatelessWidget {
   final CachedMessage? prevMessage;
   final CachedMessage? nextMessage;
   final String chatType;
+  final String? overrideStatus;
 
   const MessageBubble({
     super.key,
@@ -52,7 +53,8 @@ class MessageBubble extends StatelessWidget {
     required this.myId,
     this.prevMessage,
     this.nextMessage,
-    required this.chatType
+    required this.chatType,
+    this.overrideStatus,
   });
 
   bool get isGroupedWithNext {
@@ -315,7 +317,6 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.isControl) {
-      debugPrint('BUILD CONTROL: ${message.id}');
       return Padding(
         padding: EdgeInsets.only(top: topMargin, bottom: bottomMargin),
         child: Center(child: _buildControlContent(context)),
@@ -490,7 +491,7 @@ class MessageBubble extends StatelessWidget {
           children: [
             Flexible(
               child: isForwarded
-                  ? _buildForwardedInlineText(context, forwarded, textColor)
+                  ? _buildForwardedInlineText(context, forwarded!, textColor)
                   : Text(
                       message.text ?? '',
                       style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
@@ -500,7 +501,9 @@ class MessageBubble extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
-                _formatTime(message.time),
+                message.status == 'EDITED'
+                    ? '${_formatTime(message.time)} ред.'
+                    : _formatTime(message.time),
                 style: TextStyle(
                   color: textColor.withValues(alpha: 0.7),
                   fontSize: 10,
@@ -904,13 +907,6 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
     List<MessageAttachment> attachments,
   ) {
-    debugPrint('DEBUG: _buildForwardedGenericContent called');
-    debugPrint('DEBUG: attachments count: ${attachments.length}');
-    for (var i = 0; i < attachments.length; i++) {
-      debugPrint('DEBUG: attachment[$i] type: ${attachments[i].runtimeType}');
-      debugPrint('DEBUG: attachment[$i] type field: ${attachments[i].type}');
-    }
-
     final cs = Theme.of(context).colorScheme;
     final headerColor = isMe
         ? Colors.white.withValues(alpha: 0.7)
@@ -1671,7 +1667,7 @@ class MessageBubble extends StatelessWidget {
       url: url,
       textColor: textColor,
       isMe: isMe,
-      status: message.status,
+      status: overrideStatus ?? message.status,
       time: message.time,
       cs: cs,
       waveData: waveData,
@@ -1729,31 +1725,31 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildStatusIcon(BuildContext context) {
-    final status = message.status;
+    final status = overrideStatus ?? message.status;
     IconData icon;
     Color color;
 
-    if (status == null || status == 'sending' || status == 'pending') {
-      icon = Symbols.check;
-      color = Colors.white70;
-    } else {
-      switch (status) {
-        case 'sent':
-          icon = Symbols.check;
-          color = Colors.white70;
-        case 'delivered':
-          icon = Symbols.done_all;
-          color = Colors.white70;
-        case 'read':
-          icon = Symbols.done_all;
-          color = const Color(0xFF34C759);
-        case 'error':
-          icon = Symbols.error;
-          color = Colors.redAccent;
-        default:
-          icon = Symbols.check;
-          color = Colors.white70;
-      }
+    switch (status) {
+      case 'sending':
+      case 'pending':
+        icon = Symbols.schedule;
+        color = Colors.white70;
+      case null:
+      case 'sent':
+        icon = Symbols.check;
+        color = Colors.white70;
+      case 'delivered':
+        icon = Symbols.done_all;
+        color = Colors.white70;
+      case 'read':
+        icon = Symbols.done_all;
+        color = const Color(0xFF4FC3F7);
+      case 'error':
+        icon = Symbols.error;
+        color = Colors.redAccent;
+      default:
+        icon = Symbols.check;
+        color = Colors.white70;
     }
 
     return Icon(icon, size: 14, color: color);
@@ -1840,11 +1836,15 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
     IconData icon;
     Color color;
 
-    if (status == null || status == 'sending' || status == 'pending') {
+    if (status == null || status == 'sent') {
       icon = Symbols.check;
       color = Colors.white54;
     } else {
       switch (status) {
+        case 'sending':
+        case 'pending':
+          icon = Symbols.schedule;
+          color = Colors.white54;
         case 'sent':
           icon = Symbols.check;
           color = Colors.white54;
@@ -1853,7 +1853,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
           color = Colors.white54;
         case 'read':
           icon = Symbols.done_all;
-          color = const Color(0xFF34C759);
+          color = const Color(0xFF4FC3F7);
         case 'error':
           icon = Symbols.error;
           color = Colors.redAccent;

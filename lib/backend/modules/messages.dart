@@ -278,7 +278,6 @@ class MessagesModule {
         // Detect CONTROL
         if (attachments.any((a) => a.type == AttachmentType.control)) {
           isControl = true;
-          debugPrint('CONTROL detected: ${attachments.where((a) => a.type == AttachmentType.control).first}');
         }
       }
     }
@@ -304,7 +303,7 @@ class MessagesModule {
     return int.tryParse(value.toString()) ?? 0;
   }
 
-  Future<void> sendMessage(
+  Future<String> sendMessage(
     int accountId,
     int chatId,
     String text, {
@@ -321,7 +320,22 @@ class MessagesModule {
       'notify': notify,
     };
 
-    await _api.sendRequest(Opcode.msgSend, payload);
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) {
+      final msg = (response.payload is Map)
+          ? (response.payload['localizedMessage'] ?? response.payload['message'] ?? 'Ошибка отправки')
+          : 'Ошибка отправки';
+      throw Exception(msg.toString());
+    }
+    final data = response.payload;
+    if (data is Map) {
+      final msgMap = data['message'];
+      if (msgMap is Map) {
+        final id = msgMap['id'];
+        if (id != null) return id.toString();
+      }
+    }
+    return '';
   }
 
   Future<TranscriptionResult> requestTranscription(

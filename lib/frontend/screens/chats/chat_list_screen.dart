@@ -787,7 +787,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 2),
+                          padding: const EdgeInsets.fromLTRB(20, 6, 20, 3),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -933,7 +933,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 4),
                           child: Container(
                             height: 44,
                             decoration: BoxDecoration(

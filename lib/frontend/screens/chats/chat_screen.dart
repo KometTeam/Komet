@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -51,7 +52,6 @@ class _ChatScreenState extends State<ChatScreen>
   final GlobalKey _listKey = GlobalKey();
   bool _hasText = false;
   bool _isLoading = true;
-  bool _isSending = false;
   bool _showAttachmentPanel = false;
   late AnimationController _shimmerController;
   List<CachedMessage> _messages = [];
@@ -64,6 +64,7 @@ class _ChatScreenState extends State<ChatScreen>
   late final AnimationController _floatingDateAnimController;
   final Map<int, GlobalKey> _separatorKeys = {};
   double _lastScrollOffset = 0;
+  String? _lastSentId;
   
   @override
   void initState() {
@@ -87,10 +88,10 @@ class _ChatScreenState extends State<ChatScreen>
     final activeProfile = await AppDatabase.loadActiveProfile();
     _myId = activeProfile?.id ?? 0;
     ChatsModule.getChat(_myId, widget.chatId).then((value) {
-      chat = value[0];
-    }).catchError((error) {
-
-    });
+      if (mounted && value.isNotEmpty) {
+        setState(() { chat = value.first; });
+      }
+    }).catchError((_) {});
 
     final cachedRows = await AppDatabase.loadMessages(
       _myId,
@@ -155,17 +156,29 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  String? _effectiveStatus(CachedMessage msg) {
+    if (msg.senderId != _myId) return null;
+    if (msg.status == 'sending' || msg.status == 'error') return msg.status;
+    final c = chat;
+    if (c == null) return 'sent';
+    int otherReadTime = 0;
+    for (final entry in c.participants.entries) {
+      if (entry.key != _myId && entry.value > otherReadTime) {
+        otherReadTime = entry.value;
+      }
+    }
+    if (otherReadTime > 0 && otherReadTime >= msg.time) return 'read';
+    return 'sent';
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _myId == 0) return;
 
-    setState(() {
-      _isSending = true;
-    });
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final now = DateTime.now().millisecondsSinceEpoch;
 
     try {
-      final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
-      final now = DateTime.now().millisecondsSinceEpoch;
 
       final tempMessage = CachedMessage(
         id: tempId,
@@ -178,6 +191,7 @@ class _ChatScreenState extends State<ChatScreen>
       );
 
       setState(() {
+        _lastSentId = tempId;
         _messages.add(tempMessage);
         _messageController.clear();
         _hasText = false;
@@ -189,13 +203,13 @@ class _ChatScreenState extends State<ChatScreen>
 
       _scrollToBottom();
 
-      await messagesModule.sendMessage(_myId, widget.chatId, text);
+      final actualId = await messagesModule.sendMessage(_myId, widget.chatId, text);
 
       final index = _messages.indexWhere((m) => m.id == tempId);
-      if (index != -1) {
+      if (index != -1 && mounted) {
         setState(() {
           _messages[index] = CachedMessage(
-            id: tempId,
+            id: actualId.isNotEmpty ? actualId : tempId,
             accountId: _myId,
             chatId: widget.chatId,
             senderId: _myId,
@@ -206,12 +220,21 @@ class _ChatScreenState extends State<ChatScreen>
         });
       }
     } catch (e) {
-      debugPrint('Error sending message: $e');
       Haptics.error();
-    } finally {
-      setState(() {
-        _isSending = false;
-      });
+      final index = _messages.indexWhere((m) => m.id == tempId);
+      if (index != -1 && mounted) {
+        setState(() {
+          _messages[index] = CachedMessage(
+            id: tempId,
+            accountId: _myId,
+            chatId: widget.chatId,
+            senderId: _myId,
+            text: text,
+            time: now,
+            status: 'error',
+          );
+        });
+      }
     }
   }
 
@@ -429,7 +452,7 @@ class _ChatScreenState extends State<ChatScreen>
     
     // TODO: Локализация
     // TODO: Cклонения
-    String? status = chat?.type == "CHAT" ? "${chat?.participants.length.toString()} участников" : "last seen recently";
+    final String status = chat?.type == "CHAT" ? "${chat?.participants.length ?? 0} участников" : "last seen recently";
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: PreferredSize(
@@ -505,7 +528,7 @@ class _ChatScreenState extends State<ChatScreen>
                         ],
                       ),
                       Text(
-                        status ?? "",
+                        status,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 12,
@@ -590,8 +613,6 @@ class _ChatScreenState extends State<ChatScreen>
             final msgItem = item as _MessageItem;
             final message = msgItem.message;
             final msgIndex = msgItem.index;
-            debugPrint(
-                'LIST_ITEM: ${message.id} isControl=${message.isControl} hasAttach=${message.attachments != null}');
             final isMe = message.senderId == _myId;
             final prevMessage =
                 msgIndex > 0 ? _messages[msgIndex - 1] : null;
@@ -599,14 +620,26 @@ class _ChatScreenState extends State<ChatScreen>
                 ? _messages[msgIndex + 1]
                 : null;
 
-            return MessageBubble(
+            final bubble = MessageBubble(
               message: message,
               isMe: isMe,
               myId: _myId,
               prevMessage: prevMessage,
               nextMessage: nextMessage,
               chatType: chat?.type ?? 'CHAT',
+              overrideStatus: _effectiveStatus(message),
             );
+
+            if (isMe && message.id == _lastSentId) {
+              return _SentMessageAnimation(
+                key: ValueKey('anim_${message.id}'),
+                onComplete: () {
+                  if (mounted) setState(() => _lastSentId = null);
+                },
+                child: bubble,
+              );
+            }
+            return bubble;
           },
         ),
         if (_lastFloatingDate != null)
@@ -805,22 +838,33 @@ class _ChatScreenState extends State<ChatScreen>
                     Icon(Symbols.face, color: mutedIcon, size: 24, weight: 400),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        style: TextStyle(color: cs.onSurface, fontSize: 16),
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textAlignVertical: TextAlignVertical.center,
-                        decoration: InputDecoration(
-                          hintText: 'Message',
-                          hintStyle: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 16,
-                          ),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 14,
+                      child: Focus(
+                        onKeyEvent: (node, event) {
+                          if (event is KeyDownEvent &&
+                              event.logicalKey == LogicalKeyboardKey.enter &&
+                              !HardwareKeyboard.instance.isShiftPressed) {
+                            if (_hasText) _sendMessage();
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: TextField(
+                          controller: _messageController,
+                          style: TextStyle(color: cs.onSurface, fontSize: 16),
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          textAlignVertical: TextAlignVertical.center,
+                          decoration: InputDecoration(
+                            hintText: 'Message',
+                            hintStyle: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 16,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
                           ),
                         ),
                       ),
@@ -889,6 +933,62 @@ class _ChatScreenState extends State<ChatScreen>
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SentMessageAnimation extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onComplete;
+
+  const _SentMessageAnimation({
+    super.key,
+    required this.child,
+    required this.onComplete,
+  });
+
+  @override
+  State<_SentMessageAnimation> createState() => _SentMessageAnimationState();
+}
+
+class _SentMessageAnimationState extends State<_SentMessageAnimation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _opacity;
+  late final Animation<double> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<double>(begin: 16, end: 0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+    _ctrl.forward().whenComplete(widget.onComplete);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, child) => Opacity(
+        opacity: _opacity.value,
+        child: Transform.translate(
+          offset: Offset(0, _slide.value),
+          child: child,
+        ),
+      ),
+      child: widget.child,
     );
   }
 }
