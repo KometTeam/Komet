@@ -281,16 +281,16 @@ class _StartupScreenState extends State<_StartupScreen> {
       return;
     }
 
+    try {
+      await accountModule.login(accountId: accountId);
+    } catch (_) {}
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const ChatListScreen()),
       );
     }
-
-    try {
-      await accountModule.login(accountId: accountId);
-    } catch (_) {}
   }
 
   void _goToLogin() {

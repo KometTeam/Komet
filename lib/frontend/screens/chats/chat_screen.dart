@@ -14,6 +14,18 @@ import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../widgets/message_bubble.dart';
 import '../../widgets/attachment_panel.dart';
 
+class _DateSeparatorItem {
+  final DateTime date;
+  final GlobalKey key;
+  _DateSeparatorItem(this.date, this.key);
+}
+
+class _MessageItem {
+  final CachedMessage message;
+  final int index;
+  const _MessageItem(this.message, this.index);
+}
+
 class ChatScreen extends StatefulWidget {
   final int chatId;
   final String name;
@@ -33,9 +45,10 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _listKey = GlobalKey();
   bool _hasText = false;
   bool _isLoading = true;
   bool _isSending = false;
@@ -44,15 +57,28 @@ class _ChatScreenState extends State<ChatScreen>
   List<CachedMessage> _messages = [];
   int _myId = 0;
   CachedChat? chat;
+
+  DateTime? _floatingDate;
+  DateTime? _lastFloatingDate;
+  Timer? _floatingDateTimer;
+  late final AnimationController _floatingDateAnimController;
+  final Map<int, GlobalKey> _separatorKeys = {};
+  double _lastScrollOffset = 0;
   
   @override
   void initState() {
     super.initState();
     _messageController.addListener(_onTextChanged);
+    _scrollController.addListener(_onScrollForDate);
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
+    _floatingDateAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      reverseDuration: const Duration(milliseconds: 380),
+    );
 
     _loadHistory();
   }
@@ -111,6 +137,9 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     _messageController.removeListener(_onTextChanged);
+    _scrollController.removeListener(_onScrollForDate);
+    _floatingDateTimer?.cancel();
+    _floatingDateAnimController.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _shimmerController.dispose();
@@ -255,6 +284,143 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     });
+  }
+
+  List<Object> _buildCombinedItems() {
+    final List<Object> items = [];
+    final Set<int> usedDates = {};
+
+    for (int i = 0; i < _messages.length; i++) {
+      final msg = _messages[i];
+      final msgDate = DateTime.fromMillisecondsSinceEpoch(msg.time);
+      final dayMillis = DateTime(msgDate.year, msgDate.month, msgDate.day)
+          .millisecondsSinceEpoch;
+
+      bool needSeparator = i == 0;
+      if (!needSeparator) {
+        final prevDate =
+            DateTime.fromMillisecondsSinceEpoch(_messages[i - 1].time);
+        final prevDayMillis =
+            DateTime(prevDate.year, prevDate.month, prevDate.day)
+                .millisecondsSinceEpoch;
+        needSeparator = dayMillis != prevDayMillis;
+      }
+
+      if (needSeparator) {
+        _separatorKeys.putIfAbsent(dayMillis, () => GlobalKey());
+        usedDates.add(dayMillis);
+        items.add(_DateSeparatorItem(
+          DateTime.fromMillisecondsSinceEpoch(dayMillis),
+          _separatorKeys[dayMillis]!,
+        ));
+      }
+
+      items.add(_MessageItem(msg, i));
+    }
+
+    _separatorKeys.removeWhere((k, _) => !usedDates.contains(k));
+    return items;
+  }
+
+  void _onScrollForDate() {
+    if (!_scrollController.hasClients) return;
+    final currentOffset = _scrollController.position.pixels;
+    final scrollingUp = currentOffset > _lastScrollOffset;
+    _lastScrollOffset = currentOffset;
+
+    _floatingDateTimer?.cancel();
+
+    if (!scrollingUp) {
+      _floatingDateAnimController.reverse();
+      return;
+    }
+
+    _floatingDateTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) _floatingDateAnimController.reverse();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateFloatingDate());
+  }
+
+  void _updateFloatingDate() {
+    if (!mounted) return;
+    DateTime? result;
+
+    final listRenderBox = _listKey.currentContext?.findRenderObject();
+    if (listRenderBox is! RenderBox) return;
+
+    _separatorKeys.forEach((dayMillis, gkey) {
+      final ctx = gkey.currentContext;
+      if (ctx == null) return;
+      final box = ctx.findRenderObject();
+      if (box is! RenderBox) return;
+      final pos = box.localToGlobal(Offset.zero, ancestor: listRenderBox);
+      if (pos.dy + box.size.height < 4) {
+        final date = DateTime.fromMillisecondsSinceEpoch(dayMillis);
+        if (result == null || date.isAfter(result!)) {
+          result = date;
+        }
+      }
+    });
+
+    if (result == null) return;
+
+    final bool dateChanged = result != _lastFloatingDate;
+    _lastFloatingDate = result;
+
+    if (result != _floatingDate) {
+      setState(() => _floatingDate = result);
+    }
+
+    if (dateChanged) {
+      _floatingDateAnimController.forward(from: 0);
+    } else {
+      _floatingDateAnimController.forward();
+    }
+  }
+
+  String _formatDateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final d = DateTime(date.year, date.month, date.day);
+
+    if (d == today) return 'Сегодня';
+    if (d == yesterday) return 'Вчера';
+
+    const months = [
+      'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+    ];
+    if (date.year == now.year) {
+      return '${date.day} ${months[date.month - 1]}';
+    }
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Widget _buildDateSeparatorWidget(BuildContext context, DateTime date,
+      {Key? key}) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            _formatDateLabel(date),
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -402,31 +568,74 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
-    return ListView.builder(
-      controller: _scrollController,
-      reverse: true,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final message = _messages[_messages.length - 1 - index];
-        debugPrint('LIST_ITEM: ${message.id} isControl=${message.isControl} hasAttach=${message.attachments != null}');
-        final isMe = message.senderId == _myId;
-        final prevMessage = index < _messages.length - 1
-            ? _messages[_messages.length - 2 - index]
-            : null;
-        final nextMessage = index > 0
-            ? _messages[_messages.length - index]
-            : null;
+    final items = _buildCombinedItems();
 
-        return MessageBubble(
-          message: message,
-          isMe: isMe,
-          myId: _myId,
-          prevMessage: prevMessage,
-          nextMessage: nextMessage,
-          chatType: chat?.type ?? 'CHAT',
-        );
-      },
+    return Stack(
+      key: _listKey,
+      children: [
+        ListView.builder(
+          controller: _scrollController,
+          reverse: true,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          cacheExtent: 9999,
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[items.length - 1 - index];
+
+            if (item is _DateSeparatorItem) {
+              return _buildDateSeparatorWidget(context, item.date,
+                  key: item.key);
+            }
+
+            final msgItem = item as _MessageItem;
+            final message = msgItem.message;
+            final msgIndex = msgItem.index;
+            debugPrint(
+                'LIST_ITEM: ${message.id} isControl=${message.isControl} hasAttach=${message.attachments != null}');
+            final isMe = message.senderId == _myId;
+            final prevMessage =
+                msgIndex > 0 ? _messages[msgIndex - 1] : null;
+            final nextMessage = msgIndex < _messages.length - 1
+                ? _messages[msgIndex + 1]
+                : null;
+
+            return MessageBubble(
+              message: message,
+              isMe: isMe,
+              myId: _myId,
+              prevMessage: prevMessage,
+              nextMessage: nextMessage,
+              chatType: chat?.type ?? 'CHAT',
+            );
+          },
+        ),
+        if (_lastFloatingDate != null)
+          Positioned(
+            top: 8,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _floatingDateAnimController,
+                builder: (context, child) {
+                  final t = CurvedAnimation(
+                    parent: _floatingDateAnimController,
+                    curve: Curves.easeOut,
+                    reverseCurve: Curves.easeIn,
+                  ).value;
+                  return Opacity(
+                    opacity: t,
+                    child: Transform.scale(
+                      scale: 0.82 + 0.18 * t,
+                      child: child,
+                    ),
+                  );
+                },
+                child: _buildDateSeparatorWidget(context, _lastFloatingDate!),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
