@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
@@ -63,6 +62,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
       _avatarUrl = newProfile.baseUrl;
       _photoId = newProfile.photoId;
+      if (!mounted) return;
       KometApp.stateOf(context)?.notifyProfileUpdate();
       if (mounted) {
         showCustomNotification(context, 'Имя сохранено');
@@ -93,6 +93,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final newProfile = await accountModule.removeProfilePhoto(_photoId!);
       _avatarUrl = newProfile.baseUrl;
       _photoId = newProfile.photoId;
+      if (!mounted) return;
       KometApp.stateOf(context)?.notifyProfileUpdate();
       if (mounted) {
         showCustomNotification(context, 'Фото удалено');
