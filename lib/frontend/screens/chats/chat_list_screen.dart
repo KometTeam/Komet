@@ -1341,7 +1341,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ),
                   ),
                 ),
-                Row(
+                SizedBox(
+                  width: navInnerW,
+                  child: Row(
                   children: List.generate(4, (index) {
                     IconData icon;
                     String label;
@@ -1389,6 +1391,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       ),
                     );
                   }),
+                  ),
                 ),
               ],
             ),
