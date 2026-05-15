@@ -375,9 +375,7 @@ class AccountModule {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
       final saved = await AppDatabase.getPrivacyConfig(accountId);
-      if (saved != null) {
-        return PrivacyConfig.fromJson(saved);
-      }
+      if (saved != null) return PrivacyConfig.fromJson(saved);
     }
     return PrivacyConfig.empty();
   }
@@ -1021,6 +1019,13 @@ class AccountModule {
         profile.id,
         config.cast<dynamic, dynamic>(),
       );
+      final userConfig = config['user'];
+      if (userConfig is Map) {
+        await AppDatabase.savePrivacyConfig(
+          profile.id,
+          jsonEncode(userConfig),
+        );
+      }
     }
     try {
       await FoldersModule.syncFromServer(_api, profile.id);

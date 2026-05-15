@@ -933,7 +933,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 4),
+                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 6),
                           child: Container(
                             height: 44,
                             decoration: BoxDecoration(
@@ -1078,6 +1078,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
+          const SliverToBoxAdapter(child: SizedBox(height: 6)),
           if (chats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
