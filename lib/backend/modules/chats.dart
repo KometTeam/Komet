@@ -132,6 +132,7 @@ class ChatsModule {
       final chatsConfig = configMap['chats'] is Map
           ? configMap['chats'] as Map
           : {};
+
       // Presence for online statuses
       final presenceMap = data['presence'] is Map ? data['presence'] as Map : {};
       final cachedAt = DateTime.now().millisecondsSinceEpoch;
@@ -271,6 +272,7 @@ class ChatsModule {
           favIndex = config['favIndex'] as int?;
           dontDisturbUntil = (config['dontDisturbUntil'] as int?) ?? 0;
         }
+
 
         int seenTime = 0;
         bool isOnline = false;

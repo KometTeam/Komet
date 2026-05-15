@@ -376,13 +376,21 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
-    if (_folders.isEmpty) return _chats;
-    if (pageIndex < 0 || pageIndex >= _folders.length) return _chats;
-    final folder = _folders[pageIndex];
-    if (FoldersModule.isAllChatsFolder(folder)) return _chats;
-    return _chats
-        .where((c) => FoldersModule.chatMatchesFolder(c, folder))
-        .toList();
+    List<CachedChat> base;
+    if (_folders.isEmpty) {
+      base = _chats;
+    } else if (pageIndex < 0 || pageIndex >= _folders.length) {
+      base = _chats;
+    } else {
+      final folder = _folders[pageIndex];
+      base = FoldersModule.isAllChatsFolder(folder)
+          ? _chats
+          : _chats.where((c) => FoldersModule.chatMatchesFolder(c, folder)).toList();
+    }
+    final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
+      ..sort((a, b) => a.favIndex!.compareTo(b.favIndex!));
+    final regular = base.where((c) => (c.favIndex ?? 0) <= 0).toList();
+    return [...pinned, ...regular];
   }
 
   void _syncFolderChatScrollControllers() {
@@ -1088,7 +1096,25 @@ class _ChatListScreenState extends State<ChatListScreen>
                 if (_isInitialLoading) {
                   return _buildChatShimmer();
                 }
-                final chat = chats[index];
+
+                final pinnedCount = chats.where((c) => (c.favIndex ?? 0) > 0).length;
+                final hasSeparator = pinnedCount > 0 && pinnedCount < chats.length;
+
+                // Insert separator row between pinned and regular sections
+                if (hasSeparator && index == pinnedCount) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  );
+                }
+
+                final chatIndex = hasSeparator && index > pinnedCount ? index - 1 : index;
+                final chat = chats[chatIndex];
+                final isPinned = (chat.favIndex ?? 0) > 0;
 
                 if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
                   final secondId = chat.participants.entries
@@ -1097,6 +1123,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                       .key;
                   final name = ContactCache.get(secondId);
                   final avatar = ContactCache.getAvatar(secondId);
+                  // ContactCache.isOfficial covers contacts loaded via opcode 32;
+                  // chat.isOfficial covers contacts from the login payload.
+                  final isVerified = ContactCache.isOfficial(secondId) || chat.isOfficial;
 
                   return _buildChatItem(
                     chat.id.toString(),
@@ -1107,7 +1136,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
-                    isVerified: chat.isOfficial,
+                    isVerified: isVerified,
+                    isPinned: isPinned,
                     chatType: "DIALOG",
                   );
                 } else {
@@ -1124,7 +1154,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   if (name?.isNotEmpty == true && chat.id != 0) {
                     fullMsg += "$name: ";
                   }
-                  
+
                   if (chat.lastMsgText?.isNotEmpty == true) {
                     fullMsg += chat.lastMsgText ?? "";
                   }
@@ -1141,10 +1171,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
                     isVerified: chat.isOfficial,
+                    isPinned: isPinned,
                     chatType: chat.type,
                   );
                 }
-              }, childCount: _isInitialLoading ? 10 : chats.length),
+              }, childCount: _isInitialLoading ? 10 : chats.length + (chats.any((c) => (c.favIndex ?? 0) > 0) && chats.any((c) => (c.favIndex ?? 0) <= 0) ? 1 : 0)),
             ),
           SliverPadding(
             padding: EdgeInsets.only(
@@ -1760,6 +1791,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     int unreadCount = 0,
     bool isMuted = false,
     bool isVerified = false,
+    bool isPinned = false,
     String chatType = "CHAT",
   }) {
     final cs = Theme.of(context).colorScheme;
@@ -1893,6 +1925,15 @@ Navigator.push(
                               const SizedBox(width: 4),
                               Icon(
                                 Symbols.notifications_off,
+                                color: cs.outlineVariant,
+                                size: 14,
+                                weight: 400,
+                              ),
+                            ],
+                            if (isPinned) ...[
+                              const SizedBox(width: 4),
+                              Icon(
+                                Symbols.keep,
                                 color: cs.outlineVariant,
                                 size: 14,
                                 weight: 400,

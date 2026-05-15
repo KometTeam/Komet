@@ -8,19 +8,19 @@ import '../../models/attachment.dart';
 class ContactCache {
   static final Map<int, String> _nameCache = {};
   static final Map<int, String> _avatarCache = {};
+  static final Map<int, Set<String>> _optionsCache = {};
 
-  static void put(int id, String name) {
-    _nameCache[id] = name;
-  }
+  static void put(int id, String name) => _nameCache[id] = name;
 
   static void putAvatar(int id, String? baseUrl) {
-    if (baseUrl != null) {
-      _avatarCache[id] = baseUrl;
-    }
+    if (baseUrl != null) _avatarCache[id] = baseUrl;
   }
+
+  static void putOptions(int id, Set<String> opts) => _optionsCache[id] = opts;
 
   static String? get(int id) => _nameCache[id];
   static String? getAvatar(int id) => _avatarCache[id];
+  static bool isOfficial(int id) => _optionsCache[id]?.contains('OFFICIAL') ?? false;
 }
 
 class TranscriptionResult {
@@ -544,6 +544,11 @@ class MessagesModule {
 
               final baseUrl = contact['baseUrl'] as String?;
               ContactCache.putAvatar(contactId, baseUrl);
+
+              final rawOpts = contact['options'];
+              if (rawOpts is List) {
+                ContactCache.putOptions(contactId, rawOpts.whereType<String>().toSet());
+              }
 
               return fullName;
             }

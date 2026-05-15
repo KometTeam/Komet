@@ -29,7 +29,7 @@ class CachedContact {
   bool get isOfficial => options.contains('OFFICIAL');
   bool get isBot => options.contains('BOT');
   bool get isServiceAccount => options.contains('SERVICE_ACCOUNT');
-  bool get isVerified => isOfficial || isBot || isServiceAccount;
+  bool get isVerified => isOfficial;
 
   factory CachedContact.fromDbRow(Map<String, dynamic> row) => CachedContact(
     id: row['id'] as int,
