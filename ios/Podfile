@@ -1,8 +1,32 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+platform :ios, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+require 'json'
+
+# Firebase is Android-only: FCM is used solely by the `oneme` flavor, and on
+# iOS there is a single `ru.komet.app` bundle that never initialises push.
+# Keep the Firebase SDK out of the iOS build entirely so iOS is not forced up
+# to the iOS 15 deployment target that firebase_core's podspec requires.
+FIREBASE_IOS_PLUGINS = %w[firebase_core firebase_messaging].freeze
+
+deps_file = File.expand_path('../.flutter-plugins-dependencies', __dir__)
+if File.exist?(deps_file)
+  deps = JSON.parse(File.read(deps_file))
+  ios_plugins = deps.dig('plugins', 'ios')
+  if ios_plugins
+    ios_plugins.reject! { |p| FIREBASE_IOS_PLUGINS.include?(p['name']) }
+    File.write(deps_file, JSON.generate(deps))
+  end
+end
+
+registrant = File.expand_path('Runner/GeneratedPluginRegistrant.m', __dir__)
+if File.exist?(registrant)
+  drop = /firebase_core|firebase_messaging|FLTFirebaseCorePlugin|FLTFirebaseMessagingPlugin/
+  File.write(registrant, File.readlines(registrant).reject { |line| line =~ drop }.join)
+end
 
 project 'Runner', {
   'Debug' => :debug,
