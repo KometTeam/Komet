@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:komet/l10n/app_localizations.dart';
+import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
+import 'core/config/app_fonts.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/messages.dart';
@@ -59,11 +60,14 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
+  final initialFontId =
+      prefs.getString(AppFonts.prefKey) ?? AppFonts.fallback.id;
   runApp(
     KometApp(
       initialLocale: initialLocale,
       initialFpsOverlay: initialFpsOverlay,
       initialVpnBypass: initialVpnBypass,
+      initialFontId: initialFontId,
     ),
   );
 }
@@ -74,11 +78,13 @@ class KometApp extends StatefulWidget {
     required this.initialLocale,
     this.initialFpsOverlay = false,
     this.initialVpnBypass = false,
+    required this.initialFontId,
   });
 
   final Locale initialLocale;
   final bool initialFpsOverlay;
   final bool initialVpnBypass;
+  final String initialFontId;
   static final navigatorKey = GlobalKey<NavigatorState>();
 
   static KometAppState? stateOf(BuildContext context) {
@@ -93,6 +99,7 @@ class KometAppState extends State<KometApp> {
   static const _fallbackSeed = Color(0xFFC1C4FF);
 
   late Locale _locale;
+  late String _fontId;
   bool _isLoggingOut = false;
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
@@ -112,6 +119,7 @@ class KometAppState extends State<KometApp> {
   void initState() {
     super.initState();
     _locale = widget.initialLocale;
+    _fontId = widget.initialFontId;
 
     api.setReconnectCallback(() async {
       try {
@@ -217,6 +225,17 @@ class KometAppState extends State<KometApp> {
     }
   }
 
+  String get fontId => _fontId;
+
+  Future<void> applyAppFont(String fontId) async {
+    if (_fontId == fontId) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppFonts.prefKey, fontId);
+    if (mounted) {
+      setState(() => _fontId = fontId);
+    }
+  }
+
   void notifyProfileUpdate() {
     _profileUpdateController.add(null);
   }
@@ -282,18 +301,24 @@ class KometAppState extends State<KometApp> {
           themeMode: ThemeMode.system,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: lightScheme,
-            textTheme: GoogleFonts.interTextTheme(
-              ThemeData(brightness: Brightness.light).textTheme,
+          theme: withM3ETheme(
+            ThemeData(
+              useMaterial3: true,
+              colorScheme: lightScheme,
+              textTheme: AppFonts.textTheme(
+                _fontId,
+                ThemeData(brightness: Brightness.light).textTheme,
+              ),
             ),
           ),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            colorScheme: darkScheme,
-            textTheme: GoogleFonts.interTextTheme(
-              ThemeData(brightness: Brightness.dark).textTheme,
+          darkTheme: withM3ETheme(
+            ThemeData(
+              useMaterial3: true,
+              colorScheme: darkScheme,
+              textTheme: AppFonts.textTheme(
+                _fontId,
+                ThemeData(brightness: Brightness.dark).textTheme,
+              ),
             ),
           ),
           navigatorKey: KometApp.navigatorKey,

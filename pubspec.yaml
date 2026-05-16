@@ -52,6 +52,7 @@ dependencies:
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
   google_fonts: ^6.2.1
+  m3e_collection: ^0.3.7
   material_symbols_icons: ^4.2906.0
   dynamic_color: ^1.8.1
   shared_preferences: ^2.5.4

@@ -9,6 +9,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../auth/proxy_settings_sheet.dart';
+import 'customization_screen.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
@@ -134,6 +135,29 @@ child: _buildSection(
                           context,
                           MaterialPageRoute(
                             builder: (context) => const InfoScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _buildSection(
+                  context,
+                  cs,
+                  items: [
+                    _SettingsItem(
+                      icon: Symbols.palette,
+                      label: 'Кастомизация',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CustomizationScreen(),
                           ),
                         );
                       },
