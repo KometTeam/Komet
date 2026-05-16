@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/storage/app_database.dart';
@@ -43,9 +43,13 @@ class ChatInfoScreen extends StatefulWidget {
 }
 
 class _ChatInfoScreenState extends State<ChatInfoScreen> {
+  final _tabScrollController = ScrollController();
+
   int _myId = 0;
   bool _isLoading = true;
   Map<String, dynamic>? _chatData;
+  String _selectedTab = '';
+  bool _descExpanded = false;
 
   // DIALOG
   int? _otherId;
@@ -53,8 +57,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   int? _seenTime;
   bool _isOnline = false;
   bool _isBot = false;
-
-  bool _infoExpanded = false;
 
   // CHAT
   List<_MemberInfo> _members = [];
@@ -64,6 +66,27 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabScrollController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _tabs {
+    switch (widget.chatType) {
+      case 'DIALOG':
+        return _isBot
+            ? ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки']
+            : ['Общие чаты', 'Медиа', 'Info', 'Файлы', 'Голосовые', 'Ссылки'];
+      case 'CHAT':
+        return ['Участники', 'Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+      case 'CHANNEL':
+        return ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+      default:
+        return ['Info'];
+    }
   }
 
   Future<void> _load() async {
@@ -144,8 +167,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           final presence = (pp.payload as Map?)?['presence'] as Map?;
           if (presence != null) {
             for (final e in presence.entries) {
-              final id = e.key is int ? e.key as int : int.tryParse(e.key.toString());
-              if (id != null && e.value is Map) presenceMap[id] = e.value as Map;
+              final id = e.key is int
+                  ? e.key as int
+                  : int.tryParse(e.key.toString());
+              if (id != null && e.value is Map) {
+                presenceMap[id] = e.value as Map;
+              }
             }
           }
         }
@@ -175,7 +202,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       });
     }
 
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (_selectedTab.isEmpty) _selectedTab = _tabs.first;
+      });
+    }
   }
 
   // ─── BUILD ───────────────────────────────────────────────────────────────
@@ -202,15 +234,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           elevation: 0,
           floating: true,
           leading: IconButton(
-            icon: Icon(Symbols.arrow_back, color: cs.onSurface),
+            icon: Icon(Icons.arrow_back, color: cs.onSurface),
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
-            if (widget.chatType == 'DIALOG' && !_isBot)
-              IconButton(
-                icon: Icon(Symbols.edit, color: cs.onSurface),
-                onPressed: () {},
-              ),
+            IconButton(
+              icon: Icon(Icons.more_vert, color: cs.onSurface),
+              onPressed: () {},
+            ),
           ],
         ),
         SliverToBoxAdapter(child: _buildBody(cs)),
@@ -222,6 +253,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 4),
           _buildAvatar(cs),
@@ -244,11 +276,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           const SizedBox(height: 20),
           _buildActions(cs),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (ctx, constraints) =>
-                _buildInfoArea(cs, constraints.maxWidth),
-          ),
-          const SizedBox(height: 80),
+          _buildPersistentInfo(cs),
+          _buildTabBar(cs),
+          const SizedBox(height: 12),
+          _buildTabContent(cs),
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -260,7 +292,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     return Container(
       width: 96,
       height: 96,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: cs.primaryContainer),
+      decoration: BoxDecoration(
+          shape: BoxShape.circle, color: cs.primaryContainer),
       child: widget.imageUrl.isNotEmpty
           ? ClipOval(
               child: CachedNetworkImage(
@@ -289,11 +322,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   String _subtitle() {
     switch (widget.chatType) {
       case 'DIALOG':
-        if (_isBot) {
-          final link = _contactData?['link'] as String?;
-          final handle = link != null ? '@${Uri.parse(link).pathSegments.last}' : '';
-          return '$handle · Бот'.trim();
-        }
+        if (_isBot) return 'Бот';
         if (_isOnline) return 'В сети';
         if (_seenTime != null) return _formatLastSeen(_seenTime!);
         return '';
@@ -318,40 +347,46 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     if (widget.chatType == 'DIALOG') {
       if (_isBot) {
         btns = [
-          (icon: Symbols.chat_bubble, label: 'Цат'),
-          (icon: Symbols.notifications, label: 'Звук'),
-          (icon: Symbols.more_horiz, label: 'Ещё'),
+          (icon: Icons.chat_bubble, label: 'Чат'),
+          (icon: Icons.notifications, label: 'Звук'),
         ];
       } else {
         btns = [
-          (icon: Symbols.call, label: 'Звонок'),
-          (icon: Symbols.videocam, label: 'Видео'),
-          (icon: Symbols.notifications, label: 'Звук'),
-          (icon: Symbols.more_horiz, label: 'Ещё'),
+          (icon: Icons.chat_bubble, label: 'Чат'),
+          (icon: Icons.notifications, label: 'Звук'),
+          (icon: Icons.call, label: 'Звонок'),
         ];
       }
+    } else if (widget.chatType == 'CHANNEL') {
+      btns = [
+        (icon: Icons.notifications, label: 'Звук'),
+        (icon: Icons.exit_to_app, label: 'Покинуть'),
+      ];
     } else {
       btns = [
-        (icon: Symbols.notifications, label: 'Звук'),
-        (icon: Symbols.search, label: 'Найти'),
-        (icon: Symbols.more_horiz, label: 'Ещё'),
+        (icon: Icons.chat_bubble, label: 'Чат'),
+        (icon: Icons.notifications, label: 'Звук'),
+        (icon: Icons.exit_to_app, label: 'Покинуть'),
       ];
     }
 
-    return Row(
-      children: [
-        for (int i = 0; i < btns.length; i++) ...[
-          _actionBtn(cs, btns[i].icon, btns[i].label),
-          if (i < btns.length - 1) const SizedBox(width: 8),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          for (int i = 0; i < btns.length; i++) ...[
+            _actionBtn(cs, btns[i].icon, btns[i].label),
+            if (i < btns.length - 1) const SizedBox(width: 8),
+          ],
         ],
-      ],
+      ),
     );
   }
 
   Widget _actionBtn(ColorScheme cs, IconData icon, String label) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(14),
@@ -359,109 +394,324 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: const Color(0xFF007AFF), size: 24),
-            const SizedBox(height: 5),
-            Text(label, style: TextStyle(color: cs.onSurface, fontSize: 12)),
+            Icon(icon, color: const Color(0xFF007AFF), size: 22),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(color: cs.onSurface, fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
     );
   }
 
-  // ─── SECTIONS ────────────────────────────────────────────────────────────
+  // ─── PERSISTENT INFO (shown above tabs for all types) ────────────────────
 
-  List<Widget> _buildSections(ColorScheme cs) {
-    switch (widget.chatType) {
-      case 'DIALOG':
-        return _dialogSections(cs);
-      case 'CHAT':
-        return _groupSections(cs);
-      case 'CHANNEL':
-        return _channelSections(cs);
-      default:
-        return [_attachmentsCard(cs)];
-    }
-  }
+  Widget _buildPersistentInfo(ColorScheme cs) {
+    final items = <Widget>[];
 
-  List<Widget> _dialogSections(ColorScheme cs) {
-    final result = <Widget>[];
-
-    if (_isBot) {
-      final link = _contactData?['link'] as String?;
-      if (link != null) {
-        result
-          ..add(_linkCard(cs, link))
-          ..add(const SizedBox(height: 8));
+    if (widget.chatType == 'DIALOG') {
+      if (_isBot) {
+        final link = _contactData?['link'] as String?;
+        if (link != null && link.isNotEmpty) {
+          items.add(_simpleInfoCard(cs, 'Ссылка', link, isLink: true));
+        }
+      } else {
+        final phone = _contactData?['phone'];
+        final phoneInt =
+            phone is int ? phone : int.tryParse(phone?.toString() ?? '');
+        if (phoneInt != null && phoneInt > 0) {
+          items.add(_simpleInfoCard(cs, 'Номер телефона', _formatPhone(phoneInt)));
+        }
       }
-    } else {
-      final phone = _contactData?['phone'];
-      final phoneInt = phone is int ? phone : int.tryParse(phone?.toString() ?? '');
-      if (phoneInt != null && phoneInt > 0) {
-        result
-          ..add(_infoCard(cs, 'Номер телефона', _formatPhone(phoneInt)))
-          ..add(const SizedBox(height: 8));
+    } else if (widget.chatType == 'CHANNEL') {
+      final link = _chatData?['link'] as String?;
+      if (link != null && link.isNotEmpty) {
+        items.add(_linkCard(cs, link));
+      }
+      final desc = _chatData?['description'] as String?;
+      if (desc != null && desc.isNotEmpty) {
+        if (items.isNotEmpty) items.add(const SizedBox(height: 8));
+        items.add(_collapsibleDescCard(cs, desc));
       }
     }
 
-    result.add(_attachmentsCard(cs));
-    return result;
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [...items, const SizedBox(height: 16)],
+    );
   }
 
-  List<Widget> _groupSections(ColorScheme cs) {
-    return [
-      _attachmentsCard(cs),
-      const SizedBox(height: 24),
-      Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 8),
-        child: Text(
-          'УЧАСТНИКИ',
-          style: TextStyle(
-            color: cs.onSurfaceVariant,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
+  Widget _simpleInfoCard(ColorScheme cs, String label, String value,
+      {bool isLink = false}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: isLink ? const Color(0xFF007AFF) : cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linkCard(ColorScheme cs, String link) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ссылка-приглашение',
+                    style:
+                        TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(link,
+                    style: const TextStyle(
+                        color: Color(0xFF007AFF), fontSize: 15)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.qr_code_2,
+                color: Color(0xFF007AFF), size: 22),
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _collapsibleDescCard(ColorScheme cs, String desc) {
+    const int collapsedLines = 3;
+    final isLong = desc.length > 120;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Описание',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(
+            desc,
+            style:
+                TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
+            maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
+            overflow:
+                (_descExpanded || !isLong) ? null : TextOverflow.ellipsis,
+          ),
+          if (isLong) ...[
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () => setState(() => _descExpanded = !_descExpanded),
+              child: Text(
+                _descExpanded ? 'Свернуть' : 'Ещё',
+                style: const TextStyle(
+                    color: Color(0xFF007AFF), fontSize: 13),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── TAB BAR ─────────────────────────────────────────────────────────────
+
+  Widget _buildTabBar(ColorScheme cs) {
+    return LayoutBuilder(
+      builder: (context, constraints) => ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          dragDevices: {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.trackpad,
+          },
+        ),
+        child: Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              final delta = event.scrollDelta.dy != 0
+                  ? event.scrollDelta.dy
+                  : event.scrollDelta.dx;
+              _tabScrollController.animateTo(
+                (_tabScrollController.offset + delta).clamp(
+                  _tabScrollController.position.minScrollExtent,
+                  _tabScrollController.position.maxScrollExtent,
+                ),
+                duration: const Duration(milliseconds: 80),
+                curve: Curves.easeOut,
+              );
+            }
+          },
+          child: SingleChildScrollView(
+            controller: _tabScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (int i = 0; i < _tabs.length; i++) ...[
+                    _tabChip(cs, _tabs[i]),
+                    if (i < _tabs.length - 1) const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
-      Container(
+    );
+  }
+
+  Widget _tabChip(ColorScheme cs, String tab) {
+    final selected = tab == _selectedTab;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = tab),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(14),
+          color: selected ? cs.primaryContainer : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: Column(
-          children: [
-            _memberAction(cs, Symbols.person_add, 'Добавить участника', () {}),
-            _listDivider(cs),
-            _memberAction(cs, Symbols.link, 'Пригласить по ссылке', () {}),
-            ..._members.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
-          ],
+        child: Text(
+          tab,
+          style: TextStyle(
+            color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 14,
+          ),
         ),
       ),
-    ];
+    );
   }
 
-  List<Widget> _channelSections(ColorScheme cs) {
-    final result = <Widget>[];
+  // ─── TAB CONTENT ─────────────────────────────────────────────────────────
 
-    final link = _chatData?['link'] as String?;
-    if (link != null) {
-      result
-        ..add(_linkCard(cs, link))
-        ..add(const SizedBox(height: 8));
-    }
-
-    final desc = _chatData?['description'] as String?;
-    if (desc != null && desc.isNotEmpty) {
-      result
-        ..add(_descCard(cs, desc))
-        ..add(const SizedBox(height: 8));
-    }
-
-    result.add(_attachmentsCard(cs));
-    return result;
+  Widget _buildTabContent(ColorScheme cs) {
+    if (_selectedTab.isEmpty) return const SizedBox.shrink();
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: KeyedSubtree(
+        key: ValueKey(_selectedTab),
+        child: _tabBody(cs),
+      ),
+    );
   }
 
-  // ─── CARD WIDGETS ────────────────────────────────────────────────────────
+  Widget _tabBody(ColorScheme cs) {
+    switch (_selectedTab) {
+      case 'Info':
+        return _buildInfoTabContent(cs);
+      case 'Участники':
+        return _buildMembersTabContent(cs);
+      case 'Общие чаты':
+        return _buildPlaceholder(cs, 'Нет общих чатов', Icons.group);
+      case 'Медиа':
+        return _buildPlaceholder(cs, 'Нет медиа', Icons.photo_library);
+      case 'Файлы':
+        return _buildPlaceholder(cs, 'Нет файлов', Icons.description);
+      case 'Голосовые':
+        return _buildPlaceholder(cs, 'Нет голосовых', Icons.mic);
+      case 'Ссылки':
+        return _buildPlaceholder(cs, 'Нет ссылок', Icons.link);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildPlaceholder(ColorScheme cs, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.35), size: 48),
+          const SizedBox(height: 12),
+          Text(label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15)),
+        ],
+      ),
+    );
+  }
+
+  // ─── INFO TAB ────────────────────────────────────────────────────────────
+
+  Widget _buildInfoTabContent(ColorScheme cs) {
+    final items = <Widget>[];
+
+    if (widget.chatType == 'DIALOG' && !_isBot) {
+      final bio = (_contactData?['description'] as String?) ??
+          (_contactData?['about'] as String?);
+      if (bio != null && bio.isNotEmpty) {
+        items
+          ..add(_infoCard(cs, 'О себе', bio))
+          ..add(const SizedBox(height: 8));
+      }
+    }
+
+    if (widget.chatType == 'CHAT') {
+      final desc = _chatData?['description'] as String?;
+      if (desc != null && desc.isNotEmpty) {
+        items
+          ..add(_infoCard(cs, 'Описание', desc))
+          ..add(const SizedBox(height: 8));
+      }
+    }
+
+    items.add(_buildInfoRowsCard(cs));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: items,
+    );
+  }
+
+  Widget _buildInfoRowsCard(ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: _buildAllInfoRows(cs),
+    );
+  }
 
   Widget _infoCard(ColorScheme cs, String label, String value) {
     return Container(
@@ -487,90 +737,22 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  Widget _linkCard(ColorScheme cs, String link) {
+  // ─── MEMBERS TAB ─────────────────────────────────────────────────────────
+
+  Widget _buildMembersTabContent(ColorScheme cs) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Ссылка',
-                    style:
-                        TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text(link,
-                    style: const TextStyle(
-                        color: Color(0xFF007AFF), fontSize: 15)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Symbols.share,
-                color: Color(0xFF007AFF), size: 22),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Symbols.qr_code,
-                color: Color(0xFF007AFF), size: 22),
-            onPressed: () {},
-          ),
+          _memberAction(cs, Icons.person_add, 'Добавить участника', () {}),
+          ..._members.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
         ],
       ),
     );
   }
-
-  Widget _descCard(ColorScheme cs, String desc) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(desc,
-          style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4)),
-    );
-  }
-
-  Widget _attachmentsCard(ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(Symbols.photo_library, color: cs.onSurfaceVariant, size: 28),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Вложения',
-                    style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500)),
-                Text('Фото, видео, файлы и ссылки',
-                    style:
-                        TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
-              ],
-            ),
-          ),
-          Icon(Symbols.chevron_right, color: cs.onSurfaceVariant),
-        ],
-      ),
-    );
-  }
-
-  // ─── MEMBER LIST ─────────────────────────────────────────────────────────
 
   Widget _memberAction(
       ColorScheme cs, IconData icon, String label, VoidCallback onTap) {
@@ -661,180 +843,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── INFO AREA ───────────────────────────────────────────────────────────
-
-  Widget _buildInfoArea(ColorScheme cs, double W) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Кнопка "Инфо" — всегда полная ширина
-        GestureDetector(
-          onTap: () => setState(() => _infoExpanded = !_infoExpanded),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Icon(Symbols.info, color: const Color(0xFF007AFF), size: 22),
-                const SizedBox(width: 12),
-                Text(
-                  'Инфо',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                AnimatedRotation(
-                  turns: _infoExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 220),
-                  child: Icon(Symbols.keyboard_arrow_down,
-                      color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Контент: при закрытии — обычная колонка, при открытии — Row
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 250),
-          sizeCurve: Curves.easeOut,
-          firstCurve: Curves.easeOut,
-          secondCurve: Curves.easeOut,
-          crossFadeState: _infoExpanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          firstChild: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: _buildSections(cs),
-          ),
-          secondChild: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _buildCompactSections(cs)),
-              const SizedBox(width: 8),
-              Expanded(child: _buildInfoPanelCard(cs)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Компактные карточки — левая колонка при открытом инфо
-  Widget _buildCompactSections(ColorScheme cs) {
-    final items = <Widget>[];
-
-    if (widget.chatType == 'DIALOG') {
-      if (_isBot) {
-        final link = _contactData?['link'] as String?;
-        if (link != null) items.add(_compactCard(cs, 'Ссылка', link));
-      } else {
-        final phone = _contactData?['phone'];
-        final phoneInt =
-            phone is int ? phone : int.tryParse(phone?.toString() ?? '');
-        if (phoneInt != null && phoneInt > 0) {
-          items.add(_compactCard(cs, 'Телефон', _formatPhone(phoneInt)));
-        }
-      }
-    }
-
-    if (widget.chatType == 'CHANNEL') {
-      final desc = _chatData?['description'] as String?;
-      if (desc != null && desc.isNotEmpty) {
-        items.add(_compactCard(
-          cs,
-          'Описание',
-          desc.length > 80 ? '${desc.substring(0, 80)}…' : desc,
-        ));
-      }
-    }
-
-    if (widget.chatType == 'CHAT') {
-      final total = (_chatData?['participantsCount'] as int?) ?? _members.length;
-      items.add(_compactCard(cs, 'Участников', '$total'));
-    }
-
-    items.add(const SizedBox(height: 8));
-    items.add(_compactAttachments(cs));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (int i = 0; i < items.length; i++) ...[
-          items[i],
-          if (i < items.length - 1 && items[i] is! SizedBox)
-            const SizedBox(height: 8),
-        ],
-      ],
-    );
-  }
-
-  Widget _compactCard(ColorScheme cs, String label, String value) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
-          const SizedBox(height: 3),
-          Text(value,
-              style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis),
-        ],
-      ),
-    );
-  }
-
-  Widget _compactAttachments(ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Symbols.photo_library, color: cs.onSurfaceVariant, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text('Вложения',
-                style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
-          ),
-          Icon(Symbols.chevron_right, color: cs.onSurfaceVariant, size: 18),
-        ],
-      ),
-    );
-  }
-
-  // Инфо-панель — правая колонка при открытом инфо
-  Widget _buildInfoPanelCard(ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: _buildAllInfoRows(cs),
-    );
-  }
+  // ─── INFO ROWS ────────────────────────────────────────────────────────────
 
   Widget _buildAllInfoRows(ColorScheme cs) {
     final rows = <({String label, String value})>[];
@@ -875,8 +884,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         add('Владелец', ContactCache.get(owner) ?? '$owner');
       }
       add('Создана', chat['created'], tsFormat: true);
-      add('Вступил', (chat['joinTime'] as int?) != null && (chat['joinTime'] as int) > 1
-          ? chat['joinTime'] : null, tsFormat: true);
+      add(
+        'Вступил',
+        (chat['joinTime'] as int?) != null && (chat['joinTime'] as int) > 1
+            ? chat['joinTime']
+            : null,
+        tsFormat: true,
+      );
       add('Изменена', chat['modified'], tsFormat: true);
       add('Есть боты', chat['hasBots'] as bool?);
       final blocked = chat['blockedParticipantsCount'] as int?;
@@ -953,18 +967,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
       children: [
-        Center(
-            child: block(96, 96, r: 48)),
+        Center(child: block(96, 96, r: 48)),
         const SizedBox(height: 14),
         Center(child: block(160, 22, r: 8)),
         const SizedBox(height: 8),
         Center(child: block(110, 16, r: 6)),
         const SizedBox(height: 24),
-        block(double.infinity, 70, r: 14),
+        Center(child: block(240, 54, r: 14)),
+        const SizedBox(height: 16),
+        block(double.infinity, 36, r: 20),
         const SizedBox(height: 12),
-        block(double.infinity, 70, r: 14),
-        const SizedBox(height: 12),
-        block(double.infinity, 70, r: 14),
+        block(double.infinity, 120, r: 14),
       ],
     );
   }

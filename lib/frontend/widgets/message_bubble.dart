@@ -124,9 +124,9 @@ class MessageBubble extends StatelessWidget {
     final topRadius = Radius.circular(bubbleBorderRadius);
     final smallRadius = const Radius.circular(4);
 
-    final cornerTL = isMe ? smallRadius : topRadius;
+    final cornerTL = topRadius;
     final cornerTR = isMe ? topRadius : smallRadius;
-    final cornerBL = isMe ? smallRadius : topRadius;
+    final cornerBL = topRadius;
     final cornerBR = isMe ? topRadius : smallRadius;
 
     if (_hasPhotoWithCaption &&
@@ -136,7 +136,7 @@ class MessageBubble extends StatelessWidget {
       return BorderRadius.only(
         topLeft: topRadius,
         topRight: topRadius,
-        bottomLeft: smallRadius,
+        bottomLeft: isMe ? topRadius : smallRadius,
         bottomRight: smallRadius,
       );
     }
@@ -145,9 +145,9 @@ class MessageBubble extends StatelessWidget {
         (shape == BubbleShape.singleBottom ||
             shape == BubbleShape.singleMiddle)) {
       return BorderRadius.only(
-        topLeft: smallRadius,
+        topLeft: isMe ? topRadius : smallRadius,
         topRight: smallRadius,
-        bottomLeft: smallRadius,
+        bottomLeft: isMe ? topRadius : smallRadius,
         bottomRight: isMe ? smallRadius : topRadius,
       );
     }
@@ -157,12 +157,12 @@ class MessageBubble extends StatelessWidget {
         return BorderRadius.only(
           topLeft: cornerTL,
           topRight: cornerTR,
-          bottomLeft: smallRadius,
+          bottomLeft: isMe ? topRadius : smallRadius,
           bottomRight: smallRadius,
         );
       case BubbleShape.singleBottom:
         return BorderRadius.only(
-          topLeft: smallRadius,
+          topLeft: isMe ? topRadius : smallRadius,
           topRight: smallRadius,
           bottomLeft: cornerBL,
           bottomRight: cornerBR,
