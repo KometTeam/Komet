@@ -53,33 +53,21 @@ class VpnBypassService {
     await prefs.setBool(prefKey, value);
   }
 
-  /// Вызывается перед каждым (ре)коннектом.
-  Future<VpnBypassResult> applyIfNeeded() async {
-    if (!_supported) {
-      return const VpnBypassResult(
-        enabled: false,
-        reason: 'unsupported_platform',
-      );
-    }
+  /// true — обход включён, платформа поддерживается и виден VPN-туннель.
+  Future<bool> shouldArm() async {
+    if (!_supported) return false;
+    if (!await isEnabled()) return false;
+    return _hasTunInterface();
+  }
 
-    if (!await isEnabled()) {
-      await _restoreDefault();
-      return const VpnBypassResult(enabled: false);
-    }
-
-    final tunDetected = await _hasTunInterface();
-    if (!tunDetected) {
-      await _restoreDefault();
-      logger.i('VPN bypass: tun-интерфейс не найден — маршрут по умолчанию');
-      return const VpnBypassResult(enabled: true, tunDetected: false);
-    }
-
+  /// Привязывает процесс к non-VPN сети (wlan*/rmnet*).
+  Future<VpnBypassResult> bind() async {
     try {
       final res = await _channel
           .invokeMapMethod<String, dynamic>('bindToNonVpnNetwork');
       final bound = res?['bound'] == true;
       _bound = bound;
-      final result = VpnBypassResult(
+      return VpnBypassResult(
         enabled: true,
         tunDetected: true,
         bound: bound,
@@ -87,22 +75,9 @@ class VpnBypassService {
         transport: res?['transport'] as String?,
         reason: res?['reason'] as String?,
       );
-      if (bound) {
-        logger.i(
-          'VPN bypass: трафик направлен мимо VPN → '
-          '${result.boundInterface} (${result.transport})',
-        );
-      } else {
-        logger.w('VPN bypass: не удалось обойти VPN (${result.reason})');
-      }
-      return result;
     } on PlatformException catch (e) {
       logger.e('VPN bypass: ошибка платформы: ${e.message}');
-      return VpnBypassResult(
-        enabled: true,
-        tunDetected: true,
-        reason: e.code,
-      );
+      return VpnBypassResult(enabled: true, tunDetected: true, reason: e.code);
     } on MissingPluginException {
       return const VpnBypassResult(
         enabled: true,
@@ -137,7 +112,8 @@ class VpnBypassService {
     }
   }
 
-  Future<void> _restoreDefault() async {
+  /// Возвращает маршрутизацию процесса к системной (через VPN, если он есть).
+  Future<void> restoreDefault() async {
     if (!_bound) return;
     try {
       await _channel.invokeMethod('unbindNetwork');
