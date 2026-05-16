@@ -12,6 +12,7 @@ import 'backend/modules/contacts.dart';
 import 'backend/modules/messages.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
+import 'core/transport/vpn_bypass.dart';
 import 'core/storage/token_storage.dart';
 import 'core/utils/haptics.dart';
 import 'core/protocol/packet.dart';
@@ -57,10 +58,12 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
+  final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
   runApp(
     KometApp(
       initialLocale: initialLocale,
       initialFpsOverlay: initialFpsOverlay,
+      initialVpnBypass: initialVpnBypass,
     ),
   );
 }
@@ -70,10 +73,12 @@ class KometApp extends StatefulWidget {
     super.key,
     required this.initialLocale,
     this.initialFpsOverlay = false,
+    this.initialVpnBypass = false,
   });
 
   final Locale initialLocale;
   final bool initialFpsOverlay;
+  final bool initialVpnBypass;
   static final navigatorKey = GlobalKey<NavigatorState>();
 
   static KometAppState? stateOf(BuildContext context) {
@@ -93,6 +98,9 @@ class KometAppState extends State<KometApp> {
   StreamSubscription<LoginStatus>? _loginStatusSub;
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
     widget.initialFpsOverlay,
+  );
+  late final ValueNotifier<bool> vpnBypassEnabled = ValueNotifier(
+    widget.initialVpnBypass,
   );
   final _profileUpdateController = StreamController<void>.broadcast();
   Stream<void> get profileUpdateStream => _profileUpdateController.stream;
@@ -153,6 +161,7 @@ class KometAppState extends State<KometApp> {
     _loginStatusSub?.cancel();
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
+    vpnBypassEnabled.dispose();
     super.dispose();
   }
 
@@ -161,6 +170,13 @@ class KometAppState extends State<KometApp> {
     fpsOverlayEnabled.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('dev_fps_overlay', value);
+  }
+
+  Future<void> setVpnBypassEnabled(bool value) async {
+    if (vpnBypassEnabled.value == value) return;
+    vpnBypassEnabled.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(VpnBypassService.prefKey, value);
   }
 
   Future<void> applyLocale(Locale locale) async {
