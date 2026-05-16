@@ -4,12 +4,16 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.net.NetworkInterface
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : FlutterActivity() {
 
@@ -27,7 +31,7 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "detectInterfaces" -> result.success(detectInterfaces())
-                "bindToNonVpnNetwork" -> result.success(bindToNonVpnNetwork())
+                "bindToNonVpnNetwork" -> bindToNonVpnNetwork(result)
                 "unbindNetwork" -> result.success(unbindNetwork())
                 else -> result.notImplemented()
             }
@@ -91,11 +95,82 @@ class MainActivity : FlutterActivity() {
         val score: Int,
     )
 
-    // Привязывает процесс к не-VPN сети: Wi-Fi → Ethernet → моб.
-    // Жёсткий фильтр — только исключение VPN-транспорта; INTERNET/NOT_VPN/
-    // VALIDATED лишь повышают приоритет (физическая сеть под активным VPN
-    // часто теряет эти capability, но через неё всё равно можно ходить).
-    private fun bindToNonVpnNetwork(): Map<String, Any?> {
+    // Привязка к не-VPN сети. Надёжный путь — попросить систему выдать
+    // подходящую сеть через NetworkCallback (валидный, привязываемый
+    // Network), и лишь при тайм-ауте — перебор getAllNetworks().
+    private fun bindToNonVpnNetwork(result: MethodChannel.Result) {
+        val cm = connectivityManager()
+        val main = Handler(Looper.getMainLooper())
+        val done = AtomicBoolean(false)
+        var callback: ConnectivityManager.NetworkCallback? = null
+
+        fun finish(map: Map<String, Any?>) {
+            if (!done.compareAndSet(false, true)) return
+            callback?.let {
+                try {
+                    cm.unregisterNetworkCallback(it)
+                } catch (_: Exception) {
+                }
+            }
+            main.post { result.success(map) }
+        }
+
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            .build()
+
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                val caps = cm.getNetworkCapabilities(network)
+                val iface = cm.getLinkProperties(network)?.interfaceName
+                val transport = when {
+                    caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                        == true -> "wifi"
+                    caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                        == true -> "ethernet"
+                    else -> "cellular"
+                }
+                val ok = cm.bindProcessToNetwork(network)
+                Log.i(LOG_TAG, "onAvailable iface=$iface t=$transport bound=$ok")
+                finish(
+                    mapOf(
+                        "bound" to ok,
+                        "interface" to iface,
+                        "transport" to transport,
+                        "reason" to if (ok) {
+                            null
+                        } else {
+                            "bind_rejected_maybe_lockdown"
+                        },
+                    ),
+                )
+            }
+        }
+
+        callback = cb
+        try {
+            cm.registerNetworkCallback(request, cb)
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "registerNetworkCallback failed: ${e.message}")
+            finish(bindByEnumeration())
+            return
+        }
+
+        main.postDelayed({
+            if (done.get()) return@postDelayed
+            Log.w(LOG_TAG, "callback timeout — fallback to enumeration")
+            finish(bindByEnumeration())
+        }, 4000L)
+    }
+
+    // Запасной путь: перебор getAllNetworks(). Жёсткий фильтр — только
+    // исключение VPN-транспорта; INTERNET/NOT_VPN/VALIDATED лишь повышают
+    // приоритет (физическая сеть под VPN часто теряет эти capability).
+    private fun bindByEnumeration(): Map<String, Any?> {
         val cm = connectivityManager()
         val networks = cm.allNetworks
         val candidates = ArrayList<Candidate>()
@@ -153,7 +228,7 @@ class MainActivity : FlutterActivity() {
             }
             Log.w(LOG_TAG, "bindProcessToNetwork failed for ${c.iface}")
         }
-        return mapOf("bound" to false, "reason" to "bind_failed")
+        return mapOf("bound" to false, "reason" to "bind_blocked_maybe_lockdown")
     }
 
     private fun unbindNetwork(): Map<String, Any?> {
