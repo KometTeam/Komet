@@ -260,6 +260,43 @@ class KometAppState extends State<KometApp> {
     _profileUpdateController.add(null);
   }
 
+  String? _themeCacheFontId;
+  ColorScheme? _themeCacheLight;
+  ColorScheme? _themeCacheDark;
+  ThemeData? _lightTheme;
+  ThemeData? _darkTheme;
+
+  void _rebuildThemesIfNeeded(ColorScheme light, ColorScheme dark) {
+    if (_themeCacheFontId == _fontId &&
+        _themeCacheLight == light &&
+        _themeCacheDark == dark) {
+      return;
+    }
+    _themeCacheFontId = _fontId;
+    _themeCacheLight = light;
+    _themeCacheDark = dark;
+    _lightTheme = withM3ETheme(
+      ThemeData(
+        useMaterial3: true,
+        colorScheme: light,
+        textTheme: AppFonts.textTheme(
+          _fontId,
+          ThemeData(brightness: Brightness.light).textTheme,
+        ),
+      ),
+    );
+    _darkTheme = withM3ETheme(
+      ThemeData(
+        useMaterial3: true,
+        colorScheme: dark,
+        textTheme: AppFonts.textTheme(
+          _fontId,
+          ThemeData(brightness: Brightness.dark).textTheme,
+        ),
+      ),
+    );
+  }
+
   ColorScheme _adjustDarkScheme(ColorScheme base) {
     return base.copyWith(
       surface: Color.alphaBlend(
@@ -314,6 +351,8 @@ class KometAppState extends State<KometApp> {
         final lightScheme = _adjustLightScheme(lightBase);
         final darkScheme = _adjustDarkScheme(darkBase);
 
+        _rebuildThemesIfNeeded(lightScheme, darkScheme);
+
         return MaterialApp(
           title: 'Komet',
           debugShowCheckedModeBanner: false,
@@ -321,26 +360,8 @@ class KometAppState extends State<KometApp> {
           themeMode: ThemeMode.system,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          theme: withM3ETheme(
-            ThemeData(
-              useMaterial3: true,
-              colorScheme: lightScheme,
-              textTheme: AppFonts.textTheme(
-                _fontId,
-                ThemeData(brightness: Brightness.light).textTheme,
-              ),
-            ),
-          ),
-          darkTheme: withM3ETheme(
-            ThemeData(
-              useMaterial3: true,
-              colorScheme: darkScheme,
-              textTheme: AppFonts.textTheme(
-                _fontId,
-                ThemeData(brightness: Brightness.dark).textTheme,
-              ),
-            ),
-          ),
+          theme: _lightTheme,
+          darkTheme: _darkTheme,
           navigatorKey: KometApp.navigatorKey,
           builder: (context, child) {
             final scaledChild = MediaQuery.withClampedTextScaling(
