@@ -62,12 +62,16 @@ void main() async {
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
   final initialFontId =
       prefs.getString(AppFonts.prefKey) ?? AppFonts.fallback.id;
+  final initialFontScale = AppFonts.clampScale(
+    prefs.getDouble(AppFonts.scalePrefKey) ?? AppFonts.defaultScale,
+  );
   runApp(
     KometApp(
       initialLocale: initialLocale,
       initialFpsOverlay: initialFpsOverlay,
       initialVpnBypass: initialVpnBypass,
       initialFontId: initialFontId,
+      initialFontScale: initialFontScale,
     ),
   );
 }
@@ -79,12 +83,14 @@ class KometApp extends StatefulWidget {
     this.initialFpsOverlay = false,
     this.initialVpnBypass = false,
     required this.initialFontId,
+    required this.initialFontScale,
   });
 
   final Locale initialLocale;
   final bool initialFpsOverlay;
   final bool initialVpnBypass;
   final String initialFontId;
+  final double initialFontScale;
   static final navigatorKey = GlobalKey<NavigatorState>();
 
   static KometAppState? stateOf(BuildContext context) {
@@ -100,6 +106,7 @@ class KometAppState extends State<KometApp> {
 
   late Locale _locale;
   late String _fontId;
+  late double _fontScale;
   bool _isLoggingOut = false;
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
@@ -120,6 +127,7 @@ class KometAppState extends State<KometApp> {
     super.initState();
     _locale = widget.initialLocale;
     _fontId = widget.initialFontId;
+    _fontScale = widget.initialFontScale;
 
     api.setReconnectCallback(() async {
       try {
@@ -226,6 +234,7 @@ class KometAppState extends State<KometApp> {
   }
 
   String get fontId => _fontId;
+  double get fontScale => _fontScale;
 
   Future<void> applyAppFont(String fontId) async {
     if (_fontId == fontId) return;
@@ -233,6 +242,17 @@ class KometAppState extends State<KometApp> {
     await prefs.setString(AppFonts.prefKey, fontId);
     if (mounted) {
       setState(() => _fontId = fontId);
+    }
+  }
+
+  Future<void> applyFontScale(double scale, {bool persist = true}) async {
+    final next = AppFonts.clampScale(scale);
+    if (_fontScale != next && mounted) {
+      setState(() => _fontScale = next);
+    }
+    if (persist) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(AppFonts.scalePrefKey, next);
     }
   }
 
@@ -323,6 +343,11 @@ class KometAppState extends State<KometApp> {
           ),
           navigatorKey: KometApp.navigatorKey,
           builder: (context, child) {
+            final scaledChild = MediaQuery.withClampedTextScaling(
+              minScaleFactor: _fontScale,
+              maxScaleFactor: _fontScale,
+              child: child ?? const SizedBox.shrink(),
+            );
             return ValueListenableBuilder<bool>(
               valueListenable: fpsOverlayEnabled,
               builder: (context, fpsOn, _) {
@@ -330,7 +355,7 @@ class KometAppState extends State<KometApp> {
                   fit: StackFit.expand,
                   clipBehavior: Clip.none,
                   children: [
-                    child ?? const SizedBox.shrink(),
+                    scaledChild,
                     if (fpsOn) const FpsOverlayLayer(),
                   ],
                 );
