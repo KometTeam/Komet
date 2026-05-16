@@ -24,8 +24,16 @@ end
 
 registrant = File.expand_path('Runner/GeneratedPluginRegistrant.m', __dir__)
 if File.exist?(registrant)
-  drop = /firebase_core|firebase_messaging|FLTFirebaseCorePlugin|FLTFirebaseMessagingPlugin/
-  File.write(registrant, File.readlines(registrant).reject { |line| line =~ drop }.join)
+  src = File.read(registrant)
+  FIREBASE_IOS_PLUGINS.each do |mod|
+    cls = "FLT#{mod.split('_').map(&:capitalize).join}Plugin"
+    m = Regexp.escape(mod)
+    src = src.gsub(/#if __has_include\(<#{m}\/[^>]+>\).*?#endif\n/m, '')
+    src = src.gsub(/^\s*#import <#{m}\/[^>]+>\n/, '')
+    src = src.gsub(/^\s*@import #{m};\n/, '')
+    src = src.gsub(/^\s*\[#{cls} registerWithRegistrar:.*\n/, '')
+  end
+  File.write(registrant, src)
 end
 
 project 'Runner', {
