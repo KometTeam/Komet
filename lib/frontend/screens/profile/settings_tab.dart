@@ -5,10 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../main.dart';
 import '../auth/proxy_settings_sheet.dart';
+import 'customization_screen.dart';
+import 'performance_screen.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
+import 'edit_profile_screen.dart';
+import 'info_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
 
@@ -26,17 +32,26 @@ class _SettingsTabState extends State<SettingsTab> {
   bool _debugMenuVisible = false;
   int _versionSecretTapCount = 0;
   Timer? _versionSecretTapResetTimer;
+  StreamSubscription? _profileUpdateSub;
+  bool _hapticsEnabled = Haptics.enabled;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
     _loadAppVersion();
+    final appState = KometApp.stateOf(context);
+    if (appState != null) {
+      _profileUpdateSub = appState.profileUpdateStream.listen((_) {
+        if (mounted) _loadProfile();
+      });
+    }
   }
 
   @override
   void dispose() {
     _versionSecretTapResetTimer?.cancel();
+    _profileUpdateSub?.cancel();
     super.dispose();
   }
 
@@ -72,6 +87,13 @@ class _SettingsTabState extends State<SettingsTab> {
     });
   }
 
+  Future<void> _setHaptics(bool value) async {
+    await Haptics.setEnabled(value);
+    // Let the user *feel* the confirmation the instant they switch it on.
+    if (value) Haptics.success();
+    if (mounted) setState(() => _hapticsEnabled = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -97,14 +119,61 @@ class _SettingsTabState extends State<SettingsTab> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+child: _buildSection(
+                  context,
+                  cs,
+                  items: [
+                    const _SettingsItem(icon: Symbols.badge, label: 'Цифровой ID'),
+                    const _SettingsItem(
+                      icon: Symbols.language,
+                      label: 'Войти в Сферум',
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.info,
+                      label: 'Info',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const InfoScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: _buildSection(
                   context,
                   cs,
-                  items: const [
-                    _SettingsItem(icon: Symbols.badge, label: 'Цифровой ID'),
+                  items: [
                     _SettingsItem(
-                      icon: Symbols.language,
-                      label: 'Войти в Сферум',
+                      icon: Symbols.palette,
+                      label: 'Кастомизация',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CustomizationScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.speed,
+                      label: 'Производительность',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const PerformanceScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -120,6 +189,12 @@ class _SettingsTabState extends State<SettingsTab> {
                     const _SettingsItem(
                       icon: Symbols.notifications_active,
                       label: 'Уведомления и звук',
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.vibration,
+                      label: 'Тактильная отдача',
+                      toggleValue: _hapticsEnabled,
+                      onToggle: _setHaptics,
                     ),
                     _SettingsItem(
                       icon: Symbols.vpn_lock,
@@ -304,7 +379,14 @@ class _SettingsTabState extends State<SettingsTab> {
                   size: 22,
                   weight: 400,
                 ),
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const EditProfileScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -324,6 +406,8 @@ class _SettingsTabState extends State<SettingsTab> {
                   ? CachedNetworkImage(
                       imageUrl: _profile!.baseUrl!,
                       fit: BoxFit.cover,
+                      memCacheWidth: 240,
+                      memCacheHeight: 240,
                       fadeInDuration: const Duration(milliseconds: 120),
                       errorWidget: (context, url, error) =>
                           _buildPlaceholderAvatar(cs, name),
@@ -420,7 +504,9 @@ class _SettingsTabState extends State<SettingsTab> {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: item.onTap ?? () {},
+            onTap: item.isToggle
+                ? () => item.onToggle!(!(item.toggleValue ?? false))
+                : (item.onTap ?? () {}),
             borderRadius: isLast
                 ? const BorderRadius.vertical(bottom: Radius.circular(20))
                 : null,
@@ -445,12 +531,18 @@ class _SettingsTabState extends State<SettingsTab> {
                       ),
                     ),
                   ),
-                  Icon(
-                    Symbols.chevron_right,
-                    color: cs.outline,
-                    size: 20,
-                    weight: 400,
-                  ),
+                  if (item.isToggle)
+                    Switch.adaptive(
+                      value: item.toggleValue ?? false,
+                      onChanged: item.onToggle,
+                    )
+                  else
+                    Icon(
+                      Symbols.chevron_right,
+                      color: cs.outline,
+                      size: 20,
+                      weight: 400,
+                    ),
                 ],
               ),
             ),
@@ -475,7 +567,20 @@ class _SettingsItem {
   final String label;
   final VoidCallback? onTap;
 
-  const _SettingsItem({required this.icon, required this.label, this.onTap});
+  /// When [onToggle] is set the row renders a trailing switch instead of a
+  /// chevron, and [toggleValue] reflects its current state.
+  final bool? toggleValue;
+  final ValueChanged<bool>? onToggle;
+
+  const _SettingsItem({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.toggleValue,
+    this.onToggle,
+  });
+
+  bool get isToggle => onToggle != null;
 }
 
 class _PhoneSpoiler extends StatefulWidget {

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../config/proxy_config.dart';
 import '../utils/logger.dart';
 import 'proxy_connector.dart';
+import 'vpn_bypass.dart';
 
 enum SocketState { disconnected, connecting, connected }
 
@@ -29,28 +30,34 @@ class Connection {
     _stateController.add(newState);
   }
 
-  Future<void> connect(String host, int port) async {
+  Future<void> connect(
+    String host,
+    int port, {
+    bool bypassVpn = false,
+    Duration? timeout,
+  }) async {
     if (_state != SocketState.disconnected) return;
     _setState(SocketState.connecting);
 
     try {
       final proxySettings = await ProxyConfig.load();
-      RawSocket rawSocket;
 
-      if (proxySettings.isEnabled) {
-        final connector = ProxyConnector(proxySettings);
-        rawSocket = await connector.connect(host, port);
-        logger.i('Подключено через прокси ${proxySettings.type.name}');
+      // Решение «обходить VPN или нет» принимает вызывающий (Api):
+      // первая попытка идёт через VPN, при её провале — мимо туннеля.
+      if (bypassVpn) {
+        await VpnBypassService.instance.bind();
       } else {
-        rawSocket = await RawSocket.connect(host, port);
+        await VpnBypassService.instance.restoreDefault();
       }
 
-      _socket = await RawSecureSocket.secure(
-        rawSocket,
-        host: host,
-        onBadCertificate: (_) => true,
+      final socket = await _openSecureSocket(
+        host,
+        port,
+        proxySettings,
+        timeout: timeout,
       );
 
+      _socket = socket;
       _setState(SocketState.connected);
       logger.i('Подключено к $host:$port');
 
@@ -83,6 +90,29 @@ class Connection {
     }
   }
 
+  Future<RawSecureSocket> _openSecureSocket(
+    String host,
+    int port,
+    ProxySettings proxySettings, {
+    Duration? timeout,
+  }) async {
+    RawSocket rawSocket;
+    if (proxySettings.isEnabled) {
+      final connector = ProxyConnector(proxySettings);
+      rawSocket = await connector.connect(host, port);
+      logger.i('Подключено через прокси ${proxySettings.type.name}');
+    } else {
+      rawSocket = timeout == null
+          ? await RawSocket.connect(host, port)
+          : await RawSocket.connect(host, port, timeout: timeout);
+    }
+    return RawSecureSocket.secure(
+      rawSocket,
+      host: host,
+      onBadCertificate: (_) => true,
+    );
+  }
+
   void write(Uint8List data) {
     if (_socket == null || !isConnected) {
       throw StateError('Нельзя писать: сокет не подключён');
@@ -99,7 +129,9 @@ class Connection {
     if (socket != null) {
       try {
         socket.close();
-      } catch (_) {}
+      } catch (e) {
+        logger.w('Ошибка при закрытии сокета: $e');
+      }
     }
 
     _setState(SocketState.disconnected);

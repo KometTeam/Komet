@@ -33,7 +33,7 @@ class TokenStorage {
   static Future<String?> readActiveToken() async {
     final id = await getActiveAccountId();
     if (id == null) return null;
-    return readToken(id);
+    return await readToken(id);
   }
 
   static Future<void> deleteAccount(int accountId) async {

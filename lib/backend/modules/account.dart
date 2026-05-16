@@ -27,6 +27,7 @@ class PrivacyConfig {
   final String chatsInvite;
   final bool pushNewContacts;
   final bool unsafeFiles;
+  final String phoneNumberPrivacy;
   final String inactiveTtl;
   final bool showReadMark;
   final bool altKeyboard;
@@ -48,6 +49,7 @@ class PrivacyConfig {
     required this.chatsInvite,
     required this.pushNewContacts,
     required this.unsafeFiles,
+    required this.phoneNumberPrivacy,
     required this.inactiveTtl,
     required this.showReadMark,
     required this.altKeyboard,
@@ -71,6 +73,7 @@ class PrivacyConfig {
       chatsInvite: map['CHATS_INVITE']?.toString() ?? 'CONTACTS',
       pushNewContacts: map['PUSH_NEW_CONTACTS'] ?? false,
       unsafeFiles: map['UNSAFE_FILES'] ?? true,
+      phoneNumberPrivacy: map['PHONE_NUMBER_PRIVACY']?.toString() ?? 'ALL',
       inactiveTtl: map['INACTIVE_TTL']?.toString() ?? '6M',
       showReadMark: map['SHOW_READ_MARK'] ?? true,
       altKeyboard: map['ALT_KEYBOARD'] ?? false,
@@ -94,6 +97,7 @@ class PrivacyConfig {
     'CHATS_INVITE': chatsInvite,
     'PUSH_NEW_CONTACTS': pushNewContacts,
     'UNSAFE_FILES': unsafeFiles,
+    'PHONE_NUMBER_PRIVACY': phoneNumberPrivacy,
     'INACTIVE_TTL': inactiveTtl,
     'SHOW_READ_MARK': showReadMark,
     'ALT_KEYBOARD': altKeyboard,
@@ -125,6 +129,7 @@ class PrivacyConfig {
       chatsInvite: 'CONTACTS',
       pushNewContacts: false,
       unsafeFiles: true,
+      phoneNumberPrivacy: 'ALL',
       inactiveTtl: '6M',
       showReadMark: true,
       altKeyboard: false,
@@ -204,6 +209,12 @@ enum AuthRequestType {
 }
 
 enum LoginStatus { idle, loading, success, error }
+
+class WrongDeviceTokenException implements Exception {
+  const WrongDeviceTokenException();
+  @override
+  String toString() => 'WrongDeviceTokenException';
+}
 
 class RequestCodeResult {
   final String token;
@@ -289,7 +300,7 @@ class LoginSyncParams {
       draftsSync: int.tryParse(values[SyncKey.draftsSync] ?? '') ?? 0,
       bannersSync: int.tryParse(values[SyncKey.bannersSync] ?? '') ?? 0,
       presenceSync: int.tryParse(values[SyncKey.presenceSync] ?? '') ?? -1,
-      lastLogin: int.parse(lastLogin),
+      lastLogin: int.tryParse(lastLogin) ?? 0,
       configHash: values[SyncKey.configHash],
       chatCacheFingerprint: values[SyncKey.chatCacheFingerprint],
     );
@@ -370,9 +381,7 @@ class AccountModule {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
       final saved = await AppDatabase.getPrivacyConfig(accountId);
-      if (saved != null) {
-        return PrivacyConfig.fromJson(saved);
-      }
+      if (saved != null) return PrivacyConfig.fromJson(saved);
     }
     return PrivacyConfig.empty();
   }
@@ -424,6 +433,109 @@ class AccountModule {
       await AppDatabase.savePrivacyConfig(accountId, config.toJson());
     }
     return config;
+  }
+
+  Future<void> registerPushToken(String pushToken) async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.config, <dynamic, dynamic>{
+      'pushToken': pushToken,
+    });
+    if (packet.isError) {
+      final msg = messageFromErrorPayload(packet.payload).toUpperCase();
+      if (msg.contains('WRONG_DEVICE_TOKEN') ||
+          msg.contains('WRONG.DEVICE.TOKEN')) {
+        throw const WrongDeviceTokenException();
+      }
+      throw PacketError(messageFromErrorPayload(packet.payload));
+    }
+  }
+
+  Future<void> unregisterPushToken(String pushToken) async {
+    if (_api.state != SessionState.online) return;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+    final authToken = await TokenStorage.readToken(accountId);
+    if (authToken == null) return;
+    await _api.sendRequest(Opcode.logout, <dynamic, dynamic>{
+      'token': authToken,
+      'pushToken': pushToken,
+    });
+  }
+
+  Future<ProfileData> updateProfileName(String firstName, String? lastName) async {
+    _ensureOnline();
+    final payload = <dynamic, dynamic>{
+      'firstName': firstName,
+    };
+    if (lastName != null) payload['lastName'] = lastName;
+    final packet = await _api.sendRequest(Opcode.profile, payload);
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final profile = data['profile'] as Map?;
+    if (profile == null) throw Exception('No profile in response');
+    final contact = profile['contact'] as Map?;
+    if (contact == null) throw Exception('No contact in response');
+    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(newProfile, isActive: true);
+    return newProfile;
+  }
+
+  Future<ProfileData> updateProfileAvatar(String photoToken, String avatarType) async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.profile, {
+      'photoToken': photoToken,
+      'avatarType': avatarType,
+    });
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final profile = data['profile'] as Map?;
+    if (profile == null) throw Exception('No profile in response');
+    final contact = profile['contact'] as Map?;
+    if (contact == null) throw Exception('No contact in response');
+    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(newProfile, isActive: true);
+    return newProfile;
+  }
+
+  Future<String> getAvatarUploadUrl() async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.photoUpload, {
+      'count': 1,
+      'profile': true,
+    });
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final url = data['url'] as String?;
+    if (url == null) throw Exception('No url in response');
+    return url;
+  }
+
+  Future<ProfileData> removeProfilePhoto(int photoId) async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(Opcode.removeContactPhoto, {
+      'photoId': photoId,
+    });
+    if (packet.isError) {
+      throw Exception(packet.payload?.toString() ?? 'Server error');
+    }
+    final data = packet.payload as Map?;
+    if (data == null) throw Exception('Empty response');
+    final profile = data['profile'] as Map?;
+    if (profile == null) throw Exception('No profile in response');
+    final contact = profile['contact'] as Map?;
+    if (contact == null) throw Exception('No contact in response');
+    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(newProfile, isActive: true);
+    return newProfile;
   }
 
   // 2FA Creation (when not set)
@@ -646,19 +758,25 @@ class AccountModule {
 
   Future<ProfileData> _processProfileUpdate(Packet packet) async {
     _api.registerPushHandler(Opcode.notifProfile, (p) {});
-    await for (final push in _api.pushStream.where(
-      (p) => p.opcode == Opcode.notifProfile,
-    )) {
-      final payload = push.payload;
-      if (payload is Map) {
-        final profile = payload['profile'];
-        if (profile is Map) {
-          final contact = profile['contact'];
-          if (contact is Map) {
-            return ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    try {
+      await for (final push in _api.pushStream
+          .where((p) => p.opcode == Opcode.notifProfile)
+          .timeout(const Duration(seconds: 15))) {
+        final payload = push.payload;
+        if (payload is Map) {
+          final profile = payload['profile'];
+          if (profile is Map) {
+            final contact = profile['contact'];
+            if (contact is Map) {
+              return ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+            }
           }
         }
       }
+    } on TimeoutException {
+      throw Exception('Таймаут ожидания обновления профиля');
+    } finally {
+      _api.unregisterPushHandler(Opcode.notifProfile);
     }
     throw Exception('Не удалось получить обновлённый профиль');
   }
@@ -715,15 +833,18 @@ class AccountModule {
   }) async {
     _ensureOnline();
 
-    final resolvedAccountId =
+    int? resolvedAccountId =
         accountId ?? await TokenStorage.getActiveAccountId();
-    if (resolvedAccountId == null) {
-      throw StateError('login: нет активного аккаунта');
-    }
 
-    final authToken = token ?? await TokenStorage.readToken(resolvedAccountId);
+    String? authToken = token;
     if (authToken == null) {
-      throw StateError('login: нет токена для аккаунта $resolvedAccountId');
+      if (resolvedAccountId == null) {
+        throw StateError('login: нет активного аккаунта');
+      }
+      authToken = await TokenStorage.readToken(resolvedAccountId);
+      if (authToken == null) {
+        throw StateError('login: нет токена для аккаунта $resolvedAccountId');
+      }
     }
 
     final requestPayload = _buildLoginPayload(authToken, syncParams);
@@ -739,10 +860,24 @@ class AccountModule {
         throw Exception('login: неожиданный тип payload: ${data.runtimeType}');
       }
 
-      final result = await _processLoginResponse(
-        data.cast<dynamic, dynamic>(),
-        resolvedAccountId,
-      );
+      final dataMap = data.cast<dynamic, dynamic>();
+
+      if (resolvedAccountId == null) {
+        final profileMap = dataMap['profile'];
+        if (profileMap is Map) {
+          final contact = profileMap['contact'];
+          if (contact is Map) {
+            resolvedAccountId = contact['id'] as int?;
+          }
+        }
+        if (resolvedAccountId == null) {
+          throw Exception('login: не удалось определить accountId из ответа');
+        }
+        await TokenStorage.saveToken(authToken, resolvedAccountId);
+        await TokenStorage.setActiveAccount(resolvedAccountId);
+      }
+
+      final result = await _processLoginResponse(dataMap, resolvedAccountId);
       _loginStatusController.add(LoginStatus.success);
       return result;
     } catch (e) {
@@ -850,23 +985,7 @@ class AccountModule {
       throw Exception('checkPassword: отсутствует токен в ответе');
     }
 
-    final profileData = data['profile'];
-    int? accountId;
-    if (profileData is Map) {
-      final contact = profileData['contact'];
-      if (contact is Map) {
-        accountId = contact['id'] as int?;
-      }
-    }
-
-    if (accountId != null) {
-      await TokenStorage.saveToken(loginToken, accountId);
-      await TokenStorage.setActiveAccount(accountId);
-      logger.i('2FA пройдена, токен аккаунта $accountId сохранён');
-    } else {
-      logger.w('2FA пройдена, но accountId не получен из ответа');
-    }
-
+    logger.i('2FA пройдена, получен login-токен');
     return TwoFactorResult(loginToken: loginToken);
   }
 
@@ -920,7 +1039,7 @@ class AccountModule {
       throw Exception('login: отсутствует profile.contact в ответе');
     }
     final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-    await AppDatabase.saveProfile(profile);
+    await AppDatabase.saveProfile(profile, isActive: true);
     await AppDatabase.setActiveAccount(profile.id);
 
     await _saveSyncState(data, serverTime, profile.id);
@@ -933,11 +1052,24 @@ class AccountModule {
         profile.id,
         config.cast<dynamic, dynamic>(),
       );
+      final userConfig = config['user'];
+      if (userConfig is Map) {
+        await AppDatabase.savePrivacyConfig(
+          profile.id,
+          jsonEncode(userConfig),
+        );
+      }
     }
     try {
       await FoldersModule.syncFromServer(_api, profile.id);
     } catch (e) {
       logger.w('Папки чатов: $e');
+    }
+
+    try {
+      await _saveLoginInfo(data, profile.id);
+    } catch (e) {
+      logger.w('Info: $e');
     }
 
     return LoginResult(
@@ -972,6 +1104,115 @@ class AccountModule {
       final hash = config['hash'] as String?;
       if (hash != null) await set(SyncKey.configHash, hash);
     }
+  }
+
+  Future<void> _saveLoginInfo(
+    Map<dynamic, dynamic> data,
+    int accountId,
+  ) async {
+    final contact = data['profile']?['contact'] as Map?;
+    final videoChatHistory = data['videoChatHistory'];
+    final chats = data['chats'] as List?;
+    final config = data['config'] as Map?;
+    final serverConfig = config?['server'] as Map?;
+    final userConfig = config?['user'] as Map?;
+    final yMap = serverConfig?['y-map'] as Map?;
+    final whiteListLinks = serverConfig?['white-list-links'] as List?;
+    final fileUploadUnsupported = serverConfig?['file-upload-unsupported-types'] as List?;
+    final time = data['time'] as int?;
+
+    final info = {
+      'registrationTime': contact?['registrationTime'],
+      'country': contact?['country'],
+      'videoChatHistory': videoChatHistory,
+      'updateTime': contact?['updateTime'],
+      'id': contact?['id'],
+      'chatMarker': chats != null && chats.isNotEmpty
+          ? _extractChatMarker(chats.cast<Map>())
+          : null,
+      'time': time,
+      'server': serverConfig != null
+          ? _extractServerInfo(serverConfig, yMap, whiteListLinks, fileUploadUnsupported)
+          : null,
+      'user': userConfig != null ? _extractUserConfig(userConfig) : null,
+    };
+
+    await AppDatabase.saveLoginInfo(accountId, jsonEncode(info));
+  }
+
+  Map<String, dynamic> _extractChatMarker(List<Map> chats) {
+    int? latestTime;
+    for (final chat in chats) {
+      final lastEventTime = chat['lastEventTime'] as int?;
+      if (lastEventTime != null && (latestTime == null || lastEventTime > latestTime)) {
+        latestTime = lastEventTime;
+      }
+    }
+    return {'chatMarker': latestTime};
+  }
+
+  Map<String, dynamic> _extractServerInfo(
+    Map serverConfig,
+    Map? yMap,
+    List? whiteListLinks,
+    List? fileUploadUnsupported,
+  ) {
+    return {
+      'account-removal-enabled': serverConfig['account-removal-enabled'],
+      'image-size': serverConfig['image-size'],
+      'gce': serverConfig['gce'],
+      'gcce': serverConfig['gcce'],
+      'max-msg-length': serverConfig['max-msg-length'],
+      'quotes-enabled': serverConfig['quotes-enabled'],
+      'calls-endpoint': serverConfig['calls-endpoint'],
+      'send-location-enabled': serverConfig['send-location-enabled'],
+      'lgce': serverConfig['lgce'],
+      'wud': serverConfig['wud'],
+      'video-msg-enabled': serverConfig['video-msg-enabled'],
+      'grse': serverConfig['grse'],
+      'edit-timeout': serverConfig['edit-timeout'],
+      'image-quality': serverConfig['image-quality'],
+      'unsafe-files-alert': serverConfig['unsafe-files-alert'],
+      'account-nickname-enabled': serverConfig['account-nickname-enabled'],
+      'mentions_entity_names_limit': serverConfig['mentions_entity_names_limit'],
+      'reactions-enabled': serverConfig['reactions-enabled'],
+      'y-map': yMap != null ? {
+        'tile': yMap['tile'],
+        'geocoder': yMap['geocoder'],
+        'static': yMap['static'],
+      } : null,
+      'white-list-links': whiteListLinks,
+      'file-upload-unsupported-types': fileUploadUnsupported,
+    };
+  }
+
+  Map<String, dynamic> _extractUserConfig(Map userConfig) {
+    return {
+      'CHATS_PUSH_NOTIFICATION': userConfig['CHATS_PUSH_NOTIFICATION'],
+      'PUSH_DETAILS': userConfig['PUSH_DETAILS'],
+      'PUSH_SOUND': userConfig['PUSH_SOUND'],
+      'PHONE_NUMBER_PRIVACY': userConfig['PHONE_NUMBER_PRIVACY'],
+      'INACTIVE_TTL': userConfig['INACTIVE_TTL'],
+      'SHOW_READ_MARK': userConfig['SHOW_READ_MARK'],
+      'AUDIO_TRANSCRIPTION_ENABLED': userConfig['AUDIO_TRANSCRIPTION_ENABLED'],
+      'SEARCH_BY_PHONE': userConfig['SEARCH_BY_PHONE'],
+      'INCOMING_CALL': userConfig['INCOMING_CALL'],
+      'DOUBLE_TAP_REACTION_DISABLED': userConfig['DOUBLE_TAP_REACTION_DISABLED'],
+      'SAFE_MODE_NO_PIN': userConfig['SAFE_MODE_NO_PIN'],
+      'CHATS_PUSH_SOUND': userConfig['CHATS_PUSH_SOUND'],
+      'DOUBLE_TAP_REACTION_VALUE': userConfig['DOUBLE_TAP_REACTION_VALUE'],
+      'FAMILY_PROTECTION': userConfig['FAMILY_PROTECTION'],
+      'HIDDEN': userConfig['HIDDEN'],
+      'CHATS_INVITE': userConfig['CHATS_INVITE'],
+      'PUSH_NEW_CONTACTS': userConfig['PUSH_NEW_CONTACTS'],
+      'UNSAFE_FILES': userConfig['UNSAFE_FILES'],
+      'DONT_DISTURB_UNTIL': userConfig['DONT_DISTURB_UNTIL'],
+      'ALT_KEYBOARD': userConfig['ALT_KEYBOARD'],
+      'CONTENT_LEVEL_ACCESS': userConfig['CONTENT_LEVEL_ACCESS'],
+      'STICKERS_SUGGEST': userConfig['STICKERS_SUGGEST'],
+      'SAFE_MODE': userConfig['SAFE_MODE'],
+      'M_CALL_PUSH_NOTIFICATION': userConfig['M_CALL_PUSH_NOTIFICATION'],
+    };
   }
 
   Future<RequestCodeResult> _requestCodeInternal(

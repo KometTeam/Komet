@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:komet/core/utils/logger.dart';
@@ -72,10 +73,15 @@ class ProfileData {
     final profileOptionsStr = row['profile_options'] as String?;
     List<int>? profileOptions;
     if (profileOptionsStr != null && profileOptionsStr.isNotEmpty) {
-      profileOptions = profileOptionsStr
-          .split(',')
-          .map((e) => int.parse(e.trim()))
-          .toList();
+      try {
+        profileOptions = profileOptionsStr
+            .split(',')
+            .where((e) => e.trim().isNotEmpty)
+            .map((e) => int.parse(e.trim()))
+            .toList();
+      } catch (_) {
+        profileOptions = null;
+      }
     }
     return ProfileData(
       id: row['id'] as int,
@@ -92,7 +98,7 @@ class ProfileData {
     );
   }
 
-  Map<String, dynamic> toDbRow() => {
+  Map<String, dynamic> toDbRow({bool isActive = false}) => {
     'id': id,
     'first_name': firstName,
     'last_name': lastName,
@@ -103,6 +109,7 @@ class ProfileData {
     'country': country,
     'account_status': accountStatus,
     'update_time': updateTime,
+    'is_active': isActive ? 1 : 0,
     'profile_options': profileOptions?.join(','),
   };
 }
@@ -118,6 +125,7 @@ abstract class SyncKey {
   static const configHash = 'config_hash';
   static const chatCacheFingerprint = 'chat_cache_fingerprint';
   static const serverTime = 'server_time';
+  static const loginInfo = 'login_info';
 }
 
 class AppDatabase {
@@ -130,8 +138,20 @@ class AppDatabase {
     }
   }
 
+  static Completer<Database>? _initCompleter;
+
   static Future<Database> get _instance async {
-    _db ??= await _open();
+    if (_db != null) return _db!;
+    if (_initCompleter != null) return _initCompleter!.future;
+    _initCompleter = Completer<Database>();
+    try {
+      _db = await _open();
+      _initCompleter!.complete(_db!);
+    } catch (e) {
+      _initCompleter!.completeError(e);
+      _initCompleter = null;
+      rethrow;
+    }
     return _db!;
   }
 
@@ -139,7 +159,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 8,
+      version: 9,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -171,6 +191,14 @@ class AppDatabase {
         if (oldVersion < 8) {
             await db.execute(
             'ALTER TABLE chats_cache ADD COLUMN participants TEXT',
+          );
+        }
+        if (oldVersion < 9) {
+          await db.execute(
+            'ALTER TABLE contacts ADD COLUMN options TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN options TEXT',
           );
         }
       },
@@ -210,7 +238,8 @@ class AppDatabase {
       photo_id     INTEGER,
       base_url     TEXT,
       base_raw_url TEXT,
-      update_time  INTEGER NOT NULL DEFAULT 0
+      update_time  INTEGER NOT NULL DEFAULT 0,
+      options      TEXT
     )
   ''';
 
@@ -242,6 +271,7 @@ class AppDatabase {
       is_online       INTEGER NOT NULL DEFAULT 0,
       seen_time       INTEGER NOT NULL DEFAULT 0,
       participants    TEXT NOT NULL DEFAULT "",
+      options         TEXT,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -261,11 +291,11 @@ class AppDatabase {
     )
   ''';
 
-  static Future<void> saveProfile(ProfileData profile) async {
+  static Future<void> saveProfile(ProfileData profile, {bool isActive = true}) async {
     final db = await _instance;
     await db.insert(
       'profile',
-      profile.toDbRow(),
+      profile.toDbRow(isActive: isActive),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -372,6 +402,19 @@ class AppDatabase {
     );
     if (rows.isEmpty) return null;
     return rows.first['value'] as String;
+  }
+
+  static Future<void> saveLoginInfo(int accountId, String jsonInfo) async {
+    final db = await _instance;
+    await db.insert('sync_state', {
+      'account_id': accountId,
+      'key': SyncKey.loginInfo,
+      'value': jsonInfo,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<String?> getLoginInfo(int accountId) async {
+    return getSyncValue(accountId, SyncKey.loginInfo);
   }
 
   static Future<void> close() async {

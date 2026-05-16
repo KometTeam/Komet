@@ -1,0 +1,182 @@
+import 'package:flutter/material.dart';
+import 'package:m3e_collection/m3e_collection.dart';
+
+import '../../../core/config/app_cache_extent.dart';
+import '../../../core/utils/haptics.dart';
+
+class PerformanceScreen extends StatefulWidget {
+  const PerformanceScreen({super.key});
+
+  @override
+  State<PerformanceScreen> createState() => _PerformanceScreenState();
+}
+
+class _PerformanceScreenState extends State<PerformanceScreen> {
+  late double _value;
+  late double _preZoneValue;
+  bool _lowWarnDismissed = false;
+  bool _highWarnDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = AppCacheExtent.current.value;
+    _preZoneValue = _value;
+  }
+
+  bool _isInSafeZone(double v) =>
+      v >= AppCacheExtent.lowWarnThreshold && v < AppCacheExtent.highWarnThreshold;
+
+  void _onChanged(double v) {
+    setState(() {
+      _value = v;
+      if (_isInSafeZone(v)) _preZoneValue = v;
+    });
+  }
+
+  Future<void> _onChangeEnd(double v) async {
+    Haptics.selection();
+    final inLow = v < AppCacheExtent.lowWarnThreshold;
+    final inHigh = v >= AppCacheExtent.highWarnThreshold;
+
+    if (inLow && !_lowWarnDismissed) {
+      final ok = await _showWarning(
+        text:
+            'Производительность приложения может снизиться, вы уверены?',
+      );
+      if (ok) {
+        _lowWarnDismissed = true;
+        await AppCacheExtent.save(v);
+      } else {
+        setState(() => _value = _preZoneValue);
+        await AppCacheExtent.save(_preZoneValue);
+      }
+      return;
+    }
+
+    if (inHigh && !_highWarnDismissed) {
+      final ok = await _showWarning(
+        text:
+            'Это врядли даст хотя-бы немного заметный прирост к FPS, '
+            'но может потреблять больше памяти. Вы уверены?',
+      );
+      if (ok) {
+        _highWarnDismissed = true;
+        await AppCacheExtent.save(v);
+      } else {
+        setState(() => _value = _preZoneValue);
+        await AppCacheExtent.save(_preZoneValue);
+      }
+      return;
+    }
+
+    await AppCacheExtent.save(v);
+  }
+
+  Future<bool> _showWarning({required String text}) async {
+    final cs = Theme.of(context).colorScheme;
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: cs.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          content: Text(
+            text,
+            style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.35),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Нет',
+                style: TextStyle(color: cs.onSurfaceVariant),
+              ),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Да'),
+            ),
+          ],
+        );
+      },
+    );
+    return res ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hint = cs.onSurfaceVariant;
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBarM3E(
+        titleText: 'Производительность',
+        backgroundColor: cs.surface,
+      ),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+          children: [
+            Material(
+              color: cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(28),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Кеш сообщений',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Сколько пикселей сообщений держать построенными за пределами видимой области.',
+                      style: TextStyle(color: hint, fontSize: 13, height: 1.3),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Текущий cacheExtent: ${_value.round()}',
+                      style: TextStyle(color: hint, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Slider(
+                      value: _value,
+                      min: AppCacheExtent.min,
+                      max: AppCacheExtent.max,
+                      onChanged: _onChanged,
+                      onChangeEnd: _onChangeEnd,
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Меньше потребление',
+                          style: TextStyle(color: hint, fontSize: 11),
+                        ),
+                        Text(
+                          'Больше FPS',
+                          style: TextStyle(color: hint, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

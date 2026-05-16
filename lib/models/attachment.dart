@@ -136,7 +136,8 @@ class VideoAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 
@@ -192,18 +193,32 @@ class AudioAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
+      } catch (_) {}
+    }
+
+    String? waveStr;
+    final waveRaw = map['wave'];
+    if (waveRaw is String) {
+      waveStr = waveRaw;
+    } else if (waveRaw is List) {
+      try {
+        final bytes = List<int>.from(waveRaw);
+        final base64 = String.fromCharCodes(bytes);
+        waveStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 
     return AudioAttachment(
       previewData: previewStr,
-      baseUrl: map['baseUrl'] as String?,
+      baseUrl: map['baseUrl']?.toString(),
+      fileUrl: map['url']?.toString(),
       audioId: map['audioId'] as int?,
-      audioToken: map['audioToken'] as String?,
+      audioToken: map['token']?.toString(),
       duration: map['duration'] as int?,
       size: map['size'] as int?,
-      waveform: map['waveform'] as String?,
+      waveform: waveStr,
     );
   }
 
@@ -244,7 +259,8 @@ class FileAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 
@@ -294,15 +310,16 @@ class StickerAttachment extends MessageAttachment {
     } else if (previewRaw is List) {
       try {
         final bytes = List<int>.from(previewRaw);
-        previewStr = String.fromCharCodes(bytes);
+        final base64 = String.fromCharCodes(bytes);
+        previewStr = 'data:image/webp;base64,$base64';
       } catch (_) {}
     }
 
     return StickerAttachment(
       previewData: previewStr,
-      baseUrl: map['baseUrl'] as String?,
-      stickerId: map['stickerId'] as String?,
-      stickerPackId: map['stickerPackId'] as String?,
+      baseUrl: (map['url'] ?? map['baseUrl'])?.toString(),
+      stickerId: map['stickerId']?.toString(),
+      stickerPackId: map['setId']?.toString() ?? map['stickerPackId']?.toString(),
       width: map['width'] as int?,
       height: map['height'] as int?,
     );
@@ -344,15 +361,15 @@ class ContactAttachment extends MessageAttachment {
 
   factory ContactAttachment.fromMap(Map<String, dynamic> map) {
     return ContactAttachment(
-      previewData: map['previewData'] as String?,
-      baseUrl: map['baseUrl'] as String?,
-      userId: map['userId'] as String?,
-      firstName: map['firstName'] as String?,
-      lastName: map['lastName'] as String?,
-      phoneNumber: map['phoneNumber'] as String?,
-      photoUrl: map['photoUrl'] as String?,
-      contactId: map['contactId'] as int?,
-      name: map['name'] as String?,
+      previewData: map['previewData']?.toString(),
+      baseUrl: map['baseUrl']?.toString(),
+      userId: map['userId']?.toString(),
+      firstName: map['firstName']?.toString(),
+      lastName: map['lastName']?.toString(),
+      phoneNumber: map['phoneNumber']?.toString(),
+      photoUrl: map['photoUrl']?.toString(),
+      contactId: map['contactId'] is int ? map['contactId'] as int : int.tryParse(map['contactId']?.toString() ?? ''),
+      name: map['name']?.toString(),
     );
   }
 
@@ -414,6 +431,7 @@ class ControlAttachment extends MessageAttachment {
   final String? event;
   final String? title;
   final List<int>? userIds;
+  final int? userId;
 
   const ControlAttachment({
     super.previewData,
@@ -422,15 +440,22 @@ class ControlAttachment extends MessageAttachment {
     this.event,
     this.title,
     this.userIds,
+    this.userId,
   }) : super(type: AttachmentType.control);
 
   factory ControlAttachment.fromMap(Map<String, dynamic> map) {
+    String? title = map['title']?.toString();
+    if ((title == null || title.isEmpty) && map['shortMessage'] != null) {
+      title = map['shortMessage'].toString();
+    }
+
     return ControlAttachment(
-      previewData: map['previewData'] as String?,
-      baseUrl: map['baseUrl'] as String?,
-      event: map['event'] as String?,
-      title: map['title'] as String?,
-      userIds: (map['userIds'] as List?)?.cast<int>(),
+      previewData: map['previewData']?.toString(),
+      baseUrl: map['baseUrl']?.toString(),
+      event: map['event']?.toString(),
+      title: title,
+      userIds: (map['userIds'] as List?)?.map((e) => e is int ? e : int.tryParse(e?.toString() ?? '') ?? 0).toList(),
+      userId: map['userId'] is int ? map['userId'] as int : int.tryParse(map['userId']?.toString() ?? ''),
     );
   }
 
@@ -442,6 +467,7 @@ class ControlAttachment extends MessageAttachment {
     'event': event,
     'title': title,
     'userIds': userIds,
+    'userId': userId,
   };
 }
 

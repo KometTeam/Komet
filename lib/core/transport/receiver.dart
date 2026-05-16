@@ -4,15 +4,16 @@ import '../protocol/packet.dart';
 import '../utils/logger.dart';
 
 /// Буфер входящих данных.
-/// Копит сырые байты из сокета, собирает из них целые пакеты.
+/// Копит сырые байты из сокета, нарезает их на байтовые срезы целых пакетов.
 class PacketReceiver {
   Uint8List _buffer = Uint8List(0);
 
   static const int _maxBufferSize = 2 * 1024 * 1024; // 2 мегабуйта
 
-  /// Добавляет байты в буфер, возвращает поток собранных пакетов.
-  /// Неполные данные остаются в буфере до следующего вызова.
-  Stream<Packet> feed(Uint8List data) async* {
+  /// Добавляет байты в буфер и возвращает все собранные пакеты как сырые срезы.
+  /// Полностью синхронный — нарезка не блокируется на распаковке, поэтому
+  /// конкурентные вызовы из stream-листенера не могут пересечься на `_buffer`.
+  List<Uint8List> feed(Uint8List data) {
     final newBuffer = Uint8List(_buffer.length + data.length);
     newBuffer.setAll(0, _buffer);
     newBuffer.setAll(_buffer.length, data);
@@ -23,9 +24,10 @@ class PacketReceiver {
         'PacketReceiver: переполнение буфера (${_buffer.length} B), сброс',
       );
       reset();
-      return;
+      return const [];
     }
 
+    final packets = <Uint8List>[];
     while (_buffer.length >= headerSize) {
       final bd = ByteData.view(
         _buffer.buffer,
@@ -38,15 +40,10 @@ class PacketReceiver {
 
       if (_buffer.length < totalLength) break;
 
-      final packetBytes = Uint8List.sublistView(_buffer, 0, totalLength);
+      packets.add(Uint8List.sublistView(_buffer, 0, totalLength));
       _buffer = _buffer.sublist(totalLength);
-
-      try {
-        yield await unpackPacket(packetBytes);
-      } catch (e) {
-        logger.e('PacketReceiver: ошибка распаковки: $e');
-      }
     }
+    return packets;
   }
 
   void reset() {

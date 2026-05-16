@@ -1,7 +1,24 @@
 import 'dart:convert';
 
+import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
+import '../api.dart';
+
+Map<int, int> _parseParticipants(dynamic raw) {
+  try {
+    final decoded = raw is String ? jsonDecode(raw) : raw;
+    if (decoded is Map) {
+      return decoded.map((k, v) => MapEntry(
+        k is int ? k : int.parse(k.toString()),
+        v is int ? v : int.tryParse(v.toString()) ?? 0,
+      ));
+    }
+  } catch (e) {
+    logger.e('Failed to parse participants: $e');
+  }
+  return {};
+}
 
 class CachedChat {
   final int id;
@@ -12,6 +29,7 @@ class CachedChat {
   final int? lastMsgId;
   final int? lastMsgTime;
   final String? lastMsgText;
+  final String? lastMsgTextOneLine;
   final int? lastMsgSenderId;
   final int unreadCount;
   final int lastEventTime;
@@ -21,8 +39,9 @@ class CachedChat {
   final bool isOnline;
   final int seenTime;
   final Map<int, int> participants;
+  final Set<String> options;
 
-  const CachedChat({
+  CachedChat({
     required this.id,
     required this.accountId,
     required this.type,
@@ -40,7 +59,12 @@ class CachedChat {
     required this.isOnline,
     required this.seenTime,
     required this.participants,
-  });
+    this.options = const {},
+  }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
+            ? lastMsgText.replaceAll('\n', ' ')
+            : lastMsgText;
+
+  bool get isOfficial => options.contains('OFFICIAL');
 
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
@@ -59,9 +83,14 @@ class CachedChat {
     dontDisturbUntil: row['dont_disturb_until'] as int,
     isOnline: (row['is_online'] as int) == 1,
     seenTime: row['seen_time'] as int,
-    // watafuc
-    participants:  Map<String, int>.from(jsonDecode(row['participants'])).map((k, v) => MapEntry(int.parse(k), v))
+    participants: _parseParticipants(row['participants']),
+    options: _decodeOptions(row['options']),
   );
+
+  static Set<String> _decodeOptions(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return const {};
+    return raw.split(',').where((s) => s.isNotEmpty).toSet();
+  }
 
   Map<String, dynamic> toDbRow() => {
     'id': id,
@@ -80,7 +109,8 @@ class CachedChat {
     'dont_disturb_until': dontDisturbUntil,
     'is_online': isOnline ? 1 : 0,
     'seen_time': seenTime,
-    'participants': jsonEncode(participants.map((k, v) => MapEntry(k.toString(), v)))
+    'participants': jsonEncode(participants.map((k, v) => MapEntry(k.toString(), v))),
+    'options': options.isEmpty ? null : options.join(','),
   };
 }
 
@@ -105,6 +135,7 @@ class ChatsModule {
       final chatsConfig = configMap['chats'] is Map
           ? configMap['chats'] as Map
           : {};
+
       // Presence for online statuses
       final presenceMap = data['presence'] is Map ? data['presence'] as Map : {};
       final cachedAt = DateTime.now().millisecondsSinceEpoch;
@@ -144,7 +175,6 @@ class ChatsModule {
   static Future<List<CachedChat>> getChats(int accountId) async {
     try {
       final rows = await AppDatabase.loadChats(accountId);
-      
       return rows.map(CachedChat.fromDbRow).toList();
     } catch (e) {
       logger.e("Ошибка при получении чатов: $e");
@@ -195,6 +225,7 @@ class ChatsModule {
 
         String? title;
         String? iconUrl;
+        Set<String> options = const {};
 
         if (type == 'DIALOG') {
           otherId = _otherParticipantId(chat['participants'], currentUserId);
@@ -203,13 +234,25 @@ class ChatsModule {
           if (contact != null) {
             title = _nameFromContact(contact);
             iconUrl = contact['baseUrl'] as String?;
+            final contactOpts = contact['options'];
+            if (contactOpts is List) {
+              options = contactOpts.whereType<String>().toSet();
+            }
           } else {
             title = existing[id]?.title;
             iconUrl = existing[id]?.iconUrl;
+            options = existing[id]?.options ?? const {};
           }
         } else {
           title = chat['title'] as String?;
           iconUrl = chat['baseIconUrl'] as String?;
+          final chatOpts = chat['options'];
+          if (chatOpts is Map) {
+            options = {
+              for (final entry in chatOpts.entries)
+                if (entry.value == true && entry.key is String) entry.key as String,
+            };
+          }
         }
 
         final lastMsg = chat['lastMessage'];
@@ -233,6 +276,7 @@ class ChatsModule {
           dontDisturbUntil = (config['dontDisturbUntil'] as int?) ?? 0;
         }
 
+
         int seenTime = 0;
         bool isOnline = false;
         if (type == 'DIALOG' && otherId != null) {
@@ -242,7 +286,7 @@ class ChatsModule {
             isOnline = (presence['status'] as int?) == 1;
           }
         }
-        Map<int, int> participants = Map<int, int>.from(chat['participants']);
+        Map<int, int> participants = _parseParticipants(chat['participants']);
 
         return CachedChat(
           id: id,
@@ -261,7 +305,8 @@ class ChatsModule {
           dontDisturbUntil: dontDisturbUntil,
           isOnline: isOnline,
           seenTime: seenTime,
-          participants: participants
+          participants: participants,
+          options: options,
         );
     } catch (e) {
       logger.e("Ошибка при парсинге чата: $e");
@@ -282,12 +327,32 @@ class ChatsModule {
   static String? _nameFromContact(Map<dynamic, dynamic> contact) {
     final names = contact['names'];
     if (names is! List || names.isEmpty) return null;
-    final name =
-        names.firstWhere(
-              (n) => n is Map && n['type'] == 'ONEME',
-              orElse: () => names.first,
-            )
-            as Map;
+    final nameRaw = names.firstWhere(
+      (n) => n is Map && n['type'] == 'ONEME',
+      orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+    );
+    if (nameRaw is! Map) return null;
+    final name = nameRaw;
     return name['name'] as String?;
+  }
+
+  static Future<Map<String, dynamic>?> getChatInfo(Api api, int chatId) async {
+    final packet = await api.sendRequest(Opcode.chatInfo, {
+      'chatIds': [chatId],
+    });
+    if (packet.isError) return null;
+    final payload = packet.payload as Map?;
+    final chats = payload?['chats'] as List?;
+    if (chats == null || chats.isEmpty) return null;
+    return Map<String, dynamic>.from(chats.first as Map);
+  }
+
+  static Future<dynamic> searchById(Api api, int userId) async {
+    final packet = await api.sendRequest(Opcode.publicSearch, {
+      'query': userId.toString(),
+      'from': 0,
+      'count': 10,
+    });
+    return packet.payload;
   }
 }

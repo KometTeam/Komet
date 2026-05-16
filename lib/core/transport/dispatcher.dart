@@ -53,8 +53,12 @@ class PacketDispatcher {
     if (packet.cmd == CmdType.ok ||
         packet.cmd == CmdType.error ||
         packet.cmd == CmdType.notFound) {
+      final payloadStr = packet.payload.toString();
+      final displayPayload = packet.opcode == Opcode.login && payloadStr.length > 50
+          ? '${payloadStr.substring(0, 50)}...'
+          : payloadStr;
       logger.i(
-        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${packet.payload}}',
+        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: $displayPayload}',
       );
 
       final completer = _pendingRequests.remove(packet.seq);

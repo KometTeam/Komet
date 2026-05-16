@@ -31,7 +31,13 @@ class _CallsTabState extends State<CallsTab> {
     }
 
     final callsModule = CallsModule(api);
-    final calls = await callsModule.fetchHistory(p.id, p.id);
+    List<CallLogEntry> calls;
+    try {
+      calls = await callsModule.fetchHistory(p.id, p.id);
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     final List<CallLogEntry> grouped = [];
     for (final call in calls) {
@@ -164,6 +170,8 @@ class _CallsTabState extends State<CallsTab> {
                       ? CachedNetworkImage(
                           imageUrl: call.avatarUrl!,
                           fit: BoxFit.cover,
+                          memCacheWidth: 144,
+                          memCacheHeight: 144,
                           fadeInDuration: const Duration(milliseconds: 120),
                           errorWidget: (context, url, error) =>
                               _buildPlaceholderAvatar(cs, call.name),

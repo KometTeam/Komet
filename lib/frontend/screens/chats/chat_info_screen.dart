@@ -1,0 +1,1021 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import '../../../backend/modules/messages.dart' show ContactCache;
+import '../../../core/protocol/opcode_map.dart';
+import '../../../core/storage/app_database.dart';
+import '../../../main.dart' as main;
+
+class _MemberInfo {
+  final int id;
+  final bool isAdmin;
+  final bool isOwner;
+  final bool isMe;
+  final int? seenTime;
+  final bool isOnline;
+
+  const _MemberInfo({
+    required this.id,
+    required this.isAdmin,
+    required this.isOwner,
+    required this.isMe,
+    this.seenTime,
+    required this.isOnline,
+  });
+}
+
+class ChatInfoScreen extends StatefulWidget {
+  final int chatId;
+  final String name;
+  final String imageUrl;
+  final String chatType;
+
+  const ChatInfoScreen({
+    super.key,
+    required this.chatId,
+    required this.name,
+    required this.imageUrl,
+    required this.chatType,
+  });
+
+  @override
+  State<ChatInfoScreen> createState() => _ChatInfoScreenState();
+}
+
+class _ChatInfoScreenState extends State<ChatInfoScreen> {
+  final _tabScrollController = ScrollController();
+
+  int _myId = 0;
+  bool _isLoading = true;
+  Map<String, dynamic>? _chatData;
+  String _selectedTab = '';
+  bool _descExpanded = false;
+
+  // DIALOG
+  int? _otherId;
+  Map<String, dynamic>? _contactData;
+  int? _seenTime;
+  bool _isOnline = false;
+  bool _isBot = false;
+
+  // CHAT
+  List<_MemberInfo> _members = [];
+  int _onlineCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _tabScrollController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _tabs {
+    switch (widget.chatType) {
+      case 'DIALOG':
+        return _isBot
+            ? ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки']
+            : ['Общие чаты', 'Медиа', 'Info', 'Файлы', 'Голосовые', 'Ссылки'];
+      case 'CHAT':
+        return ['Участники', 'Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+      case 'CHANNEL':
+        return ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+      default:
+        return ['Info'];
+    }
+  }
+
+  Future<void> _load() async {
+    final profile = await AppDatabase.loadActiveProfile();
+    _myId = profile?.id ?? 0;
+
+    final packet = await main.api.sendRequest(
+      Opcode.chatInfo,
+      {'chatIds': [widget.chatId]},
+    );
+    if (!packet.isOk || !mounted) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    final chats = (packet.payload as Map?)?['chats'] as List?;
+    if (chats == null || chats.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    _chatData = Map<String, dynamic>.from(chats.first as Map);
+
+    if (widget.chatType == 'DIALOG') {
+      final parts = _chatData!['participants'] as Map? ?? {};
+      for (final key in parts.keys) {
+        final id = key is int ? key : int.tryParse(key.toString());
+        if (id != null && id != _myId) {
+          _otherId = id;
+          break;
+        }
+      }
+
+      if (_otherId != null) {
+        final cp = await main.api.sendRequest(
+          Opcode.contactInfo,
+          {'contactIds': [_otherId]},
+        );
+        if (cp.isOk) {
+          final contacts = (cp.payload as Map?)?['contacts'] as List?;
+          if (contacts != null && contacts.isNotEmpty) {
+            _contactData = Map<String, dynamic>.from(contacts.first as Map);
+            final opts = _contactData!['options'];
+            _isBot = (opts is List) && opts.contains('BOT');
+          }
+        }
+
+        final pp = await main.api.sendRequest(
+          Opcode.contactPresence,
+          {'contactIds': [_otherId]},
+        );
+        if (pp.isOk) {
+          final presence = (pp.payload as Map?)?['presence'] as Map?;
+          final p = presence?[_otherId.toString()] ?? presence?[_otherId];
+          if (p is Map) {
+            _seenTime = p['seen'] as int?;
+            _isOnline = ((p['status'] as int?) ?? 0) > 0;
+          }
+        }
+      }
+    } else if (widget.chatType == 'CHAT') {
+      final parts = _chatData!['participants'] as Map? ?? {};
+      final admins = _chatData!['adminParticipants'] as Map? ?? {};
+      final owner = _chatData!['owner'] as int?;
+
+      final memberIds = <int>[];
+      for (final k in parts.keys) {
+        final id = k is int ? k : int.tryParse(k.toString());
+        if (id != null) memberIds.add(id);
+      }
+
+      final Map<int, Map> presenceMap = {};
+      if (memberIds.isNotEmpty) {
+        final pp = await main.api.sendRequest(
+          Opcode.contactPresence,
+          {'contactIds': memberIds},
+        );
+        if (pp.isOk) {
+          final presence = (pp.payload as Map?)?['presence'] as Map?;
+          if (presence != null) {
+            for (final e in presence.entries) {
+              final id = e.key is int
+                  ? e.key as int
+                  : int.tryParse(e.key.toString());
+              if (id != null && e.value is Map) {
+                presenceMap[id] = e.value as Map;
+              }
+            }
+          }
+        }
+      }
+
+      _onlineCount = 0;
+      _members = memberIds.map((id) {
+        final pres = presenceMap[id];
+        final online = ((pres?['status'] as int?) ?? 0) > 0;
+        if (online) _onlineCount++;
+        final isAdmin =
+            admins.containsKey(id.toString()) || admins.containsKey(id);
+        return _MemberInfo(
+          id: id,
+          isAdmin: isAdmin,
+          isOwner: id == owner,
+          isMe: id == _myId,
+          seenTime: pres?['seen'] as int?,
+          isOnline: online,
+        );
+      }).toList();
+
+      _members.sort((a, b) {
+        if (a.isMe != b.isMe) return a.isMe ? -1 : 1;
+        if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
+        return (b.seenTime ?? 0).compareTo(a.seenTime ?? 0);
+      });
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (_selectedTab.isEmpty) _selectedTab = _tabs.first;
+      });
+    }
+  }
+
+  // ─── BUILD ───────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final bg = isDark ? Colors.black : cs.surface;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: _isLoading ? _buildShimmer(cs) : _buildScrollBody(cs),
+      ),
+    );
+  }
+
+  Widget _buildScrollBody(ColorScheme cs) {
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          floating: true,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: cs.onSurface),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.more_vert, color: cs.onSurface),
+              onPressed: () {},
+            ),
+          ],
+        ),
+        SliverToBoxAdapter(child: _buildBody(cs)),
+      ],
+    );
+  }
+
+  Widget _buildBody(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 4),
+          _buildAvatar(cs),
+          const SizedBox(height: 14),
+          Text(
+            widget.name,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _subtitle(),
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          _buildActions(cs),
+          const SizedBox(height: 16),
+          _buildPersistentInfo(cs),
+          _buildTabBar(cs),
+          const SizedBox(height: 12),
+          _buildTabContent(cs),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  // ─── AVATAR ──────────────────────────────────────────────────────────────
+
+  Widget _buildAvatar(ColorScheme cs) {
+    return Container(
+      width: 96,
+      height: 96,
+      decoration: BoxDecoration(
+          shape: BoxShape.circle, color: cs.primaryContainer),
+      child: widget.imageUrl.isNotEmpty
+          ? ClipOval(
+              child: CachedNetworkImage(
+                imageUrl: widget.imageUrl,
+                fit: BoxFit.cover,
+                memCacheWidth: 360,
+                memCacheHeight: 360,
+                errorWidget: (context, error, stack) => _avatarLetters(cs),
+              ),
+            )
+          : _avatarLetters(cs),
+    );
+  }
+
+  Widget _avatarLetters(ColorScheme cs) => Center(
+        child: Text(
+          widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+          style: TextStyle(
+            color: cs.onPrimaryContainer,
+            fontSize: 36,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+
+  // ─── SUBTITLE ────────────────────────────────────────────────────────────
+
+  String _subtitle() {
+    switch (widget.chatType) {
+      case 'DIALOG':
+        if (_isBot) return 'Бот';
+        if (_isOnline) return 'В сети';
+        if (_seenTime != null) return _formatLastSeen(_seenTime!);
+        return '';
+      case 'CHAT':
+        final total =
+            (_chatData?['participantsCount'] as int?) ?? _members.length;
+        if (_onlineCount > 0) return '$_onlineCount из $total в сети';
+        return _pluralCount(total, 'участник', 'участника', 'участников');
+      case 'CHANNEL':
+        final count = (_chatData?['participantsCount'] as int?) ?? 0;
+        return _pluralCount(count, 'подписчик', 'подписчика', 'подписчиков');
+      default:
+        return '';
+    }
+  }
+
+  // ─── ACTION BUTTONS ──────────────────────────────────────────────────────
+
+  Widget _buildActions(ColorScheme cs) {
+    final List<({IconData icon, String label})> btns;
+
+    if (widget.chatType == 'DIALOG') {
+      if (_isBot) {
+        btns = [
+          (icon: Icons.chat_bubble, label: 'Чат'),
+          (icon: Icons.notifications, label: 'Звук'),
+        ];
+      } else {
+        btns = [
+          (icon: Icons.chat_bubble, label: 'Чат'),
+          (icon: Icons.notifications, label: 'Звук'),
+          (icon: Icons.call, label: 'Звонок'),
+        ];
+      }
+    } else if (widget.chatType == 'CHANNEL') {
+      btns = [
+        (icon: Icons.notifications, label: 'Звук'),
+        (icon: Icons.exit_to_app, label: 'Покинуть'),
+      ];
+    } else {
+      btns = [
+        (icon: Icons.chat_bubble, label: 'Чат'),
+        (icon: Icons.notifications, label: 'Звук'),
+        (icon: Icons.exit_to_app, label: 'Покинуть'),
+      ];
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          for (int i = 0; i < btns.length; i++) ...[
+            _actionBtn(cs, btns[i].icon, btns[i].label),
+            if (i < btns.length - 1) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _actionBtn(ColorScheme cs, IconData icon, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: cs.primary, size: 22),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(color: cs.onSurface, fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── PERSISTENT INFO (shown above tabs for all types) ────────────────────
+
+  Widget _buildPersistentInfo(ColorScheme cs) {
+    final items = <Widget>[];
+
+    if (widget.chatType == 'DIALOG') {
+      if (_isBot) {
+        final link = _contactData?['link'] as String?;
+        if (link != null && link.isNotEmpty) {
+          items.add(_simpleInfoCard(cs, 'Ссылка', link, isLink: true));
+        }
+      } else {
+        final phone = _contactData?['phone'];
+        final phoneInt =
+            phone is int ? phone : int.tryParse(phone?.toString() ?? '');
+        if (phoneInt != null && phoneInt > 0) {
+          items.add(_simpleInfoCard(cs, 'Номер телефона', _formatPhone(phoneInt)));
+        }
+      }
+    } else if (widget.chatType == 'CHANNEL') {
+      final link = _chatData?['link'] as String?;
+      if (link != null && link.isNotEmpty) {
+        items.add(_linkCard(cs, link));
+      }
+      final desc = _chatData?['description'] as String?;
+      if (desc != null && desc.isNotEmpty) {
+        if (items.isNotEmpty) items.add(const SizedBox(height: 8));
+        items.add(_collapsibleDescCard(cs, desc));
+      }
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [...items, const SizedBox(height: 16)],
+    );
+  }
+
+  Widget _simpleInfoCard(ColorScheme cs, String label, String value,
+      {bool isLink = false}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: isLink ? const Color(0xFF007AFF) : cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linkCard(ColorScheme cs, String link) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ссылка-приглашение',
+                    style:
+                        TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(link,
+                    style: const TextStyle(
+                        color: Color(0xFF007AFF), fontSize: 15)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.qr_code_2,
+                color: Color(0xFF007AFF), size: 22),
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _collapsibleDescCard(ColorScheme cs, String desc) {
+    const int collapsedLines = 3;
+    final isLong = desc.length > 120;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Описание',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(
+            desc,
+            style:
+                TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
+            maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
+            overflow:
+                (_descExpanded || !isLong) ? null : TextOverflow.ellipsis,
+          ),
+          if (isLong) ...[
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () => setState(() => _descExpanded = !_descExpanded),
+              child: Text(
+                _descExpanded ? 'Свернуть' : 'Ещё',
+                style: const TextStyle(
+                    color: Color(0xFF007AFF), fontSize: 13),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── TAB BAR ─────────────────────────────────────────────────────────────
+
+  Widget _buildTabBar(ColorScheme cs) {
+    return LayoutBuilder(
+      builder: (context, constraints) => ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          dragDevices: {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.trackpad,
+          },
+        ),
+        child: Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              final delta = event.scrollDelta.dy != 0
+                  ? event.scrollDelta.dy
+                  : event.scrollDelta.dx;
+              _tabScrollController.animateTo(
+                (_tabScrollController.offset + delta).clamp(
+                  _tabScrollController.position.minScrollExtent,
+                  _tabScrollController.position.maxScrollExtent,
+                ),
+                duration: const Duration(milliseconds: 80),
+                curve: Curves.easeOut,
+              );
+            }
+          },
+          child: SingleChildScrollView(
+            controller: _tabScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (int i = 0; i < _tabs.length; i++) ...[
+                    _tabChip(cs, _tabs[i]),
+                    if (i < _tabs.length - 1) const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tabChip(ColorScheme cs, String tab) {
+    final selected = tab == _selectedTab;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = tab),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? cs.primaryContainer : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          tab,
+          style: TextStyle(
+            color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── TAB CONTENT ─────────────────────────────────────────────────────────
+
+  Widget _buildTabContent(ColorScheme cs) {
+    if (_selectedTab.isEmpty) return const SizedBox.shrink();
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: KeyedSubtree(
+        key: ValueKey(_selectedTab),
+        child: _tabBody(cs),
+      ),
+    );
+  }
+
+  Widget _tabBody(ColorScheme cs) {
+    switch (_selectedTab) {
+      case 'Info':
+        return _buildInfoTabContent(cs);
+      case 'Участники':
+        return _buildMembersTabContent(cs);
+      case 'Общие чаты':
+        return _buildPlaceholder(cs, 'Нет общих чатов', Icons.group);
+      case 'Медиа':
+        return _buildPlaceholder(cs, 'Нет медиа', Icons.photo_library);
+      case 'Файлы':
+        return _buildPlaceholder(cs, 'Нет файлов', Icons.description);
+      case 'Голосовые':
+        return _buildPlaceholder(cs, 'Нет голосовых', Icons.mic);
+      case 'Ссылки':
+        return _buildPlaceholder(cs, 'Нет ссылок', Icons.link);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildPlaceholder(ColorScheme cs, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.35), size: 48),
+          const SizedBox(height: 12),
+          Text(label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15)),
+        ],
+      ),
+    );
+  }
+
+  // ─── INFO TAB ────────────────────────────────────────────────────────────
+
+  Widget _buildInfoTabContent(ColorScheme cs) {
+    final items = <Widget>[];
+
+    if (widget.chatType == 'DIALOG' && !_isBot) {
+      final bio = (_contactData?['description'] as String?) ??
+          (_contactData?['about'] as String?);
+      if (bio != null && bio.isNotEmpty) {
+        items
+          ..add(_infoCard(cs, 'О себе', bio))
+          ..add(const SizedBox(height: 8));
+      }
+    }
+
+    if (widget.chatType == 'CHAT') {
+      final desc = _chatData?['description'] as String?;
+      if (desc != null && desc.isNotEmpty) {
+        items
+          ..add(_infoCard(cs, 'Описание', desc))
+          ..add(const SizedBox(height: 8));
+      }
+    }
+
+    items.add(_buildInfoRowsCard(cs));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: items,
+    );
+  }
+
+  Widget _buildInfoRowsCard(ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: _buildAllInfoRows(cs),
+    );
+  }
+
+  Widget _infoCard(ColorScheme cs, String label, String value) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(value,
+              style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  // ─── MEMBERS TAB ─────────────────────────────────────────────────────────
+
+  Widget _buildMembersTabContent(ColorScheme cs) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          _memberAction(cs, Icons.person_add, 'Добавить участника', () {}),
+          ..._members.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
+        ],
+      ),
+    );
+  }
+
+  Widget _memberAction(
+      ColorScheme cs, IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFF007AFF), size: 26),
+            const SizedBox(width: 14),
+            Text(label,
+                style: TextStyle(color: cs.onSurface, fontSize: 16)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _listDivider(ColorScheme cs) => Divider(
+        height: 1,
+        indent: 56,
+        endIndent: 0,
+        color: cs.outlineVariant.withValues(alpha: 0.3),
+      );
+
+  Widget _memberTile(ColorScheme cs, _MemberInfo member) {
+    final name =
+        ContactCache.get(member.id) ?? (member.isMe ? 'Вы' : '${member.id}');
+    final avatar = ContactCache.getAvatar(member.id);
+
+    final String sublabel;
+    if (member.isMe) {
+      sublabel = 'Вы';
+    } else if (member.isOnline) {
+      sublabel = 'В сети';
+    } else if (member.seenTime != null) {
+      sublabel = _formatLastSeen(member.seenTime!);
+    } else {
+      sublabel = 'Был(-а) недавно';
+    }
+
+    final String? roleLabel =
+        member.isOwner ? 'владелец' : (member.isAdmin ? 'Адмін' : null);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          (avatar != null && avatar.isNotEmpty)
+              ? CircleAvatar(
+                  radius: 22,
+                  backgroundImage: CachedNetworkImageProvider(avatar, maxWidth: 144, maxHeight: 144),
+                  backgroundColor: cs.primaryContainer,
+                )
+              : CircleAvatar(
+                  radius: 22,
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                        color: cs.onPrimaryContainer, fontSize: 16),
+                  ),
+                ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500)),
+                Text(sublabel,
+                    style: TextStyle(
+                        color: cs.onSurfaceVariant, fontSize: 13)),
+              ],
+            ),
+          ),
+          if (roleLabel != null)
+            Text(roleLabel,
+                style:
+                    TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  // ─── INFO ROWS ────────────────────────────────────────────────────────────
+
+  Widget _buildAllInfoRows(ColorScheme cs) {
+    final rows = <({String label, String value})>[];
+    final chat = _chatData;
+    if (chat == null) {
+      return Text('Нет данных',
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13));
+    }
+
+    void add(String label, dynamic val, {bool tsFormat = false}) {
+      if (val == null) return;
+      if (val is bool && !val) return;
+      String str;
+      if (tsFormat && val is int && val > 1) {
+        str = _formatTs(val);
+      } else if (val is bool) {
+        str = 'да';
+      } else {
+        str = val.toString();
+      }
+      if (str.isEmpty) return;
+      rows.add((label: label, value: str));
+    }
+
+    final type = widget.chatType;
+    add('ID чата', chat['id']);
+
+    if (type == 'DIALOG') {
+      add('Создан', chat['created'], tsFormat: true);
+      add('Изменён', chat['modified'], tsFormat: true);
+      add('Статус', chat['status']);
+    }
+
+    if (type == 'CHAT') {
+      add('Участников', chat['participantsCount']);
+      final owner = chat['owner'] as int?;
+      if (owner != null && owner != 0) {
+        add('Владелец', ContactCache.get(owner) ?? '$owner');
+      }
+      add('Создана', chat['created'], tsFormat: true);
+      add(
+        'Вступил',
+        (chat['joinTime'] as int?) != null && (chat['joinTime'] as int) > 1
+            ? chat['joinTime']
+            : null,
+        tsFormat: true,
+      );
+      add('Изменена', chat['modified'], tsFormat: true);
+      add('Есть боты', chat['hasBots'] as bool?);
+      final blocked = chat['blockedParticipantsCount'] as int?;
+      if (blocked != null && blocked > 0) add('Заблокировано', blocked);
+      final opts = chat['options'] as Map?;
+      add('Официальная', opts?['OFFICIAL'] as bool?);
+      add('Подпись адм.', opts?['SIGN_ADMIN'] as bool?);
+      add('Статус', chat['status']);
+    }
+
+    if (type == 'CHANNEL') {
+      add('Подписчиков', chat['participantsCount']);
+      add('Создан', chat['created'], tsFormat: true);
+      add('Изменён', chat['modified'], tsFormat: true);
+      final opts = chat['options'] as Map?;
+      add('Официальный', opts?['OFFICIAL'] as bool?);
+      add('Комментарии', opts?['COMMENTS'] as bool?);
+      add('РКН', opts?['A_PLUS_CHANNEL'] as bool?);
+      add('Подпись адм.', opts?['SIGN_ADMIN'] as bool?);
+      add('Только адм.', opts?['ONLY_ADMIN_CAN_ADD_MEMBER'] as bool?);
+      add('Статус', chat['status']);
+    }
+
+    if (rows.isEmpty) {
+      return Text('Нет данных',
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < rows.length; i++) ...[
+          _infoRow(cs, rows[i].label, rows[i].value),
+          if (i < rows.length - 1)
+            Divider(
+                height: 10,
+                color: cs.outlineVariant.withValues(alpha: 0.25)),
+        ],
+      ],
+    );
+  }
+
+  Widget _infoRow(ColorScheme cs, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10)),
+          Text(value,
+              style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  // ─── SHIMMER ─────────────────────────────────────────────────────────────
+
+  Widget _buildShimmer(ColorScheme cs) {
+    Widget block(double w, double h, {double r = 8}) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(r),
+          ),
+        );
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
+      children: [
+        Center(child: block(96, 96, r: 48)),
+        const SizedBox(height: 14),
+        Center(child: block(160, 22, r: 8)),
+        const SizedBox(height: 8),
+        Center(child: block(110, 16, r: 6)),
+        const SizedBox(height: 24),
+        Center(child: block(240, 54, r: 14)),
+        const SizedBox(height: 16),
+        block(double.infinity, 36, r: 20),
+        const SizedBox(height: 12),
+        block(double.infinity, 120, r: 14),
+      ],
+    );
+  }
+
+  // ─── HELPERS ─────────────────────────────────────────────────────────────
+
+  String _formatLastSeen(int ms) {
+    final diff = DateTime.now().millisecondsSinceEpoch - ms;
+    if (diff < 60000) return 'только что';
+    if (diff < 3600000) return '${diff ~/ 60000} мин назад';
+    if (diff < 86400000) return '${diff ~/ 3600000} ч назад';
+    if (diff < 604800000) return '${diff ~/ 86400000} д назад';
+    return 'давно';
+  }
+
+  String _formatPhone(int phone) {
+    final s = phone.toString();
+    if (s.length == 11 && s.startsWith('7')) {
+      return '+7 ${s.substring(1, 4)} ${s.substring(4, 7)}-'
+          '${s.substring(7, 9)}-${s.substring(9, 11)}';
+    }
+    return '+$s';
+  }
+
+  String _formatTs(int ts) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+    return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _pluralCount(int n, String one, String few, String many) {
+    final mod100 = n % 100;
+    final mod10 = n % 10;
+    if (mod100 >= 11 && mod100 <= 14) return '$n $many';
+    if (mod10 == 1) return '$n $one';
+    if (mod10 >= 2 && mod10 <= 4) return '$n $few';
+    return '$n $many';
+  }
+}

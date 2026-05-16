@@ -12,6 +12,7 @@ import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
 import '../profile/settings_tab.dart';
 import '../../../backend/api.dart';
+import '../../../core/utils/haptics.dart';
 import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
@@ -73,16 +74,24 @@ class _ChatListScreenState extends State<ChatListScreen>
   double _navDragBaseLeft = 0;
   double _revealAnimBegin = 0.0;
   double _closeAnimBegin = 0.0;
-  double _pullRatio = 0.0;
   static const double _kStoriesPullTriggerPx = 16.0;
+
+  final _StoriesUi _storiesUi = _StoriesUi();
+  double get _pullRatio => _storiesUi.pullRatio;
+  set _pullRatio(double v) => _storiesUi.pullRatio = v;
+  bool get _storiesDockedOpen => _storiesUi.dockedOpen;
+  set _storiesDockedOpen(bool v) => _storiesUi.dockedOpen = v;
+  bool get _storiesOverscrollRevealArmed => _storiesUi.overscrollRevealArmed;
+  set _storiesOverscrollRevealArmed(bool v) =>
+      _storiesUi.overscrollRevealArmed = v;
+  bool get _shouldCollapseSearch => _storiesUi.shouldCollapseSearch;
+  set _shouldCollapseSearch(bool v) => _storiesUi.shouldCollapseSearch = v;
 
   bool _navDragging = false;
   bool _isFabOpen = false;
   bool _showCacheWarning = false;
   bool _storiesAnimClosing = false;
-  bool _storiesDockedOpen = false;
-  bool _storiesOverscrollRevealArmed = true;
-  bool _shouldCollapseSearch = false;
+  Timer? _contactRebuildTimer;
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
   bool? _foldersListKnown;
 
@@ -107,7 +116,39 @@ class _ChatListScreenState extends State<ChatListScreen>
   StreamSubscription? _stateSub;
   StreamSubscription<LoginStatus>? _loginSub;
 
+  Widget? _cachedChatsBody;
+  Object? _chatsBodyCacheKey;
+
+  /// Возвращает дерево вкладки «Чаты», кэшируя его между ребилдами
+  /// родителя. Тап/драг навбара и FAB не трогают эти state-vars,
+  /// поэтому ключ остаётся прежним и subtree не пересобирается.
+  Widget _getChatsBody() {
+    final key = Object.hashAll([
+      identityHashCode(_chats),
+      identityHashCode(_folders),
+      _selectedFolderId,
+      _isInitialLoading,
+      _foldersListKnown,
+      _showCacheWarning,
+      _isSelectionMode,
+      _shouldCollapseSearch,
+      _selectedChats.length,
+      _pullRatio,
+      _storiesDockedOpen,
+      _storiesAnimClosing,
+      _storiesOverscrollRevealArmed,
+      _sessionState,
+      identityHashCode(_profile),
+    ]);
+    if (_cachedChatsBody == null || _chatsBodyCacheKey != key) {
+      _chatsBodyCacheKey = key;
+      _cachedChatsBody = _buildChatsTabBody();
+    }
+    return _cachedChatsBody!;
+  }
+
   void _toggleSelection(String chatId) {
+    Haptics.selection();
     setState(() {
       if (_selectedChats.contains(chatId)) {
         _selectedChats.remove(chatId);
@@ -337,19 +378,35 @@ class _ChatListScreenState extends State<ChatListScreen>
     for (final id in ids) {
       messagesModule.searchContactById(id).whenComplete(() {
         _inflightContactIds.remove(id);
-        if (mounted) setState(() {});
+        _scheduleContactRebuild();
       });
     }
   }
 
+  void _scheduleContactRebuild() {
+    if (!mounted) return;
+    _contactRebuildTimer?.cancel();
+    _contactRebuildTimer = Timer(const Duration(milliseconds: 120), () {
+      if (mounted) setState(() {});
+    });
+  }
+
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
-    if (_folders.isEmpty) return _chats;
-    if (pageIndex < 0 || pageIndex >= _folders.length) return _chats;
-    final folder = _folders[pageIndex];
-    if (FoldersModule.isAllChatsFolder(folder)) return _chats;
-    return _chats
-        .where((c) => FoldersModule.chatMatchesFolder(c, folder))
-        .toList();
+    List<CachedChat> base;
+    if (_folders.isEmpty) {
+      base = _chats;
+    } else if (pageIndex < 0 || pageIndex >= _folders.length) {
+      base = _chats;
+    } else {
+      final folder = _folders[pageIndex];
+      base = FoldersModule.isAllChatsFolder(folder)
+          ? _chats
+          : _chats.where((c) => FoldersModule.chatMatchesFolder(c, folder)).toList();
+    }
+    final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
+      ..sort((a, b) => a.favIndex!.compareTo(b.favIndex!));
+    final regular = base.where((c) => (c.favIndex ?? 0) <= 0).toList();
+    return [...pinned, ...regular];
   }
 
   void _syncFolderChatScrollControllers() {
@@ -395,9 +452,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (!c.hasClients) return;
     final double offset = c.offset;
     if (_isSelectionMode && !_shouldCollapseSearch && offset < 132) {
-      setState(() {
-        _shouldCollapseSearch = true;
-      });
+      _shouldCollapseSearch = true;
+      _storiesUi.notify();
     }
 
     if (offset < 0) {
@@ -412,9 +468,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         _startStoriesAutoReveal(dragRatio);
       } else if (!_storiesDockedOpen) {
         if (dragRatio != _pullRatio) {
-          setState(() {
-            _pullRatio = dragRatio;
-          });
+          _pullRatio = dragRatio;
+          _storiesUi.notify();
         }
       }
     } else {
@@ -429,14 +484,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       final disarm = offset > 3 && _storiesOverscrollRevealArmed;
       final clearPull = _pullRatio > 0;
       if (disarm || clearPull) {
-        setState(() {
-          if (disarm) {
-            _storiesOverscrollRevealArmed = false;
-          }
-          if (clearPull) {
-            _pullRatio = 0.0;
-          }
-        });
+        if (disarm) _storiesOverscrollRevealArmed = false;
+        if (clearPull) _pullRatio = 0.0;
+        _storiesUi.notify();
       }
     }
   }
@@ -477,85 +527,81 @@ class _ChatListScreenState extends State<ChatListScreen>
       animation: _shimmerController,
       builder: (context, child) {
         final opacity = 0.3 + 0.3 * sin(_shimmerController.value * pi * 2);
-        return Opacity(
-          opacity: opacity,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                        ),
-                        Container(
-                          width: double.infinity,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+        return Opacity(opacity: opacity, child: child);
       },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   void _onStoriesRevealTick() {
     if (!mounted) return;
     final t = Curves.easeOutCubic.transform(_storiesRevealController.value);
-    setState(() {
-      if (_storiesAnimClosing) {
-        _pullRatio = _closeAnimBegin * (1.0 - t);
-      } else {
-        _pullRatio = _revealAnimBegin + (1.0 - _revealAnimBegin) * t;
-      }
-    });
+    if (_storiesAnimClosing) {
+      _pullRatio = _closeAnimBegin * (1.0 - t);
+    } else {
+      _pullRatio = _revealAnimBegin + (1.0 - _revealAnimBegin) * t;
+    }
+    _storiesUi.notify();
   }
 
   void _onStoriesRevealStatus(AnimationStatus status) {
     if (!mounted) return;
     if (status == AnimationStatus.completed) {
-      setState(() {
-        if (_storiesAnimClosing) {
-          _pullRatio = 0.0;
-          _storiesDockedOpen = false;
-          _storiesAnimClosing = false;
-          _storiesOverscrollRevealArmed = true;
-        } else {
-          _pullRatio = 1.0;
-          _storiesDockedOpen = true;
-          _storiesRevealLayoutSettleUntil = DateTime.now().add(
-            const Duration(milliseconds: 520),
-          );
-        }
-      });
+      if (_storiesAnimClosing) {
+        _pullRatio = 0.0;
+        _storiesDockedOpen = false;
+        _storiesAnimClosing = false;
+        _storiesOverscrollRevealArmed = true;
+      } else {
+        _pullRatio = 1.0;
+        _storiesDockedOpen = true;
+        _storiesRevealLayoutSettleUntil = DateTime.now().add(
+          const Duration(milliseconds: 520),
+        );
+      }
+      _storiesUi.notify();
     }
   }
 
@@ -566,10 +612,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     _storiesAnimClosing = false;
     final from = max(_pullRatio, suggestedFrom.clamp(0.0, 1.0));
     if (from >= 1.0) {
-      setState(() {
-        _pullRatio = 1.0;
-        _storiesDockedOpen = true;
-      });
+      _pullRatio = 1.0;
+      _storiesDockedOpen = true;
+      _storiesUi.notify();
       _storiesRevealLayoutSettleUntil = DateTime.now().add(
         const Duration(milliseconds: 520),
       );
@@ -597,12 +642,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     _storiesAnimClosing = true;
     final from = _pullRatio.clamp(0.0, 1.0);
     if (from <= 0) {
-      setState(() {
-        _pullRatio = 0.0;
-        _storiesDockedOpen = false;
-        _storiesAnimClosing = false;
-        _storiesOverscrollRevealArmed = true;
-      });
+      _pullRatio = 0.0;
+      _storiesDockedOpen = false;
+      _storiesAnimClosing = false;
+      _storiesOverscrollRevealArmed = true;
+      _storiesUi.notify();
       return;
     }
     _closeAnimBegin = from;
@@ -618,9 +662,8 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     if (n is ScrollEndNotification) {
       if (n.metrics.pixels <= 0.5) {
-        setState(() {
-          _storiesOverscrollRevealArmed = true;
-        });
+        _storiesOverscrollRevealArmed = true;
+        _storiesUi.notify();
       }
       return false;
     }
@@ -665,6 +708,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       ..removeListener(_onStoriesRevealTick)
       ..removeStatusListener(_onStoriesRevealStatus)
       ..dispose();
+    _shimmerController.dispose();
     _folderPageController.dispose();
     while (_folderChatScrollControllers.isNotEmpty) {
       final c = _folderChatScrollControllers.removeLast();
@@ -672,6 +716,8 @@ class _ChatListScreenState extends State<ChatListScreen>
       c.removeListener(fn);
       c.dispose();
     }
+    _contactRebuildTimer?.cancel();
+    _storiesUi.dispose();
     super.dispose();
   }
 
@@ -697,6 +743,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
       return;
     }
+    // Detent "click" when crossing into a different tab.
+    Haptics.selection();
     double fromT;
     if (_navPageAnimController.isAnimating) {
       final t = Curves.easeOutCubic.transform(_navPageAnimController.value);
@@ -711,6 +759,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _toggleFab() {
+    Haptics.tap();
     setState(() {
       _isFabOpen = !_isFabOpen;
       if (_isFabOpen) {
@@ -729,20 +778,22 @@ class _ChatListScreenState extends State<ChatListScreen>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ClipRect(
-            clipBehavior: Clip.hardEdge,
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: _shouldCollapseSearch
-                  ? const SizedBox(width: double.infinity, height: 52)
-                  : Column(
+          ListenableBuilder(
+            listenable: _storiesUi,
+            builder: (context, _) => ClipRect(
+              clipBehavior: Clip.hardEdge,
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _shouldCollapseSearch
+                    ? const SizedBox(width: double.infinity, height: 52)
+                    : Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 2),
+                          padding: const EdgeInsets.fromLTRB(20, 6, 20, 3),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -888,7 +939,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 4),
                           child: Container(
                             height: 44,
                             decoration: BoxDecoration(
@@ -929,13 +980,14 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ],
                     ),
+              ),
             ),
           ),
           if (_folders.length > 1)
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              height: 48,
+              height: 34,
               color: cs.surface,
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
@@ -962,7 +1014,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 20,
-                                vertical: 4,
+                                vertical: 2,
                               ),
                               physics: const BouncingScrollPhysics(),
                               children: [
@@ -979,7 +1031,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             return Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 20,
-                                vertical: 4,
+                                vertical: 2,
                               ),
                               child: Row(
                                 children: [
@@ -1009,6 +1061,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     final chats = _chatsForPageIndex(pageIndex);
     final sc = _folderChatScrollControllers[pageIndex];
     final cs = Theme.of(context).colorScheme;
+    final pinnedCount = _isInitialLoading
+        ? 0
+        : chats.where((c) => (c.favIndex ?? 0) > 0).length;
+    final hasSeparator = pinnedCount > 0 && pinnedCount < chats.length;
+    final totalItems = _isInitialLoading
+        ? 10
+        : chats.length + (hasSeparator ? 1 : 0);
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification n) {
         if (_currentNavIndex != 0) return false;
@@ -1033,13 +1092,14 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
+          const SliverToBoxAdapter(child: SizedBox(height: 14)),
           if (chats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
                 child: Text(
                   'Кажется, тут пусто...',
                   style: TextStyle(
-                    color: cs.onSurface.withOpacity(0.6),
+                    color: cs.onSurface.withValues(alpha: 0.6),
                     fontSize: 16,
                   ),
                 ),
@@ -1051,7 +1111,21 @@ class _ChatListScreenState extends State<ChatListScreen>
                 if (_isInitialLoading) {
                   return _buildChatShimmer();
                 }
-                final chat = chats[index];
+
+                if (hasSeparator && index == pinnedCount) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  );
+                }
+
+                final chatIndex = hasSeparator && index > pinnedCount ? index - 1 : index;
+                final chat = chats[chatIndex];
+                final isPinned = (chat.favIndex ?? 0) > 0;
 
                 if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
                   final secondId = chat.participants.entries
@@ -1060,24 +1134,26 @@ class _ChatListScreenState extends State<ChatListScreen>
                       .key;
                   final name = ContactCache.get(secondId);
                   final avatar = ContactCache.getAvatar(secondId);
+                  // ContactCache.isOfficial covers contacts loaded via opcode 32;
+                  // chat.isOfficial covers contacts from the login payload.
+                  final isVerified = ContactCache.isOfficial(secondId) || chat.isOfficial;
 
                   return _buildChatItem(
                     chat.id.toString(),
                     name ?? "Пользователь",
-                    chat.lastMsgText?.replaceAll('\n', ' ') ?? '',
+                    chat.lastMsgTextOneLine ?? '',
                     _formatTime(chat.lastMsgTime),
                     avatar ?? "",
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    isVerified: isVerified,
+                    isPinned: isPinned,
+                    chatType: "DIALOG",
                   );
                 } else {
                   final name = chat.lastMsgSenderId != null
                       ? ContactCache.get(chat.lastMsgSenderId!)
-                      : null;
-
-                  final avatar = chat.lastMsgSenderId != null
-                      ? ContactCache.getAvatar(chat.lastMsgSenderId!)
                       : null;
 
                   String fullMsg = "";
@@ -1085,7 +1161,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   if (name?.isNotEmpty == true && chat.id != 0) {
                     fullMsg += "$name: ";
                   }
-                  
+
                   if (chat.lastMsgText?.isNotEmpty == true) {
                     fullMsg += chat.lastMsgText ?? "";
                   }
@@ -1101,9 +1177,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.dontDisturbUntil > 0,
+                    isVerified: chat.isOfficial,
+                    isPinned: isPinned,
+                    chatType: chat.type,
                   );
                 }
-              }, childCount: _isInitialLoading ? 10 : chats.length),
+              }, childCount: totalItems),
             ),
           SliverPadding(
             padding: EdgeInsets.only(
@@ -1282,6 +1361,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               });
             },
             child: Stack(
+              clipBehavior: Clip.hardEdge,
               children: [
                 AnimatedPositioned(
                   duration: _navDragging
@@ -1299,7 +1379,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ),
                   ),
                 ),
-                Row(
+                SizedBox(
+                  width: navInnerW,
+                  child: Row(
                   children: List.generate(4, (index) {
                     IconData icon;
                     String label;
@@ -1347,6 +1429,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       ),
                     );
                   }),
+                  ),
                 ),
               ],
             ),
@@ -1402,7 +1485,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 child: SizedBox(
                                   width: pageW,
                                   height: pageH,
-                                  child: _buildChatsTabBody(),
+                                  child: _getChatsBody(),
                                 ),
                               ),
                               RepaintBoundary(
@@ -1600,7 +1683,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
                 child: CircleAvatar(
                   radius: 26,
-                  backgroundImage: CachedNetworkImageProvider(imageUrl),
+                  backgroundImage: CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
                 ),
               ),
               const SizedBox(height: 6),
@@ -1669,33 +1752,36 @@ class _ChatListScreenState extends State<ChatListScreen>
     final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
       onTap: () {
-        final i = _folders.indexWhere((f) => f.id == folderId);
-        if (i < 0) return;
+        final target = _folders.indexWhere((f) => f.id == folderId);
+        if (target < 0) return;
         setState(() => _selectedFolderId = folderId);
         if (_folderPageController.hasClients) {
-          final cur = _folderPageController.page?.round();
-          if (cur != i) {
-            _folderPageController.animateToPage(
-              i,
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-            );
+          final cur = _folderPageController.page?.round() ?? 0;
+          if (cur == target) return;
+          if ((target - cur).abs() > 1) {
+            final neighbor = target > cur ? target - 1 : target + 1;
+            _folderPageController.jumpToPage(neighbor);
           }
+          _folderPageController.animateToPage(
+            target,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+          );
         }
       },
       child: Container(
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           title,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: isSelected ? cs.onPrimaryContainer : cs.primary,
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -1714,6 +1800,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isRead = false,
     int unreadCount = 0,
     bool isMuted = false,
+    bool isVerified = false,
+    bool isPinned = false,
+    String chatType = "CHAT",
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -1723,16 +1812,17 @@ class _ChatListScreenState extends State<ChatListScreen>
         if (_isSelectionMode) {
           _toggleSelection(id);
         } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                chatId: int.parse(id),
-                name: name,
-                imageUrl: imageUrl,
+Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(
+                  chatId: int.parse(id),
+                  name: name,
+                  imageUrl: imageUrl,
+                  chatType: chatType,
+                ),
               ),
-            ),
-          );
+            );
         }
       },
       onLongPress: () => _toggleSelection(id),
@@ -1742,7 +1832,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             ? cs.primary.withValues(alpha: 0.08)
             : Colors.transparent,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1752,7 +1842,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     radius: 24,
                     backgroundColor: cs.surfaceContainerHighest,
                     backgroundImage: imageUrl.isNotEmpty
-                        ? CachedNetworkImageProvider(imageUrl)
+                        ? CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144)
                         : null,
                     child: imageUrl.isEmpty
                         ? Text(
@@ -1812,22 +1902,48 @@ class _ChatListScreenState extends State<ChatListScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  color: cs.onSurface,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.1,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      name,
+                                      style: TextStyle(
+                                        color: cs.onSurface,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.1,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (isVerified) ...[
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Symbols.verified,
+                                      color: cs.primary,
+                                      size: 16,
+                                      weight: 600,
+                                      fill: 1,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             if (isMuted) ...[
                               const SizedBox(width: 4),
                               Icon(
                                 Symbols.notifications_off,
+                                color: cs.outlineVariant,
+                                size: 14,
+                                weight: 400,
+                              ),
+                            ],
+                            if (isPinned) ...[
+                              const SizedBox(width: 4),
+                              Icon(
+                                Symbols.keep,
                                 color: cs.outlineVariant,
                                 size: 14,
                                 weight: 400,
@@ -1966,13 +2082,26 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _buildFabMenu() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _buildFabMenuItem(Symbols.group_add, 'Создать группу'),
+        const SizedBox(height: 4),
+        _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
+        const SizedBox(height: 4),
+        _buildFabMenuItem(Symbols.person_add, 'Создать контакт'),
+      ],
+    );
+  }
+
+  Widget _buildFabMenuItem(IconData icon, String title) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       width: 220,
-      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(100),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -1981,39 +2110,27 @@ class _ChatListScreenState extends State<ChatListScreen>
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildFabMenuItem(Symbols.search, 'Найти по номеру'),
-          _buildFabMenuItem(Symbols.group_add, 'Добавить группу'),
-          _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFabMenuItem(IconData icon, String title) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () {
-        // Action logic here
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, color: cs.onSurface, size: 22),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+      child: InkWell(
+        onTap: () {
+          // Action logic here
+        },
+        borderRadius: BorderRadius.circular(100),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: cs.onSurface, size: 22),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2054,9 +2171,18 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
         child: CircleAvatar(
           radius: 12,
-          backgroundImage: CachedNetworkImageProvider(imageUrl),
+          backgroundImage: CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
         ),
       ),
     );
   }
+}
+
+class _StoriesUi extends ChangeNotifier {
+  double pullRatio = 0.0;
+  bool dockedOpen = false;
+  bool overscrollRevealArmed = true;
+  bool shouldCollapseSearch = false;
+
+  void notify() => notifyListeners();
 }

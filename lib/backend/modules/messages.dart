@@ -8,19 +8,86 @@ import '../../models/attachment.dart';
 class ContactCache {
   static final Map<int, String> _nameCache = {};
   static final Map<int, String> _avatarCache = {};
+  static final Map<int, Set<String>> _optionsCache = {};
 
-  static void put(int id, String name) {
-    _nameCache[id] = name;
-  }
+  static void put(int id, String name) => _nameCache[id] = name;
 
   static void putAvatar(int id, String? baseUrl) {
-    if (baseUrl != null) {
-      _avatarCache[id] = baseUrl;
-    }
+    if (baseUrl != null) _avatarCache[id] = baseUrl;
   }
+
+  static void putOptions(int id, Set<String> opts) => _optionsCache[id] = opts;
 
   static String? get(int id) => _nameCache[id];
   static String? getAvatar(int id) => _avatarCache[id];
+  static bool isOfficial(int id) => _optionsCache[id]?.contains('OFFICIAL') ?? false;
+}
+
+class TranscriptionResult {
+  final int status;
+  final String? text;
+  final String? messageId;
+  final int? chatId;
+  final int? mediaId;
+
+  TranscriptionResult({
+    required this.status,
+    this.text,
+    this.messageId,
+    this.chatId,
+    this.mediaId,
+  });
+}
+
+class TranscriptionCache {
+  static final Map<String, TranscriptionResult> _cache = {};
+
+  static void put(String messageId, TranscriptionResult result) {
+    _cache[messageId] = result;
+  }
+
+  static TranscriptionResult? get(String messageId) => _cache[messageId];
+
+  static bool has(String messageId) => _cache.containsKey(messageId);
+}
+
+class FileHistoryEntry {
+  final int fileId;
+  final String? url;
+  final String? token;
+  final DateTime sentAt;
+
+  FileHistoryEntry({
+    required this.fileId,
+    this.url,
+    this.token,
+    required this.sentAt,
+  });
+}
+
+class FileHistoryCache {
+  static final List<FileHistoryEntry> _history = [];
+
+  static List<FileHistoryEntry> get history => List.unmodifiable(_history);
+
+  static void add(FileHistoryEntry entry) {
+    _history.insert(0, entry);
+    if (_history.length > 50) _history.removeLast();
+  }
+
+  static bool get isEmpty => _history.isEmpty;
+}
+
+class FileUploadInfo {
+  final String url;
+  final int fileId;
+  final String token;
+
+  FileUploadInfo({
+    required this.url,
+    required this.fileId,
+    required this.token,
+  });
 }
 
 class CachedMessage {
@@ -33,6 +100,7 @@ class CachedMessage {
   final String? status;
   final Map<String, dynamic>? payload;
   final List<MessageAttachment>? attachments;
+  final bool isControl;
 
   const CachedMessage({
     required this.id,
@@ -44,6 +112,7 @@ class CachedMessage {
     this.status,
     this.payload,
     this.attachments,
+    this.isControl = false,
   });
 
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
@@ -75,15 +144,16 @@ class CachedMessage {
     }
 
     return CachedMessage(
-      id: row['id'] as String,
-      accountId: row['account_id'] as int,
-      chatId: row['chat_id'] as int,
-      senderId: row['sender_id'] as int,
-      text: row['text'] as String?,
-      time: row['time'] as int,
-      status: row['status'] as String?,
+      id: row['id']?.toString() ?? '',
+      accountId: row['account_id'] is int ? row['account_id'] as int : int.tryParse(row['account_id']?.toString() ?? '') ?? 0,
+      chatId: row['chat_id'] is int ? row['chat_id'] as int : int.tryParse(row['chat_id']?.toString() ?? '') ?? 0,
+      senderId: row['sender_id'] is int ? row['sender_id'] as int : int.tryParse(row['sender_id']?.toString() ?? '') ?? 0,
+      text: row['text']?.toString(),
+      time: row['time'] is int ? row['time'] as int : int.tryParse(row['time']?.toString() ?? '') ?? 0,
+      status: row['status']?.toString(),
       payload: payload,
       attachments: attachments,
+      isControl: attachments?.any((a) => a.type == AttachmentType.control) ?? false,
     );
   }
 
@@ -155,7 +225,9 @@ class MessagesModule {
     }
 
     if (rows.isNotEmpty) {
-      AppDatabase.saveMessages(rows).ignore();
+      AppDatabase.saveMessages(rows).catchError((e) {
+        debugPrint('saveMessages error: $e');
+      });
     }
 
     return results;
@@ -192,6 +264,7 @@ class MessagesModule {
     }
 
     List<MessageAttachment>? attachments;
+    bool isControl = false;
     if (linkType == 'FORWARD') {
       final fwdMap = Map<String, dynamic>.from(m.cast());
       attachments = [ForwardedMessageAttachment.fromMap(fwdMap)];
@@ -202,6 +275,10 @@ class MessagesModule {
             .whereType<Map>()
             .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
             .toList();
+        // Detect CONTROL
+        if (attachments.any((a) => a.type == AttachmentType.control)) {
+          isControl = true;
+        }
       }
     }
 
@@ -209,16 +286,24 @@ class MessagesModule {
       id: id,
       accountId: accountId,
       chatId: chatId,
-      senderId: (m['sender'] as int?) ?? 0,
-      text: m['text'] as String?,
-      time: (m['time'] as int?) ?? 0,
-      status: m['status'] as String?,
+      senderId: _parseIntField(m['sender']),
+      text: m['text']?.toString(),
+      time: _parseIntField(m['time']),
+      status: m['status']?.toString(),
       payload: Map<String, dynamic>.from(m.cast()),
       attachments: attachments,
+      isControl: isControl,
     );
   }
 
-  Future<void> sendMessage(
+  int _parseIntField(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  Future<String> sendMessage(
     int accountId,
     int chatId,
     String text, {
@@ -235,7 +320,99 @@ class MessagesModule {
       'notify': notify,
     };
 
-    await _api.sendRequest(Opcode.msgSend, payload);
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) {
+      final msg = (response.payload is Map)
+          ? (response.payload['localizedMessage'] ?? response.payload['message'] ?? 'Ошибка отправки')
+          : 'Ошибка отправки';
+      throw Exception(msg.toString());
+    }
+    final data = response.payload;
+    if (data is Map) {
+      final msgMap = data['message'];
+      if (msgMap is Map) {
+        final id = msgMap['id'];
+        if (id != null) return id.toString();
+      }
+    }
+    return '';
+  }
+
+  Future<TranscriptionResult> requestTranscription(
+    int chatId,
+    int messageId,
+    int mediaId,
+  ) async {
+    final payload = {
+      'chatId': chatId,
+      'messageId': messageId,
+      'mediaId': mediaId,
+    };
+
+    final response = await _api.sendRequest(Opcode.audioTranscription, payload);
+    if (!response.isOk) return TranscriptionResult(status: -1);
+
+    final data = response.payload;
+    if (data is! Map) return TranscriptionResult(status: -1);
+
+    final transcriptionStatus = data['transcriptionStatus'] as int? ?? -1;
+    if (transcriptionStatus == 1) {
+      final text = data['transcription'] as String? ?? '';
+      if (text.isEmpty) {
+        return TranscriptionResult(status: 1, text: 'не удалось распознать текст');
+      }
+      return TranscriptionResult(status: 1, text: text);
+    }
+
+    return TranscriptionResult(status: transcriptionStatus);
+  }
+
+  Future<FileUploadInfo?> requestUploadUrl({int count = 1}) async {
+    final payload = {'count': count};
+    final response = await _api.sendRequest(Opcode.fileUpload, payload);
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return FileUploadInfo(
+      url: info['url'] as String? ?? '',
+      fileId: info['fileId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  Future<bool> sendFileMessage(
+    int chatId,
+    int fileId, {
+    String? token,
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'isLive': false,
+        'detectShare': false,
+        'elements': <dynamic>[],
+        'cid': DateTime.now().millisecondsSinceEpoch,
+        'attaches': [
+          if (token != null)
+            {'_type': 'FILE', 'token': token}
+          else
+            {'_type': 'FILE', 'fileId': fileId}
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    return response.isOk;
   }
 
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
@@ -250,9 +427,8 @@ class MessagesModule {
       if (data is! Map) return null;
 
       final content = data['content'];
-      if (content is String) {
-        return Uri.parse(content).host.isNotEmpty ? null : null;
-      }
+      if (content is Uint8List) return content;
+      if (content is List<int>) return Uint8List.fromList(content);
       return null;
     } catch (e) {
       return null;
@@ -288,9 +464,8 @@ class MessagesModule {
       if (data is! Map) return null;
 
       final content = data['content'];
-      if (content is String) {
-        return Uri.parse(content).host.isNotEmpty ? null : null;
-      }
+      if (content is Uint8List) return content;
+      if (content is List<int>) return Uint8List.fromList(content);
       return null;
     } catch (e) {
       return null;
@@ -326,9 +501,8 @@ class MessagesModule {
       if (data is! Map) return null;
 
       final content = data['content'];
-      if (content is String) {
-        return Uri.parse(content).host.isNotEmpty ? null : null;
-      }
+      if (content is Uint8List) return content;
+      if (content is List<int>) return Uint8List.fromList(content);
       return null;
     } catch (e) {
       return null;
@@ -356,6 +530,8 @@ class MessagesModule {
     final cached = ContactCache.get(contactId);
     if (cached != null) return cached;
 
+    if (_api.state != SessionState.online) return null;
+
     try {
       final response = await _api.sendRequest(Opcode.contactInfo, {
         'contactIds': [contactId],
@@ -382,6 +558,11 @@ class MessagesModule {
 
               final baseUrl = contact['baseUrl'] as String?;
               ContactCache.putAvatar(contactId, baseUrl);
+
+              final rawOpts = contact['options'];
+              if (rawOpts is List) {
+                ContactCache.putOptions(contactId, rawOpts.whereType<String>().toSet());
+              }
 
               return fullName;
             }

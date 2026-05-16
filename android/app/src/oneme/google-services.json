@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "659634599081",
+    "project_id": "max-messenger-app",
+    "storage_bucket": "max-messenger-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659634599081:android:9605285443b661167225b8",
+        "android_client_info": {
+          "package_name": "ru.oneme.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABuDYeeDXIOrKTXLkUj30Ii143ofPe63Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

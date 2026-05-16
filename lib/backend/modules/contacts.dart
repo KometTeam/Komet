@@ -1,4 +1,5 @@
 import '../../core/storage/app_database.dart';
+import 'messages.dart';
 
 class CachedContact {
   final int id;
@@ -10,6 +11,7 @@ class CachedContact {
   final String? baseUrl;
   final String? baseRawUrl;
   final int updateTime;
+  final Set<String> options;
 
   const CachedContact({
     required this.id,
@@ -21,7 +23,13 @@ class CachedContact {
     this.baseUrl,
     this.baseRawUrl,
     required this.updateTime,
+    this.options = const {},
   });
+
+  bool get isOfficial => options.contains('OFFICIAL');
+  bool get isBot => options.contains('BOT');
+  bool get isServiceAccount => options.contains('SERVICE_ACCOUNT');
+  bool get isVerified => isOfficial;
 
   factory CachedContact.fromDbRow(Map<String, dynamic> row) => CachedContact(
     id: row['id'] as int,
@@ -33,7 +41,13 @@ class CachedContact {
     baseUrl: row['base_url'] as String?,
     baseRawUrl: row['base_raw_url'] as String?,
     updateTime: row['update_time'] as int,
+    options: _decodeOptions(row['options']),
   );
+
+  static Set<String> _decodeOptions(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return const {};
+    return raw.split(',').where((s) => s.isNotEmpty).toSet();
+  }
 }
 
 class ContactsModule {
@@ -44,20 +58,63 @@ class ContactsModule {
     final contacts = data['contacts'];
     if (contacts is! List || contacts.isEmpty) return;
 
-    final rows = contacts
-        .whereType<Map>()
-        .map((c) => _parseContact(c.cast<dynamic, dynamic>(), accountId))
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    final rows = <Map<String, dynamic>>[];
+    for (final raw in contacts.whereType<Map>()) {
+      final contact = raw.cast<dynamic, dynamic>();
+      final row = _parseContact(contact, accountId);
+      if (row != null) rows.add(row);
+      _primeContactCache(contact);
+    }
 
     if (rows.isNotEmpty) {
       await AppDatabase.saveContacts(rows);
     }
   }
 
+  static void _primeContactCache(Map<dynamic, dynamic> contact) {
+    final id = contact['id'];
+    if (id is! int) return;
+
+    final names = contact['names'];
+    if (names is List && names.isNotEmpty) {
+      final nameRaw = names.firstWhere(
+        (n) => n is Map && n['type'] == 'ONEME',
+        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+      );
+      if (nameRaw is Map) {
+        final firstName = (nameRaw['firstName'] as String?) ?? '';
+        final lastName = nameRaw['lastName'] as String?;
+        final fullName = (lastName != null && lastName.isNotEmpty)
+            ? '$firstName $lastName'
+            : firstName;
+        if (fullName.isNotEmpty) ContactCache.put(id, fullName);
+      }
+    }
+
+    final baseUrl = contact['baseUrl'] as String?;
+    if (baseUrl != null && baseUrl.isNotEmpty) {
+      ContactCache.putAvatar(id, baseUrl);
+    }
+  }
+
   static Future<List<CachedContact>> getContacts(int accountId) async {
     final rows = await AppDatabase.loadContacts(accountId);
     return rows.map(CachedContact.fromDbRow).toList();
+  }
+
+  /// Прогревает in-memory ContactCache из локальных контактов.
+  /// Нужно вызывать на cold start: иначе кэш пуст до следующего логина.
+  static Future<void> primeCacheFromDb(int accountId) async {
+    final contacts = await getContacts(accountId);
+    for (final c in contacts) {
+      final fullName = (c.lastName != null && c.lastName!.isNotEmpty)
+          ? '${c.firstName} ${c.lastName}'
+          : c.firstName;
+      if (fullName.isNotEmpty) ContactCache.put(c.id, fullName);
+      if (c.baseUrl != null && c.baseUrl!.isNotEmpty) {
+        ContactCache.putAvatar(c.id, c.baseUrl);
+      }
+    }
   }
 
   static Map<String, dynamic>? _parseContact(
@@ -72,14 +129,20 @@ class ContactsModule {
 
     final names = contact['names'];
     if (names is List && names.isNotEmpty) {
-      final name =
-          names.firstWhere(
-                (n) => n is Map && n['type'] == 'ONEME',
-                orElse: () => names.first,
-              )
-              as Map;
+      final nameRaw = names.firstWhere(
+        (n) => n is Map && n['type'] == 'ONEME',
+        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+      );
+      if (nameRaw is! Map) return null;
+      final name = nameRaw;
       firstName = (name['firstName'] as String?) ?? '';
       lastName = name['lastName'] as String?;
+    }
+
+    final optionsRaw = contact['options'];
+    String? optionsStr;
+    if (optionsRaw is List) {
+      optionsStr = optionsRaw.whereType<String>().join(',');
     }
 
     return {
@@ -92,6 +155,7 @@ class ContactsModule {
       'base_url': contact['baseUrl'] as String?,
       'base_raw_url': contact['baseRawUrl'] as String?,
       'update_time': (contact['updateTime'] as int?) ?? 0,
+      'options': optionsStr,
     };
   }
 }
