@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -41,6 +42,11 @@ class VpnBypassService {
 
   bool _bound = false;
 
+  final _eventController = StreamController<VpnBypassResult>.broadcast();
+
+  /// Эмитит результат каждой попытки обхода (для уведомления в UI).
+  Stream<VpnBypassResult> get events => _eventController.stream;
+
   bool get _supported => Platform.isAndroid;
 
   Future<bool> isEnabled() async {
@@ -53,21 +59,22 @@ class VpnBypassService {
     await prefs.setBool(prefKey, value);
   }
 
-  /// true — обход включён, платформа поддерживается и виден VPN-туннель.
+  /// true — обход включён, платформа поддерживается и активен VPN.
   Future<bool> shouldArm() async {
     if (!_supported) return false;
     if (!await isEnabled()) return false;
-    return _hasTunInterface();
+    return _isVpnActive();
   }
 
   /// Привязывает процесс к non-VPN сети (wlan*/rmnet*).
   Future<VpnBypassResult> bind() async {
+    VpnBypassResult result;
     try {
       final res = await _channel
           .invokeMapMethod<String, dynamic>('bindToNonVpnNetwork');
       final bound = res?['bound'] == true;
       _bound = bound;
-      return VpnBypassResult(
+      result = VpnBypassResult(
         enabled: true,
         tunDetected: true,
         bound: bound,
@@ -77,22 +84,29 @@ class VpnBypassService {
       );
     } on PlatformException catch (e) {
       logger.e('VPN bypass: ошибка платформы: ${e.message}');
-      return VpnBypassResult(enabled: true, tunDetected: true, reason: e.code);
+      result = VpnBypassResult(
+        enabled: true,
+        tunDetected: true,
+        reason: e.code,
+      );
     } on MissingPluginException {
-      return const VpnBypassResult(
+      result = const VpnBypassResult(
         enabled: true,
         tunDetected: true,
         reason: 'no_plugin',
       );
     }
+    _eventController.add(result);
+    return result;
   }
 
-  Future<bool> _hasTunInterface() async {
+  Future<bool> _isVpnActive() async {
     try {
       final res = await _channel
           .invokeMapMethod<String, dynamic>('detectInterfaces');
-      if (res != null && res.containsKey('hasTun')) {
-        return res['hasTun'] == true;
+      if (res != null) {
+        if (res['hasTun'] == true || res['hasVpn'] == true) return true;
+        if (res.containsKey('hasTun')) return false;
       }
     } catch (_) {}
     try {

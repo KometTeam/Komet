@@ -96,6 +96,9 @@ class KometAppState extends State<KometApp> {
   bool _isLoggingOut = false;
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
+  StreamSubscription<VpnBypassResult>? _vpnBypassSub;
+  String? _lastVpnNotice;
+  DateTime _lastVpnNoticeAt = DateTime.fromMillisecondsSinceEpoch(0);
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
     widget.initialFpsOverlay,
   );
@@ -153,12 +156,33 @@ class KometAppState extends State<KometApp> {
       }
       _isLoggingOut = false;
     });
+
+    _vpnBypassSub = VpnBypassService.instance.events.listen((r) {
+      final msg = r.bound
+          ? 'Соединение через VPN не работает — '
+                'используется ${r.boundInterface ?? r.transport ?? 'прямое подключение'}'
+          : 'Соединение через VPN не работает, обойти не удалось';
+
+      final now = DateTime.now();
+      if (msg == _lastVpnNotice &&
+          now.difference(_lastVpnNoticeAt).inSeconds < 10) {
+        return;
+      }
+      _lastVpnNotice = msg;
+      _lastVpnNoticeAt = now;
+
+      final overlay = KometApp.navigatorKey.currentState?.overlay;
+      if (overlay != null) {
+        showCustomNotificationOnOverlay(overlay, msg);
+      }
+    });
   }
 
   @override
   void dispose() {
     _sessionExpiredSub?.cancel();
     _loginStatusSub?.cancel();
+    _vpnBypassSub?.cancel();
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();

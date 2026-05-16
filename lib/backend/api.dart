@@ -10,6 +10,7 @@ import '../core/transport/connection.dart';
 import '../core/transport/dispatcher.dart';
 import '../core/transport/receiver.dart';
 import '../core/transport/sender.dart';
+import '../core/transport/vpn_bypass.dart';
 import '../core/utils/logger.dart';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -56,6 +57,9 @@ class Api {
   int _reconnectAttempts = 0;
   bool _autoReconnect = false;
 
+  /// Залипает на время сессии: VPN-путь не сработал — идём мимо туннеля.
+  bool _bypassActive = false;
+
   // Публичное API
 
   /// Подключается к серверу, шлёт хэндшейк, запускает пинг.
@@ -73,14 +77,28 @@ class Api {
       }
     });
 
+    final bypassArmed = await VpnBypassService.instance.shouldArm();
+    if (!bypassArmed) _bypassActive = false;
+    final useBypass = _bypassActive && bypassArmed;
+    // Попытку через VPN ограничиваем по времени, чтобы быстро понять,
+    // что туннель не пропускает, и переключиться на обход.
+    final attemptTimeout =
+        bypassArmed && !useBypass ? const Duration(seconds: 8) : null;
+
     try {
       final endpoint = await ServerConfig.loadEndpoint();
-      await _connection.connect(endpoint.host, endpoint.port);
+      await _connection.connect(
+        endpoint.host,
+        endpoint.port,
+        bypassVpn: useBypass,
+        timeout: attemptTimeout,
+      );
     } catch (e) {
       logger.e('Не удалось подключиться: $e');
       if (_sessionState != SessionState.disconnected) {
         _cleanup();
         _setSessionState(SessionState.disconnected);
+        _armBypassIfPossible(bypassArmed, useBypass, 'подключение не удалось');
         _scheduleReconnect();
       }
       return;
@@ -107,12 +125,29 @@ class Api {
       }
     } catch (e) {
       logger.e('Ошибка хэндшейка: $e');
+      // Сокет подключился (через VPN), но сервер не ответил на хэндшейк —
+      // путь нерабочий: рвём соединение и пробуем мимо VPN.
+      if (_sessionState != SessionState.disconnected) {
+        _cleanup();
+        await _connection.disconnect();
+        _setSessionState(SessionState.disconnected);
+        _armBypassIfPossible(bypassArmed, useBypass, 'хэндшейк не прошёл');
+        _scheduleReconnect();
+      }
+    }
+  }
+
+  void _armBypassIfPossible(bool armed, bool alreadyBypassing, String why) {
+    if (armed && !alreadyBypassing && !_bypassActive) {
+      _bypassActive = true;
+      logger.w('VPN bypass: $why — следующая попытка мимо VPN');
     }
   }
 
   /// Отключается без автореконнекта.
   Future<void> disconnect() async {
     _autoReconnect = false;
+    _bypassActive = false;
     _reconnectTimer?.cancel();
     _cleanup();
     await _connection.disconnect();

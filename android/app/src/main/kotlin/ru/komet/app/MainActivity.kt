@@ -60,9 +60,23 @@ class MainActivity : FlutterActivity() {
         }
         return mapOf(
             "hasTun" to tunNames.isNotEmpty(),
+            "hasVpn" to hasVpnTransport(),
             "tunNames" to tunNames,
             "directInterfaces" to directNames,
         )
+    }
+
+    // VPN активен, даже если tun-интерфейс не виден приложению (Android 10+).
+    private fun hasVpnTransport(): Boolean {
+        val cm = connectivityManager()
+        for (network in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(network) ?: continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return true
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) {
+                return true
+            }
+        }
+        return false
     }
 
     // Привязывает процесс к не-VPN сети: Wi-Fi → Ethernet → моб.

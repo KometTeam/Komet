@@ -30,41 +30,32 @@ class Connection {
     _stateController.add(newState);
   }
 
-  Future<void> connect(String host, int port) async {
+  Future<void> connect(
+    String host,
+    int port, {
+    bool bypassVpn = false,
+    Duration? timeout,
+  }) async {
     if (_state != SocketState.disconnected) return;
     _setState(SocketState.connecting);
 
     try {
       final proxySettings = await ProxyConfig.load();
 
-      // Обход VPN — только запасной путь: сначала обычное подключение
-      // (через VPN, если он поднят), и лишь при неудаче — мимо туннеля.
-      final bypassArmed = await VpnBypassService.instance.shouldArm();
-      if (bypassArmed) {
+      // Решение «обходить VPN или нет» принимает вызывающий (Api):
+      // первая попытка идёт через VPN, при её провале — мимо туннеля.
+      if (bypassVpn) {
+        await VpnBypassService.instance.bind();
+      } else {
         await VpnBypassService.instance.restoreDefault();
       }
 
-      RawSecureSocket socket;
-      try {
-        socket = await _openSecureSocket(
-          host,
-          port,
-          proxySettings,
-          timeout: bypassArmed ? const Duration(seconds: 8) : null,
-        );
-      } catch (e) {
-        if (!bypassArmed) rethrow;
-        final r = await VpnBypassService.instance.bind();
-        if (!r.bound) {
-          logger.w('VPN bypass: обходить нечего (${r.reason})');
-          rethrow;
-        }
-        logger.w(
-          'Подключение через VPN не удалось ($e) — '
-          'идём в обход → ${r.boundInterface} (${r.transport})',
-        );
-        socket = await _openSecureSocket(host, port, proxySettings);
-      }
+      final socket = await _openSecureSocket(
+        host,
+        port,
+        proxySettings,
+        timeout: timeout,
+      );
 
       _socket = socket;
       _setState(SocketState.connected);
