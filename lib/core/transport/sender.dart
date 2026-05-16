@@ -1,4 +1,5 @@
 import '../protocol/packet.dart';
+import '../utils/log_redact.dart';
 import '../utils/logger.dart';
 import 'connection.dart';
 
@@ -17,7 +18,7 @@ class PacketSender {
     final data = packPacket(opcode, payload, seq: seq);
     connection.write(data);
     logger.i(
-      '=> {ver: 10, cmd: 0, seq: $seq, opcode: $opcode, payload: $payload}',
+      '=> {ver: 10, cmd: 0, seq: $seq, opcode: $opcode, payload: ${redactForLog(payload)}}',
     );
     return seq;
   }
