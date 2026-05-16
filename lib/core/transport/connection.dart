@@ -35,29 +35,38 @@ class Connection {
     _setState(SocketState.connecting);
 
     try {
-      try {
-        await VpnBypassService.instance.applyIfNeeded();
-      } catch (e) {
-        logger.w('VPN bypass: пропущено ($e)');
-      }
-
       final proxySettings = await ProxyConfig.load();
-      RawSocket rawSocket;
 
-      if (proxySettings.isEnabled) {
-        final connector = ProxyConnector(proxySettings);
-        rawSocket = await connector.connect(host, port);
-        logger.i('Подключено через прокси ${proxySettings.type.name}');
-      } else {
-        rawSocket = await RawSocket.connect(host, port);
+      // Обход VPN — только запасной путь: сначала обычное подключение
+      // (через VPN, если он поднят), и лишь при неудаче — мимо туннеля.
+      final bypassArmed = await VpnBypassService.instance.shouldArm();
+      if (bypassArmed) {
+        await VpnBypassService.instance.restoreDefault();
       }
 
-      _socket = await RawSecureSocket.secure(
-        rawSocket,
-        host: host,
-        onBadCertificate: (_) => true,
-      );
+      RawSecureSocket socket;
+      try {
+        socket = await _openSecureSocket(
+          host,
+          port,
+          proxySettings,
+          timeout: bypassArmed ? const Duration(seconds: 8) : null,
+        );
+      } catch (e) {
+        if (!bypassArmed) rethrow;
+        final r = await VpnBypassService.instance.bind();
+        if (!r.bound) {
+          logger.w('VPN bypass: обходить нечего (${r.reason})');
+          rethrow;
+        }
+        logger.w(
+          'Подключение через VPN не удалось ($e) — '
+          'идём в обход → ${r.boundInterface} (${r.transport})',
+        );
+        socket = await _openSecureSocket(host, port, proxySettings);
+      }
 
+      _socket = socket;
       _setState(SocketState.connected);
       logger.i('Подключено к $host:$port');
 
@@ -88,6 +97,29 @@ class Connection {
       _setState(SocketState.disconnected);
       rethrow;
     }
+  }
+
+  Future<RawSecureSocket> _openSecureSocket(
+    String host,
+    int port,
+    ProxySettings proxySettings, {
+    Duration? timeout,
+  }) async {
+    RawSocket rawSocket;
+    if (proxySettings.isEnabled) {
+      final connector = ProxyConnector(proxySettings);
+      rawSocket = await connector.connect(host, port);
+      logger.i('Подключено через прокси ${proxySettings.type.name}');
+    } else {
+      rawSocket = timeout == null
+          ? await RawSocket.connect(host, port)
+          : await RawSocket.connect(host, port, timeout: timeout);
+    }
+    return RawSecureSocket.secure(
+      rawSocket,
+      host: host,
+      onBadCertificate: (_) => true,
+    );
   }
 
   void write(Uint8List data) {
