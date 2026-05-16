@@ -96,6 +96,12 @@ class VpnBypassService {
         reason: 'no_plugin',
       );
     }
+    if (result.bound) {
+      logger.i('VPN bypass: привязано к ${result.boundInterface} '
+          '(${result.transport})');
+    } else {
+      logger.w('VPN bypass: обойти не удалось (${result.reason})');
+    }
     _eventController.add(result);
     return result;
   }

@@ -161,7 +161,8 @@ class KometAppState extends State<KometApp> {
       final msg = r.bound
           ? 'Соединение через VPN не работает — '
                 'используется ${r.boundInterface ?? r.transport ?? 'прямое подключение'}'
-          : 'Соединение через VPN не работает, обойти не удалось';
+          : 'Соединение через VPN не работает, обойти не удалось'
+                '${r.reason != null ? ' (${r.reason})' : ''}';
 
       final now = DateTime.now();
       if (msg == _lastVpnNotice &&
