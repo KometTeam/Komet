@@ -88,6 +88,8 @@ class _ContactsTabState extends State<ContactsTab> {
                       ? CachedNetworkImage(
                           imageUrl: contact.baseUrl!,
                           fit: BoxFit.cover,
+                          memCacheWidth: 144,
+                          memCacheHeight: 144,
                           fadeInDuration: const Duration(milliseconds: 120),
                           errorWidget: (context, url, error) =>
                               _buildPlaceholderAvatar(cs, nameToDisplay),

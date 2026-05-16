@@ -3,6 +3,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/utils/haptics.dart';
+import 'appearance_screen.dart';
 import 'font_settings_screen.dart';
 
 class _CustomizationCategory {
@@ -24,12 +25,21 @@ class CustomizationScreen extends StatelessWidget {
 
   static const List<_CustomizationCategory> _categories = [
     _CustomizationCategory(
+      icon: Symbols.palette,
+      title: 'Внешний вид',
+      subtitle: 'Акцентный цвет интерфейса',
+      builder: _buildAppearance,
+    ),
+    _CustomizationCategory(
       icon: Symbols.text_fields,
       title: 'Шрифты',
       subtitle: 'Шрифт приложения, свои шрифты, размер текста',
       builder: _buildFontSettings,
     ),
   ];
+
+  static Widget _buildAppearance(BuildContext context) =>
+      const AppearanceScreen();
 
   static Widget _buildFontSettings(BuildContext context) =>
       const FontSettingsScreen();

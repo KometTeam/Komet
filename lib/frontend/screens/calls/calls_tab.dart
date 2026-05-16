@@ -170,6 +170,8 @@ class _CallsTabState extends State<CallsTab> {
                       ? CachedNetworkImage(
                           imageUrl: call.avatarUrl!,
                           fit: BoxFit.cover,
+                          memCacheWidth: 144,
+                          memCacheHeight: 144,
                           fadeInDuration: const Duration(milliseconds: 120),
                           errorWidget: (context, url, error) =>
                               _buildPlaceholderAvatar(cs, call.name),

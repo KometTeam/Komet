@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'customization_screen.dart';
+import 'performance_screen.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
@@ -158,6 +159,18 @@ child: _buildSection(
                           context,
                           MaterialPageRoute(
                             builder: (context) => const CustomizationScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.speed,
+                      label: 'Производительность',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const PerformanceScreen(),
                           ),
                         );
                       },
@@ -393,6 +406,8 @@ child: _buildSection(
                   ? CachedNetworkImage(
                       imageUrl: _profile!.baseUrl!,
                       fit: BoxFit.cover,
+                      memCacheWidth: 240,
+                      memCacheHeight: 240,
                       fadeInDuration: const Duration(milliseconds: 120),
                       errorWidget: (context, url, error) =>
                           _buildPlaceholderAvatar(cs, name),

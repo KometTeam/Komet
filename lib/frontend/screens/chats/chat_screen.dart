@@ -10,6 +10,7 @@ import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/config/app_cache_extent.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/attachment_panel.dart';
@@ -49,18 +50,18 @@ class _ChatScreenState extends State<ChatScreen>
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _listKey = GlobalKey();
-  bool _hasText = false;
+  final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
-  bool _showAttachmentPanel = false;
+  final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
   late AnimationController _shimmerController;
   List<CachedMessage> _messages = [];
   int _myId = 0;
   CachedChat? chat;
 
-  DateTime? _floatingDate;
-  DateTime? _lastFloatingDate;
+  final ValueNotifier<DateTime?> _floatingDate = ValueNotifier(null);
   Timer? _floatingDateTimer;
   late final AnimationController _floatingDateAnimController;
+  late final CurvedAnimation _floatingDateCurved;
   final Map<int, GlobalKey> _separatorKeys = {};
   double _lastScrollOffset = 0;
   String? _lastSentId;
@@ -78,6 +79,11 @@ class _ChatScreenState extends State<ChatScreen>
       vsync: this,
       duration: const Duration(milliseconds: 220),
       reverseDuration: const Duration(milliseconds: 380),
+    );
+    _floatingDateCurved = CurvedAnimation(
+      parent: _floatingDateAnimController,
+      curve: Curves.easeOut,
+      reverseCurve: Curves.easeIn,
     );
 
     _loadHistory();
@@ -139,7 +145,11 @@ class _ChatScreenState extends State<ChatScreen>
     _messageController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScrollForDate);
     _floatingDateTimer?.cancel();
+    _floatingDateCurved.dispose();
     _floatingDateAnimController.dispose();
+    _floatingDate.dispose();
+    _hasText.dispose();
+    _showAttachmentPanel.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _shimmerController.dispose();
@@ -147,11 +157,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _onTextChanged() {
-    final bool newHasText = _messageController.text.trim().isNotEmpty;
-    if (newHasText != _hasText) {
-      setState(() {
-        _hasText = newHasText;
-      });
+    final newHasText = _messageController.text.trim().isNotEmpty;
+    if (newHasText != _hasText.value) {
+      _hasText.value = newHasText;
     }
   }
 
@@ -189,11 +197,11 @@ class _ChatScreenState extends State<ChatScreen>
         status: 'sending',
       );
 
+      _hasText.value = false;
       setState(() {
         _lastSentId = tempId;
         _messages.add(tempMessage);
         _messageController.clear();
-        _hasText = false;
       });
 
       // Instant tactile "whoosh" the moment the message leaves the composer,
@@ -386,12 +394,8 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (result == null) return;
 
-    final bool dateChanged = result != _lastFloatingDate;
-    _lastFloatingDate = result;
-
-    if (result != _floatingDate) {
-      setState(() => _floatingDate = result);
-    }
+    final bool dateChanged = result != _floatingDate.value;
+    _floatingDate.value = result;
 
     if (dateChanged) {
       _floatingDateAnimController.forward(from: 0);
@@ -420,7 +424,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildDateSeparatorWidget(BuildContext context, DateTime date,
-      {Key? key}) {
+      {Key? key, bool floating = false}) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       key: key,
@@ -429,7 +433,7 @@ class _ChatScreenState extends State<ChatScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+            color: cs.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
@@ -437,7 +441,7 @@ class _ChatScreenState extends State<ChatScreen>
             style: TextStyle(
               color: cs.onSurfaceVariant,
               fontSize: 12,
-              fontStyle: FontStyle.italic,
+              fontStyle: floating ? FontStyle.normal : FontStyle.italic,
             ),
           ),
         ),
@@ -482,7 +486,7 @@ class _ChatScreenState extends State<ChatScreen>
                 if (widget.imageUrl.isNotEmpty)
                   CircleAvatar(
                     radius: 18,
-                    backgroundImage: CachedNetworkImageProvider(widget.imageUrl),
+                    backgroundImage: CachedNetworkImageProvider(widget.imageUrl, maxWidth: 144, maxHeight: 144),
                   )
                 else
                   CircleAvatar(
@@ -563,16 +567,21 @@ class _ChatScreenState extends State<ChatScreen>
               _buildInputArea(context),
             ],
           ),
-          if (_showAttachmentPanel)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: AttachmentPanel(
-                chatId: widget.chatId,
-                onClose: () => setState(() => _showAttachmentPanel = false),
-              ),
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _showAttachmentPanel,
+            builder: (context, open, _) {
+              if (!open) return const SizedBox.shrink();
+              return Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AttachmentPanel(
+                  chatId: widget.chatId,
+                  onClose: () => _showAttachmentPanel.value = false,
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -595,11 +604,13 @@ class _ChatScreenState extends State<ChatScreen>
     return Stack(
       key: _listKey,
       children: [
-        ListView.builder(
+        ValueListenableBuilder<double>(
+          valueListenable: AppCacheExtent.current,
+          builder: (context, cacheExtent, _) => ListView.builder(
           controller: _scrollController,
           reverse: true,
           padding: const EdgeInsets.symmetric(vertical: 8),
-          cacheExtent: 9999,
+          cacheExtent: cacheExtent,
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[items.length - 1 - index];
@@ -641,32 +652,34 @@ class _ChatScreenState extends State<ChatScreen>
             return bubble;
           },
         ),
-        if (_lastFloatingDate != null)
-          Positioned(
-            top: 8,
-            left: 0,
-            right: 0,
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _floatingDateAnimController,
-                builder: (context, child) {
-                  final t = CurvedAnimation(
-                    parent: _floatingDateAnimController,
-                    curve: Curves.easeOut,
-                    reverseCurve: Curves.easeIn,
-                  ).value;
-                  return Opacity(
-                    opacity: t,
-                    child: Transform.scale(
-                      scale: 0.82 + 0.18 * t,
-                      child: child,
-                    ),
-                  );
-                },
-                child: _buildDateSeparatorWidget(context, _lastFloatingDate!),
-              ),
+        ),
+        Positioned(
+          top: 8,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: ValueListenableBuilder<DateTime?>(
+              valueListenable: _floatingDate,
+              builder: (context, date, _) {
+                if (date == null) return const SizedBox.shrink();
+                return AnimatedBuilder(
+                  animation: _floatingDateCurved,
+                  builder: (context, child) {
+                    final t = _floatingDateCurved.value;
+                    return Opacity(
+                      opacity: t,
+                      child: Transform.scale(
+                        scale: 0.82 + 0.18 * t,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _buildDateSeparatorWidget(context, date, floating: true),
+                );
+              },
             ),
           ),
+        ),
       ],
     );
   }
@@ -842,7 +855,7 @@ class _ChatScreenState extends State<ChatScreen>
                           if (event is KeyDownEvent &&
                               event.logicalKey == LogicalKeyboardKey.enter &&
                               !HardwareKeyboard.instance.isShiftPressed) {
-                            if (_hasText) _sendMessage();
+                            if (_hasText.value) _sendMessage();
                             return KeyEventResult.handled;
                           }
                           return KeyEventResult.ignored;
@@ -868,70 +881,105 @@ class _ChatScreenState extends State<ChatScreen>
                         ),
                       ),
                     ),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: _hasText ? 0 : 36,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 200),
-                        opacity: _hasText ? 0 : 1,
-                        child: _hasText
-                            ? const SizedBox.shrink()
-                            : GestureDetector(
-                                onTap: _showAttachmentPanel ? null : () => setState(() => _showAttachmentPanel = true),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 12),
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      if (_showAttachmentPanel)
-                                        SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: cs.primary,
-                                          ),
-                                        ),
-                                      Icon(
-                                        Symbols.attachment,
-                                        color: _showAttachmentPanel
-                                            ? cs.onSurfaceVariant.withValues(alpha: 0.3)
-                                            : mutedIcon,
-                                        size: 24,
-                                        weight: 400,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                      ),
+                    _AttachButton(
+                      hasText: _hasText,
+                      panelOpen: _showAttachmentPanel,
+                      mutedIcon: mutedIcon,
+                      cs: cs,
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            Container(
-              width: 54,
-              height: 54,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: _hasText ? cs.primary : cs.surfaceContainerHighest,
-                shape: BoxShape.circle,
-              ),
-              child: GestureDetector(
-                onTap: _hasText ? _sendMessage : null,
-                child: Icon(
-                  _hasText ? Symbols.send : Symbols.mic,
-                  color: _hasText ? cs.onPrimary : cs.onSurface,
-                  size: 24,
-                  weight: 400,
+            ValueListenableBuilder<bool>(
+              valueListenable: _hasText,
+              builder: (context, hasText, _) => Container(
+                width: 54,
+                height: 54,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hasText ? cs.primary : cs.surfaceContainerHighest,
+                  shape: BoxShape.circle,
+                ),
+                child: GestureDetector(
+                  onTap: hasText ? _sendMessage : null,
+                  child: Icon(
+                    hasText ? Symbols.send : Symbols.mic,
+                    color: hasText ? cs.onPrimary : cs.onSurface,
+                    size: 24,
+                    weight: 400,
+                  ),
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AttachButton extends StatelessWidget {
+  final ValueNotifier<bool> hasText;
+  final ValueNotifier<bool> panelOpen;
+  final Color mutedIcon;
+  final ColorScheme cs;
+
+  const _AttachButton({
+    required this.hasText,
+    required this.panelOpen,
+    required this.mutedIcon,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: hasText,
+      builder: (context, isText, _) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: isText ? 0 : 36,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: isText ? 0 : 1,
+            child: isText
+                ? const SizedBox.shrink()
+                : ValueListenableBuilder<bool>(
+                    valueListenable: panelOpen,
+                    builder: (context, open, _) => GestureDetector(
+                      onTap: open ? null : () => panelOpen.value = true,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            if (open)
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: cs.primary,
+                                ),
+                              ),
+                            Icon(
+                              Symbols.attachment,
+                              color: open
+                                  ? cs.onSurfaceVariant.withValues(alpha: 0.3)
+                                  : mutedIcon,
+                              size: 24,
+                              weight: 400,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        );
+      },
     );
   }
 }

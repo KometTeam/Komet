@@ -29,6 +29,7 @@ class CachedChat {
   final int? lastMsgId;
   final int? lastMsgTime;
   final String? lastMsgText;
+  final String? lastMsgTextOneLine;
   final int? lastMsgSenderId;
   final int unreadCount;
   final int lastEventTime;
@@ -40,7 +41,7 @@ class CachedChat {
   final Map<int, int> participants;
   final Set<String> options;
 
-  const CachedChat({
+  CachedChat({
     required this.id,
     required this.accountId,
     required this.type,
@@ -59,7 +60,9 @@ class CachedChat {
     required this.seenTime,
     required this.participants,
     this.options = const {},
-  });
+  }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
+            ? lastMsgText.replaceAll('\n', ' ')
+            : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
 

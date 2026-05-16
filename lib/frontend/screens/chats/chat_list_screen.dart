@@ -74,16 +74,24 @@ class _ChatListScreenState extends State<ChatListScreen>
   double _navDragBaseLeft = 0;
   double _revealAnimBegin = 0.0;
   double _closeAnimBegin = 0.0;
-  double _pullRatio = 0.0;
   static const double _kStoriesPullTriggerPx = 16.0;
+
+  final _StoriesUi _storiesUi = _StoriesUi();
+  double get _pullRatio => _storiesUi.pullRatio;
+  set _pullRatio(double v) => _storiesUi.pullRatio = v;
+  bool get _storiesDockedOpen => _storiesUi.dockedOpen;
+  set _storiesDockedOpen(bool v) => _storiesUi.dockedOpen = v;
+  bool get _storiesOverscrollRevealArmed => _storiesUi.overscrollRevealArmed;
+  set _storiesOverscrollRevealArmed(bool v) =>
+      _storiesUi.overscrollRevealArmed = v;
+  bool get _shouldCollapseSearch => _storiesUi.shouldCollapseSearch;
+  set _shouldCollapseSearch(bool v) => _storiesUi.shouldCollapseSearch = v;
 
   bool _navDragging = false;
   bool _isFabOpen = false;
   bool _showCacheWarning = false;
   bool _storiesAnimClosing = false;
-  bool _storiesDockedOpen = false;
-  bool _storiesOverscrollRevealArmed = true;
-  bool _shouldCollapseSearch = false;
+  Timer? _contactRebuildTimer;
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
   bool? _foldersListKnown;
 
@@ -370,9 +378,17 @@ class _ChatListScreenState extends State<ChatListScreen>
     for (final id in ids) {
       messagesModule.searchContactById(id).whenComplete(() {
         _inflightContactIds.remove(id);
-        if (mounted) setState(() {});
+        _scheduleContactRebuild();
       });
     }
+  }
+
+  void _scheduleContactRebuild() {
+    if (!mounted) return;
+    _contactRebuildTimer?.cancel();
+    _contactRebuildTimer = Timer(const Duration(milliseconds: 120), () {
+      if (mounted) setState(() {});
+    });
   }
 
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
@@ -436,9 +452,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (!c.hasClients) return;
     final double offset = c.offset;
     if (_isSelectionMode && !_shouldCollapseSearch && offset < 132) {
-      setState(() {
-        _shouldCollapseSearch = true;
-      });
+      _shouldCollapseSearch = true;
+      _storiesUi.notify();
     }
 
     if (offset < 0) {
@@ -453,9 +468,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         _startStoriesAutoReveal(dragRatio);
       } else if (!_storiesDockedOpen) {
         if (dragRatio != _pullRatio) {
-          setState(() {
-            _pullRatio = dragRatio;
-          });
+          _pullRatio = dragRatio;
+          _storiesUi.notify();
         }
       }
     } else {
@@ -470,14 +484,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       final disarm = offset > 3 && _storiesOverscrollRevealArmed;
       final clearPull = _pullRatio > 0;
       if (disarm || clearPull) {
-        setState(() {
-          if (disarm) {
-            _storiesOverscrollRevealArmed = false;
-          }
-          if (clearPull) {
-            _pullRatio = 0.0;
-          }
-        });
+        if (disarm) _storiesOverscrollRevealArmed = false;
+        if (clearPull) _pullRatio = 0.0;
+        _storiesUi.notify();
       }
     }
   }
@@ -518,85 +527,81 @@ class _ChatListScreenState extends State<ChatListScreen>
       animation: _shimmerController,
       builder: (context, child) {
         final opacity = 0.3 + 0.3 * sin(_shimmerController.value * pi * 2);
-        return Opacity(
-          opacity: opacity,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                        ),
-                        Container(
-                          width: double.infinity,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+        return Opacity(opacity: opacity, child: child);
       },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   void _onStoriesRevealTick() {
     if (!mounted) return;
     final t = Curves.easeOutCubic.transform(_storiesRevealController.value);
-    setState(() {
-      if (_storiesAnimClosing) {
-        _pullRatio = _closeAnimBegin * (1.0 - t);
-      } else {
-        _pullRatio = _revealAnimBegin + (1.0 - _revealAnimBegin) * t;
-      }
-    });
+    if (_storiesAnimClosing) {
+      _pullRatio = _closeAnimBegin * (1.0 - t);
+    } else {
+      _pullRatio = _revealAnimBegin + (1.0 - _revealAnimBegin) * t;
+    }
+    _storiesUi.notify();
   }
 
   void _onStoriesRevealStatus(AnimationStatus status) {
     if (!mounted) return;
     if (status == AnimationStatus.completed) {
-      setState(() {
-        if (_storiesAnimClosing) {
-          _pullRatio = 0.0;
-          _storiesDockedOpen = false;
-          _storiesAnimClosing = false;
-          _storiesOverscrollRevealArmed = true;
-        } else {
-          _pullRatio = 1.0;
-          _storiesDockedOpen = true;
-          _storiesRevealLayoutSettleUntil = DateTime.now().add(
-            const Duration(milliseconds: 520),
-          );
-        }
-      });
+      if (_storiesAnimClosing) {
+        _pullRatio = 0.0;
+        _storiesDockedOpen = false;
+        _storiesAnimClosing = false;
+        _storiesOverscrollRevealArmed = true;
+      } else {
+        _pullRatio = 1.0;
+        _storiesDockedOpen = true;
+        _storiesRevealLayoutSettleUntil = DateTime.now().add(
+          const Duration(milliseconds: 520),
+        );
+      }
+      _storiesUi.notify();
     }
   }
 
@@ -607,10 +612,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     _storiesAnimClosing = false;
     final from = max(_pullRatio, suggestedFrom.clamp(0.0, 1.0));
     if (from >= 1.0) {
-      setState(() {
-        _pullRatio = 1.0;
-        _storiesDockedOpen = true;
-      });
+      _pullRatio = 1.0;
+      _storiesDockedOpen = true;
+      _storiesUi.notify();
       _storiesRevealLayoutSettleUntil = DateTime.now().add(
         const Duration(milliseconds: 520),
       );
@@ -638,12 +642,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     _storiesAnimClosing = true;
     final from = _pullRatio.clamp(0.0, 1.0);
     if (from <= 0) {
-      setState(() {
-        _pullRatio = 0.0;
-        _storiesDockedOpen = false;
-        _storiesAnimClosing = false;
-        _storiesOverscrollRevealArmed = true;
-      });
+      _pullRatio = 0.0;
+      _storiesDockedOpen = false;
+      _storiesAnimClosing = false;
+      _storiesOverscrollRevealArmed = true;
+      _storiesUi.notify();
       return;
     }
     _closeAnimBegin = from;
@@ -659,9 +662,8 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     if (n is ScrollEndNotification) {
       if (n.metrics.pixels <= 0.5) {
-        setState(() {
-          _storiesOverscrollRevealArmed = true;
-        });
+        _storiesOverscrollRevealArmed = true;
+        _storiesUi.notify();
       }
       return false;
     }
@@ -714,6 +716,8 @@ class _ChatListScreenState extends State<ChatListScreen>
       c.removeListener(fn);
       c.dispose();
     }
+    _contactRebuildTimer?.cancel();
+    _storiesUi.dispose();
     super.dispose();
   }
 
@@ -774,15 +778,17 @@ class _ChatListScreenState extends State<ChatListScreen>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ClipRect(
-            clipBehavior: Clip.hardEdge,
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: _shouldCollapseSearch
-                  ? const SizedBox(width: double.infinity, height: 52)
-                  : Column(
+          ListenableBuilder(
+            listenable: _storiesUi,
+            builder: (context, _) => ClipRect(
+              clipBehavior: Clip.hardEdge,
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _shouldCollapseSearch
+                    ? const SizedBox(width: double.infinity, height: 52)
+                    : Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -933,7 +939,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 14),
+                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 4),
                           child: Container(
                             height: 44,
                             decoration: BoxDecoration(
@@ -974,13 +980,14 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ],
                     ),
+              ),
             ),
           ),
           if (_folders.length > 1)
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              height: 48,
+              height: 34,
               color: cs.surface,
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
@@ -1007,7 +1014,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 20,
-                                vertical: 4,
+                                vertical: 2,
                               ),
                               physics: const BouncingScrollPhysics(),
                               children: [
@@ -1024,7 +1031,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             return Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 20,
-                                vertical: 4,
+                                vertical: 2,
                               ),
                               child: Row(
                                 children: [
@@ -1054,6 +1061,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     final chats = _chatsForPageIndex(pageIndex);
     final sc = _folderChatScrollControllers[pageIndex];
     final cs = Theme.of(context).colorScheme;
+    final pinnedCount = _isInitialLoading
+        ? 0
+        : chats.where((c) => (c.favIndex ?? 0) > 0).length;
+    final hasSeparator = pinnedCount > 0 && pinnedCount < chats.length;
+    final totalItems = _isInitialLoading
+        ? 10
+        : chats.length + (hasSeparator ? 1 : 0);
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification n) {
         if (_currentNavIndex != 0) return false;
@@ -1098,10 +1112,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                   return _buildChatShimmer();
                 }
 
-                final pinnedCount = chats.where((c) => (c.favIndex ?? 0) > 0).length;
-                final hasSeparator = pinnedCount > 0 && pinnedCount < chats.length;
-
-                // Insert separator row between pinned and regular sections
                 if (hasSeparator && index == pinnedCount) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1131,7 +1141,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   return _buildChatItem(
                     chat.id.toString(),
                     name ?? "Пользователь",
-                    chat.lastMsgText?.replaceAll('\n', ' ') ?? '',
+                    chat.lastMsgTextOneLine ?? '',
                     _formatTime(chat.lastMsgTime),
                     avatar ?? "",
                     isOnline: chat.isOnline,
@@ -1172,7 +1182,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     chatType: chat.type,
                   );
                 }
-              }, childCount: _isInitialLoading ? 10 : chats.length + (chats.any((c) => (c.favIndex ?? 0) > 0) && chats.any((c) => (c.favIndex ?? 0) <= 0) ? 1 : 0)),
+              }, childCount: totalItems),
             ),
           SliverPadding(
             padding: EdgeInsets.only(
@@ -1673,7 +1683,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
                 child: CircleAvatar(
                   radius: 26,
-                  backgroundImage: CachedNetworkImageProvider(imageUrl),
+                  backgroundImage: CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
                 ),
               ),
               const SizedBox(height: 6),
@@ -1742,33 +1752,36 @@ class _ChatListScreenState extends State<ChatListScreen>
     final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
       onTap: () {
-        final i = _folders.indexWhere((f) => f.id == folderId);
-        if (i < 0) return;
+        final target = _folders.indexWhere((f) => f.id == folderId);
+        if (target < 0) return;
         setState(() => _selectedFolderId = folderId);
         if (_folderPageController.hasClients) {
-          final cur = _folderPageController.page?.round();
-          if (cur != i) {
-            _folderPageController.animateToPage(
-              i,
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-            );
+          final cur = _folderPageController.page?.round() ?? 0;
+          if (cur == target) return;
+          if ((target - cur).abs() > 1) {
+            final neighbor = target > cur ? target - 1 : target + 1;
+            _folderPageController.jumpToPage(neighbor);
           }
+          _folderPageController.animateToPage(
+            target,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+          );
         }
       },
       child: Container(
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           title,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: isSelected ? cs.onPrimaryContainer : cs.primary,
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -1829,7 +1842,7 @@ Navigator.push(
                     radius: 24,
                     backgroundColor: cs.surfaceContainerHighest,
                     backgroundImage: imageUrl.isNotEmpty
-                        ? CachedNetworkImageProvider(imageUrl)
+                        ? CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144)
                         : null,
                     child: imageUrl.isEmpty
                         ? Text(
@@ -2158,9 +2171,18 @@ Navigator.push(
         ),
         child: CircleAvatar(
           radius: 12,
-          backgroundImage: CachedNetworkImageProvider(imageUrl),
+          backgroundImage: CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
         ),
       ),
     );
   }
+}
+
+class _StoriesUi extends ChangeNotifier {
+  double pullRatio = 0.0;
+  bool dockedOpen = false;
+  bool overscrollRevealArmed = true;
+  bool shouldCollapseSearch = false;
+
+  void notify() => notifyListeners();
 }

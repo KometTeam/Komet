@@ -7,6 +7,9 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
+import 'core/config/app_accent.dart';
+import 'core/config/app_bubble_shape.dart';
+import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/contacts.dart';
@@ -65,6 +68,9 @@ void main() async {
   final initialFontScale = AppFonts.clampScale(
     prefs.getDouble(AppFonts.scalePrefKey) ?? AppFonts.defaultScale,
   );
+  final initialAccentSeed = await AppAccent.load();
+  AppBubbleShape.current.value = await AppBubbleShape.load();
+  AppCacheExtent.current.value = await AppCacheExtent.load();
   runApp(
     KometApp(
       initialLocale: initialLocale,
@@ -72,6 +78,7 @@ void main() async {
       initialVpnBypass: initialVpnBypass,
       initialFontId: initialFontId,
       initialFontScale: initialFontScale,
+      initialAccentSeed: initialAccentSeed,
     ),
   );
 }
@@ -84,6 +91,7 @@ class KometApp extends StatefulWidget {
     this.initialVpnBypass = false,
     required this.initialFontId,
     required this.initialFontScale,
+    this.initialAccentSeed,
   });
 
   final Locale initialLocale;
@@ -91,6 +99,7 @@ class KometApp extends StatefulWidget {
   final bool initialVpnBypass;
   final String initialFontId;
   final double initialFontScale;
+  final Color? initialAccentSeed;
   static final navigatorKey = GlobalKey<NavigatorState>();
 
   static KometAppState? stateOf(BuildContext context) {
@@ -107,6 +116,9 @@ class KometAppState extends State<KometApp> {
   late Locale _locale;
   late String _fontId;
   bool _isLoggingOut = false;
+  late final ValueNotifier<Color?> accentSeed = ValueNotifier(
+    widget.initialAccentSeed,
+  );
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
@@ -205,6 +217,7 @@ class KometAppState extends State<KometApp> {
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();
     fontScale.dispose();
+    accentSeed.dispose();
     super.dispose();
   }
 
@@ -237,6 +250,11 @@ class KometAppState extends State<KometApp> {
 
   String get fontId => _fontId;
 
+  Future<void> applyAccentColor(Color? seed) async {
+    await AppAccent.save(seed);
+    accentSeed.value = seed;
+  }
+
   Future<void> applyAppFont(String fontId) async {
     if (_fontId == fontId) return;
     final prefs = await SharedPreferences.getInstance();
@@ -264,6 +282,28 @@ class KometAppState extends State<KometApp> {
   ColorScheme? _themeCacheDark;
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
+
+  Color? _seedCacheKey;
+  ColorScheme? _seedCacheLight;
+  ColorScheme? _seedCacheDark;
+
+  ({ColorScheme light, ColorScheme dark}) _schemesForSeed(Color seed) {
+    if (_seedCacheKey == seed &&
+        _seedCacheLight != null &&
+        _seedCacheDark != null) {
+      return (light: _seedCacheLight!, dark: _seedCacheDark!);
+    }
+    _seedCacheKey = seed;
+    _seedCacheLight = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.light,
+    );
+    _seedCacheDark = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.dark,
+    );
+    return (light: _seedCacheLight!, dark: _seedCacheDark!);
+  }
 
   void _rebuildThemesIfNeeded(ColorScheme light, ColorScheme dark) {
     if (_themeCacheFontId == _fontId &&
@@ -334,65 +374,72 @@ class KometAppState extends State<KometApp> {
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final lightBase =
-            lightDynamic ??
-            ColorScheme.fromSeed(
-              seedColor: _fallbackSeed,
-              brightness: Brightness.light,
-            );
-        final darkBase =
-            darkDynamic ??
-            ColorScheme.fromSeed(
-              seedColor: _fallbackSeed,
-              brightness: Brightness.dark,
-            );
+        return ValueListenableBuilder<Color?>(
+          valueListenable: accentSeed,
+          builder: (context, seed, _) {
+            final ColorScheme lightBase;
+            final ColorScheme darkBase;
+            if (seed != null) {
+              final s = _schemesForSeed(seed);
+              lightBase = s.light;
+              darkBase = s.dark;
+            } else if (lightDynamic != null && darkDynamic != null) {
+              lightBase = lightDynamic;
+              darkBase = darkDynamic;
+            } else {
+              final s = _schemesForSeed(_fallbackSeed);
+              lightBase = lightDynamic ?? s.light;
+              darkBase = darkDynamic ?? s.dark;
+            }
 
-        final lightScheme = _adjustLightScheme(lightBase);
-        final darkScheme = _adjustDarkScheme(darkBase);
+            final lightScheme = _adjustLightScheme(lightBase);
+            final darkScheme = _adjustDarkScheme(darkBase);
 
-        _rebuildThemesIfNeeded(lightScheme, darkScheme);
+            _rebuildThemesIfNeeded(lightScheme, darkScheme);
 
-        return MaterialApp(
-          title: 'Komet',
-          debugShowCheckedModeBanner: false,
-          locale: _locale,
-          themeMode: ThemeMode.system,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          theme: _lightTheme,
-          darkTheme: _darkTheme,
-          navigatorKey: KometApp.navigatorKey,
-          builder: (context, child) {
-            return ValueListenableBuilder<double>(
-              valueListenable: fontScale,
-              child: child ?? const SizedBox.shrink(),
-              builder: (context, scale, appChild) {
-                Widget scaledChild = appChild!;
-                if ((scale - 1.0).abs() > 0.001) {
-                  scaledChild = MediaQuery.withClampedTextScaling(
-                    minScaleFactor: scale,
-                    maxScaleFactor: scale,
-                    child: scaledChild,
-                  );
-                }
-                return ValueListenableBuilder<bool>(
-                  valueListenable: fpsOverlayEnabled,
-                  child: scaledChild,
-                  builder: (context, fpsOn, sChild) {
-                    return Stack(
-                      fit: StackFit.expand,
-                      clipBehavior: Clip.none,
-                      children: [
-                        sChild!,
-                        if (fpsOn) const FpsOverlayLayer(),
-                      ],
+            return MaterialApp(
+              title: 'Komet',
+              debugShowCheckedModeBanner: false,
+              locale: _locale,
+              themeMode: ThemeMode.system,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: _lightTheme,
+              darkTheme: _darkTheme,
+              navigatorKey: KometApp.navigatorKey,
+              builder: (context, child) {
+                return ValueListenableBuilder<double>(
+                  valueListenable: fontScale,
+                  child: child ?? const SizedBox.shrink(),
+                  builder: (context, scale, appChild) {
+                    Widget scaledChild = appChild!;
+                    if ((scale - 1.0).abs() > 0.001) {
+                      scaledChild = MediaQuery.withClampedTextScaling(
+                        minScaleFactor: scale,
+                        maxScaleFactor: scale,
+                        child: scaledChild,
+                      );
+                    }
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: fpsOverlayEnabled,
+                      child: scaledChild,
+                      builder: (context, fpsOn, sChild) {
+                        return Stack(
+                          fit: StackFit.expand,
+                          clipBehavior: Clip.none,
+                          children: [
+                            sChild!,
+                            if (fpsOn) const FpsOverlayLayer(),
+                          ],
+                        );
+                      },
                     );
                   },
                 );
               },
+              home: const _StartupScreen(),
             );
           },
-          home: const _StartupScreen(),
         );
       },
     );

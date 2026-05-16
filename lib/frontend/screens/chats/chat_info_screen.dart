@@ -299,6 +299,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               child: CachedNetworkImage(
                 imageUrl: widget.imageUrl,
                 fit: BoxFit.cover,
+                memCacheWidth: 360,
+                memCacheHeight: 360,
                 errorWidget: (context, error, stack) => _avatarLetters(cs),
               ),
             )
@@ -394,7 +396,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: const Color(0xFF007AFF), size: 22),
+            Icon(icon, color: cs.primary, size: 22),
             const SizedBox(height: 4),
             Text(
               label,
@@ -806,7 +808,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           (avatar != null && avatar.isNotEmpty)
               ? CircleAvatar(
                   radius: 22,
-                  backgroundImage: CachedNetworkImageProvider(avatar),
+                  backgroundImage: CachedNetworkImageProvider(avatar, maxWidth: 144, maxHeight: 144),
                   backgroundColor: cs.primaryContainer,
                 )
               : CircleAvatar(
