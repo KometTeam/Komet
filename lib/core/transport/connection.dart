@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../config/proxy_config.dart';
 import '../utils/logger.dart';
 import 'proxy_connector.dart';
+import 'vpn_bypass.dart';
 
 enum SocketState { disconnected, connecting, connected }
 
@@ -34,6 +35,12 @@ class Connection {
     _setState(SocketState.connecting);
 
     try {
+      try {
+        await VpnBypassService.instance.applyIfNeeded();
+      } catch (e) {
+        logger.w('VPN bypass: пропущено ($e)');
+      }
+
       final proxySettings = await ProxyConfig.load();
       RawSocket rawSocket;
 

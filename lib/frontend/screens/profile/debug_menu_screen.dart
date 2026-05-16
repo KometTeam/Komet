@@ -162,6 +162,73 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: appState == null
+                    ? const SizedBox.shrink()
+                    : ValueListenableBuilder<bool>(
+                        valueListenable: appState.vpnBypassEnabled,
+                        builder: (context, bypassOn, _) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 17,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Symbols.vpn_key_off,
+                                    color: cs.onSurfaceVariant,
+                                    size: 22,
+                                    weight: 400,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Обход VPN',
+                                          style: TextStyle(
+                                            color: cs.onSurface,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Если обнаружен VPN (tun-интерфейс), '
+                                          'подключаться напрямую через Wi-Fi или '
+                                          'моб. сеть в обход туннеля. Только Android',
+                                          style: TextStyle(
+                                            color: cs.onSurfaceVariant,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: bypassOn,
+                                    onChanged: (v) {
+                                      appState.setVpnBypassEnabled(v);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: Container(
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHigh,
