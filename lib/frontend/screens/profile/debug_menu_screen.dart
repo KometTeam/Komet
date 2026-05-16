@@ -229,6 +229,74 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: appState == null
+                    ? const SizedBox.shrink()
+                    : ValueListenableBuilder<bool>(
+                        valueListenable: appState.tlsInsecureEnabled,
+                        builder: (context, insecureOn, _) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 17,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Symbols.gpp_bad,
+                                    color: cs.onSurfaceVariant,
+                                    size: 22,
+                                    weight: 400,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Отключить проверку TLS',
+                                          style: TextStyle(
+                                            color: cs.onSurface,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Принимать любой сертификат сервера. '
+                                          'Только для отладки через MitM-прокси — '
+                                          'соединение становится уязвимым к '
+                                          'перехвату трафика',
+                                          style: TextStyle(
+                                            color: cs.onSurfaceVariant,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: insecureOn,
+                                    onChanged: (v) {
+                                      appState.setTlsInsecureEnabled(v);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: Container(
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHigh,

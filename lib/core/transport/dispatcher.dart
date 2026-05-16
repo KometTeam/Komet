@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../protocol/packet.dart';
 import '../protocol/opcode_map.dart';
+import '../utils/log_redact.dart';
 import '../utils/logger.dart';
 
 typedef PacketHandler = void Function(Packet packet);
@@ -53,12 +54,8 @@ class PacketDispatcher {
     if (packet.cmd == CmdType.ok ||
         packet.cmd == CmdType.error ||
         packet.cmd == CmdType.notFound) {
-      final payloadStr = packet.payload.toString();
-      final displayPayload = packet.opcode == Opcode.login && payloadStr.length > 50
-          ? '${payloadStr.substring(0, 50)}...'
-          : payloadStr;
       logger.i(
-        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: $displayPayload}',
+        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${redactForLog(packet.payload)}}',
       );
 
       final completer = _pendingRequests.remove(packet.seq);
@@ -84,7 +81,7 @@ class PacketDispatcher {
       }
     } else if (packet.isPush) {
       logger.i(
-        '<= push {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${packet.payload}}',
+        '<= push {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${redactForLog(packet.payload)}}',
       );
       _pushHandlers[packet.opcode]?.call(packet);
       _pushController.add(packet);

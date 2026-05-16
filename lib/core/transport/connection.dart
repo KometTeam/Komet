@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../config/proxy_config.dart';
 import '../utils/logger.dart';
 import 'proxy_connector.dart';
+import 'tls_config.dart';
 import 'vpn_bypass.dart';
 
 enum SocketState { disconnected, connecting, connected }
@@ -106,11 +107,18 @@ class Connection {
           ? await RawSocket.connect(host, port)
           : await RawSocket.connect(host, port, timeout: timeout);
     }
-    return RawSecureSocket.secure(
-      rawSocket,
-      host: host,
-      onBadCertificate: (_) => true,
-    );
+    final allowInsecure = await TlsConfig.isInsecureAllowed();
+    if (allowInsecure) {
+      logger.w(
+        'TLS: проверка сертификата отключена (дебаг) — соединение уязвимо к MitM',
+      );
+      return RawSecureSocket.secure(
+        rawSocket,
+        host: host,
+        onBadCertificate: (_) => true,
+      );
+    }
+    return RawSecureSocket.secure(rawSocket, host: host);
   }
 
   void write(Uint8List data) {
