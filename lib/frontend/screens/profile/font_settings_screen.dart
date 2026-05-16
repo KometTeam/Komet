@@ -135,7 +135,6 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
     final cs = Theme.of(context).colorScheme;
     final app = KometApp.stateOf(context);
     final currentId = app?.fontId ?? AppFonts.fallback.id;
-    final scale = app?.fontScale ?? AppFonts.defaultScale;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -187,18 +186,22 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
               text: 'Размер шрифта',
             ),
             const SizedBox(height: 6),
-            _FontSizeControl(
-              scale: scale,
-              onChanged: (v) => app?.applyFontScale(v, persist: false),
-              onChangeEnd: (v) {
-                Haptics.selection();
-                app?.applyFontScale(v);
-              },
-              onReset: () {
-                Haptics.selection();
-                app?.applyFontScale(AppFonts.defaultScale);
-              },
-            ),
+            if (app != null)
+              ValueListenableBuilder<double>(
+                valueListenable: app.fontScale,
+                builder: (context, scale, _) => _FontSizeControl(
+                  scale: scale,
+                  onChanged: (v) => app.applyFontScale(v, persist: false),
+                  onChangeEnd: (v) {
+                    Haptics.selection();
+                    app.applyFontScale(v);
+                  },
+                  onReset: () {
+                    Haptics.selection();
+                    app.applyFontScale(AppFonts.defaultScale);
+                  },
+                ),
+              ),
           ],
         ),
       ),

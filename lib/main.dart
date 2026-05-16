@@ -106,7 +106,6 @@ class KometAppState extends State<KometApp> {
 
   late Locale _locale;
   late String _fontId;
-  late double _fontScale;
   bool _isLoggingOut = false;
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
@@ -119,6 +118,9 @@ class KometAppState extends State<KometApp> {
   late final ValueNotifier<bool> vpnBypassEnabled = ValueNotifier(
     widget.initialVpnBypass,
   );
+  late final ValueNotifier<double> fontScale = ValueNotifier(
+    widget.initialFontScale,
+  );
   final _profileUpdateController = StreamController<void>.broadcast();
   Stream<void> get profileUpdateStream => _profileUpdateController.stream;
 
@@ -127,7 +129,6 @@ class KometAppState extends State<KometApp> {
     super.initState();
     _locale = widget.initialLocale;
     _fontId = widget.initialFontId;
-    _fontScale = widget.initialFontScale;
 
     api.setReconnectCallback(() async {
       try {
@@ -203,6 +204,7 @@ class KometAppState extends State<KometApp> {
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();
+    fontScale.dispose();
     super.dispose();
   }
 
@@ -234,7 +236,6 @@ class KometAppState extends State<KometApp> {
   }
 
   String get fontId => _fontId;
-  double get fontScale => _fontScale;
 
   Future<void> applyAppFont(String fontId) async {
     if (_fontId == fontId) return;
@@ -247,9 +248,7 @@ class KometAppState extends State<KometApp> {
 
   Future<void> applyFontScale(double scale, {bool persist = true}) async {
     final next = AppFonts.clampScale(scale);
-    if (_fontScale != next && mounted) {
-      setState(() => _fontScale = next);
-    }
+    fontScale.value = next;
     if (persist) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble(AppFonts.scalePrefKey, next);
@@ -364,21 +363,31 @@ class KometAppState extends State<KometApp> {
           darkTheme: _darkTheme,
           navigatorKey: KometApp.navigatorKey,
           builder: (context, child) {
-            final scaledChild = MediaQuery.withClampedTextScaling(
-              minScaleFactor: _fontScale,
-              maxScaleFactor: _fontScale,
+            return ValueListenableBuilder<double>(
+              valueListenable: fontScale,
               child: child ?? const SizedBox.shrink(),
-            );
-            return ValueListenableBuilder<bool>(
-              valueListenable: fpsOverlayEnabled,
-              builder: (context, fpsOn, _) {
-                return Stack(
-                  fit: StackFit.expand,
-                  clipBehavior: Clip.none,
-                  children: [
-                    scaledChild,
-                    if (fpsOn) const FpsOverlayLayer(),
-                  ],
+              builder: (context, scale, appChild) {
+                Widget scaledChild = appChild!;
+                if ((scale - 1.0).abs() > 0.001) {
+                  scaledChild = MediaQuery.withClampedTextScaling(
+                    minScaleFactor: scale,
+                    maxScaleFactor: scale,
+                    child: scaledChild,
+                  );
+                }
+                return ValueListenableBuilder<bool>(
+                  valueListenable: fpsOverlayEnabled,
+                  child: scaledChild,
+                  builder: (context, fpsOn, sChild) {
+                    return Stack(
+                      fit: StackFit.expand,
+                      clipBehavior: Clip.none,
+                      children: [
+                        sChild!,
+                        if (fpsOn) const FpsOverlayLayer(),
+                      ],
+                    );
+                  },
                 );
               },
             );
