@@ -29,7 +29,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
   bool _loading = true;
   Map<String, dynamic>? _contact;
   int? _seenTime;
-  bool _isOnline = false;
+  int _presenceStatus = 0;
 
   @override
   void initState() {
@@ -57,7 +57,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
         final p = presence?[widget.contactId.toString()] ?? presence?[widget.contactId];
         if (p is Map) {
           _seenTime = p['seen'] as int?;
-          _isOnline = ((p['status'] as int?) ?? 0) > 0;
+          _presenceStatus = (p['status'] as int?) ?? 0;
         }
       }
     } catch (e) {
@@ -101,7 +101,8 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
 
   String _subtitle() {
     if (_isBot) return 'Бот';
-    if (_isOnline) return 'В сети';
+    if (_presenceStatus == 1) return 'В сети';
+    if (_presenceStatus == 3) return 'Был(-а) недавно';
     if (_seenTime != null && _seenTime! > 0) return _formatLastSeen(_seenTime!);
     return '';
   }

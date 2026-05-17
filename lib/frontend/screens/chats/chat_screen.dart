@@ -12,6 +12,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
+import '../../../core/protocol/opcode_map.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
@@ -75,6 +77,12 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
   final ValueNotifier<_UploadStatus> _uploadStatus = ValueNotifier(const _UploadStatus());
   StreamSubscription<UploadEvent>? _uploadSub;
+  StreamSubscription<Packet>? _pushSub;
+  final Set<int> _typingUserIds = {};
+  final Map<int, Timer> _typingTimers = {};
+  int _otherStatus = 0;
+  int? _otherSeenTime;
+  final ValueNotifier<String> _headerStatusNotifier = ValueNotifier('');
   int _tempIdCounter = 0;
   late final AnimationController _attachAnim;
 
@@ -107,6 +115,12 @@ class _ChatScreenState extends State<ChatScreen>
       reverseDuration: const Duration(milliseconds: 240),
     );
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
+    _pushSub = api.pushStream
+        .where((p) =>
+            p.opcode == Opcode.notifMessage ||
+            p.opcode == Opcode.notifMark ||
+            p.opcode == Opcode.notifTyping)
+        .listen(_onIncomingPush);
     _floatingDateAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -127,8 +141,12 @@ class _ChatScreenState extends State<ChatScreen>
     ChatsModule.getChat(_myId, widget.chatId).then((value) {
       if (mounted && value.isNotEmpty) {
         setState(() { chat = value.first; });
+        _recomputeHeaderStatus();
       }
     }).catchError((_) {});
+    if (widget.chatType == 'DIALOG') {
+      unawaited(_loadOtherPresence());
+    }
 
     final cachedRows = await AppDatabase.loadMessages(
       _myId,
@@ -184,6 +202,12 @@ class _ChatScreenState extends State<ChatScreen>
     _showAttachmentPanel.removeListener(_onAttachPanelToggle);
     _showAttachmentPanel.dispose();
     _uploadSub?.cancel();
+    _pushSub?.cancel();
+    for (final t in _typingTimers.values) {
+      t.cancel();
+    }
+    _typingTimers.clear();
+    _headerStatusNotifier.dispose();
     _uploadStatus.dispose();
     _attachAnim.dispose();
     _messageController.dispose();
@@ -220,6 +244,161 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (otherReadTime > 0 && otherReadTime >= msg.time) return 'read';
     return 'sent';
+  }
+
+  void _onIncomingPush(Packet packet) {
+    if (!mounted) return;
+    switch (packet.opcode) {
+      case Opcode.notifMessage:
+        _onIncomingMessage(packet);
+      case Opcode.notifMark:
+        _onMessageRead(packet);
+      case Opcode.notifTyping:
+        _onTyping(packet);
+    }
+  }
+
+  Future<void> _loadOtherPresence() async {
+    if (_myId == 0) return;
+    final otherId = widget.chatId ^ _myId;
+    if (otherId <= 0) return;
+    try {
+      final p = await api.sendRequest(
+        Opcode.contactPresence,
+        {'contactIds': [otherId]},
+      );
+      if (!mounted) return;
+      final presence = (p.payload as Map?)?['presence'] as Map?;
+      final entry = presence?[otherId.toString()] ?? presence?[otherId];
+      if (entry is Map) {
+        _otherStatus = (entry['status'] as int?) ?? 0;
+        _otherSeenTime = entry['seen'] as int?;
+        _recomputeHeaderStatus();
+      }
+    } catch (_) {}
+  }
+
+  String _formatLastSeen(int secondsSinceEpoch) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000);
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 2) return 'Был(-а) только что';
+    if (diff.inMinutes < 60) return 'Был(-а) ${diff.inMinutes} мин назад';
+    if (diff.inHours < 24) return 'Был(-а) ${diff.inHours} ч назад';
+    if (diff.inDays < 7) return 'Был(-а) ${diff.inDays} дн назад';
+    const months = [
+      'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+    ];
+    return 'Был(-а) ${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  void _recomputeHeaderStatus() {
+    _headerStatusNotifier.value = _headerStatus();
+  }
+
+  String _headerStatus() {
+    if (_typingUserIds.isNotEmpty) return 'Печатает...';
+    if (widget.chatType == 'CHAT') {
+      return '${chat?.participants.length ?? 0} участников';
+    }
+    if (widget.chatType == 'CHANNEL') {
+      return '${chat?.participants.length ?? 0} подписчиков';
+    }
+    if (_otherStatus == 1) return 'В сети';
+    if (_otherStatus == 3) return 'Был(-а) недавно';
+    final s = _otherSeenTime;
+    if (s != null && s > 0) return _formatLastSeen(s);
+    return '';
+  }
+
+  void _onTyping(Packet packet) {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    if (payload['chatId'] != widget.chatId) return;
+    final userId = payload['userId'];
+    if (userId is! int || userId == _myId) return;
+
+    _typingTimers[userId]?.cancel();
+    _typingTimers[userId] = Timer(const Duration(seconds: 10), () {
+      if (!mounted) return;
+      _typingUserIds.remove(userId);
+      _typingTimers.remove(userId);
+      _recomputeHeaderStatus();
+    });
+    if (_typingUserIds.add(userId)) {
+      _recomputeHeaderStatus();
+    }
+  }
+
+  void _clearTyping(int userId) {
+    _typingTimers.remove(userId)?.cancel();
+    if (_typingUserIds.remove(userId)) {
+      _recomputeHeaderStatus();
+    }
+  }
+
+  void _onMessageRead(Packet packet) {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    if (payload['chatId'] != widget.chatId) return;
+    final userId = payload['userId'];
+    if (userId is! int || userId == _myId) return;
+    final mark = payload['mark'];
+    if (mark is! int) return;
+    if (payload['setAsUnread'] == true) return;
+    final c = chat;
+    if (c == null) return;
+    if (c.participants[userId] == mark) return;
+    setState(() {
+      c.participants[userId] = mark;
+    });
+  }
+
+  void _onIncomingMessage(Packet packet) {
+    if (!mounted) return;
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final chatId = payload['chatId'];
+    if (chatId != widget.chatId) return;
+    final msg = payload['message'];
+    if (msg is! Map) return;
+
+    final senderId = msg['sender'];
+    if (senderId is! int) return;
+    if (senderId == _myId) return;
+
+    final msgId = msg['id']?.toString();
+    if (msgId == null || msgId.isEmpty) return;
+    if (_messages.any((m) => m.id == msgId)) return;
+
+    List<MessageAttachment>? attachments;
+    final attaches = msg['attaches'];
+    if (attaches is List && attaches.isNotEmpty) {
+      attachments = attaches
+          .whereType<Map>()
+          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+          .toList();
+    }
+
+    final cached = CachedMessage(
+      id: msgId,
+      accountId: _myId,
+      chatId: widget.chatId,
+      senderId: senderId,
+      text: msg['text'] as String?,
+      time: (msg['time'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
+      status: 'sent',
+      payload: Map<String, dynamic>.from(msg),
+      attachments: attachments,
+    );
+
+    setState(() {
+      _lastSentId = msgId;
+      _messages.add(cached);
+    });
+    _clearTyping(senderId);
+    Haptics.tap();
+    _scrollToBottom();
   }
 
   Future<void> _sendMessage() async {
@@ -508,7 +687,6 @@ class _ChatScreenState extends State<ChatScreen>
     
     // TODO: Локализация
     // TODO: Cклонения
-    final String status = chat?.type == "CHAT" ? "${chat?.participants.length ?? 0} участников" : "last seen recently";
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: PreferredSize(
@@ -583,12 +761,15 @@ class _ChatScreenState extends State<ChatScreen>
                           ],
                         ],
                       ),
-                      Text(
-                        status,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
+                      ValueListenableBuilder<String>(
+                        valueListenable: _headerStatusNotifier,
+                        builder: (context, status, _) => Text(
+                          status,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                       ),
                     ],
@@ -697,7 +878,7 @@ class _ChatScreenState extends State<ChatScreen>
               overrideStatus: _effectiveStatus(message),
             );
 
-            if (isMe && message.id == _lastSentId) {
+            if (message.id == _lastSentId) {
               return _SentMessageAnimation(
                 key: ValueKey('anim_${message.id}'),
                 onComplete: () {

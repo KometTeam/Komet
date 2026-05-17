@@ -58,6 +58,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   Map<String, dynamic>? _contactData;
   int? _seenTime;
   bool _isOnline = false;
+  int _presenceStatus = 0;
   bool _isBot = false;
 
   // CHAT
@@ -144,7 +145,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           final p = presence?[_otherId.toString()] ?? presence?[_otherId];
           if (p is Map) {
             _seenTime = p['seen'] as int?;
-            _isOnline = ((p['status'] as int?) ?? 0) > 0;
+            final st = (p['status'] as int?) ?? 0;
+            _presenceStatus = st;
+            _isOnline = st == 1;
           }
         }
       }
@@ -183,7 +186,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       _onlineCount = 0;
       _members = memberIds.map((id) {
         final pres = presenceMap[id];
-        final online = ((pres?['status'] as int?) ?? 0) > 0;
+        final online = (pres?['status'] as int?) == 1;
         if (online) _onlineCount++;
         final isAdmin =
             admins.containsKey(id.toString()) || admins.containsKey(id);
@@ -328,7 +331,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       case 'DIALOG':
         if (_isBot) return 'Бот';
         if (_isOnline) return 'В сети';
-        if (_seenTime != null) return _formatLastSeen(_seenTime!);
+        if (_presenceStatus == 3) return 'был(-а) недавно';
+        if (_seenTime != null && _seenTime! > 0) {
+          return 'был(-а) ${_formatLastSeen(_seenTime!)}';
+        }
         return '';
       case 'CHAT':
         final total =
@@ -1075,8 +1081,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   // ─── HELPERS ─────────────────────────────────────────────────────────────
 
-  String _formatLastSeen(int ms) {
-    final diff = DateTime.now().millisecondsSinceEpoch - ms;
+  String _formatLastSeen(int secondsSinceEpoch) {
+    final diff = DateTime.now().millisecondsSinceEpoch - secondsSinceEpoch * 1000;
     if (diff < 60000) return 'только что';
     if (diff < 3600000) return '${diff ~/ 60000} мин назад';
     if (diff < 86400000) return '${diff ~/ 3600000} ч назад';

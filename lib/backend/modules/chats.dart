@@ -153,6 +153,42 @@ class ChatsModule {
   static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   static void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
+  static StreamSubscription<Packet>? _globalPushSub;
+
+  static void attachGlobalPushHandlers(Api api) {
+    _globalPushSub?.cancel();
+    _globalPushSub = api.pushStream.listen(_handleGlobalPush);
+  }
+
+  static Future<void> _handleGlobalPush(Packet packet) async {
+    switch (packet.opcode) {
+      case Opcode.notifMark:
+        await _handleNotifMark(packet);
+    }
+  }
+
+  static Future<void> _handleNotifMark(Packet packet) async {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final chatId = payload['chatId'];
+    if (chatId is! int) return;
+    final userId = payload['userId'];
+    if (userId is! int) return;
+    final mark = payload['mark'];
+    if (mark is! int) return;
+    if (payload['setAsUnread'] == true) return;
+
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final cached = CachedChat.fromDbRow(rows.first);
+    if (cached.participants[userId] == mark) return;
+    cached.participants[userId] = mark;
+    await AppDatabase.saveChats([cached.toDbRow()]);
+  }
+
   static final Set<int> _pendingContactUpdates = {};
   static Timer? _contactFlushTimer;
   static Future<void>? _contactFlushFuture;

@@ -13,6 +13,7 @@ import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'backend/modules/account.dart';
+import 'backend/modules/chats.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
@@ -53,6 +54,7 @@ void main() async {
   if (activeAccountId != null) {
     await ContactsModule.primeCacheFromDb(activeAccountId);
   }
+  ChatsModule.attachGlobalPushHandlers(api);
   await api.connect();
 
   final packageInfo = await PackageInfo.fromPlatform();
