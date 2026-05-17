@@ -183,16 +183,56 @@ class _ChatListScreenState extends State<ChatListScreen>
     return _DeleteKind.blocked;
   }
 
-  _DeleteKind? _selectionDeleteCategory() {
+  _DeleteKind? _selectionDeleteCategoryFor(List<CachedChat> selected) {
     if (_sessionState != SessionState.online) return null;
     final myId = _profile?.id;
     if (myId == null) return null;
-    final selected = _selectedChatObjects();
     if (selected.isEmpty) return null;
     final cats = selected.map((c) => _categorizeChat(c, myId)).toSet();
     if (cats.contains(_DeleteKind.blocked)) return null;
     if (cats.length > 1) return null;
     return cats.single;
+  }
+
+  Future<void> _onPinTap() async {
+    final selected = _selectedChatObjects();
+    if (selected.isEmpty) return;
+    final anyPinned = selected.any((c) => (c.favIndex ?? 0) > 0);
+    final err = await ChatsModule.togglePin(
+      api,
+      chatIds: selected.map((c) => c.id).toList(),
+      pin: !anyPinned,
+    );
+    if (!mounted) return;
+    if (err != null) showCustomNotification(context, err);
+    _clearSelection();
+  }
+
+  Future<void> _onMuteTap() async {
+    final selected = _selectedChatObjects();
+    if (selected.isEmpty) return;
+    final anyMuted = selected.any((c) => c.isMuted);
+    final targetDDU = anyMuted ? ChatsModule.muteOff : ChatsModule.muteForever;
+
+    final errors = <String>[];
+    for (final c in selected) {
+      final err = await ChatsModule.setChatMute(
+        api,
+        chatId: c.id,
+        dontDisturbUntil: targetDDU,
+      );
+      if (err != null) errors.add(err);
+    }
+    if (!mounted) return;
+    if (errors.isNotEmpty) {
+      showCustomNotification(
+        context,
+        errors.length == 1
+            ? errors.first
+            : 'Не удалось изменить ${errors.length} чат(ов): ${errors.first}',
+      );
+    }
+    _clearSelection();
   }
 
   Future<void> _onDeleteTap() async {
@@ -1328,7 +1368,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     avatar ?? "",
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
-                    isMuted: chat.dontDisturbUntil > 0,
+                    isMuted: chat.isMuted,
                     isVerified: isVerified,
                     isPinned: isPinned,
                     chatType: "DIALOG",
@@ -1358,7 +1398,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         : '',
                     isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
-                    isMuted: chat.dontDisturbUntil > 0,
+                    isMuted: chat.isMuted,
                     isVerified: chat.isOfficial,
                     isPinned: isPinned,
                     chatType: chat.type,
@@ -1803,37 +1843,53 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ],
                     ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Symbols.arrow_back, color: cs.onSurface),
-                          onPressed: _clearSelection,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _selectedChats.length.toString(),
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_selectionDeleteCategory() != null)
+                    child: Builder(builder: (_) {
+                      final selected = _selectedChatObjects();
+                      final deleteCategory = _selectionDeleteCategoryFor(selected);
+                      final anyMuted = selected.any((c) => c.isMuted);
+                      final anyPinned = selected.any((c) => (c.favIndex ?? 0) > 0);
+                      return Row(
+                        children: [
                           IconButton(
-                            icon: Icon(Symbols.delete, color: cs.onSurface),
-                            onPressed: _onDeleteTap,
+                            icon: Icon(Symbols.arrow_back, color: cs.onSurface),
+                            onPressed: _clearSelection,
                           ),
-                        IconButton(
-                          icon: Icon(Symbols.archive, color: cs.onSurface),
-                          onPressed: () {},
-                        ),
-                        IconButton(
-                          icon: Icon(Symbols.volume_off, color: cs.onSurface),
-                          onPressed: () {},
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _selectedChats.length.toString(),
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (deleteCategory != null)
+                            IconButton(
+                              icon: Icon(Symbols.delete, color: cs.onSurface),
+                              onPressed: _onDeleteTap,
+                            ),
+                          IconButton(
+                            icon: Icon(Symbols.archive, color: cs.onSurface),
+                            onPressed: () {},
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              anyPinned ? Symbols.keep_off : Symbols.keep,
+                              color: cs.onSurface,
+                            ),
+                            onPressed: selected.isEmpty ? null : _onPinTap,
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              anyMuted ? Symbols.volume_up : Symbols.volume_off,
+                              color: cs.onSurface,
+                            ),
+                            onPressed: selected.isEmpty ? null : _onMuteTap,
+                          ),
+                        ],
+                      );
+                    }),
                   ),
                 ),
               ],

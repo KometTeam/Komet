@@ -9,6 +9,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
+import 'folders.dart';
 import 'messages.dart' show ContactCache;
 
 Map<int, int> _parseParticipants(dynamic raw) {
@@ -78,6 +79,12 @@ class CachedChat {
 
   bool iAmAdmin(int myId) => owner == myId || admins.contains(myId);
 
+  bool get isMuted {
+    if (dontDisturbUntil == ChatsModule.muteOff) return false;
+    if (dontDisturbUntil < 0) return true;
+    return dontDisturbUntil > DateTime.now().millisecondsSinceEpoch;
+  }
+
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
     accountId: row['account_id'] as int,
@@ -140,20 +147,36 @@ class CachedChat {
 }
 
 class ChatsModule {
+  static const int muteOff = 0;
+  static const int muteForever = -1;
+
   static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   static void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
   static final Set<int> _pendingContactUpdates = {};
   static Timer? _contactFlushTimer;
+  static Future<void>? _contactFlushFuture;
   static const _contactFlushDelay = Duration(milliseconds: 250);
 
   static void applyContactUpdate(int contactId) {
     _pendingContactUpdates.add(contactId);
-    _contactFlushTimer ??= Timer(_contactFlushDelay, _flushContactUpdates);
+    if (_contactFlushTimer != null) return;
+    if (_contactFlushFuture != null) return;
+    _contactFlushTimer = Timer(_contactFlushDelay, _kickFlush);
+  }
+
+  static void _kickFlush() {
+    _contactFlushTimer = null;
+    if (_contactFlushFuture != null) return;
+    _contactFlushFuture = _flushContactUpdates().whenComplete(() {
+      _contactFlushFuture = null;
+      if (_pendingContactUpdates.isNotEmpty) {
+        _contactFlushTimer ??= Timer(_contactFlushDelay, _kickFlush);
+      }
+    });
   }
 
   static Future<void> _flushContactUpdates() async {
-    _contactFlushTimer = null;
     if (_pendingContactUpdates.isEmpty) return;
     final ids = _pendingContactUpdates.toList();
     _pendingContactUpdates.clear();
@@ -161,18 +184,25 @@ class ChatsModule {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
 
+    final dialogRows = await AppDatabase.loadDialogChats(accountId);
+    final byParticipant = <int, List<Map<String, dynamic>>>{};
+    for (final row in dialogRows) {
+      final cached = CachedChat.fromDbRow(row);
+      for (final pid in cached.participants.keys) {
+        if (pid == accountId) continue;
+        byParticipant.putIfAbsent(pid, () => []).add(row);
+      }
+    }
+
     final updates = <Map<String, dynamic>>[];
     for (final contactId in ids) {
       final name = ContactCache.get(contactId);
       if (name == null) continue;
       final avatar = ContactCache.getAvatar(contactId);
       final options = ContactCache.getOptions(contactId) ?? const <String>{};
-
-      final rows = await AppDatabase.findDialogChatsByParticipant(
-        accountId,
-        contactId,
-      );
-      for (final row in rows) {
+      final affected = byParticipant[contactId];
+      if (affected == null) continue;
+      for (final row in affected) {
         final cached = CachedChat.fromDbRow(row);
         final sameTitle = cached.title == name;
         final sameAvatar = (cached.iconUrl ?? '') == (avatar ?? '');
@@ -194,12 +224,15 @@ class ChatsModule {
 
   static Future<CachedChat?> cacheServerChat(
     Map<dynamic, dynamic> chat,
-    int accountId,
-  ) async {
+    int accountId, {
+    Map<int, CachedChat>? preloadedExisting,
+  }) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
     Map<int, CachedChat> existing = const {};
-    if (id is int) {
+    if (preloadedExisting != null) {
+      existing = preloadedExisting;
+    } else if (id is int) {
       final rows = await AppDatabase.loadChat(accountId, id);
       if (rows.isNotEmpty) {
         existing = {id: CachedChat.fromDbRow(rows.first)};
@@ -219,9 +252,38 @@ class ChatsModule {
       logger.w('cacheServerChat: parse returned null for chat=${chat['id']}');
       return null;
     }
+    final ex = existing[parsed.id];
+    if (ex != null && _sameContent(ex, parsed)) {
+      return parsed;
+    }
     await AppDatabase.saveChats([parsed.toDbRow()]);
     _bump();
     return parsed;
+  }
+
+  static bool _sameContent(CachedChat a, CachedChat b) {
+    if (a.title != b.title) return false;
+    if (a.iconUrl != b.iconUrl) return false;
+    if (a.owner != b.owner) return false;
+    if (a.dontDisturbUntil != b.dontDisturbUntil) return false;
+    if (a.favIndex != b.favIndex) return false;
+    if (a.lastMsgId != b.lastMsgId) return false;
+    if (a.lastMsgTime != b.lastMsgTime) return false;
+    if (a.lastMsgText != b.lastMsgText) return false;
+    if (a.lastMsgSenderId != b.lastMsgSenderId) return false;
+    if (a.unreadCount != b.unreadCount) return false;
+    if (a.lastEventTime != b.lastEventTime) return false;
+    if (a.isOnline != b.isOnline) return false;
+    if (a.seenTime != b.seenTime) return false;
+    if (a.admins.length != b.admins.length) return false;
+    if (!a.admins.containsAll(b.admins)) return false;
+    if (a.options.length != b.options.length) return false;
+    if (!a.options.containsAll(b.options)) return false;
+    if (a.participants.length != b.participants.length) return false;
+    for (final e in a.participants.entries) {
+      if (b.participants[e.key] != e.value) return false;
+    }
+    return true;
   }
 
   /// Парсит и кэширует чаты из payload opcode 19.
@@ -563,6 +625,95 @@ class ChatsModule {
     return packet.isOk;
   }
 
+  static Future<String?> togglePin(
+    Api api, {
+    required List<int> chatIds,
+    required bool pin,
+  }) async {
+    if (chatIds.isEmpty) return null;
+    try {
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId == null) return 'Нет активного аккаунта';
+      final folders = await FoldersModule.loadFolders(accountId);
+      final allFolder = folders.firstWhere(
+        FoldersModule.isAllChatsFolder,
+        orElse: () => folders.isEmpty
+            ? throw StateError('Папка "Все" не найдена')
+            : folders.first,
+      );
+
+      final favorites = List<int>.from(allFolder.favorites ?? const []);
+      if (pin) {
+        for (final id in chatIds) {
+          if (!favorites.contains(id)) favorites.add(id);
+        }
+      } else {
+        favorites.removeWhere((id) => chatIds.contains(id));
+      }
+
+      await FoldersModule.setFolderFavorites(api, accountId, allFolder, favorites);
+
+      final existingRows = await AppDatabase.loadChatsByIds(accountId, chatIds);
+      final updates = <Map<String, dynamic>>[];
+      for (final row in existingRows) {
+        final id = row['id'] as int;
+        final isFav = favorites.contains(id);
+        final currentFav = row['fav_index'] as int?;
+        final newFav = isFav
+            ? ((currentFav ?? 0) > 0 ? currentFav : favorites.indexOf(id) + 1)
+            : 0;
+        if (currentFav == newFav) continue;
+        final newRow = Map<String, dynamic>.from(row);
+        newRow['fav_index'] = newFav;
+        updates.add(newRow);
+      }
+      if (updates.isNotEmpty) {
+        await AppDatabase.saveChats(updates);
+        _bump();
+      }
+      return null;
+    } on PacketError catch (e) {
+      logger.w('togglePin: ${e.message}');
+      return e.message;
+    } catch (e) {
+      logger.w('togglePin: $e');
+      return 'Не удалось изменить закрепление';
+    }
+  }
+
+  static Future<String?> setChatMute(
+    Api api, {
+    required int chatId,
+    required int dontDisturbUntil,
+  }) async {
+    try {
+      await api.sendRequest(Opcode.config, {
+        'settings': {
+          'chats': {
+            chatId: {'dontDisturbUntil': dontDisturbUntil},
+          },
+        },
+      });
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        final rows = await AppDatabase.loadChat(accountId, chatId);
+        if (rows.isNotEmpty) {
+          final row = Map<String, dynamic>.from(rows.first);
+          row['dont_disturb_until'] = dontDisturbUntil;
+          await AppDatabase.saveChats([row]);
+          _bump();
+        }
+      }
+      return null;
+    } on PacketError catch (e) {
+      logger.w('setChatMute $chatId: ${e.message}');
+      return e.message;
+    } catch (e) {
+      logger.w('setChatMute $chatId: $e');
+      return 'Не удалось изменить уведомления';
+    }
+  }
+
   static Future<String?> deleteChat(
     Api api, {
     required int chatId,
@@ -605,10 +756,19 @@ class ChatsModule {
       if (list is! List) return const [];
       final accountId = await TokenStorage.getActiveAccountId();
       if (accountId == null) return const [];
+      final existingRows = await AppDatabase.loadChatsByIds(accountId, chatIds);
+      final preloadedExisting = {
+        for (final row in existingRows)
+          row['id'] as int: CachedChat.fromDbRow(row),
+      };
       final out = <CachedChat>[];
       for (final c in list) {
         if (c is Map) {
-          final cached = await cacheServerChat(c, accountId);
+          final cached = await cacheServerChat(
+            c,
+            accountId,
+            preloadedExisting: preloadedExisting,
+          );
           if (cached != null) out.add(cached);
         }
       }
