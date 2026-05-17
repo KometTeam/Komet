@@ -7,6 +7,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
+import 'create_group_flow.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -244,7 +245,12 @@ class _ChatListScreenState extends State<ChatListScreen>
         _reloadChatsAndFolders();
       }
     });
+    ChatsModule.chatsChanged.addListener(_onChatsChanged);
     _reloadChatsAndFolders();
+  }
+
+  void _onChatsChanged() {
+    if (mounted) _reloadChatsAndFolders();
   }
 
   Future<void> _reloadChatsAndFolders() async {
@@ -700,6 +706,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   @override
   void dispose() {
+    ChatsModule.chatsChanged.removeListener(_onChatsChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _fabController.dispose();
@@ -2086,7 +2093,14 @@ Navigator.push(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        _buildFabMenuItem(Symbols.group_add, 'Создать группу'),
+        _buildFabMenuItem(
+          Symbols.group_add,
+          'Создать группу',
+          onTap: () {
+            _toggleFab();
+            showCreateGroupFlow(context);
+          },
+        ),
         const SizedBox(height: 4),
         _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
         const SizedBox(height: 4),
@@ -2095,7 +2109,7 @@ Navigator.push(
     );
   }
 
-  Widget _buildFabMenuItem(IconData icon, String title) {
+  Widget _buildFabMenuItem(IconData icon, String title, {VoidCallback? onTap}) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       width: 220,
@@ -2111,9 +2125,7 @@ Navigator.push(
         ],
       ),
       child: InkWell(
-        onTap: () {
-          // Action logic here
-        },
+        onTap: onTap,
         borderRadius: BorderRadius.circular(100),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

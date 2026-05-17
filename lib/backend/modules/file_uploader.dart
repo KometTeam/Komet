@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:convert' show utf8;
+import 'dart:convert' show jsonDecode, utf8;
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../api.dart';
 import '../../core/config/proxy_config.dart';
@@ -163,12 +164,18 @@ class FileUploader {
     );
   }
 
-  void _writeHeaders(Socket socket, Uri uri, String filename, int total) {
+  void _writeHeaders(
+    Socket socket,
+    Uri uri,
+    String filename,
+    int total, {
+    String contentType = 'application/x-binary; charset=x-user-defined',
+  }) {
     final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
     final headers = StringBuffer()
       ..write('POST $path HTTP/1.1\r\n')
       ..write('Host: ${uri.host}\r\n')
-      ..write('Content-Type: application/x-binary; charset=x-user-defined\r\n')
+      ..write('Content-Type: $contentType\r\n')
       ..write('Content-Disposition: attachment; filename=$filename\r\n')
       ..write('Connection: keep-alive\r\n')
       ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
@@ -176,6 +183,91 @@ class FileUploader {
       ..write('Content-Length: $total\r\n')
       ..write('\r\n');
     socket.add(utf8.encode(headers.toString()));
+  }
+
+  Future<String?> uploadImage(Uri uri, Uint8List bytes, {String filename = 'avatar.jpg'}) async {
+    Socket? socket;
+    try {
+      socket = await _openSocket(uri);
+      _writeHeaders(socket, uri, filename, bytes.length, contentType: 'image/jpeg');
+      socket.add(bytes);
+      await socket.flush();
+
+      final response = await _readFullResponse(
+        socket,
+        timeout: const Duration(minutes: 2),
+      );
+      try {
+        socket.destroy();
+      } catch (_) {}
+
+      if (response == null) return null;
+      final (status, body) = response;
+      if (status != 200) return null;
+      return _parsePhotoToken(body);
+    } catch (_) {
+      try {
+        socket?.destroy();
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  Future<(int, String)?> _readFullResponse(
+    Socket socket, {
+    required Duration timeout,
+  }) {
+    final bytes = <int>[];
+    final completer = Completer<(int, String)?>();
+    Timer? timer;
+    StreamSubscription<List<int>>? sub;
+
+    void finish() {
+      timer?.cancel();
+      sub?.cancel();
+      if (completer.isCompleted) return;
+      final headerEnd = _findHeaderEnd(bytes);
+      if (headerEnd == -1) {
+        completer.complete(null);
+        return;
+      }
+      final headerStr = utf8.decode(bytes.sublist(0, headerEnd), allowMalformed: true);
+      final statusLine = headerStr.split('\r\n').first;
+      final parts = statusLine.split(' ');
+      final status = parts.length >= 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
+      final body = utf8.decode(bytes.sublist(headerEnd), allowMalformed: true);
+      completer.complete((status, body));
+    }
+
+    void fail() {
+      timer?.cancel();
+      sub?.cancel();
+      if (!completer.isCompleted) completer.complete(null);
+    }
+
+    sub = socket.listen(bytes.addAll, onError: (_) => fail(), onDone: finish);
+    timer = Timer(timeout, fail);
+    return completer.future;
+  }
+
+  String? _parsePhotoToken(String body) {
+    try {
+      final json = jsonDecode(body);
+      if (json is Map) {
+        final photos = json['photos'];
+        if (photos is Map) {
+          for (final v in photos.values) {
+            if (v is Map) {
+              final token = v['token'];
+              if (token is String && token.isNotEmpty) return token;
+            }
+          }
+        }
+        final pt = json['photoToken'];
+        if (pt is String && pt.isNotEmpty) return pt;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<int> _readResponse(
