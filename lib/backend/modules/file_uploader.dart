@@ -1,0 +1,249 @@
+import 'dart:async';
+import 'dart:convert' show utf8;
+import 'dart:io';
+
+import '../api.dart';
+import '../../core/config/proxy_config.dart';
+import '../../core/protocol/opcode_map.dart';
+import '../../core/transport/proxy_connector.dart';
+import 'messages.dart';
+
+sealed class UploadEvent {
+  const UploadEvent();
+}
+
+class UploadProgress extends UploadEvent {
+  final int sent;
+  final int total;
+  const UploadProgress({required this.sent, required this.total});
+}
+
+class UploadDone extends UploadEvent {
+  final int fileId;
+  final String? token;
+  final String? url;
+  final String filename;
+  final int size;
+  const UploadDone({
+    required this.fileId,
+    required this.filename,
+    required this.size,
+    this.token,
+    this.url,
+  });
+}
+
+class UploadError extends UploadEvent {
+  final String message;
+  const UploadError(this.message);
+}
+
+class FileUploader {
+  final Api api;
+  final MessagesModule messages;
+
+  FileUploader({required this.api, required this.messages});
+
+  Stream<UploadEvent> upload({
+    required int chatId,
+    required File file,
+    required String filename,
+    required int totalSize,
+    Duration autoForceAfter = const Duration(seconds: 1),
+    Duration overallTimeout = const Duration(minutes: 5),
+    Duration progressThrottle = const Duration(milliseconds: 16),
+  }) {
+    final ctrl = StreamController<UploadEvent>();
+    var cancelled = false;
+    Socket? socket;
+
+    ctrl.onCancel = () {
+      cancelled = true;
+      try {
+        socket?.destroy();
+      } catch (_) {}
+    };
+
+    Future<void> run() async {
+      try {
+        final info = await messages.requestUploadUrl();
+        if (cancelled) return;
+        if (info == null) {
+          ctrl.add(const UploadError('no_upload_url'));
+          return;
+        }
+
+        unawaited(() async {
+          try {
+            await api.sendRequest(Opcode.msgTyping, {
+              'chatId': chatId,
+              'type': 'FILE',
+            });
+          } catch (_) {}
+        }());
+
+        final uri = Uri.parse(info.url);
+        socket = await _openSocket(uri);
+        if (cancelled) return;
+
+        _writeHeaders(socket!, uri, filename, totalSize);
+
+        final stopwatch = Stopwatch()..start();
+        var sent = 0;
+        final body = file.openRead().map((chunk) {
+          sent += chunk.length;
+          if (stopwatch.elapsed >= progressThrottle) {
+            ctrl.add(UploadProgress(sent: sent, total: totalSize));
+            stopwatch.reset();
+          }
+          return chunk;
+        });
+        await socket!.addStream(body);
+        await socket!.flush();
+        if (cancelled) return;
+        ctrl.add(UploadProgress(sent: totalSize, total: totalSize));
+
+        final statusCode = await _readResponse(
+          socket!,
+          autoForceAfter: autoForceAfter,
+          overallTimeout: overallTimeout,
+        );
+        try {
+          socket!.destroy();
+        } catch (_) {}
+        if (cancelled) return;
+
+        if (statusCode != 200 && statusCode != 0) {
+          ctrl.add(UploadError('http_$statusCode'));
+          return;
+        }
+
+        final ok = await messages.sendFileMessage(
+          chatId,
+          info.fileId,
+          token: info.token,
+        );
+        if (cancelled) return;
+        if (!ok) {
+          ctrl.add(const UploadError('send_failed'));
+          return;
+        }
+
+        ctrl.add(UploadDone(
+          fileId: info.fileId,
+          token: info.token,
+          url: info.url,
+          filename: filename,
+          size: totalSize,
+        ));
+      } catch (e) {
+        if (!cancelled) ctrl.add(UploadError(e.toString()));
+      } finally {
+        try {
+          socket?.destroy();
+        } catch (_) {}
+        await ctrl.close();
+      }
+    }
+
+    unawaited(run());
+    return ctrl.stream;
+  }
+
+  Future<Socket> _openSocket(Uri uri) async {
+    final proxySettings = await ProxyConfig.load();
+    final base = proxySettings.isEnabled
+        ? await ProxyConnector(proxySettings).connect(uri.host, uri.port)
+        : await Socket.connect(uri.host, uri.port);
+    if (uri.scheme != 'https') return base;
+    return SecureSocket.secure(
+      base,
+      host: uri.host,
+      onBadCertificate: (_) => true,
+    );
+  }
+
+  void _writeHeaders(Socket socket, Uri uri, String filename, int total) {
+    final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
+    final headers = StringBuffer()
+      ..write('POST $path HTTP/1.1\r\n')
+      ..write('Host: ${uri.host}\r\n')
+      ..write('Content-Type: application/x-binary; charset=x-user-defined\r\n')
+      ..write('Content-Disposition: attachment; filename=$filename\r\n')
+      ..write('Connection: keep-alive\r\n')
+      ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
+      ..write('Content-Range: bytes 0-${total - 1}/$total\r\n')
+      ..write('Content-Length: $total\r\n')
+      ..write('\r\n');
+    socket.add(utf8.encode(headers.toString()));
+  }
+
+  Future<int> _readResponse(
+    Socket socket, {
+    required Duration autoForceAfter,
+    required Duration overallTimeout,
+  }) {
+    final responseBytes = <int>[];
+    final completer = Completer<int>();
+    Timer? force;
+    Timer? overall;
+    StreamSubscription<List<int>>? sub;
+
+    void finish(int code) {
+      if (completer.isCompleted) return;
+      force?.cancel();
+      overall?.cancel();
+      sub?.cancel();
+      completer.complete(code);
+    }
+
+    void fail(Object e) {
+      if (completer.isCompleted) return;
+      force?.cancel();
+      overall?.cancel();
+      sub?.cancel();
+      completer.completeError(e);
+    }
+
+    force = Timer(autoForceAfter, () => finish(0));
+
+    sub = socket.listen(
+      responseBytes.addAll,
+      onError: fail,
+      onDone: () {
+        final code = _parseHttpStatus(responseBytes);
+        if (code == null) {
+          fail(const SocketException('Не удалось прочитать заголовок ответа'));
+        } else {
+          finish(code);
+        }
+      },
+    );
+
+    overall = Timer(overallTimeout, () => fail(TimeoutException('Тайм-аут загрузки')));
+
+    return completer.future;
+  }
+
+  int? _parseHttpStatus(List<int> bytes) {
+    final headerEnd = _findHeaderEnd(bytes);
+    if (headerEnd == -1) return null;
+    final headerStr = utf8.decode(bytes.sublist(0, headerEnd), allowMalformed: true);
+    final statusLine = headerStr.split('\r\n').first;
+    final parts = statusLine.split(' ');
+    if (parts.length < 2) return null;
+    return int.tryParse(parts[1]);
+  }
+
+  int _findHeaderEnd(List<int> bytes) {
+    for (var i = 0; i < bytes.length - 3; i++) {
+      if (bytes[i] == 0x0D &&
+          bytes[i + 1] == 0x0A &&
+          bytes[i + 2] == 0x0D &&
+          bytes[i + 3] == 0x0A) {
+        return i + 4;
+      }
+    }
+    return -1;
+  }
+}

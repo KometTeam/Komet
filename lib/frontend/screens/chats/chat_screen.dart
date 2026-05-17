@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io' show File;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chats.dart';
+import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
+import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
@@ -14,6 +18,22 @@ import '../../../core/config/app_cache_extent.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/attachment_panel.dart';
+
+class _UploadStatus {
+  final bool active;
+  final int sent;
+  final int total;
+
+  const _UploadStatus({
+    this.active = false,
+    this.sent = 0,
+    this.total = 0,
+  });
+
+  bool get awaitingResponse => active && total > 0 && sent >= total;
+  double? get progressValue =>
+      (!active || total == 0 || awaitingResponse) ? null : sent / total;
+}
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -53,6 +73,12 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
+  final ValueNotifier<_UploadStatus> _uploadStatus = ValueNotifier(const _UploadStatus());
+  StreamSubscription<UploadEvent>? _uploadSub;
+  int _tempIdCounter = 0;
+  late final AnimationController _attachAnim;
+
+  String _nextTempId() => 'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
   late AnimationController _shimmerController;
   List<CachedMessage> _messages = [];
   int _myId = 0;
@@ -75,6 +101,12 @@ class _ChatScreenState extends State<ChatScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
+    _attachAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 240),
+    );
+    _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _floatingDateAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -149,7 +181,11 @@ class _ChatScreenState extends State<ChatScreen>
     _floatingDateAnimController.dispose();
     _floatingDate.dispose();
     _hasText.dispose();
+    _showAttachmentPanel.removeListener(_onAttachPanelToggle);
     _showAttachmentPanel.dispose();
+    _uploadSub?.cancel();
+    _uploadStatus.dispose();
+    _attachAnim.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _shimmerController.dispose();
@@ -160,6 +196,14 @@ class _ChatScreenState extends State<ChatScreen>
     final newHasText = _messageController.text.trim().isNotEmpty;
     if (newHasText != _hasText.value) {
       _hasText.value = newHasText;
+    }
+  }
+
+  void _onAttachPanelToggle() {
+    if (_showAttachmentPanel.value) {
+      _attachAnim.forward();
+    } else {
+      _attachAnim.reverse();
     }
   }
 
@@ -182,7 +226,7 @@ class _ChatScreenState extends State<ChatScreen>
     final text = _messageController.text.trim();
     if (text.isEmpty || _myId == 0) return;
 
-    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
 
     try {
@@ -555,33 +599,37 @@ class _ChatScreenState extends State<ChatScreen>
             ],
           ),
         )),
-      body: Stack(
+      body: Column(
         children: [
-          Column(
-            children: [
-              Expanded(
-                child: _isLoading && _messages.isEmpty
-                    ? _buildShimmerLoading()
-                    : _buildMessagesList(),
-              ),
-              _buildInputArea(context),
-            ],
+          Expanded(
+            child: _isLoading && _messages.isEmpty
+                ? _buildShimmerLoading()
+                : _buildMessagesList(),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: _showAttachmentPanel,
-            builder: (context, open, _) {
-              if (!open) return const SizedBox.shrink();
-              return Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AttachmentPanel(
-                  chatId: widget.chatId,
-                  onClose: () => _showAttachmentPanel.value = false,
+          AnimatedBuilder(
+            animation: _attachAnim,
+            builder: (context, _) {
+              if (_attachAnim.value == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: ClipRect(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    heightFactor: Curves.easeOutCubic.transform(_attachAnim.value),
+                    child: Opacity(
+                      opacity: Curves.easeOut.transform(_attachAnim.value),
+                      child: AttachmentPanel(
+                        onClose: () => _showAttachmentPanel.value = false,
+                        onPickFile: _pickAndUploadFile,
+                        onSendById: _sendFileById,
+                      ),
+                    ),
+                  ),
                 ),
               );
             },
           ),
+          _buildInputArea(context),
         ],
       ),
     );
@@ -843,74 +891,147 @@ class _ChatScreenState extends State<ChatScreen>
                     width: 0.5,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                clipBehavior: Clip.hardEdge,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Icon(Symbols.face, color: mutedIcon, size: 24, weight: 400),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Focus(
-                        onKeyEvent: (node, event) {
-                          if (event is KeyDownEvent &&
-                              event.logicalKey == LogicalKeyboardKey.enter &&
-                              !HardwareKeyboard.instance.isShiftPressed) {
-                            if (_hasText.value) _sendMessage();
-                            return KeyEventResult.handled;
-                          }
-                          return KeyEventResult.ignored;
-                        },
-                        child: TextField(
-                          controller: _messageController,
-                          style: TextStyle(color: cs.onSurface, fontSize: 16),
-                          maxLines: null,
-                          keyboardType: TextInputType.multiline,
-                          textAlignVertical: TextAlignVertical.center,
-                          decoration: InputDecoration(
-                            hintText: 'Message',
-                            hintStyle: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 16,
+                    AnimatedBuilder(
+                      animation: _attachAnim,
+                      builder: (context, child) {
+                        final t = _attachAnim.value;
+                        return IgnorePointer(
+                          ignoring: t > 0.5,
+                          child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: child),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(Symbols.face, color: mutedIcon, size: 24, weight: 400),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Focus(
+                                onKeyEvent: (node, event) {
+                                  if (event is KeyDownEvent &&
+                                      event.logicalKey == LogicalKeyboardKey.enter &&
+                                      !HardwareKeyboard.instance.isShiftPressed) {
+                                    if (_hasText.value) _sendMessage();
+                                    return KeyEventResult.handled;
+                                  }
+                                  return KeyEventResult.ignored;
+                                },
+                                child: TextField(
+                                  controller: _messageController,
+                                  style: TextStyle(color: cs.onSurface, fontSize: 16),
+                                  maxLines: null,
+                                  keyboardType: TextInputType.multiline,
+                                  textAlignVertical: TextAlignVertical.center,
+                                  decoration: InputDecoration(
+                                    hintText: 'Message',
+                                    hintStyle: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 16,
+                                    ),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 14,
+                            _AttachButton(
+                              hasText: _hasText,
+                              panelOpen: _showAttachmentPanel,
+                              uploadStatus: _uploadStatus,
+                              mutedIcon: mutedIcon,
+                              cs: cs,
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ),
-                    _AttachButton(
-                      hasText: _hasText,
-                      panelOpen: _showAttachmentPanel,
-                      mutedIcon: mutedIcon,
-                      cs: cs,
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: SizedBox(
+                        height: 54,
+                        child: AnimatedBuilder(
+                          animation: _attachAnim,
+                          builder: (context, child) {
+                            final t = _attachAnim.value;
+                            return IgnorePointer(
+                              ignoring: t < 0.5,
+                              child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
+                            );
+                          },
+                          child: _HistoryStrip(
+                            anim: _attachAnim,
+                            cs: cs,
+                            onTapEntry: _sendHistoryFile,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            ValueListenableBuilder<bool>(
-              valueListenable: _hasText,
-              builder: (context, hasText, _) => Container(
-                width: 54,
-                height: 54,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: hasText ? cs.primary : cs.surfaceContainerHighest,
-                  shape: BoxShape.circle,
-                ),
-                child: GestureDetector(
-                  onTap: hasText ? _sendMessage : null,
-                  child: Icon(
-                    hasText ? Symbols.send : Symbols.mic,
-                    color: hasText ? cs.onPrimary : cs.onSurface,
-                    size: 24,
-                    weight: 400,
+            AnimatedBuilder(
+              animation: _attachAnim,
+              builder: (context, child) {
+                final t = _attachAnim.value;
+                return ClipRect(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: (1 - t).clamp(0.0, 1.0),
+                    child: child,
                   ),
-                ),
+                );
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(width: 8),
+                  AnimatedBuilder(
+                    animation: _attachAnim,
+                    builder: (context, child) {
+                      final t = _attachAnim.value;
+                      return Transform.translate(
+                        offset: Offset(t * 80, 0),
+                        child: Opacity(
+                          opacity: (1 - t * 1.5).clamp(0.0, 1.0),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: _hasText,
+                      builder: (context, hasText, _) => Container(
+                        width: 54,
+                        height: 54,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: hasText ? cs.primary : cs.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                        ),
+                        child: GestureDetector(
+                          onTap: hasText ? _sendMessage : null,
+                          child: Icon(
+                            hasText ? Symbols.send : Symbols.mic,
+                            color: hasText ? cs.onPrimary : cs.onSurface,
+                            size: 24,
+                            weight: 400,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -918,26 +1039,204 @@ class _ChatScreenState extends State<ChatScreen>
       ),
     );
   }
+
+  String _addOptimisticFileMessage(FileAttachment attachment) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final tempId = _nextTempId();
+    final msg = CachedMessage(
+      id: tempId,
+      accountId: _myId,
+      chatId: widget.chatId,
+      senderId: _myId,
+      time: now,
+      status: 'sending',
+      attachments: [attachment],
+    );
+    setState(() {
+      _lastSentId = tempId;
+      _messages.add(msg);
+    });
+    Haptics.send();
+    _scrollToBottom();
+    return tempId;
+  }
+
+  void _updateFileMessageStatus(
+    String tempId,
+    String status, {
+    FileAttachment? attachment,
+  }) {
+    if (!mounted) return;
+    final idx = _messages.indexWhere((m) => m.id == tempId);
+    if (idx == -1) return;
+    final old = _messages[idx];
+    setState(() {
+      _messages[idx] = CachedMessage(
+        id: tempId,
+        accountId: old.accountId,
+        chatId: old.chatId,
+        senderId: old.senderId,
+        text: old.text,
+        time: old.time,
+        status: status,
+        payload: old.payload,
+        attachments: attachment != null ? [attachment] : old.attachments,
+      );
+    });
+  }
+
+  Future<void> _sendHistoryFile(FileHistoryEntry entry) async {
+    final tempId = _addOptimisticFileMessage(FileAttachment(
+      fileId: entry.fileId,
+      fileToken: entry.token,
+      name: entry.filename,
+      size: entry.size,
+    ));
+    _showAttachmentPanel.value = false;
+    try {
+      final ok = await messagesModule.sendFileMessage(
+        widget.chatId,
+        entry.fileId,
+        token: entry.token,
+      );
+      _updateFileMessageStatus(tempId, ok ? 'sent' : 'error');
+    } catch (_) {
+      _updateFileMessageStatus(tempId, 'error');
+    }
+  }
+
+  Future<bool> _sendFileById(int fileId) async {
+    final tempId = _addOptimisticFileMessage(FileAttachment(fileId: fileId));
+    try {
+      final ok = await messagesModule.sendFileMessage(widget.chatId, fileId);
+      if (!mounted) return ok;
+      if (ok) {
+        FileHistoryCache.add(FileHistoryEntry(
+          fileId: fileId,
+          sentAt: DateTime.now(),
+        ));
+        _updateFileMessageStatus(tempId, 'sent');
+        _showAttachmentPanel.value = false;
+      } else {
+        _updateFileMessageStatus(tempId, 'error');
+        showCustomNotification(context, 'Ошибка отправки');
+      }
+      return ok;
+    } catch (e) {
+      _updateFileMessageStatus(tempId, 'error');
+      if (mounted) showCustomNotification(context, 'Ошибка: $e');
+      return false;
+    }
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.path == null) return;
+
+    _showAttachmentPanel.value = false;
+    _uploadStatus.value = _UploadStatus(active: true, total: file.size);
+
+    final tempId = _addOptimisticFileMessage(FileAttachment(
+      name: file.name,
+      size: file.size,
+    ));
+
+    _uploadSub?.cancel();
+    _uploadSub = fileUploader
+        .upload(
+      chatId: widget.chatId,
+      file: File(file.path!),
+      filename: file.name,
+      totalSize: file.size,
+    )
+        .listen(
+      (event) {
+        if (!mounted) return;
+        switch (event) {
+          case UploadProgress(:final sent, :final total):
+            _uploadStatus.value = _UploadStatus(active: true, sent: sent, total: total);
+          case UploadDone(:final fileId, :final token, :final url):
+            FileHistoryCache.add(FileHistoryEntry(
+              fileId: fileId,
+              url: url,
+              token: token,
+              filename: file.name,
+              size: file.size,
+              sentAt: DateTime.now(),
+            ));
+            _updateFileMessageStatus(
+              tempId,
+              'sent',
+              attachment: FileAttachment(
+                fileId: fileId,
+                fileToken: token,
+                name: file.name,
+                size: file.size,
+              ),
+            );
+          case UploadError(:final message):
+            showCustomNotification(context, 'Ошибка: $message');
+            _updateFileMessageStatus(tempId, 'error');
+        }
+      },
+      onDone: () {
+        if (!mounted) return;
+        final inFlight = _messages.firstWhere(
+          (m) => m.id == tempId,
+          orElse: () => CachedMessage(
+            id: '', accountId: 0, chatId: 0, senderId: 0, time: 0,
+          ),
+        );
+        if (inFlight.id == tempId && inFlight.status == 'sending') {
+          _updateFileMessageStatus(tempId, 'error');
+        }
+        _uploadStatus.value = const _UploadStatus();
+        _uploadSub = null;
+      },
+      onError: (Object e) {
+        if (!mounted) return;
+        showCustomNotification(context, 'Ошибка: $e');
+        _updateFileMessageStatus(tempId, 'error');
+        _uploadStatus.value = const _UploadStatus();
+        _uploadSub = null;
+      },
+    );
+  }
 }
 
 class _AttachButton extends StatelessWidget {
   final ValueNotifier<bool> hasText;
   final ValueNotifier<bool> panelOpen;
+  final ValueNotifier<_UploadStatus> uploadStatus;
   final Color mutedIcon;
   final ColorScheme cs;
 
   const _AttachButton({
     required this.hasText,
     required this.panelOpen,
+    required this.uploadStatus,
     required this.mutedIcon,
     required this.cs,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: hasText,
-      builder: (context, isText, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([hasText, panelOpen, uploadStatus]),
+      builder: (context, _) {
+        final isText = hasText.value;
+        final open = panelOpen.value;
+        final status = uploadStatus.value;
+        final iconColor = status.awaitingResponse
+            ? cs.primary
+            : (status.active || open
+                ? cs.onSurfaceVariant.withValues(alpha: 0.5)
+                : mutedIcon);
+        final onTap = (isText || status.active || open)
+            ? null
+            : () => panelOpen.value = true;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: isText ? 0 : 36,
@@ -946,34 +1245,31 @@ class _AttachButton extends StatelessWidget {
             opacity: isText ? 0 : 1,
             child: isText
                 ? const SizedBox.shrink()
-                : ValueListenableBuilder<bool>(
-                    valueListenable: panelOpen,
-                    builder: (context, open, _) => GestureDetector(
-                      onTap: open ? null : () => panelOpen.value = true,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 12),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            if (open)
-                              SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: cs.primary,
-                                ),
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onTap,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (status.active)
+                            SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                value: status.progressValue,
+                                color: cs.primary,
                               ),
-                            Icon(
-                              Symbols.attachment,
-                              color: open
-                                  ? cs.onSurfaceVariant.withValues(alpha: 0.3)
-                                  : mutedIcon,
-                              size: 24,
-                              weight: 400,
                             ),
-                          ],
-                        ),
+                          Icon(
+                            Symbols.attachment,
+                            color: iconColor,
+                            size: 22,
+                            weight: 400,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -981,6 +1277,214 @@ class _AttachButton extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _HistoryStrip extends StatelessWidget {
+  final Animation<double> anim;
+  final ColorScheme cs;
+  final Future<void> Function(FileHistoryEntry entry) onTapEntry;
+
+  const _HistoryStrip({
+    required this.anim,
+    required this.cs,
+    required this.onTapEntry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<FileHistoryEntry>>(
+      valueListenable: FileHistoryCache.notifier,
+      builder: (context, history, _) {
+        if (history.isEmpty) {
+          return Center(
+            child: AnimatedBuilder(
+              animation: anim,
+              builder: (context, _) {
+                final v = anim.value.clamp(0.0, 1.0);
+                return Opacity(
+                  opacity: v,
+                  child: Text(
+                    'история пуста...',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+                );
+              },
+            ),
+          );
+        }
+        return ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          itemCount: history.length,
+          itemBuilder: (ctx, idx) {
+            final e = history[idx];
+        final startInterval = (idx * 0.05).clamp(0.0, 0.45);
+        return AnimatedBuilder(
+          animation: anim,
+          builder: (context, child) {
+            final raw = ((anim.value - startInterval) / 0.45).clamp(0.0, 1.0);
+            final v = Curves.easeOutCubic.transform(raw);
+            return Opacity(
+              opacity: v,
+              child: Transform.translate(
+                offset: Offset(-14 * (1 - v), 0),
+                child: child,
+              ),
+            );
+          },
+          child: Container(
+            width: 54,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
+            ),
+            child: Stack(children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onTapEntry(e),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _iconForFilename(e.filename),
+                        color: cs.onSurfaceVariant,
+                        size: 22,
+                      ),
+                      const SizedBox(height: 2),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: Text(
+                          _labelForEntry(e),
+                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 9),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -2,
+                right: -2,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => FileHistoryCache.remove(e.fileId),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: cs.outlineVariant.withValues(alpha: 0.5),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Icon(
+                      Symbols.close,
+                      size: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        );
+          },
+        );
+      },
+    );
+  }
+}
+
+String _labelForEntry(FileHistoryEntry e) {
+  final n = e.filename;
+  if (n == null || n.isEmpty) return e.fileId.toString();
+  final lastDot = n.lastIndexOf('.');
+  return lastDot > 0 ? n.substring(0, lastDot) : n;
+}
+
+IconData _iconForFilename(String? name) {
+  if (name == null || !name.contains('.')) return Symbols.description;
+  final ext = name.split('.').last.toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+    case 'webp':
+    case 'bmp':
+    case 'heic':
+    case 'heif':
+      return Symbols.image;
+    case 'mp4':
+    case 'mov':
+    case 'avi':
+    case 'mkv':
+    case 'webm':
+    case '3gp':
+      return Symbols.movie;
+    case 'mp3':
+    case 'wav':
+    case 'ogg':
+    case 'flac':
+    case 'm4a':
+    case 'aac':
+      return Symbols.audio_file;
+    case 'pdf':
+      return Symbols.picture_as_pdf;
+    case 'zip':
+    case 'rar':
+    case '7z':
+    case 'tar':
+    case 'gz':
+      return Symbols.folder_zip;
+    case 'doc':
+    case 'docx':
+    case 'txt':
+    case 'rtf':
+    case 'odt':
+    case 'md':
+      return Symbols.article;
+    case 'xls':
+    case 'xlsx':
+    case 'csv':
+      return Symbols.table_chart;
+    case 'ppt':
+    case 'pptx':
+      return Symbols.slideshow;
+    case 'dart':
+    case 'js':
+    case 'ts':
+    case 'py':
+    case 'java':
+    case 'kt':
+    case 'swift':
+    case 'cpp':
+    case 'c':
+    case 'h':
+    case 'rs':
+    case 'go':
+    case 'rb':
+    case 'php':
+    case 'html':
+    case 'css':
+    case 'json':
+    case 'xml':
+    case 'yaml':
+    case 'yml':
+      return Symbols.code;
+    default:
+      return Symbols.description;
   }
 }
 

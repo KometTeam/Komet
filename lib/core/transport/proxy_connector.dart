@@ -6,28 +6,25 @@ import 'dart:typed_data';
 import '../config/proxy_config.dart';
 import '../utils/logger.dart';
 
-/// Устанавливает TCP-соединение через SOCKS5 или HTTP CONNECT прокси.
-/// Возвращает [RawSocket], который никогда не слушался —
-/// его можно передать в [RawSecureSocket.secure].
 class ProxyConnector {
   final ProxySettings settings;
 
   ProxyConnector(this.settings);
 
-  Future<RawSocket> connect(String targetHost, int targetPort) async {
+  Future<Socket> connect(String targetHost, int targetPort) async {
     switch (settings.type) {
       case ProxyType.socks5:
         return _connectSocks5(targetHost, targetPort);
       case ProxyType.httpConnect:
         return _connectHttpConnect(targetHost, targetPort);
       case ProxyType.none:
-        return RawSocket.connect(targetHost, targetPort);
+        return Socket.connect(targetHost, targetPort);
     }
   }
 
   // ── SOCKS5 (RFC 1928) ──────────────────────────────────────────────────
 
-  Future<RawSocket> _connectSocks5(String targetHost, int targetPort) async {
+  Future<Socket> _connectSocks5(String targetHost, int targetPort) async {
     final proxySocket = await RawSocket.connect(settings.host, settings.port);
     logger.i('SOCKS5: подключено к прокси ${settings.host}:${settings.port}');
 
@@ -128,7 +125,7 @@ class ProxyConnector {
 
   // ── HTTP CONNECT ────────────────────────────────────────────────────────
 
-  Future<RawSocket> _connectHttpConnect(
+  Future<Socket> _connectHttpConnect(
     String targetHost,
     int targetPort,
   ) async {
@@ -194,19 +191,13 @@ class ProxyConnector {
     }
   }
 
-  // ── Мост: создаём свежий сокет и проксируем через loopback ─────────────
-
-  /// После handshake proxy-сокет уже прослушан (single-subscription).
-  /// Создаём пару локальных сокетов через loopback и проксируем данные
-  /// между прокси-сокетом и одним концом. Второй конец возвращаем —
-  /// он «свежий» и его можно передать в [RawSecureSocket.secure].
-  Future<RawSocket> _bridgeToFreshSocket(
+  Future<Socket> _bridgeToFreshSocket(
     RawSocket proxySocket,
     _RawSocketIO io,
   ) async {
-    RawServerSocket? server;
+    ServerSocket? server;
     try {
-      server = await RawServerSocket.bind(
+      server = await ServerSocket.bind(
         InternetAddress.loopbackIPv4,
         0,
       );
@@ -215,31 +206,36 @@ class ProxyConnector {
       proxySocket.close();
       rethrow;
     }
-    final clientSide = await RawSocket.connect(
+    final clientFuture = Socket.connect(
       InternetAddress.loopbackIPv4,
       server.port,
     );
     final serverSide = await server.first;
+    final clientSide = await clientFuture;
     await server.close();
 
-    // proxy → local (через уже имеющуюся подписку _RawSocketIO)
     io.onData = (data) {
-      serverSide.write(data);
+      serverSide.add(data);
     };
     io.onClosed = () {
-      serverSide.shutdown(SocketDirection.send);
+      serverSide.close();
     };
 
-    // local → proxy
-    serverSide.listen((event) {
-      if (event == RawSocketEvent.read) {
-        final data = serverSide.read();
-        if (data != null) proxySocket.write(data);
-      } else if (event == RawSocketEvent.readClosed ||
-          event == RawSocketEvent.closed) {
+    serverSide.listen(
+      (data) {
+        unawaited(io.write(data).catchError((Object _) {
+          try {
+            serverSide.destroy();
+          } catch (_) {}
+        }));
+      },
+      onError: (Object _) {
         proxySocket.shutdown(SocketDirection.send);
-      }
-    });
+      },
+      onDone: () {
+        proxySocket.shutdown(SocketDirection.send);
+      },
+    );
 
     // Сливаем данные, буферизованные во время handshake
     io.flushBuffered();

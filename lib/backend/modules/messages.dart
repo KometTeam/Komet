@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
@@ -55,27 +56,93 @@ class FileHistoryEntry {
   final int fileId;
   final String? url;
   final String? token;
+  final String? filename;
+  final int? size;
   final DateTime sentAt;
 
   FileHistoryEntry({
     required this.fileId,
     this.url,
     this.token,
+    this.filename,
+    this.size,
     required this.sentAt,
   });
+
+  Map<String, dynamic> toJson() => {
+        'fileId': fileId,
+        if (url != null) 'url': url,
+        if (token != null) 'token': token,
+        if (filename != null) 'filename': filename,
+        if (size != null) 'size': size,
+        'sentAt': sentAt.millisecondsSinceEpoch,
+      };
+
+  static FileHistoryEntry? fromJson(Map<String, dynamic> j) {
+    final id = j['fileId'];
+    final ts = j['sentAt'];
+    if (id is! int || ts is! int) return null;
+    return FileHistoryEntry(
+      fileId: id,
+      url: j['url'] as String?,
+      token: j['token'] as String?,
+      filename: j['filename'] as String?,
+      size: j['size'] as int?,
+      sentAt: DateTime.fromMillisecondsSinceEpoch(ts),
+    );
+  }
 }
 
 class FileHistoryCache {
-  static final List<FileHistoryEntry> _history = [];
+  static const _prefKey = 'file_history_v1';
+  static const _maxEntries = 50;
 
-  static List<FileHistoryEntry> get history => List.unmodifiable(_history);
+  static final ValueNotifier<List<FileHistoryEntry>> notifier =
+      ValueNotifier(const []);
 
-  static void add(FileHistoryEntry entry) {
-    _history.insert(0, entry);
-    if (_history.length > 50) _history.removeLast();
+  static List<FileHistoryEntry> get history => notifier.value;
+  static bool get isEmpty => notifier.value.isEmpty;
+
+  static SharedPreferences? _prefs;
+
+  static Future<void> load(SharedPreferences prefs) async {
+    _prefs = prefs;
+    final raw = prefs.getString(_prefKey);
+    if (raw == null) return;
+    try {
+      final list = jsonDecode(raw);
+      if (list is! List) return;
+      final entries = <FileHistoryEntry>[];
+      for (final e in list) {
+        if (e is Map) {
+          final entry = FileHistoryEntry.fromJson(Map<String, dynamic>.from(e));
+          if (entry != null) entries.add(entry);
+        }
+      }
+      notifier.value = entries;
+    } catch (_) {}
   }
 
-  static bool get isEmpty => _history.isEmpty;
+  static void add(FileHistoryEntry entry) {
+    final next = [entry, ...notifier.value.where((e) => e.fileId != entry.fileId)];
+    if (next.length > _maxEntries) next.removeRange(_maxEntries, next.length);
+    notifier.value = next;
+    _persist();
+  }
+
+  static void remove(int fileId) {
+    final next = notifier.value.where((e) => e.fileId != fileId).toList();
+    if (next.length == notifier.value.length) return;
+    notifier.value = next;
+    _persist();
+  }
+
+  static void _persist() {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    final encoded = jsonEncode(notifier.value.map((e) => e.toJson()).toList());
+    prefs.setString(_prefKey, encoded);
+  }
 }
 
 class FileUploadInfo {
@@ -393,6 +460,8 @@ class MessagesModule {
     int fileId, {
     String? token,
     bool notify = true,
+    int maxAttempts = 5,
+    Duration retryDelay = const Duration(seconds: 1),
   }) async {
     final payload = {
       'chatId': chatId,
@@ -411,8 +480,16 @@ class MessagesModule {
       'notify': notify,
     };
 
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
-    return response.isOk;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      final response = await _api.sendRequest(Opcode.msgSend, payload);
+      if (response.isOk) return true;
+      final err = response.payload is Map ? response.payload['error'] : null;
+      if (err != 'attachment.not.ready' || attempt == maxAttempts - 1) {
+        return false;
+      }
+      await Future.delayed(retryDelay);
+    }
+    return false;
   }
 
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
