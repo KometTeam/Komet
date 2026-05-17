@@ -5,6 +5,7 @@ import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
 import '../../models/attachment.dart';
+import 'chats.dart' show ChatsModule;
 
 class ContactCache {
   static final Map<int, String> _nameCache = {};
@@ -21,6 +22,7 @@ class ContactCache {
 
   static String? get(int id) => _nameCache[id];
   static String? getAvatar(int id) => _avatarCache[id];
+  static Set<String>? getOptions(int id) => _optionsCache[id];
   static bool isOfficial(int id) => _optionsCache[id]?.contains('OFFICIAL') ?? false;
 }
 
@@ -641,6 +643,7 @@ class MessagesModule {
                 ContactCache.putOptions(contactId, rawOpts.whereType<String>().toSet());
               }
 
+              ChatsModule.applyContactUpdate(contactId);
               return fullName;
             }
           }

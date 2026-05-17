@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
 import 'create_group_flow.dart';
+import '../../widgets/custom_notification.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -60,6 +61,8 @@ class ChatListScreen extends StatefulWidget {
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
+
+enum _DeleteKind { personalLike, ownerGroup, blocked }
 
 class _ChatListScreenState extends State<ChatListScreen>
     with TickerProviderStateMixin {
@@ -166,6 +169,176 @@ class _ChatListScreenState extends State<ChatListScreen>
       _selectedChats.clear();
       _shouldCollapseSearch = false;
     });
+  }
+
+  List<CachedChat> _selectedChatObjects() {
+    if (_selectedChats.isEmpty) return const [];
+    final ids = _selectedChats;
+    return _chats.where((c) => ids.contains(c.id.toString())).toList();
+  }
+
+  _DeleteKind _categorizeChat(CachedChat c, int myId) {
+    if (c.type == 'DIALOG') return _DeleteKind.personalLike;
+    if (c.iAmAdmin(myId)) return _DeleteKind.ownerGroup;
+    return _DeleteKind.blocked;
+  }
+
+  _DeleteKind? _selectionDeleteCategory() {
+    if (_sessionState != SessionState.online) return null;
+    final myId = _profile?.id;
+    if (myId == null) return null;
+    final selected = _selectedChatObjects();
+    if (selected.isEmpty) return null;
+    final cats = selected.map((c) => _categorizeChat(c, myId)).toSet();
+    if (cats.contains(_DeleteKind.blocked)) return null;
+    if (cats.length > 1) return null;
+    return cats.single;
+  }
+
+  Future<void> _onDeleteTap() async {
+    final selectedBefore = _selectedChatObjects();
+    if (selectedBefore.isEmpty) return;
+    final myId = _profile?.id;
+    if (myId == null) return;
+
+    await ChatsModule.refreshChats(api, selectedBefore.map((c) => c.id).toList());
+    if (!mounted) return;
+
+    final selectedAfter = _selectedChatObjects();
+    if (selectedAfter.isEmpty) return;
+    final cats = selectedAfter.map((c) => _categorizeChat(c, myId)).toSet();
+    if (cats.contains(_DeleteKind.blocked) || cats.length > 1) {
+      showCustomNotification(context, 'Статус чатов изменился, попробуйте ещё раз');
+      return;
+    }
+    final kind = cats.single;
+
+    final confirmed = await _showDeleteConfirmDialog(selectedAfter, kind);
+    if (!mounted || confirmed != true) return;
+
+    final errors = <String>[];
+    for (final c in selectedAfter) {
+      final forAll = kind == _DeleteKind.ownerGroup;
+      final err = await ChatsModule.deleteChat(
+        api,
+        chatId: c.id,
+        lastEventTime: c.lastEventTime,
+        forAll: forAll,
+      );
+      if (err != null) errors.add(err);
+    }
+    if (!mounted) return;
+    if (errors.isNotEmpty) {
+      final msg = errors.length == 1
+          ? errors.first
+          : 'Не удалось удалить ${errors.length} чат(ов): ${errors.first}';
+      showCustomNotification(context, msg);
+    }
+    _clearSelection();
+  }
+
+  Future<bool?> _showDeleteConfirmDialog(
+    List<CachedChat> selected,
+    _DeleteKind kind,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final count = selected.length;
+    final single = count == 1 ? selected.first : null;
+
+    String title;
+    String body;
+    String primaryLabel;
+    switch (kind) {
+      case _DeleteKind.personalLike:
+        title = single != null
+            ? 'Удалить чат с ${single.title ?? ''}?'
+            : 'Удалить $count чатов?';
+        body = 'Восстановить переписку не получится';
+        primaryLabel = count == 1 ? 'Удалить чат' : 'Удалить';
+      case _DeleteKind.ownerGroup:
+        title = single != null
+            ? 'Хотите удалить чат «${single.title ?? ''}»?'
+            : 'Удалить $count групп у всех?';
+        body = single != null
+            ? 'Передайте права владельца, чтобы остальные участники могли продолжить общение'
+            : 'Действие нельзя отменить';
+        primaryLabel = count == 1 ? 'Удалить чат у всех' : 'Удалить у всех';
+      case _DeleteKind.blocked:
+        return Future.value(false);
+    }
+
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  body,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                if (kind == _DeleteKind.ownerGroup && single != null) ...[
+                  Container(
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Text(
+                      'Передать права и выйти',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.4),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                GestureDetector(
+                  onTap: () => Navigator.pop(ctx, true),
+                  child: Container(
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: cs.error,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Text(
+                      primaryLabel,
+                      style: TextStyle(
+                        color: cs.onError,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   bool _isInitialLoading = true;
@@ -393,7 +566,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (!mounted) return;
     _contactRebuildTimer?.cancel();
     _contactRebuildTimer = Timer(const Duration(milliseconds: 120), () {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      _cachedChatsBody = null;
+      setState(() {});
     });
   }
 
@@ -1644,10 +1819,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                           ),
                         ),
                         const Spacer(),
-                        IconButton(
-                          icon: Icon(Symbols.delete, color: cs.onSurface),
-                          onPressed: () {},
-                        ),
+                        if (_selectionDeleteCategory() != null)
+                          IconButton(
+                            icon: Icon(Symbols.delete, color: cs.onSurface),
+                            onPressed: _onDeleteTap,
+                          ),
                         IconButton(
                           icon: Icon(Symbols.archive, color: cs.onSurface),
                           onPressed: () {},

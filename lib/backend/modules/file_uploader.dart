@@ -7,6 +7,7 @@ import '../api.dart';
 import '../../core/config/proxy_config.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/transport/proxy_connector.dart';
+import '../../core/utils/logger.dart';
 import 'messages.dart';
 
 sealed class UploadEvent {
@@ -189,7 +190,12 @@ class FileUploader {
     Socket? socket;
     try {
       socket = await _openSocket(uri);
-      _writeHeaders(socket, uri, filename, bytes.length, contentType: 'image/jpeg');
+      _writeImageHeaders(
+        socket,
+        uri,
+        bytes.length,
+        contentType: _contentTypeForFilename(filename),
+      );
       socket.add(bytes);
       await socket.flush();
 
@@ -201,15 +207,60 @@ class FileUploader {
         socket.destroy();
       } catch (_) {}
 
-      if (response == null) return null;
+      if (response == null) {
+        logger.w('uploadImage: empty/timed-out response');
+        return null;
+      }
       final (status, body) = response;
-      if (status != 200) return null;
-      return _parsePhotoToken(body);
-    } catch (_) {
+      if (status != 200) {
+        logger.w('uploadImage: status=$status body=${body.length > 200 ? '${body.substring(0, 200)}…' : body}');
+        return null;
+      }
+      final token = _parsePhotoToken(body);
+      if (token == null) {
+        logger.w('uploadImage: photoToken not found in body=${body.length > 200 ? '${body.substring(0, 200)}…' : body}');
+      }
+      return token;
+    } catch (e) {
+      logger.w('uploadImage: $e');
       try {
         socket?.destroy();
       } catch (_) {}
       return null;
+    }
+  }
+
+  void _writeImageHeaders(Socket socket, Uri uri, int total, {required String contentType}) {
+    final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
+    final headers = StringBuffer()
+      ..write('POST $path HTTP/1.1\r\n')
+      ..write('Host: ${uri.host}\r\n')
+      ..write('Content-Type: $contentType\r\n')
+      ..write('Content-Length: $total\r\n')
+      ..write('Connection: keep-alive\r\n')
+      ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
+      ..write('\r\n');
+    socket.add(utf8.encode(headers.toString()));
+  }
+
+  String _contentTypeForFilename(String filename) {
+    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : '';
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+      case 'heif':
+        return 'image/heic';
+      case 'bmp':
+        return 'image/bmp';
+      case 'jpg':
+      case 'jpeg':
+      default:
+        return 'image/jpeg';
     }
   }
 
@@ -232,10 +283,15 @@ class FileUploader {
         return;
       }
       final headerStr = utf8.decode(bytes.sublist(0, headerEnd), allowMalformed: true);
-      final statusLine = headerStr.split('\r\n').first;
-      final parts = statusLine.split(' ');
+      final lines = headerStr.split('\r\n');
+      final parts = lines.first.split(' ');
       final status = parts.length >= 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
-      final body = utf8.decode(bytes.sublist(headerEnd), allowMalformed: true);
+      final chunked = lines.skip(1).any(
+        (l) => l.toLowerCase().startsWith('transfer-encoding:') &&
+            l.toLowerCase().contains('chunked'),
+      );
+      final rawBody = utf8.decode(bytes.sublist(headerEnd), allowMalformed: true);
+      final body = chunked ? _decodeChunked(rawBody) : rawBody;
       completer.complete((status, body));
     }
 
@@ -248,6 +304,31 @@ class FileUploader {
     sub = socket.listen(bytes.addAll, onError: (_) => fail(), onDone: finish);
     timer = Timer(timeout, fail);
     return completer.future;
+  }
+
+  String _decodeChunked(String body) {
+    final out = StringBuffer();
+    var i = 0;
+    while (i < body.length) {
+      final lineEnd = body.indexOf('\r\n', i);
+      if (lineEnd < 0) break;
+      final sizeStr = body.substring(i, lineEnd).split(';').first.trim();
+      if (sizeStr.isEmpty) {
+        i = lineEnd + 2;
+        continue;
+      }
+      final size = int.tryParse(sizeStr, radix: 16);
+      if (size == null) break;
+      if (size == 0) break;
+      final dataStart = lineEnd + 2;
+      if (dataStart + size > body.length) break;
+      out.write(body.substring(dataStart, dataStart + size));
+      i = dataStart + size;
+      if (i + 2 <= body.length && body.substring(i, i + 2) == '\r\n') {
+        i += 2;
+      }
+    }
+    return out.toString();
   }
 
   String? _parsePhotoToken(String body) {
@@ -266,7 +347,9 @@ class FileUploader {
         final pt = json['photoToken'];
         if (pt is String && pt.isNotEmpty) return pt;
       }
-    } catch (_) {}
+    } catch (e) {
+      logger.w('parsePhotoToken: $e');
+    }
     return null;
   }
 

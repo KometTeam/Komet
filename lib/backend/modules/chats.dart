@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
 import '../../core/protocol/opcode_map.dart';
+import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
+import 'messages.dart' show ContactCache;
 
 Map<int, int> _parseParticipants(dynamic raw) {
   try {
@@ -43,6 +46,8 @@ class CachedChat {
   final int seenTime;
   final Map<int, int> participants;
   final Set<String> options;
+  final int? owner;
+  final Set<int> admins;
 
   CachedChat({
     required this.id,
@@ -63,11 +68,15 @@ class CachedChat {
     required this.seenTime,
     required this.participants,
     this.options = const {},
+    this.owner,
+    this.admins = const {},
   }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
             ? lastMsgText.replaceAll('\n', ' ')
             : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
+
+  bool iAmAdmin(int myId) => owner == myId || admins.contains(myId);
 
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
@@ -88,11 +97,22 @@ class CachedChat {
     seenTime: row['seen_time'] as int,
     participants: _parseParticipants(row['participants']),
     options: _decodeOptions(row['options']),
+    owner: row['owner'] as int?,
+    admins: _decodeAdmins(row['admins']),
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
     if (raw is! String || raw.isEmpty) return const {};
     return raw.split(',').where((s) => s.isNotEmpty).toSet();
+  }
+
+  static Set<int> _decodeAdmins(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return const {};
+    return raw
+        .split(',')
+        .map((s) => int.tryParse(s.trim()))
+        .whereType<int>()
+        .toSet();
   }
 
   Map<String, dynamic> toDbRow() => {
@@ -114,6 +134,8 @@ class CachedChat {
     'seen_time': seenTime,
     'participants': jsonEncode(participants.map((k, v) => MapEntry(k.toString(), v))),
     'options': options.isEmpty ? null : options.join(','),
+    'owner': owner,
+    'admins': admins.isEmpty ? null : admins.join(','),
   };
 }
 
@@ -121,15 +143,68 @@ class ChatsModule {
   static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   static void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
+  static final Set<int> _pendingContactUpdates = {};
+  static Timer? _contactFlushTimer;
+  static const _contactFlushDelay = Duration(milliseconds: 250);
+
+  static void applyContactUpdate(int contactId) {
+    _pendingContactUpdates.add(contactId);
+    _contactFlushTimer ??= Timer(_contactFlushDelay, _flushContactUpdates);
+  }
+
+  static Future<void> _flushContactUpdates() async {
+    _contactFlushTimer = null;
+    if (_pendingContactUpdates.isEmpty) return;
+    final ids = _pendingContactUpdates.toList();
+    _pendingContactUpdates.clear();
+
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+
+    final updates = <Map<String, dynamic>>[];
+    for (final contactId in ids) {
+      final name = ContactCache.get(contactId);
+      if (name == null) continue;
+      final avatar = ContactCache.getAvatar(contactId);
+      final options = ContactCache.getOptions(contactId) ?? const <String>{};
+
+      final rows = await AppDatabase.findDialogChatsByParticipant(
+        accountId,
+        contactId,
+      );
+      for (final row in rows) {
+        final cached = CachedChat.fromDbRow(row);
+        final sameTitle = cached.title == name;
+        final sameAvatar = (cached.iconUrl ?? '') == (avatar ?? '');
+        final sameOptions = cached.options.length == options.length &&
+            cached.options.containsAll(options);
+        if (sameTitle && sameAvatar && sameOptions) continue;
+        final newRow = Map<String, dynamic>.from(row);
+        newRow['title'] = name;
+        newRow['icon_url'] = avatar;
+        newRow['options'] = options.isEmpty ? null : options.join(',');
+        updates.add(newRow);
+      }
+    }
+    if (updates.isNotEmpty) {
+      await AppDatabase.saveChats(updates);
+      _bump();
+    }
+  }
+
   static Future<CachedChat?> cacheServerChat(
     Map<dynamic, dynamic> chat,
     int accountId,
   ) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
-    final existingRows = await AppDatabase.loadChats(accountId);
-    final existing = {
-      for (final row in existingRows) row['id'] as int: CachedChat.fromDbRow(row),
-    };
+    final id = chat['id'];
+    Map<int, CachedChat> existing = const {};
+    if (id is int) {
+      final rows = await AppDatabase.loadChat(accountId, id);
+      if (rows.isNotEmpty) {
+        existing = {id: CachedChat.fromDbRow(rows.first)};
+      }
+    }
     final parsed = _parseChat(
       chat,
       accountId,
@@ -140,7 +215,10 @@ class ChatsModule {
       existing,
       cachedAt,
     );
-    if (parsed == null) return null;
+    if (parsed == null) {
+      logger.w('cacheServerChat: parse returned null for chat=${chat['id']}');
+      return null;
+    }
     await AppDatabase.saveChats([parsed.toDbRow()]);
     _bump();
     return parsed;
@@ -306,6 +384,12 @@ class ChatsModule {
         if (config is Map) {
           favIndex = config['favIndex'] as int?;
           dontDisturbUntil = (config['dontDisturbUntil'] as int?) ?? 0;
+        } else {
+          final ex = existing[id];
+          if (ex != null) {
+            favIndex = ex.favIndex;
+            dontDisturbUntil = ex.dontDisturbUntil;
+          }
         }
 
 
@@ -319,6 +403,31 @@ class ChatsModule {
           }
         }
         Map<int, int> participants = _parseParticipants(chat['participants']);
+
+        int? owner;
+        final ownerRaw = chat['owner'];
+        if (ownerRaw is int) {
+          owner = ownerRaw;
+        } else if (ownerRaw is String) {
+          owner = int.tryParse(ownerRaw);
+        }
+
+        Set<int> admins = const {};
+        final adminsRaw = chat['admins'];
+        if (adminsRaw is List) {
+          admins = adminsRaw
+              .map((e) => e is int ? e : int.tryParse(e.toString()))
+              .whereType<int>()
+              .toSet();
+        } else {
+          final adminParticipants = chat['adminParticipants'];
+          if (adminParticipants is Map) {
+            admins = adminParticipants.keys
+                .map((k) => k is int ? k : int.tryParse(k.toString()))
+                .whereType<int>()
+                .toSet();
+          }
+        }
 
         return CachedChat(
           id: id,
@@ -339,6 +448,8 @@ class ChatsModule {
           seenTime: seenTime,
           participants: participants,
           options: options,
+          owner: owner,
+          admins: admins,
         );
     } catch (e) {
       logger.e("Ошибка при парсинге чата: $e");
@@ -410,13 +521,25 @@ class ChatsModule {
       'notify': notify,
     };
     final packet = await api.sendRequest(Opcode.msgSend, payload);
-    if (!packet.isOk) return null;
+    if (!packet.isOk) {
+      logger.w('createGroupChat: server error payload=${packet.payload}');
+      return null;
+    }
     final data = packet.payload;
-    if (data is! Map) return null;
+    if (data is! Map) {
+      logger.w('createGroupChat: payload is not a Map: $data');
+      return null;
+    }
     final chat = data['chat'];
-    if (chat is! Map) return null;
+    if (chat is! Map) {
+      logger.w('createGroupChat: response has no chat field: $data');
+      return null;
+    }
     final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) return null;
+    if (accountId == null) {
+      logger.w('createGroupChat: no active account id');
+      return null;
+    }
     return cacheServerChat(chat, accountId);
   }
 
@@ -438,5 +561,64 @@ class ChatsModule {
       'photoToken': photoToken,
     });
     return packet.isOk;
+  }
+
+  static Future<String?> deleteChat(
+    Api api, {
+    required int chatId,
+    required int lastEventTime,
+    required bool forAll,
+  }) async {
+    try {
+      await api.sendRequest(Opcode.chatDelete, {
+        'chatId': chatId,
+        'lastEventTime': lastEventTime,
+        'forAll': forAll,
+      });
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        await AppDatabase.deleteChat(chatId, accountId);
+        _bump();
+      }
+      return null;
+    } on PacketError catch (e) {
+      logger.w('deleteChat $chatId: ${e.message}');
+      return e.message;
+    } catch (e) {
+      logger.w('deleteChat $chatId: $e');
+      return 'Не удалось удалить чат';
+    }
+  }
+
+  static Future<List<CachedChat>> refreshChats(
+    Api api,
+    List<int> chatIds,
+  ) async {
+    if (chatIds.isEmpty) return const [];
+    try {
+      final packet = await api.sendRequest(Opcode.chatInfo, {
+        'chatIds': chatIds,
+      });
+      final payload = packet.payload;
+      if (payload is! Map) return const [];
+      final list = payload['chats'];
+      if (list is! List) return const [];
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId == null) return const [];
+      final out = <CachedChat>[];
+      for (final c in list) {
+        if (c is Map) {
+          final cached = await cacheServerChat(c, accountId);
+          if (cached != null) out.add(cached);
+        }
+      }
+      return out;
+    } on PacketError catch (e) {
+      logger.w('refreshChats: ${e.message}');
+      return const [];
+    } catch (e) {
+      logger.w('refreshChats: $e');
+      return const [];
+    }
   }
 }

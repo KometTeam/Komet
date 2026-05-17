@@ -159,7 +159,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 9,
+      version: 10,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -199,6 +199,14 @@ class AppDatabase {
           );
           await db.execute(
             'ALTER TABLE chats_cache ADD COLUMN options TEXT',
+          );
+        }
+        if (oldVersion < 10) {
+          await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN owner INTEGER',
+          );
+          await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN admins TEXT',
           );
         }
       },
@@ -272,6 +280,8 @@ class AppDatabase {
       seen_time       INTEGER NOT NULL DEFAULT 0,
       participants    TEXT NOT NULL DEFAULT "",
       options         TEXT,
+      owner           INTEGER,
+      admins          TEXT,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -458,6 +468,27 @@ class AppDatabase {
       where: 'account_id = ?',
       whereArgs: [accountId],
       orderBy: 'last_event_time DESC',
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> findDialogChatsByParticipant(
+    int accountId,
+    int contactId,
+  ) async {
+    final db = await _instance;
+    return db.query(
+      'chats_cache',
+      where: "account_id = ? AND type = 'DIALOG' AND participants LIKE ?",
+      whereArgs: [accountId, '%"$contactId":%'],
+    );
+  }
+
+  static Future<void> deleteChat(int chatId, int accountId) async {
+    final db = await _instance;
+    await db.delete(
+      'chats_cache',
+      where: 'id = ? AND account_id = ?',
+      whereArgs: [chatId, accountId],
     );
   }
 
