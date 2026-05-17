@@ -471,6 +471,19 @@ class AppDatabase {
     );
   }
 
+  static Future<int?> findDialogChatByParticipant(int accountId, int contactId) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'chats_cache',
+      columns: ['id'],
+      where: "account_id = ? AND type = 'DIALOG' AND participants LIKE ?",
+      whereArgs: [accountId, '%"$contactId":%'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['id'] as int?;
+  }
+
   static Future<List<Map<String, dynamic>>> loadDialogChats(int accountId) async {
     final db = await _instance;
     return db.query(
