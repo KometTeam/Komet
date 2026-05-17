@@ -1126,77 +1126,86 @@ class MessageBubble extends StatelessWidget {
     final size = (file as dynamic).size as int? ?? 0;
     final sizeStr = _formatFileSize(size);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
+    return IntrinsicWidth(
+      child: Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: isMe
-                  ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                  : ctx.cs.primaryContainer,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              Symbols.description,
-              color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: ctx.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                      : ctx.cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  sizeStr,
-                  style: TextStyle(
-                    color: ctx.dim,
-                    fontSize: 12,
-                    height: 1.2,
+                child: Icon(
+                  Symbols.description,
+                  color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        color: ctx.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      sizeStr,
+                      style: TextStyle(
+                        color: ctx.dim,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () {},
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                        : ctx.cs.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Symbols.download,
+                    color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                    size: 18,
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: isMe
-                    ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                    : ctx.cs.surfaceContainerHighest,
-                shape: BoxShape.circle,
               ),
-              child: Icon(
-                Symbols.download,
-                color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-                size: 18,
-              ),
-            ),
+            ],
           ),
+          _buildMeta(ctx),
         ],
       ),
+    ),
     );
   }
 

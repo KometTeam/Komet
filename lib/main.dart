@@ -13,6 +13,7 @@ import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/contacts.dart';
+import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
@@ -29,6 +30,7 @@ import 'frontend/widgets/custom_notification.dart';
 final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
+final fileUploader = FileUploader(api: api, messages: messagesModule);
 
 Future<Locale> _loadInitialLocale() async {
   final prefs = await SharedPreferences.getInstance();
@@ -62,6 +64,7 @@ void main() async {
   await Haptics.load();
 
   final prefs = await SharedPreferences.getInstance();
+  await FileHistoryCache.load(prefs);
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
   final initialTlsInsecure = prefs.getBool(TlsConfig.prefKey) ?? false;
