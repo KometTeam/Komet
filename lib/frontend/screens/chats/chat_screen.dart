@@ -270,6 +270,15 @@ class _ChatScreenState extends State<ChatScreen>
           );
         });
       }
+
+      if (chat == null) {
+        unawaited(
+          ChatsModule.refreshChats(api, [widget.chatId]).then((list) {
+            if (!mounted || list.isEmpty) return;
+            setState(() => chat = list.first);
+          }),
+        );
+      }
     } catch (e) {
       Haptics.error();
       final index = _messages.indexWhere((m) => m.id == tempId);
