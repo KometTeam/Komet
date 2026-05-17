@@ -1,7 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
 
@@ -115,6 +118,34 @@ class CachedChat {
 }
 
 class ChatsModule {
+  static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
+  static void _bump() => chatsChanged.value = chatsChanged.value + 1;
+
+  static Future<CachedChat?> cacheServerChat(
+    Map<dynamic, dynamic> chat,
+    int accountId,
+  ) async {
+    final cachedAt = DateTime.now().millisecondsSinceEpoch;
+    final existingRows = await AppDatabase.loadChats(accountId);
+    final existing = {
+      for (final row in existingRows) row['id'] as int: CachedChat.fromDbRow(row),
+    };
+    final parsed = _parseChat(
+      chat,
+      accountId,
+      accountId,
+      const {},
+      const {},
+      const {},
+      existing,
+      cachedAt,
+    );
+    if (parsed == null) return null;
+    await AppDatabase.saveChats([parsed.toDbRow()]);
+    _bump();
+    return parsed;
+  }
+
   /// Парсит и кэширует чаты из payload opcode 19.
   ///
   /// Для диалогов разрезолвит имя и аватар из списка [contacts] того же
@@ -166,6 +197,7 @@ class ChatsModule {
 
       if (rows.isNotEmpty) {
         await AppDatabase.saveChats(rows);
+        _bump();
       }
     } catch (e) {
       logger.e("Ошибка при синке: $e");
@@ -354,5 +386,57 @@ class ChatsModule {
       'count': 10,
     });
     return packet.payload;
+  }
+
+  static Future<CachedChat?> createGroupChat(
+    Api api, {
+    required String title,
+    required List<int> userIds,
+    bool notify = true,
+  }) async {
+    final payload = {
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch,
+        'attaches': [
+          {
+            '_type': 'CONTROL',
+            'event': 'new',
+            'chatType': 'CHAT',
+            'title': title,
+            'userIds': userIds,
+          },
+        ],
+      },
+      'notify': notify,
+    };
+    final packet = await api.sendRequest(Opcode.msgSend, payload);
+    if (!packet.isOk) return null;
+    final data = packet.payload;
+    if (data is! Map) return null;
+    final chat = data['chat'];
+    if (chat is! Map) return null;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return null;
+    return cacheServerChat(chat, accountId);
+  }
+
+  static Future<String?> requestChatPhotoUploadUrl(Api api) async {
+    final packet = await api.sendRequest(Opcode.photoUpload, {'count': 1});
+    if (!packet.isOk) return null;
+    final data = packet.payload;
+    if (data is! Map) return null;
+    return data['url'] as String?;
+  }
+
+  static Future<bool> setChatPhoto(
+    Api api, {
+    required int chatId,
+    required String photoToken,
+  }) async {
+    final packet = await api.sendRequest(Opcode.chatUpdate, {
+      'chatId': chatId,
+      'photoToken': photoToken,
+    });
+    return packet.isOk;
   }
 }
