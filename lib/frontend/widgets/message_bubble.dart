@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
+import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
+import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/haptics.dart';
 import '../../models/attachment.dart';
 
@@ -196,71 +198,21 @@ class MessageBubble extends StatelessWidget {
 
   BorderRadius _borderRadiusFor(
     BubbleStyle bubbleStyle,
+    BubbleBehavior bubbleBehavior,
     BubbleShape shape,
     bool hasPhotoWithCaption,
     bool hasMultiplePhotosNoCaption,
   ) {
-    final outsideRadius =
-        bubbleStyle == BubbleStyle.mobile ? _bigRadius : _smallRadius;
-
-    if (hasPhotoWithCaption &&
-        (shape == BubbleShape.singleTop ||
-            shape == BubbleShape.singleMiddle ||
-            shape == BubbleShape.singleBottom)) {
-      return BorderRadius.only(
-        topLeft: _bigRadius,
-        topRight: _bigRadius,
-        bottomLeft: isMe ? _bigRadius : _smallRadius,
-        bottomRight: _smallRadius,
-      );
-    }
-
-    if (hasMultiplePhotosNoCaption &&
-        (shape == BubbleShape.singleBottom ||
-            shape == BubbleShape.singleMiddle)) {
-      return BorderRadius.only(
-        topLeft: isMe ? _bigRadius : _smallRadius,
-        topRight: _smallRadius,
-        bottomLeft: isMe ? _bigRadius : _smallRadius,
-        bottomRight: isMe ? _smallRadius : _bigRadius,
-      );
-    }
-
-    Radius cornerTL = isMe ? outsideRadius : _bigRadius;
-    Radius cornerTR = isMe ? _bigRadius : outsideRadius;
-    Radius cornerBL = isMe ? outsideRadius : _bigRadius;
-    Radius cornerBR = isMe ? _bigRadius : outsideRadius;
-
-    switch (shape) {
-      case BubbleShape.singleTop:
-        if (isMe) {
-          cornerBR = _smallRadius;
-        } else {
-          cornerBL = _smallRadius;
-        }
-      case BubbleShape.singleBottom:
-        if (isMe) {
-          cornerTR = _smallRadius;
-        } else {
-          cornerTL = _smallRadius;
-        }
-      case BubbleShape.singleMiddle:
-        break;
-      case BubbleShape.groupedMiddle:
-        if (isMe) {
-          cornerTR = _smallRadius;
-          cornerBR = _smallRadius;
-        } else {
-          cornerTL = _smallRadius;
-          cornerBL = _smallRadius;
-        }
-    }
-
-    return BorderRadius.only(
-      topLeft: cornerTL,
-      topRight: cornerTR,
-      bottomLeft: cornerBL,
-      bottomRight: cornerBR,
+    final isTop = shape == BubbleShape.singleTop || shape == BubbleShape.singleMiddle;
+    final isBottom = shape == BubbleShape.singleBottom || shape == BubbleShape.singleMiddle;
+    return computeBubbleRadius(
+      isMe: isMe,
+      isTop: isTop,
+      isBottom: isBottom,
+      style: bubbleStyle,
+      behavior: bubbleBehavior,
+      hasPhotoWithCaption: hasPhotoWithCaption,
+      hasMultiplePhotosNoCaption: hasMultiplePhotosNoCaption,
     );
   }
 
@@ -352,9 +304,11 @@ class MessageBubble extends StatelessWidget {
                   radius: 15,
                   backgroundColor: Color(0x00000000),
                 ),
-              ValueListenableBuilder<BubbleStyle>(
-                valueListenable: AppBubbleShape.current,
-                builder: (context, bubbleStyle, child) {
+              ListenableBuilder(
+                listenable: Listenable.merge(
+                  [AppBubbleShape.current, AppBubbleBehavior.current],
+                ),
+                builder: (context, child) {
                   return Container(
                     constraints: BoxConstraints(
                       maxWidth: MediaQuery.sizeOf(context).width * 0.75,
@@ -364,7 +318,8 @@ class MessageBubble extends StatelessWidget {
                           ? cs.primaryContainer
                           : cs.surfaceContainerHighest,
                       borderRadius: _borderRadiusFor(
-                        bubbleStyle,
+                        AppBubbleShape.current.value,
+                        AppBubbleBehavior.current.value,
                         shape,
                         hasPhotoCap,
                         hasMultiPhotos,

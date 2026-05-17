@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/config/app_accent.dart';
+import 'core/config/app_bubble_behavior.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
@@ -75,6 +76,7 @@ void main() async {
   );
   final initialAccentSeed = await AppAccent.load();
   AppBubbleShape.current.value = await AppBubbleShape.load();
+  AppBubbleBehavior.current.value = await AppBubbleBehavior.load();
   AppCacheExtent.current.value = await AppCacheExtent.load();
   runApp(
     KometApp(

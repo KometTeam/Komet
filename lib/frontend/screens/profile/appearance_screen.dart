@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/config/app_bubble_behavior.dart';
 import '../../../core/config/app_bubble_shape.dart';
+import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
 
@@ -70,6 +72,11 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
     AppBubbleShape.save(style);
   }
 
+  void _onBehaviorChanged(BubbleBehavior behavior) {
+    Haptics.selection();
+    AppBubbleBehavior.save(behavior);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -98,6 +105,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             ),
             const SizedBox(height: 12),
             _BubbleShapeCard(onChanged: _onStyleChanged),
+            const SizedBox(height: 12),
+            _BubbleBehaviorCard(onChanged: _onBehaviorChanged),
           ],
         ),
       ),
@@ -168,54 +177,84 @@ class _PreviewSectionState extends State<_PreviewSection> {
 class _ChatPreview extends StatelessWidget {
   const _ChatPreview();
 
+  static const _messages = <_PreviewMsg>[
+    _PreviewMsg('Привет!', true, true, false),
+    _PreviewMsg('Как тебе?', true, false, true),
+    _PreviewMsg('Привет!', false, true, false),
+    _PreviewMsg('хм...', false, false, false),
+    _PreviewMsg('Вполне неплохо!', false, false, true),
+  ];
+
+  BorderRadius _radiusFor(
+    _PreviewMsg msg,
+    BubbleStyle style,
+    BubbleBehavior behavior,
+  ) {
+    return computeBubbleRadius(
+      isMe: msg.isMe,
+      isTop: msg.isTop,
+      isBottom: msg.isBottom,
+      style: style,
+      behavior: behavior,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return ValueListenableBuilder<BubbleStyle>(
-      valueListenable: AppBubbleShape.current,
-      builder: (context, style, _) => Container(
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _PreviewBubble(text: 'Как тебе?', isMe: true, style: style),
-            const SizedBox(height: 6),
-            _PreviewBubble(text: 'отлично выглядит!', isMe: false, style: style),
-          ],
-        ),
+    return ListenableBuilder(
+      listenable: Listenable.merge(
+        [AppBubbleShape.current, AppBubbleBehavior.current],
       ),
+      builder: (context, _) {
+        final style = AppBubbleShape.current.value;
+        final behavior = AppBubbleBehavior.current.value;
+        return Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < _messages.length; i++) ...[
+                if (i > 0)
+                  SizedBox(height: _messages[i].isTop ? 8 : 2),
+                _PreviewBubble(
+                  text: _messages[i].text,
+                  isMe: _messages[i].isMe,
+                  radius: _radiusFor(_messages[i], style, behavior),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
+}
+
+class _PreviewMsg {
+  final String text;
+  final bool isMe;
+  final bool isTop;
+  final bool isBottom;
+  const _PreviewMsg(this.text, this.isMe, this.isTop, this.isBottom);
 }
 
 class _PreviewBubble extends StatelessWidget {
   final String text;
   final bool isMe;
-  final BubbleStyle style;
+  final BorderRadius radius;
 
   const _PreviewBubble({
     required this.text,
     required this.isMe,
-    required this.style,
+    required this.radius,
   });
-
-  BorderRadius get _radius {
-    const big = Radius.circular(20);
-    const small = Radius.circular(4);
-    final outside = style == BubbleStyle.mobile ? big : small;
-    return BorderRadius.only(
-      topLeft: isMe ? outside : big,
-      topRight: isMe ? big : outside,
-      bottomLeft: isMe ? outside : big,
-      bottomRight: isMe ? big : outside,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +269,7 @@ class _PreviewBubble extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 220),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(color: bg, borderRadius: _radius),
+        decoration: BoxDecoration(color: bg, borderRadius: radius),
         child: Text(
           text,
           style: TextStyle(color: fg, fontSize: 15, height: 1.3),
@@ -428,6 +467,67 @@ class _BubbleShapeCard extends StatelessWidget {
                       value: BubbleStyle.desktop,
                       label: Text('TG Desktop'),
                       icon: Icon(Symbols.desktop_windows),
+                    ),
+                  ],
+                  selected: {current},
+                  onSelectionChanged: (set) {
+                    if (set.isNotEmpty) onChanged(set.first);
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BubbleBehaviorCard extends StatelessWidget {
+  final ValueChanged<BubbleBehavior> onChanged;
+
+  const _BubbleBehaviorCard({required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Поведение сообщения',
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Меняется ли форма пузыря по соседям в группе',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            ValueListenableBuilder<BubbleBehavior>(
+              valueListenable: AppBubbleBehavior.current,
+              builder: (context, current, _) {
+                return SegmentedButton<BubbleBehavior>(
+                  segments: const [
+                    ButtonSegment(
+                      value: BubbleBehavior.mutable,
+                      label: Text('Изменяемая'),
+                      icon: Icon(Symbols.auto_fix),
+                    ),
+                    ButtonSegment(
+                      value: BubbleBehavior.immutable,
+                      label: Text('Неизменяемая'),
+                      icon: Icon(Symbols.lock),
                     ),
                   ],
                   selected: {current},

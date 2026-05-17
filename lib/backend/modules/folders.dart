@@ -179,6 +179,57 @@ class FoldersModule {
     await markFoldersListReady(accountId);
   }
 
+  static Future<ChatFolder?> setFolderFavorites(
+    Api api,
+    int accountId,
+    ChatFolder folder,
+    List<int> favorites,
+  ) async {
+    final packet = await api.sendRequest(Opcode.foldersUpdate, {
+      'id': folder.id,
+      'title': folder.title,
+      'include': folder.include ?? const [],
+      'favorites': favorites,
+      'filters': folder.filters,
+      'options': folder.options ?? const [],
+    });
+    if (packet.isError) {
+      throw PacketError(messageFromErrorPayload(packet.payload));
+    }
+    final data = packet.payload;
+    if (data is! Map) return null;
+    final folderJson = data['folder'];
+    if (folderJson is! Map) return null;
+    final updated = ChatFolder.fromJson(
+      folderJson is Map<String, dynamic>
+          ? folderJson
+          : Map<String, dynamic>.from(folderJson),
+    );
+
+    final currentRaw = await AppDatabase.getSyncValue(accountId, _syncKey);
+    final snapshot = (currentRaw != null && currentRaw.isNotEmpty)
+        ? jsonDecode(currentRaw) as Map<String, dynamic>
+        : <String, dynamic>{};
+    final existing = (snapshot['folders'] as List?)
+            ?.map((e) {
+              final m = e is Map<String, dynamic>
+                  ? e
+                  : Map<String, dynamic>.from(e as Map);
+              return ChatFolder.fromJson(m);
+            })
+            .toList() ??
+        <ChatFolder>[];
+    final idx = existing.indexWhere((f) => f.id == updated.id);
+    if (idx >= 0) {
+      existing[idx] = updated;
+    } else {
+      existing.add(updated);
+    }
+    final order = snapshot['foldersOrder'] as List<dynamic>?;
+    await _persist(accountId, existing, order);
+    return updated;
+  }
+
   static Future<void> syncFromServer(Api api, int accountId) async {
     try {
       final packet = await api.sendRequest(Opcode.foldersGet, {
