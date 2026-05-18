@@ -5,6 +5,7 @@ import '../core/config/config.dart';
 import '../core/config/countries.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
+import '../core/storage/device_identity.dart';
 import '../core/storage/spoofing_service.dart';
 import '../core/transport/connection.dart';
 import '../core/transport/dispatcher.dart';
@@ -170,7 +171,7 @@ class Api {
     String timezone = timeZoneName.identifier;
     String locale = 'ru';
     String deviceLocale = Platform.localeName.substring(0, 2);
-    String deviceId = 'a1b2c3d4e5f6a7b8';
+    String deviceId = await DeviceIdentity.deviceId();
 
     if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
@@ -242,8 +243,8 @@ class Api {
     };
 
     final payload = <dynamic, dynamic>{
-      'mt_instanceid': '550e8400-e29b-41d4-a716-446655440000',
-      'clientSessionId': 42,
+      'mt_instanceid': await DeviceIdentity.instanceId(),
+      'clientSessionId': DeviceIdentity.clientSessionId,
       'deviceId': deviceId,
       'userAgent': _userAgent,
     };

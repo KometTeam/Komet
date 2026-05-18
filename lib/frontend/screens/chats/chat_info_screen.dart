@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/storage/app_database.dart';
@@ -47,6 +48,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   int _myId = 0;
   bool _isLoading = true;
+  bool _extraContactExpanded = false;
   Map<String, dynamic>? _chatData;
   String _selectedTab = '';
   bool _descExpanded = false;
@@ -56,6 +58,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   Map<String, dynamic>? _contactData;
   int? _seenTime;
   bool _isOnline = false;
+  int _presenceStatus = 0;
   bool _isBot = false;
 
   // CHAT
@@ -142,7 +145,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           final p = presence?[_otherId.toString()] ?? presence?[_otherId];
           if (p is Map) {
             _seenTime = p['seen'] as int?;
-            _isOnline = ((p['status'] as int?) ?? 0) > 0;
+            final st = (p['status'] as int?) ?? 0;
+            _presenceStatus = st;
+            _isOnline = st == 1;
           }
         }
       }
@@ -181,7 +186,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       _onlineCount = 0;
       _members = memberIds.map((id) {
         final pres = presenceMap[id];
-        final online = ((pres?['status'] as int?) ?? 0) > 0;
+        final online = (pres?['status'] as int?) == 1;
         if (online) _onlineCount++;
         final isAdmin =
             admins.containsKey(id.toString()) || admins.containsKey(id);
@@ -326,7 +331,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       case 'DIALOG':
         if (_isBot) return 'Бот';
         if (_isOnline) return 'В сети';
-        if (_seenTime != null) return _formatLastSeen(_seenTime!);
+        if (_presenceStatus == 3) return 'был(-а) недавно';
+        if (_seenTime != null && _seenTime! > 0) {
+          return 'был(-а) ${_formatLastSeen(_seenTime!)}';
+        }
         return '';
       case 'CHAT':
         final total =
@@ -921,34 +929,121 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13));
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (int i = 0; i < rows.length; i++) ...[
-          _infoRow(cs, rows[i].label, rows[i].value),
-          if (i < rows.length - 1)
-            Divider(
-                height: 10,
-                color: cs.outlineVariant.withValues(alpha: 0.25)),
+    final extraRows = _buildExtraContactRows();
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (int i = 0; i < rows.length; i++) ...[
+            _infoRow(
+              cs,
+              rows[i].label,
+              rows[i].value,
+              trailing: _trailingFor(rows[i].label, cs),
+            ),
+            if (i < rows.length - 1 || (_extraContactExpanded && extraRows.isNotEmpty))
+              Divider(
+                  height: 10,
+                  color: cs.outlineVariant.withValues(alpha: 0.25)),
+          ],
+          if (_extraContactExpanded)
+            for (int i = 0; i < extraRows.length; i++) ...[
+              _infoRow(cs, extraRows[i].label, extraRows[i].value),
+              if (i < extraRows.length - 1)
+                Divider(
+                    height: 10,
+                    color: cs.outlineVariant.withValues(alpha: 0.25)),
+            ],
         ],
-      ],
+      ),
     );
   }
 
-  Widget _infoRow(ColorScheme cs, String label, String value) {
+  List<({String label, String value})> _buildExtraContactRows() {
+    final c = _contactData;
+    if (c == null) return const [];
+    final rows = <({String label, String value})>[];
+    final reg = c['registrationTime'];
+    if (reg is int && reg > 0) {
+      rows.add((label: 'Регистрация', value: _formatTs(reg)));
+    }
+    final upd = c['updateTime'];
+    if (upd is int && upd > 0) {
+      rows.add((label: 'Обновлён', value: _formatTs(upd)));
+    }
+    final country = c['country'];
+    if (country is String && country.isNotEmpty) {
+      rows.add((label: 'Страна', value: country));
+    }
+    final gender = c['gender'];
+    if (gender is int) {
+      final g = gender == 1 ? 'Мужской' : (gender == 2 ? 'Женский' : null);
+      if (g != null) rows.add((label: 'Пол', value: g));
+    }
+    final phone = c['phone'];
+    if (phone is int && phone > 0) {
+      rows.add((label: 'Телефон', value: '+$phone'));
+    } else if (phone is String && phone.isNotEmpty && phone != '***') {
+      rows.add((label: 'Телефон', value: phone));
+    }
+    final accStatus = c['accountStatus'];
+    if (accStatus is int && accStatus != 0) {
+      rows.add((label: 'Статус аккаунта', value: accStatus.toString()));
+    }
+    final opts = c['options'];
+    if (opts is List && opts.isNotEmpty) {
+      rows.add((label: 'Флаги', value: opts.whereType<String>().join(', ')));
+    }
+    final link = c['link'];
+    if (link is String && link.isNotEmpty) {
+      rows.add((label: 'Ссылка', value: link));
+    }
+    return rows;
+  }
+
+  Widget? _trailingFor(String label, ColorScheme cs) {
+    if (label != 'ID чата') return null;
+    if (widget.chatType != 'DIALOG') return null;
+    if (_contactData == null) return null;
+    return IconButton(
+      tooltip: _extraContactExpanded ? 'Скрыть' : 'Подробнее',
+      icon: AnimatedRotation(
+        turns: _extraContactExpanded ? 0.125 : 0,
+        duration: const Duration(milliseconds: 220),
+        child: Icon(Symbols.add_circle, color: cs.primary, size: 22),
+      ),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      onPressed: () => setState(() => _extraContactExpanded = !_extraContactExpanded),
+    );
+  }
+
+  Widget _infoRow(ColorScheme cs, String label, String value, {Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10)),
-          Text(value,
-              style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10)),
+                Text(value,
+                    style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          ?trailing,
         ],
       ),
     );
@@ -986,8 +1081,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   // ─── HELPERS ─────────────────────────────────────────────────────────────
 
-  String _formatLastSeen(int ms) {
-    final diff = DateTime.now().millisecondsSinceEpoch - ms;
+  String _formatLastSeen(int secondsSinceEpoch) {
+    final diff = DateTime.now().millisecondsSinceEpoch - secondsSinceEpoch * 1000;
     if (diff < 60000) return 'только что';
     if (diff < 3600000) return '${diff ~/ 60000} мин назад';
     if (diff < 86400000) return '${diff ~/ 3600000} ч назад';

@@ -10,8 +10,8 @@ const int _maxDecompressedSize = 1048576; // 1 MB
 
 /// Типы команд в протоколе
 abstract class CmdType {
-  static const int request = 0; // запрос клиента
-  static const int push = 1; // пуш от сервера
+  static const int request = 0; // запрос клиента / пуш от сервера (направление определяет смысл)
+  static const int push = 0; // пуш от сервера (имеет смысл только для incoming)
 
   static const int ok = 1; // ответ: ок
   static const int notFound = 2; // ответ: не найдено

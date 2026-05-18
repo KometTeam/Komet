@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
+import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
+import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/haptics.dart';
 import '../../models/attachment.dart';
 
@@ -196,71 +198,21 @@ class MessageBubble extends StatelessWidget {
 
   BorderRadius _borderRadiusFor(
     BubbleStyle bubbleStyle,
+    BubbleBehavior bubbleBehavior,
     BubbleShape shape,
     bool hasPhotoWithCaption,
     bool hasMultiplePhotosNoCaption,
   ) {
-    final outsideRadius =
-        bubbleStyle == BubbleStyle.mobile ? _bigRadius : _smallRadius;
-
-    if (hasPhotoWithCaption &&
-        (shape == BubbleShape.singleTop ||
-            shape == BubbleShape.singleMiddle ||
-            shape == BubbleShape.singleBottom)) {
-      return BorderRadius.only(
-        topLeft: _bigRadius,
-        topRight: _bigRadius,
-        bottomLeft: isMe ? _bigRadius : _smallRadius,
-        bottomRight: _smallRadius,
-      );
-    }
-
-    if (hasMultiplePhotosNoCaption &&
-        (shape == BubbleShape.singleBottom ||
-            shape == BubbleShape.singleMiddle)) {
-      return BorderRadius.only(
-        topLeft: isMe ? _bigRadius : _smallRadius,
-        topRight: _smallRadius,
-        bottomLeft: isMe ? _bigRadius : _smallRadius,
-        bottomRight: isMe ? _smallRadius : _bigRadius,
-      );
-    }
-
-    Radius cornerTL = isMe ? outsideRadius : _bigRadius;
-    Radius cornerTR = isMe ? _bigRadius : outsideRadius;
-    Radius cornerBL = isMe ? outsideRadius : _bigRadius;
-    Radius cornerBR = isMe ? _bigRadius : outsideRadius;
-
-    switch (shape) {
-      case BubbleShape.singleTop:
-        if (isMe) {
-          cornerBR = _smallRadius;
-        } else {
-          cornerBL = _smallRadius;
-        }
-      case BubbleShape.singleBottom:
-        if (isMe) {
-          cornerTR = _smallRadius;
-        } else {
-          cornerTL = _smallRadius;
-        }
-      case BubbleShape.singleMiddle:
-        break;
-      case BubbleShape.groupedMiddle:
-        if (isMe) {
-          cornerTR = _smallRadius;
-          cornerBR = _smallRadius;
-        } else {
-          cornerTL = _smallRadius;
-          cornerBL = _smallRadius;
-        }
-    }
-
-    return BorderRadius.only(
-      topLeft: cornerTL,
-      topRight: cornerTR,
-      bottomLeft: cornerBL,
-      bottomRight: cornerBR,
+    final isTop = shape == BubbleShape.singleTop || shape == BubbleShape.singleMiddle;
+    final isBottom = shape == BubbleShape.singleBottom || shape == BubbleShape.singleMiddle;
+    return computeBubbleRadius(
+      isMe: isMe,
+      isTop: isTop,
+      isBottom: isBottom,
+      style: bubbleStyle,
+      behavior: bubbleBehavior,
+      hasPhotoWithCaption: hasPhotoWithCaption,
+      hasMultiplePhotosNoCaption: hasMultiplePhotosNoCaption,
     );
   }
 
@@ -352,9 +304,11 @@ class MessageBubble extends StatelessWidget {
                   radius: 15,
                   backgroundColor: Color(0x00000000),
                 ),
-              ValueListenableBuilder<BubbleStyle>(
-                valueListenable: AppBubbleShape.current,
-                builder: (context, bubbleStyle, child) {
+              ListenableBuilder(
+                listenable: Listenable.merge(
+                  [AppBubbleShape.current, AppBubbleBehavior.current],
+                ),
+                builder: (context, child) {
                   return Container(
                     constraints: BoxConstraints(
                       maxWidth: MediaQuery.sizeOf(context).width * 0.75,
@@ -364,7 +318,8 @@ class MessageBubble extends StatelessWidget {
                           ? cs.primaryContainer
                           : cs.surfaceContainerHighest,
                       borderRadius: _borderRadiusFor(
-                        bubbleStyle,
+                        AppBubbleShape.current.value,
+                        AppBubbleBehavior.current.value,
                         shape,
                         hasPhotoCap,
                         hasMultiPhotos,
@@ -1126,77 +1081,86 @@ class MessageBubble extends StatelessWidget {
     final size = (file as dynamic).size as int? ?? 0;
     final sizeStr = _formatFileSize(size);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
+    return IntrinsicWidth(
+      child: Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: isMe
-                  ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                  : ctx.cs.primaryContainer,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              Symbols.description,
-              color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: ctx.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                      : ctx.cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  sizeStr,
-                  style: TextStyle(
-                    color: ctx.dim,
-                    fontSize: 12,
-                    height: 1.2,
+                child: Icon(
+                  Symbols.description,
+                  color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        color: ctx.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      sizeStr,
+                      style: TextStyle(
+                        color: ctx.dim,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () {},
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                        : ctx.cs.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Symbols.download,
+                    color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                    size: 18,
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: isMe
-                    ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                    : ctx.cs.surfaceContainerHighest,
-                shape: BoxShape.circle,
               ),
-              child: Icon(
-                Symbols.download,
-                color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-                size: 18,
-              ),
-            ),
+            ],
           ),
+          _buildMeta(ctx),
         ],
       ),
+    ),
     );
   }
 

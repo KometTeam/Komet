@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../config/proxy_config.dart';
 import '../utils/logger.dart';
 import 'proxy_connector.dart';
+import 'tls_config.dart';
 import 'vpn_bypass.dart';
 
 enum SocketState { disconnected, connecting, connected }
@@ -12,8 +13,8 @@ enum SocketState { disconnected, connecting, connected }
 /// Обёртка над TCP + TLS сокетом.
 /// Отдаёт сырые байты через [dataStream], сборкой пакетов занимается [PacketReceiver].
 class Connection {
-  RawSecureSocket? _socket;
-  StreamSubscription<RawSocketEvent>? _subscription;
+  SecureSocket? _socket;
+  StreamSubscription<Uint8List>? _subscription;
   SocketState _state = SocketState.disconnected;
 
   final _dataController = StreamController<Uint8List>.broadcast();
@@ -62,18 +63,7 @@ class Connection {
       logger.i('Подключено к $host:$port');
 
       _subscription = _socket!.listen(
-        (event) {
-          if (event == RawSocketEvent.read) {
-            final data = _socket?.read();
-            if (data != null) {
-              _dataController.add(data);
-            }
-          } else if (event == RawSocketEvent.readClosed ||
-              event == RawSocketEvent.closed) {
-            logger.w('Сокет закрыт сервером');
-            disconnect();
-          }
-        },
+        (data) => _dataController.add(data),
         onError: (Object error) {
           logger.e('Ошибка сокета: $error');
           disconnect();
@@ -90,34 +80,41 @@ class Connection {
     }
   }
 
-  Future<RawSecureSocket> _openSecureSocket(
+  Future<SecureSocket> _openSecureSocket(
     String host,
     int port,
     ProxySettings proxySettings, {
     Duration? timeout,
   }) async {
-    RawSocket rawSocket;
+    Socket socket;
     if (proxySettings.isEnabled) {
       final connector = ProxyConnector(proxySettings);
-      rawSocket = await connector.connect(host, port);
+      socket = await connector.connect(host, port);
       logger.i('Подключено через прокси ${proxySettings.type.name}');
     } else {
-      rawSocket = timeout == null
-          ? await RawSocket.connect(host, port)
-          : await RawSocket.connect(host, port, timeout: timeout);
+      socket = timeout == null
+          ? await Socket.connect(host, port)
+          : await Socket.connect(host, port, timeout: timeout);
     }
-    return RawSecureSocket.secure(
-      rawSocket,
-      host: host,
-      onBadCertificate: (_) => true,
-    );
+    final allowInsecure = await TlsConfig.isInsecureAllowed();
+    if (allowInsecure) {
+      logger.w(
+        'TLS: проверка сертификата отключена (дебаг) — соединение уязвимо к MitM',
+      );
+      return SecureSocket.secure(
+        socket,
+        host: host,
+        onBadCertificate: (_) => true,
+      );
+    }
+    return SecureSocket.secure(socket, host: host);
   }
 
   void write(Uint8List data) {
     if (_socket == null || !isConnected) {
       throw StateError('Нельзя писать: сокет не подключён');
     }
-    _socket!.write(data);
+    _socket!.add(data);
   }
 
   Future<void> disconnect() async {
@@ -128,7 +125,7 @@ class Connection {
 
     if (socket != null) {
       try {
-        socket.close();
+        await socket.close();
       } catch (e) {
         logger.w('Ошибка при закрытии сокета: $e');
       }

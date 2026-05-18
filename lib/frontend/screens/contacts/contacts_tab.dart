@@ -1,8 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/protocol/opcode_map.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../backend/modules/contacts.dart';
+import '../../../main.dart';
+import 'contact_profile_screen.dart';
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key});
@@ -19,6 +23,19 @@ class _ContactsTabState extends State<ContactsTab> {
   void initState() {
     super.initState();
     _loadContacts();
+  }
+
+  Future<void> _openSearchById() async {
+    final cs = Theme.of(context).colorScheme;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _SearchContactSheet(),
+    );
   }
 
   Future<void> _loadContacts() async {
@@ -67,7 +84,16 @@ class _ContactsTabState extends State<ContactsTab> {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          // Open contact details or chat
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ContactProfileScreen(
+                contactId: contact.id,
+                initialName: nameToDisplay,
+                initialAvatarUrl: contact.baseUrl,
+              ),
+            ),
+          );
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -182,7 +208,7 @@ class _ContactsTabState extends State<ContactsTab> {
                   ),
                   IconButton(
                     icon: Icon(Symbols.search, color: cs.onSurface),
-                    onPressed: () {},
+                    onPressed: _openSearchById,
                   ),
                 ],
               ),
@@ -211,6 +237,185 @@ class _ContactsTabState extends State<ContactsTab> {
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchContactSheet extends StatefulWidget {
+  const _SearchContactSheet();
+
+  @override
+  State<_SearchContactSheet> createState() => _SearchContactSheetState();
+}
+
+class _SearchContactSheetState extends State<_SearchContactSheet> {
+  final _controller = TextEditingController();
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final raw = _controller.text.trim();
+    final id = int.tryParse(raw);
+    if (id == null) {
+      setState(() => _error = 'Введите числовой ID');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final packet = await api.sendRequest(Opcode.contactInfo, {
+        'contactIds': [id],
+      });
+      final contacts = (packet.payload as Map?)?['contacts'] as List?;
+      if (contacts == null || contacts.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = 'Контакт с таким ID не найден';
+          });
+        }
+        return;
+      }
+      final raw = Map<String, dynamic>.from(contacts.first as Map);
+      String? name;
+      final namesRaw = raw['names'];
+      if (namesRaw is List && namesRaw.isNotEmpty) {
+        final n = namesRaw.first;
+        if (n is Map) name = n['name']?.toString();
+      }
+      if (!mounted) return;
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ContactProfileScreen(
+            contactId: id,
+            initialName: name,
+            initialAvatarUrl: raw['baseUrl'] as String?,
+          ),
+        ),
+      );
+    } on PacketError catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Ошибка: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    return Padding(
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Поиск по ID',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Symbols.close, color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                enabled: !_loading,
+                onSubmitted: (_) => _submit(),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+                style: TextStyle(color: cs.onSurface, fontSize: 16),
+                decoration: InputDecoration(
+                  hintText: 'Введите ID контакта',
+                  hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
+                  prefixIcon: Icon(Symbols.tag, color: cs.onSurfaceVariant, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cs.errorContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Symbols.error_outline, size: 18, color: cs.onErrorContainer),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: TextStyle(color: cs.onErrorContainer, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _loading ? null : _submit,
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Найти'),
+              ),
+            ],
+          ),
         ),
       ),
     );

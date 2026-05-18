@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'customization_screen.dart';
 import 'performance_screen.dart';
@@ -26,6 +28,8 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
+  static const bool _showLogoutButton = false;
+
   ProfileData? _profile;
   bool _isPhoneVisible = false;
   String? _appVersionLabel;
@@ -92,6 +96,83 @@ class _SettingsTabState extends State<SettingsTab> {
     // Let the user *feel* the confirmation the instant they switch it on.
     if (value) Haptics.success();
     if (mounted) setState(() => _hapticsEnabled = value);
+  }
+
+  Future<void> _confirmLogout() async {
+    final cs = Theme.of(context).colorScheme;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Выйти из аккаунта?',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Сессия будет сброшена. Локальный кеш сохранится — войдёшь снова в этот же аккаунт.',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: cs.error,
+                    foregroundColor: cs.onError,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('Выйти'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Отмена'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+    await _doLogout();
+  }
+
+  Future<void> _doLogout() async {
+    final navState = KometApp.navigatorKey.currentState;
+    try {
+      await api.disconnect();
+    } catch (_) {}
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId != null) {
+      await TokenStorage.deleteToken(accountId);
+    }
+    try {
+      await api.connect();
+    } catch (_) {}
+    if (navState != null) {
+      await navState.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -426,31 +507,51 @@ child: _buildSection(
             ),
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Stack(
             children: [
-              GestureDetector(
-                onTap: () => setState(() => _isPhoneVisible = !_isPhoneVisible),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: _PhoneSpoiler(
-                    text: phone,
-                    isVisible: _isPhoneVisible,
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0.5,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () => setState(() => _isPhoneVisible = !_isPhoneVisible),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: _PhoneSpoiler(
+                        text: phone,
+                        isVisible: _isPhoneVisible,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _isPhoneVisible ? Symbols.visibility : Symbols.visibility_off,
+                    size: 14,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                  ),
+                ],
+              ),
+              if (_showLogoutButton)
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      tooltip: 'Выйти',
+                      icon: Icon(
+                        Symbols.logout,
+                        color: cs.error,
+                        size: 22,
+                        weight: 400,
+                      ),
+                      onPressed: _confirmLogout,
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                _isPhoneVisible ? Symbols.visibility : Symbols.visibility_off,
-                size: 14,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-              ),
             ],
           ),
         ],

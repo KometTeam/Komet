@@ -8,14 +8,18 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/config/app_accent.dart';
+import 'core/config/app_bubble_behavior.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'backend/modules/account.dart';
+import 'backend/modules/chats.dart';
 import 'backend/modules/contacts.dart';
+import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
+import 'core/transport/tls_config.dart';
 import 'core/transport/vpn_bypass.dart';
 import 'core/storage/token_storage.dart';
 import 'core/utils/haptics.dart';
@@ -28,6 +32,7 @@ import 'frontend/widgets/custom_notification.dart';
 final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
+final fileUploader = FileUploader(api: api, messages: messagesModule);
 
 Future<Locale> _loadInitialLocale() async {
   final prefs = await SharedPreferences.getInstance();
@@ -49,6 +54,7 @@ void main() async {
   if (activeAccountId != null) {
     await ContactsModule.primeCacheFromDb(activeAccountId);
   }
+  ChatsModule.attachGlobalPushHandlers(api);
   await api.connect();
 
   final packageInfo = await PackageInfo.fromPlatform();
@@ -61,8 +67,10 @@ void main() async {
   await Haptics.load();
 
   final prefs = await SharedPreferences.getInstance();
+  await FileHistoryCache.load(prefs);
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
+  final initialTlsInsecure = prefs.getBool(TlsConfig.prefKey) ?? false;
   final initialFontId =
       prefs.getString(AppFonts.prefKey) ?? AppFonts.fallback.id;
   final initialFontScale = AppFonts.clampScale(
@@ -70,12 +78,14 @@ void main() async {
   );
   final initialAccentSeed = await AppAccent.load();
   AppBubbleShape.current.value = await AppBubbleShape.load();
+  AppBubbleBehavior.current.value = await AppBubbleBehavior.load();
   AppCacheExtent.current.value = await AppCacheExtent.load();
   runApp(
     KometApp(
       initialLocale: initialLocale,
       initialFpsOverlay: initialFpsOverlay,
       initialVpnBypass: initialVpnBypass,
+      initialTlsInsecure: initialTlsInsecure,
       initialFontId: initialFontId,
       initialFontScale: initialFontScale,
       initialAccentSeed: initialAccentSeed,
@@ -89,6 +99,7 @@ class KometApp extends StatefulWidget {
     required this.initialLocale,
     this.initialFpsOverlay = false,
     this.initialVpnBypass = false,
+    this.initialTlsInsecure = false,
     required this.initialFontId,
     required this.initialFontScale,
     this.initialAccentSeed,
@@ -97,6 +108,7 @@ class KometApp extends StatefulWidget {
   final Locale initialLocale;
   final bool initialFpsOverlay;
   final bool initialVpnBypass;
+  final bool initialTlsInsecure;
   final String initialFontId;
   final double initialFontScale;
   final Color? initialAccentSeed;
@@ -129,6 +141,9 @@ class KometAppState extends State<KometApp> {
   );
   late final ValueNotifier<bool> vpnBypassEnabled = ValueNotifier(
     widget.initialVpnBypass,
+  );
+  late final ValueNotifier<bool> tlsInsecureEnabled = ValueNotifier(
+    widget.initialTlsInsecure,
   );
   late final ValueNotifier<double> fontScale = ValueNotifier(
     widget.initialFontScale,
@@ -216,6 +231,7 @@ class KometAppState extends State<KometApp> {
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();
+    tlsInsecureEnabled.dispose();
     fontScale.dispose();
     accentSeed.dispose();
     super.dispose();
@@ -233,6 +249,12 @@ class KometAppState extends State<KometApp> {
     vpnBypassEnabled.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(VpnBypassService.prefKey, value);
+  }
+
+  Future<void> setTlsInsecureEnabled(bool value) async {
+    if (tlsInsecureEnabled.value == value) return;
+    tlsInsecureEnabled.value = value;
+    await TlsConfig.setInsecureAllowed(value);
   }
 
   Future<void> applyLocale(Locale locale) async {
