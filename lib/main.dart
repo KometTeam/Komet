@@ -526,6 +526,7 @@ class KometAppState extends State<KometApp> with WidgetsBindingObserver {
               debugShowCheckedModeBanner: false,
               locale: _locale,
               themeMode: _effectiveThemeMode,
+              themeAnimationDuration: Duration.zero,
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               theme: _lightTheme,
