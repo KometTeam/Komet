@@ -180,11 +180,43 @@ jobs:
         run: flutter pub get
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
-      - name: Package unsigned IPA
+      - name: Install ldid
+        run: brew install ldid
+      - name: Pseudo-sign with ldid
+        run: |
+          set -euo pipefail
+          APP="build/ios/iphoneos/Runner.app"
+          ENT="$(mktemp -t ent).plist"
+          cat > "$ENT" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>platform-application</key><true/>
+            <key>get-task-allow</key><true/>
+            <key>com.apple.private.security.no-container</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -type f -name "*.dylib" -print0 | xargs -0 -I{} ldid -S "{}"
+            find "$APP/Frameworks" -type d -name "*.framework" | while read -r fw; do
+              bin="$fw/$(basename "$fw" .framework)"
+              [ -f "$bin" ] && ldid -S "$bin"
+            done
+          fi
+          if [ -d "$APP/PlugIns" ]; then
+            find "$APP/PlugIns" -type d -name "*.appex" | while read -r ext; do
+              bin="$ext/$(basename "$ext" .appex)"
+              [ -f "$bin" ] && ldid -S"$ENT" "$bin"
+            done
+          fi
+          ldid -S"$ENT" "$APP/Runner"
+      - name: Package IPA
         run: |
           mkdir -p dist build/ios/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
-          (cd build/ios && zip -qr ../../dist/Komet-ios-unsigned.ipa Payload)
+          (cd build/ios && zip -qr ../../dist/Komet-ios-pseudosigned.ipa Payload)
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
@@ -225,5 +257,5 @@ jobs:
           body: |
             Automated pre-release built from `${{ github.ref_name }}` @ `${{ github.sha }}`.
 
-            ⚠️ The iOS build is **unsigned** — install via AltStore / Sideloadly / a jailbroken device only.
+            ⚠️ The iOS build is **pseudo-signed via ldid** — install on a jailbroken device (Filza / TrollStore / rootless) or sideload via AltStore / Sideloadly.
           files: dist/*
