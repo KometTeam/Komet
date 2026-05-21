@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/haptics.dart';
 import 'appearance_screen.dart';
 import 'font_settings_screen.dart';
+import 'theme_settings_screen.dart';
 
 class _CustomizationCategory {
   final IconData icon;
@@ -25,6 +26,12 @@ class CustomizationScreen extends StatelessWidget {
 
   static const List<_CustomizationCategory> _categories = [
     _CustomizationCategory(
+      icon: Symbols.dark_mode,
+      title: 'Тема',
+      subtitle: 'Светлая, тёмная, AMOLED, расписание',
+      builder: _buildThemeSettings,
+    ),
+    _CustomizationCategory(
       icon: Symbols.palette,
       title: 'Внешний вид',
       subtitle: 'Акцентный цвет интерфейса',
@@ -43,6 +50,9 @@ class CustomizationScreen extends StatelessWidget {
 
   static Widget _buildFontSettings(BuildContext context) =>
       const FontSettingsScreen();
+
+  static Widget _buildThemeSettings(BuildContext context) =>
+      const ThemeSettingsScreen();
 
   @override
   Widget build(BuildContext context) {
