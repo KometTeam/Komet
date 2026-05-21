@@ -8,10 +8,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/config/app_accent.dart';
+import 'core/config/app_amoled.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
+import 'core/config/app_theme_mode.dart';
+import 'core/config/app_theme_schedule.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/chats.dart';
 import 'backend/modules/contacts.dart';
@@ -80,6 +83,9 @@ void main() async {
   AppBubbleShape.current.value = await AppBubbleShape.load();
   AppBubbleBehavior.current.value = await AppBubbleBehavior.load();
   AppCacheExtent.current.value = await AppCacheExtent.load();
+  AppThemeModeConfig.current.value = await AppThemeModeConfig.load();
+  AppAmoled.current.value = await AppAmoled.load();
+  AppThemeSchedule.current.value = await AppThemeSchedule.load();
   runApp(
     KometApp(
       initialLocale: initialLocale,
@@ -122,7 +128,7 @@ class KometApp extends StatefulWidget {
   State<KometApp> createState() => KometAppState();
 }
 
-class KometAppState extends State<KometApp> {
+class KometAppState extends State<KometApp> with WidgetsBindingObserver {
   static const _fallbackSeed = Color(0xFFC1C4FF);
 
   late Locale _locale;
@@ -134,6 +140,7 @@ class KometAppState extends State<KometApp> {
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
+  Timer? _scheduleTimer;
   String? _lastVpnNotice;
   DateTime _lastVpnNoticeAt = DateTime.fromMillisecondsSinceEpoch(0);
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
@@ -156,6 +163,13 @@ class KometAppState extends State<KometApp> {
     super.initState();
     _locale = widget.initialLocale;
     _fontId = widget.initialFontId;
+
+    WidgetsBinding.instance.addObserver(this);
+    AppThemeModeConfig.current.addListener(_onThemeModeChanged);
+    AppAmoled.current.addListener(_onAmoledChanged);
+    AppThemeSchedule.current.addListener(_onScheduleChanged);
+    _lastAppliedThemeMode = _effectiveThemeMode;
+    _rescheduleSwitch();
 
     api.setReconnectCallback(() async {
       try {
@@ -228,6 +242,11 @@ class KometAppState extends State<KometApp> {
     _sessionExpiredSub?.cancel();
     _loginStatusSub?.cancel();
     _vpnBypassSub?.cancel();
+    _scheduleTimer?.cancel();
+    AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
+    AppAmoled.current.removeListener(_onAmoledChanged);
+    AppThemeSchedule.current.removeListener(_onScheduleChanged);
+    WidgetsBinding.instance.removeObserver(this);
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();
@@ -235,6 +254,79 @@ class KometAppState extends State<KometApp> {
     fontScale.dispose();
     accentSeed.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
+    _rescheduleSwitch();
+    final next = _effectiveThemeMode;
+    if (next == _lastAppliedThemeMode) return;
+    _lastAppliedThemeMode = next;
+    if (mounted) setState(() {});
+  }
+
+  void _onThemeModeChanged() {
+    _rescheduleSwitch();
+    _lastAppliedThemeMode = _effectiveThemeMode;
+    if (mounted) setState(() {});
+  }
+
+  void _onAmoledChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onScheduleChanged() {
+    if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
+    _rescheduleSwitch();
+    final next = _effectiveThemeMode;
+    if (next == _lastAppliedThemeMode) return;
+    _lastAppliedThemeMode = next;
+    if (mounted) setState(() {});
+  }
+
+  ThemeMode _lastAppliedThemeMode = ThemeMode.system;
+
+  void _rescheduleSwitch() {
+    _scheduleTimer?.cancel();
+    _scheduleTimer = null;
+    if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
+    final until = AppThemeSchedule.current.value.durationUntilNextSwitch(
+      DateTime.now(),
+    );
+    _scheduleTimer = Timer(until, () {
+      if (!mounted) return;
+      _lastAppliedThemeMode = _effectiveThemeMode;
+      setState(() {});
+      _rescheduleSwitch();
+    });
+  }
+
+  ThemeMode get _effectiveThemeMode {
+    switch (AppThemeModeConfig.current.value) {
+      case AppThemeMode.system:
+        return ThemeMode.system;
+      case AppThemeMode.light:
+        return ThemeMode.light;
+      case AppThemeMode.dark:
+        return ThemeMode.dark;
+      case AppThemeMode.schedule:
+        final isDark = AppThemeSchedule.current.value.isDarkAt(DateTime.now());
+        return isDark ? ThemeMode.dark : ThemeMode.light;
+    }
+  }
+
+  Future<void> applyThemeMode(AppThemeMode mode) async {
+    await AppThemeModeConfig.save(mode);
+  }
+
+  Future<void> applyAmoled(bool value) async {
+    await AppAmoled.save(value);
+  }
+
+  Future<void> applyThemeSchedule(ThemeSchedule schedule) async {
+    await AppThemeSchedule.save(schedule);
   }
 
   Future<void> setFpsOverlayEnabled(bool value) async {
@@ -359,6 +451,16 @@ class KometAppState extends State<KometApp> {
   }
 
   ColorScheme _adjustDarkScheme(ColorScheme base) {
+    if (AppAmoled.current.value) {
+      return base.copyWith(
+        surface: Colors.black,
+        surfaceContainerLowest: Colors.black,
+        surfaceContainerLow: const Color(0xFF080808),
+        surfaceContainer: const Color(0xFF101010),
+        surfaceContainerHigh: const Color(0xFF161616),
+        surfaceContainerHighest: const Color(0xFF1C1C1C),
+      );
+    }
     return base.copyWith(
       surface: Color.alphaBlend(
         base.primary.withValues(alpha: 0.05),
@@ -423,7 +525,7 @@ class KometAppState extends State<KometApp> {
               title: 'Komet',
               debugShowCheckedModeBanner: false,
               locale: _locale,
-              themeMode: ThemeMode.system,
+              themeMode: _effectiveThemeMode,
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               theme: _lightTheme,

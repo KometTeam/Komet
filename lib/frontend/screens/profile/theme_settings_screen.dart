@@ -1,0 +1,359 @@
+import 'package:flutter/material.dart';
+import 'package:m3e_collection/m3e_collection.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
+import '../../../core/config/app_amoled.dart';
+import '../../../core/config/app_theme_mode.dart';
+import '../../../core/config/app_theme_schedule.dart';
+import '../../../core/utils/haptics.dart';
+import '../../../main.dart';
+
+class ThemeSettingsScreen extends StatelessWidget {
+  const ThemeSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBarM3E(titleText: 'Тема', backgroundColor: cs.surface),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+          children: const [
+            _ThemeModeCard(),
+            SizedBox(height: 12),
+            _AmoledCard(),
+            SizedBox(height: 12),
+            _ScheduleCard(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeModeCard extends StatelessWidget {
+  const _ThemeModeCard();
+
+  static const _items = [
+    (mode: AppThemeMode.system, icon: Symbols.brightness_auto, label: 'Системная'),
+    (mode: AppThemeMode.light, icon: Symbols.light_mode, label: 'Светлая'),
+    (mode: AppThemeMode.dark, icon: Symbols.dark_mode, label: 'Тёмная'),
+    (mode: AppThemeMode.schedule, icon: Symbols.schedule, label: 'По расписанию'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Режим темы',
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Светлая, тёмная или авто-переключение',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<AppThemeMode>(
+              valueListenable: AppThemeModeConfig.current,
+              builder: (context, current, _) {
+                return Column(
+                  children: [
+                    for (final item in _items)
+                      _ModeTile(
+                        icon: item.icon,
+                        label: item.label,
+                        selected: current == item.mode,
+                        onTap: () {
+                          if (current == item.mode) return;
+                          Haptics.selection();
+                          KometApp.stateOf(context)?.applyThemeMode(item.mode);
+                        },
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeTile({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: cs.onSurface, size: 22, weight: 500),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Icon(
+                selected ? Symbols.radio_button_checked : Symbols.radio_button_unchecked,
+                color: selected ? cs.primary : cs.outline,
+                size: 22,
+                fill: selected ? 1 : 0,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AmoledCard extends StatelessWidget {
+  const _AmoledCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+        child: Row(
+          children: [
+            Icon(Symbols.contrast, color: cs.onSurface, size: 24, weight: 500),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AMOLED-чёрный',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Чистый чёрный фон для OLED-экранов',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: AppAmoled.current,
+              builder: (context, value, _) {
+                return Switch(
+                  value: value,
+                  onChanged: (v) {
+                    Haptics.selection();
+                    KometApp.stateOf(context)?.applyAmoled(v);
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleCard extends StatelessWidget {
+  const _ScheduleCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<AppThemeMode>(
+      valueListenable: AppThemeModeConfig.current,
+      builder: (context, mode, _) {
+        final enabled = mode == AppThemeMode.schedule;
+        return AnimatedOpacity(
+          opacity: enabled ? 1 : 0.5,
+          duration: const Duration(milliseconds: 200),
+          child: Material(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(28),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Расписание',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    enabled
+                        ? 'Когда автоматически включается тёмная тема'
+                        : 'Доступно в режиме «По расписанию»',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<ThemeSchedule>(
+                    valueListenable: AppThemeSchedule.current,
+                    builder: (context, schedule, _) {
+                      return Column(
+                        children: [
+                          _TimeRow(
+                            icon: Symbols.bedtime,
+                            label: 'Тёмная с',
+                            time: schedule.darkStart,
+                            enabled: enabled,
+                            onPick: (picked) {
+                              KometApp.stateOf(context)?.applyThemeSchedule(
+                                ThemeSchedule(
+                                  darkStart: picked,
+                                  darkEnd: schedule.darkEnd,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          _TimeRow(
+                            icon: Symbols.wb_sunny,
+                            label: 'Светлая с',
+                            time: schedule.darkEnd,
+                            enabled: enabled,
+                            onPick: (picked) {
+                              KometApp.stateOf(context)?.applyThemeSchedule(
+                                ThemeSchedule(
+                                  darkStart: schedule.darkStart,
+                                  darkEnd: picked,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TimeRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final TimeOfDay time;
+  final bool enabled;
+  final ValueChanged<TimeOfDay> onPick;
+
+  const _TimeRow({
+    required this.icon,
+    required this.label,
+    required this.time,
+    required this.enabled,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: enabled ? () => _pick(context) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: cs.onSurface, size: 22, weight: 500),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Text(
+                AppThemeSchedule.format(time),
+                style: TextStyle(
+                  color: cs.primary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    Haptics.tap();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: time,
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (picked != null) onPick(picked);
+  }
+}
