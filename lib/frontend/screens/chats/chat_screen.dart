@@ -1738,7 +1738,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     Haptics.medium();
 
     final controller = MessageActionsController();
-    controller.attach(pointerId, details.globalPosition);
+    controller.attach(details.globalPosition, pointerId: pointerId);
     _controller = controller;
 
     Navigator.of(ctx)

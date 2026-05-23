@@ -15,18 +15,20 @@ class MessageActionsController extends ChangeNotifier {
   Offset? initialPointer;
   bool committed = false;
   bool movedSignificantly = false;
+  bool _attached = false;
 
-  void attach(int pointerId, Offset initial) {
-    if (_pointerId != null) return;
+  void attach(Offset initial, {int? pointerId}) {
+    if (_attached) return;
+    _attached = true;
     _pointerId = pointerId;
     initialPointer = initial;
     pointer = initial;
-    GestureBinding.instance.pointerRouter
-        .addRoute(pointerId, _onPointerEvent);
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointerEvent);
   }
 
   void _onPointerEvent(PointerEvent event) {
     if (committed) return;
+    if (_pointerId != null && event.pointer != _pointerId) return;
     if (event is PointerMoveEvent) {
       pointer = event.position;
       if (initialPointer != null &&
@@ -48,11 +50,9 @@ class MessageActionsController extends ChangeNotifier {
 
   @override
   void dispose() {
-    final id = _pointerId;
-    if (id != null) {
-      GestureBinding.instance.pointerRouter
-          .removeRoute(id, _onPointerEvent);
-      _pointerId = null;
+    if (_attached) {
+      GestureBinding.instance.pointerRouter.removeGlobalRoute(_onPointerEvent);
+      _attached = false;
     }
     super.dispose();
   }
