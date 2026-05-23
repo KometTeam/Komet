@@ -309,28 +309,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
               ),
               ..._buildButtons(t),
               _buildLabelBanner(size, t),
-              _buildDebugOverlay(),
             ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildDebugOverlay() {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: CustomPaint(
-          painter: _DebugPainter(
-            pointerPosition: widget.controller.pointer,
-            initialPointer: widget.controller.initialPointer,
-            buttonCenters: _buttonCenters,
-            hoveredIndex: _hoveredIndex,
-            committed: widget.controller.committed,
-            moved: widget.controller.movedSignificantly,
-          ),
-        ),
-      ),
     );
   }
 
@@ -420,79 +402,6 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         ),
       ),
     );
-  }
-}
-
-class _DebugPainter extends CustomPainter {
-  final Offset? pointerPosition;
-  final Offset? initialPointer;
-  final List<Offset> buttonCenters;
-  final int hoveredIndex;
-  final bool committed;
-  final bool moved;
-
-  _DebugPainter({
-    required this.pointerPosition,
-    required this.initialPointer,
-    required this.buttonCenters,
-    required this.hoveredIndex,
-    required this.committed,
-    required this.moved,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final centerPaint = Paint()..color = const Color(0xFFFFFFFF);
-    final centerBorder = Paint()
-      ..color = const Color(0xFF000000)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    for (var i = 0; i < buttonCenters.length; i++) {
-      canvas.drawCircle(buttonCenters[i], 5, centerPaint);
-      canvas.drawCircle(buttonCenters[i], 5, centerBorder);
-    }
-
-    final initial = initialPointer;
-    if (initial != null) {
-      final paint = Paint()..color = const Color(0xFFFFEB3B);
-      canvas.drawCircle(initial, 8, paint);
-    }
-
-    final p = pointerPosition;
-    if (p != null) {
-      final paint = Paint()..color = const Color(0xFFFF1744);
-      canvas.drawCircle(p, 14, paint);
-      final border = Paint()
-        ..color = const Color(0xFFFFFFFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      canvas.drawCircle(p, 14, border);
-    }
-
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text:
-            'h=$hoveredIndex c=$committed mov=$moved\n'
-            'p=${pointerPosition?.dx.toStringAsFixed(0)},${pointerPosition?.dy.toStringAsFixed(0)}',
-        style: const TextStyle(
-          color: Color(0xFFFFFFFF),
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          backgroundColor: Color(0xCC000000),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, const Offset(12, 60));
-  }
-
-  @override
-  bool shouldRepaint(covariant _DebugPainter old) {
-    return old.pointerPosition != pointerPosition ||
-        old.hoveredIndex != hoveredIndex ||
-        old.committed != committed ||
-        old.moved != moved;
   }
 }
 
