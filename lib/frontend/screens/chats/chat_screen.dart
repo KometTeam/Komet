@@ -1737,23 +1737,21 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     controller.attach(details.globalPosition);
     _controller = controller;
 
-    Navigator.of(ctx)
-        .push(
-      MessageActionsRoute(
-        snapshot: snapshot,
-        originRect: rect,
-        tapPoint: details.globalPosition,
-        isMe: widget.isMe,
-        messageText: widget.message.text,
-        controller: controller,
-      ),
-    )
-        .whenComplete(() {
-      if (identical(_controller, controller)) {
-        _controller = null;
-      }
-      controller.dispose();
-    });
+    showMessageActions(
+      context: ctx,
+      snapshot: snapshot,
+      originRect: rect,
+      tapPoint: details.globalPosition,
+      isMe: widget.isMe,
+      messageText: widget.message.text,
+      controller: controller,
+      onDispose: () {
+        if (identical(_controller, controller)) {
+          _controller = null;
+        }
+        controller.dispose();
+      },
+    );
   }
 
   @override

@@ -60,36 +60,33 @@ class MessageActionsController extends ChangeNotifier {
   }
 }
 
-class MessageActionsRoute extends PageRouteBuilder<void> {
-  MessageActionsRoute({
-    required ui.Image snapshot,
-    required Rect originRect,
-    required Offset tapPoint,
-    required bool isMe,
-    required String? messageText,
-    required MessageActionsController controller,
-  }) : super(
-          opaque: false,
-          barrierColor: Colors.transparent,
-          transitionDuration: const Duration(milliseconds: 320),
-          reverseTransitionDuration: const Duration(milliseconds: 220),
-          pageBuilder: (ctx, anim, secondaryAnim) {
-            return _MessageActionsLayer(
-              snapshot: snapshot,
-              originRect: originRect,
-              tapPoint: tapPoint,
-              isMe: isMe,
-              messageText: messageText,
-              controller: controller,
-              animation: CurvedAnimation(
-                parent: anim,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            );
-          },
-          transitionsBuilder: (_, __, ___, child) => child,
-        );
+void showMessageActions({
+  required BuildContext context,
+  required ui.Image snapshot,
+  required Rect originRect,
+  required Offset tapPoint,
+  required bool isMe,
+  required String? messageText,
+  required MessageActionsController controller,
+  required VoidCallback onDispose,
+}) {
+  final overlay = Overlay.of(context, rootOverlay: true);
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (ctx) => _MessageActionsLayer(
+      snapshot: snapshot,
+      originRect: originRect,
+      tapPoint: tapPoint,
+      isMe: isMe,
+      messageText: messageText,
+      controller: controller,
+      onDismiss: () {
+        if (entry.mounted) entry.remove();
+        onDispose();
+      },
+    ),
+  );
+  overlay.insert(entry);
 }
 
 class _MessageActionsLayer extends StatefulWidget {
@@ -99,7 +96,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final bool isMe;
   final String? messageText;
   final MessageActionsController controller;
-  final Animation<double> animation;
+  final VoidCallback onDismiss;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -108,14 +105,18 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.isMe,
     required this.messageText,
     required this.controller,
-    required this.animation,
+    required this.onDismiss,
   });
 
   @override
   State<_MessageActionsLayer> createState() => _MessageActionsLayerState();
 }
 
-class _MessageActionsLayerState extends State<_MessageActionsLayer> {
+class _MessageActionsLayerState extends State<_MessageActionsLayer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animController;
+  late final Animation<double> _animation;
+  bool _closing = false;
   static const double _radius = 92.0;
   static const double _arcSpan = math.pi * 0.62;
   static const double _btnSize = 52.0;
@@ -130,6 +131,22 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
 
   int _hoveredIndex = -1;
   bool _committedFired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 220),
+    );
+    _animation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _animController.forward();
+  }
 
   @override
   void didChangeDependencies() {
@@ -151,6 +168,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
 
   @override
   void dispose() {
+    _animController.dispose();
     widget.controller.removeListener(_onControllerUpdate);
     widget.snapshot.dispose();
     super.dispose();
@@ -223,8 +241,13 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
   }
 
   Future<void> _close() async {
+    if (!mounted || _closing) return;
+    _closing = true;
+    try {
+      await _animController.reverse();
+    } catch (_) {}
     if (!mounted) return;
-    Navigator.of(context).maybePop();
+    widget.onDismiss();
   }
 
   Future<void> _copy() async {
@@ -247,9 +270,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     return AnimatedBuilder(
-      animation: widget.animation,
+      animation: _animation,
       builder: (ctx, _) {
-        final t = widget.animation.value.clamp(0.0, 1.0);
+        final t = _animation.value.clamp(0.0, 1.0);
         final blurSigma = 14.0 * t;
         final bubbleScale = 1.0 + 0.05 * t;
 
