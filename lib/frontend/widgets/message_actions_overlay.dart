@@ -115,6 +115,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
         : Offset(widget.tapPoint.dx, widget.originRect.top - 16);
     _buttonCenters = _computeButtonCenters(screenSize);
     widget.controller.addListener(_onControllerUpdate);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onControllerUpdate();
+    });
   }
 
   @override
