@@ -1704,10 +1704,16 @@ class _LongPressBubble extends StatefulWidget {
 
 class _LongPressBubbleState extends State<_LongPressBubble> {
   final GlobalKey _boundaryKey = GlobalKey();
-  Offset _tapPoint = Offset.zero;
+  MessageActionsController? _controller;
+
+  @override
+  void dispose() {
+    _controller?.commit();
+    _controller = null;
+    super.dispose();
+  }
 
   void _onLongPressStart(LongPressStartDetails details) {
-    _tapPoint = details.globalPosition;
     final ctx = _boundaryKey.currentContext;
     if (ctx == null) return;
     final renderObject = ctx.findRenderObject();
@@ -1726,15 +1732,35 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     }
 
     Haptics.medium();
-    Navigator.of(ctx).push(
+
+    final controller = MessageActionsController();
+    _controller = controller;
+
+    Navigator.of(ctx)
+        .push(
       MessageActionsRoute(
         snapshot: snapshot,
         originRect: rect,
-        tapPoint: _tapPoint,
+        tapPoint: details.globalPosition,
         isMe: widget.isMe,
         messageText: widget.message.text,
+        controller: controller,
       ),
-    );
+    )
+        .whenComplete(() {
+      if (identical(_controller, controller)) {
+        _controller = null;
+      }
+      controller.dispose();
+    });
+  }
+
+  void _onLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
+    _controller?.updatePointer(details.globalPosition);
+  }
+
+  void _onLongPressEnd(LongPressEndDetails details) {
+    _controller?.commit();
   }
 
   @override
@@ -1742,6 +1768,8 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
       onLongPressStart: _onLongPressStart,
+      onLongPressMoveUpdate: _onLongPressMoveUpdate,
+      onLongPressEnd: _onLongPressEnd,
       child: RepaintBoundary(
         key: _boundaryKey,
         child: widget.child,

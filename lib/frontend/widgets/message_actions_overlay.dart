@@ -8,6 +8,28 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
+class MessageActionsController extends ChangeNotifier {
+  Offset? pointer;
+  Offset? initialPointer;
+  bool committed = false;
+  bool movedSignificantly = false;
+
+  void updatePointer(Offset p) {
+    initialPointer ??= p;
+    pointer = p;
+    if (!movedSignificantly && (p - initialPointer!).distance > 18) {
+      movedSignificantly = true;
+    }
+    notifyListeners();
+  }
+
+  void commit() {
+    if (committed) return;
+    committed = true;
+    notifyListeners();
+  }
+}
+
 class MessageActionsRoute extends PageRouteBuilder<void> {
   MessageActionsRoute({
     required ui.Image snapshot,
@@ -15,6 +37,7 @@ class MessageActionsRoute extends PageRouteBuilder<void> {
     required Offset tapPoint,
     required bool isMe,
     required String? messageText,
+    required MessageActionsController controller,
   }) : super(
           opaque: false,
           barrierColor: Colors.transparent,
@@ -27,6 +50,7 @@ class MessageActionsRoute extends PageRouteBuilder<void> {
               tapPoint: tapPoint,
               isMe: isMe,
               messageText: messageText,
+              controller: controller,
               animation: CurvedAnimation(
                 parent: anim,
                 curve: Curves.easeOutCubic,
@@ -44,6 +68,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final Offset tapPoint;
   final bool isMe;
   final String? messageText;
+  final MessageActionsController controller;
   final Animation<double> animation;
 
   const _MessageActionsLayer({
@@ -52,6 +77,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.tapPoint,
     required this.isMe,
     required this.messageText,
+    required this.controller,
     required this.animation,
   });
 
@@ -60,10 +86,110 @@ class _MessageActionsLayer extends StatefulWidget {
 }
 
 class _MessageActionsLayerState extends State<_MessageActionsLayer> {
+  static const double _radius = 92.0;
+  static const double _arcSpan = math.pi * 0.62;
+  static const double _btnSize = 52.0;
+  static const double _hitRadius = 40.0;
+  static const double _hMargin = 8.0;
+
+  late List<_Action> _actions;
+  bool _showBelow = true;
+  Offset _anchor = Offset.zero;
+  List<Offset> _buttonCenters = const [];
+  bool _initialized = false;
+
+  int _hoveredIndex = -1;
+  bool _tapMode = false;
+  bool _committedFired = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    _actions = _buildActions();
+    final screenSize = MediaQuery.sizeOf(context);
+    _showBelow = widget.tapPoint.dy < screenSize.height * 0.55;
+    _anchor = _showBelow
+        ? Offset(widget.tapPoint.dx, widget.originRect.bottom + 16)
+        : Offset(widget.tapPoint.dx, widget.originRect.top - 16);
+    _buttonCenters = _computeButtonCenters(screenSize);
+    widget.controller.addListener(_onControllerUpdate);
+  }
+
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerUpdate);
     widget.snapshot.dispose();
     super.dispose();
+  }
+
+  List<_Action> _buildActions() {
+    final hasText = widget.messageText != null && widget.messageText!.isNotEmpty;
+    return <_Action>[
+      if (hasText) _Action(Symbols.content_copy, 'Копировать', _copy),
+      _Action(Symbols.reply, 'Ответить', () => _stub('Ответ')),
+      _Action(Symbols.forward, 'Переслать', () => _stub('Пересылка')),
+      _Action(Symbols.delete, 'Удалить', () => _stub('Удаление')),
+    ];
+  }
+
+  List<Offset> _computeButtonCenters(Size screenSize) {
+    final n = _actions.length;
+    if (n == 0) return const [];
+    final base = _showBelow ? math.pi * 0.5 : -math.pi * 0.5;
+    final start = base - _arcSpan / 2;
+    final step = n == 1 ? 0.0 : _arcSpan / (n - 1);
+    final minX = _hMargin + _btnSize / 2;
+    final maxX = screenSize.width - _hMargin - _btnSize / 2;
+    return [
+      for (int i = 0; i < n; i++)
+        () {
+          final angle = start + step * i;
+          var p = _anchor + Offset(math.cos(angle), math.sin(angle)) * _radius;
+          if (p.dx < minX) p = Offset(minX, p.dy);
+          if (p.dx > maxX) p = Offset(maxX, p.dy);
+          return p;
+        }(),
+    ];
+  }
+
+  void _onControllerUpdate() {
+    if (!mounted || _tapMode) return;
+
+    final p = widget.controller.pointer;
+    if (p != null) {
+      final newHovered = _findButtonAt(p);
+      if (newHovered != _hoveredIndex) {
+        if (newHovered != -1) Haptics.selection();
+        setState(() => _hoveredIndex = newHovered);
+      }
+    }
+
+    if (widget.controller.committed && !_committedFired) {
+      _committedFired = true;
+      _onCommit();
+    }
+  }
+
+  int _findButtonAt(Offset p) {
+    for (int i = 0; i < _buttonCenters.length; i++) {
+      if ((_buttonCenters[i] - p).distance <= _hitRadius) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  void _onCommit() {
+    if (_hoveredIndex != -1) {
+      Haptics.medium();
+      _actions[_hoveredIndex].onTap();
+    } else if (widget.controller.movedSignificantly) {
+      _close();
+    } else {
+      setState(() => _tapMode = true);
+    }
   }
 
   Future<void> _close() async {
@@ -87,25 +213,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
     await _close();
   }
 
-  List<_Action> _buildActions() {
-    final hasText = widget.messageText != null && widget.messageText!.isNotEmpty;
-    return <_Action>[
-      if (hasText) _Action(Symbols.content_copy, 'Копировать', _copy),
-      _Action(Symbols.reply, 'Ответить', () => _stub('Ответ')),
-      _Action(Symbols.forward, 'Переслать', () => _stub('Пересылка')),
-      _Action(Symbols.delete, 'Удалить', () => _stub('Удаление')),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
-    final actions = _buildActions();
     final size = MediaQuery.sizeOf(context);
-    final showBelow = widget.tapPoint.dy < size.height * 0.55;
-    final anchor = showBelow
-        ? Offset(widget.tapPoint.dx, widget.originRect.bottom + 16)
-        : Offset(widget.tapPoint.dx, widget.originRect.top - 16);
-
     return AnimatedBuilder(
       animation: widget.animation,
       builder: (ctx, _) {
@@ -114,7 +224,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
         final bubbleScale = 1.0 + 0.05 * t;
 
         return GestureDetector(
-          onTap: _close,
+          onTap: _tapMode ? _close : null,
           behavior: HitTestBehavior.opaque,
           child: Stack(
             children: [
@@ -144,7 +254,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
                   ),
                 ),
               ),
-              ..._buildRadialMenu(actions, anchor, showBelow, t, size),
+              ..._buildButtons(t),
+              _buildLabelBanner(size, t),
             ],
           ),
         );
@@ -152,55 +263,93 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
     );
   }
 
-  List<Widget> _buildRadialMenu(
-    List<_Action> actions,
-    Offset anchor,
-    bool below,
-    double t,
-    Size screenSize,
-  ) {
-    final n = actions.length;
-    if (n == 0) return const [];
-    const radius = 92.0;
-    const arcSpan = math.pi * 0.62;
-    final baseAngle = below ? math.pi * 0.5 : -math.pi * 0.5;
-    final startAngle = baseAngle - arcSpan / 2;
-    final step = n == 1 ? 0.0 : arcSpan / (n - 1);
-    const btnSize = 52.0;
-    const margin = 8.0;
-
+  List<Widget> _buildButtons(double t) {
+    final n = _actions.length;
     return [
       for (int i = 0; i < n; i++)
         Builder(
           builder: (_) {
             final delay = (i / n) * 0.25;
-            final localT =
-                ((t - delay) / (1.0 - delay)).clamp(0.0, 1.0);
+            final localT = ((t - delay) / (1.0 - delay)).clamp(0.0, 1.0);
             final eased = Curves.easeOutBack.transform(localT);
-            final angle = startAngle + step * i;
-            final rOffset =
-                Offset(math.cos(angle), math.sin(angle)) * radius * eased;
-            var pos = anchor + rOffset;
-            final minX = margin + btnSize / 2;
-            final maxX = screenSize.width - margin - btnSize / 2;
-            if (pos.dx < minX) pos = Offset(minX, pos.dy);
-            if (pos.dx > maxX) pos = Offset(maxX, pos.dy);
+            final isHovered = _hoveredIndex == i;
+            final hoverScale = isHovered ? 1.18 : 1.0;
+            final entryScale = 0.4 + 0.6 * eased;
+            final centerAtFull = _buttonCenters[i];
+            final centerAtT = _anchor +
+                (centerAtFull - _anchor) * eased;
+
             return Positioned(
-              left: pos.dx - btnSize / 2,
-              top: pos.dy - btnSize / 2,
-              width: btnSize,
-              height: btnSize,
+              left: centerAtT.dx - _btnSize / 2,
+              top: centerAtT.dy - _btnSize / 2,
+              width: _btnSize,
+              height: _btnSize,
               child: Opacity(
                 opacity: localT,
                 child: Transform.scale(
-                  scale: 0.4 + 0.6 * eased,
-                  child: _ActionButton(action: actions[i]),
+                  scale: entryScale,
+                  child: AnimatedScale(
+                    scale: hoverScale,
+                    duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOutCubic,
+                    child: _ActionButton(
+                      action: _actions[i],
+                      highlighted: isHovered,
+                      tapEnabled: _tapMode,
+                    ),
+                  ),
                 ),
               ),
             );
           },
         ),
     ];
+  }
+
+  Widget _buildLabelBanner(Size size, double t) {
+    final label =
+        _hoveredIndex == -1 ? null : _actions[_hoveredIndex].label;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: bottomInset + 36,
+      child: IgnorePointer(
+        child: Center(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 140),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.85, end: 1.0).animate(anim),
+                child: child,
+              ),
+            ),
+            child: label == null
+                ? const SizedBox(key: ValueKey('empty'), height: 0)
+                : Container(
+                    key: ValueKey('label_$label'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.72 * t),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -213,26 +362,46 @@ class _Action {
 
 class _ActionButton extends StatelessWidget {
   final _Action action;
-  const _ActionButton({required this.action});
+  final bool highlighted;
+  final bool tapEnabled;
+  const _ActionButton({
+    required this.action,
+    required this.highlighted,
+    required this.tapEnabled,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.surfaceContainerHighest,
-      shape: const CircleBorder(),
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.4),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: () {
-          Haptics.tap();
-          action.onTap();
-        },
-        child: Tooltip(
-          message: action.label,
+    final bgColor = highlighted ? cs.primary : cs.surfaceContainerHighest;
+    final iconColor = highlighted ? cs.onPrimary : cs.onSurface;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: bgColor,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.32),
+            blurRadius: highlighted ? 14 : 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: tapEnabled
+              ? () {
+                  Haptics.tap();
+                  action.onTap();
+                }
+              : null,
           child: Center(
-            child: Icon(action.icon, color: cs.onSurface, size: 24),
+            child: Icon(action.icon, color: iconColor, size: 24),
           ),
         ),
       ),
