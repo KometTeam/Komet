@@ -10,33 +10,35 @@ import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
 class MessageActionsController extends ChangeNotifier {
-  int? _pointerId;
   Offset? pointer;
   Offset? initialPointer;
   bool committed = false;
   bool movedSignificantly = false;
   bool _attached = false;
 
-  void attach(Offset initial, {int? pointerId}) {
+  void attach(Offset initial) {
     if (_attached) return;
     _attached = true;
-    _pointerId = pointerId;
     initialPointer = initial;
     pointer = initial;
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointerEvent);
   }
 
+  void updatePointer(Offset p) {
+    if (committed) return;
+    pointer = p;
+    if (initialPointer != null &&
+        !movedSignificantly &&
+        (p - initialPointer!).distance > 18) {
+      movedSignificantly = true;
+    }
+    notifyListeners();
+  }
+
   void _onPointerEvent(PointerEvent event) {
     if (committed) return;
-    if (_pointerId != null && event.pointer != _pointerId) return;
     if (event is PointerMoveEvent) {
-      pointer = event.position;
-      if (initialPointer != null &&
-          !movedSignificantly &&
-          (event.position - initialPointer!).distance > 18) {
-        movedSignificantly = true;
-      }
-      notifyListeners();
+      updatePointer(event.position);
     } else if (event is PointerUpEvent || event is PointerCancelEvent) {
       commit();
     }
@@ -127,7 +129,6 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
   bool _initialized = false;
 
   int _hoveredIndex = -1;
-  bool _tapMode = false;
   bool _committedFired = false;
 
   @override
@@ -186,7 +187,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
   }
 
   void _onControllerUpdate() {
-    if (!mounted || _tapMode) return;
+    if (!mounted) return;
 
     final p = widget.controller.pointer;
     if (p != null) {
@@ -213,13 +214,11 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
   }
 
   void _onCommit() {
-    if (_hoveredIndex != -1) {
+    if (_hoveredIndex != -1 && widget.controller.movedSignificantly) {
       Haptics.medium();
       _actions[_hoveredIndex].onTap();
     } else if (widget.controller.movedSignificantly) {
       _close();
-    } else {
-      setState(() => _tapMode = true);
     }
   }
 
@@ -255,7 +254,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
         final bubbleScale = 1.0 + 0.05 * t;
 
         return GestureDetector(
-          onTap: _tapMode ? _close : null,
+          onTap: _close,
           behavior: HitTestBehavior.opaque,
           child: Stack(
             children: [
@@ -326,7 +325,6 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer> {
                     child: _ActionButton(
                       action: _actions[i],
                       highlighted: isHovered,
-                      tapEnabled: _tapMode,
                     ),
                   ),
                 ),
@@ -394,11 +392,9 @@ class _Action {
 class _ActionButton extends StatelessWidget {
   final _Action action;
   final bool highlighted;
-  final bool tapEnabled;
   const _ActionButton({
     required this.action,
     required this.highlighted,
-    required this.tapEnabled,
   });
 
   @override
@@ -425,12 +421,10 @@ class _ActionButton extends StatelessWidget {
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: tapEnabled
-              ? () {
-                  Haptics.tap();
-                  action.onTap();
-                }
-              : null,
+          onTap: () {
+            Haptics.tap();
+            action.onTap();
+          },
           child: Center(
             child: Icon(action.icon, color: iconColor, size: 24),
           ),
