@@ -520,15 +520,12 @@ class _ListMenuItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final fg = action.destructive ? cs.error : cs.onSurface;
-    final hoverBg = action.destructive
-        ? cs.error.withValues(alpha: 0.14)
-        : cs.primary.withValues(alpha: 0.16);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOutCubic,
+    final pillBg = action.destructive ? cs.error : cs.primary;
+    final onPill = action.destructive ? cs.onError : cs.onPrimary;
+    final restFg = action.destructive ? cs.error : cs.onSurface;
+    final fg = highlighted ? onPill : restFg;
+    return SizedBox(
       height: 48,
-      color: highlighted ? hoverBg : Colors.transparent,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -537,23 +534,32 @@ class _ListMenuItem extends StatelessWidget {
             action.onTap();
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Icon(action.icon, color: fg, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    action.label,
-                    style: TextStyle(
-                      color: fg,
-                      fontSize: 15,
-                      fontWeight:
-                          highlighted ? FontWeight.w600 : FontWeight.w500,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: highlighted ? pillBg : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  Icon(action.icon, color: fg, size: 22),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      action.label,
+                      style: TextStyle(
+                        color: fg,
+                        fontSize: 15,
+                        fontWeight:
+                            highlighted ? FontWeight.w600 : FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
