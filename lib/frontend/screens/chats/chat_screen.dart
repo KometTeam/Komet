@@ -1705,6 +1705,7 @@ class _LongPressBubble extends StatefulWidget {
 class _LongPressBubbleState extends State<_LongPressBubble> {
   final GlobalKey _boundaryKey = GlobalKey();
   MessageActionsController? _controller;
+  int? _lastPointerId;
 
   @override
   void dispose() {
@@ -1714,6 +1715,9 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
   }
 
   void _onLongPressStart(LongPressStartDetails details) {
+    final pointerId = _lastPointerId;
+    if (pointerId == null) return;
+
     final ctx = _boundaryKey.currentContext;
     if (ctx == null) return;
     final renderObject = ctx.findRenderObject();
@@ -1734,7 +1738,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     Haptics.medium();
 
     final controller = MessageActionsController();
-    controller.updatePointer(details.globalPosition);
+    controller.attach(pointerId, details.globalPosition);
     _controller = controller;
 
     Navigator.of(ctx)
@@ -1760,15 +1764,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
   Widget build(BuildContext context) {
     return Listener(
       behavior: HitTestBehavior.deferToChild,
-      onPointerMove: (event) {
-        _controller?.updatePointer(event.position);
-      },
-      onPointerUp: (event) {
-        _controller?.commit();
-      },
-      onPointerCancel: (event) {
-        _controller?.commit();
-      },
+      onPointerDown: (event) => _lastPointerId = event.pointer,
       child: GestureDetector(
         behavior: HitTestBehavior.deferToChild,
         onLongPressStart: _onLongPressStart,

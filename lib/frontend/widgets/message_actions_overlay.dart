@@ -9,24 +9,51 @@ import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
 class MessageActionsController extends ChangeNotifier {
+  int? _pointerId;
   Offset? pointer;
   Offset? initialPointer;
   bool committed = false;
   bool movedSignificantly = false;
 
-  void updatePointer(Offset p) {
-    initialPointer ??= p;
-    pointer = p;
-    if (!movedSignificantly && (p - initialPointer!).distance > 18) {
-      movedSignificantly = true;
+  void attach(int pointerId, Offset initial) {
+    if (_pointerId != null) return;
+    _pointerId = pointerId;
+    initialPointer = initial;
+    pointer = initial;
+    GestureBinding.instance.pointerRouter
+        .addRoute(pointerId, _onPointerEvent);
+  }
+
+  void _onPointerEvent(PointerEvent event) {
+    if (committed) return;
+    if (event is PointerMoveEvent) {
+      pointer = event.position;
+      if (initialPointer != null &&
+          !movedSignificantly &&
+          (event.position - initialPointer!).distance > 18) {
+        movedSignificantly = true;
+      }
+      notifyListeners();
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      commit();
     }
-    notifyListeners();
   }
 
   void commit() {
     if (committed) return;
     committed = true;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    final id = _pointerId;
+    if (id != null) {
+      GestureBinding.instance.pointerRouter
+          .removeRoute(id, _onPointerEvent);
+      _pointerId = null;
+    }
+    super.dispose();
   }
 }
 
