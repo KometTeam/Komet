@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io' show File;
+import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
@@ -19,6 +21,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
+import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
 
 class _UploadStatus {
@@ -878,16 +881,22 @@ class _ChatScreenState extends State<ChatScreen>
               overrideStatus: _effectiveStatus(message),
             );
 
+            final pressable = _LongPressBubble(
+              message: message,
+              isMe: isMe,
+              child: bubble,
+            );
+
             if (message.id == _lastSentId) {
               return _SentMessageAnimation(
                 key: ValueKey('anim_${message.id}'),
                 onComplete: () {
                   if (mounted) setState(() => _lastSentId = null);
                 },
-                child: bubble,
+                child: pressable,
               );
             }
-            return bubble;
+            return pressable;
           },
         ),
         ),
@@ -1675,6 +1684,68 @@ IconData _iconForFilename(String? name) {
       return Symbols.code;
     default:
       return Symbols.description;
+  }
+}
+
+class _LongPressBubble extends StatefulWidget {
+  final Widget child;
+  final CachedMessage message;
+  final bool isMe;
+
+  const _LongPressBubble({
+    required this.child,
+    required this.message,
+    required this.isMe,
+  });
+
+  @override
+  State<_LongPressBubble> createState() => _LongPressBubbleState();
+}
+
+class _LongPressBubbleState extends State<_LongPressBubble> {
+  final GlobalKey _boundaryKey = GlobalKey();
+  Offset _tapPoint = Offset.zero;
+
+  void _onLongPressStart(LongPressStartDetails details) {
+    _tapPoint = details.globalPosition;
+    final ctx = _boundaryKey.currentContext;
+    if (ctx == null) return;
+    final renderObject = ctx.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) return;
+
+    final origin = renderObject.localToGlobal(Offset.zero);
+    final rect = origin & renderObject.size;
+    final dpr = MediaQuery.of(ctx).devicePixelRatio.clamp(1.0, 2.0);
+
+    final ui.Image snapshot;
+    try {
+      snapshot = renderObject.toImageSync(pixelRatio: dpr);
+    } catch (_) {
+      return;
+    }
+
+    Haptics.medium();
+    Navigator.of(ctx).push(
+      MessageActionsRoute(
+        snapshot: snapshot,
+        originRect: rect,
+        tapPoint: _tapPoint,
+        isMe: widget.isMe,
+        messageText: widget.message.text,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onLongPressStart: _onLongPressStart,
+      child: RepaintBoundary(
+        key: _boundaryKey,
+        child: widget.child,
+      ),
+    );
   }
 }
 
