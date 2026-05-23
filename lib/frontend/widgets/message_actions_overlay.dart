@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/config/app_message_actions_style.dart';
 import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
@@ -68,6 +69,7 @@ void showMessageActions({
   required bool isMe,
   required String? messageText,
   required MessageActionsController controller,
+  required MessageActionsStyle style,
   required VoidCallback onDispose,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
@@ -80,6 +82,7 @@ void showMessageActions({
       isMe: isMe,
       messageText: messageText,
       controller: controller,
+      style: style,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -96,6 +99,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final bool isMe;
   final String? messageText;
   final MessageActionsController controller;
+  final MessageActionsStyle style;
   final VoidCallback onDismiss;
 
   const _MessageActionsLayer({
@@ -105,6 +109,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.isMe,
     required this.messageText,
     required this.controller,
+    required this.style,
     required this.onDismiss,
   });
 
@@ -127,6 +132,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   bool _showBelow = true;
   Offset _anchor = Offset.zero;
   List<Offset> _buttonCenters = const [];
+  List<Rect> _buttonHitRects = const [];
+  Rect _menuRect = Rect.zero;
   bool _initialized = false;
 
   int _hoveredIndex = -1;
@@ -155,15 +162,55 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     _initialized = true;
     _actions = _buildActions();
     final screenSize = MediaQuery.sizeOf(context);
+    if (widget.style == MessageActionsStyle.radial) {
+      _computeRadialGeometry(screenSize);
+    } else {
+      _computeListGeometry(screenSize);
+    }
+    widget.controller.addListener(_onControllerUpdate);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onControllerUpdate();
+    });
+  }
+
+  void _computeRadialGeometry(Size screenSize) {
     _showBelow = widget.tapPoint.dy < screenSize.height * 0.55;
     _anchor = _showBelow
         ? Offset(widget.tapPoint.dx, widget.originRect.bottom + 16)
         : Offset(widget.tapPoint.dx, widget.originRect.top - 16);
     _buttonCenters = _computeButtonCenters(screenSize);
-    widget.controller.addListener(_onControllerUpdate);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _onControllerUpdate();
-    });
+    _buttonHitRects = [
+      for (final c in _buttonCenters)
+        Rect.fromCenter(center: c, width: _hitRadius * 2, height: _hitRadius * 2),
+    ];
+  }
+
+  void _computeListGeometry(Size screenSize) {
+    final n = _actions.length;
+    const menuWidth = 244.0;
+    const itemHeight = 48.0;
+    const vPad = 8.0;
+    final menuHeight = n * itemHeight + vPad * 2;
+    final spaceBelow = screenSize.height - widget.originRect.bottom - 24;
+    final spaceAbove = widget.originRect.top - 24;
+    _showBelow = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
+    final menuY = _showBelow
+        ? widget.originRect.bottom + 10
+        : widget.originRect.top - 10 - menuHeight;
+    final rawX = widget.isMe
+        ? widget.originRect.right - menuWidth
+        : widget.originRect.left;
+    final menuX = rawX.clamp(8.0, screenSize.width - menuWidth - 8.0).toDouble();
+    _menuRect = Rect.fromLTWH(menuX, menuY, menuWidth, menuHeight);
+    _buttonHitRects = [
+      for (int i = 0; i < n; i++)
+        Rect.fromLTWH(
+          menuX,
+          menuY + vPad + i * itemHeight,
+          menuWidth,
+          itemHeight,
+        ),
+    ];
   }
 
   @override
@@ -180,7 +227,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       if (hasText) _Action(Symbols.content_copy, 'Копировать', _copy),
       _Action(Symbols.reply, 'Ответить', () => _stub('Ответ')),
       _Action(Symbols.forward, 'Переслать', () => _stub('Пересылка')),
-      _Action(Symbols.delete, 'Удалить', () => _stub('Удаление')),
+      _Action(
+        Symbols.delete,
+        'Удалить',
+        () => _stub('Удаление'),
+        destructive: true,
+      ),
     ];
   }
 
@@ -223,10 +275,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   }
 
   int _findButtonAt(Offset p) {
-    for (int i = 0; i < _buttonCenters.length; i++) {
-      if ((_buttonCenters[i] - p).distance <= _hitRadius) {
-        return i;
-      }
+    for (int i = 0; i < _buttonHitRects.length; i++) {
+      if (_buttonHitRects[i].contains(p)) return i;
     }
     return -1;
   }
@@ -307,12 +357,56 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                   ),
                 ),
               ),
-              ..._buildButtons(t),
-              _buildLabelBanner(size, t),
+              if (widget.style == MessageActionsStyle.radial) ...[
+                ..._buildButtons(t),
+                _buildLabelBanner(size, t),
+              ] else
+                _buildListMenu(t),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildListMenu(double t) {
+    final cs = Theme.of(context).colorScheme;
+    final eased = Curves.easeOutCubic.transform(t);
+    final scale = 0.88 + 0.12 * eased;
+    return Positioned(
+      left: _menuRect.left,
+      top: _menuRect.top,
+      width: _menuRect.width,
+      height: _menuRect.height,
+      child: Opacity(
+        opacity: eased,
+        child: Transform.scale(
+          scale: scale,
+          alignment: Alignment(
+            widget.isMe ? 1.0 : -1.0,
+            _showBelow ? -1.0 : 1.0,
+          ),
+          child: Material(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            elevation: 8,
+            shadowColor: Colors.black.withValues(alpha: 0.4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                for (int i = 0; i < _actions.length; i++)
+                  _ListMenuItem(
+                    action: _actions[i],
+                    highlighted: _hoveredIndex == i,
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -409,7 +503,63 @@ class _Action {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _Action(this.icon, this.label, this.onTap);
+  final bool destructive;
+  const _Action(
+    this.icon,
+    this.label,
+    this.onTap, {
+    this.destructive = false,
+  });
+}
+
+class _ListMenuItem extends StatelessWidget {
+  final _Action action;
+  final bool highlighted;
+  const _ListMenuItem({required this.action, required this.highlighted});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final fg = action.destructive ? cs.error : cs.onSurface;
+    final hoverBg = action.destructive
+        ? cs.error.withValues(alpha: 0.14)
+        : cs.primary.withValues(alpha: 0.16);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutCubic,
+      height: 48,
+      color: highlighted ? hoverBg : Colors.transparent,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Haptics.tap();
+            action.onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(action.icon, color: fg, size: 22),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    action.label,
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 15,
+                      fontWeight:
+                          highlighted ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ActionButton extends StatelessWidget {

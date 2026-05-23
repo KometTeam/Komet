@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/haptics.dart';
 import 'appearance_screen.dart';
 import 'font_settings_screen.dart';
+import 'message_actions_screen.dart';
 import 'theme_settings_screen.dart';
 
 class _CustomizationCategory {
@@ -43,6 +44,12 @@ class CustomizationScreen extends StatelessWidget {
       subtitle: 'Шрифт приложения, свои шрифты, размер текста',
       builder: _buildFontSettings,
     ),
+    _CustomizationCategory(
+      icon: Symbols.touch_app,
+      title: 'Меню действий',
+      subtitle: 'Радиальное или список — для долгого нажатия на сообщение',
+      builder: _buildMessageActions,
+    ),
   ];
 
   static Widget _buildAppearance(BuildContext context) =>
@@ -53,6 +60,9 @@ class CustomizationScreen extends StatelessWidget {
 
   static Widget _buildThemeSettings(BuildContext context) =>
       const ThemeSettingsScreen();
+
+  static Widget _buildMessageActions(BuildContext context) =>
+      const MessageActionsScreen();
 
   @override
   Widget build(BuildContext context) {

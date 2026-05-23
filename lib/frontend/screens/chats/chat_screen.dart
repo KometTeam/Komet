@@ -19,6 +19,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
+import '../../../core/config/app_message_actions_style.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/message_actions_overlay.dart';
@@ -1745,6 +1746,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       isMe: widget.isMe,
       messageText: widget.message.text,
       controller: controller,
+      style: AppMessageActionsStyle.current.value,
       onDispose: () {
         if (identical(_controller, controller)) {
           _controller = null;
