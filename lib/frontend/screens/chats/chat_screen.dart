@@ -1715,7 +1715,8 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
 
     final origin = renderObject.localToGlobal(Offset.zero);
     final rect = origin & renderObject.size;
-    final dpr = MediaQuery.of(ctx).devicePixelRatio.clamp(1.0, 2.0);
+    final rawDpr = MediaQuery.of(ctx).devicePixelRatio;
+    final dpr = rawDpr > 2.0 ? 2.0 : rawDpr;
 
     final ui.Image snapshot;
     try {
