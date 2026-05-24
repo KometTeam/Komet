@@ -81,10 +81,11 @@ class _ThemeModeCard extends StatelessWidget {
                         icon: item.icon,
                         label: item.label,
                         selected: current == item.mode,
-                        onTap: () {
+                        onTap: (position) {
                           if (current == item.mode) return;
                           Haptics.selection();
-                          KometApp.stateOf(context)?.applyThemeMode(item.mode);
+                          KometApp.stateOf(context)
+                              ?.applyThemeModeWithReveal(item.mode, position);
                         },
                       ),
                   ],
@@ -98,11 +99,11 @@ class _ThemeModeCard extends StatelessWidget {
   }
 }
 
-class _ModeTile extends StatelessWidget {
+class _ModeTile extends StatefulWidget {
   final IconData icon;
   final String label;
   final bool selected;
-  final VoidCallback onTap;
+  final ValueChanged<Offset> onTap;
 
   const _ModeTile({
     required this.icon,
@@ -112,22 +113,30 @@ class _ModeTile extends StatelessWidget {
   });
 
   @override
+  State<_ModeTile> createState() => _ModeTileState();
+}
+
+class _ModeTileState extends State<_ModeTile> {
+  Offset _lastTapPosition = Offset.zero;
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTapDown: (d) => _lastTapPosition = d.globalPosition,
+        onTap: () => widget.onTap(_lastTapPosition),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           child: Row(
             children: [
-              Icon(icon, color: cs.onSurface, size: 22, weight: 500),
+              Icon(widget.icon, color: cs.onSurface, size: 22, weight: 500),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  label,
+                  widget.label,
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 15,
@@ -136,10 +145,12 @@ class _ModeTile extends StatelessWidget {
                 ),
               ),
               Icon(
-                selected ? Symbols.radio_button_checked : Symbols.radio_button_unchecked,
-                color: selected ? cs.primary : cs.outline,
+                widget.selected
+                    ? Symbols.radio_button_checked
+                    : Symbols.radio_button_unchecked,
+                color: widget.selected ? cs.primary : cs.outline,
                 size: 22,
-                fill: selected ? 1 : 0,
+                fill: widget.selected ? 1 : 0,
               ),
             ],
           ),
@@ -149,54 +160,76 @@ class _ModeTile extends StatelessWidget {
   }
 }
 
-class _AmoledCard extends StatelessWidget {
+class _AmoledCard extends StatefulWidget {
   const _AmoledCard();
+
+  @override
+  State<_AmoledCard> createState() => _AmoledCardState();
+}
+
+class _AmoledCardState extends State<_AmoledCard> {
+  Offset _lastPointerPosition = Offset.zero;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-        child: Row(
-          children: [
-            Icon(Symbols.contrast, color: cs.onSurface, size: 24, weight: 500),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'AMOLED-чёрный',
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Чистый чёрный фон для OLED-экранов',
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                  ),
-                ],
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (e) => _lastPointerPosition = e.position,
+      child: Material(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+          child: Row(
+            children: [
+              Icon(
+                Symbols.contrast,
+                color: cs.onSurface,
+                size: 24,
+                weight: 500,
               ),
-            ),
-            ValueListenableBuilder<bool>(
-              valueListenable: AppAmoled.current,
-              builder: (context, value, _) {
-                return Switch(
-                  value: value,
-                  onChanged: (v) {
-                    Haptics.selection();
-                    KometApp.stateOf(context)?.applyAmoled(v);
-                  },
-                );
-              },
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AMOLED-чёрный',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Чистый чёрный фон для OLED-экранов',
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: AppAmoled.current,
+                builder: (context, value, _) {
+                  return Switch(
+                    value: value,
+                    onChanged: (v) {
+                      Haptics.selection();
+                      KometApp.stateOf(context)?.applyAmoledWithReveal(
+                        v,
+                        _lastPointerPosition,
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

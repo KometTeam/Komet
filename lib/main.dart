@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -13,6 +16,7 @@ import 'core/config/app_bubble_behavior.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
+import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'backend/modules/account.dart';
@@ -31,6 +35,7 @@ import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/screens/chats/chat_list_screen.dart';
 import 'frontend/widgets/custom_notification.dart';
+import 'frontend/widgets/theme_reveal.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
@@ -86,6 +91,7 @@ void main() async {
   AppThemeModeConfig.current.value = await AppThemeModeConfig.load();
   AppAmoled.current.value = await AppAmoled.load();
   AppThemeSchedule.current.value = await AppThemeSchedule.load();
+  AppMessageActionsStyle.current.value = await AppMessageActionsStyle.load();
   runApp(
     KometApp(
       initialLocale: initialLocale,
@@ -128,8 +134,14 @@ class KometApp extends StatefulWidget {
   State<KometApp> createState() => KometAppState();
 }
 
-class KometAppState extends State<KometApp> with WidgetsBindingObserver {
+class KometAppState extends State<KometApp>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   static const _fallbackSeed = Color(0xFFC1C4FF);
+
+  final GlobalKey _captureBoundaryKey = GlobalKey();
+  OverlayEntry? _revealEntry;
+  AnimationController? _revealController;
+  ui.Image? _revealImage;
 
   late Locale _locale;
   late String _fontId;
@@ -239,6 +251,7 @@ class KometAppState extends State<KometApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _finishReveal();
     _sessionExpiredSub?.cancel();
     _loginStatusSub?.cancel();
     _vpnBypassSub?.cancel();
@@ -321,8 +334,87 @@ class KometAppState extends State<KometApp> with WidgetsBindingObserver {
     await AppThemeModeConfig.save(mode);
   }
 
+  void applyThemeModeWithReveal(AppThemeMode mode, Offset center) {
+    if (AppThemeModeConfig.current.value == mode) return;
+    _runThemeReveal(center, () => AppThemeModeConfig.save(mode));
+  }
+
   Future<void> applyAmoled(bool value) async {
     await AppAmoled.save(value);
+  }
+
+  void applyAmoledWithReveal(bool value, Offset center) {
+    if (AppAmoled.current.value == value) return;
+    _runThemeReveal(center, () => AppAmoled.save(value));
+  }
+
+  void _runThemeReveal(Offset center, Future<void> Function() apply) {
+    final overlay = KometApp.navigatorKey.currentState?.overlay;
+    final ctx = _captureBoundaryKey.currentContext;
+    if (overlay == null || ctx == null) {
+      apply();
+      return;
+    }
+    if (MediaQuery.disableAnimationsOf(ctx)) {
+      apply();
+      return;
+    }
+    final renderObject = ctx.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) {
+      apply();
+      return;
+    }
+
+    final ui.Image snapshot;
+    try {
+      final dpr = math.min(MediaQuery.of(ctx).devicePixelRatio, 2.0);
+      snapshot = renderObject.toImageSync(pixelRatio: dpr);
+    } catch (_) {
+      apply();
+      return;
+    }
+
+    _finishReveal();
+
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    final entry = ThemeRevealOverlay.build(
+      snapshot: snapshot,
+      center: center,
+      animation: controller,
+    );
+
+    _revealController = controller;
+    _revealEntry = entry;
+    _revealImage = snapshot;
+
+    overlay.insert(entry);
+    apply();
+
+    WidgetsBinding.instance.endOfFrame.then((_) {
+      if (_revealController != controller) return;
+      controller.forward().then(
+        (_) {
+          if (_revealController != controller) return;
+          _finishReveal();
+        },
+        onError: (_) {},
+      );
+    });
+  }
+
+  void _finishReveal() {
+    _revealEntry?.remove();
+    _revealEntry = null;
+    _revealController?.dispose();
+    _revealController = null;
+    final img = _revealImage;
+    _revealImage = null;
+    if (img != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => img.dispose());
+    }
   }
 
   Future<void> applyThemeSchedule(ThemeSchedule schedule) async {
@@ -553,7 +645,10 @@ class KometAppState extends State<KometApp> with WidgetsBindingObserver {
                           fit: StackFit.expand,
                           clipBehavior: Clip.none,
                           children: [
-                            sChild!,
+                            RepaintBoundary(
+                              key: _captureBoundaryKey,
+                              child: sChild!,
+                            ),
                             if (fpsOn) const FpsOverlayLayer(),
                           ],
                         );
