@@ -9,6 +9,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/info_action_sheet.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'customization_screen.dart';
@@ -96,6 +97,38 @@ class _SettingsTabState extends State<SettingsTab> {
     // Let the user *feel* the confirmation the instant they switch it on.
     if (value) Haptics.success();
     if (mounted) setState(() => _hapticsEnabled = value);
+  }
+
+  Future<void> _openCloudStorage(BuildContext context) async {
+    final cs = Theme.of(context).colorScheme;
+    await showInfoActionSheet(
+      context,
+      headerIcon: Symbols.cloud,
+      title: 'Облачное хранилище',
+      subtitle: 'Через МАХ',
+      items: [
+        const InfoActionSheetItem(
+          icon: Symbols.cloud_done,
+          title: 'Работает при белых списках',
+          body: 'Вы сможете передать файл даже при ограниченном интернете.',
+        ),
+        const InfoActionSheetItem(
+          icon: Symbols.inventory_2,
+          title: 'Файлы до 4ГБ, безлимитное количество.',
+          body: 'Можете хранить массивный обьем информации.',
+        ),
+        InfoActionSheetItem(
+          icon: Symbols.gpp_maybe,
+          title: 'Не обеспечивается конфединциальность файлов',
+          body:
+              'Облачное хранилище работает через ваш аккаунт на сервере МАХ, '
+              'нужные люди всё равно могут его посмотреть.',
+          titleColor: cs.error,
+        ),
+      ],
+      confirmLabel: 'ОК',
+      confirmDelay: const Duration(seconds: 3),
+    );
   }
 
   Future<void> _confirmLogout() async {
@@ -276,6 +309,11 @@ child: _buildSection(
                       label: 'Тактильная отдача',
                       toggleValue: _hapticsEnabled,
                       onToggle: _setHaptics,
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.cloud,
+                      label: 'Облачное хранилище [BETA]',
+                      onTap: () => _openCloudStorage(context),
                     ),
                     _SettingsItem(
                       icon: Symbols.vpn_lock,

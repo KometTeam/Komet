@@ -212,11 +212,23 @@ class AppLocalizationsRu extends AppLocalizations {
   String get spoofFieldLocale => 'Локаль';
 
   @override
+  String get spoofFieldDeviceLocale => 'Системная локаль (производная)';
+
+  @override
   String get spoofIdentifiersSectionTitle => 'Идентификаторы';
 
   @override
   String get spoofIdentifiersDescription =>
       'mt_instanceid и clientSessionId генерируются автоматически при каждом запуске приложения. Изменить можно только Device ID.';
+
+  @override
+  String get spoofFieldInstanceId => 'mt_instanceid';
+
+  @override
+  String get spoofFieldClientSessionId => 'clientSessionId';
+
+  @override
+  String get spoofFieldPushDeviceType => 'Тип push-уведомлений';
 
   @override
   String get spoofFieldDeviceId => 'ID Устройства';
