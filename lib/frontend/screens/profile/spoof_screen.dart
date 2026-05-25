@@ -8,10 +8,12 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/config/device_presets.dart';
+import '../../../core/storage/device_identity.dart';
 import '../../../core/storage/spoofing_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/info_action_sheet.dart';
 import '../auth/login_screen.dart';
 
 enum SpoofingMethod { partial, full }
@@ -36,6 +38,10 @@ class _SpoofScreenState extends State<SpoofScreen> {
   final _deviceIdController = TextEditingController();
   final _appVersionController = TextEditingController();
   final _buildNumberController = TextEditingController();
+  final _instanceIdController = TextEditingController();
+  final _clientSessionIdController = TextEditingController();
+  final _deviceLocaleController = TextEditingController();
+  final _pushDeviceTypeController = TextEditingController(text: 'GCM');
 
   String _selectedDeviceType = 'ANDROID';
   String _selectedArch = 'arm64-v8a';
@@ -45,7 +51,32 @@ class _SpoofScreenState extends State<SpoofScreen> {
   @override
   void initState() {
     super.initState();
+    _localeController.addListener(_syncDeviceLocale);
     _loadInitialData();
+  }
+
+  void _syncDeviceLocale() {
+    if (_selectedMethod == SpoofingMethod.full) return;
+    final derived = _localeController.text.split(RegExp(r'[-_]')).first;
+    if (_deviceLocaleController.text != derived) {
+      _deviceLocaleController.text = derived;
+    }
+  }
+
+  Future<bool> _confirmFullSpoofing() {
+    return showInfoActionSheet(
+      context,
+      headerIcon: Icons.warning_amber_rounded,
+      title: 'Могут быть последствия.',
+      subtitle: 'Меняй, только если знаешь что делаешь.',
+      confirmLabel: 'ОК',
+      confirmDelay: const Duration(seconds: 3),
+    );
+  }
+
+  Future<void> _loadSessionIdentifiers() async {
+    _instanceIdController.text = await DeviceIdentity.instanceId();
+    _clientSessionIdController.text = '${DeviceIdentity.clientSessionId}';
   }
 
   String _generateDeviceId() {
@@ -55,6 +86,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
+    await _loadSessionIdentifiers();
     final prefs = await SharedPreferences.getInstance();
     final isSpoofingEnabled = prefs.getBool('spoofing_enabled') ?? false;
 
@@ -336,6 +368,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
   @override
   void dispose() {
+    _localeController.removeListener(_syncDeviceLocale);
     _deviceNameController.dispose();
     _osVersionController.dispose();
     _screenController.dispose();
@@ -344,6 +377,10 @@ class _SpoofScreenState extends State<SpoofScreen> {
     _deviceIdController.dispose();
     _appVersionController.dispose();
     _buildNumberController.dispose();
+    _instanceIdController.dispose();
+    _clientSessionIdController.dispose();
+    _deviceLocaleController.dispose();
+    _pushDeviceTypeController.dispose();
     super.dispose();
   }
 
@@ -453,8 +490,16 @@ class _SpoofScreenState extends State<SpoofScreen> {
                 ),
               ],
               selected: {_selectedMethod},
-              onSelectionChanged: (s) =>
-                  setState(() => _selectedMethod = s.first),
+              onSelectionChanged: (s) async {
+                final next = s.first;
+                if (next == _selectedMethod) return;
+                if (next == SpoofingMethod.full) {
+                  final confirmed = await _confirmFullSpoofing();
+                  if (!confirmed || !mounted) return;
+                }
+                setState(() => _selectedMethod = next);
+                _syncDeviceLocale();
+              },
             ),
             const SizedBox(height: 12),
             descriptionWidget,
@@ -604,6 +649,15 @@ class _SpoofScreenState extends State<SpoofScreen> {
                 Icons.language_outlined,
               ),
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _deviceLocaleController,
+              enabled: _selectedMethod == SpoofingMethod.full,
+              decoration: _inputDecoration(
+                l10n.spoofFieldDeviceLocale,
+                Icons.translate_outlined,
+              ),
+            ),
           ],
         ),
       ),
@@ -626,6 +680,24 @@ class _SpoofScreenState extends State<SpoofScreen> {
             ),
             const SizedBox(height: 12),
             TextField(
+              controller: _instanceIdController,
+              enabled: _selectedMethod == SpoofingMethod.full,
+              decoration: _inputDecoration(
+                l10n.spoofFieldInstanceId,
+                Icons.fingerprint_outlined,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _clientSessionIdController,
+              enabled: _selectedMethod == SpoofingMethod.full,
+              decoration: _inputDecoration(
+                l10n.spoofFieldClientSessionId,
+                Icons.vpn_key_outlined,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
               controller: _deviceIdController,
               decoration:
                   _inputDecoration(
@@ -642,7 +714,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _appVersionController,
-              enabled: false,
+              enabled: _selectedMethod == SpoofingMethod.full,
               decoration: _inputDecoration(
                 l10n.spoofFieldAppVersion,
                 Icons.info_outline_rounded,
@@ -651,11 +723,20 @@ class _SpoofScreenState extends State<SpoofScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _buildNumberController,
-              enabled: false,
+              enabled: _selectedMethod == SpoofingMethod.full,
               keyboardType: TextInputType.number,
               decoration: _inputDecoration(
                 l10n.spoofFieldBuildNumber,
                 Icons.numbers_outlined,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _pushDeviceTypeController,
+              enabled: _selectedMethod == SpoofingMethod.full,
+              decoration: _inputDecoration(
+                l10n.spoofFieldPushDeviceType,
+                Icons.notifications_outlined,
               ),
             ),
             const SizedBox(height: 16),

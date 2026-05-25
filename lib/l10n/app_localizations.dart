@@ -482,6 +482,12 @@ abstract class AppLocalizations {
   /// **'Locale'**
   String get spoofFieldLocale;
 
+  /// No description provided for @spoofFieldDeviceLocale.
+  ///
+  /// In en, this message translates to:
+  /// **'Device locale (derived)'**
+  String get spoofFieldDeviceLocale;
+
   /// No description provided for @spoofIdentifiersSectionTitle.
   ///
   /// In en, this message translates to:
@@ -493,6 +499,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'mt_instanceid and clientSessionId are generated automatically on every app launch. Only the Device ID can be changed.'**
   String get spoofIdentifiersDescription;
+
+  /// No description provided for @spoofFieldInstanceId.
+  ///
+  /// In en, this message translates to:
+  /// **'mt_instanceid'**
+  String get spoofFieldInstanceId;
+
+  /// No description provided for @spoofFieldClientSessionId.
+  ///
+  /// In en, this message translates to:
+  /// **'clientSessionId'**
+  String get spoofFieldClientSessionId;
+
+  /// No description provided for @spoofFieldPushDeviceType.
+  ///
+  /// In en, this message translates to:
+  /// **'Push device type'**
+  String get spoofFieldPushDeviceType;
 
   /// No description provided for @spoofFieldDeviceId.
   ///

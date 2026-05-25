@@ -1,0 +1,56 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'lib/**'
+      - 'windows/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'windows/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-windows.yml'
+
+env:
+  FLUTTER_VERSION: '3.41.5'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/Komet-windows-x64.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-windows-x64
+          path: dist/Komet-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30

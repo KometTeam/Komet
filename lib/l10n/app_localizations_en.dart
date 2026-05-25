@@ -210,11 +210,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get spoofFieldLocale => 'Locale';
 
   @override
+  String get spoofFieldDeviceLocale => 'Device locale (derived)';
+
+  @override
   String get spoofIdentifiersSectionTitle => 'Identifiers';
 
   @override
   String get spoofIdentifiersDescription =>
       'mt_instanceid and clientSessionId are generated automatically on every app launch. Only the Device ID can be changed.';
+
+  @override
+  String get spoofFieldInstanceId => 'mt_instanceid';
+
+  @override
+  String get spoofFieldClientSessionId => 'clientSessionId';
+
+  @override
+  String get spoofFieldPushDeviceType => 'Push device type';
 
   @override
   String get spoofFieldDeviceId => 'Device ID';

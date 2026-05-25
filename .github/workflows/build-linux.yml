@@ -1,0 +1,60 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'lib/**'
+      - 'linux/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-linux.yml'
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'linux/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-linux.yml'
+
+env:
+  FLUTTER_VERSION: '3.41.5'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Linux
+        run: flutter build linux --release
+
+      - name: Package Linux
+        run: |
+          mkdir -p dist
+          tar -C build/linux/x64/release/bundle -czf dist/Komet-linux-x64.tar.gz .
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-linux-x64
+          path: dist/Komet-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 30
