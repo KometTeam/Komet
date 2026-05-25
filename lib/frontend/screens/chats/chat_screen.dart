@@ -804,14 +804,18 @@ class _ChatScreenState extends State<ChatScreen>
             animation: _attachAnim,
             builder: (context, _) {
               if (_attachAnim.value == 0) return const SizedBox.shrink();
+              final curve = _attachAnim.status == AnimationStatus.reverse
+                  ? Curves.easeIn
+                  : Curves.easeOut;
+              final t = curve.transform(_attachAnim.value);
               return Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: ClipRect(
                   child: Align(
                     alignment: Alignment.bottomCenter,
-                    heightFactor: Curves.easeOutCubic.transform(_attachAnim.value),
+                    heightFactor: t,
                     child: Opacity(
-                      opacity: Curves.easeOut.transform(_attachAnim.value),
+                      opacity: t,
                       child: AttachmentPanel(
                         onClose: () => _showAttachmentPanel.value = false,
                         onPickFile: _pickAndUploadFile,

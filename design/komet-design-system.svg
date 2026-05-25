@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="2280" viewBox="0 0 1440 2280" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <style>
+      .title { font-size: 32px; font-weight: 700; }
+      .h2 { font-size: 22px; font-weight: 600; }
+      .h3 { font-size: 16px; font-weight: 600; }
+      .label { font-size: 12px; font-weight: 500; }
+      .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+      .body { font-size: 14px; font-weight: 400; }
+      .small { font-size: 12px; font-weight: 400; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="2280" fill="#F8F4FE"/>
+
+  <g id="header">
+    <text x="64" y="84" class="title" fill="#1B1B21">Komet — Design System</text>
+    <text x="64" y="112" class="small" fill="#46464F">Seed #C1C4FF · Material 3 Expressive · Inter</text>
+  </g>
+
+  <g id="colors-light">
+    <text x="64" y="180" class="h2" fill="#1B1B21">Цвета — Light</text>
+
+    <g id="light-swatches">
+      <g transform="translate(64, 208)">
+        <rect width="180" height="96" rx="12" fill="#4D55A9"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">primary</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#4D55A9</text>
+      </g>
+      <g transform="translate(260, 208)">
+        <rect width="180" height="96" rx="12" fill="#DFE0FF"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">primaryContainer</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#DFE0FF</text>
+      </g>
+      <g transform="translate(456, 208)">
+        <rect width="180" height="96" rx="12" fill="#FEFBFF" stroke="#C6C5D0"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">surface</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#FEFBFF</text>
+      </g>
+      <g transform="translate(652, 208)">
+        <rect width="180" height="96" rx="12" fill="#F2EEF8"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">surfaceContainer</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#F2EEF8</text>
+      </g>
+      <g transform="translate(848, 208)">
+        <rect width="180" height="96" rx="12" fill="#ECE8F2"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">surfaceContainerHigh</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#ECE8F2</text>
+      </g>
+      <g transform="translate(1044, 208)">
+        <rect width="180" height="96" rx="12" fill="#E6E2EC"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">surfaceContainerHighest</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#E6E2EC</text>
+      </g>
+
+      <g transform="translate(64, 360)">
+        <rect width="180" height="96" rx="12" fill="#1B1B21"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">onSurface</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#1B1B21</text>
+      </g>
+      <g transform="translate(260, 360)">
+        <rect width="180" height="96" rx="12" fill="#46464F"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">onSurfaceVariant</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#46464F</text>
+      </g>
+      <g transform="translate(456, 360)">
+        <rect width="180" height="96" rx="12" fill="#767680"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">outline</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#767680</text>
+      </g>
+      <g transform="translate(652, 360)">
+        <rect width="180" height="96" rx="12" fill="#C6C5D0"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">outlineVariant</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#C6C5D0</text>
+      </g>
+      <g transform="translate(848, 360)">
+        <rect width="180" height="96" rx="12" fill="#BA1A1A"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">error</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#BA1A1A</text>
+      </g>
+      <g transform="translate(1044, 360)">
+        <rect width="180" height="96" rx="12" fill="#FFDAD6"/>
+        <text x="12" y="116" class="label" fill="#1B1B21">errorContainer</text>
+        <text x="12" y="132" class="mono" fill="#46464F">#FFDAD6</text>
+      </g>
+    </g>
+  </g>
+
+  <g id="colors-dark">
+    <text x="64" y="528" class="h2" fill="#1B1B21">Цвета — Dark</text>
+    <rect x="48" y="552" width="1344" height="304" rx="20" fill="#131318"/>
+
+    <g id="dark-swatches">
+      <g transform="translate(80, 576)">
+        <rect width="180" height="96" rx="12" fill="#BCC2FF"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">primary</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#BCC2FF</text>
+      </g>
+      <g transform="translate(276, 576)">
+        <rect width="180" height="96" rx="12" fill="#353D90"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">primaryContainer</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#353D90</text>
+      </g>
+      <g transform="translate(472, 576)">
+        <rect width="180" height="96" rx="12" fill="#131318" stroke="#46464F"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">surface</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#131318</text>
+      </g>
+      <g transform="translate(668, 576)">
+        <rect width="180" height="96" rx="12" fill="#1F1F25"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">surfaceContainer</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#1F1F25</text>
+      </g>
+      <g transform="translate(864, 576)">
+        <rect width="180" height="96" rx="12" fill="#2A2A30"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">surfaceContainerHigh</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#2A2A30</text>
+      </g>
+      <g transform="translate(1060, 576)">
+        <rect width="180" height="96" rx="12" fill="#35353B"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">surfaceContainerHighest</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#35353B</text>
+      </g>
+
+      <g transform="translate(80, 728)">
+        <rect width="180" height="96" rx="12" fill="#E4E1E9"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">onSurface</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#E4E1E9</text>
+      </g>
+      <g transform="translate(276, 728)">
+        <rect width="180" height="96" rx="12" fill="#C6C5D0"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">onSurfaceVariant</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#C6C5D0</text>
+      </g>
+      <g transform="translate(472, 728)">
+        <rect width="180" height="96" rx="12" fill="#90909A"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">outline</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#90909A</text>
+      </g>
+      <g transform="translate(668, 728)">
+        <rect width="180" height="96" rx="12" fill="#46464F"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">outlineVariant</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#46464F</text>
+      </g>
+      <g transform="translate(864, 728)">
+        <rect width="180" height="96" rx="12" fill="#FFB4AB"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">error</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#FFB4AB</text>
+      </g>
+      <g transform="translate(1060, 728)">
+        <rect width="180" height="96" rx="12" fill="#93000A"/>
+        <text x="12" y="116" class="label" fill="#E4E1E9">errorContainer</text>
+        <text x="12" y="132" class="mono" fill="#C6C5D0">#93000A</text>
+      </g>
+    </g>
+  </g>
+
+  <g id="typography">
+    <text x="64" y="924" class="h2" fill="#1B1B21">Типографика — Inter</text>
+    <g transform="translate(64, 956)">
+      <text y="36" font-size="32" font-weight="700" fill="#1B1B21">Display / 32 / 700</text>
+      <text y="76" font-size="22" font-weight="600" fill="#1B1B21">Headline / 22 / 600</text>
+      <text y="112" font-size="18" font-weight="600" fill="#1B1B21">Title / 18 / 600</text>
+      <text y="144" font-size="16" font-weight="500" fill="#1B1B21">Subtitle / 16 / 500</text>
+      <text y="174" font-size="14" font-weight="400" fill="#46464F">Body / 14 / 400 — основной текст в интерфейсе.</text>
+      <text y="200" font-size="13" font-weight="400" fill="#46464F">Caption / 13 / 400 — подсказки, метаданные.</text>
+      <text y="224" font-size="12" font-weight="500" fill="#767680">LABEL / 12 / 500 / UPPER</text>
+    </g>
+  </g>
+
+  <g id="settings-row" transform="translate(64, 1216)">
+    <text y="0" class="h2" fill="#1B1B21">Компонент: Settings Item</text>
+    <rect x="0" y="20" width="600" height="240" rx="20" fill="#FEFBFF" stroke="#E6E2EC"/>
+
+    <g transform="translate(0, 36)">
+      <rect width="600" height="56" fill="transparent"/>
+      <circle cx="36" cy="28" r="14" fill="#DFE0FF"/>
+      <text x="62" y="34" font-size="15" font-weight="500" fill="#1B1B21">Цифровой ID</text>
+      <text x="572" y="34" font-size="14" fill="#767680" text-anchor="end">›</text>
+    </g>
+    <line x1="60" y1="92" x2="600" y2="92" stroke="#E6E2EC"/>
+
+    <g transform="translate(0, 92)">
+      <rect width="600" height="56" fill="transparent"/>
+      <circle cx="36" cy="28" r="14" fill="#DFE0FF"/>
+      <text x="62" y="34" font-size="15" font-weight="500" fill="#1B1B21">Облачное хранилище</text>
+      <rect x="206" y="20" width="56" height="18" rx="9" fill="#FFDAD6"/>
+      <text x="234" y="33" font-size="10" font-weight="700" fill="#BA1A1A" text-anchor="middle">BETA</text>
+      <text x="572" y="34" font-size="14" fill="#767680" text-anchor="end">›</text>
+    </g>
+    <line x1="60" y1="148" x2="600" y2="148" stroke="#E6E2EC"/>
+
+    <g transform="translate(0, 148)">
+      <rect width="600" height="56" fill="transparent"/>
+      <circle cx="36" cy="28" r="14" fill="#DFE0FF"/>
+      <text x="62" y="34" font-size="15" font-weight="500" fill="#1B1B21">Уведомления</text>
+      <rect x="528" y="16" width="44" height="24" rx="12" fill="#4D55A9"/>
+      <circle cx="560" cy="28" r="9" fill="#FFFFFF"/>
+    </g>
+    <line x1="60" y1="204" x2="600" y2="204" stroke="#E6E2EC"/>
+
+    <g transform="translate(0, 204)">
+      <rect width="600" height="56" fill="transparent"/>
+      <circle cx="36" cy="28" r="14" fill="#FFDAD6"/>
+      <text x="62" y="34" font-size="15" font-weight="500" fill="#BA1A1A">Выйти из аккаунта</text>
+    </g>
+  </g>
+
+  <g id="buttons" transform="translate(720, 1216)">
+    <text y="0" class="h2" fill="#1B1B21">Кнопки</text>
+
+    <g transform="translate(0, 40)">
+      <rect width="240" height="48" rx="14" fill="#4D55A9"/>
+      <text x="120" y="30" font-size="15" font-weight="600" fill="#FFFFFF" text-anchor="middle">Filled · Primary</text>
+    </g>
+
+    <g transform="translate(0, 104)">
+      <rect width="240" height="48" rx="14" fill="#DFE0FF"/>
+      <text x="120" y="30" font-size="15" font-weight="600" fill="#050865" text-anchor="middle">Tonal</text>
+    </g>
+
+    <g transform="translate(0, 168)">
+      <rect width="240" height="48" rx="14" fill="transparent" stroke="#767680"/>
+      <text x="120" y="30" font-size="15" font-weight="500" fill="#4D55A9" text-anchor="middle">Outlined</text>
+    </g>
+
+    <g transform="translate(0, 232)">
+      <text x="0" y="14" font-size="15" font-weight="500" fill="#4D55A9">Text button</text>
+    </g>
+
+    <g transform="translate(280, 40)">
+      <rect width="240" height="48" rx="14" fill="#BA1A1A"/>
+      <text x="120" y="30" font-size="15" font-weight="600" fill="#FFFFFF" text-anchor="middle">Destructive</text>
+    </g>
+
+    <g transform="translate(280, 104)">
+      <circle cx="24" cy="24" r="24" fill="#ECE8F2"/>
+      <text x="24" y="30" font-size="20" fill="#1B1B21" text-anchor="middle">＋</text>
+    </g>
+  </g>
+
+  <g id="action-sheet" transform="translate(64, 1520)">
+    <text y="0" class="h2" fill="#1B1B21">Компонент: InfoActionSheet</text>
+    <rect x="0" y="20" width="400" height="540" rx="24" fill="#ECE8F2"/>
+    <rect x="180" y="32" width="40" height="4" rx="2" fill="#C6C5D0"/>
+
+    <g transform="translate(0, 60)">
+      <circle cx="200" cy="40" r="32" fill="#DFE0FF"/>
+      <text x="200" y="48" font-size="28" text-anchor="middle" fill="#050865">☁</text>
+      <text x="200" y="104" font-size="18" font-weight="600" fill="#1B1B21" text-anchor="middle">Облачное хранилище</text>
+      <text x="200" y="124" font-size="13" fill="#46464F" text-anchor="middle">Через МАХ</text>
+    </g>
+
+    <g transform="translate(24, 216)">
+      <rect width="352" height="64" rx="14" fill="#FEFBFF"/>
+      <circle cx="28" cy="32" r="14" fill="#DFE0FF"/>
+      <text x="56" y="28" font-size="13" font-weight="600" fill="#1B1B21">Работает при белых списках</text>
+      <text x="56" y="46" font-size="11" fill="#46464F">Можете передать файл при ограничениях.</text>
+    </g>
+    <g transform="translate(24, 292)">
+      <rect width="352" height="64" rx="14" fill="#FEFBFF"/>
+      <circle cx="28" cy="32" r="14" fill="#DFE0FF"/>
+      <text x="56" y="28" font-size="13" font-weight="600" fill="#1B1B21">Файлы до 4 ГБ, безлимитно</text>
+      <text x="56" y="46" font-size="11" fill="#46464F">Хранилище большого объёма.</text>
+    </g>
+    <g transform="translate(24, 368)">
+      <rect width="352" height="64" rx="14" fill="#FEFBFF"/>
+      <circle cx="28" cy="32" r="14" fill="#FFDAD6"/>
+      <text x="56" y="28" font-size="13" font-weight="600" fill="#BA1A1A">Без конфиденциальности</text>
+      <text x="56" y="46" font-size="11" fill="#46464F">Файлы хранятся на сервере МАХ.</text>
+    </g>
+
+    <g transform="translate(24, 460)">
+      <rect width="352" height="48" rx="14" fill="#4D55A9"/>
+      <text x="176" y="30" font-size="15" font-weight="600" fill="#FFFFFF" text-anchor="middle">ОК</text>
+    </g>
+  </g>
+
+  <g id="empty-screen" transform="translate(560, 1520)">
+    <text y="0" class="h2" fill="#1B1B21">Шаблон экрана</text>
+    <rect x="0" y="20" width="400" height="700" rx="32" fill="#FEFBFF" stroke="#E6E2EC"/>
+
+    <g transform="translate(0, 36)">
+      <rect width="400" height="56" fill="transparent"/>
+      <text x="24" y="36" font-size="20" fill="#1B1B21">←</text>
+      <text x="60" y="38" font-size="17" font-weight="600" fill="#1B1B21">Заголовок</text>
+    </g>
+
+    <g transform="translate(0, 300)">
+      <circle cx="200" cy="40" r="32" fill="#F2EEF8"/>
+      <text x="200" y="50" font-size="28" text-anchor="middle" fill="#767680">☁</text>
+      <text x="200" y="100" font-size="16" font-weight="600" fill="#1B1B21" text-anchor="middle">Заголовок состояния</text>
+      <text x="200" y="120" font-size="13" fill="#46464F" text-anchor="middle">Подпись · описание</text>
+    </g>
+  </g>
+
+  <g id="phone-frame" transform="translate(1000, 1520)">
+    <text y="0" class="h2" fill="#1B1B21">Phone</text>
+    <rect x="0" y="20" width="380" height="700" rx="40" fill="#131318"/>
+    <rect x="12" y="32" width="356" height="676" rx="32" fill="#131318" stroke="#46464F"/>
+
+    <g transform="translate(12, 32)">
+      <rect width="356" height="56" fill="transparent"/>
+      <text x="24" y="36" font-size="20" fill="#E4E1E9">←</text>
+      <text x="60" y="38" font-size="17" font-weight="600" fill="#E4E1E9">Облачное хранилище</text>
+    </g>
+
+    <g transform="translate(40, 220)">
+      <circle cx="138" cy="40" r="32" fill="#1F1F25"/>
+      <text x="138" y="50" font-size="28" text-anchor="middle" fill="#90909A">☁</text>
+      <text x="138" y="100" font-size="16" font-weight="600" fill="#E4E1E9" text-anchor="middle">Скоро</text>
+      <text x="138" y="120" font-size="13" fill="#C6C5D0" text-anchor="middle">Экран в разработке</text>
+    </g>
+  </g>
+
+  <g id="footer">
+    <text x="64" y="2240" class="small" fill="#767680">Импорт в Figma: File → Place / drag &amp; drop. Слои сохранят имена (id), текст редактируемый.</text>
+  </g>
+</svg>
