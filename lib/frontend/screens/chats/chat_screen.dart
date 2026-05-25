@@ -804,14 +804,18 @@ class _ChatScreenState extends State<ChatScreen>
             animation: _attachAnim,
             builder: (context, _) {
               if (_attachAnim.value == 0) return const SizedBox.shrink();
+              final curve = _attachAnim.status == AnimationStatus.reverse
+                  ? Curves.easeIn
+                  : Curves.easeOut;
+              final t = curve.transform(_attachAnim.value);
               return Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: ClipRect(
                   child: Align(
                     alignment: Alignment.bottomCenter,
-                    heightFactor: Curves.easeOutCubic.transform(_attachAnim.value),
+                    heightFactor: t,
                     child: Opacity(
-                      opacity: Curves.easeOut.transform(_attachAnim.value),
+                      opacity: t,
                       child: AttachmentPanel(
                         onClose: () => _showAttachmentPanel.value = false,
                         onPickFile: _pickAndUploadFile,
@@ -1756,6 +1760,37 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     );
   }
 
+  void _onSecondaryTapDown(TapDownDetails details) {
+    if (_controller != null) return;
+    final ctx = _boundaryKey.currentContext;
+    if (ctx == null) return;
+    final renderObject = ctx.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) return;
+
+    final origin = renderObject.localToGlobal(Offset.zero);
+    final rect = origin & renderObject.size;
+
+    final controller = MessageActionsController();
+    _controller = controller;
+
+    showMessageActions(
+      context: ctx,
+      originRect: rect,
+      tapPoint: details.globalPosition,
+      isMe: widget.isMe,
+      messageText: widget.message.text,
+      controller: controller,
+      style: MessageActionsStyle.list,
+      interaction: MessageActionsInteraction.click,
+      onDispose: () {
+        if (identical(_controller, controller)) {
+          _controller = null;
+        }
+        controller.dispose();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Listener(
@@ -1769,6 +1804,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
         onLongPressMoveUpdate: (d) =>
             _controller?.updatePointer(d.globalPosition),
         onLongPressEnd: (_) => _controller?.commit(),
+        onSecondaryTapDown: _onSecondaryTapDown,
         child: RepaintBoundary(
           key: _boundaryKey,
           child: widget.child,

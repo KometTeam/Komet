@@ -10,6 +10,8 @@ import '../../core/config/app_message_actions_style.dart';
 import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
+enum MessageActionsInteraction { dragAndRelease, click }
+
 class MessageActionsController extends ChangeNotifier {
   Offset? pointer;
   Offset? initialPointer;
@@ -63,7 +65,7 @@ class MessageActionsController extends ChangeNotifier {
 
 void showMessageActions({
   required BuildContext context,
-  required ui.Image snapshot,
+  ui.Image? snapshot,
   required Rect originRect,
   required Offset tapPoint,
   required bool isMe,
@@ -71,6 +73,7 @@ void showMessageActions({
   required MessageActionsController controller,
   required MessageActionsStyle style,
   required VoidCallback onDispose,
+  MessageActionsInteraction interaction = MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late OverlayEntry entry;
@@ -83,6 +86,7 @@ void showMessageActions({
       messageText: messageText,
       controller: controller,
       style: style,
+      interaction: interaction,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -93,13 +97,14 @@ void showMessageActions({
 }
 
 class _MessageActionsLayer extends StatefulWidget {
-  final ui.Image snapshot;
+  final ui.Image? snapshot;
   final Rect originRect;
   final Offset tapPoint;
   final bool isMe;
   final String? messageText;
   final MessageActionsController controller;
   final MessageActionsStyle style;
+  final MessageActionsInteraction interaction;
   final VoidCallback onDismiss;
 
   const _MessageActionsLayer({
@@ -110,6 +115,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.messageText,
     required this.controller,
     required this.style,
+    required this.interaction,
     required this.onDismiss,
   });
 
@@ -129,6 +135,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   static const double _hMargin = 8.0;
 
   late List<_Action> _actions;
+  late MessageActionsStyle _effectiveStyle;
   bool _showBelow = true;
   Offset _anchor = Offset.zero;
   List<Offset> _buttonCenters = const [];
@@ -161,46 +168,95 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (_initialized) return;
     _initialized = true;
     _actions = _buildActions();
+    _effectiveStyle = widget.interaction == MessageActionsInteraction.click
+        ? MessageActionsStyle.list
+        : widget.style;
     final screenSize = MediaQuery.sizeOf(context);
-    if (widget.style == MessageActionsStyle.radial) {
+    if (_effectiveStyle == MessageActionsStyle.radial) {
       _computeRadialGeometry(screenSize);
     } else {
       _computeListGeometry(screenSize);
     }
-    widget.controller.addListener(_onControllerUpdate);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _onControllerUpdate();
-    });
+    if (widget.interaction == MessageActionsInteraction.dragAndRelease) {
+      widget.controller.addListener(_onControllerUpdate);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onControllerUpdate();
+      });
+    }
   }
 
   void _computeRadialGeometry(Size screenSize) {
     _showBelow = widget.tapPoint.dy < screenSize.height * 0.55;
-    _anchor = _showBelow
-        ? Offset(widget.tapPoint.dx, widget.originRect.bottom + 16)
-        : Offset(widget.tapPoint.dx, widget.originRect.top - 16);
-    _buttonCenters = _computeButtonCenters(screenSize);
+    final anchorY = _showBelow
+        ? widget.originRect.bottom + 16
+        : widget.originRect.top - 16;
+
+    final n = _actions.length;
+    final base = _showBelow ? math.pi * 0.5 : -math.pi * 0.5;
+    final start = base - _arcSpan / 2;
+    final step = n <= 1 ? 0.0 : _arcSpan / (n - 1);
+
+    final offsets = <Offset>[];
+    double minDx = 0;
+    double maxDx = 0;
+    for (int i = 0; i < n; i++) {
+      final angle = start + step * i;
+      final dx = math.cos(angle) * _radius;
+      final dy = math.sin(angle) * _radius;
+      offsets.add(Offset(dx, dy));
+      if (dx < minDx) minDx = dx;
+      if (dx > maxDx) maxDx = dx;
+    }
+
+    final minX = _hMargin + _btnSize / 2;
+    final maxX = screenSize.width - _hMargin - _btnSize / 2;
+
+    double anchorX = widget.tapPoint.dx;
+    if (anchorX + maxDx > maxX) anchorX = maxX - maxDx;
+    if (anchorX + minDx < minX) anchorX = minX - minDx;
+
+    _anchor = Offset(anchorX, anchorY);
+    _buttonCenters = [for (final o in offsets) _anchor + o];
     _buttonHitRects = [
       for (final c in _buttonCenters)
-        Rect.fromCenter(center: c, width: _hitRadius * 2, height: _hitRadius * 2),
+        Rect.fromCenter(
+          center: c,
+          width: _hitRadius * 2,
+          height: _hitRadius * 2,
+        ),
     ];
   }
 
   void _computeListGeometry(Size screenSize) {
     final n = _actions.length;
-    const menuWidth = 244.0;
-    const itemHeight = 48.0;
-    const vPad = 8.0;
+    const menuWidth = 220.0;
+    const itemHeight = 42.0;
+    const vPad = 6.0;
     final menuHeight = n * itemHeight + vPad * 2;
-    final spaceBelow = screenSize.height - widget.originRect.bottom - 24;
-    final spaceAbove = widget.originRect.top - 24;
-    _showBelow = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
-    final menuY = _showBelow
-        ? widget.originRect.bottom + 10
-        : widget.originRect.top - 10 - menuHeight;
-    final rawX = widget.isMe
-        ? widget.originRect.right - menuWidth
-        : widget.originRect.left;
-    final menuX = rawX.clamp(8.0, screenSize.width - menuWidth - 8.0).toDouble();
+    late double menuX;
+    late double menuY;
+    if (widget.interaction == MessageActionsInteraction.click) {
+      final spaceBelow = screenSize.height - widget.tapPoint.dy - 8;
+      _showBelow = spaceBelow >= menuHeight || widget.tapPoint.dy < menuHeight;
+      final rawY = _showBelow
+          ? widget.tapPoint.dy
+          : widget.tapPoint.dy - menuHeight;
+      menuY = rawY.clamp(8.0, screenSize.height - menuHeight - 8.0).toDouble();
+      menuX = widget.tapPoint.dx
+          .clamp(8.0, screenSize.width - menuWidth - 8.0)
+          .toDouble();
+    } else {
+      final spaceBelow = screenSize.height - widget.originRect.bottom - 24;
+      final spaceAbove = widget.originRect.top - 24;
+      _showBelow = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
+      menuY = _showBelow
+          ? widget.originRect.bottom + 10
+          : widget.originRect.top - 10 - menuHeight;
+      final rawX = widget.isMe
+          ? widget.originRect.right - menuWidth
+          : widget.originRect.left;
+      menuX = rawX.clamp(8.0, screenSize.width - menuWidth - 8.0).toDouble();
+    }
     _menuRect = Rect.fromLTWH(menuX, menuY, menuWidth, menuHeight);
     _buttonHitRects = [
       for (int i = 0; i < n; i++)
@@ -217,7 +273,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   void dispose() {
     _animController.dispose();
     widget.controller.removeListener(_onControllerUpdate);
-    widget.snapshot.dispose();
+    widget.snapshot?.dispose();
     super.dispose();
   }
 
@@ -233,26 +289,6 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         () => _stub('Удаление'),
         destructive: true,
       ),
-    ];
-  }
-
-  List<Offset> _computeButtonCenters(Size screenSize) {
-    final n = _actions.length;
-    if (n == 0) return const [];
-    final base = _showBelow ? math.pi * 0.5 : -math.pi * 0.5;
-    final start = base - _arcSpan / 2;
-    final step = n == 1 ? 0.0 : _arcSpan / (n - 1);
-    final minX = _hMargin + _btnSize / 2;
-    final maxX = screenSize.width - _hMargin - _btnSize / 2;
-    return [
-      for (int i = 0; i < n; i++)
-        () {
-          final angle = start + step * i;
-          var p = _anchor + Offset(math.cos(angle), math.sin(angle)) * _radius;
-          if (p.dx < minX) p = Offset(minX, p.dy);
-          if (p.dx > maxX) p = Offset(maxX, p.dy);
-          return p;
-        }(),
     ];
   }
 
@@ -319,6 +355,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
+    final isClick = widget.interaction == MessageActionsInteraction.click;
     return AnimatedBuilder(
       animation: _animation,
       builder: (ctx, _) {
@@ -331,33 +368,36 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           behavior: HitTestBehavior.opaque,
           child: Stack(
             children: [
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(
-                    sigmaX: blurSigma,
-                    sigmaY: blurSigma,
-                  ),
-                  child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.22 * t),
+              if (!isClick) ...[
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(
+                      sigmaX: blurSigma,
+                      sigmaY: blurSigma,
+                    ),
+                    child: ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.22 * t),
+                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                left: widget.originRect.left,
-                top: widget.originRect.top,
-                width: widget.originRect.width,
-                height: widget.originRect.height,
-                child: Transform.scale(
-                  scale: bubbleScale,
-                  child: RawImage(
-                    image: widget.snapshot,
+                if (widget.snapshot != null)
+                  Positioned(
+                    left: widget.originRect.left,
+                    top: widget.originRect.top,
                     width: widget.originRect.width,
                     height: widget.originRect.height,
-                    fit: BoxFit.fill,
+                    child: Transform.scale(
+                      scale: bubbleScale,
+                      child: RawImage(
+                        image: widget.snapshot,
+                        width: widget.originRect.width,
+                        height: widget.originRect.height,
+                        fit: BoxFit.fill,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              if (widget.style == MessageActionsStyle.radial) ...[
+              ],
+              if (_effectiveStyle == MessageActionsStyle.radial) ...[
                 ..._buildButtons(t),
                 _buildLabelBanner(size, t),
               ] else
@@ -373,6 +413,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final cs = Theme.of(context).colorScheme;
     final eased = Curves.easeOutCubic.transform(t);
     final scale = 0.88 + 0.12 * eased;
+    final isClick = widget.interaction == MessageActionsInteraction.click;
     return Positioned(
       left: _menuRect.left,
       top: _menuRect.top,
@@ -382,26 +423,39 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         opacity: eased,
         child: Transform.scale(
           scale: scale,
-          alignment: Alignment(
-            widget.isMe ? 1.0 : -1.0,
-            _showBelow ? -1.0 : 1.0,
-          ),
+          alignment: isClick
+              ? Alignment(-1.0, _showBelow ? -1.0 : 1.0)
+              : Alignment(
+                  widget.isMe ? 1.0 : -1.0,
+                  _showBelow ? -1.0 : 1.0,
+                ),
           child: Material(
             color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             clipBehavior: Clip.antiAlias,
             elevation: 8,
             shadowColor: Colors.black.withValues(alpha: 0.4),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 for (int i = 0; i < _actions.length; i++)
                   _ListMenuItem(
                     action: _actions[i],
                     highlighted: _hoveredIndex == i,
+                    onHoverChanged: isClick
+                        ? (hovered) {
+                            if (hovered) {
+                              if (_hoveredIndex != i) {
+                                setState(() => _hoveredIndex = i);
+                              }
+                            } else if (_hoveredIndex == i) {
+                              setState(() => _hoveredIndex = -1);
+                            }
+                          }
+                        : null,
                   ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
               ],
             ),
           ),
@@ -515,7 +569,12 @@ class _Action {
 class _ListMenuItem extends StatelessWidget {
   final _Action action;
   final bool highlighted;
-  const _ListMenuItem({required this.action, required this.highlighted});
+  final ValueChanged<bool>? onHoverChanged;
+  const _ListMenuItem({
+    required this.action,
+    required this.highlighted,
+    this.onHoverChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -524,8 +583,8 @@ class _ListMenuItem extends StatelessWidget {
     final onPill = action.destructive ? cs.onError : cs.onPrimary;
     final restFg = action.destructive ? cs.error : cs.onSurface;
     final fg = highlighted ? onPill : restFg;
-    return SizedBox(
-      height: 48,
+    final inner = SizedBox(
+      height: 42,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -534,25 +593,25 @@ class _ListMenuItem extends StatelessWidget {
             action.onTap();
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               curve: Curves.easeOutCubic,
               decoration: BoxDecoration(
                 color: highlighted ? pillBg : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(18),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  Icon(action.icon, color: fg, size: 22),
-                  const SizedBox(width: 14),
+                  Icon(action.icon, color: fg, size: 20),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       action.label,
                       style: TextStyle(
                         color: fg,
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight:
                             highlighted ? FontWeight.w600 : FontWeight.w500,
                       ),
@@ -564,6 +623,12 @@ class _ListMenuItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (onHoverChanged == null) return inner;
+    return MouseRegion(
+      onEnter: (_) => onHoverChanged!(true),
+      onExit: (_) => onHoverChanged!(false),
+      child: inner,
     );
   }
 }
