@@ -12,6 +12,7 @@ import '../../../main.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
+import 'cloud_storage_screen.dart';
 import 'customization_screen.dart';
 import 'performance_screen.dart';
 import 'debug_menu_screen.dart';
@@ -101,7 +102,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Future<void> _openCloudStorage(BuildContext context) async {
     final cs = Theme.of(context).colorScheme;
-    await showInfoActionSheet(
+    final ok = await showInfoActionSheet(
       context,
       headerIcon: Symbols.cloud,
       title: 'Облачное хранилище',
@@ -128,6 +129,12 @@ class _SettingsTabState extends State<SettingsTab> {
       ],
       confirmLabel: 'ОК',
       confirmDelay: const Duration(seconds: 3),
+      seenKey: 'cloud_storage_intro_seen',
+    );
+    if (!ok || !context.mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CloudStorageScreen()),
     );
   }
 
