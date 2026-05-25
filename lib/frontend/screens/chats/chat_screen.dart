@@ -1756,6 +1756,37 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     );
   }
 
+  void _onSecondaryTapDown(TapDownDetails details) {
+    if (_controller != null) return;
+    final ctx = _boundaryKey.currentContext;
+    if (ctx == null) return;
+    final renderObject = ctx.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) return;
+
+    final origin = renderObject.localToGlobal(Offset.zero);
+    final rect = origin & renderObject.size;
+
+    final controller = MessageActionsController();
+    _controller = controller;
+
+    showMessageActions(
+      context: ctx,
+      originRect: rect,
+      tapPoint: details.globalPosition,
+      isMe: widget.isMe,
+      messageText: widget.message.text,
+      controller: controller,
+      style: MessageActionsStyle.list,
+      interaction: MessageActionsInteraction.click,
+      onDispose: () {
+        if (identical(_controller, controller)) {
+          _controller = null;
+        }
+        controller.dispose();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Listener(
@@ -1769,6 +1800,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
         onLongPressMoveUpdate: (d) =>
             _controller?.updatePointer(d.globalPosition),
         onLongPressEnd: (_) => _controller?.commit(),
+        onSecondaryTapDown: _onSecondaryTapDown,
         child: RepaintBoundary(
           key: _boundaryKey,
           child: widget.child,
