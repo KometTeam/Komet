@@ -664,23 +664,39 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           const SizedBox(height: 44),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              IconButton(
-                                onPressed: () => _showSecurityOptions(context),
-                                icon: Icon(
-                                  Symbols.admin_panel_settings,
-                                  color: cs.onSurfaceVariant,
-                                  weight: 400,
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: _showLanguagePicker,
-                                icon: Icon(
-                                  Symbols.language,
-                                  color: cs.onSurfaceVariant,
-                                  weight: 400,
-                                ),
+                              if (Navigator.canPop(context))
+                                IconButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  icon: Icon(
+                                    Symbols.arrow_back,
+                                    color: cs.onSurfaceVariant,
+                                    weight: 400,
+                                  ),
+                                )
+                              else
+                                const SizedBox.shrink(),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    onPressed: () => _showSecurityOptions(context),
+                                    icon: Icon(
+                                      Symbols.admin_panel_settings,
+                                      color: cs.onSurfaceVariant,
+                                      weight: 400,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: _showLanguagePicker,
+                                    icon: Icon(
+                                      Symbols.language,
+                                      color: cs.onSurfaceVariant,
+                                      weight: 400,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

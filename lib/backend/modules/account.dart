@@ -9,6 +9,7 @@ import '../../core/utils/logger.dart';
 import 'chats.dart';
 import 'contacts.dart';
 import 'folders.dart';
+import 'messages.dart';
 
 String _normalizeAuthPhone(String phone) {
   final digits = phone.replaceAll(RegExp(r'\D'), '');
@@ -925,12 +926,32 @@ class AccountModule {
     if (profile == null) {
       throw StateError('switchAccount: аккаунт $accountId не найден в базе');
     }
+    final token = await TokenStorage.readToken(accountId);
+    if (token == null) {
+      throw StateError('switchAccount: нет токена для аккаунта $accountId');
+    }
+
+    try {
+      await _api.disconnect();
+    } catch (_) {}
 
     await AppDatabase.setActiveAccount(accountId);
     await TokenStorage.setActiveAccount(accountId);
 
+    ContactCache.clear();
+    TranscriptionCache.clear();
+    await ContactsModule.primeCacheFromDb(accountId);
+
+    try {
+      await _api.connect();
+    } catch (_) {}
+
     logger.i('Активный аккаунт переключён на $accountId');
     return profile;
+  }
+
+  Future<List<ProfileData>> listAccounts() async {
+    return AppDatabase.loadAllProfiles();
   }
 
   Future<void> removeAccount(int accountId) async {

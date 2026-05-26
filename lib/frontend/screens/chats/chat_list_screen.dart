@@ -14,6 +14,8 @@ import '../../widgets/custom_notification.dart';
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
 import '../profile/settings_tab.dart';
+import '../auth/login_screen.dart';
+import '../../widgets/account_switcher_overlay.dart';
 import '../../../backend/api.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../backend/models/chat_folder.dart';
@@ -2285,8 +2287,12 @@ class _ChatListScreenState extends State<ChatListScreen>
     final Duration opacityDur = instant
         ? Duration.zero
         : const Duration(milliseconds: 200);
+    final bool isSettings = index == 3;
     return GestureDetector(
       onTap: () => _onNavTabSelected(index),
+      onLongPressStart: isSettings
+          ? (details) => _openAccountSwitcher(details.globalPosition)
+          : null,
       behavior: HitTestBehavior.opaque,
       child: Center(
         child: FittedBox(
@@ -2327,6 +2333,39 @@ class _ChatListScreenState extends State<ChatListScreen>
           ),
         ),
       ),
+    );
+  }
+
+  void _openAccountSwitcher(Offset point) {
+    Haptics.medium();
+    final controller = AccountSwitcherController()..attach(point);
+    showAccountSwitcher(
+      context: context,
+      tapPoint: point,
+      controller: controller,
+      onSelected: (accountId) async {
+        controller.dispose();
+        if (!mounted) return;
+        if (accountId == null) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+          return;
+        }
+        try {
+          await accountModule.switchAccount(accountId);
+        } catch (e) {
+          if (!mounted) return;
+          showCustomNotification(context, 'Не удалось переключить аккаунт');
+          return;
+        }
+        if (!mounted) return;
+        await Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AdaptiveShell()),
+          (route) => false,
+        );
+      },
     );
   }
 
