@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/utils/haptics.dart';
-import '../screens/chats/chat_list_screen.dart';
+import 'adaptive_shell.dart';
 
 Future<ImageProvider?> precacheLoginAvatar(
   BuildContext context,
@@ -118,7 +118,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 360),
           reverseTransitionDuration: const Duration(milliseconds: 200),
-          pageBuilder: (_, __, ___) => const ChatListScreen(),
+          pageBuilder: (_, __, ___) => const AdaptiveShell(),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(
               opacity: CurvedAnimation(

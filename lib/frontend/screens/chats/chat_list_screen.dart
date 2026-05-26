@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
 import 'create_group_flow.dart';
+import '../../widgets/adaptive_shell.dart';
 import '../../widgets/custom_notification.dart';
 
 import '../calls/calls_tab.dart';
@@ -56,7 +57,9 @@ class _StoriesScrollPhysics extends BouncingScrollPhysics {
 }
 
 class ChatListScreen extends StatefulWidget {
-  const ChatListScreen({super.key});
+  final ValueChanged<DesktopChatSelection>? onChatSelected;
+
+  const ChatListScreen({super.key, this.onChatSelected});
 
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
@@ -2050,18 +2053,25 @@ class _ChatListScreenState extends State<ChatListScreen>
       onTap: () {
         if (_isSelectionMode) {
           _toggleSelection(id);
+        } else if (widget.onChatSelected != null) {
+          widget.onChatSelected!(DesktopChatSelection(
+            chatId: int.parse(id),
+            name: name,
+            imageUrl: imageUrl,
+            chatType: chatType,
+          ));
         } else {
-Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatScreen(
-                  chatId: int.parse(id),
-                  name: name,
-                  imageUrl: imageUrl,
-                  chatType: chatType,
-                ),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                chatId: int.parse(id),
+                name: name,
+                imageUrl: imageUrl,
+                chatType: chatType,
               ),
-            );
+            ),
+          );
         }
       },
       onLongPress: () => _toggleSelection(id),

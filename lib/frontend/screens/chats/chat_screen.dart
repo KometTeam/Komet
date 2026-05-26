@@ -58,6 +58,8 @@ class ChatScreen extends StatefulWidget {
   final String name;
   final String imageUrl;
   final String chatType;
+  final bool embedded;
+  final VoidCallback? onClose;
 
   const ChatScreen({
     super.key,
@@ -65,6 +67,8 @@ class ChatScreen extends StatefulWidget {
     required this.name,
     required this.imageUrl,
     required this.chatType,
+    this.embedded = false,
+    this.onClose,
   });
 
   @override
@@ -712,8 +716,17 @@ class _ChatScreenState extends State<ChatScreen>
             surfaceTintColor: Colors.transparent,
             iconTheme: IconThemeData(color: cs.onSurface),
             leading: IconButton(
-              icon: const Icon(Symbols.arrow_back, weight: 400),
-              onPressed: () => Navigator.pop(context),
+              icon: Icon(
+                widget.embedded ? Symbols.close : Symbols.arrow_back,
+                weight: 400,
+              ),
+              onPressed: () {
+                if (widget.embedded) {
+                  widget.onClose?.call();
+                } else {
+                  Navigator.pop(context);
+                }
+              },
             ),
             titleSpacing: 0,
             title: Row(
