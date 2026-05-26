@@ -40,7 +40,14 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
 
       if (!mounted) return;
 
-      await accountModule.login(token: result.loginToken);
+      final loginResult = await accountModule.login(token: result.loginToken);
+
+      if (!mounted) return;
+
+      final avatar = await precacheLoginAvatar(
+        context,
+        loginResult.profile.baseUrl,
+      );
 
       if (!mounted) return;
 
@@ -48,7 +55,7 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => const LoginSuccessScreen(),
+          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
           transitionsBuilder: (_, animation, __, child) => FadeTransition(
             opacity: animation,
             child: child,

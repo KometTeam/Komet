@@ -167,7 +167,14 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         return;
       }
 
-      await accountModule.login();
+      final loginResult = await accountModule.login();
+
+      if (!mounted) return;
+
+      final avatar = await precacheLoginAvatar(
+        context,
+        loginResult.profile.baseUrl,
+      );
 
       if (!mounted) return;
 
@@ -175,7 +182,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => const LoginSuccessScreen(),
+          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
           transitionsBuilder: (_, animation, __, child) => FadeTransition(
             opacity: animation,
             child: child,

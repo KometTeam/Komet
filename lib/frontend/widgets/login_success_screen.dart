@@ -1,12 +1,29 @@
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/utils/haptics.dart';
 import '../screens/chats/chat_list_screen.dart';
 
+Future<ImageProvider?> precacheLoginAvatar(
+  BuildContext context,
+  String? url,
+) async {
+  if (url == null || url.isEmpty) return null;
+  final provider = CachedNetworkImageProvider(url);
+  try {
+    await precacheImage(provider, context);
+    return provider;
+  } catch (_) {
+    return null;
+  }
+}
+
 class LoginSuccessScreen extends StatefulWidget {
-  const LoginSuccessScreen({super.key});
+  final ImageProvider? avatar;
+
+  const LoginSuccessScreen({super.key, this.avatar});
 
   @override
   State<LoginSuccessScreen> createState() => _LoginSuccessScreenState();
@@ -16,6 +33,13 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
     with SingleTickerProviderStateMixin {
   static const Duration _duration = Duration(milliseconds: 1900);
 
+  static const List<String> _greetings = [
+    'С большой силой приходит большая ответственность',
+    'All in your hands',
+    'Иногда забавные вещи могут быть уголовно наказуемы',
+  ];
+
+  late final String _greeting;
   late final AnimationController _controller;
   late final Animation<double> _circleScale;
   late final Animation<double> _ringSweep;
@@ -34,6 +58,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   @override
   void initState() {
     super.initState();
+    _greeting = _greetings[math.Random().nextInt(_greetings.length)];
     _controller = AnimationController(vsync: this, duration: _duration);
 
     _circleScale = CurvedAnimation(
@@ -227,6 +252,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
 
   Widget _buildCircle(ColorScheme cs) {
     final scale = _circleScale.value.clamp(0.0, 1.0);
+    final avatar = widget.avatar;
     return Transform.scale(
       scale: scale,
       child: Container(
@@ -243,12 +269,21 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
             ),
           ],
         ),
-        child: CustomPaint(
-          painter: _CheckPainter(
-            progress: _checkProgress.value,
-            color: cs.onPrimary,
-          ),
-        ),
+        child: avatar != null
+            ? ClipOval(
+                child: Image(
+                  image: avatar,
+                  fit: BoxFit.cover,
+                  width: 120,
+                  height: 120,
+                ),
+              )
+            : CustomPaint(
+                painter: _CheckPainter(
+                  progress: _checkProgress.value,
+                  color: cs.onPrimary,
+                ),
+              ),
       ),
     );
   }
@@ -276,12 +311,17 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
       opacity: _subtitleOpacity.value,
       child: Transform.translate(
         offset: Offset(0, 14 * (1 - _subtitleOffset.value)),
-        child: Text(
-          'Добро пожаловать в Komet',
-          style: TextStyle(
-            color: cs.onSurfaceVariant,
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Text(
+            _greeting,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              height: 1.3,
+            ),
           ),
         ),
       ),
