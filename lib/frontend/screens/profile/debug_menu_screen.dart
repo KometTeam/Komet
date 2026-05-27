@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/chats.dart';
+import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/logger.dart';
@@ -330,6 +331,70 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                           );
                         },
                       ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppSwipeBackDesktop.current,
+                  builder: (context, swipeOn, _) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 17,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.swipe_right,
+                              color: cs.onSurfaceVariant,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Свайп-назад в десктоп-режиме',
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Включает жест «провести от левого края, чтобы '
+                                    'закрыть» внутри встроенной панели чата на '
+                                    'десктопе — для тестирования курсором',
+                                    style: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: swipeOn,
+                              onChanged: (v) {
+                                AppSwipeBackDesktop.save(v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
             SliverToBoxAdapter(

@@ -7,6 +7,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/swipe_route.dart';
 import '../chats/chat_screen.dart';
 
 class ContactProfileScreen extends StatefulWidget {
@@ -170,15 +171,13 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
     );
     final chatId = existing ?? (accountId ^ widget.contactId);
     if (!mounted) return;
-    Navigator.push(
+    pushSwipeable(
       context,
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          chatId: chatId,
-          name: _displayName(),
-          imageUrl: _avatarUrl() ?? '',
-          chatType: 'DIALOG',
-        ),
+      (_) => ChatScreen(
+        chatId: chatId,
+        name: _displayName(),
+        imageUrl: _avatarUrl() ?? '',
+        chatType: 'DIALOG',
       ),
     );
   }

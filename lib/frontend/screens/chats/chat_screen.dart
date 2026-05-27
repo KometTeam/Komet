@@ -21,10 +21,12 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
+import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
+import '../../widgets/swipe_to_pop.dart';
 
 class _UploadStatus {
   final bool active;
@@ -791,10 +793,17 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    
+
     // TODO: Локализация
     // TODO: Cклонения
-    return Scaffold(
+    return ValueListenableBuilder<bool>(
+      valueListenable: AppSwipeBackDesktop.current,
+      builder: (context, desktopSwipe, child) => SwipeToPop(
+        enabled: widget.embedded && desktopSwipe,
+        onPop: widget.onClose,
+        child: child!,
+      ),
+      child: Scaffold(
       backgroundColor: cs.surface,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(kToolbarHeight),
@@ -941,6 +950,7 @@ class _ChatScreenState extends State<ChatScreen>
           ),
           _buildInputArea(context),
         ],
+      ),
       ),
     );
   }

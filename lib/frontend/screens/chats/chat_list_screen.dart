@@ -10,6 +10,7 @@ import 'chat_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/swipe_route.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -2072,15 +2073,13 @@ class _ChatListScreenState extends State<ChatListScreen>
             chatType: chatType,
           ));
         } else {
-          Navigator.push(
+          pushSwipeable(
             context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                chatId: int.parse(id),
-                name: name,
-                imageUrl: imageUrl,
-                chatType: chatType,
-              ),
+            (context) => ChatScreen(
+              chatId: int.parse(id),
+              name: name,
+              imageUrl: imageUrl,
+              chatType: chatType,
             ),
           );
         }

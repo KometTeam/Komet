@@ -10,6 +10,7 @@ import '../../../backend/modules/contacts.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
 
 const int _maxAvatarBytes = 8 * 1024 * 1024;
@@ -146,14 +147,13 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
 
       if (!mounted) return;
       navigator.pop();
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => ChatScreen(
-            chatId: chat.id,
-            name: chat.title ?? title,
-            imageUrl: chat.iconUrl ?? '',
-            chatType: chat.type,
-          ),
+      pushSwipeable(
+        context,
+        (_) => ChatScreen(
+          chatId: chat.id,
+          name: chat.title ?? title,
+          imageUrl: chat.iconUrl ?? '',
+          chatType: chat.type,
         ),
       );
     } catch (e) {

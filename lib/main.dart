@@ -17,6 +17,7 @@ import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'core/config/app_message_actions_style.dart';
+import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'backend/modules/account.dart';
@@ -92,6 +93,7 @@ void main() async {
   AppAmoled.current.value = await AppAmoled.load();
   AppThemeSchedule.current.value = await AppThemeSchedule.load();
   AppMessageActionsStyle.current.value = await AppMessageActionsStyle.load();
+  AppSwipeBackDesktop.current.value = await AppSwipeBackDesktop.load();
   runApp(
     KometApp(
       initialLocale: initialLocale,
