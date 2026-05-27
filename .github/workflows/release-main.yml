@@ -276,7 +276,7 @@ jobs:
             - `Komet-android-oneme.aab` — App Bundle для Google Play.
 
             ### Windows
-            - **`Komet-windows-x64.zip`** — портативная сборка для Windows 10/11 (x64). Распаковать и запустить `komet.exe`.
+            - **`Komet-windows-x64.zip`** — портативная сборка для Windows 10/11 (x64). Распаковать и запустить `Komet.exe`.
 
             ### Linux
             - **`Komet-linux-x64.tar.gz`** — сборка для 64-битного Linux. Требуются `libgtk-3`, `libsecret-1`, `libjsoncpp`. Распаковать и запустить бинарник.

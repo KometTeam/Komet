@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <application
-        android:label="komet"
+        android:label="Komet"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
