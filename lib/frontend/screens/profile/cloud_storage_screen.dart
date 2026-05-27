@@ -23,10 +23,17 @@ class CloudStorageScreen extends StatefulWidget {
   State<CloudStorageScreen> createState() => _CloudStorageScreenState();
 }
 
-class _CloudStorageScreenState extends State<CloudStorageScreen> {
+class _CloudStorageScreenState extends State<CloudStorageScreen>
+    with SingleTickerProviderStateMixin {
+  static const _translateFactor = 0.7;
   static const _horizontalPadding = 32.0;
-  static const _cardViewportFraction = 0.38;
+  static const _hintSidePadding = 35.0;
+  static const _cornerSidePadding = 16.0;
+  static const _cornerBottomPadding = 24.0;
+  static const _cornerSlideAmount = 28.0;
+  static const _cardViewportFraction = 0.42;
 
+  late final _UploadModeController _mode;
   late final PageController _pageController;
   final _currentFilePage = ValueNotifier<int>(0);
 
@@ -35,28 +42,31 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
   int? _envGroupId;
   int? _accountId;
   List<CloudFile> _files = [];
-  bool _filesLoading = false;
   bool _isUploading = false;
   double _uploadProgress = 0;
   bool _animateNewCard = false;
-  bool _showUploadCard = false;
 
   @override
   void initState() {
     super.initState();
+    _mode = _UploadModeController(this);
     _pageController = PageController(viewportFraction: _cardViewportFraction);
     _pageController.addListener(_onPageScroll);
     _checkEnv();
     _bindUploadManager();
   }
 
+  void _onPageScroll() {
+    _currentFilePage.value = _pageController.page?.round() ?? 0;
+  }
+
   void _bindUploadManager() {
     final mgr = UploadManager.instance;
     if (mgr.isActive) {
-      // Upload was already running (e.g. user left and came back)
-      setState(() { _isUploading = true; _showUploadCard = true; });
+      setState(() => _isUploading = true);
+      _mode.open();
     }
-    mgr.onProgress = (progress, speedBps) {
+    mgr.onProgress = (progress, _) {
       if (!mounted) return;
       setState(() { _isUploading = true; _uploadProgress = progress; });
     };
@@ -72,17 +82,13 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
     };
   }
 
-  void _onPageScroll() {
-    _currentFilePage.value = _pageController.page?.round() ?? 0;
-  }
-
   @override
   void dispose() {
-    // Unregister UI callbacks — upload continues in background via UploadManager
     final mgr = UploadManager.instance;
     mgr.onProgress = null;
     mgr.onDone = null;
     mgr.onError = null;
+    _mode.dispose();
     _pageController.dispose();
     _currentFilePage.dispose();
     super.dispose();
@@ -95,7 +101,6 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
       return;
     }
 
-    // Fast path: validate cached env group ID with a single DB row query
     final cachedId = await CloudStorageModule.getCachedEnvGroupId(profile.id);
     if (cachedId != null) {
       final rows = await ChatsModule.getChat(profile.id, cachedId);
@@ -107,31 +112,27 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
           _accountId = profile.id;
         });
         _loadFiles(profile.id, cachedId);
-        _handleOrphansBackground(profile.id, cachedId);
+        _handleOrphansBackground(profile.id);
         return;
       }
       await CloudStorageModule.clearEnvGroupCache(profile.id);
     }
 
-    // Full scan
     final chats = await ChatsModule.getChats(profile.id);
     CachedChat? envGroup = CloudStorageModule.findEnvGroup(chats);
     final orphans = CloudStorageModule.findOrphanGroups(chats);
 
     if (envGroup == null && orphans.isNotEmpty) {
-      // Repair first orphan into a valid env group
       final repaired = await CloudStorageModule.repairOrphan(api, orphans.first);
       if (repaired != null) {
         envGroup = repaired;
         await CloudStorageModule.cacheEnvGroupId(profile.id, repaired.id);
       }
-      // If there were multiple orphans, clean up the rest
       for (final orphan in orphans.skip(1)) {
         _deleteOrLeave(profile.id, orphan);
       }
     } else if (envGroup != null) {
       await CloudStorageModule.cacheEnvGroupId(profile.id, envGroup.id);
-      // Env already exists — delete or leave any orphan groups
       for (final orphan in orphans) {
         _deleteOrLeave(profile.id, orphan);
       }
@@ -146,11 +147,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
     if (envGroup != null) _loadFiles(profile.id, envGroup.id);
   }
 
-  // Runs in background after the fast-cache path — loads all chats to find and remove orphans
-  void _handleOrphansBackground(int accountId, int envGroupId) async {
+  void _handleOrphansBackground(int accountId) async {
     final chats = await ChatsModule.getChats(accountId);
-    final orphans = CloudStorageModule.findOrphanGroups(chats);
-    for (final orphan in orphans) {
+    for (final orphan in CloudStorageModule.findOrphanGroups(chats)) {
       _deleteOrLeave(accountId, orphan);
     }
   }
@@ -165,13 +164,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
   }
 
   Future<void> _loadFiles(int accountId, int chatId) async {
-    if (mounted) setState(() => _filesLoading = true);
     final files = await CloudStorageModule.fetchFiles(messagesModule, accountId, chatId);
     if (!mounted) return;
-    setState(() {
-      _files = files.reversed.toList();
-      _filesLoading = false;
-    });
+    setState(() => _files = files.reversed.toList());
   }
 
   void _prependFile(CloudFile file) {
@@ -180,11 +175,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
       _animateNewCard = true;
     });
     if (_pageController.hasClients) {
-      _pageController.animateToPage(
-        0,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOut,
-      );
+      _pageController.animateToPage(0,
+          duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
     }
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) setState(() => _animateNewCard = false);
@@ -250,7 +242,6 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
         onSend: (id) async {
           final ok = await messagesModule.sendFileMessage(chatId, id);
           if (!ok) return false;
-          // Fetch just the new file — avoids full 200-msg reload
           final newest = await CloudStorageModule.fetchLatestFile(
             messagesModule, accountId, chatId, expectedFileId: id,
           );
@@ -276,6 +267,14 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
     );
   }
 
+  void _onBack() {
+    if (_mode.isOpen) {
+      _mode.close();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -287,13 +286,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Symbols.arrow_back, color: cs.onSurface),
-          onPressed: () {
-            if (_showUploadCard) {
-              setState(() => _showUploadCard = false);
-            } else {
-              Navigator.pop(context);
-            }
-          },
+          onPressed: _onBack,
         ),
         title: Text(
           'Облачное хранилище',
@@ -331,8 +324,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
               ),
               child: _isCreatingEnv
                   ? SizedBox(
-                      width: 18,
-                      height: 18,
+                      width: 18, height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
                     )
                   : const Text('Начать', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -344,90 +336,61 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
   }
 
   Widget _buildReady(ColorScheme cs) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final cardSide = constraints.maxWidth * _cardViewportFraction;
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _showUploadCard
-                ? () => setState(() => _showUploadCard = false)
-                : null,
-            child: _buildMainContent(cs),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: (d) => _mode.handleDragUpdate(d, h),
+          onVerticalDragEnd: _mode.handleDragEnd,
+          child: AnimatedBuilder(
+            animation: _mode.anim,
+            builder: (context, _) {
+              final t = Curves.easeOutCubic.transform(_mode.anim.value);
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildHint(cs, t),
+                  _buildUploadingCenterHint(cs, t, constraints.maxWidth),
+                  _buildEmptyState(cs, t, h),
+                  ..._buildCornerActions(cs, t),
+                ],
+              );
+            },
           ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 380),
-            reverseDuration: const Duration(milliseconds: 220),
-            transitionBuilder: (child, anim) => SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 0.15),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-              child: FadeTransition(opacity: anim, child: child),
-            ),
-            child: _showUploadCard
-                ? _buildUploadCard(cs, cardSide)
-                : const SizedBox.shrink(),
-          ),
-        ],
-      );
-    });
+        );
+      },
+    );
   }
 
-  Widget _buildMainContent(ColorScheme cs) {
-    if (_filesLoading) return const Center(child: CircularProgressIndicator());
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            _files.isEmpty ? 'Облачных файлов пока нет...' : '${_files.length} ${_pluralFiles(_files.length)} в облаке',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _files.isEmpty ? 'Добавите?' : 'Добавить ещё?',
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _showUploadCard ? null : () => setState(() => _showUploadCard = true),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            child: const Text('Загрузить', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-          ),
-        ],
+  Widget _buildHint(ColorScheme cs, double t) {
+    return Positioned(
+      top: 0,
+      left: _hintSidePadding,
+      right: _hintSidePadding,
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: t,
+          child: _DragDownHint(color: cs.onSurfaceVariant),
+        ),
       ),
     );
   }
 
-  Widget _buildUploadCard(ColorScheme cs, double cardSide) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: GestureDetector(
-        onTap: () {},
-        child: Container(
-          key: const ValueKey('upload_card'),
-          margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4), width: 0.5),
-          ),
+  Widget _buildUploadingCenterHint(ColorScheme cs, double t, double availableWidth) {
+    final cardSide = availableWidth * _cardViewportFraction;
+    return Center(
+      child: Opacity(
+        opacity: t,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_files.isNotEmpty) ...[
                 SizedBox(
                   height: cardSide,
+                  width: availableWidth,
                   child: ScrollConfiguration(
                     behavior: _MouseDragScrollBehavior(),
                     child: PageView.builder(
@@ -439,7 +402,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
                           onTap: () => _onCardTap(_files[i]),
                         );
                         final padded = Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
                           child: card,
                         );
                         if (i == 0 && _animateNewCard) {
@@ -453,18 +416,15 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
                     ),
                   ),
                 ),
-                // Page indicator
                 const SizedBox(height: 8),
-                Center(
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: _currentFilePage,
-                    builder: (context, page, child) => Text(
-                      '${page + 1} / ${_files.length}',
-                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-                    ),
+                ValueListenableBuilder<int>(
+                  valueListenable: _currentFilePage,
+                  builder: (context, page, child) => Text(
+                    '${page + 1} / ${_files.length}',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
               ],
               if (_isUploading) ...[
                 LinearProgressIndicator(
@@ -474,40 +434,18 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
                   color: cs.primary,
                   backgroundColor: cs.surfaceContainerHighest,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   'Загрузка ${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
-                const SizedBox(height: 16),
-              ] else ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    'Начните загрузку для прогресс-бара',
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                  ),
+              ] else if (_files.isEmpty) ...[
+                Text(
+                  'Начните загрузку для прогресс-бара',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
               ],
-              Row(
-                children: [
-                  Expanded(
-                    child: _CardActionButton(
-                      icon: Symbols.upload_file,
-                      label: 'С файла',
-                      onTap: _isUploading ? null : _pickAndUploadFile,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _CardActionButton(
-                      icon: Symbols.tag,
-                      label: 'По ID',
-                      onTap: _showSendByIdSheet,
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -515,10 +453,248 @@ class _CloudStorageScreenState extends State<CloudStorageScreen> {
     );
   }
 
-  static String _pluralFiles(int n) {
-    if (n % 10 == 1 && n % 100 != 11) return 'файл';
-    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'файла';
-    return 'файлов';
+  Widget _buildEmptyState(ColorScheme cs, double t, double availableHeight) {
+    return Transform.translate(
+      offset: Offset(0, -t * availableHeight * _translateFactor),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Облачных файлов пока нет...',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Добавите?',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _mode.isOpen ? null : _mode.open,
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                'Загрузить',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildCornerActions(ColorScheme cs, double t) {
+    final slide = (1 - t) * _cornerSlideAmount;
+    return [
+      Positioned(
+        bottom: _cornerBottomPadding,
+        left: _cornerSidePadding - slide,
+        child: Opacity(
+          opacity: t,
+          child: _CornerAction(
+            icon: Symbols.upload_file,
+            label: 'С файла',
+            onTap: _pickAndUploadFile,
+          ),
+        ),
+      ),
+      Positioned(
+        bottom: _cornerBottomPadding,
+        right: _cornerSidePadding - slide,
+        child: Opacity(
+          opacity: t,
+          child: _CornerAction(
+            icon: Symbols.tag,
+            label: 'По ID',
+            onTap: _showSendByIdSheet,
+          ),
+        ),
+      ),
+    ];
+  }
+}
+
+class _UploadModeController {
+  static const _openDuration = Duration(milliseconds: 480);
+  static const _closeDuration = Duration(milliseconds: 320);
+  static const _dragRangeFactor = 0.55;
+  static const _flingVelocityThreshold = 280.0;
+  static const _snapMidpoint = 0.5;
+
+  final AnimationController anim;
+
+  _UploadModeController(TickerProvider vsync)
+      : anim = AnimationController(
+          vsync: vsync,
+          duration: _openDuration,
+          reverseDuration: _closeDuration,
+        );
+
+  bool get isOpen => anim.value > 0;
+
+  void open() => anim.forward();
+  void close() => anim.reverse();
+
+  void handleDragUpdate(DragUpdateDetails d, double availableHeight) {
+    if (anim.value == 0) return;
+    final delta = d.primaryDelta ?? 0;
+    final next = anim.value - delta / (availableHeight * _dragRangeFactor);
+    anim.value = next.clamp(0.0, 1.0);
+  }
+
+  void handleDragEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    if (v.abs() > _flingVelocityThreshold) {
+      v > 0 ? close() : open();
+      return;
+    }
+    anim.value < _snapMidpoint ? close() : open();
+  }
+
+  void dispose() => anim.dispose();
+}
+
+class _CornerAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _CornerAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: cs.onSurface, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DragDownHint extends StatefulWidget {
+  final Color color;
+
+  const _DragDownHint({required this.color});
+
+  @override
+  State<_DragDownHint> createState() => _DragDownHintState();
+}
+
+class _DragDownHintState extends State<_DragDownHint>
+    with SingleTickerProviderStateMixin {
+  static const _cycle = Duration(milliseconds: 2800);
+  static const _activeFraction = 0.4;
+  static const _height = 3.0;
+  static const _slotHeight = 28.0;
+  static const _startY = -6.0;
+  static const _travel = 16.0;
+  static const _peakOpacity = 0.32;
+
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: _cycle)..repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _slotHeight,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final ghost = _ghostFor(_c.value);
+          if (ghost.opacity <= 0) return const SizedBox.shrink();
+          return Stack(
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: ghost.dy,
+                height: _height,
+                child: Opacity(
+                  opacity: ghost.opacity,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: widget.color,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  ({double dy, double opacity}) _ghostFor(double phase) {
+    if (phase > _activeFraction) return (dy: 0, opacity: 0);
+    final local = phase / _activeFraction;
+    final eased = Curves.easeOutCubic.transform(local);
+    return (
+      dy: _startY + eased * _travel,
+      opacity: (1 - local) * _peakOpacity,
+    );
   }
 }
 
@@ -563,54 +739,11 @@ class _FadeScaleEntryState extends State<_FadeScaleEntry>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _c,
-      builder: (_, child) => Opacity(
+      builder: (context, child) => Opacity(
         opacity: _opacity.value.clamp(0.0, 1.0),
         child: Transform.scale(scale: _scale.value, child: child),
       ),
       child: widget.child,
-    );
-  }
-}
-
-class _CardActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  const _CardActionButton({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final active = onTap != null;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: active ? cs.primaryContainer : cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: active ? cs.onPrimaryContainer : cs.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -655,7 +788,7 @@ class _CloudFileCard extends StatelessWidget {
         aspectRatio: 1.0,
         child: Container(
           decoration: BoxDecoration(
-            color: cs.surface,
+            color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5), width: 0.5),
           ),
@@ -719,7 +852,6 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
     if (f.fileId != null) {
       _link = CloudStorageModule.getCachedLink(f.accountId, f.fileId!);
     }
-    // Refresh the expiry countdown every minute
     _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -784,8 +916,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
         children: [
           Center(
             child: Container(
-              width: 36,
-              height: 4,
+              width: 36, height: 4,
               decoration: BoxDecoration(
                 color: cs.outlineVariant,
                 borderRadius: BorderRadius.circular(2),
@@ -793,10 +924,8 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            f.name,
-            style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w700),
-          ),
+          Text(f.name,
+              style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           _InfoRow(label: 'ID файла', value: f.fileId?.toString() ?? '—'),
           const SizedBox(height: 6),
@@ -808,20 +937,15 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
             children: [
               Expanded(
                 child: isExpired
-                    ? Text(
-                        'Ссылки пока нет. Создайте.',
-                        style: TextStyle(color: cs.error, fontSize: 13),
-                      )
-                    : Text(
-                        'Ссылка истечет ${_formatExpiry(_link!.expires)}',
-                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                      ),
+                    ? Text('Ссылки пока нет. Создайте.',
+                        style: TextStyle(color: cs.error, fontSize: 13))
+                    : Text('Ссылка истечет ${_formatExpiry(_link!.expires)}',
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
               ),
               const SizedBox(width: 8),
               _loading
                   ? SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: 20, height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
                     )
                   : IconButton(
@@ -923,19 +1047,15 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
         children: [
           Center(
             child: Container(
-              width: 36,
-              height: 4,
+              width: 36, height: 4,
               decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
+                color: cs.outlineVariant, borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            'Отправить по ID',
-            style: TextStyle(color: cs.onSurface, fontSize: 16, fontWeight: FontWeight.w700),
-          ),
+          Text('Отправить по ID',
+              style: TextStyle(color: cs.onSurface, fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
@@ -964,8 +1084,7 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
             ),
             child: _sending
                 ? SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: 18, height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
                   )
                 : const Text('Отправить', style: TextStyle(fontWeight: FontWeight.w600)),

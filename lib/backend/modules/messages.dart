@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../models/attachment.dart';
 import 'chats.dart' show ChatsModule;
@@ -462,8 +463,9 @@ class MessagesModule {
     int fileId, {
     String? token,
     bool notify = true,
-    int maxAttempts = 5,
+    int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
+    Duration initialDelay = const Duration(seconds: 3),
   }) async {
     final payload = {
       'chatId': chatId,
@@ -482,14 +484,18 @@ class MessagesModule {
       'notify': notify,
     };
 
+    await Future.delayed(initialDelay);
+
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      final response = await _api.sendRequest(Opcode.msgSend, payload);
-      if (response.isOk) return true;
-      final err = response.payload is Map ? response.payload['error'] : null;
-      if (err != 'attachment.not.ready' || attempt == maxAttempts - 1) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        if (response.isOk) return true;
         return false;
+      } on PacketError catch (e) {
+        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (attempt == maxAttempts - 1) return false;
+        await Future.delayed(retryDelay);
       }
-      await Future.delayed(retryDelay);
     }
     return false;
   }

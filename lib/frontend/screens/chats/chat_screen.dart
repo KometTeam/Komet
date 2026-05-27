@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
+import 'package:komet/backend/modules/upload_notification_service.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -1347,6 +1348,15 @@ class _ChatScreenState extends State<ChatScreen>
       size: file.size,
     ));
 
+    UploadNotificationService.start(file.name);
+
+    var notifLastSent = 0;
+    var notifLastMs = DateTime.now().millisecondsSinceEpoch;
+    var notifSpeedBps = 0;
+    var notifLastPercent = -1;
+
+    void stopNotif() => UploadNotificationService.stop();
+
     _uploadSub?.cancel();
     _uploadSub = fileUploader
         .upload(
@@ -1361,7 +1371,24 @@ class _ChatScreenState extends State<ChatScreen>
         switch (event) {
           case UploadProgress(:final sent, :final total):
             _uploadStatus.value = _UploadStatus(active: true, sent: sent, total: total);
+            final nowMs = DateTime.now().millisecondsSinceEpoch;
+            final elapsed = nowMs - notifLastMs;
+            if (elapsed >= 500) {
+              notifSpeedBps = ((sent - notifLastSent) * 1000 / elapsed).round();
+              notifLastSent = sent;
+              notifLastMs = nowMs;
+            }
+            final percent = total > 0 ? (sent * 100 ~/ total) : 0;
+            if (percent != notifLastPercent) {
+              notifLastPercent = percent;
+              UploadNotificationService.update(
+                filename: file.name,
+                progressPercent: percent,
+                speedBps: notifSpeedBps,
+              );
+            }
           case UploadDone(:final fileId, :final token, :final url):
+            stopNotif();
             FileHistoryCache.add(FileHistoryEntry(
               fileId: fileId,
               url: url,
@@ -1381,12 +1408,14 @@ class _ChatScreenState extends State<ChatScreen>
               ),
             );
           case UploadError(:final message):
+            stopNotif();
             showCustomNotification(context, 'Ошибка: $message');
             _updateFileMessageStatus(tempId, 'error');
         }
       },
       onDone: () {
         if (!mounted) return;
+        stopNotif();
         final inFlight = _messages.firstWhere(
           (m) => m.id == tempId,
           orElse: () => CachedMessage(
@@ -1401,6 +1430,7 @@ class _ChatScreenState extends State<ChatScreen>
       },
       onError: (Object e) {
         if (!mounted) return;
+        stopNotif();
         showCustomNotification(context, 'Ошибка: $e');
         _updateFileMessageStatus(tempId, 'error');
         _uploadStatus.value = const _UploadStatus();

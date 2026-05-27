@@ -55,7 +55,8 @@ class Packet {
 
 class PacketError implements Exception {
   final String message;
-  const PacketError(this.message);
+  final String? errorKey;
+  const PacketError(this.message, {this.errorKey});
   @override
   String toString() => message;
 }
