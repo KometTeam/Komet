@@ -1,0 +1,293 @@
+name: Release (main)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.41.5'
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [komet, oneme]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Configure Gradle
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
+          echo "kotlin.daemon.jvmargs=-Xmx1536m" >> ~/.gradle/gradle.properties
+
+      - name: Setup release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_BASE64 secret not set — release will be debug-signed."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/komet-release.jks
+          {
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=komet-release.jks"
+          } > android/key.properties
+          echo "Release signing configured."
+
+      - name: Build APKs and App Bundle (${{ matrix.flavor }})
+        run: |
+          flutter build apk --release --flavor ${{ matrix.flavor }}
+          flutter build apk --release --split-per-abi --flavor ${{ matrix.flavor }}
+          flutter build appbundle --release --flavor ${{ matrix.flavor }}
+
+      - name: Collect Android artifacts (${{ matrix.flavor }})
+        run: |
+          F=${{ matrix.flavor }}
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-$F-release.apk            dist/Komet-android-$F-universal.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-$F-release.apk  dist/Komet-android-$F-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-$F-release.apk dist/Komet-android-$F-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-$F-release.apk     dist/Komet-android-$F-x86_64.apk
+          cp build/app/outputs/bundle/${F}Release/app-$F-release.aab     dist/Komet-android-$F.aab
+
+      - name: Upload Android artifacts (${{ matrix.flavor }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.flavor }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Build Windows
+        run: flutter build windows --release
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/Komet-windows-x64.zip
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Build Linux
+        run: flutter build linux --release
+      - name: Package Linux
+        run: |
+          mkdir -p dist
+          tar -C build/linux/x64/release/bundle -czf dist/Komet-linux-x64.tar.gz .
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Build macOS
+        run: flutter build macos --release
+      - name: Package macOS
+        run: |
+          mkdir -p dist
+          APP=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          ditto -c -k --keepParent "$APP" dist/Komet-macos.zip
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+      - name: Install ldid
+        run: brew install ldid
+      - name: Pseudo-sign with ldid
+        run: |
+          set -euo pipefail
+          APP="build/ios/iphoneos/Runner.app"
+          ENT="$(mktemp -t ent).plist"
+          cat > "$ENT" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>platform-application</key><true/>
+            <key>get-task-allow</key><true/>
+            <key>com.apple.private.security.no-container</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -type f -name "*.dylib" -print0 | xargs -0 -I{} ldid -S "{}"
+            find "$APP/Frameworks" -type d -name "*.framework" | while read -r fw; do
+              bin="$fw/$(basename "$fw" .framework)"
+              [ -f "$bin" ] && ldid -S "$bin"
+            done
+          fi
+          if [ -d "$APP/PlugIns" ]; then
+            find "$APP/PlugIns" -type d -name "*.appex" | while read -r ext; do
+              bin="$ext/$(basename "$ext" .appex)"
+              [ -f "$bin" ] && ldid -S"$ENT" "$bin"
+            done
+          fi
+          ldid -S"$ENT" "$APP/Runner"
+      - name: Package IPA
+        run: |
+          mkdir -p dist build/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
+          (cd build/ios && zip -qr ../../dist/Komet-ios-pseudosigned.ipa Payload)
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [android, windows, linux, macos, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Compute version
+        id: ver
+        run: |
+          PUBSPEC_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          echo "tag=v${PUBSPEC_VERSION}+${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "name=Komet ${PUBSPEC_VERSION} (сборка ${GITHUB_RUN_NUMBER})" >> "$GITHUB_OUTPUT"
+
+      - name: List artifacts
+        run: ls -lhR dist
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            Автоматическая сборка из ветки `${{ github.ref_name }}` @ `${{ github.sha }}`.
+
+            ## Какой файл качать
+
+            ### Android — версия Komet (без push-уведомлений)
+            - **`Komet-android-komet-arm64-v8a.apk`** — рекомендуется для большинства современных телефонов (64-битный ARM).
+            - `Komet-android-komet-universal.apk` — универсальный APK, работает везде, но весит больше.
+            - `Komet-android-komet-armeabi-v7a.apk` — для старых 32-битных устройств.
+            - `Komet-android-komet-x86_64.apk` — для эмуляторов и редких x86-устройств.
+            - `Komet-android-komet.aab` — App Bundle для публикации в Google Play (не для ручной установки).
+
+            ### Android — версия OneMe (с push-уведомлениями через Firebase)
+            - **`Komet-android-oneme-arm64-v8a.apk`** — рекомендуется для большинства современных телефонов.
+            - `Komet-android-oneme-universal.apk` — универсальный APK.
+            - `Komet-android-oneme-armeabi-v7a.apk` — для старых 32-битных устройств.
+            - `Komet-android-oneme-x86_64.apk` — для эмуляторов и x86-устройств.
+            - `Komet-android-oneme.aab` — App Bundle для Google Play.
+
+            ### Windows
+            - **`Komet-windows-x64.zip`** — портативная сборка для Windows 10/11 (x64). Распаковать и запустить `komet.exe`.
+
+            ### Linux
+            - **`Komet-linux-x64.tar.gz`** — сборка для 64-битного Linux. Требуются `libgtk-3`, `libsecret-1`, `libjsoncpp`. Распаковать и запустить бинарник.
+
+            ### macOS
+            - **`Komet-macos.zip`** — `.app` для macOS. Распаковать и перетащить в `/Applications`. Приложение не нотаризовано — при первом запуске разрешите через «Системные настройки → Защита и безопасность».
+
+            ### iOS
+            - **`Komet-ios-pseudosigned.ipa`** — IPA с псевдо-подписью (ldid).
+              ⚠️ Не устанавливается через App Store. Подходит для:
+              - jailbreak (Filza, rootless),
+              - TrollStore,
+              - сайдлоада через AltStore / Sideloadly (потребуется ваш Apple ID для повторной подписи).
+          files: dist/*
