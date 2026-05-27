@@ -97,6 +97,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   String _nextTempId() => 'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
   late AnimationController _shimmerController;
+  Timer? _shimmerStartTimer;
+  bool _historyKickedOff = false;
   List<CachedMessage> _messages = [];
   int _myId = 0;
   CachedChat? chat;
@@ -117,7 +119,7 @@ class _ChatScreenState extends State<ChatScreen>
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    );
     _attachAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
@@ -141,7 +143,50 @@ class _ChatScreenState extends State<ChatScreen>
       reverseCurve: Curves.easeIn,
     );
 
+    WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
+  }
+
+  void _onFirstFrameRendered(Duration _) {
+    if (!mounted) return;
+    if (widget.embedded) {
+      _kickoffHistory();
+      return;
+    }
+    final anim = ModalRoute.of(context)?.animation;
+    if (anim == null || anim.status == AnimationStatus.completed) {
+      _kickoffHistory();
+      return;
+    }
+    Timer? safety;
+    void onStatus(AnimationStatus status) {
+      if (status != AnimationStatus.completed) return;
+      anim.removeStatusListener(onStatus);
+      safety?.cancel();
+      if (!mounted) return;
+      _kickoffHistory();
+    }
+    anim.addStatusListener(onStatus);
+    safety = Timer(const Duration(milliseconds: 400), () {
+      anim.removeStatusListener(onStatus);
+      if (!mounted) return;
+      _kickoffHistory();
+    });
+  }
+
+  void _kickoffHistory() {
+    if (_historyKickedOff) return;
+    _historyKickedOff = true;
+    _shimmerStartTimer = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted || !_isLoading) return;
+      _shimmerController.repeat();
+    });
     _loadHistory();
+  }
+
+  void _onLoadingFinished() {
+    _shimmerStartTimer?.cancel();
+    _shimmerStartTimer = null;
+    if (_shimmerController.isAnimating) _shimmerController.stop();
   }
 
   Future<void> _loadHistory() async {
@@ -157,19 +202,35 @@ class _ChatScreenState extends State<ChatScreen>
       unawaited(_loadOtherPresence());
     }
 
-    final cachedRows = await AppDatabase.loadMessages(
+    final firstRows = await AppDatabase.loadMessages(
+      _myId,
+      widget.chatId,
+      limit: 20,
+    );
+    if (mounted && firstRows.isNotEmpty) {
+      final first = firstRows.reversed
+          .map((r) => CachedMessage.fromDbRow(r))
+          .toList();
+      setState(() {
+        _messages = first;
+        if (api.state == SessionState.online) {
+          _isLoading = false;
+          _onLoadingFinished();
+        }
+      });
+    }
+
+    unawaited(_loadRemainingHistory());
+  }
+
+  Future<void> _loadRemainingHistory() async {
+    final fullRows = await AppDatabase.loadMessages(
       _myId,
       widget.chatId,
       limit: 100,
     );
-    if (mounted && cachedRows.isNotEmpty) {
-      setState(() {
-        _messages = cachedRows.map((r) => CachedMessage.fromDbRow(r)).toList();
-        _messages.sort((a, b) => a.time.compareTo(b.time));
-        if (api.state == SessionState.online) {
-          _isLoading = false;
-        }
-      });
+    if (mounted && fullRows.length > _messages.length) {
+      _applyMergedMessages(fullRows);
     }
 
     try {
@@ -180,13 +241,7 @@ class _ChatScreenState extends State<ChatScreen>
         limit: 100,
       );
       if (mounted) {
-        setState(() {
-          _messages = updatedRows
-              .map((r) => CachedMessage.fromDbRow(r))
-              .toList();
-          _messages.sort((a, b) => a.time.compareTo(b.time));
-          _isLoading = false;
-        });
+        _applyMergedMessages(updatedRows, markLoaded: true);
       }
       _loadForwardedSenderNames();
     } catch (e) {
@@ -194,9 +249,51 @@ class _ChatScreenState extends State<ChatScreen>
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _onLoadingFinished();
         });
       }
     }
+  }
+
+  void _applyMergedMessages(
+    List<Map<String, dynamic>> rowsDesc, {
+    bool markLoaded = false,
+  }) {
+    final byId = <String, CachedMessage>{
+      for (final m in _messages) m.id: m,
+    };
+    final merged = <CachedMessage>[];
+    for (final row in rowsDesc.reversed) {
+      final fresh = CachedMessage.fromDbRow(row);
+      final old = byId[fresh.id];
+      merged.add(old != null && _sameMessage(old, fresh) ? old : fresh);
+    }
+
+    final changed = !_listsEquivalent(_messages, merged);
+    if (!changed && !markLoaded) return;
+    setState(() {
+      if (changed) _messages = merged;
+      if (markLoaded) {
+        _isLoading = false;
+        _onLoadingFinished();
+      }
+    });
+  }
+
+  bool _sameMessage(CachedMessage a, CachedMessage b) {
+    return a.id == b.id &&
+        a.time == b.time &&
+        a.status == b.status &&
+        a.text == b.text &&
+        a.senderId == b.senderId;
+  }
+
+  bool _listsEquivalent(List<CachedMessage> a, List<CachedMessage> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!identical(a[i], b[i])) return false;
+    }
+    return true;
   }
 
   @override
@@ -221,6 +318,7 @@ class _ChatScreenState extends State<ChatScreen>
     _attachAnim.dispose();
     _messageController.dispose();
     _scrollController.dispose();
+    _shimmerStartTimer?.cancel();
     _shimmerController.dispose();
     super.dispose();
   }
@@ -906,16 +1004,20 @@ class _ChatScreenState extends State<ChatScreen>
               child: bubble,
             );
 
-            if (message.id == _lastSentId) {
-              return _SentMessageAnimation(
-                key: ValueKey('anim_${message.id}'),
-                onComplete: () {
-                  if (mounted) setState(() => _lastSentId = null);
-                },
-                child: pressable,
-              );
-            }
-            return pressable;
+            final Widget child = message.id == _lastSentId
+                ? _SentMessageAnimation(
+                    key: ValueKey('anim_${message.id}'),
+                    onComplete: () {
+                      if (mounted) setState(() => _lastSentId = null);
+                    },
+                    child: pressable,
+                  )
+                : pressable;
+
+            return RepaintBoundary(
+              key: ValueKey('msg_${message.id}'),
+              child: child,
+            );
           },
         ),
         ),

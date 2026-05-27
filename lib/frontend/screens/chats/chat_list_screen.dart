@@ -2056,7 +2056,15 @@ class _ChatListScreenState extends State<ChatListScreen>
       onTap: () {
         if (_isSelectionMode) {
           _toggleSelection(id);
-        } else if (widget.onChatSelected != null) {
+          return;
+        }
+        if (imageUrl.isNotEmpty) {
+          unawaited(precacheImage(
+            CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
+            context,
+          ));
+        }
+        if (widget.onChatSelected != null) {
           widget.onChatSelected!(DesktopChatSelection(
             chatId: int.parse(id),
             name: name,
