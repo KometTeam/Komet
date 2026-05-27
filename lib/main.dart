@@ -33,7 +33,7 @@ import 'core/utils/haptics.dart';
 import 'core/protocol/packet.dart';
 import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/screens/auth/login_screen.dart';
-import 'frontend/screens/chats/chat_list_screen.dart';
+import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/theme_reveal.dart';
 
@@ -694,7 +694,7 @@ class _StartupScreenState extends State<_StartupScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const ChatListScreen()),
+        MaterialPageRoute(builder: (_) => const AdaptiveShell()),
       );
     }
   }

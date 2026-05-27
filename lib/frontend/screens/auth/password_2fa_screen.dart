@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../chats/chat_list_screen.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/login_success_screen.dart';
 
 class Password2FAScreen extends StatefulWidget {
   final String trackId;
@@ -40,13 +40,27 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
 
       if (!mounted) return;
 
-      await accountModule.login(token: result.loginToken);
+      final loginResult = await accountModule.login(token: result.loginToken);
+
+      if (!mounted) return;
+
+      final avatar = await precacheLoginAvatar(
+        context,
+        loginResult.profile.baseUrl,
+      );
 
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const ChatListScreen()),
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 240),
+          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+        ),
         (route) => false,
       );
     } catch (e) {

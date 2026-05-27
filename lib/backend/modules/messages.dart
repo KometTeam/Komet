@@ -25,6 +25,12 @@ class ContactCache {
   static String? getAvatar(int id) => _avatarCache[id];
   static Set<String>? getOptions(int id) => _optionsCache[id];
   static bool isOfficial(int id) => _optionsCache[id]?.contains('OFFICIAL') ?? false;
+
+  static void clear() {
+    _nameCache.clear();
+    _avatarCache.clear();
+    _optionsCache.clear();
+  }
 }
 
 class TranscriptionResult {
@@ -53,6 +59,8 @@ class TranscriptionCache {
   static TranscriptionResult? get(String messageId) => _cache[messageId];
 
   static bool has(String messageId) => _cache.containsKey(messageId);
+
+  static void clear() => _cache.clear();
 }
 
 class FileHistoryEntry {

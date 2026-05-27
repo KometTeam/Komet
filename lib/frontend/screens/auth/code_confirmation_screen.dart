@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../chats/chat_list_screen.dart';
 import 'password_2fa_screen.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/login_success_screen.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -167,13 +167,27 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         return;
       }
 
-      await accountModule.login();
+      final loginResult = await accountModule.login();
+
+      if (!mounted) return;
+
+      final avatar = await precacheLoginAvatar(
+        context,
+        loginResult.profile.baseUrl,
+      );
 
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const ChatListScreen()),
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 240),
+          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+        ),
         (route) => false,
       );
     } catch (e) {
