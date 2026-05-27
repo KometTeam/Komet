@@ -18,6 +18,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
+import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../main.dart' show accountModule, api, messagesModule;
@@ -503,7 +504,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       if (mounted) {
         setState(() {
           _profile = p;
-          _chats = chats;
+          _chats = chats.where((c) => !CloudStorageModule.isCloudStorageGroup(c)).toList();
           _folders = folders;
           _foldersListKnown = foldersKnown;
           if (_selectedFolderId != null &&

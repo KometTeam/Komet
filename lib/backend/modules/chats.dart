@@ -661,6 +661,40 @@ class ChatsModule {
     return packet.isOk;
   }
 
+  static Future<bool> setChatOptions(
+    Api api, {
+    required int chatId,
+    required Map<String, dynamic> options,
+  }) async {
+    final packet = await api.sendRequest(Opcode.chatUpdate, {
+      'chatId': chatId,
+      'options': options,
+    });
+    return packet.isOk;
+  }
+
+  static Future<bool> setChatTitle(
+    Api api, {
+    required int chatId,
+    required String title,
+  }) async {
+    final packet = await api.sendRequest(Opcode.chatUpdate, {
+      'chatId': chatId,
+      'theme': title,
+    });
+    if (!packet.isOk) return false;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return true;
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isNotEmpty) {
+      final updated = Map<String, dynamic>.from(rows.first);
+      updated['title'] = title;
+      await AppDatabase.saveChats([updated]);
+      _bump();
+    }
+    return true;
+  }
+
   static Future<String?> togglePin(
     Api api, {
     required List<int> chatIds,
@@ -774,6 +808,20 @@ class ChatsModule {
     } catch (e) {
       logger.w('deleteChat $chatId: $e');
       return 'Не удалось удалить чат';
+    }
+  }
+
+  static Future<bool> leaveChat(Api api, {required int chatId}) async {
+    try {
+      await api.sendRequest(Opcode.chatLeave, {'chatId': chatId});
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        await AppDatabase.deleteChat(chatId, accountId);
+        _bump();
+      }
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

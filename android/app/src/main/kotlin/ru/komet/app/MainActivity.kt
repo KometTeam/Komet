@@ -1,10 +1,12 @@
 package ru.komet.app
 
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -33,6 +35,48 @@ class MainActivity : FlutterActivity() {
                 "detectInterfaces" -> result.success(detectInterfaces())
                 "bindToNonVpnNetwork" -> bindToNonVpnNetwork(result)
                 "unbindNetwork" -> result.success(unbindNetwork())
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/upload_service",
+        ).setMethodCallHandler { call, result ->
+            val ctx = this
+            when (call.method) {
+                "start" -> {
+                    val filename = call.argument<String>("filename") ?: "Файл"
+                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
+                        action = UploadForegroundService.ACTION_START
+                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    result.success(null)
+                }
+                "update" -> {
+                    val filename = call.argument<String>("filename") ?: "Файл"
+                    val progress = call.argument<Int>("progress") ?: 0
+                    val speed    = call.argument<Long>("speed") ?: 0L
+                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
+                        action = UploadForegroundService.ACTION_UPDATE
+                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
+                        putExtra(UploadForegroundService.EXTRA_PROGRESS, progress)
+                        putExtra(UploadForegroundService.EXTRA_SPEED, speed)
+                    }
+                    startService(intent)
+                    result.success(null)
+                }
+                "stop" -> {
+                    startService(Intent(ctx, UploadForegroundService::class.java).apply {
+                        action = UploadForegroundService.ACTION_STOP
+                    })
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
