@@ -1367,10 +1367,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                   // chat.isOfficial covers contacts from the login payload.
                   final isVerified = ContactCache.isOfficial(secondId) || chat.isOfficial;
 
+                  final isPlaceholder =
+                      chat.lastMsgText == ChatsModule.lastMsgPlaceholder;
+                  final previewText = isPlaceholder
+                      ? 'зайдите в чат для подгрузки'
+                      : (chat.lastMsgTextOneLine ?? '');
                   return _buildChatItem(
                     chat.id.toString(),
                     name ?? "Пользователь",
-                    chat.lastMsgTextOneLine ?? '',
+                    previewText,
                     _formatTime(chat.lastMsgTime),
                     avatar ?? "",
                     isOnline: chat.isOnline,
@@ -1379,20 +1384,25 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isVerified: isVerified,
                     isPinned: isPinned,
                     chatType: "DIALOG",
+                    messageItalic: isPlaceholder,
                   );
                 } else {
-                  final name = chat.lastMsgSenderId != null
+                  final isPlaceholder =
+                      chat.lastMsgText == ChatsModule.lastMsgPlaceholder;
+                  final sender = chat.lastMsgSenderId != null
                       ? ContactCache.get(chat.lastMsgSenderId!)
                       : null;
 
                   String fullMsg = "";
-
-                  if (name?.isNotEmpty == true && chat.id != 0) {
-                    fullMsg += "$name: ";
-                  }
-
-                  if (chat.lastMsgText?.isNotEmpty == true) {
-                    fullMsg += chat.lastMsgText ?? "";
+                  if (isPlaceholder) {
+                    fullMsg = 'зайдите в чат для подгрузки';
+                  } else {
+                    if (sender?.isNotEmpty == true && chat.id != 0) {
+                      fullMsg += "$sender: ";
+                    }
+                    if (chat.lastMsgText?.isNotEmpty == true) {
+                      fullMsg += chat.lastMsgText ?? "";
+                    }
                   }
 
                   return _buildChatItem(
@@ -1409,6 +1419,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isVerified: chat.isOfficial,
                     isPinned: isPinned,
                     chatType: chat.type,
+                    messageItalic: isPlaceholder,
                   );
                 }
               }, childCount: totalItems),
@@ -2049,6 +2060,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isVerified = false,
     bool isPinned = false,
     String chatType = "CHAT",
+    bool messageItalic = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -2230,6 +2242,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   fontWeight: isTyping
                                       ? FontWeight.w500
                                       : FontWeight.w400,
+                                  fontStyle: messageItalic
+                                      ? FontStyle.italic
+                                      : FontStyle.normal,
                                   height: 1.2,
                                 ),
                                 maxLines: 1,

@@ -940,6 +940,7 @@ class AccountModule {
 
     ContactCache.clear();
     TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
 
     try {

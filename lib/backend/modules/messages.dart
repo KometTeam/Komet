@@ -245,6 +245,29 @@ class CachedMessage {
     'status': status,
     'payload': payload != null ? jsonEncode(payload) : null,
   };
+
+  static CachedMessage fromPushPayload(int accountId, int chatId, Map msg) {
+    List<MessageAttachment>? attachments;
+    final attaches = msg['attaches'];
+    if (attaches is List && attaches.isNotEmpty) {
+      attachments = attaches
+          .whereType<Map>()
+          .map((a) =>
+              MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+          .toList();
+    }
+    return CachedMessage(
+      id: msg['id']?.toString() ?? '',
+      accountId: accountId,
+      chatId: chatId,
+      senderId: msg['sender'] as int? ?? 0,
+      text: msg['text'] as String?,
+      time: (msg['time'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
+      status: (msg['status'] as String?) ?? 'sent',
+      payload: Map<String, dynamic>.from(msg),
+      attachments: attachments,
+    );
+  }
 }
 
 class MessagesModule {

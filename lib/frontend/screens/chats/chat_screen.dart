@@ -13,11 +13,11 @@ import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
-import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/cache/info_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
@@ -89,6 +89,27 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<_UploadStatus> _uploadStatus = ValueNotifier(const _UploadStatus());
   StreamSubscription<UploadEvent>? _uploadSub;
   StreamSubscription<Packet>? _pushSub;
+  StreamSubscription<MessageEvent>? _messageEventSub;
+  final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers = {};
+
+  ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
+    final existing = _reactionNotifiers[m.id];
+    if (existing != null) return existing;
+    final info = m.payload?['reactionInfo'];
+    final notifier = ValueNotifier<Map<String, dynamic>?>(
+      info is Map ? Map<String, dynamic>.from(info) : null,
+    );
+    _reactionNotifiers[m.id] = notifier;
+    return notifier;
+  }
+
+  void _pruneReactionNotifiers() {
+    final liveIds = _messages.map((m) => m.id).toSet();
+    final dead = _reactionNotifiers.keys.where((id) => !liveIds.contains(id)).toList();
+    for (final id in dead) {
+      _reactionNotifiers.remove(id)?.dispose();
+    }
+  }
   final Set<int> _typingUserIds = {};
   final Map<int, Timer> _typingTimers = {};
   int _otherStatus = 0;
@@ -130,10 +151,12 @@ class _ChatScreenState extends State<ChatScreen>
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _pushSub = api.pushStream
         .where((p) =>
-            p.opcode == Opcode.notifMessage ||
             p.opcode == Opcode.notifMark ||
             p.opcode == Opcode.notifTyping)
         .listen(_onIncomingPush);
+    _messageEventSub = ChatsModule.messageEvents
+        .where((e) => e.chatId == widget.chatId)
+        .listen(_onMessageEvent);
     _floatingDateAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -145,7 +168,40 @@ class _ChatScreenState extends State<ChatScreen>
       reverseCurve: Curves.easeIn,
     );
 
+    unawaited(_fastPreloadCache());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
+  }
+
+  Future<void> _fastPreloadCache() async {
+    final p = await AppDatabase.loadActiveProfile();
+    if (!mounted) return;
+    _myId = p?.id ?? 0;
+
+    ChatsModule.getChat(_myId, widget.chatId).then((value) {
+      if (mounted && value.isNotEmpty) {
+        setState(() {
+          chat = value.first;
+        });
+        _recomputeHeaderStatus();
+      }
+    }).catchError((_) {});
+
+    final firstRows = await AppDatabase.loadMessages(
+      _myId,
+      widget.chatId,
+      limit: 20,
+    );
+    if (!mounted) return;
+    if (firstRows.isNotEmpty) {
+      final first = firstRows.reversed
+          .map((r) => CachedMessage.fromDbRow(r))
+          .toList();
+      setState(() {
+        _messages = first;
+        _isLoading = false;
+        _onLoadingFinished();
+      });
+    }
   }
 
   void _onFirstFrameRendered(Duration _) {
@@ -192,37 +248,15 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _loadHistory() async {
-    final activeProfile = await AppDatabase.loadActiveProfile();
-    _myId = activeProfile?.id ?? 0;
-    ChatsModule.getChat(_myId, widget.chatId).then((value) {
-      if (mounted && value.isNotEmpty) {
-        setState(() { chat = value.first; });
-        _recomputeHeaderStatus();
-      }
-    }).catchError((_) {});
+    if (_myId == 0) {
+      final activeProfile = await AppDatabase.loadActiveProfile();
+      if (!mounted) return;
+      _myId = activeProfile?.id ?? 0;
+    }
     if (widget.chatType == 'DIALOG') {
       unawaited(_loadOtherPresence());
     }
-
-    final firstRows = await AppDatabase.loadMessages(
-      _myId,
-      widget.chatId,
-      limit: 20,
-    );
-    if (mounted && firstRows.isNotEmpty) {
-      final first = firstRows.reversed
-          .map((r) => CachedMessage.fromDbRow(r))
-          .toList();
-      setState(() {
-        _messages = first;
-        if (api.state == SessionState.online) {
-          _isLoading = false;
-          _onLoadingFinished();
-        }
-      });
-    }
-
-    unawaited(_loadRemainingHistory());
+    await _loadRemainingHistory();
   }
 
   Future<void> _loadRemainingHistory() async {
@@ -235,8 +269,20 @@ class _ChatScreenState extends State<ChatScreen>
       _applyMergedMessages(fullRows);
     }
 
+    if (!ChatsModule.isChatDirty(widget.chatId) && fullRows.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _onLoadingFinished();
+        });
+      }
+      _loadForwardedSenderNames();
+      return;
+    }
+
     try {
       await messagesModule.fetchHistory(_myId, widget.chatId);
+      ChatsModule.markChatClean(widget.chatId);
       final updatedRows = await AppDatabase.loadMessages(
         _myId,
         widget.chatId,
@@ -245,6 +291,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (mounted) {
         _applyMergedMessages(updatedRows, markLoaded: true);
       }
+      unawaited(ChatsModule.reconcileLastMessageIfPlaceholder(_myId, widget.chatId));
       _loadForwardedSenderNames();
     } catch (e) {
       debugPrint('Error fetching history: $e');
@@ -280,6 +327,33 @@ class _ChatScreenState extends State<ChatScreen>
         _onLoadingFinished();
       }
     });
+    if (changed) {
+      _syncReactionNotifiersFromMessages();
+      _pruneReactionNotifiers();
+    }
+  }
+
+  void _syncReactionNotifiersFromMessages() {
+    for (final m in _messages) {
+      final info = m.payload?['reactionInfo'];
+      final value = info is Map ? Map<String, dynamic>.from(info) : null;
+      final existing = _reactionNotifiers[m.id];
+      if (existing == null) {
+        _reactionNotifiers[m.id] = ValueNotifier(value);
+      } else if (!_reactionsEqual(existing.value, value)) {
+        existing.value = value;
+      }
+    }
+  }
+
+  bool _reactionsEqual(Map<String, dynamic>? a, Map<String, dynamic>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (a[k].toString() != b[k].toString()) return false;
+    }
+    return true;
   }
 
   bool _sameMessage(CachedMessage a, CachedMessage b) {
@@ -311,6 +385,11 @@ class _ChatScreenState extends State<ChatScreen>
     _showAttachmentPanel.dispose();
     _uploadSub?.cancel();
     _pushSub?.cancel();
+    _messageEventSub?.cancel();
+    for (final n in _reactionNotifiers.values) {
+      n.dispose();
+    }
+    _reactionNotifiers.clear();
     for (final t in _typingTimers.values) {
       t.cancel();
     }
@@ -358,12 +437,37 @@ class _ChatScreenState extends State<ChatScreen>
   void _onIncomingPush(Packet packet) {
     if (!mounted) return;
     switch (packet.opcode) {
-      case Opcode.notifMessage:
-        _onIncomingMessage(packet);
       case Opcode.notifMark:
         _onMessageRead(packet);
       case Opcode.notifTyping:
         _onTyping(packet);
+    }
+  }
+
+  void _onMessageEvent(MessageEvent event) {
+    if (!mounted) return;
+    switch (event) {
+      case MessageAddedEvent(:final message):
+        if (message.senderId == _myId) return;
+        if (_messages.any((m) => m.id == message.id)) return;
+        setState(() {
+          _lastSentId = message.id;
+          _messages.add(message);
+        });
+        _clearTyping(message.senderId);
+        Haptics.tap();
+        _scrollToBottom();
+      case MessageEditedEvent(:final message):
+        final idx = _messages.indexWhere((m) => m.id == message.id);
+        if (idx == -1) return;
+        setState(() => _messages[idx] = message);
+      case MessageRemovedEvent(:final messageId):
+        final idx = _messages.indexWhere((m) => m.id == messageId);
+        if (idx == -1) return;
+        setState(() => _messages.removeAt(idx));
+        _reactionNotifiers.remove(messageId)?.dispose();
+      case MessageReactionsChangedEvent(:final messageId, :final reactionInfo):
+        _reactionNotifiers[messageId]?.value = reactionInfo;
     }
   }
 
@@ -372,18 +476,11 @@ class _ChatScreenState extends State<ChatScreen>
     final otherId = widget.chatId ^ _myId;
     if (otherId <= 0) return;
     try {
-      final p = await api.sendRequest(
-        Opcode.contactPresence,
-        {'contactIds': [otherId]},
-      );
-      if (!mounted) return;
-      final presence = (p.payload as Map?)?['presence'] as Map?;
-      final entry = presence?[otherId.toString()] ?? presence?[otherId];
-      if (entry is Map) {
-        _otherStatus = (entry['status'] as int?) ?? 0;
-        _otherSeenTime = entry['seen'] as int?;
-        _recomputeHeaderStatus();
-      }
+      final entry = await PresenceFetch.get(otherId);
+      if (!mounted || entry == null) return;
+      _otherStatus = (entry['status'] as int?) ?? 0;
+      _otherSeenTime = entry['seen'] as int?;
+      _recomputeHeaderStatus();
     } catch (_) {}
   }
 
@@ -461,53 +558,6 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() {
       c.participants[userId] = mark;
     });
-  }
-
-  void _onIncomingMessage(Packet packet) {
-    if (!mounted) return;
-    final payload = packet.payload;
-    if (payload is! Map) return;
-    final chatId = payload['chatId'];
-    if (chatId != widget.chatId) return;
-    final msg = payload['message'];
-    if (msg is! Map) return;
-
-    final senderId = msg['sender'];
-    if (senderId is! int) return;
-    if (senderId == _myId) return;
-
-    final msgId = msg['id']?.toString();
-    if (msgId == null || msgId.isEmpty) return;
-    if (_messages.any((m) => m.id == msgId)) return;
-
-    List<MessageAttachment>? attachments;
-    final attaches = msg['attaches'];
-    if (attaches is List && attaches.isNotEmpty) {
-      attachments = attaches
-          .whereType<Map>()
-          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
-          .toList();
-    }
-
-    final cached = CachedMessage(
-      id: msgId,
-      accountId: _myId,
-      chatId: widget.chatId,
-      senderId: senderId,
-      text: msg['text'] as String?,
-      time: (msg['time'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
-      status: 'sent',
-      payload: Map<String, dynamic>.from(msg),
-      attachments: attachments,
-    );
-
-    setState(() {
-      _lastSentId = msgId;
-      _messages.add(cached);
-    });
-    _clearTyping(senderId);
-    Haptics.tap();
-    _scrollToBottom();
   }
 
   Future<void> _sendMessage() async {
@@ -1006,6 +1056,7 @@ class _ChatScreenState extends State<ChatScreen>
               nextMessage: nextMessage,
               chatType: chat?.type ?? 'CHAT',
               overrideStatus: _effectiveStatus(message),
+              reactionsListenable: _reactionNotifierFor(message),
             );
 
             final pressable = _LongPressBubble(

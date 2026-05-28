@@ -587,4 +587,33 @@ class AppDatabase {
       whereArgs: [accountId, chatId],
     );
   }
+
+  static Future<Map<String, dynamic>?> loadMessage(
+    int accountId,
+    int chatId,
+    String messageId,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'messages',
+      where: 'account_id = ? AND chat_id = ? AND id = ?',
+      whereArgs: [accountId, chatId, messageId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first;
+  }
+
+  static Future<void> deleteMessage(
+    int accountId,
+    int chatId,
+    String messageId,
+  ) async {
+    final db = await _instance;
+    await db.delete(
+      'messages',
+      where: 'account_id = ? AND chat_id = ? AND id = ?',
+      whereArgs: [accountId, chatId, messageId],
+    );
+  }
 }

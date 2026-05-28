@@ -5,12 +5,13 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../../core/cache/info_cache.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
 import 'folders.dart';
-import 'messages.dart' show ContactCache;
+import 'messages.dart' show ContactCache, CachedMessage;
 
 Map<int, int> _parseParticipants(dynamic raw) {
   try {
@@ -146,25 +147,315 @@ class CachedChat {
   };
 }
 
+sealed class MessageEvent {
+  final int chatId;
+  const MessageEvent(this.chatId);
+}
+
+class MessageAddedEvent extends MessageEvent {
+  final CachedMessage message;
+  const MessageAddedEvent(super.chatId, this.message);
+}
+
+class MessageEditedEvent extends MessageEvent {
+  final CachedMessage message;
+  const MessageEditedEvent(super.chatId, this.message);
+}
+
+class MessageRemovedEvent extends MessageEvent {
+  final String messageId;
+  const MessageRemovedEvent(super.chatId, this.messageId);
+}
+
+class MessageReactionsChangedEvent extends MessageEvent {
+  final String messageId;
+  final Map<String, dynamic>? reactionInfo;
+  const MessageReactionsChangedEvent(super.chatId, this.messageId, this.reactionInfo);
+}
+
 class ChatsModule {
   static const int muteOff = 0;
   static const int muteForever = -1;
+
+  /// Sentinel в `lastMsgText` когда последнее сообщение в чате удалено,
+  /// а кеша истории нет — UI должен отрисовать курсивную плашку.
+  static const String lastMsgPlaceholder = '__komet_lastmsg_placeholder__';
+
+  static final _messageEventsController =
+      StreamController<MessageEvent>.broadcast();
+  static Stream<MessageEvent> get messageEvents =>
+      _messageEventsController.stream;
 
   static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   static void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
   static StreamSubscription<Packet>? _globalPushSub;
+  static StreamSubscription<SessionState>? _globalStateSub;
+
+  static final Set<int> _dirtyChats = {};
+  static final Set<int> _knownChats = {};
+
+  static bool isChatDirty(int chatId) => _dirtyChats.contains(chatId);
+  static void markChatClean(int chatId) => _dirtyChats.remove(chatId);
+  static void markChatDirty(int chatId) => _dirtyChats.add(chatId);
+  static void registerKnownChat(int chatId) => _knownChats.add(chatId);
 
   static void attachGlobalPushHandlers(Api api) {
     _globalPushSub?.cancel();
+    _globalStateSub?.cancel();
     _globalPushSub = api.pushStream.listen(_handleGlobalPush);
+    _globalStateSub = api.stateStream.listen(_handleSessionState);
+    if (api.state != SessionState.online) {
+      _markAllKnownChatsDirty();
+    }
+  }
+
+  static Future<void> _handleSessionState(SessionState state) async {
+    if (state == SessionState.disconnected) {
+      ContactInfoFetch.clear();
+      PresenceFetch.clear();
+      ChatInfoFetch.clear();
+      await _markAllKnownChatsDirty();
+    }
+  }
+
+  static void resetForAccountSwitch() {
+    _dirtyChats.clear();
+    _knownChats.clear();
+    ContactInfoFetch.clear();
+    PresenceFetch.clear();
+    ChatInfoFetch.clear();
+  }
+
+  static Future<void> _markAllKnownChatsDirty() async {
+    if (_knownChats.isEmpty) {
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId == null) return;
+      final rows = await AppDatabase.loadChats(accountId);
+      for (final row in rows) {
+        final id = row['id'];
+        if (id is int) _knownChats.add(id);
+      }
+    }
+    _dirtyChats.addAll(_knownChats);
   }
 
   static Future<void> _handleGlobalPush(Packet packet) async {
     switch (packet.opcode) {
+      case Opcode.notifMessage:
+        await _handleNotifMessage(packet);
       case Opcode.notifMark:
         await _handleNotifMark(packet);
+      case Opcode.notifMsgReactionsChanged:
+        await _handleNotifMsgReactionsChanged(packet);
     }
+  }
+
+  static Future<void> _handleNotifMessage(Packet packet) async {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final chatId = payload['chatId'];
+    if (chatId is! int) return;
+    final msg = payload['message'];
+    if (msg is! Map) return;
+
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+
+    final senderId = msg['sender'] as int?;
+    final msgIdStr = msg['id']?.toString();
+    final msgIdInt = (msg['id'] is int)
+        ? msg['id'] as int
+        : int.tryParse(msgIdStr ?? '');
+    final msgTime = msg['time'] as int?;
+    final msgText = msg['text'] as String?;
+    final status = msg['status'] as String?;
+    final unread = payload['unread'] as int?;
+
+    var rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) {
+      try {
+        final chatInfo = await ChatInfoFetch.get(chatId);
+        if (chatInfo != null) {
+          await cacheServerChat(chatInfo, accountId);
+        }
+      } catch (e) {
+        logger.w('notifMessage: fetch info for unknown chat $chatId failed: $e');
+        return;
+      }
+      rows = await AppDatabase.loadChat(accountId, chatId);
+      if (rows.isEmpty) return;
+    }
+
+    if (status == 'REMOVED' && msgIdStr != null) {
+      await AppDatabase.deleteMessage(accountId, chatId, msgIdStr);
+      final cachedChat = CachedChat.fromDbRow(rows.first);
+      if (cachedChat.lastMsgId == msgIdInt) {
+        await _reconcileLastMessage(accountId, chatId, rows.first, unread: unread);
+      } else if (unread != null) {
+        final newRow = Map<String, dynamic>.from(rows.first);
+        newRow['unread_count'] = unread;
+        await AppDatabase.saveChats([newRow]);
+      }
+      _messageEventsController.add(MessageRemovedEvent(chatId, msgIdStr));
+      _bump();
+      return;
+    }
+
+    CachedMessage? emittedMessage;
+    if (status == 'EDITED' && msgIdStr != null) {
+      final existing = await AppDatabase.loadMessage(accountId, chatId, msgIdStr);
+      if (existing != null) {
+        Map<String, dynamic> mergedPayload;
+        final existingPayloadRaw = existing['payload'];
+        if (existingPayloadRaw is String && existingPayloadRaw.isNotEmpty) {
+          try {
+            mergedPayload = Map<String, dynamic>.from(
+              jsonDecode(existingPayloadRaw) as Map,
+            );
+          } catch (_) {
+            mergedPayload = Map<String, dynamic>.from(msg);
+          }
+        } else {
+          mergedPayload = Map<String, dynamic>.from(msg);
+        }
+        for (final entry in msg.entries) {
+          if (entry.key == 'reactionInfo') continue;
+          mergedPayload[entry.key.toString()] = entry.value;
+        }
+        final newRow = Map<String, dynamic>.from(existing);
+        newRow['text'] = msgText;
+        newRow['status'] = status;
+        newRow['payload'] = jsonEncode(mergedPayload);
+        await AppDatabase.saveMessages([newRow]);
+        emittedMessage = CachedMessage.fromDbRow(newRow);
+        _messageEventsController.add(MessageEditedEvent(chatId, emittedMessage));
+      }
+    } else if (msgIdStr != null) {
+      final existing = await AppDatabase.loadMessage(accountId, chatId, msgIdStr);
+      if (existing == null) {
+        final cached = CachedMessage.fromPushPayload(accountId, chatId, msg);
+        await AppDatabase.saveMessages([cached.toDbRow()]);
+        emittedMessage = cached;
+        _messageEventsController.add(MessageAddedEvent(chatId, cached));
+      }
+    }
+
+    final cached = CachedChat.fromDbRow(rows.first);
+    final isStaleLast = status != 'REMOVED' &&
+        msgIdInt != null &&
+        cached.lastMsgId == msgIdInt &&
+        status != 'EDITED';
+    if (isStaleLast) {
+      _bump();
+      return;
+    }
+
+    final newRow = Map<String, dynamic>.from(rows.first);
+    if (status != 'REMOVED') {
+      if (msgIdInt != null) newRow['last_msg_id'] = msgIdInt;
+      if (msgTime != null) {
+        newRow['last_msg_time'] = msgTime;
+        if (status != 'EDITED') {
+          newRow['last_event_time'] = msgTime;
+        }
+      }
+      newRow['last_msg_text'] = msgText;
+      if (senderId != null) newRow['last_msg_sender'] = senderId;
+    }
+    if (unread != null) newRow['unread_count'] = unread;
+
+    await AppDatabase.saveChats([newRow]);
+    _bump();
+  }
+
+  static Future<void> _reconcileLastMessage(
+    int accountId,
+    int chatId,
+    Map<String, dynamic> chatRow, {
+    int? unread,
+  }) async {
+    final latest = await AppDatabase.loadMessages(accountId, chatId, limit: 1);
+    final newRow = Map<String, dynamic>.from(chatRow);
+    if (latest.isNotEmpty) {
+      final m = latest.first;
+      newRow['last_msg_id'] = int.tryParse(m['id']?.toString() ?? '');
+      newRow['last_msg_text'] = m['text'];
+      newRow['last_msg_time'] = m['time'];
+      newRow['last_msg_sender'] = m['sender_id'];
+    } else {
+      newRow['last_msg_id'] = null;
+      newRow['last_msg_text'] = lastMsgPlaceholder;
+      newRow['last_msg_sender'] = null;
+    }
+    if (unread != null) newRow['unread_count'] = unread;
+    await AppDatabase.saveChats([newRow]);
+  }
+
+  /// Вызывается после успешного фетча истории чата —
+  /// если в превью был placeholder, заменяем его на актуальное
+  /// последнее сообщение из кеша.
+  static Future<void> reconcileLastMessageIfPlaceholder(
+    int accountId,
+    int chatId,
+  ) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final chat = CachedChat.fromDbRow(rows.first);
+    if (chat.lastMsgText != lastMsgPlaceholder) return;
+    await _reconcileLastMessage(accountId, chatId, rows.first);
+    _bump();
+  }
+
+  static Future<void> _handleNotifMsgReactionsChanged(Packet packet) async {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final chatId = payload['chatId'];
+    if (chatId is! int) return;
+    final messageId = payload['messageId']?.toString();
+    if (messageId == null || messageId.isEmpty) return;
+
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+
+    final existing = await AppDatabase.loadMessage(accountId, chatId, messageId);
+    if (existing == null) return;
+
+    Map<String, dynamic> payloadMap;
+    final raw = existing['payload'];
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        payloadMap = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      } catch (_) {
+        payloadMap = {};
+      }
+    } else {
+      payloadMap = {};
+    }
+
+    final counters = payload['counters'];
+    final totalCount = payload['totalCount'];
+    final reactionInfo = <String, dynamic>{};
+    final prev = payloadMap['reactionInfo'];
+    if (prev is Map && prev['yourReaction'] != null) {
+      reactionInfo['yourReaction'] = prev['yourReaction'];
+    }
+    if (counters is List) reactionInfo['counters'] = counters;
+    if (totalCount is int) reactionInfo['totalCount'] = totalCount;
+    if (reactionInfo['counters'] == null || (counters is List && counters.isEmpty)) {
+      payloadMap.remove('reactionInfo');
+    } else {
+      payloadMap['reactionInfo'] = reactionInfo;
+    }
+
+    final newRow = Map<String, dynamic>.from(existing);
+    newRow['payload'] = jsonEncode(payloadMap);
+    await AppDatabase.saveMessages([newRow]);
+    final emitted = payloadMap['reactionInfo'] as Map<String, dynamic>?;
+    _messageEventsController.add(
+      MessageReactionsChangedEvent(chatId, messageId, emitted),
+    );
+    _bump();
   }
 
   static Future<void> _handleNotifMark(Packet packet) async {
@@ -288,6 +579,7 @@ class ChatsModule {
       logger.w('cacheServerChat: parse returned null for chat=${chat['id']}');
       return null;
     }
+    _knownChats.add(parsed.id);
     final ex = existing[parsed.id];
     if (ex != null && _sameContent(ex, parsed)) {
       return parsed;
@@ -383,7 +675,11 @@ class ChatsModule {
   static Future<List<CachedChat>> getChats(int accountId) async {
     try {
       final rows = await AppDatabase.loadChats(accountId);
-      return rows.map(CachedChat.fromDbRow).toList();
+      final chats = rows.map(CachedChat.fromDbRow).toList();
+      for (final c in chats) {
+        _knownChats.add(c.id);
+      }
+      return chats;
     } catch (e) {
       logger.e("Ошибка при получении чатов: $e");
       return [];

@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -59,6 +60,7 @@ class MessageBubble extends StatelessWidget {
   final CachedMessage? nextMessage;
   final String chatType;
   final String? overrideStatus;
+  final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
 
   const MessageBubble({
     super.key,
@@ -69,6 +71,7 @@ class MessageBubble extends StatelessWidget {
     this.nextMessage,
     required this.chatType,
     this.overrideStatus,
+    this.reactionsListenable,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -304,32 +307,52 @@ class MessageBubble extends StatelessWidget {
                   radius: 15,
                   backgroundColor: Color(0x00000000),
                 ),
-              ListenableBuilder(
-                listenable: Listenable.merge(
-                  [AppBubbleShape.current, AppBubbleBehavior.current],
-                ),
-                builder: (context, child) {
-                  return Container(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width * 0.75,
+              Column(
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  ListenableBuilder(
+                    listenable: Listenable.merge(
+                      [AppBubbleShape.current, AppBubbleBehavior.current],
                     ),
-                    decoration: BoxDecoration(
-                      color: isMe
-                          ? cs.primaryContainer
-                          : cs.surfaceContainerHighest,
-                      borderRadius: _borderRadiusFor(
-                        AppBubbleShape.current.value,
-                        AppBubbleBehavior.current.value,
-                        shape,
-                        hasPhotoCap,
-                        hasMultiPhotos,
-                      ),
-                    ),
-                    padding: padding,
-                    child: child,
-                  );
-                },
-                child: _buildContent(ctx),
+                    builder: (context, child) {
+                      return Container(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.sizeOf(context).width * 0.75,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? cs.primaryContainer
+                              : cs.surfaceContainerHighest,
+                          borderRadius: _borderRadiusFor(
+                            AppBubbleShape.current.value,
+                            AppBubbleBehavior.current.value,
+                            shape,
+                            hasPhotoCap,
+                            hasMultiPhotos,
+                          ),
+                        ),
+                        padding: padding,
+                        child: child,
+                      );
+                    },
+                    child: _buildContent(ctx),
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOutCubic,
+                    alignment: isMe
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: reactionsListenable != null
+                        ? ValueListenableBuilder<Map<String, dynamic>?>(
+                            valueListenable: reactionsListenable!,
+                            builder: (context, info, _) =>
+                                _buildReactionsBarFor(cs, info),
+                          )
+                        : _buildReactionsBar(cs),
+                  ),
+                ],
               ),
             ],
           ),
@@ -349,6 +372,66 @@ class MessageBubble extends StatelessWidget {
       case MessageType.text:
         return _buildTextContent(ctx);
     }
+  }
+
+  Widget _buildReactionsBar(ColorScheme cs) {
+    final info = message.payload?['reactionInfo'];
+    return _buildReactionsBarFor(cs, info is Map ? info : null);
+  }
+
+  Widget _buildReactionsBarFor(ColorScheme cs, Map? info) {
+    if (info == null) return const SizedBox.shrink();
+    final counters = info['counters'];
+    if (counters is! List || counters.isEmpty) return const SizedBox.shrink();
+    final yourReaction = info['yourReaction']?.toString();
+
+    final chips = <Widget>[];
+    for (final c in counters) {
+      if (c is! Map) continue;
+      final reaction = c['reaction']?.toString();
+      final count = c['count'];
+      if (reaction == null || reaction.isEmpty) continue;
+      final isYours = yourReaction == reaction;
+      chips.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: isYours
+                ? cs.primary.withValues(alpha: 0.18)
+                : cs.surfaceContainerHighest.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isYours
+                  ? cs.primary.withValues(alpha: 0.45)
+                  : cs.outlineVariant.withValues(alpha: 0.35),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(reaction, style: const TextStyle(fontSize: 14)),
+              if (count is int && count > 1) ...[
+                const SizedBox(width: 4),
+                Text(
+                  count.toString(),
+                  style: TextStyle(
+                    color: isYours ? cs.primary : cs.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 4, runSpacing: 4, children: chips),
+    );
   }
 
   Widget _buildControlContent(ColorScheme cs) {

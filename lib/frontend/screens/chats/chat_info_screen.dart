@@ -3,9 +3,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
-import '../../../core/protocol/opcode_map.dart';
+import '../../../core/cache/info_cache.dart';
 import '../../../core/storage/app_database.dart';
-import '../../../main.dart' as main;
 
 class _MemberInfo {
   final int id;
@@ -96,21 +95,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final profile = await AppDatabase.loadActiveProfile();
     _myId = profile?.id ?? 0;
 
-    final packet = await main.api.sendRequest(
-      Opcode.chatInfo,
-      {'chatIds': [widget.chatId]},
-    );
-    if (!packet.isOk || !mounted) {
-      if (mounted) setState(() => _isLoading = false);
+    final info = await ChatInfoFetch.get(widget.chatId);
+    if (!mounted) return;
+    if (info == null) {
+      setState(() => _isLoading = false);
       return;
     }
-
-    final chats = (packet.payload as Map?)?['chats'] as List?;
-    if (chats == null || chats.isEmpty) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-    _chatData = Map<String, dynamic>.from(chats.first as Map);
+    _chatData = info;
 
     if (widget.chatType == 'DIALOG') {
       final parts = _chatData!['participants'] as Map? ?? {};
@@ -123,32 +114,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       }
 
       if (_otherId != null) {
-        final cp = await main.api.sendRequest(
-          Opcode.contactInfo,
-          {'contactIds': [_otherId]},
-        );
-        if (cp.isOk) {
-          final contacts = (cp.payload as Map?)?['contacts'] as List?;
-          if (contacts != null && contacts.isNotEmpty) {
-            _contactData = Map<String, dynamic>.from(contacts.first as Map);
-            final opts = _contactData!['options'];
-            _isBot = (opts is List) && opts.contains('BOT');
-          }
+        final contact = await ContactInfoFetch.get(_otherId!);
+        if (contact != null) {
+          _contactData = contact;
+          final opts = _contactData!['options'];
+          _isBot = (opts is List) && opts.contains('BOT');
         }
 
-        final pp = await main.api.sendRequest(
-          Opcode.contactPresence,
-          {'contactIds': [_otherId]},
-        );
-        if (pp.isOk) {
-          final presence = (pp.payload as Map?)?['presence'] as Map?;
-          final p = presence?[_otherId.toString()] ?? presence?[_otherId];
-          if (p is Map) {
-            _seenTime = p['seen'] as int?;
-            final st = (p['status'] as int?) ?? 0;
-            _presenceStatus = st;
-            _isOnline = st == 1;
-          }
+        final presence = await PresenceFetch.get(_otherId!);
+        if (presence != null) {
+          _seenTime = presence['seen'] as int?;
+          final st = (presence['status'] as int?) ?? 0;
+          _presenceStatus = st;
+          _isOnline = st == 1;
         }
       }
     } else if (widget.chatType == 'CHAT') {
@@ -162,25 +140,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         if (id != null) memberIds.add(id);
       }
 
-      final Map<int, Map> presenceMap = {};
+      Map<int, Map<String, dynamic>> presenceMap = {};
       if (memberIds.isNotEmpty) {
-        final pp = await main.api.sendRequest(
-          Opcode.contactPresence,
-          {'contactIds': memberIds},
-        );
-        if (pp.isOk) {
-          final presence = (pp.payload as Map?)?['presence'] as Map?;
-          if (presence != null) {
-            for (final e in presence.entries) {
-              final id = e.key is int
-                  ? e.key as int
-                  : int.tryParse(e.key.toString());
-              if (id != null && e.value is Map) {
-                presenceMap[id] = e.value as Map;
-              }
-            }
-          }
-        }
+        presenceMap = await PresenceFetch.getMany(memberIds);
       }
 
       _onlineCount = 0;

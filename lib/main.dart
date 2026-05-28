@@ -10,6 +10,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
+import 'core/cache/info_cache.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_bubble_behavior.dart';
@@ -63,6 +64,7 @@ void main() async {
   if (activeAccountId != null) {
     await ContactsModule.primeCacheFromDb(activeAccountId);
   }
+  attachInfoCacheApi(api);
   ChatsModule.attachGlobalPushHandlers(api);
   await api.connect();
 
