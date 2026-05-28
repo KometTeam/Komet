@@ -621,15 +621,17 @@ class AccountModule {
     String? hint,
   }) async {
     _ensureOnline();
+    final capabilities = <int>[0, if (hint != null) 3, 4];
     final payload = <dynamic, dynamic>{
-      'expectedCapabilities': [0, 3, 4],
+      'expectedCapabilities': capabilities,
       'trackId': trackId,
       'password': password,
     };
     if (hint != null) payload['hint'] = hint;
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'confirm2fa');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'confirm2fa',
+    );
   }
 
   // 2FA Management (when already set)
@@ -707,15 +709,16 @@ class AccountModule {
     }
 
     final payload = <dynamic, dynamic>{
-      'expectedCapabilities': [1, 3],
+      'expectedCapabilities': <int>[1, if (hint != null) 3],
       'trackId': trackId,
       'password': newPassword,
     };
     if (hint != null) payload['hint'] = hint;
 
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'update2faPassword');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'update2faPassword',
+    );
   }
 
   Future<ProfileData> update2faEmail({
@@ -740,9 +743,10 @@ class AccountModule {
       'expectedCapabilities': [4],
       'trackId': trackId,
     };
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'update2faEmail');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'update2faEmail',
+    );
   }
 
   Future<ProfileData> remove2fa(String trackId) async {
@@ -752,34 +756,46 @@ class AccountModule {
       'trackId': trackId,
       'remove2fa': true,
     };
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'remove2fa');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'remove2fa',
+    );
   }
 
-  Future<ProfileData> _processProfileUpdate(Packet packet) async {
-    _api.registerPushHandler(Opcode.notifProfile, (p) {});
-    try {
-      await for (final push in _api.pushStream
-          .where((p) => p.opcode == Opcode.notifProfile)
-          .timeout(const Duration(seconds: 15))) {
-        final payload = push.payload;
-        if (payload is Map) {
-          final profile = payload['profile'];
-          if (profile is Map) {
-            final contact = profile['contact'];
-            if (contact is Map) {
-              return ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-            }
-          }
-        }
+  Future<ProfileData> _processProfileUpdate(
+    Future<Packet> requestFuture,
+    String tag,
+  ) async {
+    final completer = Completer<ProfileData>();
+    final sub = _api.pushStream
+        .where((p) => p.opcode == Opcode.notifProfile)
+        .listen((push) {
+      if (completer.isCompleted) return;
+      final payload = push.payload;
+      if (payload is! Map) return;
+      final profile = payload['profile'];
+      if (profile is! Map) return;
+      final contact = profile['contact'];
+      if (contact is! Map) return;
+      completer.complete(
+        ProfileData.fromServerMap(contact.cast<dynamic, dynamic>()),
+      );
+    });
+    final timer = Timer(const Duration(seconds: 15), () {
+      if (!completer.isCompleted) {
+        completer.completeError(
+          Exception('Таймаут ожидания обновления профиля'),
+        );
       }
-    } on TimeoutException {
-      throw Exception('Таймаут ожидания обновления профиля');
+    });
+    try {
+      final packet = await requestFuture;
+      _checkPacketError(packet, tag);
+      return await completer.future;
     } finally {
-      _api.unregisterPushHandler(Opcode.notifProfile);
+      timer.cancel();
+      await sub.cancel();
     }
-    throw Exception('Не удалось получить обновлённый профиль');
   }
 
   Future<RequestCodeResult> requestCode(

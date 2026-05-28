@@ -564,18 +564,9 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 16),
-        TextField(
+        _PasswordField(
           controller: _passwordController,
-          obscureText: true,
-          decoration: InputDecoration(
-            hintText: 'Введите пароль',
-            filled: true,
-            fillColor: cs.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
+          hintText: 'Введите пароль',
         ),
       ],
     );
@@ -599,18 +590,9 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 16),
-        TextField(
+        _PasswordField(
           controller: _passwordController,
-          obscureText: true,
-          decoration: InputDecoration(
-            hintText: 'Повторите пароль',
-            filled: true,
-            fillColor: cs.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
+          hintText: 'Повторите пароль',
         ),
       ],
     );
@@ -818,18 +800,9 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
                 style: TextStyle(color: cs.onErrorContainer),
               ),
             ),
-          TextField(
+          _PasswordField(
             controller: _passwordController,
-            obscureText: true,
-            decoration: InputDecoration(
-              hintText: 'Пароль',
-              filled: true,
-              fillColor: cs.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
+            hintText: 'Пароль',
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -1035,18 +1008,9 @@ class _TwoFactorPasswordChangeScreenState
                   style: TextStyle(color: cs.onErrorContainer),
                 ),
               ),
-            TextField(
+            _PasswordField(
               controller: _passwordController,
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: 'Введите новый пароль',
-                filled: true,
-                fillColor: cs.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
+              hintText: 'Введите новый пароль',
             ),
             const SizedBox(height: 24),
             Text(
@@ -1216,18 +1180,9 @@ class _TwoFactorEmailChangeScreenState
                 ),
               ),
               const SizedBox(height: 16),
-              TextField(
+              _PasswordField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  hintText: 'Пароль',
-                  filled: true,
-                  fillColor: cs.surfaceContainerHighest,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
+                hintText: 'Пароль',
               ),
             ] else ...[
               if (_errorMessage != null)
@@ -1440,18 +1395,9 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
                   style: TextStyle(color: cs.onErrorContainer),
                 ),
               ),
-            TextField(
+            _PasswordField(
               controller: _passwordController,
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: 'Пароль',
-                filled: true,
-                fillColor: cs.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
+              hintText: 'Пароль',
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -1479,6 +1425,48 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PasswordField extends StatefulWidget {
+  final TextEditingController controller;
+  final String hintText;
+
+  const _PasswordField({
+    required this.controller,
+    required this.hintText,
+  });
+
+  @override
+  State<_PasswordField> createState() => _PasswordFieldState();
+}
+
+class _PasswordFieldState extends State<_PasswordField> {
+  bool _visible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return TextField(
+      controller: widget.controller,
+      obscureText: !_visible,
+      decoration: InputDecoration(
+        hintText: widget.hintText,
+        filled: true,
+        fillColor: cs.surfaceContainerHighest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        suffixIcon: IconButton(
+          icon: Icon(
+            _visible ? Symbols.visibility_off : Symbols.visibility,
+            color: cs.onSurfaceVariant,
+          ),
+          onPressed: () => setState(() => _visible = !_visible),
         ),
       ),
     );
