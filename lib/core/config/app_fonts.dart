@@ -23,7 +23,7 @@ class AppFonts {
   static const String customPrefKey = 'app_custom_fonts';
   static const String customPrefix = 'g:';
 
-  static const double minScale = 0.85;
+  static const double minScale = 0.60;
   static const double maxScale = 1.35;
   static const double defaultScale = 1.0;
 
