@@ -1,22 +1,19 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import 'rightward_drag_recognizer.dart';
 
 class SwipeToPop extends StatefulWidget {
   final Widget child;
-  final double edgeWidth;
   final double popThreshold;
   final double velocityThreshold;
-  final bool fullWidth;
   final bool enabled;
   final VoidCallback? onPop;
 
   const SwipeToPop({
     super.key,
     required this.child,
-    this.edgeWidth = 28,
     this.popThreshold = 0.35,
     this.velocityThreshold = 700,
-    this.fullWidth = false,
     this.enabled = true,
     this.onPop,
   });
@@ -28,6 +25,7 @@ class SwipeToPop extends StatefulWidget {
 class _SwipeToPopState extends State<SwipeToPop>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  double _width = 0;
 
   @override
   void initState() {
@@ -53,17 +51,19 @@ class _SwipeToPopState extends State<SwipeToPop>
   }
 
   void _onDragStart(DragStartDetails _) {
+    _width = context.size?.width ?? MediaQuery.of(context).size.width;
+    if (_width <= 0) _width = 1.0;
     _controller.stop();
   }
 
-  void _onDragUpdate(DragUpdateDetails d, double width) {
-    if (width <= 0) return;
-    final next = (_controller.value + d.delta.dx / width).clamp(0.0, 1.0);
+  void _onDragUpdate(DragUpdateDetails d) {
+    final next =
+        (_controller.value + (d.primaryDelta ?? 0.0) / _width).clamp(0.0, 1.0);
     _controller.value = next;
   }
 
-  Future<void> _onDragEnd(DragEndDetails d, double width) async {
-    final velocity = d.primaryVelocity ?? 0;
+  Future<void> _onDragEnd(DragEndDetails d) async {
+    final velocity = d.velocity.pixelsPerSecond.dx;
     final pastThreshold = _controller.value > widget.popThreshold ||
         velocity > widget.velocityThreshold;
     if (pastThreshold) {
@@ -96,44 +96,35 @@ class _SwipeToPopState extends State<SwipeToPop>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final gestureChild = GestureDetector(
+        return RawGestureDetector(
           behavior: HitTestBehavior.translucent,
-          dragStartBehavior: DragStartBehavior.down,
-          onHorizontalDragStart: _onDragStart,
-          onHorizontalDragUpdate: (d) => _onDragUpdate(d, width),
-          onHorizontalDragEnd: (d) => _onDragEnd(d, width),
-          onHorizontalDragCancel: _onDragCancel,
-        );
-
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) {
-                  final t = _controller.value;
-                  return Transform.translate(
-                    offset: Offset(t * width, 0),
-                    child: Opacity(
-                      opacity: (1.0 - t * 0.35).clamp(0.0, 1.0),
-                      child: child,
-                    ),
-                  );
-                },
-                child: widget.child,
-              ),
+          gestures: <Type, GestureRecognizerFactory>{
+            RightwardDragRecognizer:
+                GestureRecognizerFactoryWithHandlers<RightwardDragRecognizer>(
+              () => RightwardDragRecognizer(debugOwner: this),
+              (instance) {
+                instance
+                  ..onStart = _onDragStart
+                  ..onUpdate = _onDragUpdate
+                  ..onEnd = _onDragEnd
+                  ..onCancel = _onDragCancel;
+              },
             ),
-            if (widget.fullWidth)
-              Positioned.fill(child: gestureChild)
-            else
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: widget.edgeWidth,
-                child: gestureChild,
-              ),
-          ],
+          },
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final t = _controller.value;
+              return Transform.translate(
+                offset: Offset(t * width, 0),
+                child: Opacity(
+                  opacity: (1.0 - t * 0.35).clamp(0.0, 1.0),
+                  child: child,
+                ),
+              );
+            },
+            child: widget.child,
+          ),
         );
       },
     );
