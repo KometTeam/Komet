@@ -23,6 +23,7 @@ class _BubbleCtx {
   final MessageType contentType;
   final bool hasPhotoWithCaption;
   final bool hasMultiplePhotosNoCaption;
+  final Map? reactionInfo;
 
   _BubbleCtx({
     required this.context,
@@ -32,6 +33,7 @@ class _BubbleCtx {
     required this.contentType,
     required this.hasPhotoWithCaption,
     required this.hasMultiplePhotosNoCaption,
+    this.reactionInfo,
   }) : dim = text.withValues(alpha: 0.7);
 }
 
@@ -262,16 +264,6 @@ class MessageBubble extends StatelessWidget {
     final hasMultiPhotos = _computeHasMultiplePhotosNoCaption();
     final textColor = bubbleTextColor(context);
 
-    final ctx = _BubbleCtx(
-      context: context,
-      cs: cs,
-      text: textColor,
-      shape: shape,
-      contentType: contentType,
-      hasPhotoWithCaption: hasPhotoCap,
-      hasMultiplePhotosNoCaption: hasMultiPhotos,
-    );
-
     final topMargin = _topMarginFor(contentType, shape);
     final bottomMargin = _bottomMarginFor(contentType, shape);
     final padding = _paddingFor(contentType, shape);
@@ -281,6 +273,12 @@ class MessageBubble extends StatelessWidget {
         chatType == "CHAT" &&
         nextMessage?.senderId != message.senderId &&
         prevMessage?.senderId == message.senderId;
+
+    final bubbleListenable = Listenable.merge([
+      AppBubbleShape.current,
+      AppBubbleBehavior.current,
+      ?reactionsListenable,
+    ]);
 
     return GestureDetector(
       onTap: Haptics.tap,
@@ -312,46 +310,63 @@ class MessageBubble extends StatelessWidget {
                     isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   ListenableBuilder(
-                    listenable: Listenable.merge(
-                      [AppBubbleShape.current, AppBubbleBehavior.current],
-                    ),
-                    builder: (context, child) {
-                      return Container(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.sizeOf(context).width * 0.75,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? cs.primaryContainer
-                              : cs.surfaceContainerHighest,
-                          borderRadius: _borderRadiusFor(
-                            AppBubbleShape.current.value,
-                            AppBubbleBehavior.current.value,
-                            shape,
-                            hasPhotoCap,
-                            hasMultiPhotos,
+                    listenable: bubbleListenable,
+                    builder: (context, _) {
+                      final reactionInfo = _resolveReactionInfo();
+                      final ctx = _BubbleCtx(
+                        context: context,
+                        cs: cs,
+                        text: textColor,
+                        shape: shape,
+                        contentType: contentType,
+                        hasPhotoWithCaption: hasPhotoCap,
+                        hasMultiplePhotosNoCaption: hasMultiPhotos,
+                        reactionInfo: reactionInfo,
+                      );
+                      return AnimatedSize(
+                        duration: const Duration(milliseconds: 150),
+                        curve: Curves.easeOutCubic,
+                        alignment: isMe
+                            ? Alignment.bottomRight
+                            : Alignment.bottomLeft,
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth:
+                                MediaQuery.sizeOf(context).width * 0.75,
                           ),
+                          decoration: BoxDecoration(
+                            color: isMe
+                                ? cs.primaryContainer
+                                : cs.surfaceContainerHighest,
+                            borderRadius: _borderRadiusFor(
+                              AppBubbleShape.current.value,
+                              AppBubbleBehavior.current.value,
+                              shape,
+                              hasPhotoCap,
+                              hasMultiPhotos,
+                            ),
+                          ),
+                          padding: padding,
+                          child: _buildContent(ctx),
                         ),
-                        padding: padding,
-                        child: child,
                       );
                     },
-                    child: _buildContent(ctx),
                   ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 150),
-                    curve: Curves.easeOutCubic,
-                    alignment: isMe
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
-                    child: reactionsListenable != null
-                        ? ValueListenableBuilder<Map<String, dynamic>?>(
-                            valueListenable: reactionsListenable!,
-                            builder: (context, info, _) =>
-                                _buildReactionsBarFor(cs, info),
-                          )
-                        : _buildReactionsBar(cs),
-                  ),
+                  if (contentType != MessageType.text)
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOutCubic,
+                      alignment: isMe
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: reactionsListenable != null
+                          ? ValueListenableBuilder<Map<String, dynamic>?>(
+                              valueListenable: reactionsListenable!,
+                              builder: (context, info, _) =>
+                                  _buildReactionsBarFor(cs, info),
+                            )
+                          : _buildReactionsBar(cs),
+                    ),
                 ],
               ),
             ],
@@ -359,6 +374,16 @@ class MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Map? _resolveReactionInfo() {
+    if (reactionsListenable != null) {
+      final v = reactionsListenable!.value;
+      if (v != null) return v;
+    }
+    final info = message.payload?['reactionInfo'];
+    if (info is Map) return info;
+    return null;
   }
 
   Widget _buildContent(_BubbleCtx ctx) {
@@ -380,9 +405,18 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildReactionsBarFor(ColorScheme cs, Map? info) {
-    if (info == null) return const SizedBox.shrink();
+    final chips = _buildReactionChipsFor(cs, info);
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 4, runSpacing: 4, children: chips),
+    );
+  }
+
+  List<Widget> _buildReactionChipsFor(ColorScheme cs, Map? info) {
+    if (info == null) return const [];
     final counters = info['counters'];
-    if (counters is! List || counters.isEmpty) return const SizedBox.shrink();
+    if (counters is! List || counters.isEmpty) return const [];
     final yourReaction = info['yourReaction']?.toString();
 
     final chips = <Widget>[];
@@ -394,30 +428,24 @@ class MessageBubble extends StatelessWidget {
       final isYours = yourReaction == reaction;
       chips.add(
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
             color: isYours
-                ? cs.primary.withValues(alpha: 0.18)
-                : cs.surfaceContainerHighest.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isYours
-                  ? cs.primary.withValues(alpha: 0.45)
-                  : cs.outlineVariant.withValues(alpha: 0.35),
-              width: 1,
-            ),
+                ? cs.primary.withValues(alpha: 0.22)
+                : Colors.black.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(reaction, style: const TextStyle(fontSize: 14)),
+              Text(reaction, style: const TextStyle(fontSize: 13)),
               if (count is int && count > 1) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: 3),
                 Text(
                   count.toString(),
                   style: TextStyle(
                     color: isYours ? cs.primary : cs.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -427,11 +455,7 @@ class MessageBubble extends StatelessWidget {
         ),
       );
     }
-    if (chips.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Wrap(spacing: 4, runSpacing: 4, children: chips),
-    );
+    return chips;
   }
 
   Widget _buildControlContent(ColorScheme cs) {
@@ -504,49 +528,95 @@ class MessageBubble extends StatelessWidget {
 
     final displaySender = ContactCache.get(message.senderId);
 
+    final reactionChips = _buildReactionChipsFor(ctx.cs, ctx.reactionInfo);
+    final hasReactions = reactionChips.isNotEmpty;
+
+    final textWidget = isForwarded
+        ? _buildForwardedInlineText(ctx, forwarded)
+        : Text(
+            message.text ?? '',
+            style: TextStyle(
+              color: ctx.text,
+              fontSize: 16,
+              height: 1.3,
+            ),
+          );
+
+    final metaWidget = Text(
+      message.status == 'EDITED'
+          ? '${_formatTime(message.time)} ред.'
+          : _formatTime(message.time),
+      style: TextStyle(color: ctx.dim, fontSize: 10),
+    );
+
+    final showSender = message.senderId != message.accountId &&
+        prevMessage?.senderId != message.senderId &&
+        chatType == "CHAT";
+
+    if (hasReactions) {
+      return IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showSender)
+              Text(
+                displaySender ?? "",
+                textAlign: TextAlign.left,
+                style: TextStyle(color: ctx.text),
+              ),
+            textWidget,
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: reactionChips,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: metaWidget,
+                ),
+                if (isMe) ...[
+                  const SizedBox(width: 4),
+                  _buildStatusIcon(ctx),
+                ],
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (message.senderId != message.accountId &&
-            prevMessage?.senderId != message.senderId &&
-            chatType == "CHAT")
+        if (showSender)
           Text(
             displaySender ?? "",
             textAlign: TextAlign.left,
             style: TextStyle(color: ctx.text),
           ),
         Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Flexible(
-              child: isForwarded
-                  ? _buildForwardedInlineText(ctx, forwarded)
-                  : Text(
-                      message.text ?? '',
-                      style: TextStyle(
-                        color: ctx.text,
-                        fontSize: 16,
-                        height: 1.3,
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 8),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(
-                message.status == 'EDITED'
-                    ? '${_formatTime(message.time)} ред.'
-                    : _formatTime(message.time),
-                style: TextStyle(color: ctx.dim, fontSize: 10),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Flexible(child: textWidget),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: metaWidget,
               ),
-            ),
-            if (isMe) ...[
-              const SizedBox(width: 4),
-              _buildStatusIcon(ctx),
+              if (isMe) ...[
+                const SizedBox(width: 4),
+                _buildStatusIcon(ctx),
+              ],
             ],
-          ],
-        ),
+          ),
       ],
     );
   }
