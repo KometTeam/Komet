@@ -14,6 +14,21 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Komet</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>MinimalIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>MinimalIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
