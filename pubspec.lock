@@ -318,14 +318,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.4.1"
-  flutter_dynamic_icon_plus:
-    dependency: "direct main"
-    description:
-      name: flutter_dynamic_icon_plus
-      sha256: "7721ef2666691064dece879d968fa7e1c4d64aa743ea998e6b1e65a1b482f212"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.4.0"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:

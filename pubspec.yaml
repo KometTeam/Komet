@@ -58,7 +58,6 @@ dependencies:
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.2
   flutter_local_notifications: ^21.0.0
-  flutter_dynamic_icon_plus: ^1.4.0
 
 dev_dependencies:
   flutter_test:

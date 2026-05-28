@@ -74,7 +74,7 @@ class _AppIconScreenState extends State<AppIconScreen> {
                     const SizedBox(height: 4),
                     Text(
                       AppIconConfig.isSupported
-                          ? 'Изменение применится сразу — приложение может ненадолго закрыться'
+                          ? 'На Android приложение закроется — лаунчер подхватит новую иконку. На iOS — мгновенно с системным диалогом.'
                           : 'Доступно только на Android и iOS',
                       style: TextStyle(
                         color: cs.onSurfaceVariant,

@@ -1,23 +1,25 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dynamic_icon_plus/flutter_dynamic_icon_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppIcon {
-  defaultIcon('default', 'Default', 'assets/komet_icon.png', null),
+  defaultIcon('default', 'Default', 'assets/komet_icon.png', 'DefaultIcon'),
   minimal('minimal', 'Minimal', 'assets/meteor_icon.png', 'MinimalIcon');
 
   final String id;
   final String title;
   final String previewAsset;
-  final String? platformName;
+  final String platformName;
 
   const AppIcon(this.id, this.title, this.previewAsset, this.platformName);
 }
 
 class AppIconConfig {
   static const prefKey = 'app_icon';
+  static const _channel = MethodChannel('ru.komet.app/app_icon');
+
   static final ValueNotifier<AppIcon> current = ValueNotifier(
     AppIcon.defaultIcon,
   );
@@ -34,12 +36,12 @@ class AppIconConfig {
   static Future<void> apply(AppIcon icon) async {
     if (!isSupported) return;
     if (current.value == icon) return;
-    await FlutterDynamicIconPlus.setAlternateIconName(
-      iconName: icon.platformName,
-    );
-    current.value = icon;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(prefKey, icon.id);
+    current.value = icon;
+    await _channel.invokeMethod<void>('setAppIcon', {
+      'name': icon.platformName,
+    });
   }
 
   static AppIcon _parse(String? val) {
