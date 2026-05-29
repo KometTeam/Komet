@@ -937,6 +937,20 @@ class AccountModule {
     _checkPacketError(packet, 'authorizeWebQrLogin');
   }
 
+  Future<void> beginAddAccount() async {
+    try {
+      await _api.disconnect();
+    } catch (_) {}
+
+    await TokenStorage.clearActiveAccount();
+
+    ContactCache.clear();
+    TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
+
+    logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
+  }
+
   Future<ProfileData> switchAccount(int accountId) async {
     final profile = await AppDatabase.loadProfile(accountId);
     if (profile == null) {

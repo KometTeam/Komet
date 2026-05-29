@@ -25,6 +25,7 @@ import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../main.dart' show accountModule, api, messagesModule;
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
@@ -100,7 +101,6 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   bool _navDragging = false;
   bool _isFabOpen = false;
-  bool _showCacheWarning = false;
   bool _storiesAnimClosing = false;
   Timer? _contactRebuildTimer;
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
@@ -140,7 +140,6 @@ class _ChatListScreenState extends State<ChatListScreen>
       _selectedFolderId,
       _isInitialLoading,
       _foldersListKnown,
-      _showCacheWarning,
       _isSelectionMode,
       _shouldCollapseSearch,
       _selectedChats.length,
@@ -446,12 +445,6 @@ class _ChatListScreenState extends State<ChatListScreen>
       if (mounted) {
         setState(() {
           _sessionState = state;
-          if (state == SessionState.disconnected && _chats.isNotEmpty) {
-            _showCacheWarning = true;
-          }
-          if (state == SessionState.online) {
-            _showCacheWarning = false;
-          }
         });
         if (state == SessionState.online) {
           _reloadChatsAndFolders();
@@ -1145,42 +1138,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           ),
                         ),
-                        if (_showCacheWarning)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cs.errorContainer.withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: cs.error.withValues(alpha: 0.2),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Symbols.cloud_off,
-                                    size: 18,
-                                    color: cs.error,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Expanded(
-                                    child: Text(
-                                      'Ошибка соединения, сейчас вы смотрите КЕШ',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 3, 20, 4),
                           child: Container(
@@ -2393,9 +2350,16 @@ class _ChatListScreenState extends State<ChatListScreen>
         controller.dispose();
         if (!mounted) return;
         if (accountId == null) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          final previousId = await TokenStorage.getActiveAccountId();
+          try {
+            await accountModule.beginAddAccount();
+          } catch (_) {}
+          if (!mounted) return;
+          await Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => LoginScreen(returnToAccountId: previousId),
+            ),
+            (route) => false,
           );
           return;
         }

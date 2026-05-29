@@ -23,7 +23,9 @@ Future<ImageProvider?> precacheLoginAvatar(
 class LoginSuccessScreen extends StatefulWidget {
   final ImageProvider? avatar;
 
-  const LoginSuccessScreen({super.key, this.avatar});
+  final bool preview;
+
+  const LoginSuccessScreen({super.key, this.avatar, this.preview = false});
 
   @override
   State<LoginSuccessScreen> createState() => _LoginSuccessScreenState();
@@ -54,6 +56,8 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   late final Animation<double> _fadeOut;
 
   bool _navigated = false;
+  bool _handedOff = false;
+  final GlobalKey _subtitleKey = GlobalKey();
 
   @override
   void initState() {
@@ -114,24 +118,64 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   void _onStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed && !_navigated && mounted) {
       _navigated = true;
-      Navigator.of(context).pushAndRemoveUntil(
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 360),
-          reverseTransitionDuration: const Duration(milliseconds: 200),
-          pageBuilder: (_, __, ___) => const AdaptiveShell(),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(
-              opacity: CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ),
-              child: child,
-            );
-          },
-        ),
-        (route) => false,
-      );
+
+      final navigator = Navigator.of(context);
+      final overlay = navigator.overlay;
+      final entry = _buildGreetingEntry();
+      if (entry != null) {
+        setState(() => _handedOff = true);
+      }
+
+      if (widget.preview) {
+        navigator.pop();
+      } else {
+        navigator.pushAndRemoveUntil(
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 360),
+            reverseTransitionDuration: const Duration(milliseconds: 200),
+            pageBuilder: (_, _, _) => const AdaptiveShell(),
+            transitionsBuilder: (_, animation, _, child) {
+              return FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+                child: child,
+              );
+            },
+          ),
+          (route) => false,
+        );
+      }
+
+      if (entry != null && overlay != null) {
+        overlay.insert(entry);
+      }
     }
+  }
+
+  OverlayEntry? _buildGreetingEntry() {
+    final box = _subtitleKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return null;
+
+    final topLeft = box.localToGlobal(Offset.zero);
+    final size = box.size;
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: topLeft.dx,
+        top: topLeft.dy,
+        width: size.width,
+        child: _GreetingLinger(
+          greeting: _greeting,
+          color: color,
+          onDone: () => entry.remove(),
+        ),
+      ),
+    );
+    return entry;
   }
 
   @override
@@ -149,11 +193,12 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          return Opacity(
-            opacity: 1.0 - _fadeOut.value,
-            child: Stack(
-              children: [
-                Positioned.fill(
+          final celebrationOpacity = 1.0 - _fadeOut.value;
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: Opacity(
+                  opacity: celebrationOpacity,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
@@ -169,11 +214,14 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
                     ),
                   ),
                 ),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
+              ),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Opacity(
+                      opacity: celebrationOpacity,
+                      child: SizedBox(
                         width: 220,
                         height: 220,
                         child: Stack(
@@ -186,15 +234,21 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
                           ],
                         ),
                       ),
-                      const SizedBox(height: 28),
-                      _buildTitle(cs),
-                      const SizedBox(height: 8),
-                      _buildSubtitle(cs),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 28),
+                    Opacity(
+                      opacity: celebrationOpacity,
+                      child: _buildTitle(cs),
+                    ),
+                    const SizedBox(height: 8),
+                    Opacity(
+                      opacity: _handedOff ? 0.0 : 1.0,
+                      child: _buildSubtitle(cs),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
@@ -315,6 +369,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
           padding: const EdgeInsets.symmetric(horizontal: 40),
           child: Text(
             _greeting,
+            key: _subtitleKey,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: cs.onSurfaceVariant,
@@ -324,6 +379,78 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GreetingLinger extends StatefulWidget {
+  final String greeting;
+  final Color color;
+  final VoidCallback onDone;
+
+  const _GreetingLinger({
+    required this.greeting,
+    required this.color,
+    required this.onDone,
+  });
+
+  @override
+  State<_GreetingLinger> createState() => _GreetingLingerState();
+}
+
+class _GreetingLingerState extends State<_GreetingLinger>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween<double>(1.0), weight: 55),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
+        weight: 45,
+      ),
+    ]).animate(_controller);
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) widget.onDone();
+    });
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _opacity,
+        builder: (context, _) {
+          return Opacity(
+            opacity: _opacity.value,
+            child: Text(
+              widget.greeting,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: widget.color,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
+            ),
+          );
+        },
       ),
     );
   }

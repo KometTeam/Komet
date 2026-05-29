@@ -300,6 +300,10 @@ class MessageBubble extends StatelessWidget {
               )
             : _buildContent(makeCtx());
 
+    final reactionsUnder = _reactionsUnderBubble(contentType);
+    final reactionsInside =
+        contentType != MessageType.text && !reactionsUnder;
+
     return GestureDetector(
       onTap: Haptics.tap,
       child: Padding(
@@ -349,16 +353,15 @@ class MessageBubble extends StatelessWidget {
                       padding: padding,
                       child: child,
                     ),
-                    child: bubbleContent,
-                  ),
-                  if (contentType != MessageType.text)
-                    reactionsListenable != null
-                        ? ValueListenableBuilder<Map<String, dynamic>?>(
-                            valueListenable: reactionsListenable!,
-                            builder: (context, info, _) =>
-                                _buildReactionsBarFor(cs, info),
+                    child: reactionsInside
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [bubbleContent, _reactionsBar(cs)],
                           )
-                        : _buildReactionsBar(cs),
+                        : bubbleContent,
+                  ),
+                  if (reactionsUnder) _reactionsBar(cs),
                 ],
               ),
             ],
@@ -376,6 +379,27 @@ class MessageBubble extends StatelessWidget {
     final info = message.payload?['reactionInfo'];
     if (info is Map) return info;
     return null;
+  }
+
+  bool _reactionsUnderBubble(MessageType contentType) {
+    if (contentType != MessageType.attachment) return false;
+    final attachments = message.attachments;
+    if (attachments == null || attachments.isEmpty) return false;
+    if (attachments.first is ForwardedMessageAttachment) return false;
+    if (attachments.any((a) => a is ContactAttachment)) return false;
+    if (attachments.whereType<PhotoAttachment>().length >= 2) return false;
+    return true;
+  }
+
+  Widget _reactionsBar(ColorScheme cs) {
+    final listenable = reactionsListenable;
+    if (listenable != null) {
+      return ValueListenableBuilder<Map<String, dynamic>?>(
+        valueListenable: listenable,
+        builder: (context, info, _) => _buildReactionsBarFor(cs, info),
+      );
+    }
+    return _buildReactionsBar(cs);
   }
 
   Widget _buildContent(_BubbleCtx ctx) {
@@ -1752,10 +1776,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
   @override
   void initState() {
     super.initState();
-    if (widget.preloadedText != null) {
-      _transcriptionText = widget.preloadedText;
-      _transcriptionVisible = true;
-    }
+    _transcriptionText = widget.preloadedText;
   }
 
   String _formatDuration(int seconds) {
@@ -1917,14 +1938,19 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _formatDuration(widget.duration),
-                style: TextStyle(
-                  color: widget.textColor.withValues(alpha: 0.7),
-                  fontSize: 11,
+              SizedBox(
+                width: 32,
+                child: Center(
+                  child: Text(
+                    _formatDuration(widget.duration),
+                    style: TextStyle(
+                      color: widget.textColor.withValues(alpha: 0.7),
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: AnimatedSize(
                   duration: const Duration(milliseconds: 200),

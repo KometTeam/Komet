@@ -700,8 +700,13 @@ class _StartupScreenState extends State<_StartupScreen> {
   }
 
   Future<void> _tryAutoLogin() async {
-    final accountId = await TokenStorage.getActiveAccountId();
+    int? accountId = await TokenStorage.getActiveAccountId();
+
     if (accountId == null || await TokenStorage.readToken(accountId) == null) {
+      accountId = await _recoverActiveAccount();
+    }
+
+    if (accountId == null) {
       _goToLogin();
       return;
     }
@@ -716,6 +721,19 @@ class _StartupScreenState extends State<_StartupScreen> {
         MaterialPageRoute(builder: (_) => const AdaptiveShell()),
       );
     }
+  }
+
+  Future<int?> _recoverActiveAccount() async {
+    final profiles = await AppDatabase.loadAllProfiles();
+    for (final profile in profiles) {
+      if (await TokenStorage.readToken(profile.id) != null) {
+        await TokenStorage.setActiveAccount(profile.id);
+        await AppDatabase.setActiveAccount(profile.id);
+        await ContactsModule.primeCacheFromDb(profile.id);
+        return profile.id;
+      }
+    }
+    return null;
   }
 
   void _goToLogin() {

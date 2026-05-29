@@ -114,6 +114,7 @@ class _ChatScreenState extends State<ChatScreen>
   final Map<int, Timer> _typingTimers = {};
   int _otherStatus = 0;
   int? _otherSeenTime;
+  int? _participantsCount;
   final ValueNotifier<String> _headerStatusNotifier = ValueNotifier('');
   final ValueNotifier<int> _otherReadTime = ValueNotifier(0);
   int _tempIdCounter = 0;
@@ -172,7 +173,19 @@ class _ChatScreenState extends State<ChatScreen>
     );
 
     unawaited(_fastPreloadCache());
+    unawaited(_loadParticipantsCount());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
+  }
+
+  Future<void> _loadParticipantsCount() async {
+    if (widget.chatType != 'CHAT' && widget.chatType != 'CHANNEL') return;
+    final info = await ChatsModule.getChatInfo(api, widget.chatId);
+    if (!mounted) return;
+    final count = info?['participantsCount'] as int?;
+    if (count != null && count != _participantsCount) {
+      _participantsCount = count;
+      _recomputeHeaderStatus();
+    }
   }
 
   Future<void> _fastPreloadCache() async {
@@ -521,10 +534,12 @@ class _ChatScreenState extends State<ChatScreen>
   String _headerStatus() {
     if (_typingUserIds.isNotEmpty) return 'Печатает...';
     if (widget.chatType == 'CHAT') {
-      return '${chat?.participants.length ?? 0} участников';
+      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      return '$count участников';
     }
     if (widget.chatType == 'CHANNEL') {
-      return '${chat?.participants.length ?? 0} подписчиков';
+      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      return '$count подписчиков';
     }
     if (_otherStatus == 1) return 'В сети';
     if (_otherStatus == 3) return 'Был(-а) недавно';
