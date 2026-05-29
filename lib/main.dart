@@ -19,6 +19,7 @@ import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
+import 'core/config/app_pranks.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'backend/modules/account.dart';
@@ -43,6 +44,8 @@ final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
 final fileUploader = FileUploader(api: api, messages: messagesModule);
+final RouteObserver<PageRoute<dynamic>> appRouteObserver =
+    RouteObserver<PageRoute<dynamic>>();
 
 Future<Locale> _loadInitialLocale() async {
   final prefs = await SharedPreferences.getInstance();
@@ -80,6 +83,7 @@ void main() async {
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
+  final pranksFuture = AppPranks.load();
 
   await api.connect();
 
@@ -111,6 +115,7 @@ void main() async {
   AppThemeSchedule.current.value = await themeScheduleFuture;
   AppMessageActionsStyle.current.value = await messageActionsFuture;
   AppSwipeBackDesktop.current.value = await swipeBackFuture;
+  AppPranks.current.value = await pranksFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,
@@ -643,6 +648,7 @@ class KometAppState extends State<KometApp>
               theme: _lightTheme,
               darkTheme: _darkTheme,
               navigatorKey: KometApp.navigatorKey,
+              navigatorObservers: [appRouteObserver],
               builder: (context, child) {
                 return ValueListenableBuilder<double>(
                   valueListenable: fontScale,

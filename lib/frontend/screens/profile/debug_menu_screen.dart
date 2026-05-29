@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
+import '../../../core/config/app_pranks.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/logger.dart';
@@ -388,6 +389,60 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                               value: swipeOn,
                               onChanged: (v) {
                                 AppSwipeBackDesktop.save(v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppPranks.current,
+                  builder: (context, pranksOn, _) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 17,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.auto_awesome,
+                              color: cs.onSurfaceVariant,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Приколь4ики',
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: pranksOn,
+                              onChanged: (v) {
+                                AppPranks.save(v);
                               },
                             ),
                           ],

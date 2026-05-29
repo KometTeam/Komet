@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show File;
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
@@ -22,8 +23,10 @@ import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
+import '../../../core/config/app_pranks.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
+import '../../widgets/theme_reveal.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/swipe_to_pop.dart';
@@ -115,6 +118,14 @@ class _ChatScreenState extends State<ChatScreen>
   int _otherStatus = 0;
   int? _otherSeenTime;
   int? _participantsCount;
+
+  bool _prankActive = false;
+  String? _prankBubbleId;
+  final GlobalKey _prankBubbleKey = GlobalKey();
+  final GlobalKey _prankCaptureKey = GlobalKey();
+  OverlayEntry? _prankRevealEntry;
+  AnimationController? _prankRevealController;
+  ui.Image? _prankRevealImage;
   final ValueNotifier<String> _headerStatusNotifier = ValueNotifier('');
   final ValueNotifier<int> _otherReadTime = ValueNotifier(0);
   int _tempIdCounter = 0;
@@ -413,6 +424,7 @@ class _ChatScreenState extends State<ChatScreen>
     _typingTimers.clear();
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
+    _finishPrankReveal();
     _uploadStatus.dispose();
     _attachAnim.dispose();
     _messageController.dispose();
@@ -454,6 +466,102 @@ class _ChatScreenState extends State<ChatScreen>
     if (_otherReadTime.value != t) _otherReadTime.value = t;
   }
 
+  void _checkPrankTrigger(CachedMessage msg) {
+    if (!AppPranks.current.value || _prankActive || _prankBubbleId != null) {
+      return;
+    }
+    if ((msg.text ?? '').trim().toUpperCase() != 'THE WORLD') return;
+    setState(() => _prankBubbleId = msg.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _runPrankReveal();
+    });
+  }
+
+  ThemeData _prankPinkTheme(ThemeData base) {
+    final cs = base.colorScheme;
+    return base.copyWith(
+      scaffoldBackgroundColor: const Color(0xFFFFF0F5),
+      colorScheme: cs.copyWith(
+        surface: const Color(0xFFFFF0F5),
+        surfaceContainerHigh: const Color(0xFFFFE3EC),
+        surfaceContainerHighest: const Color(0xFFFFD9E6),
+        primary: const Color(0xFFE8579A),
+        primaryContainer: const Color(0xFFFFD6E5),
+        onPrimaryContainer: const Color(0xFF7A1F4B),
+      ),
+    );
+  }
+
+  void _runPrankReveal() {
+    if (_prankActive) return;
+    final overlay = Navigator.of(context).overlay;
+    final captureCtx = _prankCaptureKey.currentContext;
+    final renderObject = captureCtx?.findRenderObject();
+    if (overlay == null || renderObject is! RenderRepaintBoundary) {
+      setState(() => _prankActive = true);
+      return;
+    }
+
+    Offset center;
+    final bubbleBox =
+        _prankBubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    if (bubbleBox != null && bubbleBox.attached) {
+      center = bubbleBox.localToGlobal(bubbleBox.size.center(Offset.zero));
+    } else {
+      final size = MediaQuery.sizeOf(context);
+      center = Offset(size.width / 2, size.height / 2);
+    }
+
+    final ui.Image snapshot;
+    try {
+      final dpr = math.min(MediaQuery.of(context).devicePixelRatio, 2.0);
+      snapshot = renderObject.toImageSync(pixelRatio: dpr);
+    } catch (_) {
+      setState(() => _prankActive = true);
+      return;
+    }
+
+    _finishPrankReveal();
+
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    final entry = ThemeRevealOverlay.build(
+      snapshot: snapshot,
+      center: center,
+      animation: controller,
+    );
+
+    _prankRevealController = controller;
+    _prankRevealEntry = entry;
+    _prankRevealImage = snapshot;
+
+    overlay.insert(entry);
+    setState(() => _prankActive = true);
+    Haptics.success();
+
+    WidgetsBinding.instance.endOfFrame.then((_) {
+      if (_prankRevealController != controller) return;
+      controller.forward().then((_) {
+        if (_prankRevealController != controller) return;
+        _finishPrankReveal();
+      }, onError: (_) {});
+    });
+  }
+
+  void _finishPrankReveal() {
+    _prankRevealEntry?.remove();
+    _prankRevealEntry = null;
+    _prankRevealController?.dispose();
+    _prankRevealController = null;
+    final img = _prankRevealImage;
+    _prankRevealImage = null;
+    if (img != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => img.dispose());
+    }
+  }
+
   String? _effectiveStatus(CachedMessage msg) {
     if (msg.senderId != _myId) return null;
     if (msg.status == 'sending' || msg.status == 'error') return msg.status;
@@ -486,6 +594,7 @@ class _ChatScreenState extends State<ChatScreen>
         _clearTyping(message.senderId);
         Haptics.tap();
         _scrollToBottom();
+        _checkPrankTrigger(message);
       case MessageEditedEvent(:final message):
         final idx = _messages.indexWhere((m) => m.id == message.id);
         if (idx == -1) return;
@@ -615,28 +724,32 @@ class _ChatScreenState extends State<ChatScreen>
         _messages.add(tempMessage);
         _messageController.clear();
       });
+      unawaited(_persistOutgoing(tempMessage));
 
       // Instant tactile "whoosh" the moment the message leaves the composer,
       // not after the network round-trip — feedback must feel immediate.
       Haptics.send();
 
       _scrollToBottom();
+      _checkPrankTrigger(tempMessage);
 
       final actualId = await messagesModule.sendMessage(_myId, widget.chatId, text);
 
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
+        final sent = CachedMessage(
+          id: actualId.isNotEmpty ? actualId : tempId,
+          accountId: _myId,
+          chatId: widget.chatId,
+          senderId: _myId,
+          text: text,
+          time: now,
+          status: 'sent',
+        );
         setState(() {
-          _messages[index] = CachedMessage(
-            id: actualId.isNotEmpty ? actualId : tempId,
-            accountId: _myId,
-            chatId: widget.chatId,
-            senderId: _myId,
-            text: text,
-            time: now,
-            status: 'sent',
-          );
+          _messages[index] = sent;
         });
+        unawaited(_persistOutgoing(sent, removeId: tempId));
       }
 
       if (chat == null) {
@@ -652,19 +765,30 @@ class _ChatScreenState extends State<ChatScreen>
       Haptics.error();
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
+        final failed = CachedMessage(
+          id: tempId,
+          accountId: _myId,
+          chatId: widget.chatId,
+          senderId: _myId,
+          text: text,
+          time: now,
+          status: 'error',
+        );
         setState(() {
-          _messages[index] = CachedMessage(
-            id: tempId,
-            accountId: _myId,
-            chatId: widget.chatId,
-            senderId: _myId,
-            text: text,
-            time: now,
-            status: 'error',
-          );
+          _messages[index] = failed;
         });
+        unawaited(_persistOutgoing(failed));
       }
     }
+  }
+
+  Future<void> _persistOutgoing(CachedMessage msg, {String? removeId}) async {
+    try {
+      if (removeId != null && removeId != msg.id) {
+        await AppDatabase.deleteMessage(_myId, widget.chatId, removeId);
+      }
+      await AppDatabase.saveMessages([msg.toDbRow()]);
+    } catch (_) {}
   }
 
   Future<void> _loadForwardedSenderNames() async {
@@ -879,11 +1003,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme =
+        _prankActive ? _prankPinkTheme(Theme.of(context)) : Theme.of(context);
+    final cs = theme.colorScheme;
 
     // TODO: Локализация
     // TODO: Cклонения
-    return ValueListenableBuilder<bool>(
+    return Theme(
+      data: theme,
+      child: RepaintBoundary(
+        key: _prankCaptureKey,
+        child: ValueListenableBuilder<bool>(
       valueListenable: AppSwipeBackDesktop.current,
       builder: (context, desktopSwipe, child) => SwipeToPop(
         enabled: widget.embedded && desktopSwipe,
@@ -1039,6 +1169,8 @@ class _ChatScreenState extends State<ChatScreen>
         ],
       ),
       ),
+        ),
+      ),
     );
   }
 
@@ -1114,10 +1246,13 @@ class _ChatScreenState extends State<ChatScreen>
                   )
                 : pressable;
 
-            return RepaintBoundary(
+            final builtItem = RepaintBoundary(
               key: ValueKey('msg_${message.id}'),
               child: child,
             );
+            return message.id == _prankBubbleId
+                ? KeyedSubtree(key: _prankBubbleKey, child: builtItem)
+                : builtItem;
           },
         ),
         ),

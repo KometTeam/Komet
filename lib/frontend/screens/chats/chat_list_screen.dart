@@ -26,7 +26,8 @@ import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
-import '../../../main.dart' show accountModule, api, messagesModule;
+import '../../../main.dart'
+    show accountModule, api, messagesModule, appRouteObserver;
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -73,7 +74,7 @@ class ChatListScreen extends StatefulWidget {
 enum _DeleteKind { personalLike, ownerGroup, blocked }
 
 class _ChatListScreenState extends State<ChatListScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
   String? _selectedFolderId;
 
   List<ChatFolder> _folders = [];
@@ -103,6 +104,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _isFabOpen = false;
   bool _storiesAnimClosing = false;
   Timer? _contactRebuildTimer;
+  bool _deferReloads = false;
+  bool _reloadQueued = false;
+  Timer? _settleTimer;
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
   bool? _foldersListKnown;
 
@@ -447,22 +451,58 @@ class _ChatListScreenState extends State<ChatListScreen>
           _sessionState = state;
         });
         if (state == SessionState.online) {
-          _reloadChatsAndFolders();
+          _requestReload();
         }
       }
     });
 
     _loginSub = accountModule.loginStatusStream.listen((status) {
       if (status == LoginStatus.success) {
-        _reloadChatsAndFolders();
+        _requestReload();
       }
     });
     ChatsModule.chatsChanged.addListener(_onChatsChanged);
     _reloadChatsAndFolders();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPushNext() {
+    _deferReloads = true;
+  }
+
+  @override
+  void didPopNext() {
+    _settleTimer?.cancel();
+    _settleTimer = Timer(const Duration(milliseconds: 420), () {
+      if (!mounted) return;
+      _deferReloads = false;
+      if (_reloadQueued) {
+        _reloadQueued = false;
+        _reloadChatsAndFolders();
+      }
+    });
+  }
+
+  void _requestReload() {
+    if (!mounted) return;
+    if (_deferReloads) {
+      _reloadQueued = true;
+      return;
+    }
+    _reloadChatsAndFolders();
+  }
+
   void _onChatsChanged() {
-    if (mounted) _reloadChatsAndFolders();
+    _requestReload();
   }
 
   Future<void> _reloadChatsAndFolders() async {
@@ -934,6 +974,8 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
+    _settleTimer?.cancel();
     ChatsModule.chatsChanged.removeListener(_onChatsChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
