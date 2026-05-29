@@ -155,12 +155,24 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   }
 
   OverlayEntry? _buildGreetingEntry() {
-    final box = _subtitleKey.currentContext?.findRenderObject() as RenderBox?;
+    final subtitleContext = _subtitleKey.currentContext;
+    if (subtitleContext == null) return null;
+    final box = subtitleContext.findRenderObject() as RenderBox?;
     if (box == null || !box.attached) return null;
 
     final topLeft = box.localToGlobal(Offset.zero);
     final size = box.size;
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    final style = DefaultTextStyle.of(subtitleContext)
+        .style
+        .merge(const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          height: 1.3,
+        ))
+        .copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          decoration: TextDecoration.none,
+        );
 
     late final OverlayEntry entry;
     entry = OverlayEntry(
@@ -170,7 +182,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
         width: size.width,
         child: _GreetingLinger(
           greeting: _greeting,
-          color: color,
+          style: style,
           onDone: () => entry.remove(),
         ),
       ),
@@ -386,12 +398,12 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
 
 class _GreetingLinger extends StatefulWidget {
   final String greeting;
-  final Color color;
+  final TextStyle style;
   final VoidCallback onDone;
 
   const _GreetingLinger({
     required this.greeting,
-    required this.color,
+    required this.style,
     required this.onDone,
   });
 
@@ -434,23 +446,21 @@ class _GreetingLingerState extends State<_GreetingLinger>
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _opacity,
-        builder: (context, _) {
-          return Opacity(
-            opacity: _opacity.value,
-            child: Text(
-              widget.greeting,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: widget.color,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                height: 1.3,
+      child: Material(
+        type: MaterialType.transparency,
+        child: AnimatedBuilder(
+          animation: _opacity,
+          builder: (context, _) {
+            return Opacity(
+              opacity: _opacity.value,
+              child: Text(
+                widget.greeting,
+                textAlign: TextAlign.center,
+                style: widget.style,
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
