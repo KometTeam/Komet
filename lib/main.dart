@@ -66,18 +66,33 @@ void main() async {
   }
   attachInfoCacheApi(api);
   ChatsModule.attachGlobalPushHandlers(api);
+
+  final packageInfoFuture = PackageInfo.fromPlatform();
+  final localeFuture = _loadInitialLocale();
+  final hapticsFuture = Haptics.load();
+  final prefsFuture = SharedPreferences.getInstance();
+  final accentFuture = AppAccent.load();
+  final bubbleShapeFuture = AppBubbleShape.load();
+  final bubbleBehaviorFuture = AppBubbleBehavior.load();
+  final cacheExtentFuture = AppCacheExtent.load();
+  final themeModeFuture = AppThemeModeConfig.load();
+  final amoledFuture = AppAmoled.load();
+  final themeScheduleFuture = AppThemeSchedule.load();
+  final messageActionsFuture = AppMessageActionsStyle.load();
+  final swipeBackFuture = AppSwipeBackDesktop.load();
+
   await api.connect();
 
-  final packageInfo = await PackageInfo.fromPlatform();
+  final packageInfo = await packageInfoFuture;
   if (packageInfo.packageName == 'ru.oneme.app') {
     await PushService.instance.init(api: api, account: accountModule);
   }
 
-  final initialLocale = await _loadInitialLocale();
+  final initialLocale = await localeFuture;
 
-  await Haptics.load();
+  await hapticsFuture;
 
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await prefsFuture;
   await FileHistoryCache.load(prefs);
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
@@ -87,15 +102,15 @@ void main() async {
   final initialFontScale = AppFonts.clampScale(
     prefs.getDouble(AppFonts.scalePrefKey) ?? AppFonts.defaultScale,
   );
-  final initialAccentSeed = await AppAccent.load();
-  AppBubbleShape.current.value = await AppBubbleShape.load();
-  AppBubbleBehavior.current.value = await AppBubbleBehavior.load();
-  AppCacheExtent.current.value = await AppCacheExtent.load();
-  AppThemeModeConfig.current.value = await AppThemeModeConfig.load();
-  AppAmoled.current.value = await AppAmoled.load();
-  AppThemeSchedule.current.value = await AppThemeSchedule.load();
-  AppMessageActionsStyle.current.value = await AppMessageActionsStyle.load();
-  AppSwipeBackDesktop.current.value = await AppSwipeBackDesktop.load();
+  final initialAccentSeed = await accentFuture;
+  AppBubbleShape.current.value = await bubbleShapeFuture;
+  AppBubbleBehavior.current.value = await bubbleBehaviorFuture;
+  AppCacheExtent.current.value = await cacheExtentFuture;
+  AppThemeModeConfig.current.value = await themeModeFuture;
+  AppAmoled.current.value = await amoledFuture;
+  AppThemeSchedule.current.value = await themeScheduleFuture;
+  AppMessageActionsStyle.current.value = await messageActionsFuture;
+  AppSwipeBackDesktop.current.value = await swipeBackFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,

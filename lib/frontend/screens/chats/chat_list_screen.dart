@@ -81,7 +81,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   double _navPageAnimStart = 0;
   double _navPageAnimEnd = 0;
-  double _navDragDx = 0;
+  final ValueNotifier<double> _navDragDx = ValueNotifier(0);
   double _navDragBaseLeft = 0;
   double _revealAnimBegin = 0.0;
   double _closeAnimBegin = 0.0;
@@ -144,7 +144,6 @@ class _ChatListScreenState extends State<ChatListScreen>
       _isSelectionMode,
       _shouldCollapseSearch,
       _selectedChats.length,
-      _pullRatio,
       _storiesDockedOpen,
       _storiesAnimClosing,
       _storiesOverscrollRevealArmed,
@@ -619,7 +618,19 @@ class _ChatListScreenState extends State<ChatListScreen>
     });
   }
 
+  int? _pageChatsBaseKey;
+  final Map<int, List<CachedChat>> _pageChatsCache = {};
+
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
+    final baseKey =
+        Object.hash(identityHashCode(_chats), identityHashCode(_folders));
+    if (_pageChatsBaseKey != baseKey) {
+      _pageChatsBaseKey = baseKey;
+      _pageChatsCache.clear();
+    }
+    final cached = _pageChatsCache[pageIndex];
+    if (cached != null) return cached;
+
     List<CachedChat> base;
     if (_folders.isEmpty) {
       base = _chats;
@@ -634,7 +645,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
       ..sort((a, b) => a.favIndex!.compareTo(b.favIndex!));
     final regular = base.where((c) => (c.favIndex ?? 0) <= 0).toList();
-    return [...pinned, ...regular];
+    final result = [...pinned, ...regular];
+    _pageChatsCache[pageIndex] = result;
+    return result;
   }
 
   void _syncFolderChatScrollControllers() {
@@ -947,6 +960,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     _contactRebuildTimer?.cancel();
     _storiesUi.dispose();
+    _navDragDx.dispose();
     super.dispose();
   }
 
@@ -955,7 +969,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     required double Function(int index) bubbleLeftForIndex,
   }) {
     if (_navDragging) {
-      final left = (_navDragBaseLeft + _navDragDx).clamp(
+      final left = (_navDragBaseLeft + _navDragDx.value).clamp(
         bubbleLeftForIndex(0),
         bubbleLeftForIndex(3),
       );
@@ -1343,6 +1357,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
                 if (hasSeparator && index == pinnedCount) {
                   return Padding(
+                    key: const ValueKey('pinned_divider'),
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Divider(
                       height: 1,
@@ -1357,10 +1372,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                 final isPinned = (chat.favIndex ?? 0) > 0;
 
                 if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
-                  final secondId = chat.participants.entries
-                      .where((entry) => entry.key != _profile?.id)
-                      .first
-                      .key;
+                  int secondId = _profile?.id ?? 0;
+                  for (final entry in chat.participants.entries) {
+                    if (entry.key != _profile?.id) {
+                      secondId = entry.key;
+                      break;
+                    }
+                  }
                   final name = ContactCache.get(secondId);
                   final avatar = ContactCache.getAvatar(secondId);
                   // ContactCache.isOfficial covers contacts loaded via opcode 32;
@@ -1510,12 +1528,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     final minBubbleLeft = bubbleLeftForIndex(0);
     final maxBubbleLeft = bubbleLeftForIndex(3);
 
-    final bubbleLeft = _navDragging
-        ? (_navDragBaseLeft + _navDragDx).clamp(minBubbleLeft, maxBubbleLeft)
-        : leftOffset;
-
-    final navRowT = ((bubbleLeft - 4) / inactiveWidth).clamp(0.0, 3.0);
-
     double navInterpolatedWidth(int tabIndex, double rowT) {
       final rt = rowT.clamp(0.0, 3.0);
       final i0 = rt.floor().clamp(0, 3);
@@ -1568,39 +1580,46 @@ class _ChatListScreenState extends State<ChatListScreen>
               if (_isSelectionMode) return;
               _navPageAnimController.stop();
               _navPageAnimController.value = 1.0;
+              _navDragDx.value = 0;
               setState(() {
                 _navDragging = true;
-                _navDragDx = 0;
                 _navDragBaseLeft = bubbleLeftForIndex(_currentNavIndex);
               });
             },
             onHorizontalDragUpdate: (details) {
               if (!_navDragging) return;
-              setState(() {
-                _navDragDx += details.delta.dx;
-              });
+              _navDragDx.value += details.delta.dx;
             },
             onHorizontalDragEnd: (_) {
               if (!_navDragging) return;
-              final left = (_navDragBaseLeft + _navDragDx).clamp(
+              final left = (_navDragBaseLeft + _navDragDx.value).clamp(
                 minBubbleLeft,
                 maxBubbleLeft,
               );
               final next = indexForBubbleLeft(left);
+              _navDragDx.value = 0;
               setState(() {
                 _currentNavIndex = next;
                 _navDragging = false;
-                _navDragDx = 0;
               });
             },
             onHorizontalDragCancel: () {
               if (!_navDragging) return;
+              _navDragDx.value = 0;
               setState(() {
                 _navDragging = false;
-                _navDragDx = 0;
               });
             },
-            child: Stack(
+            child: ValueListenableBuilder<double>(
+              valueListenable: _navDragDx,
+              builder: (context, navDragDx, _) {
+                final bubbleLeft = _navDragging
+                    ? (_navDragBaseLeft + navDragDx)
+                        .clamp(minBubbleLeft, maxBubbleLeft)
+                    : leftOffset;
+                final navRowT =
+                    ((bubbleLeft - 4) / inactiveWidth).clamp(0.0, 3.0);
+                return Stack(
               clipBehavior: Clip.hardEdge,
               children: [
                 AnimatedPositioned(
@@ -1672,6 +1691,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                   ),
                 ),
               ],
+                );
+              },
             ),
           ),
         ),
@@ -1717,7 +1738,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                         width: pageW * 4,
                         height: pageH,
                         child: AnimatedBuilder(
-                          animation: _navPageAnimController,
+                          animation: Listenable.merge(
+                              [_navPageAnimController, _navDragDx]),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -2066,6 +2088,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final isSelected = _selectedChats.contains(id);
 
     return InkWell(
+      key: ValueKey('chat_$id'),
       onTap: () {
         if (_isSelectionMode) {
           _toggleSelection(id);

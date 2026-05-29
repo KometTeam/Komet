@@ -307,33 +307,40 @@ class TwoFactorSetupScreen extends StatefulWidget {
 
 class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
   final _hintController = TextEditingController();
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
 
   int _step = 0;
-  bool _isLoading = false;
+  final ValueNotifier<bool> _isLoading = ValueNotifier(false);
   String? _trackId;
   String? _errorMessage;
 
   @override
   void dispose() {
     _passwordController.dispose();
+    _confirmController.dispose();
     _hintController.dispose();
     _emailController.dispose();
     _codeController.dispose();
+    _isLoading.dispose();
     super.dispose();
   }
 
   Future<void> _nextStep() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    _isLoading.value = true;
+    setState(() => _errorMessage = null);
 
     try {
       switch (_step) {
         case 0:
+          if (_passwordController.text.length < 6) {
+            setState(
+              () => _errorMessage = 'Пароль должен быть минимум 6 символов',
+            );
+            break;
+          }
           final trackId = await accountModule.create2faTrack();
           setState(() {
             _trackId = trackId;
@@ -341,10 +348,8 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           });
           break;
         case 1:
-          if (_passwordController.text.length < 6) {
-            setState(
-              () => _errorMessage = 'Пароль должен быть минимум 6 символов',
-            );
+          if (_confirmController.text != _passwordController.text) {
+            setState(() => _errorMessage = 'Пароли не совпадают');
             break;
           }
           await accountModule.set2faPassword(
@@ -392,7 +397,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
       setState(() => _errorMessage = e.toString());
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        _isLoading.value = false;
       }
     }
   }
@@ -458,26 +463,29 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: _isLoading ? null : _nextStep,
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _isLoading,
+              builder: (context, loading, _) => FilledButton(
+                onPressed: loading ? null : _nextStep,
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
+                child: loading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.onPrimary,
+                        ),
+                      )
+                    : Text(_step == 4 ? 'Установить пароль' : 'Продолжить'),
               ),
-              child: _isLoading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.onPrimary,
-                      ),
-                    )
-                  : Text(_step == 4 ? 'Установить пароль' : 'Продолжить'),
             ),
           ),
         ],
@@ -591,7 +599,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
         ),
         const SizedBox(height: 16),
         _PasswordField(
-          controller: _passwordController,
+          controller: _confirmController,
           hintText: 'Повторите пароль',
         ),
       ],
@@ -714,7 +722,7 @@ class TwoFactorManageScreen extends StatefulWidget {
 
 class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
+  final ValueNotifier<bool> _isLoading = ValueNotifier(false);
   bool _isAuthenticated = false;
   String? _trackId;
   TwoFactorDetails? _details;
@@ -723,14 +731,13 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
   @override
   void dispose() {
     _passwordController.dispose();
+    _isLoading.dispose();
     super.dispose();
   }
 
   Future<void> _authenticate() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    _isLoading.value = true;
+    setState(() => _errorMessage = null);
 
     try {
       _trackId = await accountModule.enter2faPanel();
@@ -743,7 +750,7 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
     } catch (e) {
       setState(() => _errorMessage = 'Неверный пароль');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _isLoading.value = false;
     }
   }
 
@@ -807,26 +814,29 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: _isLoading ? null : _authenticate,
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _isLoading,
+              builder: (context, loading, _) => FilledButton(
+                onPressed: loading ? null : _authenticate,
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
+                child: loading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.onPrimary,
+                        ),
+                      )
+                    : const Text('Продолжить'),
               ),
-              child: _isLoading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.onPrimary,
-                      ),
-                    )
-                  : const Text('Продолжить'),
             ),
           ),
         ],
@@ -917,13 +927,14 @@ class _TwoFactorPasswordChangeScreenState
     extends State<TwoFactorPasswordChangeScreen> {
   final _passwordController = TextEditingController();
   final _hintController = TextEditingController();
-  bool _isLoading = false;
+  final ValueNotifier<bool> _isLoading = ValueNotifier(false);
   String? _errorMessage;
 
   @override
   void dispose() {
     _passwordController.dispose();
     _hintController.dispose();
+    _isLoading.dispose();
     super.dispose();
   }
 
@@ -933,10 +944,8 @@ class _TwoFactorPasswordChangeScreenState
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    _isLoading.value = true;
+    setState(() => _errorMessage = null);
 
     try {
       final trackId = await accountModule.enter2faPanel();
@@ -956,7 +965,7 @@ class _TwoFactorPasswordChangeScreenState
     } catch (e) {
       setState(() => _errorMessage = e.toString());
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _isLoading.value = false;
     }
   }
 
@@ -1037,26 +1046,29 @@ class _TwoFactorPasswordChangeScreenState
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                onPressed: _isLoading ? null : _changePassword,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _isLoading,
+                builder: (context, loading, _) => FilledButton(
+                  onPressed: loading ? null : _changePassword,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: cs.primary,
+                    foregroundColor: cs.onPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
+                  child: loading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.onPrimary,
+                          ),
+                        )
+                      : const Text('Сохранить'),
                 ),
-                child: _isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onPrimary,
-                        ),
-                      )
-                    : const Text('Сохранить'),
               ),
             ),
           ],
@@ -1080,7 +1092,7 @@ class _TwoFactorEmailChangeScreenState
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
   int _step = 0;
-  bool _isLoading = false;
+  final ValueNotifier<bool> _isLoading = ValueNotifier(false);
   String? _trackId;
   String? _errorMessage;
 
@@ -1089,14 +1101,13 @@ class _TwoFactorEmailChangeScreenState
     _passwordController.dispose();
     _emailController.dispose();
     _codeController.dispose();
+    _isLoading.dispose();
     super.dispose();
   }
 
   Future<void> _nextStep() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    _isLoading.value = true;
+    setState(() => _errorMessage = null);
 
     try {
       switch (_step) {
@@ -1140,7 +1151,7 @@ class _TwoFactorEmailChangeScreenState
     } catch (e) {
       setState(() => _errorMessage = e.toString());
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _isLoading.value = false;
     }
   }
 
@@ -1256,26 +1267,29 @@ class _TwoFactorEmailChangeScreenState
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                onPressed: _isLoading ? null : _nextStep,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _isLoading,
+                builder: (context, loading, _) => FilledButton(
+                  onPressed: loading ? null : _nextStep,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: cs.primary,
+                    foregroundColor: cs.onPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
+                  child: loading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.onPrimary,
+                          ),
+                        )
+                      : Text(_step == 2 ? 'Сохранить' : 'Продолжить'),
                 ),
-                child: _isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onPrimary,
-                        ),
-                      )
-                    : Text(_step == 2 ? 'Сохранить' : 'Продолжить'),
               ),
             ),
           ],
@@ -1294,20 +1308,19 @@ class TwoFactorRemoveScreen extends StatefulWidget {
 
 class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
+  final ValueNotifier<bool> _isLoading = ValueNotifier(false);
   String? _errorMessage;
 
   @override
   void dispose() {
     _passwordController.dispose();
+    _isLoading.dispose();
     super.dispose();
   }
 
   Future<void> _remove2fa() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    _isLoading.value = true;
+    setState(() => _errorMessage = null);
 
     try {
       final trackId = await accountModule.enter2faPanel();
@@ -1323,7 +1336,7 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
     } catch (e) {
       setState(() => _errorMessage = e.toString());
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _isLoading.value = false;
     }
   }
 
@@ -1402,26 +1415,29 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                onPressed: _isLoading ? null : _remove2fa,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.error,
-                  foregroundColor: cs.onError,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _isLoading,
+                builder: (context, loading, _) => FilledButton(
+                  onPressed: loading ? null : _remove2fa,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: cs.error,
+                    foregroundColor: cs.onError,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
+                  child: loading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.onError,
+                          ),
+                        )
+                      : const Text('Удалить пароль'),
                 ),
-                child: _isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onError,
-                        ),
-                      )
-                    : const Text('Удалить пароль'),
               ),
             ),
           ],

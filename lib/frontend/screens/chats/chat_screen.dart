@@ -115,6 +115,7 @@ class _ChatScreenState extends State<ChatScreen>
   int _otherStatus = 0;
   int? _otherSeenTime;
   final ValueNotifier<String> _headerStatusNotifier = ValueNotifier('');
+  final ValueNotifier<int> _otherReadTime = ValueNotifier(0);
   int _tempIdCounter = 0;
   late final AnimationController _attachAnim;
 
@@ -123,6 +124,8 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _shimmerStartTimer;
   bool _historyKickedOff = false;
   List<CachedMessage> _messages = [];
+  List<Object>? _combinedItemsCache;
+  int? _combinedItemsKey;
   int _myId = 0;
   CachedChat? chat;
 
@@ -183,6 +186,7 @@ class _ChatScreenState extends State<ChatScreen>
           chat = value.first;
         });
         _recomputeHeaderStatus();
+        _syncOtherReadTime();
       }
     }).catchError((_) {});
 
@@ -395,6 +399,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _typingTimers.clear();
     _headerStatusNotifier.dispose();
+    _otherReadTime.dispose();
     _uploadStatus.dispose();
     _attachAnim.dispose();
     _messageController.dispose();
@@ -419,17 +424,28 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  String? _effectiveStatus(CachedMessage msg) {
-    if (msg.senderId != _myId) return null;
-    if (msg.status == 'sending' || msg.status == 'error') return msg.status;
+  int _computeOtherReadTime() {
     final c = chat;
-    if (c == null) return 'sent';
+    if (c == null) return 0;
     int otherReadTime = 0;
     for (final entry in c.participants.entries) {
       if (entry.key != _myId && entry.value > otherReadTime) {
         otherReadTime = entry.value;
       }
     }
+    return otherReadTime;
+  }
+
+  void _syncOtherReadTime() {
+    final t = _computeOtherReadTime();
+    if (_otherReadTime.value != t) _otherReadTime.value = t;
+  }
+
+  String? _effectiveStatus(CachedMessage msg) {
+    if (msg.senderId != _myId) return null;
+    if (msg.status == 'sending' || msg.status == 'error') return msg.status;
+    if (chat == null) return 'sent';
+    final otherReadTime = _otherReadTime.value;
     if (otherReadTime > 0 && otherReadTime >= msg.time) return 'read';
     return 'sent';
   }
@@ -555,9 +571,8 @@ class _ChatScreenState extends State<ChatScreen>
     final c = chat;
     if (c == null) return;
     if (c.participants[userId] == mark) return;
-    setState(() {
-      c.participants[userId] = mark;
-    });
+    c.participants[userId] = mark;
+    _syncOtherReadTime();
   }
 
   Future<void> _sendMessage() async {
@@ -614,6 +629,7 @@ class _ChatScreenState extends State<ChatScreen>
           ChatsModule.refreshChats(api, [widget.chatId]).then((list) {
             if (!mounted || list.isEmpty) return;
             setState(() => chat = list.first);
+            _syncOtherReadTime();
           }),
         );
       }
@@ -708,6 +724,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   List<Object> _buildCombinedItems() {
+    final key = Object.hashAll(_messages.map(identityHashCode));
+    final cached = _combinedItemsCache;
+    if (cached != null && _combinedItemsKey == key) return cached;
+
     final List<Object> items = [];
     final Set<int> usedDates = {};
 
@@ -740,6 +760,8 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     _separatorKeys.removeWhere((k, _) => !usedDates.contains(k));
+    _combinedItemsCache = items;
+    _combinedItemsKey = key;
     return items;
   }
 
@@ -1022,7 +1044,9 @@ class _ChatScreenState extends State<ChatScreen>
     return Stack(
       key: _listKey,
       children: [
-        ValueListenableBuilder<double>(
+        ValueListenableBuilder<int>(
+          valueListenable: _otherReadTime,
+          builder: (context, _, _) => ValueListenableBuilder<double>(
           valueListenable: AppCacheExtent.current,
           builder: (context, cacheExtent, _) => ListView.builder(
           controller: _scrollController,
@@ -1080,6 +1104,7 @@ class _ChatScreenState extends State<ChatScreen>
               child: child,
             );
           },
+        ),
         ),
         ),
         Positioned(

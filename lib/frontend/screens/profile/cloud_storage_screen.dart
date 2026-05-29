@@ -43,7 +43,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   int? _accountId;
   List<CloudFile> _files = [];
   bool _isUploading = false;
-  double _uploadProgress = 0;
+  final ValueNotifier<double> _uploadProgress = ValueNotifier(0);
   bool _animateNewCard = false;
 
   @override
@@ -68,16 +68,19 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     }
     mgr.onProgress = (progress, _) {
       if (!mounted) return;
-      setState(() { _isUploading = true; _uploadProgress = progress; });
+      if (!_isUploading) setState(() => _isUploading = true);
+      _uploadProgress.value = progress;
     };
     mgr.onDone = (file) {
       if (!mounted) return;
-      setState(() { _isUploading = false; _uploadProgress = 0; });
+      _uploadProgress.value = 0;
+      setState(() => _isUploading = false);
       _prependFile(file);
     };
     mgr.onError = (msg) {
       if (!mounted) return;
-      setState(() { _isUploading = false; _uploadProgress = 0; });
+      _uploadProgress.value = 0;
+      setState(() => _isUploading = false);
       showCustomNotification(context, 'Ошибка: $msg');
     };
   }
@@ -91,6 +94,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     _mode.dispose();
     _pageController.dispose();
     _currentFilePage.dispose();
+    _uploadProgress.dispose();
     super.dispose();
   }
 
@@ -218,7 +222,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     final picked = result.files.first;
     if (picked.path == null) return;
 
-    setState(() { _isUploading = true; _uploadProgress = 0; });
+    _uploadProgress.value = 0;
+    setState(() => _isUploading = true);
 
     await UploadManager.instance.start(
       chatId: chatId,
@@ -427,17 +432,27 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                 const SizedBox(height: 16),
               ],
               if (_isUploading) ...[
-                LinearProgressIndicator(
-                  value: _uploadProgress,
-                  borderRadius: BorderRadius.circular(4),
-                  minHeight: 5,
-                  color: cs.primary,
-                  backgroundColor: cs.surfaceContainerHighest,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Загрузка ${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ValueListenableBuilder<double>(
+                  valueListenable: _uploadProgress,
+                  builder: (context, progress, _) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LinearProgressIndicator(
+                        value: progress,
+                        borderRadius: BorderRadius.circular(4),
+                        minHeight: 5,
+                        color: cs.primary,
+                        backgroundColor: cs.surfaceContainerHighest,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Загрузка ${(progress * 100).toStringAsFixed(0)}%',
+                        style:
+                            TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                      ),
+                    ],
+                  ),
                 ),
               ] else if (_files.isEmpty) ...[
                 Text(

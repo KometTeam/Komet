@@ -50,6 +50,10 @@ class MessageBubble extends StatelessWidget {
   static const Radius _smallRadius = Radius.circular(4);
   static const Radius _photoRadius = Radius.circular(photoBorderRadius);
 
+  static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
+  static const BorderRadius _reactionChipRadius =
+      BorderRadius.all(Radius.circular(10));
+
   static Color bubbleTextColor(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
           ? Colors.white
@@ -271,14 +275,30 @@ class MessageBubble extends StatelessWidget {
     final showAvatarSlot = !isMe;
     final showAvatar = showAvatarSlot &&
         chatType == "CHAT" &&
-        nextMessage?.senderId != message.senderId &&
-        prevMessage?.senderId == message.senderId;
+        nextMessage?.senderId != message.senderId;
 
-    final bubbleListenable = Listenable.merge([
-      AppBubbleShape.current,
-      AppBubbleBehavior.current,
-      ?reactionsListenable,
-    ]);
+    final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.75;
+    final bubbleColor =
+        isMe ? cs.primaryContainer : cs.surfaceContainerHighest;
+
+    _BubbleCtx makeCtx() => _BubbleCtx(
+          context: context,
+          cs: cs,
+          text: textColor,
+          shape: shape,
+          contentType: contentType,
+          hasPhotoWithCaption: hasPhotoCap,
+          hasMultiplePhotosNoCaption: hasMultiPhotos,
+          reactionInfo: _resolveReactionInfo(),
+        );
+
+    final Widget bubbleContent =
+        reactionsListenable != null && contentType == MessageType.text
+            ? ValueListenableBuilder<Map<String, dynamic>?>(
+                valueListenable: reactionsListenable!,
+                builder: (context, _, _) => _buildContent(makeCtx()),
+              )
+            : _buildContent(makeCtx());
 
     return GestureDetector(
       onTap: Haptics.tap,
@@ -310,63 +330,35 @@ class MessageBubble extends StatelessWidget {
                     isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   ListenableBuilder(
-                    listenable: bubbleListenable,
-                    builder: (context, _) {
-                      final reactionInfo = _resolveReactionInfo();
-                      final ctx = _BubbleCtx(
-                        context: context,
-                        cs: cs,
-                        text: textColor,
-                        shape: shape,
-                        contentType: contentType,
-                        hasPhotoWithCaption: hasPhotoCap,
-                        hasMultiplePhotosNoCaption: hasMultiPhotos,
-                        reactionInfo: reactionInfo,
-                      );
-                      return AnimatedSize(
-                        duration: const Duration(milliseconds: 150),
-                        curve: Curves.easeOutCubic,
-                        alignment: isMe
-                            ? Alignment.bottomRight
-                            : Alignment.bottomLeft,
-                        child: Container(
-                          constraints: BoxConstraints(
-                            maxWidth:
-                                MediaQuery.sizeOf(context).width * 0.75,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isMe
-                                ? cs.primaryContainer
-                                : cs.surfaceContainerHighest,
-                            borderRadius: _borderRadiusFor(
-                              AppBubbleShape.current.value,
-                              AppBubbleBehavior.current.value,
-                              shape,
-                              hasPhotoCap,
-                              hasMultiPhotos,
-                            ),
-                          ),
-                          padding: padding,
-                          child: _buildContent(ctx),
+                    listenable: Listenable.merge([
+                      AppBubbleShape.current,
+                      AppBubbleBehavior.current,
+                    ]),
+                    builder: (context, child) => Container(
+                      constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                      decoration: BoxDecoration(
+                        color: bubbleColor,
+                        borderRadius: _borderRadiusFor(
+                          AppBubbleShape.current.value,
+                          AppBubbleBehavior.current.value,
+                          shape,
+                          hasPhotoCap,
+                          hasMultiPhotos,
                         ),
-                      );
-                    },
+                      ),
+                      padding: padding,
+                      child: child,
+                    ),
+                    child: bubbleContent,
                   ),
                   if (contentType != MessageType.text)
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 150),
-                      curve: Curves.easeOutCubic,
-                      alignment: isMe
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: reactionsListenable != null
-                          ? ValueListenableBuilder<Map<String, dynamic>?>(
-                              valueListenable: reactionsListenable!,
-                              builder: (context, info, _) =>
-                                  _buildReactionsBarFor(cs, info),
-                            )
-                          : _buildReactionsBar(cs),
-                    ),
+                    reactionsListenable != null
+                        ? ValueListenableBuilder<Map<String, dynamic>?>(
+                            valueListenable: reactionsListenable!,
+                            builder: (context, info, _) =>
+                                _buildReactionsBarFor(cs, info),
+                          )
+                        : _buildReactionsBar(cs),
                 ],
               ),
             ],
@@ -432,8 +424,8 @@ class MessageBubble extends StatelessWidget {
           decoration: BoxDecoration(
             color: isYours
                 ? cs.primary.withValues(alpha: 0.22)
-                : Colors.black.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(10),
+                : _reactionChipBg,
+            borderRadius: _reactionChipRadius,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
