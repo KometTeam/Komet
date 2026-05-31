@@ -1,9 +1,13 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/image_utils.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../main.dart' show accountModule, KometApp;
+import '../../../main.dart' show accountModule, fileUploader, KometApp;
 import '../../widgets/custom_notification.dart';
+
+const int _maxAvatarBytes = 8 * 1024 * 1024;
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -77,12 +81,56 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _changeAvatar() async {
     if (_isSaving) return;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.first;
+    final bytes = picked.bytes;
+    if (bytes == null) {
+      if (mounted) showCustomNotification(context, 'Не удалось прочитать файл');
+      return;
+    }
+    if (bytes.length > _maxAvatarBytes) {
+      if (mounted) showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _isSaving = true);
     try {
-      final uploadUrl = await accountModule.getAvatarUploadUrl();
+      final processed = await compressAvatar(bytes);
+      if (processed == null) {
+        if (!mounted) return;
+        showCustomNotification(context, 'Не удалось обработать изображение');
+        setState(() => _isSaving = false);
+        return;
+      }
+      final url = await accountModule.getAvatarUploadUrl();
+      final token = await fileUploader.uploadImage(
+        Uri.parse(url),
+        processed,
+        filename: 'avatar.jpg',
+      );
+      if (token == null) {
+        if (!mounted) return;
+        showCustomNotification(context, 'Не удалось загрузить аватарку');
+        setState(() => _isSaving = false);
+        return;
+      }
+      final newProfile = await accountModule.updateProfileAvatar(token);
       if (!mounted) return;
-      showCustomNotification(context, 'Загрузка аватарки: $uploadUrl (пока нет)');
+      setState(() {
+        _avatarUrl = newProfile.baseUrl;
+        _photoId = newProfile.photoId;
+        _isSaving = false;
+      });
+      KometApp.stateOf(context)?.notifyProfileUpdate();
+      showCustomNotification(context, 'Аватарка обновлена');
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Ошибка: $e');
+      if (!mounted) return;
+      showCustomNotification(context, 'Ошибка: $e');
+      setState(() => _isSaving = false);
     }
   }
 

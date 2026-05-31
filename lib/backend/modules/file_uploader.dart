@@ -190,13 +190,23 @@ class FileUploader {
     Socket? socket;
     try {
       socket = await _openSocket(uri);
+      final boundary = '----KometBoundary${DateTime.now().microsecondsSinceEpoch}';
+      final preamble = utf8.encode(
+        '--$boundary\r\n'
+        'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
+        'Content-Type: ${_contentTypeForFilename(filename)}\r\n'
+        '\r\n',
+      );
+      final epilogue = utf8.encode('\r\n--$boundary--\r\n');
       _writeImageHeaders(
         socket,
         uri,
-        bytes.length,
-        contentType: _contentTypeForFilename(filename),
+        preamble.length + bytes.length + epilogue.length,
+        boundary: boundary,
       );
+      socket.add(preamble);
       socket.add(bytes);
+      socket.add(epilogue);
       await socket.flush();
 
       final response = await _readFullResponse(
@@ -208,7 +218,6 @@ class FileUploader {
       } catch (_) {}
 
       if (response == null) {
-        logger.w('uploadImage: empty/timed-out response');
         return null;
       }
       final (status, body) = response;
@@ -230,12 +239,12 @@ class FileUploader {
     }
   }
 
-  void _writeImageHeaders(Socket socket, Uri uri, int total, {required String contentType}) {
+  void _writeImageHeaders(Socket socket, Uri uri, int total, {required String boundary}) {
     final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
     final headers = StringBuffer()
       ..write('POST $path HTTP/1.1\r\n')
       ..write('Host: ${uri.host}\r\n')
-      ..write('Content-Type: $contentType\r\n')
+      ..write('Content-Type: multipart/form-data; boundary=$boundary\r\n')
       ..write('Content-Length: $total\r\n')
       ..write('Connection: keep-alive\r\n')
       ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
@@ -273,36 +282,63 @@ class FileUploader {
     Timer? timer;
     StreamSubscription<List<int>>? sub;
 
-    void finish() {
+    void finishWith((int, String)? value) {
       timer?.cancel();
       sub?.cancel();
-      if (completer.isCompleted) return;
+      if (!completer.isCompleted) completer.complete(value);
+    }
+
+    (int, String)? tryParse({required bool atClose}) {
       final headerEnd = _findHeaderEnd(bytes);
-      if (headerEnd == -1) {
-        completer.complete(null);
-        return;
-      }
+      if (headerEnd == -1) return null;
       final headerStr = utf8.decode(bytes.sublist(0, headerEnd), allowMalformed: true);
       final lines = headerStr.split('\r\n');
       final parts = lines.first.split(' ');
       final status = parts.length >= 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
-      final chunked = lines.skip(1).any(
+      final headerLines = lines.skip(1);
+      final chunked = headerLines.any(
         (l) => l.toLowerCase().startsWith('transfer-encoding:') &&
             l.toLowerCase().contains('chunked'),
       );
+      int? contentLength;
+      for (final l in headerLines) {
+        if (l.toLowerCase().startsWith('content-length:')) {
+          contentLength = int.tryParse(l.split(':').last.trim());
+        }
+      }
       final rawBody = utf8.decode(bytes.sublist(headerEnd), allowMalformed: true);
-      final body = chunked ? _decodeChunked(rawBody) : rawBody;
-      completer.complete((status, body));
+      if (chunked) {
+        if (!atClose && !rawBody.contains('\r\n0\r\n')) return null;
+        return (status, _decodeChunked(rawBody));
+      }
+      if (contentLength != null && !atClose && bytes.length - headerEnd < contentLength) {
+        return null;
+      }
+      return (status, rawBody);
     }
 
-    void fail() {
-      timer?.cancel();
-      sub?.cancel();
-      if (!completer.isCompleted) completer.complete(null);
-    }
-
-    sub = socket.listen(bytes.addAll, onError: (_) => fail(), onDone: finish);
-    timer = Timer(timeout, fail);
+    sub = socket.listen(
+      (chunk) {
+        bytes.addAll(chunk);
+        final parsed = tryParse(atClose: false);
+        if (parsed != null) finishWith(parsed);
+      },
+      onError: (e) {
+        logger.w('uploadImage: socket error after ${bytes.length} bytes: $e');
+        finishWith(tryParse(atClose: true));
+      },
+      onDone: () {
+        final parsed = tryParse(atClose: true);
+        if (parsed == null) {
+          logger.w('uploadImage: connection closed without HTTP response (${bytes.length} bytes)');
+        }
+        finishWith(parsed);
+      },
+    );
+    timer = Timer(timeout, () {
+      logger.w('uploadImage: response timeout after ${bytes.length} bytes');
+      finishWith(tryParse(atClose: true));
+    });
     return completer.future;
   }
 

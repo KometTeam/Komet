@@ -484,7 +484,7 @@ class AccountModule {
     return newProfile;
   }
 
-  Future<ProfileData> updateProfileAvatar(String photoToken, String avatarType) async {
+  Future<ProfileData> updateProfileAvatar(String photoToken, {String avatarType = 'USER_AVATAR'}) async {
     _ensureOnline();
     final packet = await _api.sendRequest(Opcode.profile, {
       'photoToken': photoToken,
