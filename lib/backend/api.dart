@@ -39,6 +39,12 @@ class Api {
 
   Map<dynamic, dynamic>? get userAgent => _userAgent;
 
+  int? _callsSeed;
+  String? _deviceId;
+
+  int? get callsSeed => _callsSeed;
+  String? get deviceId => _deviceId;
+
   List<CountryName>? _registrationCountries;
 
   List<CountryName> get registrationCountries =>
@@ -111,6 +117,7 @@ class Api {
     try {
       final response = await sendHandshake();
       if (response.isOk) {
+        _callsSeed = response.payload['callsSeed'] as int?;
         _registrationCountries = _parseRegistrationCountries(response.payload);
         _setSessionState(SessionState.online);
         _startPinging();
@@ -241,6 +248,8 @@ class Api {
       'arch': architecture,
       'buildNumber': buildNumber,
     };
+
+    _deviceId = deviceId;
 
     final payload = <dynamic, dynamic>{
       'mt_instanceid': await DeviceIdentity.instanceId(),

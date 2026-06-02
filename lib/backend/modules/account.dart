@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import '../api.dart';
+import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -1048,8 +1050,17 @@ class AccountModule {
     final payload = <dynamic, dynamic>{
       'token': token,
       'interactive': true,
-      if (_api.userAgent != null) 'userAgent': _api.userAgent,
+      'exp': {
+        'chatsCountGroups': Uint8List.fromList([0x0b, 0x32]),
+      },
     };
+
+    final callsSeed = _api.callsSeed;
+    final deviceId = _api.deviceId;
+    if (callsSeed != null && deviceId != null) {
+      payload['chatCacheFingerprint'] =
+          ChatCacheFingerprint.compute(callsSeed, deviceId);
+    }
 
     if (sync != null) {
       payload['presenceSync'] = sync.presenceSync;
@@ -1060,9 +1071,6 @@ class AccountModule {
       payload['bannersSync'] = sync.bannersSync;
       payload['lastLogin'] = sync.lastLogin;
       if (sync.configHash != null) payload['configHash'] = sync.configHash;
-      if (sync.chatCacheFingerprint != null) {
-        payload['chatCacheFingerprint'] = sync.chatCacheFingerprint;
-      }
     } else {
       payload['presenceSync'] = 0;
     }

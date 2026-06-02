@@ -134,3 +134,7 @@ agents.md
 # Environment variables
 .env
 .env.*
+# Локальные дампы трафика и скрипты анализа (содержат секреты)
+komet.txt
+original_app.txt
+fingerprint.py
