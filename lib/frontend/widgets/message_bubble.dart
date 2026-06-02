@@ -8,7 +8,12 @@ import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/haptics.dart';
+import '../../core/utils/file_download.dart';
+import 'custom_notification.dart';
 import '../../models/attachment.dart';
+import 'poll_view.dart';
+import 'photo_viewer.dart';
+import 'video_player_screen.dart';
 
 enum MessageType { text, attachment, voice, control }
 
@@ -745,12 +750,32 @@ class MessageBubble extends StatelessWidget {
       return _buildContactAttachment(ctx, contacts.first);
     }
 
+    final polls = attachments.whereType<PollAttachment>().toList();
+    if (polls.isNotEmpty) {
+      return _buildPollAttachment(ctx, polls.first);
+    }
+
     final photos = attachments.whereType<PhotoAttachment>().toList();
     if (photos.isEmpty) {
       return _buildGenericAttachment(ctx, attachments.first);
     }
 
     return _buildPhotoContent(ctx, photos);
+  }
+
+  Widget _buildPollAttachment(_BubbleCtx ctx, PollAttachment poll) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: PollView(
+        chatId: message.chatId,
+        messageId: message.id,
+        pollId: poll.pollId,
+        fallbackTitle: poll.title ?? message.text,
+        textColor: ctx.text,
+        dimColor: ctx.dim,
+        accentColor: ctx.text,
+      ),
+    );
   }
 
   Widget _buildPhotoContent(_BubbleCtx ctx, List<PhotoAttachment> photos) {
@@ -974,6 +999,7 @@ class MessageBubble extends StatelessWidget {
 
     final constrainedWidth = width.clamp(photoMinSize, photoMaxSize);
     final constrainedHeight = height.clamp(photoMinSize, photoMaxSize);
+    final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
     final matchTop = ctx.hasPhotoWithCaption;
     final matchBottom = !ctx.hasPhotoWithCaption;
@@ -999,8 +1025,8 @@ class MessageBubble extends StatelessWidget {
               width: constrainedWidth,
               height: constrainedHeight,
               fit: BoxFit.cover,
-              memCacheWidth: (constrainedWidth * 2).round(),
-              memCacheHeight: (constrainedHeight * 2).round(),
+              memCacheWidth: (constrainedWidth * dpr).round(),
+              memCacheHeight: (constrainedHeight * dpr).round(),
               fadeInDuration: const Duration(milliseconds: 120),
               errorWidget: (_, _, _) => _buildPhotoPlaceholder(
                 ctx.cs,
@@ -1095,6 +1121,8 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildPhotoTile(_BubbleCtx ctx, PhotoAttachment photo) {
     final imageUrl = photo.baseUrl ?? '';
+    final cachePx =
+        (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio).round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
@@ -1105,8 +1133,8 @@ class MessageBubble extends StatelessWidget {
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
-              memCacheWidth: 280,
-              memCacheHeight: 280,
+              memCacheWidth: cachePx,
+              memCacheHeight: cachePx,
               fadeInDuration: const Duration(milliseconds: 120),
               errorWidget: (_, _, _) =>
                   _buildPhotoPlaceholder(ctx.cs, 100, 100),
@@ -1130,6 +1158,8 @@ class MessageBubble extends StatelessWidget {
     String overlay,
   ) {
     final imageUrl = photo.baseUrl ?? '';
+    final cachePx =
+        (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio).round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
@@ -1140,8 +1170,8 @@ class MessageBubble extends StatelessWidget {
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
-              memCacheWidth: 280,
-              memCacheHeight: 280,
+              memCacheWidth: cachePx,
+              memCacheHeight: cachePx,
               fadeInDuration: const Duration(milliseconds: 120),
               errorWidget: (_, _, _) =>
                   _buildPhotoPlaceholder(ctx.cs, 100, 100),
@@ -1230,10 +1260,22 @@ class MessageBubble extends StatelessWidget {
                   color: ctx.cs.onSurfaceVariant,
                 ),
               ),
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Symbols.play_arrow,
+                      color: Colors.white, size: 30),
+                ),
+              ),
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () {},
+                  onTap: () => _playVideo(ctx.context, video),
                 ),
               ),
             ],
@@ -1242,6 +1284,36 @@ class MessageBubble extends StatelessWidget {
         const SizedBox(height: 6),
         _buildMeta(ctx),
       ],
+    );
+  }
+
+  Future<void> _playVideo(
+    BuildContext context,
+    MessageAttachment video,
+  ) async {
+    final videoId = (video as dynamic).videoId as int?;
+    final token = (video as dynamic).videoToken as String?;
+    if (videoId == null || token == null) {
+      showCustomNotification(context, 'Не удалось открыть видео');
+      return;
+    }
+    Haptics.tap();
+    final url = await messagesModule.getVideoUrl(
+      messageId: message.id,
+      chatId: message.chatId,
+      token: token,
+      videoId: videoId,
+    );
+    if (!context.mounted) return;
+    if (url == null) {
+      showCustomNotification(context, 'Не удалось получить видео');
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => VideoPlayerScreen(url: url),
+      ),
     );
   }
 
@@ -1307,7 +1379,7 @@ class MessageBubble extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               GestureDetector(
-                onTap: () {},
+                onTap: () => _downloadFile(ctx.context, file, name),
                 child: Container(
                   width: 34,
                   height: 34,
@@ -1605,7 +1677,48 @@ class MessageBubble extends StatelessWidget {
   }
 
   void _openPhotoViewer(BuildContext ctx, PhotoAttachment photo) {
-    // TODO: Open photo viewer
+    final url = photo.baseUrl ?? '';
+    if (url.isEmpty) return;
+    Navigator.of(ctx).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PhotoViewerScreen(baseUrl: url),
+      ),
+    );
+  }
+
+  Future<void> _downloadFile(
+    BuildContext context,
+    MessageAttachment file,
+    String name,
+  ) async {
+    final fileId = (file as dynamic).fileId as int?;
+    if (fileId == null) {
+      showCustomNotification(context, 'Не удалось определить файл');
+      return;
+    }
+    Haptics.tap();
+    showCustomNotification(context, 'Скачивание «$name»…');
+
+    final url = await messagesModule.getFileUrl(
+      messageId: message.id,
+      chatId: message.chatId,
+      fileId: fileId,
+    );
+    if (!context.mounted) return;
+    if (url == null) {
+      showCustomNotification(context, 'Не удалось получить файл');
+      return;
+    }
+
+    final result = await downloadAndOpenFile(url, name);
+    if (!context.mounted) return;
+    if (!result.ok) {
+      showCustomNotification(
+        context,
+        'Ошибка загрузки: ${result.error ?? 'не удалось открыть'}',
+      );
+    }
   }
 
   Widget _buildVoiceContent(_BubbleCtx ctx) {

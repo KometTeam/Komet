@@ -568,6 +568,43 @@ class MessagesModule {
     }
   }
 
+  /// Запрашивает у сервера ссылку на воспроизведение видео (opcode 83).
+  ///
+  /// Формат подтверждён дампом: запрос `{messageId, chatId, token, videoId}`,
+  /// ответ содержит `MP4_1080/MP4_720/...`, `HLS`, `DASH`, `EXTERNAL`.
+  /// Возвращает лучший доступный progressive-MP4 (или HLS как запасной).
+  Future<String?> getVideoUrl({
+    required String messageId,
+    required int chatId,
+    required String token,
+    required int videoId,
+  }) async {
+    try {
+      final response = await _api.sendRequest(Opcode.videoPlay, {
+        'messageId': int.tryParse(messageId) ?? 0,
+        'chatId': chatId,
+        'token': token,
+        'videoId': videoId,
+      });
+      if (!response.isOk) return null;
+      final data = response.payload;
+      if (data is! Map) return null;
+
+      const mp4Keys = ['MP4_1080', 'MP4_720', 'MP4_480', 'MP4_360', 'MP4_240'];
+      for (final key in mp4Keys) {
+        final url = data[key];
+        if (url is String && url.isNotEmpty) return url;
+      }
+      final hls = data['HLS'];
+      if (hls is String && hls.isNotEmpty) return hls;
+      final external = data['EXTERNAL'];
+      if (external is String && external.isNotEmpty) return external;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Uint8List?> downloadVideo(String baseUrl, String videoToken) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {
@@ -583,23 +620,6 @@ class MessagesModule {
       if (content is Uint8List) return content;
       if (content is List<int>) return Uint8List.fromList(content);
       return null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<String?> getVideoUrl(String baseUrl, String videoToken) async {
-    try {
-      final response = await _api.sendRequest(Opcode.fileDownload, {
-        'url': baseUrl,
-        'token': videoToken,
-      });
-
-      if (!response.isOk) return null;
-      final data = response.payload;
-      if (data is! Map) return null;
-
-      return data['content'] as String?;
     } catch (e) {
       return null;
     }
@@ -625,18 +645,27 @@ class MessagesModule {
     }
   }
 
-  Future<String?> getFileUrl(String baseUrl, String fileToken) async {
+  /// Запрашивает у сервера временный CDN-URL для скачивания файла (opcode 88).
+  ///
+  /// Формат подтверждён дампом: запрос `{messageId, chatId, fileId}`,
+  /// ответ `{url: "https://fd.oneme.ru/getfile?..."}`.
+  Future<String?> getFileUrl({
+    required String messageId,
+    required int chatId,
+    required int fileId,
+  }) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {
-        'url': baseUrl,
-        'token': fileToken,
+        'messageId': int.tryParse(messageId) ?? 0,
+        'chatId': chatId,
+        'fileId': fileId,
       });
 
       if (!response.isOk) return null;
       final data = response.payload;
       if (data is! Map) return null;
 
-      return data['content'] as String?;
+      return data['url'] as String?;
     } catch (e) {
       return null;
     }

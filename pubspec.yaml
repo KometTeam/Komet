@@ -57,6 +57,9 @@ dependencies:
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
   cached_network_image: ^3.4.1
+  path_provider: ^2.1.4
+  open_filex: ^4.5.0
+  video_player: ^2.9.2
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.2
   flutter_local_notifications: ^21.0.0
