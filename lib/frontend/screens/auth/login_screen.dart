@@ -13,6 +13,7 @@ import 'select_country_screen.dart';
 import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
 import '../profile/spoof_screen.dart';
+import '../profile/debug_menu_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../../backend/api.dart';
@@ -34,6 +35,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isTOSRead = false;
   String? _phoneError;
   Timer? _phoneErrorTimer;
+  int _logoTapCount = 0;
+  Timer? _logoTapTimer;
 
   @override
   void initState() {
@@ -74,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     _phoneErrorTimer?.cancel();
+    _logoTapTimer?.cancel();
     _phoneController.dispose();
     super.dispose();
   }
@@ -84,6 +88,22 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _isTOSRead = prefs.getBool('IsReadeTOS') ?? false;
       });
+    }
+  }
+
+  void _onLogoTap() {
+    _logoTapTimer?.cancel();
+    _logoTapTimer = Timer(const Duration(milliseconds: 600), () {
+      _logoTapCount = 0;
+    });
+    _logoTapCount++;
+    if (_logoTapCount >= 7) {
+      _logoTapTimer?.cancel();
+      _logoTapCount = 0;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const DebugMenuScreen()),
+      );
     }
   }
 
@@ -728,10 +748,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           Center(
                             child: Column(
                               children: [
-                                Image.asset(
-                                  'assets/komet.png',
-                                  height: 80,
-                                  color: cs.onSurface,
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _onLogoTap,
+                                  child: Image.asset(
+                                    'assets/komet.png',
+                                    height: 80,
+                                    color: cs.onSurface,
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
