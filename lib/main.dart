@@ -21,6 +21,7 @@ import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
+import 'core/config/app_media_cache.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'backend/modules/account.dart';
@@ -88,6 +89,7 @@ void main() async {
   final swipeBackFuture = AppSwipeBackDesktop.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
+  final cacheLimitFuture = AppMediaCacheLimit.load();
 
   await api.connect();
 
@@ -121,6 +123,7 @@ void main() async {
   AppSwipeBackDesktop.current.value = await swipeBackFuture;
   AppPranks.current.value = await pranksFuture;
   AppStories.current.value = await storiesFuture;
+  AppMediaCacheLimit.current.value = await cacheLimitFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,

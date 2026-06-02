@@ -1,11 +1,20 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 
-class VideoPlayerScreen extends StatefulWidget {
-  final String url;
+import '../../core/utils/media_cache.dart';
 
-  const VideoPlayerScreen({super.key, required this.url});
+class VideoPlayerScreen extends StatefulWidget {
+  final String cacheName;
+  final String? url;
+
+  const VideoPlayerScreen({
+    super.key,
+    required this.cacheName,
+    this.url,
+  });
 
   @override
   State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -14,6 +23,7 @@ class VideoPlayerScreen extends StatefulWidget {
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoPlayerController? _controller;
   bool _error = false;
+  double _progress = 0;
 
   @override
   void initState() {
@@ -22,7 +32,23 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Future<void> _init() async {
-    final controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    File? file = await MediaCache.existing(widget.cacheName);
+    if (file == null && widget.url != null) {
+      file = await MediaCache.getOrDownload(
+        widget.cacheName,
+        widget.url!,
+        onProgress: (p) {
+          if (mounted) setState(() => _progress = p);
+        },
+      );
+    }
+    if (!mounted) return;
+    if (file == null) {
+      setState(() => _error = true);
+      return;
+    }
+
+    final controller = VideoPlayerController.file(file);
     _controller = controller;
     try {
       await controller.initialize();
@@ -69,7 +95,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         aspectRatio: c.value.aspectRatio,
                         child: VideoPlayer(c),
                       )
-                    : const CircularProgressIndicator(color: Colors.white),
+                    : _buildLoading(),
           ),
           if (ready)
             Positioned.fill(
@@ -83,7 +109,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     child: Container(
                       width: 64,
                       height: 64,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Colors.black54,
                         shape: BoxShape.circle,
                       ),
@@ -115,6 +141,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLoading() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(
+          color: Colors.white,
+          value: _progress > 0 && _progress < 1 ? _progress : null,
+        ),
+        if (_progress > 0 && _progress < 1) ...[
+          const SizedBox(height: 12),
+          Text(
+            '${(_progress * 100).round()}%',
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+        ],
+      ],
     );
   }
 }

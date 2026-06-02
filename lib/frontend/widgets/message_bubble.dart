@@ -9,6 +9,8 @@ import '../../core/config/app_bubble_shape.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/file_download.dart';
+import '../../core/utils/media_cache.dart';
+import '../../core/utils/download_progress.dart';
 import 'custom_notification.dart';
 import '../../models/attachment.dart';
 import 'poll_view.dart';
@@ -1293,26 +1295,39 @@ class MessageBubble extends StatelessWidget {
   ) async {
     final videoId = (video as dynamic).videoId as int?;
     final token = (video as dynamic).videoToken as String?;
-    if (videoId == null || token == null) {
+    if (videoId == null) {
       showCustomNotification(context, 'Не удалось открыть видео');
       return;
     }
     Haptics.tap();
-    final url = await messagesModule.getVideoUrl(
-      messageId: message.id,
-      chatId: message.chatId,
-      token: token,
-      videoId: videoId,
-    );
+
+    final cacheName = 'video_$videoId.mp4';
+    final cached = await MediaCache.existing(cacheName) != null;
     if (!context.mounted) return;
-    if (url == null) {
-      showCustomNotification(context, 'Не удалось получить видео');
-      return;
+
+    String? url;
+    if (!cached) {
+      if (token == null) {
+        showCustomNotification(context, 'Не удалось открыть видео');
+        return;
+      }
+      url = await messagesModule.getVideoUrl(
+        messageId: message.id,
+        chatId: message.chatId,
+        token: token,
+        videoId: videoId,
+      );
+      if (!context.mounted) return;
+      if (url == null) {
+        showCustomNotification(context, 'Не удалось получить видео');
+        return;
+      }
     }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => VideoPlayerScreen(url: url),
+        builder: (_) => VideoPlayerScreen(cacheName: cacheName, url: url),
       ),
     );
   }
@@ -1321,6 +1336,8 @@ class MessageBubble extends StatelessWidget {
     final name = (file as dynamic).name as String? ?? 'File';
     final size = (file as dynamic).size as int? ?? 0;
     final sizeStr = _formatFileSize(size);
+    final fileId = (file as dynamic).fileId as int?;
+    final cacheName = '${fileId}_$name';
 
     return IntrinsicWidth(
       child: Padding(
@@ -1366,35 +1383,61 @@ class MessageBubble extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      sizeStr,
-                      style: TextStyle(
-                        color: ctx.dim,
-                        fontSize: 12,
-                        height: 1.2,
+                    ValueListenableBuilder<double?>(
+                      valueListenable: MediaDownloadProgress.notifier(cacheName),
+                      builder: (context, progress, _) => Text(
+                        progress != null
+                            ? '${(progress * 100).round()}% · $sizeStr'
+                            : sizeStr,
+                        style: TextStyle(
+                          color: ctx.dim,
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () => _downloadFile(ctx.context, file, name),
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: isMe
-                        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                        : ctx.cs.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Symbols.download,
-                    color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-                    size: 18,
-                  ),
-                ),
+              ValueListenableBuilder<double?>(
+                valueListenable: MediaDownloadProgress.notifier(cacheName),
+                builder: (context, progress, _) {
+                  final downloading = progress != null;
+                  return GestureDetector(
+                    onTap: downloading
+                        ? null
+                        : () => _downloadFile(ctx.context, file, name),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                            : ctx.cs.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: downloading
+                          ? Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                value: progress > 0 ? progress : null,
+                                color: isMe
+                                    ? ctx.cs.onPrimaryContainer
+                                    : ctx.cs.primary,
+                              ),
+                            )
+                          : Icon(
+                              Symbols.download,
+                              color: isMe
+                                  ? ctx.cs.onPrimaryContainer
+                                  : ctx.cs.primary,
+                              size: 18,
+                            ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -1698,20 +1741,20 @@ class MessageBubble extends StatelessWidget {
       return;
     }
     Haptics.tap();
-    showCustomNotification(context, 'Скачивание «$name»…');
 
-    final url = await messagesModule.getFileUrl(
-      messageId: message.id,
-      chatId: message.chatId,
-      fileId: fileId,
+    final cacheName = '${fileId}_$name';
+
+    MediaDownloadProgress.set(cacheName, 0);
+    final result = await openCachedFile(
+      cacheName,
+      () => messagesModule.getFileUrl(
+        messageId: message.id,
+        chatId: message.chatId,
+        fileId: fileId,
+      ),
+      onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
     );
-    if (!context.mounted) return;
-    if (url == null) {
-      showCustomNotification(context, 'Не удалось получить файл');
-      return;
-    }
-
-    final result = await downloadAndOpenFile(url, name);
+    MediaDownloadProgress.set(cacheName, null);
     if (!context.mounted) return;
     if (!result.ok) {
       showCustomNotification(

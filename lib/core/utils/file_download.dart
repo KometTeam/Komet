@@ -1,8 +1,6 @@
-import 'dart:io';
-
 import 'package:open_filex/open_filex.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import 'media_cache.dart';
 
 class FileDownloadResult {
   final bool ok;
@@ -12,28 +10,32 @@ class FileDownloadResult {
   const FileDownloadResult({required this.ok, this.path, this.error});
 }
 
-/// Скачивает файл по [url] во временную папку под именем [fileName]
-/// и открывает его системным приложением.
-Future<FileDownloadResult> downloadAndOpenFile(
-  String url,
-  String fileName,
-) async {
+/// Открывает файл из кэша, скачивая его при отсутствии.
+///
+/// [cacheName] — стабильное имя в кэше (например, `<fileId>_имя.ext`).
+/// [resolveUrl] вызывается лениво — только если файла ещё нет в кэше,
+/// чтобы не дёргать сервер за временной ссылкой повторно.
+Future<FileDownloadResult> openCachedFile(
+  String cacheName,
+  Future<String?> Function() resolveUrl, {
+  void Function(double progress)? onProgress,
+}) async {
   try {
-    final dir = await getTemporaryDirectory();
-    final safeName = _sanitize(fileName);
-    final file = File(p.join(dir.path, safeName));
+    var file = await MediaCache.existing(cacheName);
 
-    final client = HttpClient();
-    try {
-      final request = await client.getUrl(Uri.parse(url));
-      final response = await request.close();
-      if (response.statusCode != 200) {
-        return FileDownloadResult(ok: false, error: 'HTTP ${response.statusCode}');
+    if (file == null) {
+      final url = await resolveUrl();
+      if (url == null || url.isEmpty) {
+        return const FileDownloadResult(ok: false, error: 'нет ссылки');
       }
-      final sink = file.openWrite();
-      await response.pipe(sink);
-    } finally {
-      client.close();
+      file = await MediaCache.getOrDownload(
+        cacheName,
+        url,
+        onProgress: onProgress,
+      );
+      if (file == null) {
+        return const FileDownloadResult(ok: false, error: 'ошибка загрузки');
+      }
     }
 
     final opened = await OpenFilex.open(file.path);
@@ -45,9 +47,4 @@ Future<FileDownloadResult> downloadAndOpenFile(
   } catch (e) {
     return FileDownloadResult(ok: false, error: e.toString());
   }
-}
-
-String _sanitize(String name) {
-  final cleaned = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
-  return cleaned.isEmpty ? 'file' : cleaned;
 }
