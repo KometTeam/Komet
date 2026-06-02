@@ -674,6 +674,11 @@ class AccountModule {
     );
   }
 
+  Future<TwoFactorDetails> get2faStatus() async {
+    final trackId = await enter2faPanel();
+    return get2faDetails(trackId);
+  }
+
   Future<void> check2faPassword(String trackId, String password) async {
     _ensureOnline();
     final packet = await _api.sendRequest(Opcode.authLoginCheckPassword, {

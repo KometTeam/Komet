@@ -19,6 +19,7 @@ import '../auth/login_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
 import '../../../backend/api.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/config/app_stories.dart';
 import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
@@ -406,6 +407,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   bool _allowStoriesPullOverscrollTop() {
+    if (!AppStories.current.value) return false;
     if (_storiesDockedOpen ||
         _storiesRevealController.isAnimating ||
         _pullRatio > 0) {
@@ -462,7 +464,20 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
     });
     ChatsModule.chatsChanged.addListener(_onChatsChanged);
+    AppStories.current.addListener(_onStoriesEnabledChanged);
     _reloadChatsAndFolders();
+  }
+
+  void _onStoriesEnabledChanged() {
+    if (!mounted) return;
+    if (!AppStories.current.value) {
+      _storiesRevealController.stop();
+      _pullRatio = 0;
+      _storiesDockedOpen = false;
+      _storiesAnimClosing = false;
+      _storiesOverscrollRevealArmed = false;
+    }
+    setState(() {});
   }
 
   @override
@@ -977,6 +992,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     ChatsModule.chatsChanged.removeListener(_onChatsChanged);
+    AppStories.current.removeListener(_onStoriesEnabledChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _fabController.dispose();
@@ -1077,7 +1093,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                             children: [
                               Row(
                                 children: [
-                                  if (_pullRatio < 0.8)
+                                  if (AppStories.current.value &&
+                                      _pullRatio < 0.8)
                                     Opacity(
                                       opacity: 1.0 - _pullRatio,
                                       child: Container(
@@ -1156,30 +1173,31 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ],
                           ),
                         ),
-                        SizedBox(
-                          height: 96 * _pullRatio,
-                          child: Opacity(
-                            opacity: _pullRatio,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
+                        if (AppStories.current.value)
+                          SizedBox(
+                            height: 96 * _pullRatio,
+                            child: Opacity(
+                              opacity: _pullRatio,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                children: [
+                                  _buildStoryItem(
+                                    'Даша',
+                                    'https://i.pravatar.cc/150?u=dasha',
+                                    true,
+                                  ),
+                                  _buildStoryItem(
+                                    'Мастика',
+                                    'https://i.pravatar.cc/150?u=mastika',
+                                    false,
+                                  ),
+                                ],
                               ),
-                              children: [
-                                _buildStoryItem(
-                                  'Даша',
-                                  'https://i.pravatar.cc/150?u=dasha',
-                                  true,
-                                ),
-                                _buildStoryItem(
-                                  'Мастика',
-                                  'https://i.pravatar.cc/150?u=mastika',
-                                  false,
-                                ),
-                              ],
                             ),
                           ),
-                        ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 3, 20, 4),
                           child: Container(

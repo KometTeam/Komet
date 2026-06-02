@@ -1,8 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SpoofingService {
-  static const String hardcodedAppVersion = '26.14.1';
-  static const int hardcodedBuildNumber = 6606;
+  static const String hardcodedAppVersion = '26.17.1';
+  static const int hardcodedBuildNumber = 6712;
 
   static Future<Map<String, dynamic>?> getSpoofedSessionData() async {
     final prefs = await SharedPreferences.getInstance();

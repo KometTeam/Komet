@@ -20,6 +20,7 @@ import 'core/config/app_fonts.dart';
 import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
+import 'core/config/app_stories.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'backend/modules/account.dart';
@@ -84,6 +85,7 @@ void main() async {
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
   final pranksFuture = AppPranks.load();
+  final storiesFuture = AppStories.load();
 
   await api.connect();
 
@@ -116,6 +118,7 @@ void main() async {
   AppMessageActionsStyle.current.value = await messageActionsFuture;
   AppSwipeBackDesktop.current.value = await swipeBackFuture;
   AppPranks.current.value = await pranksFuture;
+  AppStories.current.value = await storiesFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,

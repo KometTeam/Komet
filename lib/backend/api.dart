@@ -171,7 +171,7 @@ class Api {
     String architecture = 'arm64';
     String appVersion = SpoofingService.hardcodedAppVersion;
     int buildNumber = SpoofingService.hardcodedBuildNumber;
-    String screen = '1920x1080';
+    String screen = '420dpi 420dpi 1080x2340';
 
     tz.initializeTimeZones();
     final timeZoneName = await FlutterTimezone.getLocalTimezone();
@@ -237,25 +237,25 @@ class Api {
 
     _userAgent = {
       'deviceType': deviceType,
-      'locale': locale,
-      'deviceLocale': deviceLocale,
-      'osVersion': osVersion,
-      'deviceName': deviceName,
       'appVersion': appVersion,
-      'screen': screen,
+      'osVersion': osVersion,
       'timezone': timezone,
+      'screen': screen,
       'pushDeviceType': 'GCM',
       'arch': architecture,
+      'locale': locale,
       'buildNumber': buildNumber,
+      'deviceName': deviceName,
+      'deviceLocale': deviceLocale,
     };
 
     _deviceId = deviceId;
 
     final payload = <dynamic, dynamic>{
       'mt_instanceid': await DeviceIdentity.instanceId(),
+      'userAgent': _userAgent,
       'clientSessionId': DeviceIdentity.clientSessionId,
       'deviceId': deviceId,
-      'userAgent': _userAgent,
     };
 
     return sendRequest(Opcode.sessionInit, payload);

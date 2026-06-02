@@ -24,10 +24,16 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
 
   Future<void> _check2faStatus() async {
     try {
-      final profile = await AppDatabase.loadActiveProfile();
+      bool is2faEnabled;
+      try {
+        is2faEnabled = (await accountModule.get2faStatus()).enabled;
+      } catch (_) {
+        final profile = await AppDatabase.loadActiveProfile();
+        is2faEnabled = profile?.profileOptions?.contains(2) ?? false;
+      }
       if (mounted) {
         setState(() {
-          _is2faEnabled = profile?.profileOptions?.contains(2) ?? false;
+          _is2faEnabled = is2faEnabled;
           _isLoading = false;
         });
       }

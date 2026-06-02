@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
+import '../../../core/config/app_stories.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/logger.dart';
@@ -443,6 +444,68 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                               value: pranksOn,
                               onChanged: (v) {
                                 AppPranks.save(v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppStories.current,
+                  builder: (context, storiesOn, _) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 17,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.amp_stories,
+                              color: cs.onSurfaceVariant,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Истории',
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Отображение ленты историй в списке чатов',
+                                    style: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: storiesOn,
+                              onChanged: (v) {
+                                AppStories.save(v);
                               },
                             ),
                           ],
