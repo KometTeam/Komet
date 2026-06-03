@@ -3,6 +3,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/utils/haptics.dart';
+import 'app_icon_screen.dart';
 import 'appearance_screen.dart';
 import 'font_settings_screen.dart';
 import 'message_actions_screen.dart';
@@ -50,6 +51,12 @@ class CustomizationScreen extends StatelessWidget {
       subtitle: 'Радиальное или список — для долгого нажатия на сообщение',
       builder: _buildMessageActions,
     ),
+    _CustomizationCategory(
+      icon: Symbols.apps,
+      title: 'Иконка приложения',
+      subtitle: 'Default или Minimal — иконка на главном экране',
+      builder: _buildAppIcon,
+    ),
   ];
 
   static Widget _buildAppearance(BuildContext context) =>
@@ -63,6 +70,8 @@ class CustomizationScreen extends StatelessWidget {
 
   static Widget _buildMessageActions(BuildContext context) =>
       const MessageActionsScreen();
+
+  static Widget _buildAppIcon(BuildContext context) => const AppIconScreen();
 
   @override
   Widget build(BuildContext context) {
