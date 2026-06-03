@@ -14,6 +14,7 @@ import '../../../core/utils/media_cache.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
+import '../calls/call_screen.dart';
 
 class DebugMenuScreen extends StatefulWidget {
   const DebugMenuScreen({super.key});
@@ -807,6 +808,91 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
+                        'Экран звонка',
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Превью экранов звонков',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DebugCallButton(
+                              label: 'Входящий',
+                              icon: Symbols.call_received,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CallScreen(
+                                    name: 'Кирил Г.',
+                                    initialState: CallScreenState.incoming,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _DebugCallButton(
+                              label: 'Исходящий',
+                              icon: Symbols.call_made,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CallScreen(
+                                    name: 'Кирил Г.',
+                                    initialState: CallScreenState.outgoing,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _DebugCallButton(
+                              label: 'Активный',
+                              icon: Symbols.phone_in_talk,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CallScreen(
+                                    name: 'Кирил Г.',
+                                    initialState: CallScreenState.active,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                         'Поиск по ID',
                         style: TextStyle(
                           color: cs.onSurface,
@@ -1207,6 +1293,49 @@ class _ErrorChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DebugCallButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _DebugCallButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: cs.onSurfaceVariant, size: 22, fill: 1),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

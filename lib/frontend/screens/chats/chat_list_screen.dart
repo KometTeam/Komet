@@ -1203,7 +1203,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 4),
+                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
                           child: Container(
                             height: 44,
                             decoration: BoxDecoration(
@@ -1356,7 +1356,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 14)),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
           if (chats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
@@ -1866,9 +1866,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               onPressed: _toggleFab,
                               backgroundColor: cs.primaryContainer,
                               elevation: 4,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
+                              shape: const CircleBorder(),
                               child: Transform.rotate(
                                 angle: val * (pi / 4),
                                 child: Icon(
@@ -2074,7 +2072,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(50),
         ),
         child: Text(
           title,
@@ -2372,6 +2370,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 icon,
                 color: isSelected ? cs.onPrimary : cs.onSurface,
                 size: 20,
+                fill: 1,
               ),
               AnimatedContainer(
                 duration: animDur,
