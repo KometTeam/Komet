@@ -33,13 +33,9 @@ void showLoginSuccess(BuildContext context, {ImageProvider? avatar}) {
     PageRouteBuilder(
       opaque: false,
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 240),
+      transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
       pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
-      transitionsBuilder: (_, animation, _, child) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
     ),
   );
 }
