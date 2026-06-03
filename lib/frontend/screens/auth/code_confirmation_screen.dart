@@ -193,7 +193,16 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
 
       if (!mounted) return;
 
-      showLoginSuccess(context, avatar: avatar);
+      Navigator.pushAndRemoveUntil(
+        context,
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 240),
+          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       _showError(e.toString());

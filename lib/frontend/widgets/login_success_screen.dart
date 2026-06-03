@@ -20,29 +20,8 @@ Future<ImageProvider?> precacheLoginAvatar(
   }
 }
 
-void showLoginSuccess(BuildContext context, {ImageProvider? avatar}) {
-  final navigator = Navigator.of(context);
-  navigator.pushAndRemoveUntil(
-    PageRouteBuilder(
-      transitionDuration: Duration.zero,
-      pageBuilder: (_, _, _) => const AdaptiveShell(),
-    ),
-    (route) => false,
-  );
-  navigator.push(
-    PageRouteBuilder(
-      opaque: false,
-      barrierColor: Colors.transparent,
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
-    ),
-  );
-}
-
 class LoginSuccessScreen extends StatefulWidget {
   final ImageProvider? avatar;
-
   final bool preview;
 
   const LoginSuccessScreen({super.key, this.avatar, this.preview = false});
@@ -52,7 +31,7 @@ class LoginSuccessScreen extends StatefulWidget {
 }
 
 class _LoginSuccessScreenState extends State<LoginSuccessScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   static const Duration _duration = Duration(milliseconds: 1900);
 
   static const List<String> _greetings = [
@@ -74,10 +53,6 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   late final Animation<double> _subtitleOpacity;
   late final Animation<double> _subtitleOffset;
   late final Animation<double> _fadeOut;
-
-  late final AnimationController _exitController;
-  late final Animation<double> _bgFadeOut;
-  late final Animation<double> _greetingFadeOut;
 
   bool _navigated = false;
 
@@ -132,21 +107,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
       curve: const Interval(0.88, 1.0, curve: Curves.easeInCubic),
     );
 
-    _exitController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    _bgFadeOut = CurvedAnimation(
-      parent: _exitController,
-      curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
-    );
-    _greetingFadeOut = CurvedAnimation(
-      parent: _exitController,
-      curve: const Interval(0.55, 1.0, curve: Curves.easeInCubic),
-    );
-
     _controller.addStatusListener(_onStatus);
-    _exitController.addStatusListener(_onExitStatus);
     _controller.forward();
     Haptics.success();
   }
@@ -156,15 +117,25 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
       _navigated = true;
       if (widget.preview) {
         Navigator.of(context).pop();
-      } else {
-        _exitController.forward();
+        return;
       }
-    }
-  }
-
-  void _onExitStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed && mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pushAndRemoveUntil(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 360),
+          reverseTransitionDuration: const Duration(milliseconds: 200),
+          pageBuilder: (_, __, ___) => const AdaptiveShell(),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+              child: child,
+            );
+          },
+        ),
+        (route) => false,
+      );
     }
   }
 
@@ -172,8 +143,6 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   void dispose() {
     _controller.removeStatusListener(_onStatus);
     _controller.dispose();
-    _exitController.removeStatusListener(_onExitStatus);
-    _exitController.dispose();
     super.dispose();
   }
 
@@ -181,24 +150,15 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: cs.surface,
       body: AnimatedBuilder(
-        animation: Listenable.merge([_controller, _exitController]),
+        animation: _controller,
         builder: (context, _) {
-          final celebrationOpacity = 1.0 - _fadeOut.value;
-          final bgOpacity = 1.0 - _bgFadeOut.value;
-          final greetingOpacity = 1.0 - _greetingFadeOut.value;
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: Opacity(
-                  opacity: bgOpacity,
-                  child: ColoredBox(color: cs.surface),
-                ),
-              ),
-              Positioned.fill(
-                child: Opacity(
-                  opacity: celebrationOpacity * bgOpacity,
+          return Opacity(
+            opacity: 1.0 - _fadeOut.value,
+            child: Stack(
+              children: [
+                Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
@@ -214,14 +174,11 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
                     ),
                   ),
                 ),
-              ),
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Opacity(
-                      opacity: celebrationOpacity,
-                      child: SizedBox(
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
                         width: 220,
                         height: 220,
                         child: Stack(
@@ -234,21 +191,15 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 28),
-                    Opacity(
-                      opacity: celebrationOpacity,
-                      child: _buildTitle(cs),
-                    ),
-                    const SizedBox(height: 8),
-                    Opacity(
-                      opacity: greetingOpacity,
-                      child: _buildSubtitle(cs),
-                    ),
-                  ],
+                      const SizedBox(height: 28),
+                      _buildTitle(cs),
+                      const SizedBox(height: 8),
+                      _buildSubtitle(cs),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),

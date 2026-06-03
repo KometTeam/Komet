@@ -8,6 +8,7 @@ import '../../../core/config/app_pranks.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
+import '../../../core/storage/app_database.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_cache.dart';
@@ -736,12 +737,19 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                   borderRadius: BorderRadius.circular(20),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(20),
-                    onTap: () {
+                    onTap: () async {
+                      final profile = await AppDatabase.loadActiveProfile();
+                      if (!context.mounted) return;
+                      final avatar = await precacheLoginAvatar(
+                        context,
+                        profile?.baseUrl,
+                      );
+                      if (!context.mounted) return;
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) =>
-                              const LoginSuccessScreen(preview: true),
+                              LoginSuccessScreen(preview: true, avatar: avatar),
                         ),
                       );
                     },
