@@ -51,18 +51,7 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
 
       if (!mounted) return;
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) => FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
-        ),
-        (route) => false,
-      );
+      showLoginSuccess(context, avatar: avatar);
     } catch (e) {
       if (!mounted) return;
 
