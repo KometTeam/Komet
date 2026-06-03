@@ -8,8 +8,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/image_utils.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
 
 const int _maxAvatarBytes = 8 * 1024 * 1024;
@@ -130,30 +132,33 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       if (_avatar != null) {
         final url = await ChatsModule.requestChatPhotoUploadUrl(api);
         if (url != null) {
-          final bytes = await _avatar!.readAsBytes();
-          final token = await fileUploader.uploadImage(
-            Uri.parse(url),
-            bytes,
-            filename: _avatar!.uri.pathSegments.last,
-          );
-          if (token != null) {
-            await ChatsModule.setChatPhoto(api, chatId: chat.id, photoToken: token);
-          } else if (mounted) {
-            showCustomNotification(context, 'Не удалось загрузить аватарку');
+          final bytes = await compressAvatar(await _avatar!.readAsBytes());
+          if (bytes == null) {
+            if (mounted) showCustomNotification(context, 'Не удалось обработать аватарку');
+          } else {
+            final token = await fileUploader.uploadImage(
+              Uri.parse(url),
+              bytes,
+              filename: 'avatar.jpg',
+            );
+            if (token != null) {
+              await ChatsModule.setChatPhoto(api, chatId: chat.id, photoToken: token);
+            } else if (mounted) {
+              showCustomNotification(context, 'Не удалось загрузить аватарку');
+            }
           }
         }
       }
 
       if (!mounted) return;
       navigator.pop();
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => ChatScreen(
-            chatId: chat.id,
-            name: chat.title ?? title,
-            imageUrl: chat.iconUrl ?? '',
-            chatType: chat.type,
-          ),
+      pushSwipeable(
+        context,
+        (_) => ChatScreen(
+          chatId: chat.id,
+          name: chat.title ?? title,
+          imageUrl: chat.iconUrl ?? '',
+          chatType: chat.type,
         ),
       );
     } catch (e) {

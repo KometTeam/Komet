@@ -1,10 +1,14 @@
 package ru.komet.app
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -18,9 +22,30 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MainActivity : FlutterActivity() {
 
     private val channelName = "ru.komet.app/vpn_bypass"
+    private val iconAliases = listOf("DefaultIcon", "MinimalIcon")
 
     private companion object {
         const val LOG_TAG = "VpnBypass"
+    }
+
+    private fun applyIcon(name: String) {
+        val pm = packageManager
+        for (alias in iconAliases) {
+            val component = ComponentName(packageName, "$packageName.$alias")
+            val state = if (alias == name) {
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            } else {
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            }
+            pm.setComponentEnabledSetting(
+                component,
+                state,
+                PackageManager.DONT_KILL_APP,
+            )
+        }
+        Handler(Looper.getMainLooper()).postDelayed({
+            finishAndRemoveTask()
+        }, 250L)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -33,6 +58,70 @@ class MainActivity : FlutterActivity() {
                 "detectInterfaces" -> result.success(detectInterfaces())
                 "bindToNonVpnNetwork" -> bindToNonVpnNetwork(result)
                 "unbindNetwork" -> result.success(unbindNetwork())
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/app_icon",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setAppIcon" -> {
+                    val name = call.argument<String>("name")
+                    if (name == null || !iconAliases.contains(name)) {
+                        result.error("INVALID_ICON", "Unknown icon: $name", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        applyIcon(name)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("APPLY_FAILED", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/upload_service",
+        ).setMethodCallHandler { call, result ->
+            val ctx = this
+            when (call.method) {
+                "start" -> {
+                    val filename = call.argument<String>("filename") ?: "Файл"
+                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
+                        action = UploadForegroundService.ACTION_START
+                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    result.success(null)
+                }
+                "update" -> {
+                    val filename = call.argument<String>("filename") ?: "Файл"
+                    val progress = call.argument<Int>("progress") ?: 0
+                    val speed    = call.argument<Long>("speed") ?: 0L
+                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
+                        action = UploadForegroundService.ACTION_UPDATE
+                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
+                        putExtra(UploadForegroundService.EXTRA_PROGRESS, progress)
+                        putExtra(UploadForegroundService.EXTRA_SPEED, speed)
+                    }
+                    startService(intent)
+                    result.success(null)
+                }
+                "stop" -> {
+                    startService(Intent(ctx, UploadForegroundService::class.java).apply {
+                        action = UploadForegroundService.ACTION_STOP
+                    })
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

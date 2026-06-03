@@ -47,12 +47,18 @@ class _SecurityScreenState extends State<SecurityScreen>
         accountModule.getBlockedContacts(),
         AppDatabase.loadActiveProfile(),
       ]);
+      bool is2faEnabled;
+      try {
+        is2faEnabled = (await accountModule.get2faStatus()).enabled;
+      } catch (_) {
+        final profile = results[2] as ProfileData?;
+        is2faEnabled = profile?.profileOptions?.contains(2) ?? false;
+      }
       if (mounted) {
         setState(() {
           _privacyConfig = results[0] as PrivacyConfig;
           _blockedContacts = results[1] as List<BlockedContact>;
-          final profile = results[2] as ProfileData?;
-          _is2faEnabled = profile?.profileOptions?.contains(2) ?? false;
+          _is2faEnabled = is2faEnabled;
           _isLoading = false;
         });
       }

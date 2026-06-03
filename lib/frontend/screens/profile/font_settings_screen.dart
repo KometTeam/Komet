@@ -378,7 +378,9 @@ class _FontSizeControl extends StatelessWidget {
                     value: AppFonts.clampScale(scale),
                     min: AppFonts.minScale,
                     max: AppFonts.maxScale,
-                    divisions: 10,
+                    divisions:
+                        ((AppFonts.maxScale - AppFonts.minScale) / 0.05)
+                            .round(),
                     onChanged: onChanged,
                     onChangeEnd: onChangeEnd,
                   ),

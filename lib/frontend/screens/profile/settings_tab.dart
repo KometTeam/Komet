@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../../../backend/modules/chats.dart';
+import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/haptics.dart';
@@ -19,6 +21,7 @@ import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
 import 'info_screen.dart';
+import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
 
@@ -30,8 +33,6 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  static const bool _showLogoutButton = false;
-
   ProfileData? _profile;
   bool _isPhoneVisible = false;
   String? _appVersionLabel;
@@ -164,7 +165,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Сессия будет сброшена. Локальный кеш сохранится — войдёшь снова в этот же аккаунт.',
+                  'Данные аккаунта будут удалены с этого устройства.',
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
@@ -202,8 +203,12 @@ class _SettingsTabState extends State<SettingsTab> {
     } catch (_) {}
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
-      await TokenStorage.deleteToken(accountId);
+      await TokenStorage.deleteAccount(accountId);
+      await AppDatabase.deleteAccount(accountId);
     }
+    ContactCache.clear();
+    TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
     try {
       await api.connect();
     } catch (_) {}
@@ -307,9 +312,17 @@ child: _buildSection(
                   context,
                   cs,
                   items: [
-                    const _SettingsItem(
+                    _SettingsItem(
                       icon: Symbols.notifications_active,
-                      label: 'Уведомления и звук',
+                      label: 'Уведомления',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _SettingsItem(
                       icon: Symbols.vibration,
@@ -442,6 +455,23 @@ child: _buildSection(
                       ),
               ),
             ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _buildSection(
+                  context,
+                  cs,
+                  items: [
+                    _SettingsItem(
+                      icon: Symbols.logout,
+                      label: 'Выйти из аккаунта',
+                      tintColor: cs.error,
+                      onTap: _confirmLogout,
+                    ),
+                  ],
+                ),
+              ),
+            ),
             if (_appVersionLabel != null)
               SliverToBoxAdapter(
                 child: Padding(
@@ -552,51 +582,31 @@ child: _buildSection(
             ),
           ),
           const SizedBox(height: 4),
-          Stack(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: () => setState(() => _isPhoneVisible = !_isPhoneVisible),
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: _PhoneSpoiler(
-                        text: phone,
-                        isVisible: _isPhoneVisible,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _isPhoneVisible ? Symbols.visibility : Symbols.visibility_off,
-                    size: 14,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                  ),
-                ],
-              ),
-              if (_showLogoutButton)
-                Positioned.fill(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      tooltip: 'Выйти',
-                      icon: Icon(
-                        Symbols.logout,
-                        color: cs.error,
-                        size: 22,
-                        weight: 400,
-                      ),
-                      onPressed: _confirmLogout,
+              GestureDetector(
+                onTap: () => setState(() => _isPhoneVisible = !_isPhoneVisible),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: _PhoneSpoiler(
+                    text: phone,
+                    isVisible: _isPhoneVisible,
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                _isPhoneVisible ? Symbols.visibility : Symbols.visibility_off,
+                size: 14,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
             ],
           ),
         ],
@@ -662,7 +672,7 @@ child: _buildSection(
                 children: [
                   Icon(
                     item.icon,
-                    color: cs.onSurfaceVariant,
+                    color: item.tintColor ?? cs.onSurfaceVariant,
                     size: 22,
                     weight: 400,
                   ),
@@ -671,7 +681,7 @@ child: _buildSection(
                     child: Text(
                       item.label,
                       style: TextStyle(
-                        color: cs.onSurface,
+                        color: item.tintColor ?? cs.onSurface,
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
@@ -712,6 +722,7 @@ class _SettingsItem {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final Color? tintColor;
 
   /// When [onToggle] is set the row renders a trailing switch instead of a
   /// chevron, and [toggleValue] reflects its current state.
@@ -722,6 +733,7 @@ class _SettingsItem {
     required this.icon,
     required this.label,
     this.onTap,
+    this.tintColor,
     this.toggleValue,
     this.onToggle,
   });

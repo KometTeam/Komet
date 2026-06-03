@@ -1,0 +1,61 @@
+import 'package:flutter/foundation.dart';
+
+import '../api.dart';
+import '../../core/protocol/opcode_map.dart';
+import '../../models/poll.dart';
+
+class PollsModule extends ChangeNotifier {
+  final Api _api;
+
+  PollsModule(this._api);
+
+  final Map<int, Poll> _cache = {};
+  final Set<int> _inFlight = {};
+
+  Poll? get(int pollId) => _cache[pollId];
+
+  Future<void> fetch(
+    int chatId,
+    String messageId,
+    int pollId, {
+    bool force = false,
+  }) async {
+    if (pollId == 0) return;
+    if (!force && (_cache.containsKey(pollId) || _inFlight.contains(pollId))) {
+      return;
+    }
+    _inFlight.add(pollId);
+    try {
+      final mid = int.tryParse(messageId) ?? 0;
+      final response = await _api.sendRequest(Opcode.getPollUpdates, {
+        'chatId': chatId,
+        'polls': [
+          {'messageId': mid, 'pollId': pollId},
+        ],
+      });
+      if (!response.isOk) return;
+
+      final data = response.payload;
+      if (data is! Map) return;
+
+      final polls = data['polls'];
+      if (polls is! List) return;
+
+      var changed = false;
+      for (final p in polls) {
+        if (p is Map) {
+          final poll = Poll.fromServerMap(p);
+          if (poll.pollId != 0) {
+            _cache[poll.pollId] = poll;
+            changed = true;
+          }
+        }
+      }
+      if (changed) notifyListeners();
+    } catch (_) {
+      // тихо игнорируем — опрос просто не отобразится
+    } finally {
+      _inFlight.remove(pollId);
+    }
+  }
+}

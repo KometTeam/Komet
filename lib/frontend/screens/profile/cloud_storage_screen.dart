@@ -1,5 +1,20 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../../backend/modules/chats.dart';
+import '../../../backend/modules/cloud_storage.dart';
+import '../../../backend/modules/upload_manager.dart';
+import '../../../core/storage/app_database.dart';
+import '../../../main.dart';
+import '../../widgets/custom_notification.dart';
+
+enum _EnvState { loading, notConfigured, ready }
 
 class CloudStorageScreen extends StatefulWidget {
   const CloudStorageScreen({super.key});
@@ -16,19 +31,245 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   static const _cornerSidePadding = 16.0;
   static const _cornerBottomPadding = 24.0;
   static const _cornerSlideAmount = 28.0;
+  static const _cardViewportFraction = 0.42;
 
   late final _UploadModeController _mode;
+  late final PageController _pageController;
+  final _currentFilePage = ValueNotifier<int>(0);
+
+  _EnvState _envState = _EnvState.loading;
+  bool _isCreatingEnv = false;
+  int? _envGroupId;
+  int? _accountId;
+  List<CloudFile> _files = [];
+  bool _isUploading = false;
+  final ValueNotifier<double> _uploadProgress = ValueNotifier(0);
+  bool _animateNewCard = false;
 
   @override
   void initState() {
     super.initState();
     _mode = _UploadModeController(this);
+    _pageController = PageController(viewportFraction: _cardViewportFraction);
+    _pageController.addListener(_onPageScroll);
+    _checkEnv();
+    _bindUploadManager();
+  }
+
+  void _onPageScroll() {
+    _currentFilePage.value = _pageController.page?.round() ?? 0;
+  }
+
+  void _bindUploadManager() {
+    final mgr = UploadManager.instance;
+    if (mgr.isActive) {
+      setState(() => _isUploading = true);
+      _mode.open();
+    }
+    mgr.onProgress = (progress, _) {
+      if (!mounted) return;
+      if (!_isUploading) setState(() => _isUploading = true);
+      _uploadProgress.value = progress;
+    };
+    mgr.onDone = (file) {
+      if (!mounted) return;
+      _uploadProgress.value = 0;
+      setState(() => _isUploading = false);
+      _prependFile(file);
+    };
+    mgr.onError = (msg) {
+      if (!mounted) return;
+      _uploadProgress.value = 0;
+      setState(() => _isUploading = false);
+      showCustomNotification(context, 'Ошибка: $msg');
+    };
   }
 
   @override
   void dispose() {
+    final mgr = UploadManager.instance;
+    mgr.onProgress = null;
+    mgr.onDone = null;
+    mgr.onError = null;
     _mode.dispose();
+    _pageController.dispose();
+    _currentFilePage.dispose();
+    _uploadProgress.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkEnv() async {
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile == null) {
+      if (mounted) setState(() => _envState = _EnvState.notConfigured);
+      return;
+    }
+
+    final cachedId = await CloudStorageModule.getCachedEnvGroupId(profile.id);
+    if (cachedId != null) {
+      final rows = await ChatsModule.getChat(profile.id, cachedId);
+      if (rows.isNotEmpty && CloudStorageModule.isCloudStorageGroup(rows.first)) {
+        if (!mounted) return;
+        setState(() {
+          _envState = _EnvState.ready;
+          _envGroupId = cachedId;
+          _accountId = profile.id;
+        });
+        _loadFiles(profile.id, cachedId);
+        _handleOrphansBackground(profile.id);
+        return;
+      }
+      await CloudStorageModule.clearEnvGroupCache(profile.id);
+    }
+
+    final chats = await ChatsModule.getChats(profile.id);
+    CachedChat? envGroup = CloudStorageModule.findEnvGroup(chats);
+    final orphans = CloudStorageModule.findOrphanGroups(chats);
+
+    if (envGroup == null && orphans.isNotEmpty) {
+      final repaired = await CloudStorageModule.repairOrphan(api, orphans.first);
+      if (repaired != null) {
+        envGroup = repaired;
+        await CloudStorageModule.cacheEnvGroupId(profile.id, repaired.id);
+      }
+      for (final orphan in orphans.skip(1)) {
+        _deleteOrLeave(profile.id, orphan);
+      }
+    } else if (envGroup != null) {
+      await CloudStorageModule.cacheEnvGroupId(profile.id, envGroup.id);
+      for (final orphan in orphans) {
+        _deleteOrLeave(profile.id, orphan);
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _envState = envGroup != null ? _EnvState.ready : _EnvState.notConfigured;
+      _envGroupId = envGroup?.id;
+      _accountId = profile.id;
+    });
+    if (envGroup != null) _loadFiles(profile.id, envGroup.id);
+  }
+
+  void _handleOrphansBackground(int accountId) async {
+    final chats = await ChatsModule.getChats(accountId);
+    for (final orphan in CloudStorageModule.findOrphanGroups(chats)) {
+      _deleteOrLeave(accountId, orphan);
+    }
+  }
+
+  void _deleteOrLeave(int accountId, CachedChat chat) async {
+    final isAdmin = chat.owner == accountId || chat.admins.contains(accountId);
+    if (isAdmin) {
+      await ChatsModule.deleteChat(api, chatId: chat.id, lastEventTime: chat.lastEventTime, forAll: true);
+    } else {
+      await ChatsModule.leaveChat(api, chatId: chat.id);
+    }
+  }
+
+  Future<void> _loadFiles(int accountId, int chatId) async {
+    final files = await CloudStorageModule.fetchFiles(messagesModule, accountId, chatId);
+    if (!mounted) return;
+    setState(() => _files = files.reversed.toList());
+  }
+
+  void _prependFile(CloudFile file) {
+    setState(() {
+      _files = [file, ..._files];
+      _animateNewCard = true;
+    });
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(0,
+          duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+    }
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => _animateNewCard = false);
+    });
+  }
+
+  Future<void> _setupEnv() async {
+    final profile = await AppDatabase.loadActiveProfile();
+    if (!mounted) return;
+    if (profile == null) {
+      showCustomNotification(context, 'Нет активного профиля');
+      return;
+    }
+    setState(() => _isCreatingEnv = true);
+    final result = await CloudStorageModule.setupEnv(api);
+    if (!mounted) return;
+    if (result == null) {
+      setState(() => _isCreatingEnv = false);
+      showCustomNotification(context, 'Не удалось создать среду');
+      return;
+    }
+    await CloudStorageModule.cacheEnvGroupId(profile.id, result.id);
+    setState(() {
+      _isCreatingEnv = false;
+      _envState = _EnvState.ready;
+      _envGroupId = result.id;
+      _accountId = profile.id;
+    });
+    _loadFiles(profile.id, result.id);
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    final chatId = _envGroupId;
+    final accountId = _accountId;
+    if (chatId == null || accountId == null) return;
+
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.first;
+    if (picked.path == null) return;
+
+    _uploadProgress.value = 0;
+    setState(() => _isUploading = true);
+
+    await UploadManager.instance.start(
+      chatId: chatId,
+      accountId: accountId,
+      file: File(picked.path!),
+      filename: picked.name,
+      totalSize: picked.size,
+    );
+  }
+
+  void _showSendByIdSheet() {
+    final chatId = _envGroupId;
+    final accountId = _accountId;
+    if (chatId == null || accountId == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SendByIdSheet(
+        onSend: (id) async {
+          final ok = await messagesModule.sendFileMessage(chatId, id);
+          if (!ok) return false;
+          final newest = await CloudStorageModule.fetchLatestFile(
+            messagesModule, accountId, chatId, expectedFileId: id,
+          );
+          if (mounted) {
+            if (newest != null) {
+              _prependFile(newest);
+            } else {
+              _loadFiles(accountId, chatId);
+            }
+          }
+          return true;
+        },
+      ),
+    );
+  }
+
+  void _onCardTap(CloudFile file) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FileDetailsSheet(file: file),
+    );
   }
 
   void _onBack() {
@@ -57,31 +298,73 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final h = constraints.maxHeight;
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate: (d) => _mode.handleDragUpdate(d, h),
-            onVerticalDragEnd: _mode.handleDragEnd,
-            child: AnimatedBuilder(
-              animation: _mode.anim,
-              builder: (context, _) {
-                final t = Curves.easeOutCubic.transform(_mode.anim.value);
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _buildHint(cs, t),
-                    _buildUploadingCenterHint(cs, t),
-                    _buildEmptyState(cs, t, h),
-                    ..._buildCornerActions(cs, t),
-                  ],
-                );
-              },
+      body: switch (_envState) {
+        _EnvState.loading => const Center(child: CircularProgressIndicator()),
+        _EnvState.notConfigured => _buildNotConfigured(cs),
+        _EnvState.ready => _buildReady(cs),
+      },
+    );
+  }
+
+  Widget _buildNotConfigured(ColorScheme cs) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Среда для облачного хранилища не настроена',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w600),
             ),
-          );
-        },
+            const SizedBox(height: 6),
+            Text('Начнем? Это быстро.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _isCreatingEnv ? null : _setupEnv,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _isCreatingEnv
+                  ? SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
+                    )
+                  : const Text('Начать', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildReady(ColorScheme cs) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: (d) => _mode.handleDragUpdate(d, h),
+          onVerticalDragEnd: _mode.handleDragEnd,
+          child: AnimatedBuilder(
+            animation: _mode.anim,
+            builder: (context, _) {
+              final t = Curves.easeOutCubic.transform(_mode.anim.value);
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildHint(cs, t),
+                  _buildUploadingCenterHint(cs, t, constraints.maxWidth),
+                  _buildEmptyState(cs, t, h),
+                  ..._buildCornerActions(cs, t),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -99,16 +382,86 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     );
   }
 
-  Widget _buildUploadingCenterHint(ColorScheme cs, double t) {
+  Widget _buildUploadingCenterHint(ColorScheme cs, double t, double availableWidth) {
+    final cardSide = availableWidth * _cardViewportFraction;
     return Center(
       child: Opacity(
         opacity: t,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
-          child: Text(
-            'Начните загрузку для прогресс-бара',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_files.isNotEmpty) ...[
+                SizedBox(
+                  height: cardSide,
+                  width: availableWidth,
+                  child: ScrollConfiguration(
+                    behavior: _MouseDragScrollBehavior(),
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: _files.length,
+                      itemBuilder: (_, i) {
+                        final card = _CloudFileCard(
+                          file: _files[i],
+                          onTap: () => _onCardTap(_files[i]),
+                        );
+                        final padded = Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: card,
+                        );
+                        if (i == 0 && _animateNewCard) {
+                          return _FadeScaleEntry(
+                            key: ValueKey('${_files[0].messageId}_${_files[0].time}'),
+                            child: padded,
+                          );
+                        }
+                        return padded;
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ValueListenableBuilder<int>(
+                  valueListenable: _currentFilePage,
+                  builder: (context, page, child) => Text(
+                    '${page + 1} / ${_files.length}',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (_isUploading) ...[
+                ValueListenableBuilder<double>(
+                  valueListenable: _uploadProgress,
+                  builder: (context, progress, _) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LinearProgressIndicator(
+                        value: progress,
+                        borderRadius: BorderRadius.circular(4),
+                        minHeight: 5,
+                        color: cs.primary,
+                        backgroundColor: cs.surfaceContainerHighest,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Загрузка ${(progress * 100).toStringAsFixed(0)}%',
+                        style:
+                            TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (_files.isEmpty) ...[
+                Text(
+                  'Начните загрузку для прогресс-бара',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -139,7 +492,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _mode.open,
+              onPressed: _mode.isOpen ? null : _mode.open,
               style: FilledButton.styleFrom(
                 backgroundColor: cs.primary,
                 foregroundColor: cs.onPrimary,
@@ -173,7 +526,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           child: _CornerAction(
             icon: Symbols.upload_file,
             label: 'С файла',
-            onTap: () {},
+            onTap: _pickAndUploadFile,
           ),
         ),
       ),
@@ -185,7 +538,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           child: _CornerAction(
             icon: Symbols.tag,
             label: 'По ID',
-            onTap: () {},
+            onTap: _showSendByIdSheet,
           ),
         ),
       ),
@@ -356,6 +709,403 @@ class _DragDownHintState extends State<_DragDownHint>
     return (
       dy: _startY + eased * _travel,
       opacity: (1 - local) * _peakOpacity,
+    );
+  }
+}
+
+class _MouseDragScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+  };
+}
+
+class _FadeScaleEntry extends StatefulWidget {
+  final Widget child;
+  const _FadeScaleEntry({super.key, required this.child});
+
+  @override
+  State<_FadeScaleEntry> createState() => _FadeScaleEntryState();
+}
+
+class _FadeScaleEntryState extends State<_FadeScaleEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
+    _scale = CurvedAnimation(parent: _c, curve: Curves.elasticOut);
+    _opacity = CurvedAnimation(parent: _c, curve: const Interval(0, 0.4, curve: Curves.easeIn));
+    _c.forward();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) => Opacity(
+        opacity: _opacity.value.clamp(0.0, 1.0),
+        child: Transform.scale(scale: _scale.value, child: child),
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+class _CloudFileCard extends StatelessWidget {
+  final CloudFile file;
+  final VoidCallback onTap;
+
+  const _CloudFileCard({required this.file, required this.onTap});
+
+  static IconData _icon(String name) {
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    return switch (ext) {
+      'pdf' => Symbols.picture_as_pdf,
+      'jpg' || 'jpeg' || 'png' || 'gif' || 'webp' || 'bmp' => Symbols.image,
+      'mp4' || 'mov' || 'avi' || 'mkv' => Symbols.video_file,
+      'mp3' || 'wav' || 'ogg' || 'flac' => Symbols.audio_file,
+      'zip' || 'rar' || '7z' || 'tar' || 'gz' => Symbols.folder_zip,
+      'doc' || 'docx' => Symbols.description,
+      'xls' || 'xlsx' => Symbols.table_chart,
+      'ppt' || 'pptx' => Symbols.slideshow,
+      'txt' => Symbols.text_snippet,
+      _ => Symbols.insert_drive_file,
+    };
+  }
+
+  static String _formatTime(int millis) {
+    final d = DateTime.fromMillisecondsSinceEpoch(millis);
+    final now = DateTime.now();
+    if (d.year == now.year && d.month == now.month && d.day == now.day) {
+      return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    }
+    return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AspectRatio(
+        aspectRatio: 1.0,
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5), width: 0.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Center(
+                  child: Icon(_icon(file.name), color: cs.primary, size: 34),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        file.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatTime(file.time),
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FileDetailsSheet extends StatefulWidget {
+  final CloudFile file;
+  const _FileDetailsSheet({required this.file});
+
+  @override
+  State<_FileDetailsSheet> createState() => _FileDetailsSheetState();
+}
+
+class _FileDetailsSheetState extends State<_FileDetailsSheet> {
+  ({String url, int expires})? _link;
+  bool _loading = false;
+  Timer? _expiryTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    final f = widget.file;
+    if (f.fileId != null) {
+      _link = CloudStorageModule.getCachedLink(f.accountId, f.fileId!);
+    }
+    _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _generateLink() async {
+    final f = widget.file;
+    if (f.fileId == null) return;
+    setState(() => _loading = true);
+    final result = await CloudStorageModule.fetchFileUrl(
+      api,
+      accountId: f.accountId,
+      fileId: f.fileId!,
+      chatId: f.chatId,
+      messageId: f.messageId,
+    );
+    if (mounted) setState(() { _link = result; _loading = false; });
+  }
+
+  static String _formatSize(int? bytes) {
+    if (bytes == null) return '—';
+    if (bytes < 1024) return '$bytes Б';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
+  }
+
+  static String _formatExpiry(int expiresMs) {
+    final remaining = DateTime.fromMillisecondsSinceEpoch(expiresMs).difference(DateTime.now());
+    if (remaining.isNegative) return 'истекла';
+    final h = remaining.inHours;
+    final m = remaining.inMinutes % 60;
+    if (h >= 24) return 'через ${remaining.inDays} д';
+    if (h > 0) return 'через $h ч $m мин';
+    return 'через $m мин';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final f = widget.file;
+    final isExpired = _link == null ||
+        _link!.expires <= DateTime.now().millisecondsSinceEpoch;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24, 16, 24,
+        MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(f.name,
+              style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          _InfoRow(label: 'ID файла', value: f.fileId?.toString() ?? '—'),
+          const SizedBox(height: 6),
+          _InfoRow(label: 'Размер', value: _formatSize(f.size)),
+          const SizedBox(height: 20),
+          Container(height: 0.5, color: cs.outlineVariant),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: isExpired
+                    ? Text('Ссылки пока нет. Создайте.',
+                        style: TextStyle(color: cs.error, fontSize: 13))
+                    : Text('Ссылка истечет ${_formatExpiry(_link!.expires)}',
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+              ),
+              const SizedBox(width: 8),
+              _loading
+                  ? SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                    )
+                  : IconButton(
+                      icon: Icon(
+                        isExpired ? Symbols.add_link : Symbols.content_copy,
+                        color: isExpired ? cs.error : cs.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: isExpired
+                          ? _generateLink
+                          : () {
+                              Clipboard.setData(ClipboardData(text: _link!.url));
+                              showCustomNotification(context, 'Ссылка скопирована');
+                            },
+                    ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Text('$label: ', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w500),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SendByIdSheet extends StatefulWidget {
+  final Future<bool> Function(int fileId) onSend;
+  const _SendByIdSheet({required this.onSend});
+
+  @override
+  State<_SendByIdSheet> createState() => _SendByIdSheetState();
+}
+
+class _SendByIdSheetState extends State<_SendByIdSheet> {
+  final _controller = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final id = int.tryParse(_controller.text.trim());
+    if (id == null) {
+      showCustomNotification(context, 'Неверный ID');
+      return;
+    }
+    setState(() => _sending = true);
+    final ok = await widget.onSend(id);
+    if (!mounted) return;
+    if (ok) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _sending = false);
+      showCustomNotification(context, 'Ошибка отправки');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24, 16, 24,
+        MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant, borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Отправить по ID',
+              style: TextStyle(color: cs.onSurface, fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            style: TextStyle(color: cs.onSurface, fontSize: 15),
+            onSubmitted: (_) => _sending ? null : _submit(),
+            decoration: InputDecoration(
+              hintText: 'fileId',
+              hintStyle: TextStyle(color: cs.onSurfaceVariant),
+              filled: true,
+              fillColor: cs.surfaceContainerHigh,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _sending ? null : _submit,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: _sending
+                ? SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
+                  )
+                : const Text('Отправить', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
     );
   }
 }

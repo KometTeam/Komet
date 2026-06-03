@@ -70,11 +70,14 @@ class PacketDispatcher {
 
       if (packet.isError) {
         final message = messageFromErrorPayload(packet.payload);
+        final errorKey = packet.payload is Map
+            ? packet.payload['error']?.toString()
+            : null;
         if (packet.payload is Map &&
             packet.payload['message'] == 'FAIL_LOGIN_TOKEN') {
           completer.completeError(SessionExpiredException(message));
         } else {
-          completer.completeError(PacketError(message));
+          completer.completeError(PacketError(message, errorKey: errorKey));
         }
       } else {
         completer.complete(packet);

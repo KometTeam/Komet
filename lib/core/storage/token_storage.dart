@@ -24,6 +24,11 @@ class TokenStorage {
     await prefs.setString(_activeAccountKey, accountId.toString());
   }
 
+  static Future<void> clearActiveAccount() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_activeAccountKey);
+  }
+
   static Future<int?> getActiveAccountId() async {
     final prefs = await SharedPreferences.getInstance();
     final val = prefs.getString(_activeAccountKey);

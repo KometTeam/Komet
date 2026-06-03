@@ -478,4 +478,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editProfileRemovePhoto => 'Remove photo';
+
+  @override
+  String get registrationTitle => 'Create your profile';
+
+  @override
+  String get registrationSubtitle => 'Add your name and pick an avatar';
+
+  @override
+  String get registrationChooseAvatar => 'Choose an avatar';
 }
