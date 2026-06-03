@@ -168,5 +168,8 @@
   "editProfileSave": "Сохранить",
   "editProfileFirstName": "Имя",
   "editProfileLastName": "Фамилия",
-  "editProfileRemovePhoto": "Удалить фото"
+  "editProfileRemovePhoto": "Удалить фото",
+  "registrationTitle": "Создание профиля",
+  "registrationSubtitle": "Укажите имя и выберите аватар",
+  "registrationChooseAvatar": "Выберите аватар"
 }

@@ -4,6 +4,7 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'password_2fa_screen.dart';
+import 'registration_screen.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
@@ -162,6 +163,20 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
           MaterialPageRoute(
             builder: (context) =>
                 Password2FAScreen(trackId: trackId, hint: result.challengeHint),
+          ),
+        );
+        return;
+      }
+
+      if (result.isRegistration) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RegistrationScreen(
+              phoneNumber: widget.phoneNumber,
+              registerToken: result.registerToken!,
+              presetAvatars: result.presetAvatars,
+            ),
           ),
         );
         return;

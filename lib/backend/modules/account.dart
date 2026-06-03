@@ -225,6 +225,20 @@ class RequestCodeResult {
   const RequestCodeResult({required this.token});
 }
 
+class PresetAvatar {
+  final int id;
+  final String url;
+
+  const PresetAvatar({required this.id, required this.url});
+}
+
+class PresetAvatarCategory {
+  final String name;
+  final List<PresetAvatar> avatars;
+
+  const PresetAvatarCategory({required this.name, required this.avatars});
+}
+
 class VerifyCodeResult {
   final Map<dynamic, dynamic> payload;
 
@@ -233,6 +247,37 @@ class VerifyCodeResult {
   String? get loginToken => _nestedToken('LOGIN');
 
   String? get registerToken => _nestedToken('REGISTER');
+
+  bool get isRegistration => registerToken != null && loginToken == null;
+
+  List<PresetAvatarCategory> get presetAvatars {
+    final raw = payload['presetAvatars'];
+    if (raw is! List) return const [];
+    final categories = <PresetAvatarCategory>[];
+    for (final cat in raw) {
+      if (cat is! Map) continue;
+      final avatarsRaw = cat['avatars'];
+      if (avatarsRaw is! List) continue;
+      final avatars = <PresetAvatar>[];
+      for (final a in avatarsRaw) {
+        if (a is! Map) continue;
+        final id = a['id'];
+        final url = a['url'];
+        if (id is int && url is String && url.isNotEmpty) {
+          avatars.add(PresetAvatar(id: id, url: url));
+        }
+      }
+      if (avatars.isNotEmpty) {
+        categories.add(
+          PresetAvatarCategory(
+            name: cat['name']?.toString() ?? '',
+            avatars: avatars,
+          ),
+        );
+      }
+    }
+    return categories;
+  }
 
   bool get requiresPassword => payload['passwordChallenge'] != null;
 
@@ -848,6 +893,61 @@ class AccountModule {
     }
 
     return result;
+  }
+
+  Future<int> completeRegistration({
+    required String token,
+    required String firstName,
+    String? lastName,
+    int? photoId,
+  }) async {
+    _ensureOnline();
+
+    final payload = <dynamic, dynamic>{
+      'token': token,
+      'tokenType': AuthRequestType.register.value,
+      'firstName': firstName,
+    };
+    if (lastName != null && lastName.isNotEmpty) {
+      payload['lastName'] = lastName;
+    }
+    if (photoId != null) {
+      payload['photoId'] = photoId;
+      payload['avatarType'] = 'PRESET_AVATAR';
+    }
+
+    logger.i('Завершение регистрации (opcode=${Opcode.authConfirm})');
+
+    final packet = await _api.sendRequest(Opcode.authConfirm, payload);
+
+    _checkPacketError(packet, 'completeRegistration');
+
+    final data = packet.payload;
+    if (data is! Map) {
+      throw Exception(
+        'completeRegistration: неожиданный тип payload: ${data.runtimeType}',
+      );
+    }
+
+    final profileMap = data['profile'];
+    if (profileMap is! Map) {
+      throw Exception('completeRegistration: отсутствует profile в ответе');
+    }
+    final contact = profileMap['contact'];
+    if (contact is! Map) {
+      throw Exception('completeRegistration: отсутствует profile.contact');
+    }
+    final accountId = contact['id'] as int?;
+    if (accountId == null) {
+      throw Exception('completeRegistration: отсутствует id аккаунта');
+    }
+
+    final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(profile, isActive: true);
+    await TokenStorage.setActiveAccount(accountId);
+
+    logger.i('Регистрация завершена, accountId=$accountId');
+    return accountId;
   }
 
   Future<LoginResult> login({

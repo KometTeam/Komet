@@ -168,5 +168,8 @@
   "editProfileSave": "Save",
   "editProfileFirstName": "First name",
   "editProfileLastName": "Last name",
-  "editProfileRemovePhoto": "Remove photo"
+  "editProfileRemovePhoto": "Remove photo",
+  "registrationTitle": "Create your profile",
+  "registrationSubtitle": "Add your name and pick an avatar",
+  "registrationChooseAvatar": "Choose an avatar"
 }

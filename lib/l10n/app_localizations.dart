@@ -1009,6 +1009,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove photo'**
   String get editProfileRemovePhoto;
+
+  /// No description provided for @registrationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your profile'**
+  String get registrationTitle;
+
+  /// No description provided for @registrationSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your name and pick an avatar'**
+  String get registrationSubtitle;
+
+  /// No description provided for @registrationChooseAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an avatar'**
+  String get registrationChooseAvatar;
 }
 
 class _AppLocalizationsDelegate

@@ -480,4 +480,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get editProfileRemovePhoto => 'Удалить фото';
+
+  @override
+  String get registrationTitle => 'Создание профиля';
+
+  @override
+  String get registrationSubtitle => 'Укажите имя и выберите аватар';
+
+  @override
+  String get registrationChooseAvatar => 'Выберите аватар';
 }
