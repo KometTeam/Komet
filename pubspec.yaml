@@ -39,11 +39,13 @@ dependencies:
   dart_lz4: ^1.0.0
   libcompress: ^1.0.0
   msgpack_dart: ^1.0.1
+  crypto: ^3.0.7
   logger: ^2.6.2
   device_info_plus: 12.3.0
   flutter_timezone: ^5.0.1
   timezone: ^0.11.0
   file_picker: ^8.0.0
+  image: ^4.3.0
   sqflite: ^2.4.2
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
@@ -55,6 +57,9 @@ dependencies:
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
   cached_network_image: ^3.4.1
+  path_provider: ^2.1.4
+  open_filex: ^4.5.0
+  video_player: ^2.9.2
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.2
   flutter_local_notifications: ^21.0.0

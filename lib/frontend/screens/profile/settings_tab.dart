@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
@@ -20,6 +21,7 @@ import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
 import 'info_screen.dart';
+import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
 
@@ -206,6 +208,7 @@ class _SettingsTabState extends State<SettingsTab> {
     }
     ContactCache.clear();
     TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
     try {
       await api.connect();
     } catch (_) {}
@@ -309,9 +312,17 @@ child: _buildSection(
                   context,
                   cs,
                   items: [
-                    const _SettingsItem(
+                    _SettingsItem(
                       icon: Symbols.notifications_active,
-                      label: 'Уведомления и звук',
+                      label: 'Уведомления',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _SettingsItem(
                       icon: Symbols.vibration,

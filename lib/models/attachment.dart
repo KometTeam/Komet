@@ -7,6 +7,7 @@ enum AttachmentType {
   location,
   sticker,
   control,
+  poll,
 }
 
 abstract class MessageAttachment {
@@ -41,6 +42,8 @@ abstract class MessageAttachment {
         return LocationAttachment.fromMap(map);
       case 'CONTROL':
         return ControlAttachment.fromMap(map);
+      case 'POLL':
+        return PollAttachment.fromMap(map);
       case 'SHARE':
         return FileAttachment.fromMap(map);
       case 'INLINE_KEYBOARD':
@@ -468,6 +471,31 @@ class ControlAttachment extends MessageAttachment {
     'title': title,
     'userIds': userIds,
     'userId': userId,
+  };
+}
+
+class PollAttachment extends MessageAttachment {
+  final int pollId;
+  final String? title;
+
+  const PollAttachment({
+    required this.pollId,
+    this.title,
+  }) : super(type: AttachmentType.poll);
+
+  factory PollAttachment.fromMap(Map<String, dynamic> map) {
+    final id = map['pollId'] ?? map['id'];
+    return PollAttachment(
+      pollId: id is int ? id : int.tryParse(id?.toString() ?? '') ?? 0,
+      title: (map['title'] ?? map['question'])?.toString(),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toMap() => {
+    '_type': 'POLL',
+    'pollId': pollId,
+    'title': title,
   };
 }
 

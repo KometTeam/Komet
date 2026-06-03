@@ -22,8 +22,9 @@ Future<ImageProvider?> precacheLoginAvatar(
 
 class LoginSuccessScreen extends StatefulWidget {
   final ImageProvider? avatar;
+  final bool preview;
 
-  const LoginSuccessScreen({super.key, this.avatar});
+  const LoginSuccessScreen({super.key, this.avatar, this.preview = false});
 
   @override
   State<LoginSuccessScreen> createState() => _LoginSuccessScreenState();
@@ -114,6 +115,10 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   void _onStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed && !_navigated && mounted) {
       _navigated = true;
+      if (widget.preview) {
+        Navigator.of(context).pop();
+        return;
+      }
       Navigator.of(context).pushAndRemoveUntil(
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 360),

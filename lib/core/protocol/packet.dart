@@ -82,19 +82,41 @@ String messageFromErrorPayload(dynamic payload) {
   return s.isNotEmpty ? s : 'Неизвестная ошибка';
 }
 
-/// Упаковка пакета для отправки на сервер
+/// Payload меньше этого размера отправляется без сжатия (как в оригинале).
+const int _compressionThreshold = 32;
+
+/// Упаковка пакета для отправки на сервер.
+///
+/// Payload сериализуется в MsgPack и при размере >= [_compressionThreshold]
+/// сжимается LZ4-block. Старший байт поля packedLen — флаг сжатия:
+/// `0` — без сжатия, иначе `(rawLen ~/ compLen) + 1` (множитель размера, по
+/// которому получатель выделяет буфер под распаковку).
 Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
-  final header = ByteData(headerSize);
+  final Uint8List raw = msgpack.serialize(payload);
+
+  final List<int> body;
+  final int flag;
+  if (raw.length < _compressionThreshold) {
+    body = raw;
+    flag = 0;
+  } else {
+    body = lz4Compress(raw);
+    flag = (raw.length ~/ body.length) + 1;
+  }
+
+  final out = Uint8List(headerSize + body.length);
+  final header = ByteData.view(out.buffer, out.offsetInBytes, headerSize);
   header.setUint8(0, 10);
   header.setUint8(1, CmdType.request);
   header.setUint16(2, seq, Endian.big);
   header.setUint16(4, opcode, Endian.big);
-
-  final payloadBytes = msgpack.serialize(payload);
-  final payloadLen = payloadBytes.length & 0xFFFFFF;
-  header.setUint32(6, payloadLen, Endian.big);
-
-  return Uint8List.fromList(header.buffer.asUint8List() + payloadBytes);
+  header.setUint32(
+    6,
+    ((flag & 0xFF) << 24) | (body.length & 0xFFFFFF),
+    Endian.big,
+  );
+  out.setRange(headerSize, out.length, body);
+  return out;
 }
 
 /// Распаковка пакета от сервера

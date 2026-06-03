@@ -2,10 +2,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../core/protocol/opcode_map.dart';
+import '../../../core/cache/info_cache.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
-import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/swipe_route.dart';
 import '../chats/chat_screen.dart';
@@ -41,25 +40,18 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
   Future<void> _load() async {
     try {
       final results = await Future.wait([
-        api.sendRequest(Opcode.contactInfo, {'contactIds': [widget.contactId]}),
-        api.sendRequest(Opcode.contactPresence, {'contactIds': [widget.contactId]}),
+        ContactInfoFetch.get(widget.contactId),
+        PresenceFetch.get(widget.contactId),
       ]);
       if (!mounted) return;
-      final infoPacket = results[0];
-      if (infoPacket.isOk) {
-        final contacts = (infoPacket.payload as Map?)?['contacts'] as List?;
-        if (contacts != null && contacts.isNotEmpty) {
-          _contact = Map<String, dynamic>.from(contacts.first as Map);
-        }
+      final contact = results[0];
+      if (contact != null) {
+        _contact = contact;
       }
-      final presencePacket = results[1];
-      if (presencePacket.isOk) {
-        final presence = (presencePacket.payload as Map?)?['presence'] as Map?;
-        final p = presence?[widget.contactId.toString()] ?? presence?[widget.contactId];
-        if (p is Map) {
-          _seenTime = p['seen'] as int?;
-          _presenceStatus = (p['status'] as int?) ?? 0;
-        }
+      final presence = results[1];
+      if (presence != null) {
+        _seenTime = presence['seen'] as int?;
+        _presenceStatus = (presence['status'] as int?) ?? 0;
       }
     } catch (e) {
       if (mounted) showCustomNotification(context, 'Ошибка: $e');

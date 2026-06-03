@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import '../api.dart';
+import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -223,6 +225,20 @@ class RequestCodeResult {
   const RequestCodeResult({required this.token});
 }
 
+class PresetAvatar {
+  final int id;
+  final String url;
+
+  const PresetAvatar({required this.id, required this.url});
+}
+
+class PresetAvatarCategory {
+  final String name;
+  final List<PresetAvatar> avatars;
+
+  const PresetAvatarCategory({required this.name, required this.avatars});
+}
+
 class VerifyCodeResult {
   final Map<dynamic, dynamic> payload;
 
@@ -231,6 +247,37 @@ class VerifyCodeResult {
   String? get loginToken => _nestedToken('LOGIN');
 
   String? get registerToken => _nestedToken('REGISTER');
+
+  bool get isRegistration => registerToken != null && loginToken == null;
+
+  List<PresetAvatarCategory> get presetAvatars {
+    final raw = payload['presetAvatars'];
+    if (raw is! List) return const [];
+    final categories = <PresetAvatarCategory>[];
+    for (final cat in raw) {
+      if (cat is! Map) continue;
+      final avatarsRaw = cat['avatars'];
+      if (avatarsRaw is! List) continue;
+      final avatars = <PresetAvatar>[];
+      for (final a in avatarsRaw) {
+        if (a is! Map) continue;
+        final id = a['id'];
+        final url = a['url'];
+        if (id is int && url is String && url.isNotEmpty) {
+          avatars.add(PresetAvatar(id: id, url: url));
+        }
+      }
+      if (avatars.isNotEmpty) {
+        categories.add(
+          PresetAvatarCategory(
+            name: cat['name']?.toString() ?? '',
+            avatars: avatars,
+          ),
+        );
+      }
+    }
+    return categories;
+  }
 
   bool get requiresPassword => payload['passwordChallenge'] != null;
 
@@ -484,7 +531,7 @@ class AccountModule {
     return newProfile;
   }
 
-  Future<ProfileData> updateProfileAvatar(String photoToken, String avatarType) async {
+  Future<ProfileData> updateProfileAvatar(String photoToken, {String avatarType = 'USER_AVATAR'}) async {
     _ensureOnline();
     final packet = await _api.sendRequest(Opcode.profile, {
       'photoToken': photoToken,
@@ -621,15 +668,17 @@ class AccountModule {
     String? hint,
   }) async {
     _ensureOnline();
+    final capabilities = <int>[0, if (hint != null) 3, 4];
     final payload = <dynamic, dynamic>{
-      'expectedCapabilities': [0, 3, 4],
+      'expectedCapabilities': capabilities,
       'trackId': trackId,
       'password': password,
     };
     if (hint != null) payload['hint'] = hint;
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'confirm2fa');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'confirm2fa',
+    );
   }
 
   // 2FA Management (when already set)
@@ -670,6 +719,11 @@ class AccountModule {
     );
   }
 
+  Future<TwoFactorDetails> get2faStatus() async {
+    final trackId = await enter2faPanel();
+    return get2faDetails(trackId);
+  }
+
   Future<void> check2faPassword(String trackId, String password) async {
     _ensureOnline();
     final packet = await _api.sendRequest(Opcode.authLoginCheckPassword, {
@@ -707,15 +761,16 @@ class AccountModule {
     }
 
     final payload = <dynamic, dynamic>{
-      'expectedCapabilities': [1, 3],
+      'expectedCapabilities': <int>[1, if (hint != null) 3],
       'trackId': trackId,
       'password': newPassword,
     };
     if (hint != null) payload['hint'] = hint;
 
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'update2faPassword');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'update2faPassword',
+    );
   }
 
   Future<ProfileData> update2faEmail({
@@ -740,9 +795,10 @@ class AccountModule {
       'expectedCapabilities': [4],
       'trackId': trackId,
     };
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'update2faEmail');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'update2faEmail',
+    );
   }
 
   Future<ProfileData> remove2fa(String trackId) async {
@@ -752,34 +808,46 @@ class AccountModule {
       'trackId': trackId,
       'remove2fa': true,
     };
-    final packet = await _api.sendRequest(Opcode.authSet2fa, payload);
-    _checkPacketError(packet, 'remove2fa');
-    return _processProfileUpdate(packet);
+    return _processProfileUpdate(
+      _api.sendRequest(Opcode.authSet2fa, payload),
+      'remove2fa',
+    );
   }
 
-  Future<ProfileData> _processProfileUpdate(Packet packet) async {
-    _api.registerPushHandler(Opcode.notifProfile, (p) {});
-    try {
-      await for (final push in _api.pushStream
-          .where((p) => p.opcode == Opcode.notifProfile)
-          .timeout(const Duration(seconds: 15))) {
-        final payload = push.payload;
-        if (payload is Map) {
-          final profile = payload['profile'];
-          if (profile is Map) {
-            final contact = profile['contact'];
-            if (contact is Map) {
-              return ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-            }
-          }
-        }
+  Future<ProfileData> _processProfileUpdate(
+    Future<Packet> requestFuture,
+    String tag,
+  ) async {
+    final completer = Completer<ProfileData>();
+    final sub = _api.pushStream
+        .where((p) => p.opcode == Opcode.notifProfile)
+        .listen((push) {
+      if (completer.isCompleted) return;
+      final payload = push.payload;
+      if (payload is! Map) return;
+      final profile = payload['profile'];
+      if (profile is! Map) return;
+      final contact = profile['contact'];
+      if (contact is! Map) return;
+      completer.complete(
+        ProfileData.fromServerMap(contact.cast<dynamic, dynamic>()),
+      );
+    });
+    final timer = Timer(const Duration(seconds: 15), () {
+      if (!completer.isCompleted) {
+        completer.completeError(
+          Exception('Таймаут ожидания обновления профиля'),
+        );
       }
-    } on TimeoutException {
-      throw Exception('Таймаут ожидания обновления профиля');
+    });
+    try {
+      final packet = await requestFuture;
+      _checkPacketError(packet, tag);
+      return await completer.future;
     } finally {
-      _api.unregisterPushHandler(Opcode.notifProfile);
+      timer.cancel();
+      await sub.cancel();
     }
-    throw Exception('Не удалось получить обновлённый профиль');
   }
 
   Future<RequestCodeResult> requestCode(
@@ -825,6 +893,61 @@ class AccountModule {
     }
 
     return result;
+  }
+
+  Future<int> completeRegistration({
+    required String token,
+    required String firstName,
+    String? lastName,
+    int? photoId,
+  }) async {
+    _ensureOnline();
+
+    final payload = <dynamic, dynamic>{
+      'token': token,
+      'tokenType': AuthRequestType.register.value,
+      'firstName': firstName,
+    };
+    if (lastName != null && lastName.isNotEmpty) {
+      payload['lastName'] = lastName;
+    }
+    if (photoId != null) {
+      payload['photoId'] = photoId;
+      payload['avatarType'] = 'PRESET_AVATAR';
+    }
+
+    logger.i('Завершение регистрации (opcode=${Opcode.authConfirm})');
+
+    final packet = await _api.sendRequest(Opcode.authConfirm, payload);
+
+    _checkPacketError(packet, 'completeRegistration');
+
+    final data = packet.payload;
+    if (data is! Map) {
+      throw Exception(
+        'completeRegistration: неожиданный тип payload: ${data.runtimeType}',
+      );
+    }
+
+    final profileMap = data['profile'];
+    if (profileMap is! Map) {
+      throw Exception('completeRegistration: отсутствует profile в ответе');
+    }
+    final contact = profileMap['contact'];
+    if (contact is! Map) {
+      throw Exception('completeRegistration: отсутствует profile.contact');
+    }
+    final accountId = contact['id'] as int?;
+    if (accountId == null) {
+      throw Exception('completeRegistration: отсутствует id аккаунта');
+    }
+
+    final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    await AppDatabase.saveProfile(profile, isActive: true);
+    await TokenStorage.setActiveAccount(accountId);
+
+    logger.i('Регистрация завершена, accountId=$accountId');
+    return accountId;
   }
 
   Future<LoginResult> login({
@@ -921,6 +1044,20 @@ class AccountModule {
     _checkPacketError(packet, 'authorizeWebQrLogin');
   }
 
+  Future<void> beginAddAccount() async {
+    try {
+      await _api.disconnect();
+    } catch (_) {}
+
+    await TokenStorage.clearActiveAccount();
+
+    ContactCache.clear();
+    TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
+
+    logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
+  }
+
   Future<ProfileData> switchAccount(int accountId) async {
     final profile = await AppDatabase.loadProfile(accountId);
     if (profile == null) {
@@ -940,6 +1077,7 @@ class AccountModule {
 
     ContactCache.clear();
     TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
 
     try {
@@ -1017,8 +1155,17 @@ class AccountModule {
     final payload = <dynamic, dynamic>{
       'token': token,
       'interactive': true,
-      if (_api.userAgent != null) 'userAgent': _api.userAgent,
+      'exp': {
+        'chatsCountGroups': Uint8List.fromList([0x0b, 0x32]),
+      },
     };
+
+    final callsSeed = _api.callsSeed;
+    final deviceId = _api.deviceId;
+    if (callsSeed != null && deviceId != null) {
+      payload['chatCacheFingerprint'] =
+          ChatCacheFingerprint.compute(callsSeed, deviceId);
+    }
 
     if (sync != null) {
       payload['presenceSync'] = sync.presenceSync;
@@ -1029,9 +1176,6 @@ class AccountModule {
       payload['bannersSync'] = sync.bannersSync;
       payload['lastLogin'] = sync.lastLogin;
       if (sync.configHash != null) payload['configHash'] = sync.configHash;
-      if (sync.chatCacheFingerprint != null) {
-        payload['chatCacheFingerprint'] = sync.chatCacheFingerprint;
-      }
     } else {
       payload['presenceSync'] = 0;
     }

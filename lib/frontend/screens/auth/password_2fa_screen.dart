@@ -56,10 +56,8 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
           pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) => FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
         ),
         (route) => false,
       );

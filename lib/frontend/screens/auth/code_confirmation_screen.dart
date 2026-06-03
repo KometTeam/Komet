@@ -4,6 +4,7 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'password_2fa_screen.dart';
+import 'registration_screen.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
@@ -167,6 +168,20 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         return;
       }
 
+      if (result.isRegistration) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RegistrationScreen(
+              phoneNumber: widget.phoneNumber,
+              registerToken: result.registerToken!,
+              presetAvatars: result.presetAvatars,
+            ),
+          ),
+        );
+        return;
+      }
+
       final loginResult = await accountModule.login();
 
       if (!mounted) return;
@@ -183,10 +198,8 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
           pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) => FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
         ),
         (route) => false,
       );

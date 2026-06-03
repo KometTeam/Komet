@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show File;
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
@@ -13,17 +14,19 @@ import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
-import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/cache/info_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
+import '../../../core/config/app_pranks.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/message_bubble.dart';
+import '../../widgets/theme_reveal.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/swipe_to_pop.dart';
@@ -89,11 +92,42 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<_UploadStatus> _uploadStatus = ValueNotifier(const _UploadStatus());
   StreamSubscription<UploadEvent>? _uploadSub;
   StreamSubscription<Packet>? _pushSub;
+  StreamSubscription<MessageEvent>? _messageEventSub;
+  final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers = {};
+
+  ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
+    final existing = _reactionNotifiers[m.id];
+    if (existing != null) return existing;
+    final info = m.payload?['reactionInfo'];
+    final notifier = ValueNotifier<Map<String, dynamic>?>(
+      info is Map ? Map<String, dynamic>.from(info) : null,
+    );
+    _reactionNotifiers[m.id] = notifier;
+    return notifier;
+  }
+
+  void _pruneReactionNotifiers() {
+    final liveIds = _messages.map((m) => m.id).toSet();
+    final dead = _reactionNotifiers.keys.where((id) => !liveIds.contains(id)).toList();
+    for (final id in dead) {
+      _reactionNotifiers.remove(id)?.dispose();
+    }
+  }
   final Set<int> _typingUserIds = {};
   final Map<int, Timer> _typingTimers = {};
   int _otherStatus = 0;
   int? _otherSeenTime;
+  int? _participantsCount;
+
+  bool _prankActive = false;
+  String? _prankBubbleId;
+  final GlobalKey _prankBubbleKey = GlobalKey();
+  final GlobalKey _prankCaptureKey = GlobalKey();
+  OverlayEntry? _prankRevealEntry;
+  AnimationController? _prankRevealController;
+  ui.Image? _prankRevealImage;
   final ValueNotifier<String> _headerStatusNotifier = ValueNotifier('');
+  final ValueNotifier<int> _otherReadTime = ValueNotifier(0);
   int _tempIdCounter = 0;
   late final AnimationController _attachAnim;
 
@@ -102,6 +136,10 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _shimmerStartTimer;
   bool _historyKickedOff = false;
   List<CachedMessage> _messages = [];
+  int _messagesRevision = 0;
+  List<Object>? _combinedItemsCache;
+  int? _combinedItemsKey;
+  bool _floatingDateScheduled = false;
   int _myId = 0;
   CachedChat? chat;
 
@@ -110,7 +148,6 @@ class _ChatScreenState extends State<ChatScreen>
   late final AnimationController _floatingDateAnimController;
   late final CurvedAnimation _floatingDateCurved;
   final Map<int, GlobalKey> _separatorKeys = {};
-  double _lastScrollOffset = 0;
   String? _lastSentId;
   
   @override
@@ -130,10 +167,12 @@ class _ChatScreenState extends State<ChatScreen>
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _pushSub = api.pushStream
         .where((p) =>
-            p.opcode == Opcode.notifMessage ||
             p.opcode == Opcode.notifMark ||
             p.opcode == Opcode.notifTyping)
         .listen(_onIncomingPush);
+    _messageEventSub = ChatsModule.messageEvents
+        .where((e) => e.chatId == widget.chatId)
+        .listen(_onMessageEvent);
     _floatingDateAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -145,7 +184,54 @@ class _ChatScreenState extends State<ChatScreen>
       reverseCurve: Curves.easeIn,
     );
 
+    unawaited(_fastPreloadCache());
+    unawaited(_loadParticipantsCount());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
+  }
+
+  Future<void> _loadParticipantsCount() async {
+    if (widget.chatType != 'CHAT' && widget.chatType != 'CHANNEL') return;
+    final info = await ChatsModule.getChatInfo(api, widget.chatId);
+    if (!mounted) return;
+    final count = info?['participantsCount'] as int?;
+    if (count != null && count != _participantsCount) {
+      _participantsCount = count;
+      _recomputeHeaderStatus();
+    }
+  }
+
+  Future<void> _fastPreloadCache() async {
+    final p = await AppDatabase.loadActiveProfile();
+    if (!mounted) return;
+    _myId = p?.id ?? 0;
+
+    ChatsModule.getChat(_myId, widget.chatId).then((value) {
+      if (mounted && value.isNotEmpty) {
+        setState(() {
+          chat = value.first;
+        });
+        _recomputeHeaderStatus();
+        _syncOtherReadTime();
+      }
+    }).catchError((_) {});
+
+    final firstRows = await AppDatabase.loadMessages(
+      _myId,
+      widget.chatId,
+      limit: 20,
+    );
+    if (!mounted) return;
+    if (firstRows.isNotEmpty) {
+      final first = firstRows.reversed
+          .map((r) => CachedMessage.fromDbRow(r))
+          .toList();
+      setState(() {
+        _messages = first;
+        _messagesRevision++;
+        _isLoading = false;
+        _onLoadingFinished();
+      });
+    }
   }
 
   void _onFirstFrameRendered(Duration _) {
@@ -192,37 +278,15 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _loadHistory() async {
-    final activeProfile = await AppDatabase.loadActiveProfile();
-    _myId = activeProfile?.id ?? 0;
-    ChatsModule.getChat(_myId, widget.chatId).then((value) {
-      if (mounted && value.isNotEmpty) {
-        setState(() { chat = value.first; });
-        _recomputeHeaderStatus();
-      }
-    }).catchError((_) {});
+    if (_myId == 0) {
+      final activeProfile = await AppDatabase.loadActiveProfile();
+      if (!mounted) return;
+      _myId = activeProfile?.id ?? 0;
+    }
     if (widget.chatType == 'DIALOG') {
       unawaited(_loadOtherPresence());
     }
-
-    final firstRows = await AppDatabase.loadMessages(
-      _myId,
-      widget.chatId,
-      limit: 20,
-    );
-    if (mounted && firstRows.isNotEmpty) {
-      final first = firstRows.reversed
-          .map((r) => CachedMessage.fromDbRow(r))
-          .toList();
-      setState(() {
-        _messages = first;
-        if (api.state == SessionState.online) {
-          _isLoading = false;
-          _onLoadingFinished();
-        }
-      });
-    }
-
-    unawaited(_loadRemainingHistory());
+    await _loadRemainingHistory();
   }
 
   Future<void> _loadRemainingHistory() async {
@@ -235,8 +299,20 @@ class _ChatScreenState extends State<ChatScreen>
       _applyMergedMessages(fullRows);
     }
 
+    if (!ChatsModule.isChatDirty(widget.chatId) && fullRows.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _onLoadingFinished();
+        });
+      }
+      _loadForwardedSenderNames();
+      return;
+    }
+
     try {
       await messagesModule.fetchHistory(_myId, widget.chatId);
+      ChatsModule.markChatClean(widget.chatId);
       final updatedRows = await AppDatabase.loadMessages(
         _myId,
         widget.chatId,
@@ -245,6 +321,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (mounted) {
         _applyMergedMessages(updatedRows, markLoaded: true);
       }
+      unawaited(ChatsModule.reconcileLastMessageIfPlaceholder(_myId, widget.chatId));
       _loadForwardedSenderNames();
     } catch (e) {
       debugPrint('Error fetching history: $e');
@@ -274,12 +351,42 @@ class _ChatScreenState extends State<ChatScreen>
     final changed = !_listsEquivalent(_messages, merged);
     if (!changed && !markLoaded) return;
     setState(() {
-      if (changed) _messages = merged;
+      if (changed) {
+        _messages = merged;
+        _messagesRevision++;
+      }
       if (markLoaded) {
         _isLoading = false;
         _onLoadingFinished();
       }
     });
+    if (changed) {
+      _syncReactionNotifiersFromMessages();
+      _pruneReactionNotifiers();
+    }
+  }
+
+  void _syncReactionNotifiersFromMessages() {
+    for (final m in _messages) {
+      final info = m.payload?['reactionInfo'];
+      final value = info is Map ? Map<String, dynamic>.from(info) : null;
+      final existing = _reactionNotifiers[m.id];
+      if (existing == null) {
+        _reactionNotifiers[m.id] = ValueNotifier(value);
+      } else if (!_reactionsEqual(existing.value, value)) {
+        existing.value = value;
+      }
+    }
+  }
+
+  bool _reactionsEqual(Map<String, dynamic>? a, Map<String, dynamic>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (a[k].toString() != b[k].toString()) return false;
+    }
+    return true;
   }
 
   bool _sameMessage(CachedMessage a, CachedMessage b) {
@@ -311,11 +418,18 @@ class _ChatScreenState extends State<ChatScreen>
     _showAttachmentPanel.dispose();
     _uploadSub?.cancel();
     _pushSub?.cancel();
+    _messageEventSub?.cancel();
+    for (final n in _reactionNotifiers.values) {
+      n.dispose();
+    }
+    _reactionNotifiers.clear();
     for (final t in _typingTimers.values) {
       t.cancel();
     }
     _typingTimers.clear();
     _headerStatusNotifier.dispose();
+    _otherReadTime.dispose();
+    _finishPrankReveal();
     _uploadStatus.dispose();
     _attachAnim.dispose();
     _messageController.dispose();
@@ -340,17 +454,124 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  String? _effectiveStatus(CachedMessage msg) {
-    if (msg.senderId != _myId) return null;
-    if (msg.status == 'sending' || msg.status == 'error') return msg.status;
+  int _computeOtherReadTime() {
     final c = chat;
-    if (c == null) return 'sent';
+    if (c == null) return 0;
     int otherReadTime = 0;
     for (final entry in c.participants.entries) {
       if (entry.key != _myId && entry.value > otherReadTime) {
         otherReadTime = entry.value;
       }
     }
+    return otherReadTime;
+  }
+
+  void _syncOtherReadTime() {
+    final t = _computeOtherReadTime();
+    if (_otherReadTime.value != t) _otherReadTime.value = t;
+  }
+
+  void _checkPrankTrigger(CachedMessage msg) {
+    if (!AppPranks.current.value || _prankActive || _prankBubbleId != null) {
+      return;
+    }
+    if ((msg.text ?? '').trim().toUpperCase() != 'THE WORLD') return;
+    setState(() => _prankBubbleId = msg.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _runPrankReveal();
+    });
+  }
+
+  ThemeData _prankPinkTheme(ThemeData base) {
+    final cs = base.colorScheme;
+    return base.copyWith(
+      scaffoldBackgroundColor: const Color(0xFFFFF0F5),
+      colorScheme: cs.copyWith(
+        surface: const Color(0xFFFFF0F5),
+        surfaceContainerHigh: const Color(0xFFFFE3EC),
+        surfaceContainerHighest: const Color(0xFFFFD9E6),
+        primary: const Color(0xFFE8579A),
+        primaryContainer: const Color(0xFFFFD6E5),
+        onPrimaryContainer: const Color(0xFF7A1F4B),
+      ),
+    );
+  }
+
+  void _runPrankReveal() {
+    if (_prankActive) return;
+    final overlay = Navigator.of(context).overlay;
+    final captureCtx = _prankCaptureKey.currentContext;
+    final renderObject = captureCtx?.findRenderObject();
+    if (overlay == null || renderObject is! RenderRepaintBoundary) {
+      setState(() => _prankActive = true);
+      return;
+    }
+
+    Offset center;
+    final bubbleBox =
+        _prankBubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    if (bubbleBox != null && bubbleBox.attached) {
+      center = bubbleBox.localToGlobal(bubbleBox.size.center(Offset.zero));
+    } else {
+      final size = MediaQuery.sizeOf(context);
+      center = Offset(size.width / 2, size.height / 2);
+    }
+
+    final ui.Image snapshot;
+    try {
+      final dpr = math.min(MediaQuery.of(context).devicePixelRatio, 2.0);
+      snapshot = renderObject.toImageSync(pixelRatio: dpr);
+    } catch (_) {
+      setState(() => _prankActive = true);
+      return;
+    }
+
+    _finishPrankReveal();
+
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    final entry = ThemeRevealOverlay.build(
+      snapshot: snapshot,
+      center: center,
+      animation: controller,
+    );
+
+    _prankRevealController = controller;
+    _prankRevealEntry = entry;
+    _prankRevealImage = snapshot;
+
+    overlay.insert(entry);
+    setState(() => _prankActive = true);
+    Haptics.success();
+
+    WidgetsBinding.instance.endOfFrame.then((_) {
+      if (_prankRevealController != controller) return;
+      controller.forward().then((_) {
+        if (_prankRevealController != controller) return;
+        _finishPrankReveal();
+      }, onError: (_) {});
+    });
+  }
+
+  void _finishPrankReveal() {
+    _prankRevealEntry?.remove();
+    _prankRevealEntry = null;
+    _prankRevealController?.dispose();
+    _prankRevealController = null;
+    final img = _prankRevealImage;
+    _prankRevealImage = null;
+    if (img != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => img.dispose());
+    }
+  }
+
+  String? _effectiveStatus(CachedMessage msg) {
+    if (msg.senderId != _myId) return null;
+    if (msg.status == 'sending' || msg.status == 'error') return msg.status;
+    if (chat == null) return 'sent';
+    final otherReadTime = _otherReadTime.value;
     if (otherReadTime > 0 && otherReadTime >= msg.time) return 'read';
     return 'sent';
   }
@@ -358,12 +579,45 @@ class _ChatScreenState extends State<ChatScreen>
   void _onIncomingPush(Packet packet) {
     if (!mounted) return;
     switch (packet.opcode) {
-      case Opcode.notifMessage:
-        _onIncomingMessage(packet);
       case Opcode.notifMark:
         _onMessageRead(packet);
       case Opcode.notifTyping:
         _onTyping(packet);
+    }
+  }
+
+  void _onMessageEvent(MessageEvent event) {
+    if (!mounted) return;
+    switch (event) {
+      case MessageAddedEvent(:final message):
+        if (message.senderId == _myId) return;
+        if (_messages.any((m) => m.id == message.id)) return;
+        setState(() {
+          _lastSentId = message.id;
+          _messages.add(message);
+          _messagesRevision++;
+        });
+        _clearTyping(message.senderId);
+        Haptics.tap();
+        _scrollToBottom();
+        _checkPrankTrigger(message);
+      case MessageEditedEvent(:final message):
+        final idx = _messages.indexWhere((m) => m.id == message.id);
+        if (idx == -1) return;
+        setState(() {
+          _messages[idx] = message;
+          _messagesRevision++;
+        });
+      case MessageRemovedEvent(:final messageId):
+        final idx = _messages.indexWhere((m) => m.id == messageId);
+        if (idx == -1) return;
+        setState(() {
+          _messages.removeAt(idx);
+          _messagesRevision++;
+        });
+        _reactionNotifiers.remove(messageId)?.dispose();
+      case MessageReactionsChangedEvent(:final messageId, :final reactionInfo):
+        _reactionNotifiers[messageId]?.value = reactionInfo;
     }
   }
 
@@ -372,18 +626,11 @@ class _ChatScreenState extends State<ChatScreen>
     final otherId = widget.chatId ^ _myId;
     if (otherId <= 0) return;
     try {
-      final p = await api.sendRequest(
-        Opcode.contactPresence,
-        {'contactIds': [otherId]},
-      );
-      if (!mounted) return;
-      final presence = (p.payload as Map?)?['presence'] as Map?;
-      final entry = presence?[otherId.toString()] ?? presence?[otherId];
-      if (entry is Map) {
-        _otherStatus = (entry['status'] as int?) ?? 0;
-        _otherSeenTime = entry['seen'] as int?;
-        _recomputeHeaderStatus();
-      }
+      final entry = await PresenceFetch.get(otherId);
+      if (!mounted || entry == null) return;
+      _otherStatus = (entry['status'] as int?) ?? 0;
+      _otherSeenTime = entry['seen'] as int?;
+      _recomputeHeaderStatus();
     } catch (_) {}
   }
 
@@ -408,10 +655,12 @@ class _ChatScreenState extends State<ChatScreen>
   String _headerStatus() {
     if (_typingUserIds.isNotEmpty) return 'Печатает...';
     if (widget.chatType == 'CHAT') {
-      return '${chat?.participants.length ?? 0} участников';
+      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      return '$count участников';
     }
     if (widget.chatType == 'CHANNEL') {
-      return '${chat?.participants.length ?? 0} подписчиков';
+      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      return '$count подписчиков';
     }
     if (_otherStatus == 1) return 'В сети';
     if (_otherStatus == 3) return 'Был(-а) недавно';
@@ -458,56 +707,8 @@ class _ChatScreenState extends State<ChatScreen>
     final c = chat;
     if (c == null) return;
     if (c.participants[userId] == mark) return;
-    setState(() {
-      c.participants[userId] = mark;
-    });
-  }
-
-  void _onIncomingMessage(Packet packet) {
-    if (!mounted) return;
-    final payload = packet.payload;
-    if (payload is! Map) return;
-    final chatId = payload['chatId'];
-    if (chatId != widget.chatId) return;
-    final msg = payload['message'];
-    if (msg is! Map) return;
-
-    final senderId = msg['sender'];
-    if (senderId is! int) return;
-    if (senderId == _myId) return;
-
-    final msgId = msg['id']?.toString();
-    if (msgId == null || msgId.isEmpty) return;
-    if (_messages.any((m) => m.id == msgId)) return;
-
-    List<MessageAttachment>? attachments;
-    final attaches = msg['attaches'];
-    if (attaches is List && attaches.isNotEmpty) {
-      attachments = attaches
-          .whereType<Map>()
-          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
-          .toList();
-    }
-
-    final cached = CachedMessage(
-      id: msgId,
-      accountId: _myId,
-      chatId: widget.chatId,
-      senderId: senderId,
-      text: msg['text'] as String?,
-      time: (msg['time'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
-      status: 'sent',
-      payload: Map<String, dynamic>.from(msg),
-      attachments: attachments,
-    );
-
-    setState(() {
-      _lastSentId = msgId;
-      _messages.add(cached);
-    });
-    _clearTyping(senderId);
-    Haptics.tap();
-    _scrollToBottom();
+    c.participants[userId] = mark;
+    _syncOtherReadTime();
   }
 
   Future<void> _sendMessage() async {
@@ -533,30 +734,36 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() {
         _lastSentId = tempId;
         _messages.add(tempMessage);
+        _messagesRevision++;
         _messageController.clear();
       });
+      unawaited(_persistOutgoing(tempMessage));
 
       // Instant tactile "whoosh" the moment the message leaves the composer,
       // not after the network round-trip — feedback must feel immediate.
       Haptics.send();
 
       _scrollToBottom();
+      _checkPrankTrigger(tempMessage);
 
       final actualId = await messagesModule.sendMessage(_myId, widget.chatId, text);
 
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
+        final sent = CachedMessage(
+          id: actualId.isNotEmpty ? actualId : tempId,
+          accountId: _myId,
+          chatId: widget.chatId,
+          senderId: _myId,
+          text: text,
+          time: now,
+          status: 'sent',
+        );
         setState(() {
-          _messages[index] = CachedMessage(
-            id: actualId.isNotEmpty ? actualId : tempId,
-            accountId: _myId,
-            chatId: widget.chatId,
-            senderId: _myId,
-            text: text,
-            time: now,
-            status: 'sent',
-          );
+          _messages[index] = sent;
+          _messagesRevision++;
         });
+        unawaited(_persistOutgoing(sent, removeId: tempId));
       }
 
       if (chat == null) {
@@ -564,6 +771,7 @@ class _ChatScreenState extends State<ChatScreen>
           ChatsModule.refreshChats(api, [widget.chatId]).then((list) {
             if (!mounted || list.isEmpty) return;
             setState(() => chat = list.first);
+            _syncOtherReadTime();
           }),
         );
       }
@@ -571,19 +779,31 @@ class _ChatScreenState extends State<ChatScreen>
       Haptics.error();
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
+        final failed = CachedMessage(
+          id: tempId,
+          accountId: _myId,
+          chatId: widget.chatId,
+          senderId: _myId,
+          text: text,
+          time: now,
+          status: 'error',
+        );
         setState(() {
-          _messages[index] = CachedMessage(
-            id: tempId,
-            accountId: _myId,
-            chatId: widget.chatId,
-            senderId: _myId,
-            text: text,
-            time: now,
-            status: 'error',
-          );
+          _messages[index] = failed;
+          _messagesRevision++;
         });
+        unawaited(_persistOutgoing(failed));
       }
     }
+  }
+
+  Future<void> _persistOutgoing(CachedMessage msg, {String? removeId}) async {
+    try {
+      if (removeId != null && removeId != msg.id) {
+        await AppDatabase.deleteMessage(_myId, widget.chatId, removeId);
+      }
+      await AppDatabase.saveMessages([msg.toDbRow()]);
+    } catch (_) {}
   }
 
   Future<void> _loadForwardedSenderNames() async {
@@ -601,47 +821,60 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (forwardIds.isEmpty) return;
 
+    final resolved = <int, ({String name, String? avatar})>{};
     for (final id in forwardIds) {
       final name = await messagesModule.searchContactById(id);
-      final avatar = ContactCache.getAvatar(id);
-      if (name != null && mounted) {
-        setState(() {
-          for (var i = 0; i < _messages.length; i++) {
-            final msg = _messages[i];
-            if (msg.attachments != null) {
-              final newAttaches = msg.attachments!.map((a) {
-                if (a is ForwardedMessageAttachment &&
-                    a.originalSenderId == id &&
-                    a.originalSenderName == null) {
-                  return ForwardedMessageAttachment(
-                    originalSenderId: id,
-                    originalSenderName: name,
-                    originalSenderAvatar: avatar,
-                    originalMessageId: a.originalMessageId,
-                    originalTime: a.originalTime,
-                    originalText: a.originalText,
-                    originalChatId: a.originalChatId,
-                    originalAttachments: a.originalAttachments,
-                    originalContact: a.originalContact,
-                  );
-                }
-                return a;
-              }).toList();
-              _messages[i] = CachedMessage(
-                id: msg.id,
-                accountId: msg.accountId,
-                chatId: msg.chatId,
-                senderId: msg.senderId,
-                text: msg.text,
-                time: msg.time,
-                status: msg.status,
-                payload: msg.payload,
-                attachments: newAttaches,
-              );
-            }
-          }
-        });
+      if (name != null) {
+        resolved[id] = (name: name, avatar: ContactCache.getAvatar(id));
       }
+    }
+    if (resolved.isEmpty || !mounted) return;
+
+    var anyChanged = false;
+    for (var i = 0; i < _messages.length; i++) {
+      final msg = _messages[i];
+      final attaches = msg.attachments;
+      if (attaches == null) continue;
+
+      var msgChanged = false;
+      final newAttaches = attaches.map((a) {
+        if (a is ForwardedMessageAttachment &&
+            a.originalSenderName == null &&
+            resolved.containsKey(a.originalSenderId)) {
+          final r = resolved[a.originalSenderId]!;
+          msgChanged = true;
+          return ForwardedMessageAttachment(
+            originalSenderId: a.originalSenderId,
+            originalSenderName: r.name,
+            originalSenderAvatar: r.avatar,
+            originalMessageId: a.originalMessageId,
+            originalTime: a.originalTime,
+            originalText: a.originalText,
+            originalChatId: a.originalChatId,
+            originalAttachments: a.originalAttachments,
+            originalContact: a.originalContact,
+          );
+        }
+        return a;
+      }).toList();
+
+      if (!msgChanged) continue;
+      anyChanged = true;
+      _messages[i] = CachedMessage(
+        id: msg.id,
+        accountId: msg.accountId,
+        chatId: msg.chatId,
+        senderId: msg.senderId,
+        text: msg.text,
+        time: msg.time,
+        status: msg.status,
+        payload: msg.payload,
+        attachments: newAttaches,
+      );
+    }
+
+    if (anyChanged) {
+      setState(() => _messagesRevision++);
     }
   }
 
@@ -658,6 +891,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   List<Object> _buildCombinedItems() {
+    final key = Object.hash(_messagesRevision, _messages.length);
+    final cached = _combinedItemsCache;
+    if (cached != null && _combinedItemsKey == key) return cached;
+
     final List<Object> items = [];
     final Set<int> usedDates = {};
 
@@ -690,30 +927,29 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     _separatorKeys.removeWhere((k, _) => !usedDates.contains(k));
+    _combinedItemsCache = items;
+    _combinedItemsKey = key;
     return items;
   }
 
   void _onScrollForDate() {
     if (!_scrollController.hasClients) return;
-    final currentOffset = _scrollController.position.pixels;
-    final scrollingUp = currentOffset > _lastScrollOffset;
-    _lastScrollOffset = currentOffset;
 
     _floatingDateTimer?.cancel();
-
-    if (!scrollingUp) {
-      _floatingDateAnimController.reverse();
-      return;
-    }
-
-    _floatingDateTimer = Timer(const Duration(seconds: 2), () {
+    _floatingDateTimer = Timer(const Duration(seconds: 1), () {
       if (mounted) _floatingDateAnimController.reverse();
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateFloatingDate());
+
+    if (_floatingDateScheduled) return;
+    _floatingDateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _floatingDateScheduled = false;
+      _updateFloatingDate();
+    });
   }
 
   void _updateFloatingDate() {
-    if (!mounted) return;
+    if (!mounted || _separatorKeys.isEmpty) return;
     DateTime? result;
 
     final listRenderBox = _listKey.currentContext?.findRenderObject();
@@ -792,11 +1028,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme =
+        _prankActive ? _prankPinkTheme(Theme.of(context)) : Theme.of(context);
+    final cs = theme.colorScheme;
 
     // TODO: Локализация
     // TODO: Cклонения
-    return ValueListenableBuilder<bool>(
+    return Theme(
+      data: theme,
+      child: RepaintBoundary(
+        key: _prankCaptureKey,
+        child: ValueListenableBuilder<bool>(
       valueListenable: AppSwipeBackDesktop.current,
       builder: (context, desktopSwipe, child) => SwipeToPop(
         enabled: widget.embedded && desktopSwipe,
@@ -952,6 +1194,8 @@ class _ChatScreenState extends State<ChatScreen>
         ],
       ),
       ),
+        ),
+      ),
     );
   }
 
@@ -972,7 +1216,9 @@ class _ChatScreenState extends State<ChatScreen>
     return Stack(
       key: _listKey,
       children: [
-        ValueListenableBuilder<double>(
+        ValueListenableBuilder<int>(
+          valueListenable: _otherReadTime,
+          builder: (context, _, _) => ValueListenableBuilder<double>(
           valueListenable: AppCacheExtent.current,
           builder: (context, cacheExtent, _) => ListView.builder(
           controller: _scrollController,
@@ -1006,6 +1252,7 @@ class _ChatScreenState extends State<ChatScreen>
               nextMessage: nextMessage,
               chatType: chat?.type ?? 'CHAT',
               overrideStatus: _effectiveStatus(message),
+              reactionsListenable: _reactionNotifierFor(message),
             );
 
             final pressable = _LongPressBubble(
@@ -1024,11 +1271,15 @@ class _ChatScreenState extends State<ChatScreen>
                   )
                 : pressable;
 
-            return RepaintBoundary(
+            final builtItem = RepaintBoundary(
               key: ValueKey('msg_${message.id}'),
               child: child,
             );
+            return message.id == _prankBubbleId
+                ? KeyedSubtree(key: _prankBubbleKey, child: builtItem)
+                : builtItem;
           },
+        ),
         ),
         ),
         Positioned(
@@ -1385,6 +1636,7 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() {
       _lastSentId = tempId;
       _messages.add(msg);
+      _messagesRevision++;
     });
     Haptics.send();
     _scrollToBottom();
@@ -1412,6 +1664,7 @@ class _ChatScreenState extends State<ChatScreen>
         payload: old.payload,
         attachments: attachment != null ? [attachment] : old.attachments,
       );
+      _messagesRevision++;
     });
   }
 

@@ -44,10 +44,13 @@ class FoldersModule {
     List<dynamic>? foldersOrder,
   ) {
     if (foldersOrder == null || foldersOrder.isEmpty) return;
-    final orderedIds = foldersOrder.map((id) => id.toString()).toList();
+    final orderIndex = <String, int>{};
+    for (var i = 0; i < foldersOrder.length; i++) {
+      orderIndex.putIfAbsent(foldersOrder[i].toString(), () => i);
+    }
     folders.sort((a, b) {
-      final aIndex = orderedIds.indexOf(a.id);
-      final bIndex = orderedIds.indexOf(b.id);
+      final aIndex = orderIndex[a.id] ?? -1;
+      final bIndex = orderIndex[b.id] ?? -1;
       if (aIndex == -1 && bIndex == -1) return 0;
       if (aIndex == -1) return 1;
       if (bIndex == -1) return -1;
