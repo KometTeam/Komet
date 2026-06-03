@@ -435,17 +435,20 @@ class AppDatabase {
   // Chats cache
 
   static Future<void> saveChats(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
     try {
       final db = await _instance;
-      final batch = db.batch();
-      for (final row in rows) {
-        batch.insert(
-          'chats_cache',
-          row,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      await batch.commit(noResult: true);
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        for (final row in rows) {
+          batch.insert(
+            'chats_cache',
+            row,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+      });
     } catch (e) {
       logger.e("Ошибка при сохранении чата: $e");
     }

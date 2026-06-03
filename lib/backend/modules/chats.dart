@@ -512,12 +512,15 @@ class ChatsModule {
     if (accountId == null) return;
 
     final dialogRows = await AppDatabase.loadDialogChats(accountId);
-    final byParticipant = <int, List<Map<String, dynamic>>>{};
+    final byParticipant =
+        <int, List<({Map<String, dynamic> row, CachedChat cached})>>{};
     for (final row in dialogRows) {
       final cached = CachedChat.fromDbRow(row);
       for (final pid in cached.participants.keys) {
         if (pid == accountId) continue;
-        byParticipant.putIfAbsent(pid, () => []).add(row);
+        byParticipant
+            .putIfAbsent(pid, () => [])
+            .add((row: row, cached: cached));
       }
     }
 
@@ -529,8 +532,9 @@ class ChatsModule {
       final options = ContactCache.getOptions(contactId) ?? const <String>{};
       final affected = byParticipant[contactId];
       if (affected == null) continue;
-      for (final row in affected) {
-        final cached = CachedChat.fromDbRow(row);
+      for (final entry in affected) {
+        final row = entry.row;
+        final cached = entry.cached;
         final sameTitle = cached.title == name;
         final sameAvatar = (cached.iconUrl ?? '') == (avatar ?? '');
         final sameOptions = cached.options.length == options.length &&

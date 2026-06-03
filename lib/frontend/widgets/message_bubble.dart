@@ -1924,7 +1924,7 @@ class _VoiceMessageBubble extends StatefulWidget {
 
 class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
   bool _isPlaying = false;
-  double _progress = 0.0;
+  final ValueNotifier<double> _progress = ValueNotifier(0.0);
   bool _transcriptionVisible = false;
   String? _transcriptionText;
   bool _transcriptionLoading = false;
@@ -1933,6 +1933,12 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
   void initState() {
     super.initState();
     _transcriptionText = widget.preloadedText;
+  }
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    super.dispose();
   }
 
   String _formatDuration(int seconds) {
@@ -2027,18 +2033,14 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                   builder: (context, constraints) {
                     return GestureDetector(
                       onTapDown: (details) {
-                        setState(() {
-                          _progress = (details.localPosition.dx /
-                                  constraints.maxWidth)
-                              .clamp(0.0, 1.0);
-                        });
+                        _progress.value =
+                            (details.localPosition.dx / constraints.maxWidth)
+                                .clamp(0.0, 1.0);
                       },
                       onHorizontalDragUpdate: (details) {
-                        setState(() {
-                          _progress = (details.localPosition.dx /
-                                  constraints.maxWidth)
-                              .clamp(0.0, 1.0);
-                        });
+                        _progress.value =
+                            (details.localPosition.dx / constraints.maxWidth)
+                                .clamp(0.0, 1.0);
                       },
                       child: Container(
                         height: 4,
@@ -2046,13 +2048,16 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                           color: waveInactiveColor,
                           borderRadius: BorderRadius.circular(2),
                         ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: _progress.clamp(0.0, 1.0),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: waveActiveColor,
-                              borderRadius: BorderRadius.circular(2),
+                        child: ValueListenableBuilder<double>(
+                          valueListenable: _progress,
+                          builder: (context, progress, _) => FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: progress.clamp(0.0, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: waveActiveColor,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
                         ),

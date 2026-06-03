@@ -15,6 +15,7 @@ class MediaCache {
   static int get maxBytes => AppMediaCacheLimit.current.value;
 
   static Directory? _dir;
+  static int? _cachedSize;
 
   static Future<Directory> _cacheDir() async {
     final cached = _dir;
@@ -81,6 +82,12 @@ class MediaCache {
       }
       await sink.close();
       await part.rename(file.path);
+      final known = _cachedSize;
+      if (known != null) {
+        try {
+          _cachedSize = known + await file.length();
+        } catch (_) {}
+      }
       await _enforceLimit();
       return file;
     } catch (_) {
@@ -96,7 +103,18 @@ class MediaCache {
   }
 
   /// Суммарный размер кэша в байтах.
+  ///
+  /// Результат держится в памяти и поддерживается инкрементально при
+  /// загрузке/очистке/вытеснении — повторные вызовы не пересканируют каталог.
   static Future<int> currentSize() async {
+    final cached = _cachedSize;
+    if (cached != null) return cached;
+    final total = await _scanSize();
+    _cachedSize = total;
+    return total;
+  }
+
+  static Future<int> _scanSize() async {
     final dir = await _cacheDir();
     var total = 0;
     await for (final entity in dir.list()) {
@@ -121,34 +139,43 @@ class MediaCache {
         } catch (_) {}
       }
     }
+    _cachedSize = 0;
     return freed;
   }
 
   /// Вытесняет старые файлы (по mtime), пока размер превышает [maxBytes].
+  ///
+  /// Под лимитом — ранний выход без сканирования каталога (частый случай).
+  /// Каталог обходится только когда лимит реально превышен.
   static Future<void> _enforceLimit() async {
+    final limit = maxBytes;
+    if (limit <= 0) return;
+
+    var total = _cachedSize ?? await _scanSize();
+    if (total <= limit) {
+      _cachedSize = total;
+      return;
+    }
+
     final dir = await _cacheDir();
     final files = <File>[];
-    var total = 0;
     await for (final entity in dir.list()) {
       if (entity is File && !entity.path.endsWith('.part')) {
         files.add(entity);
-        try {
-          total += await entity.length();
-        } catch (_) {}
       }
     }
-    if (maxBytes <= 0 || total <= maxBytes) return;
 
     files.sort((a, b) =>
         a.statSync().modified.compareTo(b.statSync().modified));
 
     for (final file in files) {
-      if (total <= maxBytes) break;
+      if (total <= limit) break;
       try {
         total -= await file.length();
         await file.delete();
       } catch (_) {}
     }
+    _cachedSize = total;
   }
 
   static String _sanitize(String name) {

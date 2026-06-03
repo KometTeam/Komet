@@ -183,8 +183,12 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   List<CachedChat> _selectedChatObjects() {
     if (_selectedChats.isEmpty) return const [];
-    final ids = _selectedChats;
-    return _chats.where((c) => ids.contains(c.id.toString())).toList();
+    final ids = <int>{};
+    for (final s in _selectedChats) {
+      final v = int.tryParse(s);
+      if (v != null) ids.add(v);
+    }
+    return _chats.where((c) => ids.contains(c.id)).toList();
   }
 
   _DeleteKind _categorizeChat(CachedChat c, int myId) {
