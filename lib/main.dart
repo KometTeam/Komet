@@ -91,6 +91,11 @@ void main() async {
   final storiesFuture = AppStories.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
 
+  final packageInfo = await packageInfoFuture;
+  if (packageInfo.packageName == 'ru.oneme.app') {
+    await PushService.instance.init(api: api, account: accountModule);
+  }
+
   final initialLocale = await localeFuture;
 
   await hapticsFuture;
@@ -128,15 +133,6 @@ void main() async {
       initialAccentSeed: initialAccentSeed,
     ),
   );
-
-  unawaited(_initPushIfNeeded(packageInfoFuture));
-}
-
-Future<void> _initPushIfNeeded(Future<PackageInfo> packageInfoFuture) async {
-  final packageInfo = await packageInfoFuture;
-  if (packageInfo.packageName == 'ru.oneme.app') {
-    await PushService.instance.init(api: api, account: accountModule);
-  }
 }
 
 class KometApp extends StatefulWidget {
