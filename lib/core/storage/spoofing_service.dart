@@ -16,11 +16,15 @@ class SpoofingService {
       'screen': prefs.getString('spoof_screen'),
       'timezone': prefs.getString('spoof_timezone'),
       'locale': prefs.getString('spoof_locale'),
+      'device_locale': prefs.getString('spoof_devicelocale'),
       'device_id': prefs.getString('spoof_deviceid'),
       'device_type': prefs.getString('spoof_devicetype'),
-      'app_version': hardcodedAppVersion,
+      'app_version': prefs.getString('spoof_appversion') ?? hardcodedAppVersion,
       'arch': prefs.getString('spoof_arch') ?? 'arm64-v8a',
-      'build_number': hardcodedBuildNumber,
+      'build_number': prefs.getInt('spoof_buildnumber') ?? hardcodedBuildNumber,
+      'instance_id': prefs.getString('spoof_instanceid'),
+      'client_session_id': prefs.getInt('spoof_clientsessionid'),
+      'push_device_type': prefs.getString('spoof_pushdevicetype'),
     };
   }
 }
