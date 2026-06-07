@@ -29,6 +29,7 @@ import '../../widgets/message_bubble.dart';
 import '../../widgets/theme_reveal.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
+import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
 
 class _UploadStatus {
@@ -1526,7 +1527,7 @@ class _ChatScreenState extends State<ChatScreen>
                             ),
                             _AttachButton(
                               hasText: _hasText,
-                              panelOpen: _showAttachmentPanel,
+                              onOpen: _openAttachmentSheet,
                               uploadStatus: _uploadStatus,
                               mutedIcon: mutedIcon,
                               cs: cs,
@@ -1712,6 +1713,10 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  void _openAttachmentSheet() {
+    showAttachmentSheet(context);
+  }
+
   Future<void> _pickAndUploadFile() async {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.isEmpty) return;
@@ -1820,14 +1825,14 @@ class _ChatScreenState extends State<ChatScreen>
 
 class _AttachButton extends StatelessWidget {
   final ValueNotifier<bool> hasText;
-  final ValueNotifier<bool> panelOpen;
+  final VoidCallback onOpen;
   final ValueNotifier<_UploadStatus> uploadStatus;
   final Color mutedIcon;
   final ColorScheme cs;
 
   const _AttachButton({
     required this.hasText,
-    required this.panelOpen,
+    required this.onOpen,
     required this.uploadStatus,
     required this.mutedIcon,
     required this.cs,
@@ -1836,19 +1841,16 @@ class _AttachButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([hasText, panelOpen, uploadStatus]),
+      listenable: Listenable.merge([hasText, uploadStatus]),
       builder: (context, _) {
         final isText = hasText.value;
-        final open = panelOpen.value;
         final status = uploadStatus.value;
         final iconColor = status.awaitingResponse
             ? cs.primary
-            : (status.active || open
+            : (status.active
                 ? cs.onSurfaceVariant.withValues(alpha: 0.5)
                 : mutedIcon);
-        final onTap = (isText || status.active || open)
-            ? null
-            : () => panelOpen.value = true;
+        final onTap = (isText || status.active) ? null : onOpen;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: isText ? 0 : 36,

@@ -11,6 +11,7 @@ import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/sliding_pill_nav.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -81,6 +82,17 @@ class _ChatListScreenState extends State<ChatListScreen>
   List<ChatFolder> _folders = [];
 
   int _currentNavIndex = 0;
+
+  static const List<PillNavItem> _chatsNavItems = [
+    PillNavItem(icon: Symbols.chat_bubble, label: 'Чаты'),
+    PillNavItem(icon: Symbols.call, label: 'Звонки'),
+    PillNavItem(icon: Symbols.person_pin, label: 'Контакты'),
+    PillNavItem(
+      icon: Symbols.settings,
+      label: 'Настройки',
+      longPressable: true,
+    ),
+  ];
 
   double _navPageAnimStart = 0;
   double _navPageAnimEnd = 0;
@@ -255,14 +267,20 @@ class _ChatListScreenState extends State<ChatListScreen>
     final myId = _profile?.id;
     if (myId == null) return;
 
-    await ChatsModule.refreshChats(api, selectedBefore.map((c) => c.id).toList());
+    await ChatsModule.refreshChats(
+      api,
+      selectedBefore.map((c) => c.id).toList(),
+    );
     if (!mounted) return;
 
     final selectedAfter = _selectedChatObjects();
     if (selectedAfter.isEmpty) return;
     final cats = selectedAfter.map((c) => _categorizeChat(c, myId)).toSet();
     if (cats.contains(_DeleteKind.blocked) || cats.length > 1) {
-      showCustomNotification(context, 'Статус чатов изменился, попробуйте ещё раз');
+      showCustomNotification(
+        context,
+        'Статус чатов изменился, попробуйте ещё раз',
+      );
       return;
     }
     final kind = cats.single;
@@ -561,7 +579,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       if (mounted) {
         setState(() {
           _profile = p;
-          _chats = chats.where((c) => !CloudStorageModule.isCloudStorageGroup(c)).toList();
+          _chats = chats
+              .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
+              .toList();
           _folders = folders;
           _foldersListKnown = foldersKnown;
           if (_selectedFolderId != null &&
@@ -674,8 +694,10 @@ class _ChatListScreenState extends State<ChatListScreen>
   final Map<int, List<CachedChat>> _pageChatsCache = {};
 
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
-    final baseKey =
-        Object.hash(identityHashCode(_chats), identityHashCode(_folders));
+    final baseKey = Object.hash(
+      identityHashCode(_chats),
+      identityHashCode(_folders),
+    );
     if (_pageChatsBaseKey != baseKey) {
       _pageChatsBaseKey = baseKey;
       _pageChatsCache.clear();
@@ -692,7 +714,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       final folder = _folders[pageIndex];
       base = FoldersModule.isAllChatsFolder(folder)
           ? _chats
-          : _chats.where((c) => FoldersModule.chatMatchesFolder(c, folder)).toList();
+          : _chats
+                .where((c) => FoldersModule.chatMatchesFolder(c, folder))
+                .toList();
     }
     final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
       ..sort((a, b) => a.favIndex!.compareTo(b.favIndex!));
@@ -1087,163 +1111,167 @@ class _ChatListScreenState extends State<ChatListScreen>
                 child: _shouldCollapseSearch
                     ? const SizedBox(width: double.infinity, height: 52)
                     : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 6, 20, 3),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  if (AppStories.current.value &&
-                                      _pullRatio < 0.8)
-                                    Opacity(
-                                      opacity: 1.0 - _pullRatio,
-                                      child: Container(
-                                        width: 50 * (1.0 - _pullRatio),
-                                        height: 32,
-                                        margin: const EdgeInsets.only(right: 8),
-                                        child: Stack(
-                                          children: [
-                                            _buildFoldedStory(
-                                              cs,
-                                              'https://i.pravatar.cc/150?u=dasha',
-                                              0,
-                                            ),
-                                            _buildFoldedStory(
-                                              cs,
-                                              'https://i.pravatar.cc/150?u=mastika',
-                                              1,
-                                            ),
-                                            _buildFoldedStory(
-                                              cs,
-                                              'https://i.pravatar.cc/150?u=stas',
-                                              2,
-                                            ),
-                                          ],
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 6, 20, 3),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    if (AppStories.current.value &&
+                                        _pullRatio < 0.8)
+                                      Opacity(
+                                        opacity: 1.0 - _pullRatio,
+                                        child: Container(
+                                          width: 50 * (1.0 - _pullRatio),
+                                          height: 32,
+                                          margin: const EdgeInsets.only(
+                                            right: 8,
+                                          ),
+                                          child: Stack(
+                                            children: [
+                                              _buildFoldedStory(
+                                                cs,
+                                                'https://i.pravatar.cc/150?u=dasha',
+                                                0,
+                                              ),
+                                              _buildFoldedStory(
+                                                cs,
+                                                'https://i.pravatar.cc/150?u=mastika',
+                                                1,
+                                              ),
+                                              _buildFoldedStory(
+                                                cs,
+                                                'https://i.pravatar.cc/150?u=stas',
+                                                2,
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  Text(
-                                    _sessionState == SessionState.online
-                                        ? (_profile?.firstName ?? 'Чат')
-                                        : 'Подключение...',
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w600,
-                                      fontFamily: 'Outfit',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              PopupMenuButton<int>(
-                                icon: Icon(
-                                  Symbols.more_vert,
-                                  color: cs.outline,
-                                  weight: 400,
-                                ),
-                                offset: const Offset(0, 48),
-                                elevation: 4,
-                                color: cs.surfaceContainerHigh,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                itemBuilder: (context) => [
-                                  _buildPopupMenuItem(
-                                    1,
-                                    'Кнопка 1',
-                                    Symbols.settings,
-                                  ),
-                                  _buildPopupMenuItem(
-                                    2,
-                                    'Кнопка 2',
-                                    Symbols.notifications,
-                                  ),
-                                  _buildPopupMenuItem(
-                                    3,
-                                    'Кнопка 3',
-                                    Symbols.shield,
-                                  ),
-                                  _buildPopupMenuItem(
-                                    4,
-                                    'Кнопка 4',
-                                    Symbols.info,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (AppStories.current.value)
-                          SizedBox(
-                            height: 96 * _pullRatio,
-                            child: Opacity(
-                              opacity: _pullRatio,
-                              child: ListView(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                children: [
-                                  _buildStoryItem(
-                                    'Даша',
-                                    'https://i.pravatar.cc/150?u=dasha',
-                                    true,
-                                  ),
-                                  _buildStoryItem(
-                                    'Мастика',
-                                    'https://i.pravatar.cc/150?u=mastika',
-                                    false,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: cs.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(50),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Symbols.search,
-                                  color: cs.outline,
-                                  size: 20,
-                                  weight: 400,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: TextField(
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontSize: 15,
-                                    ),
-                                    decoration: InputDecoration(
-                                      hintText: 'Поиск',
-                                      hintStyle: TextStyle(
-                                        color: cs.outline,
-                                        fontSize: 15,
+                                    Text(
+                                      _sessionState == SessionState.online
+                                          ? (_profile?.firstName ?? 'Чат')
+                                          : 'Подключение...',
+                                      style: TextStyle(
+                                        color: cs.onSurface,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Outfit',
                                       ),
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.zero,
                                     ),
+                                  ],
+                                ),
+                                PopupMenuButton<int>(
+                                  icon: Icon(
+                                    Symbols.more_vert,
+                                    color: cs.outline,
+                                    weight: 400,
                                   ),
+                                  offset: const Offset(0, 48),
+                                  elevation: 4,
+                                  color: cs.surfaceContainerHigh,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  itemBuilder: (context) => [
+                                    _buildPopupMenuItem(
+                                      1,
+                                      'Кнопка 1',
+                                      Symbols.settings,
+                                    ),
+                                    _buildPopupMenuItem(
+                                      2,
+                                      'Кнопка 2',
+                                      Symbols.notifications,
+                                    ),
+                                    _buildPopupMenuItem(
+                                      3,
+                                      'Кнопка 3',
+                                      Symbols.shield,
+                                    ),
+                                    _buildPopupMenuItem(
+                                      4,
+                                      'Кнопка 4',
+                                      Symbols.info,
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                          if (AppStories.current.value)
+                            SizedBox(
+                              height: 96 * _pullRatio,
+                              child: Opacity(
+                                opacity: _pullRatio,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
+                                  children: [
+                                    _buildStoryItem(
+                                      'Даша',
+                                      'https://i.pravatar.cc/150?u=dasha',
+                                      true,
+                                    ),
+                                    _buildStoryItem(
+                                      'Мастика',
+                                      'https://i.pravatar.cc/150?u=mastika',
+                                      false,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
+                            child: Container(
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Symbols.search,
+                                    color: cs.outline,
+                                    size: 20,
+                                    weight: 400,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: TextField(
+                                      style: TextStyle(
+                                        color: cs.onSurface,
+                                        fontSize: 15,
+                                      ),
+                                      decoration: InputDecoration(
+                                        hintText: 'Поиск',
+                                        hintStyle: TextStyle(
+                                          color: cs.outline,
+                                          fontSize: 15,
+                                        ),
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),
@@ -1388,11 +1416,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                   );
                 }
 
-                final chatIndex = hasSeparator && index > pinnedCount ? index - 1 : index;
+                final chatIndex = hasSeparator && index > pinnedCount
+                    ? index - 1
+                    : index;
                 final chat = chats[chatIndex];
                 final isPinned = (chat.favIndex ?? 0) > 0;
 
-                if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
+                if (chat.type.isNotEmpty &&
+                    chat.type == "DIALOG" &&
+                    chat.id != 0) {
                   int secondId = _profile?.id ?? 0;
                   for (final entry in chat.participants.entries) {
                     if (entry.key != _profile?.id) {
@@ -1404,7 +1436,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                   final avatar = ContactCache.getAvatar(secondId);
                   // ContactCache.isOfficial covers contacts loaded via opcode 32;
                   // chat.isOfficial covers contacts from the login payload.
-                  final isVerified = ContactCache.isOfficial(secondId) || chat.isOfficial;
+                  final isVerified =
+                      ContactCache.isOfficial(secondId) || chat.isOfficial;
 
                   final isPlaceholder =
                       chat.lastMsgText == ChatsModule.lastMsgPlaceholder;
@@ -1531,33 +1564,14 @@ class _ChatListScreenState extends State<ChatListScreen>
     double navInnerW,
     double bottomInset,
   ) {
-    final totalWeight = 5.2;
-    final unitWidth = navInnerW / totalWeight;
-    final activeWidth = unitWidth * 2.2;
-    final inactiveWidth = unitWidth * 1.0;
+    final geometry = PillNavGeometry.fromInnerWidth(navInnerW, 4);
+    final inactiveWidth = geometry.inactiveWidth;
+    final bubbleW = geometry.activeWidth - 8;
 
-    double bubbleLeftForIndex(int index) {
-      double lo = 0;
-      for (int i = 0; i < index; i++) {
-        lo += inactiveWidth;
-      }
-      return lo + 4;
-    }
+    double bubbleLeftForIndex(int index) => index * inactiveWidth + 4;
 
-    final leftOffset = bubbleLeftForIndex(_currentNavIndex);
-    final bubbleW = activeWidth - 8;
     final minBubbleLeft = bubbleLeftForIndex(0);
     final maxBubbleLeft = bubbleLeftForIndex(3);
-
-    double navInterpolatedWidth(int tabIndex, double rowT) {
-      final rt = rowT.clamp(0.0, 3.0);
-      final i0 = rt.floor().clamp(0, 3);
-      final i1 = rt.ceil().clamp(0, 3);
-      final frac = i0 == i1 ? 0.0 : (rt - i0);
-      double at(int sel, int tab) =>
-          (tab == sel) ? (activeWidth - 0.5) : (inactiveWidth - 0.5);
-      return at(i0, tabIndex) + (at(i1, tabIndex) - at(i0, tabIndex)) * frac;
-    }
 
     int indexForBubbleLeft(double left) {
       final cx = left + bubbleW / 2;
@@ -1581,140 +1595,68 @@ class _ChatListScreenState extends State<ChatListScreen>
       right: 8,
       bottom: _isSelectionMode ? -100 : bottomInset + 10.0,
       child: RepaintBoundary(
-        child: Container(
-          height: 68,
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(34),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: (_) {
-              if (_isSelectionMode) return;
-              _navPageAnimController.stop();
-              _navPageAnimController.value = 1.0;
-              _navDragDx.value = 0;
-              setState(() {
-                _navDragging = true;
-                _navDragBaseLeft = bubbleLeftForIndex(_currentNavIndex);
-              });
-            },
-            onHorizontalDragUpdate: (details) {
-              if (!_navDragging) return;
-              _navDragDx.value += details.delta.dx;
-            },
-            onHorizontalDragEnd: (_) {
-              if (!_navDragging) return;
-              final left = (_navDragBaseLeft + _navDragDx.value).clamp(
-                minBubbleLeft,
-                maxBubbleLeft,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) {
+            if (_isSelectionMode) return;
+            _navPageAnimController.stop();
+            _navPageAnimController.value = 1.0;
+            _navDragDx.value = 0;
+            setState(() {
+              _navDragging = true;
+              _navDragBaseLeft = bubbleLeftForIndex(_currentNavIndex);
+            });
+          },
+          onHorizontalDragUpdate: (details) {
+            if (!_navDragging) return;
+            _navDragDx.value += details.delta.dx;
+          },
+          onHorizontalDragEnd: (_) {
+            if (!_navDragging) return;
+            final left = (_navDragBaseLeft + _navDragDx.value).clamp(
+              minBubbleLeft,
+              maxBubbleLeft,
+            );
+            final next = indexForBubbleLeft(left);
+            _navDragDx.value = 0;
+            setState(() {
+              _currentNavIndex = next;
+              _navDragging = false;
+            });
+          },
+          onHorizontalDragCancel: () {
+            if (!_navDragging) return;
+            _navDragDx.value = 0;
+            setState(() {
+              _navDragging = false;
+            });
+          },
+          child: ValueListenableBuilder<double>(
+            valueListenable: _navDragDx,
+            builder: (context, navDragDx, _) {
+              final position = _navDragging
+                  ? ((_navDragBaseLeft + navDragDx).clamp(
+                              minBubbleLeft,
+                              maxBubbleLeft,
+                            ) -
+                            4) /
+                        inactiveWidth
+                  : _currentNavIndex.toDouble();
+              return SlidingPillNav(
+                items: _chatsNavItems,
+                position: position,
+                animationDuration: _navDragging
+                    ? Duration.zero
+                    : const Duration(milliseconds: 350),
+                geometry: geometry,
+                iconSize: 20,
+                labelGap: 4,
+                onTap: _onNavTabSelected,
+                onItemLongPress: (index, pos) {
+                  if (index == 3) _openAccountSwitcher(pos);
+                },
               );
-              final next = indexForBubbleLeft(left);
-              _navDragDx.value = 0;
-              setState(() {
-                _currentNavIndex = next;
-                _navDragging = false;
-              });
             },
-            onHorizontalDragCancel: () {
-              if (!_navDragging) return;
-              _navDragDx.value = 0;
-              setState(() {
-                _navDragging = false;
-              });
-            },
-            child: ValueListenableBuilder<double>(
-              valueListenable: _navDragDx,
-              builder: (context, navDragDx, _) {
-                final bubbleLeft = _navDragging
-                    ? (_navDragBaseLeft + navDragDx)
-                        .clamp(minBubbleLeft, maxBubbleLeft)
-                    : leftOffset;
-                final navRowT =
-                    ((bubbleLeft - 4) / inactiveWidth).clamp(0.0, 3.0);
-                return Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                AnimatedPositioned(
-                  duration: _navDragging
-                      ? Duration.zero
-                      : const Duration(milliseconds: 350),
-                  curve: Curves.easeOutCubic,
-                  left: bubbleLeft,
-                  top: 8,
-                  bottom: 8,
-                  width: bubbleW,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: navInnerW,
-                  child: Row(
-                  children: List.generate(4, (index) {
-                    IconData icon;
-                    String label;
-                    switch (index) {
-                      case 0:
-                        icon = Symbols.chat_bubble;
-                        label = 'Чаты';
-                        break;
-                      case 1:
-                        icon = Symbols.call;
-                        label = 'Звонки';
-                        break;
-                      case 2:
-                        icon = Symbols.person_pin;
-                        label = 'Контакты';
-                        break;
-                      default:
-                        icon = Symbols.settings;
-                        label = 'Настройки';
-                    }
-
-                    final isSelected = _currentNavIndex == index;
-                    final visualSel = navRowT.round().clamp(0, 3);
-                    return AnimatedContainer(
-                      duration: _navDragging
-                          ? Duration.zero
-                          : const Duration(milliseconds: 350),
-                      curve: Curves.easeOutCubic,
-                      width: _navDragging
-                          ? navInterpolatedWidth(index, navRowT)
-                          : (isSelected
-                                ? (activeWidth - 0.5)
-                                : (inactiveWidth - 0.5)),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(26),
-                        child: _buildNavItem(
-                          index,
-                          icon,
-                          label,
-                          selectedOverride: _navDragging
-                              ? (index == visualSel)
-                              : null,
-                          instant: _navDragging,
-                        ),
-                      ),
-                    );
-                  }),
-                  ),
-                ),
-              ],
-                );
-              },
-            ),
           ),
         ),
       ),
@@ -1759,8 +1701,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                         width: pageW * 4,
                         height: pageH,
                         child: AnimatedBuilder(
-                          animation: Listenable.merge(
-                              [_navPageAnimController, _navDragDx]),
+                          animation: Listenable.merge([
+                            _navPageAnimController,
+                            _navDragDx,
+                          ]),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -1902,53 +1846,64 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ],
                     ),
-                    child: Builder(builder: (_) {
-                      final selected = _selectedChatObjects();
-                      final deleteCategory = _selectionDeleteCategoryFor(selected);
-                      final anyMuted = selected.any((c) => c.isMuted);
-                      final anyPinned = selected.any((c) => (c.favIndex ?? 0) > 0);
-                      return Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Symbols.arrow_back, color: cs.onSurface),
-                            onPressed: _clearSelection,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _selectedChats.length.toString(),
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                          if (deleteCategory != null)
+                    child: Builder(
+                      builder: (_) {
+                        final selected = _selectedChatObjects();
+                        final deleteCategory = _selectionDeleteCategoryFor(
+                          selected,
+                        );
+                        final anyMuted = selected.any((c) => c.isMuted);
+                        final anyPinned = selected.any(
+                          (c) => (c.favIndex ?? 0) > 0,
+                        );
+                        return Row(
+                          children: [
                             IconButton(
-                              icon: Icon(Symbols.delete, color: cs.onSurface),
-                              onPressed: _onDeleteTap,
+                              icon: Icon(
+                                Symbols.arrow_back,
+                                color: cs.onSurface,
+                              ),
+                              onPressed: _clearSelection,
                             ),
-                          IconButton(
-                            icon: Icon(Symbols.archive, color: cs.onSurface),
-                            onPressed: () {},
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              anyPinned ? Symbols.keep_off : Symbols.keep,
-                              color: cs.onSurface,
+                            const SizedBox(width: 8),
+                            Text(
+                              _selectedChats.length.toString(),
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                            onPressed: selected.isEmpty ? null : _onPinTap,
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              anyMuted ? Symbols.volume_up : Symbols.volume_off,
-                              color: cs.onSurface,
+                            const Spacer(),
+                            if (deleteCategory != null)
+                              IconButton(
+                                icon: Icon(Symbols.delete, color: cs.onSurface),
+                                onPressed: _onDeleteTap,
+                              ),
+                            IconButton(
+                              icon: Icon(Symbols.archive, color: cs.onSurface),
+                              onPressed: () {},
                             ),
-                            onPressed: selected.isEmpty ? null : _onMuteTap,
-                          ),
-                        ],
-                      );
-                    }),
+                            IconButton(
+                              icon: Icon(
+                                anyPinned ? Symbols.keep_off : Symbols.keep,
+                                color: cs.onSurface,
+                              ),
+                              onPressed: selected.isEmpty ? null : _onPinTap,
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                anyMuted
+                                    ? Symbols.volume_up
+                                    : Symbols.volume_off,
+                                color: cs.onSurface,
+                              ),
+                              onPressed: selected.isEmpty ? null : _onMuteTap,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -1981,7 +1936,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
                 child: CircleAvatar(
                   radius: 26,
-                  backgroundImage: CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
+                  backgroundImage: CachedNetworkImageProvider(
+                    imageUrl,
+                    maxWidth: 144,
+                    maxHeight: 144,
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -2114,18 +2073,26 @@ class _ChatListScreenState extends State<ChatListScreen>
           return;
         }
         if (imageUrl.isNotEmpty) {
-          unawaited(precacheImage(
-            CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
-            context,
-          ));
+          unawaited(
+            precacheImage(
+              CachedNetworkImageProvider(
+                imageUrl,
+                maxWidth: 144,
+                maxHeight: 144,
+              ),
+              context,
+            ),
+          );
         }
         if (widget.onChatSelected != null) {
-          widget.onChatSelected!(DesktopChatSelection(
-            chatId: int.parse(id),
-            name: name,
-            imageUrl: imageUrl,
-            chatType: chatType,
-          ));
+          widget.onChatSelected!(
+            DesktopChatSelection(
+              chatId: int.parse(id),
+              name: name,
+              imageUrl: imageUrl,
+              chatType: chatType,
+            ),
+          );
         } else {
           pushSwipeable(
             context,
@@ -2155,7 +2122,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                     radius: 24,
                     backgroundColor: cs.surfaceContainerHighest,
                     backgroundImage: imageUrl.isNotEmpty
-                        ? CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144)
+                        ? CachedNetworkImageProvider(
+                            imageUrl,
+                            maxWidth: 144,
+                            maxHeight: 144,
+                          )
                         : null,
                     child: imageUrl.isEmpty
                         ? Text(
@@ -2337,71 +2308,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildNavItem(
-    int index,
-    IconData icon,
-    String label, {
-    bool? selectedOverride,
-    bool instant = false,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final bool isSelected = selectedOverride ?? (_currentNavIndex == index);
-    final Duration animDur = instant
-        ? Duration.zero
-        : const Duration(milliseconds: 350);
-    final Duration opacityDur = instant
-        ? Duration.zero
-        : const Duration(milliseconds: 200);
-    final bool isSettings = index == 3;
-    return GestureDetector(
-      onTap: () => _onNavTabSelected(index),
-      onLongPressStart: isSettings
-          ? (details) => _openAccountSwitcher(details.globalPosition)
-          : null,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? cs.onPrimary : cs.onSurface,
-                size: 20,
-                fill: 1,
-              ),
-              AnimatedContainer(
-                duration: animDur,
-                curve: Curves.easeOutCubic,
-                width: isSelected ? null : 0,
-                child: AnimatedOpacity(
-                  duration: opacityDur,
-                  opacity: isSelected ? 1.0 : 0.0,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(width: 4),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   void _openAccountSwitcher(Offset point) {
     Haptics.medium();
     final controller = AccountSwitcherController()..attach(point);
@@ -2537,7 +2443,11 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
         child: CircleAvatar(
           radius: 12,
-          backgroundImage: CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144),
+          backgroundImage: CachedNetworkImageProvider(
+            imageUrl,
+            maxWidth: 144,
+            maxHeight: 144,
+          ),
         ),
       ),
     );
