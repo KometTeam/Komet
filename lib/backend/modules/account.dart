@@ -12,6 +12,7 @@ import 'chats.dart';
 import 'contacts.dart';
 import 'folders.dart';
 import 'messages.dart';
+import 'webapp.dart';
 
 String _normalizeAuthPhone(String phone) {
   final digits = phone.replaceAll(RegExp(r'\D'), '');
@@ -1281,6 +1282,9 @@ class AccountModule {
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
     final userConfig = config?['user'] as Map?;
+    if (serverConfig != null) {
+      await _persistEntryBannerApps(accountId, serverConfig);
+    }
     final yMap = serverConfig?['y-map'] as Map?;
     final whiteListLinks = serverConfig?['white-list-links'] as List?;
     final fileUploadUnsupported = serverConfig?['file-upload-unsupported-types'] as List?;
@@ -1303,6 +1307,28 @@ class AccountModule {
     };
 
     await AppDatabase.saveLoginInfo(accountId, jsonEncode(info));
+  }
+
+  Future<void> _persistEntryBannerApps(int accountId, Map serverConfig) async {
+    final banners = serverConfig['settings-entry-banners'];
+    if (banners is! List) return;
+    for (final banner in banners) {
+      final items = (banner is Map) ? banner['items'] : null;
+      if (items is! List) continue;
+      for (final item in items) {
+        if (item is! Map) continue;
+        final appId = item['appid'];
+        final icon = item['icon']?.toString().toLowerCase() ?? '';
+        if (appId is int && icon.contains('sferum')) {
+          await AppDatabase.setSyncValue(
+            accountId,
+            EntryBannerApps.sferumKey,
+            appId.toString(),
+          );
+          return;
+        }
+      }
+    }
   }
 
   Map<String, dynamic> _extractChatMarker(List<Map> chats) {

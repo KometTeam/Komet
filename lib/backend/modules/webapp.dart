@@ -1,5 +1,11 @@
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/storage/app_database.dart';
+import '../../core/storage/token_storage.dart';
+
+abstract class EntryBannerApps {
+  static const String sferumKey = 'entry_banner_app_sferum';
+}
 
 class WebAppLaunch {
   final String url;
@@ -8,8 +14,6 @@ class WebAppLaunch {
 }
 
 class WebAppModule {
-  static const int sferumBotId = 2340319;
-
   final Api _api;
 
   WebAppModule(this._api);
@@ -18,7 +22,6 @@ class WebAppModule {
     if (_api.state != SessionState.online) {
       throw const WebAppUnavailable('Нет соединения с сервером');
     }
-    await _resolveBot(botId);
     final packet = await _api.sendRequest(Opcode.webAppInitData, {
       'botId': botId,
     });
@@ -33,14 +36,21 @@ class WebAppModule {
     return WebAppLaunch(url: url);
   }
 
-  Future<WebAppLaunch> fetchSferum() => fetchLaunch(sferumBotId);
+  Future<WebAppLaunch> fetchSferum() async {
+    final botId = await _resolveEntryApp(EntryBannerApps.sferumKey);
+    if (botId == null) {
+      throw const WebAppUnavailable(
+        'Сферум сейчас недоступен. Переподключитесь и попробуйте снова.',
+      );
+    }
+    return fetchLaunch(botId);
+  }
 
-  Future<void> _resolveBot(int botId) async {
-    try {
-      await _api.sendRequest(Opcode.contactInfo, {
-        'contactIds': [botId],
-      });
-    } catch (_) {}
+  Future<int?> _resolveEntryApp(String key) async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return null;
+    final raw = await AppDatabase.getSyncValue(accountId, key);
+    return int.tryParse(raw ?? '');
   }
 }
 
