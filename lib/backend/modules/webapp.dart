@@ -18,6 +18,7 @@ class WebAppModule {
     if (_api.state != SessionState.online) {
       throw const WebAppUnavailable('Нет соединения с сервером');
     }
+    await _resolveBot(botId);
     final packet = await _api.sendRequest(Opcode.webAppInitData, {
       'botId': botId,
     });
@@ -33,6 +34,14 @@ class WebAppModule {
   }
 
   Future<WebAppLaunch> fetchSferum() => fetchLaunch(sferumBotId);
+
+  Future<void> _resolveBot(int botId) async {
+    try {
+      await _api.sendRequest(Opcode.contactInfo, {
+        'contactIds': [botId],
+      });
+    } catch (_) {}
+  }
 }
 
 class WebAppUnavailable implements Exception {
