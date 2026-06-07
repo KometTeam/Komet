@@ -30,6 +30,7 @@ import 'backend/modules/contacts.dart';
 import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
 import 'backend/modules/polls.dart';
+import 'backend/modules/webapp.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
@@ -47,6 +48,7 @@ final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
 final pollsModule = PollsModule(api);
+final webAppModule = WebAppModule(api);
 final fileUploader = FileUploader(api: api, messages: messagesModule);
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();

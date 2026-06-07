@@ -15,6 +15,7 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
+import '../webapp/web_app_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_screen.dart';
 import 'performance_screen.dart';
@@ -252,9 +253,20 @@ class _SettingsTabState extends State<SettingsTab> {
                       icon: Symbols.badge,
                       label: 'Цифровой ID',
                     ),
-                    const _SettingsItem(
+                    _SettingsItem(
                       icon: Symbols.language,
                       label: 'Войти в Сферум',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => WebAppScreen(
+                              title: 'Сферум',
+                              loader: () => webAppModule.fetchSferum(),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _SettingsItem(
                       icon: Symbols.info,
