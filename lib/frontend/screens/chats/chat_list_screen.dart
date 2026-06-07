@@ -1429,8 +1429,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                       break;
                     }
                   }
-                  final name = ContactCache.get(secondId);
-                  final avatar = ContactCache.getAvatar(secondId);
+                  final name = ContactCache.get(secondId) ?? chat.title;
+                  final avatar =
+                      ContactCache.getAvatar(secondId) ?? chat.iconUrl;
                   // ContactCache.isOfficial covers contacts loaded via opcode 32;
                   // chat.isOfficial covers contacts from the login payload.
                   final isVerified =
