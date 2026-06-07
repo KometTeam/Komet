@@ -5,6 +5,7 @@ import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/utils/logger.dart';
 import '../../models/attachment.dart';
 import 'chats.dart' show ChatsModule;
 
@@ -24,7 +25,8 @@ class ContactCache {
   static String? get(int id) => _nameCache[id];
   static String? getAvatar(int id) => _avatarCache[id];
   static Set<String>? getOptions(int id) => _optionsCache[id];
-  static bool isOfficial(int id) => _optionsCache[id]?.contains('OFFICIAL') ?? false;
+  static bool isOfficial(int id) =>
+      _optionsCache[id]?.contains('OFFICIAL') ?? false;
 
   static void clear() {
     _nameCache.clear();
@@ -81,13 +83,13 @@ class FileHistoryEntry {
   });
 
   Map<String, dynamic> toJson() => {
-        'fileId': fileId,
-        if (url != null) 'url': url,
-        if (token != null) 'token': token,
-        if (filename != null) 'filename': filename,
-        if (size != null) 'size': size,
-        'sentAt': sentAt.millisecondsSinceEpoch,
-      };
+    'fileId': fileId,
+    if (url != null) 'url': url,
+    if (token != null) 'token': token,
+    if (filename != null) 'filename': filename,
+    if (size != null) 'size': size,
+    'sentAt': sentAt.millisecondsSinceEpoch,
+  };
 
   static FileHistoryEntry? fromJson(Map<String, dynamic> j) {
     final id = j['fileId'];
@@ -108,8 +110,9 @@ class FileHistoryCache {
   static const _prefKey = 'file_history_v1';
   static const _maxEntries = 50;
 
-  static final ValueNotifier<List<FileHistoryEntry>> notifier =
-      ValueNotifier(const []);
+  static final ValueNotifier<List<FileHistoryEntry>> notifier = ValueNotifier(
+    const [],
+  );
 
   static List<FileHistoryEntry> get history => notifier.value;
   static bool get isEmpty => notifier.value.isEmpty;
@@ -135,7 +138,10 @@ class FileHistoryCache {
   }
 
   static void add(FileHistoryEntry entry) {
-    final next = [entry, ...notifier.value.where((e) => e.fileId != entry.fileId)];
+    final next = [
+      entry,
+      ...notifier.value.where((e) => e.fileId != entry.fileId),
+    ];
     if (next.length > _maxEntries) next.removeRange(_maxEntries, next.length);
     notifier.value = next;
     _persist();
@@ -223,15 +229,24 @@ class CachedMessage {
 
     return CachedMessage(
       id: row['id']?.toString() ?? '',
-      accountId: row['account_id'] is int ? row['account_id'] as int : int.tryParse(row['account_id']?.toString() ?? '') ?? 0,
-      chatId: row['chat_id'] is int ? row['chat_id'] as int : int.tryParse(row['chat_id']?.toString() ?? '') ?? 0,
-      senderId: row['sender_id'] is int ? row['sender_id'] as int : int.tryParse(row['sender_id']?.toString() ?? '') ?? 0,
+      accountId: row['account_id'] is int
+          ? row['account_id'] as int
+          : int.tryParse(row['account_id']?.toString() ?? '') ?? 0,
+      chatId: row['chat_id'] is int
+          ? row['chat_id'] as int
+          : int.tryParse(row['chat_id']?.toString() ?? '') ?? 0,
+      senderId: row['sender_id'] is int
+          ? row['sender_id'] as int
+          : int.tryParse(row['sender_id']?.toString() ?? '') ?? 0,
       text: row['text']?.toString(),
-      time: row['time'] is int ? row['time'] as int : int.tryParse(row['time']?.toString() ?? '') ?? 0,
+      time: row['time'] is int
+          ? row['time'] as int
+          : int.tryParse(row['time']?.toString() ?? '') ?? 0,
       status: row['status']?.toString(),
       payload: payload,
       attachments: attachments,
-      isControl: attachments?.any((a) => a.type == AttachmentType.control) ?? false,
+      isControl:
+          attachments?.any((a) => a.type == AttachmentType.control) ?? false,
     );
   }
 
@@ -252,8 +267,7 @@ class CachedMessage {
     if (attaches is List && attaches.isNotEmpty) {
       attachments = attaches
           .whereType<Map>()
-          .map((a) =>
-              MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
           .toList();
     }
     return CachedMessage(
@@ -327,7 +341,7 @@ class MessagesModule {
 
     if (rows.isNotEmpty) {
       AppDatabase.saveMessages(rows).catchError((e) {
-        debugPrint('saveMessages error: $e');
+        logger.e('saveMessages error: $e');
       });
     }
 
@@ -424,7 +438,9 @@ class MessagesModule {
     final response = await _api.sendRequest(Opcode.msgSend, payload);
     if (!response.isOk) {
       final msg = (response.payload is Map)
-          ? (response.payload['localizedMessage'] ?? response.payload['message'] ?? 'Ошибка отправки')
+          ? (response.payload['localizedMessage'] ??
+                response.payload['message'] ??
+                'Ошибка отправки')
           : 'Ошибка отправки';
       throw Exception(msg.toString());
     }
@@ -460,7 +476,10 @@ class MessagesModule {
     if (transcriptionStatus == 1) {
       final text = data['transcription'] as String? ?? '';
       if (text.isEmpty) {
-        return TranscriptionResult(status: 1, text: 'не удалось распознать текст');
+        return TranscriptionResult(
+          status: 1,
+          text: 'не удалось распознать текст',
+        );
       }
       return TranscriptionResult(status: 1, text: text);
     }
@@ -509,7 +528,7 @@ class MessagesModule {
           if (token != null)
             {'_type': 'FILE', 'token': token}
           else
-            {'_type': 'FILE', 'fileId': fileId}
+            {'_type': 'FILE', 'fileId': fileId},
         ],
       },
       'notify': notify,
@@ -706,7 +725,10 @@ class MessagesModule {
 
               final rawOpts = contact['options'];
               if (rawOpts is List) {
-                ContactCache.putOptions(contactId, rawOpts.whereType<String>().toSet());
+                ContactCache.putOptions(
+                  contactId,
+                  rawOpts.whereType<String>().toSet(),
+                );
               }
 
               ChatsModule.applyContactUpdate(contactId);
@@ -716,7 +738,7 @@ class MessagesModule {
         }
       }
     } catch (e) {
-      debugPrint('searchContactById error: $e');
+      logger.e('searchContactById error: $e');
     }
     return null;
   }

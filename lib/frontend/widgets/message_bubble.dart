@@ -7,6 +7,7 @@ import '../../backend/modules/messages.dart';
 import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
 import '../../core/utils/bubble_radius.dart';
+import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/file_download.dart';
 import '../../core/utils/media_cache.dart';
@@ -58,13 +59,14 @@ class MessageBubble extends StatelessWidget {
   static const Radius _photoRadius = Radius.circular(photoBorderRadius);
 
   static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
-  static const BorderRadius _reactionChipRadius =
-      BorderRadius.all(Radius.circular(10));
+  static const BorderRadius _reactionChipRadius = BorderRadius.all(
+    Radius.circular(10),
+  );
 
   static Color bubbleTextColor(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? Colors.white
-          : Colors.black;
+      ? Colors.white
+      : Colors.black;
 
   final CachedMessage message;
   final bool isMe;
@@ -108,13 +110,15 @@ class MessageBubble extends StatelessWidget {
 
     final hasPrevFromMe =
         prevMessage?.senderId == message.senderId && !prevMessage!.isControl;
-    final prevTimeDiff =
-        hasPrevFromMe ? message.time - prevMessage!.time : 999999999;
+    final prevTimeDiff = hasPrevFromMe
+        ? message.time - prevMessage!.time
+        : 999999999;
 
     final hasNextFromMe =
         nextMessage?.senderId == message.senderId && !nextMessage!.isControl;
-    final nextTimeDiff =
-        hasNextFromMe ? nextMessage!.time - message.time : 999999999;
+    final nextTimeDiff = hasNextFromMe
+        ? nextMessage!.time - message.time
+        : 999999999;
 
     final groupedWithPrev = hasPrevFromMe && prevTimeDiff < 300000;
     final groupedWithNext = hasNextFromMe && nextTimeDiff < 300000;
@@ -133,9 +137,11 @@ class MessageBubble extends StatelessWidget {
       if (first is ForwardedMessageAttachment) {
         final fwd = first;
         final hasContact = fwd.originalContact != null;
-        final hasPhoto = fwd.originalAttachments != null &&
+        final hasPhoto =
+            fwd.originalAttachments != null &&
             fwd.originalAttachments!.any((a) => a is PhotoAttachment);
-        final hasOther = fwd.originalAttachments != null &&
+        final hasOther =
+            fwd.originalAttachments != null &&
             fwd.originalAttachments!.isNotEmpty;
         if (hasContact || hasPhoto || hasOther) return MessageType.attachment;
         return MessageType.text;
@@ -219,8 +225,10 @@ class MessageBubble extends StatelessWidget {
     bool hasPhotoWithCaption,
     bool hasMultiplePhotosNoCaption,
   ) {
-    final isTop = shape == BubbleShape.singleTop || shape == BubbleShape.singleMiddle;
-    final isBottom = shape == BubbleShape.singleBottom || shape == BubbleShape.singleMiddle;
+    final isTop =
+        shape == BubbleShape.singleTop || shape == BubbleShape.singleMiddle;
+    final isBottom =
+        shape == BubbleShape.singleBottom || shape == BubbleShape.singleMiddle;
     return computeBubbleRadius(
       isMe: isMe,
       isTop: isTop,
@@ -238,7 +246,11 @@ class MessageBubble extends StatelessWidget {
     if (senderAvatar != null && senderAvatar.isNotEmpty) {
       return CircleAvatar(
         radius: 15,
-        backgroundImage: CachedNetworkImageProvider(senderAvatar, maxWidth: 96, maxHeight: 96),
+        backgroundImage: CachedNetworkImageProvider(
+          senderAvatar,
+          maxWidth: 96,
+          maxHeight: 96,
+        ),
         backgroundColor: cs.primaryContainer,
       );
     }
@@ -280,36 +292,35 @@ class MessageBubble extends StatelessWidget {
     final padding = _paddingFor(contentType, shape);
 
     final showAvatarSlot = !isMe;
-    final showAvatar = showAvatarSlot &&
+    final showAvatar =
+        showAvatarSlot &&
         chatType == "CHAT" &&
         nextMessage?.senderId != message.senderId;
 
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.75;
-    final bubbleColor =
-        isMe ? cs.primaryContainer : cs.surfaceContainerHighest;
+    final bubbleColor = isMe ? cs.primaryContainer : cs.surfaceContainerHighest;
 
     _BubbleCtx makeCtx() => _BubbleCtx(
-          context: context,
-          cs: cs,
-          text: textColor,
-          shape: shape,
-          contentType: contentType,
-          hasPhotoWithCaption: hasPhotoCap,
-          hasMultiplePhotosNoCaption: hasMultiPhotos,
-          reactionInfo: _resolveReactionInfo(),
-        );
+      context: context,
+      cs: cs,
+      text: textColor,
+      shape: shape,
+      contentType: contentType,
+      hasPhotoWithCaption: hasPhotoCap,
+      hasMultiplePhotosNoCaption: hasMultiPhotos,
+      reactionInfo: _resolveReactionInfo(),
+    );
 
     final Widget bubbleContent =
         reactionsListenable != null && contentType == MessageType.text
-            ? ValueListenableBuilder<Map<String, dynamic>?>(
-                valueListenable: reactionsListenable!,
-                builder: (context, _, _) => _buildContent(makeCtx()),
-              )
-            : _buildContent(makeCtx());
+        ? ValueListenableBuilder<Map<String, dynamic>?>(
+            valueListenable: reactionsListenable!,
+            builder: (context, _, _) => _buildContent(makeCtx()),
+          )
+        : _buildContent(makeCtx());
 
     final reactionsUnder = _reactionsUnderBubble(contentType);
-    final reactionsInside =
-        contentType != MessageType.text && !reactionsUnder;
+    final reactionsInside = contentType != MessageType.text && !reactionsUnder;
 
     return GestureDetector(
       onTap: Haptics.tap,
@@ -322,8 +333,9 @@ class MessageBubble extends StatelessWidget {
         ),
         child: Align(
           child: Row(
-            mainAxisAlignment:
-                isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: isMe
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
             spacing: 8,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -337,8 +349,9 @@ class MessageBubble extends StatelessWidget {
                   backgroundColor: Color(0x00000000),
                 ),
               Column(
-                crossAxisAlignment:
-                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: [
                   ListenableBuilder(
                     listenable: Listenable.merge([
@@ -540,7 +553,8 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildTextContent(_BubbleCtx ctx) {
     final attachments = message.attachments;
-    final isForwardedContact = attachments != null &&
+    final isForwardedContact =
+        attachments != null &&
         attachments.isNotEmpty &&
         attachments.first is ForwardedMessageAttachment &&
         (attachments.first as ForwardedMessageAttachment).originalContact !=
@@ -558,21 +572,18 @@ class MessageBubble extends StatelessWidget {
         ? _buildForwardedInlineText(ctx, forwarded)
         : Text(
             message.text ?? '',
-            style: TextStyle(
-              color: ctx.text,
-              fontSize: 16,
-              height: 1.3,
-            ),
+            style: TextStyle(color: ctx.text, fontSize: 16, height: 1.3),
           );
 
     final metaWidget = Text(
       message.status == 'EDITED'
-          ? '${_formatTime(message.time)} ред.'
-          : _formatTime(message.time),
+          ? '${formatClock(DateTime.fromMillisecondsSinceEpoch(message.time))} ред.'
+          : formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
       style: TextStyle(color: ctx.dim, fontSize: 10),
     );
 
-    final showSender = message.senderId != message.accountId &&
+    final showSender =
+        message.senderId != message.accountId &&
         prevMessage?.senderId != message.senderId &&
         chatType == "CHAT";
 
@@ -604,10 +615,7 @@ class MessageBubble extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 2),
                   child: metaWidget,
                 ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  _buildStatusIcon(ctx),
-                ],
+                if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
               ],
             ),
           ],
@@ -625,21 +633,18 @@ class MessageBubble extends StatelessWidget {
             style: TextStyle(color: ctx.text),
           ),
         Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Flexible(child: textWidget),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: metaWidget,
-              ),
-              if (isMe) ...[
-                const SizedBox(width: 4),
-                _buildStatusIcon(ctx),
-              ],
-            ],
-          ),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Flexible(child: textWidget),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: metaWidget,
+            ),
+            if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
+          ],
+        ),
       ],
     );
   }
@@ -667,7 +672,11 @@ class MessageBubble extends StatelessWidget {
             if (senderAvatar != null && senderAvatar.isNotEmpty)
               CircleAvatar(
                 radius: 10,
-                backgroundImage: CachedNetworkImageProvider(senderAvatar, maxWidth: 96, maxHeight: 96),
+                backgroundImage: CachedNetworkImageProvider(
+                  senderAvatar,
+                  maxWidth: 96,
+                  maxHeight: 96,
+                ),
                 backgroundColor: ctx.cs.primaryContainer,
               )
             else
@@ -735,8 +744,9 @@ class MessageBubble extends StatelessWidget {
       if (fwd.originalContact != null) {
         return _buildForwardedContactContent(ctx, fwd);
       }
-      final photos =
-          fwd.originalAttachments?.whereType<PhotoAttachment>().toList();
+      final photos = fwd.originalAttachments
+          ?.whereType<PhotoAttachment>()
+          .toList();
       if (photos != null && photos.isNotEmpty) {
         return _buildForwardedPhotoContent(ctx, fwd, photos);
       }
@@ -885,7 +895,11 @@ class MessageBubble extends StatelessWidget {
               if (senderAvatar != null && senderAvatar.isNotEmpty)
                 CircleAvatar(
                   radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(senderAvatar, maxWidth: 96, maxHeight: 96),
+                  backgroundImage: CachedNetworkImageProvider(
+                    senderAvatar,
+                    maxWidth: 96,
+                    maxHeight: 96,
+                  ),
                   backgroundColor: ctx.cs.primaryContainer,
                 )
               else
@@ -954,7 +968,11 @@ class MessageBubble extends StatelessWidget {
               if (senderAvatar != null && senderAvatar.isNotEmpty)
                 CircleAvatar(
                   radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(senderAvatar, maxWidth: 96, maxHeight: 96),
+                  backgroundImage: CachedNetworkImageProvider(
+                    senderAvatar,
+                    maxWidth: 96,
+                    maxHeight: 96,
+                  ),
                   backgroundColor: ctx.cs.primaryContainer,
                 )
               else
@@ -1007,10 +1025,12 @@ class MessageBubble extends StatelessWidget {
     final matchBottom = !ctx.hasPhotoWithCaption;
 
     final topR = matchTop ? _bigRadius : _photoRadius;
-    final bottomL =
-        matchBottom ? (isMe ? _bigRadius : _smallRadius) : _smallRadius;
-    final bottomR =
-        matchBottom ? (isMe ? _smallRadius : _bigRadius) : _smallRadius;
+    final bottomL = matchBottom
+        ? (isMe ? _bigRadius : _smallRadius)
+        : _smallRadius;
+    final bottomR = matchBottom
+        ? (isMe ? _smallRadius : _bigRadius)
+        : _smallRadius;
 
     return ClipRRect(
       borderRadius: BorderRadius.only(
@@ -1123,8 +1143,8 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildPhotoTile(_BubbleCtx ctx, PhotoAttachment photo) {
     final imageUrl = photo.baseUrl ?? '';
-    final cachePx =
-        (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio).round();
+    final cachePx = (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio)
+        .round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
@@ -1160,8 +1180,8 @@ class MessageBubble extends StatelessWidget {
     String overlay,
   ) {
     final imageUrl = photo.baseUrl ?? '';
-    final cachePx =
-        (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio).round();
+    final cachePx = (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio)
+        .round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
@@ -1270,8 +1290,11 @@ class MessageBubble extends StatelessWidget {
                     color: Colors.black54,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Symbols.play_arrow,
-                      color: Colors.white, size: 30),
+                  child: const Icon(
+                    Symbols.play_arrow,
+                    color: Colors.white,
+                    size: 30,
+                  ),
                 ),
               ),
               Positioned.fill(
@@ -1289,10 +1312,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Future<void> _playVideo(
-    BuildContext context,
-    MessageAttachment video,
-  ) async {
+  Future<void> _playVideo(BuildContext context, MessageAttachment video) async {
     final videoId = (video as dynamic).videoId as int?;
     final token = (video as dynamic).videoToken as String?;
     if (videoId == null) {
@@ -1335,123 +1355,121 @@ class MessageBubble extends StatelessWidget {
   Widget _buildFileAttachment(_BubbleCtx ctx, MessageAttachment file) {
     final name = (file as dynamic).name as String? ?? 'File';
     final size = (file as dynamic).size as int? ?? 0;
-    final sizeStr = _formatFileSize(size);
+    final sizeStr = formatBytes(size);
     final fileId = (file as dynamic).fileId as int?;
     final cacheName = '${fileId}_$name';
 
     return IntrinsicWidth(
       child: Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: isMe
-                      ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                      : ctx.cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                        : ctx.cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Symbols.description,
+                    color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                    size: 20,
+                  ),
                 ),
-                child: Icon(
-                  Symbols.description,
-                  color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        color: ctx.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        height: 1.2,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    ValueListenableBuilder<double?>(
-                      valueListenable: MediaDownloadProgress.notifier(cacheName),
-                      builder: (context, progress, _) => Text(
-                        progress != null
-                            ? '${(progress * 100).round()}% · $sizeStr'
-                            : sizeStr,
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
                         style: TextStyle(
-                          color: ctx.dim,
-                          fontSize: 12,
+                          color: ctx.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                           height: 1.2,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      ValueListenableBuilder<double?>(
+                        valueListenable: MediaDownloadProgress.notifier(
+                          cacheName,
+                        ),
+                        builder: (context, progress, _) => Text(
+                          progress != null
+                              ? '${(progress * 100).round()}% · $sizeStr'
+                              : sizeStr,
+                          style: TextStyle(
+                            color: ctx.dim,
+                            fontSize: 12,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              ValueListenableBuilder<double?>(
-                valueListenable: MediaDownloadProgress.notifier(cacheName),
-                builder: (context, progress, _) {
-                  final downloading = progress != null;
-                  return GestureDetector(
-                    onTap: downloading
-                        ? null
-                        : () => _downloadFile(ctx.context, file, name),
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: isMe
-                            ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                            : ctx.cs.surfaceContainerHighest,
-                        shape: BoxShape.circle,
-                      ),
-                      child: downloading
-                          ? Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                value: progress > 0 ? progress : null,
+                const SizedBox(width: 12),
+                ValueListenableBuilder<double?>(
+                  valueListenable: MediaDownloadProgress.notifier(cacheName),
+                  builder: (context, progress, _) {
+                    final downloading = progress != null;
+                    return GestureDetector(
+                      onTap: downloading
+                          ? null
+                          : () => _downloadFile(ctx.context, file, name),
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? ctx.cs.onPrimaryContainer.withValues(
+                                  alpha: 0.12,
+                                )
+                              : ctx.cs.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                        ),
+                        child: downloading
+                            ? Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  value: progress > 0 ? progress : null,
+                                  color: isMe
+                                      ? ctx.cs.onPrimaryContainer
+                                      : ctx.cs.primary,
+                                ),
+                              )
+                            : Icon(
+                                Symbols.download,
                                 color: isMe
                                     ? ctx.cs.onPrimaryContainer
                                     : ctx.cs.primary,
+                                size: 18,
                               ),
-                            )
-                          : Icon(
-                              Symbols.download,
-                              color: isMe
-                                  ? ctx.cs.onPrimaryContainer
-                                  : ctx.cs.primary,
-                              size: 18,
-                            ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          _buildMeta(ctx),
-        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            _buildMeta(ctx),
+          ],
+        ),
       ),
-    ),
     );
-  }
-
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} МБ';
   }
 
   Widget _buildStickerAttachment(_BubbleCtx ctx, MessageAttachment sticker) {
@@ -1533,8 +1551,7 @@ class MessageBubble extends StatelessWidget {
                   )
                 : Icon(
                     Symbols.person,
-                    color:
-                        isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                    color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
                     size: 24,
                   ),
           ),
@@ -1559,11 +1576,7 @@ class MessageBubble extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     contactData.phoneNumber!,
-                    style: TextStyle(
-                      color: ctx.dim,
-                      fontSize: 12,
-                      height: 1.2,
-                    ),
+                    style: TextStyle(color: ctx.dim, fontSize: 12, height: 1.2),
                   ),
                 ],
               ],
@@ -1614,7 +1627,11 @@ class MessageBubble extends StatelessWidget {
               if (senderAvatar != null && senderAvatar.isNotEmpty)
                 CircleAvatar(
                   radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(senderAvatar, maxWidth: 96, maxHeight: 96),
+                  backgroundImage: CachedNetworkImageProvider(
+                    senderAvatar,
+                    maxWidth: 96,
+                    maxHeight: 96,
+                  ),
                   backgroundColor: ctx.cs.primaryContainer,
                 )
               else
@@ -1816,13 +1833,10 @@ class MessageBubble extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Text(
-            _formatTime(message.time),
+            formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
             style: TextStyle(color: ctx.dim, fontSize: 11),
           ),
-          if (isMe) ...[
-            const SizedBox(width: 4),
-            _buildStatusIcon(ctx),
-          ],
+          if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
         ],
       ),
     );
@@ -1840,7 +1854,7 @@ class MessageBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        _formatTime(message.time),
+        formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 10,
@@ -1879,13 +1893,6 @@ class MessageBubble extends StatelessWidget {
     }
 
     return Icon(icon, size: 14, color: color);
-  }
-
-  String _formatTime(int timestamp) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final minute = dt.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
   }
 }
 
@@ -1939,19 +1946,6 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
   void dispose() {
     _progress.dispose();
     super.dispose();
-  }
-
-  String _formatDuration(int seconds) {
-    final min = seconds ~/ 60;
-    final sec = seconds % 60;
-    return '$min:${sec.toString().padLeft(2, '0')}';
-  }
-
-  String _formatTime(int timestamp) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final minute = dt.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
   }
 
   Widget _buildStatusIcon() {
@@ -2050,16 +2044,17 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                         ),
                         child: ValueListenableBuilder<double>(
                           valueListenable: _progress,
-                          builder: (context, progress, _) => FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: progress.clamp(0.0, 1.0),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: waveActiveColor,
-                                borderRadius: BorderRadius.circular(2),
+                          builder: (context, progress, _) =>
+                              FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: progress.clamp(0.0, 1.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: waveActiveColor,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
                         ),
                       ),
                     );
@@ -2103,7 +2098,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                 width: 32,
                 child: Center(
                   child: Text(
-                    _formatDuration(widget.duration),
+                    formatSecondsMmSs(widget.duration),
                     style: TextStyle(
                       color: widget.textColor.withValues(alpha: 0.7),
                       fontSize: 11,
@@ -2133,7 +2128,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
               ),
               if (!_transcriptionVisible) ...[
                 Text(
-                  _formatTime(widget.time),
+                  formatClock(DateTime.fromMillisecondsSinceEpoch(widget.time)),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),
                     fontSize: 10,
@@ -2151,7 +2146,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  _formatTime(widget.time),
+                  formatClock(DateTime.fromMillisecondsSinceEpoch(widget.time)),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),
                     fontSize: 10,

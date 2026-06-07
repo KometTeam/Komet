@@ -14,6 +14,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/info_action_sheet.dart';
+import '../../widgets/section_header.dart';
 import '../auth/login_screen.dart';
 
 enum SpoofingMethod { partial, full }
@@ -103,6 +104,21 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _buildNumberController.text =
           prefs.getInt('spoof_buildnumber')?.toString() ??
           '$_hardcodedBuildNumber';
+      _pushDeviceTypeController.text =
+          prefs.getString('spoof_pushdevicetype') ?? 'GCM';
+
+      final savedDeviceLocale = prefs.getString('spoof_devicelocale');
+      if (savedDeviceLocale != null && savedDeviceLocale.isNotEmpty) {
+        _deviceLocaleController.text = savedDeviceLocale;
+      }
+      final savedInstanceId = prefs.getString('spoof_instanceid');
+      if (savedInstanceId != null && savedInstanceId.isNotEmpty) {
+        _instanceIdController.text = savedInstanceId;
+      }
+      final savedClientSessionId = prefs.getInt('spoof_clientsessionid');
+      if (savedClientSessionId != null) {
+        _clientSessionIdController.text = '$savedClientSessionId';
+      }
 
       String savedType = prefs.getString('spoof_devicetype') ?? 'ANDROID';
       if (savedType == 'WEB') savedType = 'ANDROID';
@@ -235,6 +251,13 @@ class _SpoofScreenState extends State<SpoofScreen> {
       'device_id': prefs.getString('spoof_deviceid') ?? '',
       'device_type': prefs.getString('spoof_devicetype') ?? 'ANDROID',
       'arch': prefs.getString('spoof_arch') ?? '',
+      'device_locale': prefs.getString('spoof_devicelocale') ?? '',
+      'app_version': prefs.getString('spoof_appversion') ?? '',
+      'build_number': prefs.getInt('spoof_buildnumber')?.toString() ?? '',
+      'push_device_type': prefs.getString('spoof_pushdevicetype') ?? '',
+      'instance_id': prefs.getString('spoof_instanceid') ?? '',
+      'client_session_id':
+          prefs.getInt('spoof_clientsessionid')?.toString() ?? '',
     };
 
     final newValues = {
@@ -246,6 +269,12 @@ class _SpoofScreenState extends State<SpoofScreen> {
       'device_id': _deviceIdController.text,
       'device_type': _selectedDeviceType,
       'arch': _selectedArch,
+      'device_locale': _deviceLocaleController.text,
+      'app_version': _appVersionController.text,
+      'build_number': _buildNumberController.text,
+      'push_device_type': _pushDeviceTypeController.text,
+      'instance_id': _instanceIdController.text,
+      'client_session_id': _clientSessionIdController.text,
     };
 
     bool otherDataChanged = false;
@@ -358,6 +387,27 @@ class _SpoofScreenState extends State<SpoofScreen> {
     await prefs.setString('spoof_deviceid', _deviceIdController.text);
     await prefs.setString('spoof_devicetype', _selectedDeviceType);
     await prefs.setString('spoof_arch', _selectedArch);
+    await prefs.setString('spoof_devicelocale', _deviceLocaleController.text);
+    await prefs.setString('spoof_appversion', _appVersionController.text);
+    await prefs.setString(
+      'spoof_pushdevicetype',
+      _pushDeviceTypeController.text,
+    );
+    await prefs.setString('spoof_instanceid', _instanceIdController.text);
+
+    final buildNumber = int.tryParse(_buildNumberController.text);
+    if (buildNumber != null) {
+      await prefs.setInt('spoof_buildnumber', buildNumber);
+    } else {
+      await prefs.remove('spoof_buildnumber');
+    }
+
+    final clientSessionId = int.tryParse(_clientSessionIdController.text);
+    if (clientSessionId != null) {
+      await prefs.setInt('spoof_clientsessionid', clientSessionId);
+    } else {
+      await prefs.remove('spoof_clientsessionid');
+    }
   }
 
   void _generateNewDeviceId() {
@@ -572,19 +622,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
   Widget _buildMainDataCard() {
     final l10n = AppLocalizations.of(context)!;
     return Card(
@@ -593,7 +630,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader(context, l10n.spoofMainSectionTitle),
+            SectionHeader(
+              l10n.spoofMainSectionTitle,
+              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
+              fontSize: 22,
+            ),
             TextField(
               controller: _deviceNameController,
               decoration: _inputDecoration(
@@ -623,7 +664,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader(context, l10n.spoofRegionalSectionTitle),
+            SectionHeader(
+              l10n.spoofRegionalSectionTitle,
+              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
+              fontSize: 22,
+            ),
             TextField(
               controller: _screenController,
               decoration: _inputDecoration(
@@ -672,7 +717,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader(context, l10n.spoofIdentifiersSectionTitle),
+            SectionHeader(
+              l10n.spoofIdentifiersSectionTitle,
+              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
+              fontSize: 22,
+            ),
             _buildDescriptionTile(
               icon: Icons.info_outline,
               color: Theme.of(context).colorScheme.tertiary,

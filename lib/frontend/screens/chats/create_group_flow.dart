@@ -11,10 +11,9 @@ import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
-
-const int _maxAvatarBytes = 8 * 1024 * 1024;
 
 Future<void> showCreateGroupFlow(BuildContext context) async {
   final cs = Theme.of(context).colorScheme;
@@ -22,9 +21,7 @@ Future<void> showCreateGroupFlow(BuildContext context) async {
     context: context,
     isScrollControlled: true,
     backgroundColor: cs.surfaceContainerHigh,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+    shape: kSheetShape,
     builder: (_) => const _CreateGroupFlow(),
   );
 }
@@ -70,7 +67,11 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       }
       final list = await ContactsModule.getContacts(myId);
       list.removeWhere((c) => c.id == myId);
-      list.sort((a, b) => _displayName(a).toLowerCase().compareTo(_displayName(b).toLowerCase()));
+      list.sort(
+        (a, b) => _displayName(
+          a,
+        ).toLowerCase().compareTo(_displayName(b).toLowerCase()),
+      );
       if (!mounted) return;
       setState(() {
         _all = list;
@@ -102,7 +103,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
     if (path == null) return;
     final file = File(path);
     final size = await file.length();
-    if (size > _maxAvatarBytes) {
+    if (size > kMaxAvatarBytes) {
       if (!mounted) return;
       showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
       return;
@@ -134,7 +135,9 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
         if (url != null) {
           final bytes = await compressAvatar(await _avatar!.readAsBytes());
           if (bytes == null) {
-            if (mounted) showCustomNotification(context, 'Не удалось обработать аватарку');
+            if (mounted) {
+              showCustomNotification(context, 'Не удалось обработать аватарку');
+            }
           } else {
             final token = await fileUploader.uploadImage(
               Uri.parse(url),
@@ -142,7 +145,11 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
               filename: 'avatar.jpg',
             );
             if (token != null) {
-              await ChatsModule.setChatPhoto(api, chatId: chat.id, photoToken: token);
+              await ChatsModule.setChatPhoto(
+                api,
+                chatId: chat.id,
+                photoToken: token,
+              );
             } else if (mounted) {
               showCustomNotification(context, 'Не удалось загрузить аватарку');
             }
@@ -183,7 +190,9 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       padding: EdgeInsets.only(bottom: viewInsets.bottom),
       child: SafeArea(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
             switchInCurve: Curves.easeOut,
@@ -193,7 +202,10 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                   ? Offset(-0.05, 0)
                   : Offset(0.05, 0);
               return SlideTransition(
-                position: Tween<Offset>(begin: offset, end: Offset.zero).animate(anim),
+                position: Tween<Offset>(
+                  begin: offset,
+                  end: Offset.zero,
+                ).animate(anim),
                 child: FadeTransition(opacity: anim, child: child),
               );
             },
@@ -217,7 +229,9 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
     final query = _search.text.trim().toLowerCase();
     final filtered = query.isEmpty
         ? _all
-        : _all.where((c) => _displayName(c).toLowerCase().contains(query)).toList();
+        : _all
+              .where((c) => _displayName(c).toLowerCase().contains(query))
+              .toList();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -269,7 +283,11 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
             decoration: InputDecoration(
               hintText: 'Найти по имени',
               hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-              prefixIcon: Icon(Symbols.search, color: cs.onSurfaceVariant, size: 20),
+              prefixIcon: Icon(
+                Symbols.search,
+                color: cs.onSurfaceVariant,
+                size: 20,
+              ),
               isDense: true,
               border: InputBorder.none,
             ),
@@ -291,7 +309,10 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                     return InkWell(
                       onTap: () => _toggle(c),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: Row(
                           children: [
                             _Avatar(contact: c, size: 40, cs: cs),
@@ -316,7 +337,9 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                                   Text(
                                     _statusText(c),
                                     style: TextStyle(
-                                      color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+                                      color: cs.onSurfaceVariant.withValues(
+                                        alpha: 0.8,
+                                      ),
                                       fontSize: 12,
                                     ),
                                     maxLines: 1,
@@ -333,7 +356,11 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                                   color: cs.primary,
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(Symbols.check, color: cs.onPrimary, size: 16),
+                                child: Icon(
+                                  Symbols.check,
+                                  color: cs.onPrimary,
+                                  size: 16,
+                                ),
                               ),
                           ],
                         ),
@@ -419,7 +446,11 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                   clipBehavior: Clip.antiAlias,
                   child: _avatar != null
                       ? Image.file(_avatar!, fit: BoxFit.cover)
-                      : Icon(Symbols.add_a_photo, color: cs.onSurfaceVariant, size: 20),
+                      : Icon(
+                          Symbols.add_a_photo,
+                          color: cs.onSurfaceVariant,
+                          size: 20,
+                        ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -431,7 +462,10 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                   style: TextStyle(color: cs.onSurface, fontSize: 16),
                   decoration: InputDecoration(
                     hintText: 'Название группы',
-                    hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
+                    hintStyle: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 16,
+                    ),
                     border: InputBorder.none,
                     isDense: true,
                   ),
@@ -500,7 +534,10 @@ class _Avatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: cs.primaryContainer, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        shape: BoxShape.circle,
+      ),
       alignment: Alignment.center,
       child: Text(
         initial,
@@ -589,8 +626,8 @@ class _SheetButton extends StatelessWidget {
             color: filled
                 ? cs.onPrimary
                 : (disabled
-                    ? cs.onSurface.withValues(alpha: 0.4)
-                    : cs.onSurface),
+                      ? cs.onSurface.withValues(alpha: 0.4)
+                      : cs.onSurface),
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),

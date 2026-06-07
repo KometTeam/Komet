@@ -6,9 +6,11 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/utils/format.dart';
 import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show SessionInfo;
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 import 'web_qr_scan_screen.dart';
 
 class DevicesScreen extends StatefulWidget {
@@ -125,16 +127,7 @@ class _DevicesScreenState extends State<DevicesScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
+                const Center(child: SheetGrabber(margin: EdgeInsets.zero)),
                 const SizedBox(height: 20),
                 Text(
                   'Вход по QR',
@@ -158,8 +151,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () =>
-                            Navigator.of(sheetContext).pop(false),
+                        onPressed: () => Navigator.of(sheetContext).pop(false),
                         child: Text(
                           'Отмена',
                           style: TextStyle(color: cs.onSurface),
@@ -169,8 +161,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
-                        onPressed: () =>
-                            Navigator.of(sheetContext).pop(true),
+                        onPressed: () => Navigator.of(sheetContext).pop(true),
                         child: const Text('Войти'),
                       ),
                     ),
@@ -186,7 +177,8 @@ class _DevicesScreenState extends State<DevicesScreen>
   }
 
   Future<void> _startWebQrAuth() async {
-    final canScan = !kIsWeb &&
+    final canScan =
+        !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.iOS);
 
@@ -310,29 +302,14 @@ class _DevicesScreenState extends State<DevicesScreen>
     if (now.year == date.year &&
         now.month == date.month &&
         now.day == date.day) {
-      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      return formatClock(date);
     }
-
-    final months = [
-      'янв.',
-      'февр.',
-      'мар.',
-      'апр.',
-      'мая',
-      'июня',
-      'июля',
-      'авг.',
-      'сент.',
-      'окт.',
-      'нояб.',
-      'дек.',
-    ];
 
     if (now.year == date.year) {
-      return '${date.day} ${months[date.month - 1]}';
+      return '${date.day} ${kRuMonthsShort[date.month - 1]}';
     }
 
-    return '${date.day}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+    return formatDateNumeric(date);
   }
 
   @override

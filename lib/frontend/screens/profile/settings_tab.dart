@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -12,6 +11,8 @@ import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/info_action_sheet.dart';
+import '../../widgets/komet_avatar.dart';
+import '../../widgets/sheet_helpers.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
 import 'cloud_storage_screen.dart';
@@ -144,9 +145,7 @@ class _SettingsTabState extends State<SettingsTab> {
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -245,11 +244,14 @@ class _SettingsTabState extends State<SettingsTab> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-child: _buildSection(
+                child: _buildSection(
                   context,
                   cs,
                   items: [
-                    const _SettingsItem(icon: Symbols.badge, label: 'Цифровой ID'),
+                    const _SettingsItem(
+                      icon: Symbols.badge,
+                      label: 'Цифровой ID',
+                    ),
                     const _SettingsItem(
                       icon: Symbols.language,
                       label: 'Войти в Сферум',
@@ -344,15 +346,9 @@ child: _buildSection(
                           context: context,
                           isScrollControlled: true,
                           backgroundColor: cs.surfaceContainerHigh,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(24),
-                            ),
-                          ),
+                          shape: kSheetShape,
                           builder: (_) {
-                            return SafeArea(
-                              child: const ProxySettingsSheet(),
-                            );
+                            return SafeArea(child: const ProxySettingsSheet());
                           },
                         );
                       },
@@ -407,10 +403,7 @@ child: _buildSection(
                     child: Align(
                       alignment: Alignment.topCenter,
                       heightFactor: animation.value.clamp(0.0, 1.0),
-                      child: FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      ),
+                      child: FadeTransition(opacity: animation, child: child),
                     ),
                   );
                 },
@@ -418,10 +411,7 @@ child: _buildSection(
                   return Stack(
                     alignment: Alignment.topCenter,
                     clipBehavior: Clip.none,
-                    children: <Widget>[
-                      ...previousChildren,
-                      ?currentChild,
-                    ],
+                    children: <Widget>[...previousChildren, ?currentChild],
                   );
                 },
                 child: _debugMenuVisible
@@ -557,18 +547,11 @@ child: _buildSection(
                 width: 2.5,
               ),
             ),
-            child: ClipOval(
-              child: _profile?.baseUrl != null && _profile!.baseUrl!.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: _profile!.baseUrl!,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 240,
-                      memCacheHeight: 240,
-                      fadeInDuration: const Duration(milliseconds: 120),
-                      errorWidget: (context, url, error) =>
-                          _buildPlaceholderAvatar(cs, name),
-                    )
-                  : _buildPlaceholderAvatar(cs, name),
+            child: KometAvatar(
+              name: name,
+              imageUrl: _profile?.baseUrl,
+              size: 88,
+              fontSize: 32,
             ),
           ),
           const SizedBox(height: 14),
@@ -610,21 +593,6 @@ child: _buildSection(
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderAvatar(ColorScheme cs, String name) {
-    return Container(
-      color: cs.primaryContainer,
-      alignment: Alignment.center,
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: TextStyle(
-          color: cs.onPrimaryContainer,
-          fontSize: 32,
-          fontWeight: FontWeight.bold,
-        ),
       ),
     );
   }

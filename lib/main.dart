@@ -91,8 +91,6 @@ void main() async {
   final storiesFuture = AppStories.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
 
-  await api.connect();
-
   final packageInfo = await packageInfoFuture;
   if (packageInfo.packageName == 'ru.oneme.app') {
     await PushService.instance.init(api: api, account: accountModule);
@@ -714,27 +712,25 @@ class _StartupScreenState extends State<_StartupScreen> {
   }
 
   Future<void> _tryAutoLogin() async {
+    unawaited(api.connect());
+
     int? accountId = await TokenStorage.getActiveAccountId();
 
     if (accountId == null || await TokenStorage.readToken(accountId) == null) {
       accountId = await _recoverActiveAccount();
     }
 
+    if (!mounted) return;
+
     if (accountId == null) {
       _goToLogin();
       return;
     }
 
-    try {
-      await accountModule.login(accountId: accountId);
-    } catch (_) {}
-
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdaptiveShell()),
-      );
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const AdaptiveShell()),
+    );
   }
 
   Future<int?> _recoverActiveAccount() async {

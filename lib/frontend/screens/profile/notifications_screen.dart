@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../widgets/section_header.dart';
+import '../../widgets/sheet_helpers.dart';
+
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -29,9 +32,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final picked = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -67,10 +68,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                     title: Text(
                       s,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                      ),
+                      style: TextStyle(color: cs.onSurface, fontSize: 16),
                     ),
                   ),
               ],
@@ -90,17 +88,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
-        titleText: 'Уведомления',
-        backgroundColor: cs.surface,
-      ),
+      appBar: AppBarM3E(titleText: 'Уведомления', backgroundColor: cs.surface),
       body: SafeArea(
         top: false,
         child: ListView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: [
-            _sectionHeader(cs, 'FKM'),
+            const SectionHeader(
+              'FKM',
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
             _card(cs, [
               _toggleRow(
                 cs,
@@ -113,7 +112,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ]),
             const SizedBox(height: 20),
-            _sectionHeader(cs, 'Настройки уведомлений'),
+            const SectionHeader(
+              'Настройки уведомлений',
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
             _card(cs, [
               _toggleRow(
                 cs,
@@ -140,7 +143,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ]),
             const SizedBox(height: 20),
-            _sectionHeader(cs, 'Звук'),
+            const SectionHeader(
+              'Звук',
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
             _card(cs, [
               _tappableRow(
                 cs,
@@ -151,21 +158,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ]),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionHeader(ColorScheme cs, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          color: cs.primary,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.2,
         ),
       ),
     );
@@ -275,10 +267,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
               Text(
                 trailingText,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
               ),
               const SizedBox(width: 6),
               Icon(Symbols.chevron_right, color: cs.outline, size: 20),

@@ -1,9 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show api;
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/format.dart';
 import '../../../backend/modules/calls.dart';
+import '../../widgets/komet_avatar.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -81,36 +82,7 @@ class _CallsTabState extends State<CallsTab> {
   String _formatDate(int timestamp) {
     if (timestamp == 0) return '';
     final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final months = [
-      'янв.',
-      'фев.',
-      'мар.',
-      'апр.',
-      'мая',
-      'июн.',
-      'июл.',
-      'авг.',
-      'сен.',
-      'окт.',
-      'ноя.',
-      'дек.',
-    ];
-    return '${dt.day} ${months[dt.month - 1]}';
-  }
-
-  Widget _buildPlaceholderAvatar(ColorScheme cs, String name) {
-    return Container(
-      color: cs.primaryContainer,
-      alignment: Alignment.center,
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: TextStyle(
-          color: cs.onPrimaryContainer,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
+    return '${dt.day} ${kRuMonthsShort[dt.month - 1]}';
   }
 
   Widget _buildCallItem(
@@ -165,18 +137,10 @@ class _CallsTabState extends State<CallsTab> {
                     width: 1,
                   ),
                 ),
-                child: ClipOval(
-                  child: call.avatarUrl != null && call.avatarUrl!.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: call.avatarUrl!,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 144,
-                          memCacheHeight: 144,
-                          fadeInDuration: const Duration(milliseconds: 120),
-                          errorWidget: (context, url, error) =>
-                              _buildPlaceholderAvatar(cs, call.name),
-                        )
-                      : _buildPlaceholderAvatar(cs, call.name),
+                child: KometAvatar(
+                  name: call.name,
+                  imageUrl: call.avatarUrl,
+                  size: 48,
                 ),
               ),
               const SizedBox(width: 16),

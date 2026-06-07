@@ -179,6 +179,9 @@ class Api {
     String locale = 'ru';
     String deviceLocale = Platform.localeName.substring(0, 2);
     String deviceId = await DeviceIdentity.deviceId();
+    String pushDeviceType = 'GCM';
+    String instanceId = await DeviceIdentity.instanceId();
+    int clientSessionId = DeviceIdentity.clientSessionId;
 
     if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
@@ -223,6 +226,10 @@ class Api {
         locale = sLocale;
         deviceLocale = sLocale.split(RegExp(r'[-_]')).first;
       }
+      final sDeviceLocale = spoofed['device_locale'] as String?;
+      if (sDeviceLocale != null && sDeviceLocale.isNotEmpty) {
+        deviceLocale = sDeviceLocale;
+      }
       final sDeviceId = spoofed['device_id'] as String?;
       if (sDeviceId != null && sDeviceId.isNotEmpty) deviceId = sDeviceId;
       appVersion = (spoofed['app_version'] as String?) ?? appVersion;
@@ -233,6 +240,14 @@ class Api {
       } else if (sBuild is String) {
         buildNumber = int.tryParse(sBuild) ?? buildNumber;
       }
+      final sPushType = spoofed['push_device_type'] as String?;
+      if (sPushType != null && sPushType.isNotEmpty) pushDeviceType = sPushType;
+      final sInstanceId = spoofed['instance_id'] as String?;
+      if (sInstanceId != null && sInstanceId.isNotEmpty) {
+        instanceId = sInstanceId;
+      }
+      final sClientSession = spoofed['client_session_id'];
+      if (sClientSession is int) clientSessionId = sClientSession;
     }
 
     _userAgent = {
@@ -241,7 +256,7 @@ class Api {
       'osVersion': osVersion,
       'timezone': timezone,
       'screen': screen,
-      'pushDeviceType': 'GCM',
+      'pushDeviceType': pushDeviceType,
       'arch': architecture,
       'locale': locale,
       'buildNumber': buildNumber,
@@ -252,9 +267,9 @@ class Api {
     _deviceId = deviceId;
 
     final payload = <dynamic, dynamic>{
-      'mt_instanceid': await DeviceIdentity.instanceId(),
+      'mt_instanceid': instanceId,
       'userAgent': _userAgent,
-      'clientSessionId': DeviceIdentity.clientSessionId,
+      'clientSessionId': clientSessionId,
       'deviceId': deviceId,
     };
 

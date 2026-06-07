@@ -13,6 +13,8 @@ enum SocketState { disconnected, connecting, connected }
 /// Обёртка над TCP + TLS сокетом.
 /// Отдаёт сырые байты через [dataStream], сборкой пакетов занимается [PacketReceiver].
 class Connection {
+  static const Duration _defaultConnectTimeout = Duration(seconds: 15);
+
   SecureSocket? _socket;
   StreamSubscription<Uint8List>? _subscription;
   SocketState _state = SocketState.disconnected;
@@ -86,28 +88,30 @@ class Connection {
     ProxySettings proxySettings, {
     Duration? timeout,
   }) async {
+    final connectTimeout = timeout ?? _defaultConnectTimeout;
     Socket socket;
     if (proxySettings.isEnabled) {
       final connector = ProxyConnector(proxySettings);
-      socket = await connector.connect(host, port);
+      socket = await connector.connect(host, port).timeout(connectTimeout);
       logger.i('Подключено через прокси ${proxySettings.type.name}');
     } else {
-      socket = timeout == null
-          ? await Socket.connect(host, port)
-          : await Socket.connect(host, port, timeout: timeout);
+      socket = await Socket.connect(host, port, timeout: connectTimeout);
     }
     final allowInsecure = await TlsConfig.isInsecureAllowed();
     if (allowInsecure) {
       logger.w(
         'TLS: проверка сертификата отключена (дебаг) — соединение уязвимо к MitM',
       );
-      return SecureSocket.secure(
-        socket,
-        host: host,
-        onBadCertificate: (_) => true,
-      );
     }
-    return SecureSocket.secure(socket, host: host);
+    final secured = allowInsecure
+        ? SecureSocket.secure(socket, host: host, onBadCertificate: (_) => true)
+        : SecureSocket.secure(socket, host: host);
+    try {
+      return await secured.timeout(connectTimeout);
+    } on TimeoutException {
+      socket.destroy();
+      rethrow;
+    }
   }
 
   void write(Uint8List data) {

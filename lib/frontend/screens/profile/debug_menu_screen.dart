@@ -10,10 +10,12 @@ import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_cache.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 import '../../widgets/login_success_screen.dart';
 import '../calls/call_screen.dart';
 
@@ -53,7 +55,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
       _clearingCache = false;
       _cacheSize = 0;
     });
-    showCustomNotification(context, 'Кэш очищен (${_formatBytes(freed)})');
+    showCustomNotification(context, 'Кэш очищен (${formatBytes(freed)})');
   }
 
   void _pickCacheLimit() {
@@ -61,9 +63,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -106,16 +106,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   }
 
   String _limitLabel(int bytes) =>
-      bytes <= 0 ? 'Без лимита' : _formatBytes(bytes);
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes Б';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} ГБ';
-  }
+      bytes <= 0 ? 'Без лимита' : formatBytes(bytes);
 
   @override
   void dispose() {
@@ -133,7 +124,10 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
       _errors.clear();
     });
 
-    Future<void> tryProbe(String label, Future<dynamic> Function() probe) async {
+    Future<void> tryProbe(
+      String label,
+      Future<dynamic> Function() probe,
+    ) async {
       try {
         final res = await probe();
         logger.i('debug-search $label($id): $res');
@@ -147,11 +141,15 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
 
     await Future.wait([
       tryProbe('contactInfo', () async {
-        final p = await api.sendRequest(Opcode.contactInfo, {'contactIds': [id]});
+        final p = await api.sendRequest(Opcode.contactInfo, {
+          'contactIds': [id],
+        });
         return p.payload;
       }),
       tryProbe('chatInfo', () async {
-        final p = await api.sendRequest(Opcode.chatInfo, {'chatIds': [id]});
+        final p = await api.sendRequest(Opcode.chatInfo, {
+          'chatIds': [id],
+        });
         return p.payload;
       }),
       tryProbe('publicSearch', () => ChatsModule.searchById(api, id)),
@@ -704,7 +702,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                                 Text(
                                   _clearingCache
                                       ? 'Очистка…'
-                                      : 'Занято: ${_formatBytes(_cacheSize)}',
+                                      : 'Занято: ${formatBytes(_cacheSize)}',
                                   style: TextStyle(
                                     color: cs.onSurfaceVariant,
                                     fontSize: 13,
@@ -958,7 +956,10 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                             padding: const EdgeInsets.all(12),
                             child: Text(
                               'Ничего не найдено',
-                              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         for (final hit in _hits) ...[
@@ -1152,7 +1153,11 @@ class _SearchResultCard extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Скопировать id',
-            icon: Icon(Symbols.content_copy, size: 18, color: cs.onSurfaceVariant),
+            icon: Icon(
+              Symbols.content_copy,
+              size: 18,
+              color: cs.onSurfaceVariant,
+            ),
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: hit.id.toString()));
               if (context.mounted) {
@@ -1292,10 +1297,7 @@ class _ErrorChip extends StatelessWidget {
           Expanded(
             child: Text(
               '$label: $message',
-              style: TextStyle(
-                color: cs.onErrorContainer,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: cs.onErrorContainer, fontSize: 12),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

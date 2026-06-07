@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show TwoFactorDetails;
 import '../../../core/storage/app_database.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 
 class PasswordEntryScreen extends StatefulWidget {
@@ -270,36 +271,22 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
     );
   }
 
-  void _showRemoveConfirmation(BuildContext context, ColorScheme cs) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Удалить пароль?', style: TextStyle(color: cs.onSurface)),
-        content: Text(
+  Future<void> _showRemoveConfirmation(
+    BuildContext context,
+    ColorScheme cs,
+  ) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Удалить пароль?',
+      message:
           'Вы уверены, что хотите удалить пароль для входа? Это ослабит защиту вашего аккаунта.',
-          style: TextStyle(color: cs.onSurfaceVariant),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Отмена', style: TextStyle(color: cs.primary)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TwoFactorRemoveScreen(),
-                ),
-              );
-            },
-            child: Text('Удалить', style: TextStyle(color: cs.error)),
-          ),
-        ],
-      ),
+      confirmLabel: 'Удалить',
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TwoFactorRemoveScreen()),
     );
   }
 }
@@ -813,10 +800,7 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
                 style: TextStyle(color: cs.onErrorContainer),
               ),
             ),
-          _PasswordField(
-            controller: _passwordController,
-            hintText: 'Пароль',
-          ),
+          _PasswordField(controller: _passwordController, hintText: 'Пароль'),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -1414,10 +1398,7 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
                   style: TextStyle(color: cs.onErrorContainer),
                 ),
               ),
-            _PasswordField(
-              controller: _passwordController,
-              hintText: 'Пароль',
-            ),
+            _PasswordField(controller: _passwordController, hintText: 'Пароль'),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -1457,10 +1438,7 @@ class _PasswordField extends StatefulWidget {
   final TextEditingController controller;
   final String hintText;
 
-  const _PasswordField({
-    required this.controller,
-    required this.hintText,
-  });
+  const _PasswordField({required this.controller, required this.hintText});
 
   @override
   State<_PasswordField> createState() => _PasswordFieldState();

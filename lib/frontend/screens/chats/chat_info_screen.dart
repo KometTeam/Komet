@@ -5,6 +5,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/format.dart';
+import '../../widgets/komet_avatar.dart';
 
 class _MemberInfo {
   final int id;
@@ -223,7 +225,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 4),
-          _buildAvatar(cs),
+          KometAvatar(
+            name: widget.name,
+            imageUrl: widget.imageUrl,
+            size: 96,
+            fontSize: 36,
+          ),
           const SizedBox(height: 14),
           Text(
             widget.name,
@@ -252,39 +259,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       ),
     );
   }
-
-  // ─── AVATAR ──────────────────────────────────────────────────────────────
-
-  Widget _buildAvatar(ColorScheme cs) {
-    return Container(
-      width: 96,
-      height: 96,
-      decoration: BoxDecoration(
-          shape: BoxShape.circle, color: cs.primaryContainer),
-      child: widget.imageUrl.isNotEmpty
-          ? ClipOval(
-              child: CachedNetworkImage(
-                imageUrl: widget.imageUrl,
-                fit: BoxFit.cover,
-                memCacheWidth: 360,
-                memCacheHeight: 360,
-                errorWidget: (context, error, stack) => _avatarLetters(cs),
-              ),
-            )
-          : _avatarLetters(cs),
-    );
-  }
-
-  Widget _avatarLetters(ColorScheme cs) => Center(
-        child: Text(
-          widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-          style: TextStyle(
-            color: cs.onPrimaryContainer,
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
 
   // ─── SUBTITLE ────────────────────────────────────────────────────────────
 
@@ -392,10 +366,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         }
       } else {
         final phone = _contactData?['phone'];
-        final phoneInt =
-            phone is int ? phone : int.tryParse(phone?.toString() ?? '');
+        final phoneInt = phone is int
+            ? phone
+            : int.tryParse(phone?.toString() ?? '');
         if (phoneInt != null && phoneInt > 0) {
-          items.add(_simpleInfoCard(cs, 'Номер телефона', _formatPhone(phoneInt)));
+          items.add(
+            _simpleInfoCard(cs, 'Номер телефона', formatPhone(phoneInt)!),
+          );
         }
       }
     } else if (widget.chatType == 'CHANNEL') {
@@ -417,8 +394,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  Widget _simpleInfoCard(ColorScheme cs, String label, String value,
-      {bool isLink = false}) {
+  Widget _simpleInfoCard(
+    ColorScheme cs,
+    String label,
+    String value, {
+    bool isLink = false,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
@@ -429,8 +410,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          Text(
+            label,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
           const SizedBox(height: 4),
           Text(
             value,
@@ -458,19 +441,27 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Ссылка-приглашение',
-                    style:
-                        TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                Text(
+                  'Ссылка-приглашение',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
                 const SizedBox(height: 4),
-                Text(link,
-                    style: const TextStyle(
-                        color: Color(0xFF007AFF), fontSize: 15)),
+                Text(
+                  link,
+                  style: const TextStyle(
+                    color: Color(0xFF007AFF),
+                    fontSize: 15,
+                  ),
+                ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.qr_code_2,
-                color: Color(0xFF007AFF), size: 22),
+            icon: const Icon(
+              Icons.qr_code_2,
+              color: Color(0xFF007AFF),
+              size: 22,
+            ),
             onPressed: () {},
           ),
         ],
@@ -492,16 +483,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Описание',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          Text(
+            'Описание',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
           const SizedBox(height: 4),
           Text(
             desc,
-            style:
-                TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
+            style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
             maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
-            overflow:
-                (_descExpanded || !isLong) ? null : TextOverflow.ellipsis,
+            overflow: (_descExpanded || !isLong) ? null : TextOverflow.ellipsis,
           ),
           if (isLong) ...[
             const SizedBox(height: 6),
@@ -509,8 +500,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               onTap: () => setState(() => _descExpanded = !_descExpanded),
               child: Text(
                 _descExpanded ? 'Свернуть' : 'Ещё',
-                style: const TextStyle(
-                    color: Color(0xFF007AFF), fontSize: 13),
+                style: const TextStyle(color: Color(0xFF007AFF), fontSize: 13),
               ),
             ),
           ],
@@ -598,10 +588,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     if (_selectedTab.isEmpty) return const SizedBox.shrink();
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
-      child: KeyedSubtree(
-        key: ValueKey(_selectedTab),
-        child: _tabBody(cs),
-      ),
+      child: KeyedSubtree(key: ValueKey(_selectedTab), child: _tabBody(cs)),
     );
   }
 
@@ -632,11 +619,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon,
-              color: cs.onSurfaceVariant.withValues(alpha: 0.35), size: 48),
+          Icon(
+            icon,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+            size: 48,
+          ),
           const SizedBox(height: 12),
-          Text(label,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15)),
+          Text(
+            label,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+          ),
         ],
       ),
     );
@@ -648,7 +640,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final items = <Widget>[];
 
     if (widget.chatType == 'DIALOG' && !_isBot) {
-      final bio = (_contactData?['description'] as String?) ??
+      final bio =
+          (_contactData?['description'] as String?) ??
           (_contactData?['about'] as String?);
       if (bio != null && bio.isNotEmpty) {
         items
@@ -696,14 +689,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          Text(
+            label,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
           const SizedBox(height: 4),
-          Text(value,
-              style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            value,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -727,7 +725,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _memberAction(
-      ColorScheme cs, IconData icon, String label, VoidCallback onTap) {
+    ColorScheme cs,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -737,8 +739,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           children: [
             Icon(icon, color: const Color(0xFF007AFF), size: 26),
             const SizedBox(width: 14),
-            Text(label,
-                style: TextStyle(color: cs.onSurface, fontSize: 16)),
+            Text(label, style: TextStyle(color: cs.onSurface, fontSize: 16)),
           ],
         ),
       ),
@@ -746,11 +747,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _listDivider(ColorScheme cs) => Divider(
-        height: 1,
-        indent: 56,
-        endIndent: 0,
-        color: cs.outlineVariant.withValues(alpha: 0.3),
-      );
+    height: 1,
+    indent: 56,
+    endIndent: 0,
+    color: cs.outlineVariant.withValues(alpha: 0.3),
+  );
 
   Widget _memberTile(ColorScheme cs, _MemberInfo member) {
     final name =
@@ -768,8 +769,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       sublabel = 'Был(-а) недавно';
     }
 
-    final String? roleLabel =
-        member.isOwner ? 'владелец' : (member.isAdmin ? 'Адмін' : null);
+    final String? roleLabel = member.isOwner
+        ? 'владелец'
+        : (member.isAdmin ? 'Адмін' : null);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -778,7 +780,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           (avatar != null && avatar.isNotEmpty)
               ? CircleAvatar(
                   radius: 22,
-                  backgroundImage: CachedNetworkImageProvider(avatar, maxWidth: 144, maxHeight: 144),
+                  backgroundImage: CachedNetworkImageProvider(
+                    avatar,
+                    maxWidth: 144,
+                    maxHeight: 144,
+                  ),
                   backgroundColor: cs.primaryContainer,
                 )
               : CircleAvatar(
@@ -787,7 +793,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                   child: Text(
                     name.isNotEmpty ? name[0].toUpperCase() : '?',
                     style: TextStyle(
-                        color: cs.onPrimaryContainer, fontSize: 16),
+                      color: cs.onPrimaryContainer,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
           const SizedBox(width: 14),
@@ -795,21 +803,26 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500)),
-                Text(sublabel,
-                    style: TextStyle(
-                        color: cs.onSurfaceVariant, fontSize: 13)),
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  sublabel,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
               ],
             ),
           ),
           if (roleLabel != null)
-            Text(roleLabel,
-                style:
-                    TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+            Text(
+              roleLabel,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+            ),
         ],
       ),
     );
@@ -821,8 +834,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final rows = <({String label, String value})>[];
     final chat = _chatData;
     if (chat == null) {
-      return Text('Нет данных',
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13));
+      return Text(
+        'Нет данных',
+        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+      );
     }
 
     void add(String label, dynamic val, {bool tsFormat = false}) {
@@ -830,7 +845,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       if (val is bool && !val) return;
       String str;
       if (tsFormat && val is int && val > 1) {
-        str = _formatTs(val);
+        str = formatDateTimeNumeric(DateTime.fromMillisecondsSinceEpoch(val));
       } else if (val is bool) {
         str = 'да';
       } else {
@@ -887,8 +902,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     }
 
     if (rows.isEmpty) {
-      return Text('Нет данных',
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13));
+      return Text(
+        'Нет данных',
+        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+      );
     }
 
     final extraRows = _buildExtraContactRows();
@@ -908,18 +925,21 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               rows[i].value,
               trailing: _trailingFor(rows[i].label, cs),
             ),
-            if (i < rows.length - 1 || (_extraContactExpanded && extraRows.isNotEmpty))
+            if (i < rows.length - 1 ||
+                (_extraContactExpanded && extraRows.isNotEmpty))
               Divider(
-                  height: 10,
-                  color: cs.outlineVariant.withValues(alpha: 0.25)),
+                height: 10,
+                color: cs.outlineVariant.withValues(alpha: 0.25),
+              ),
           ],
           if (_extraContactExpanded)
             for (int i = 0; i < extraRows.length; i++) ...[
               _infoRow(cs, extraRows[i].label, extraRows[i].value),
               if (i < extraRows.length - 1)
                 Divider(
-                    height: 10,
-                    color: cs.outlineVariant.withValues(alpha: 0.25)),
+                  height: 10,
+                  color: cs.outlineVariant.withValues(alpha: 0.25),
+                ),
             ],
         ],
       ),
@@ -932,11 +952,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final rows = <({String label, String value})>[];
     final reg = c['registrationTime'];
     if (reg is int && reg > 0) {
-      rows.add((label: 'Регистрация', value: _formatTs(reg)));
+      rows.add((
+        label: 'Регистрация',
+        value: formatDateTimeNumeric(DateTime.fromMillisecondsSinceEpoch(reg)),
+      ));
     }
     final upd = c['updateTime'];
     if (upd is int && upd > 0) {
-      rows.add((label: 'Обновлён', value: _formatTs(upd)));
+      rows.add((
+        label: 'Обновлён',
+        value: formatDateTimeNumeric(DateTime.fromMillisecondsSinceEpoch(upd)),
+      ));
     }
     final country = c['country'];
     if (country is String && country.isNotEmpty) {
@@ -944,7 +970,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     }
     final gender = c['gender'];
     if (gender is int) {
-      final g = gender == 1 ? 'Мужской' : (gender == 2 ? 'Женский' : null);
+      final g = formatGender(gender);
       if (g != null) rows.add((label: 'Пол', value: g));
     }
     final phone = c['phone'];
@@ -981,11 +1007,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       ),
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-      onPressed: () => setState(() => _extraContactExpanded = !_extraContactExpanded),
+      onPressed: () =>
+          setState(() => _extraContactExpanded = !_extraContactExpanded),
     );
   }
 
-  Widget _infoRow(ColorScheme cs, String label, String value, {Widget? trailing}) {
+  Widget _infoRow(
+    ColorScheme cs,
+    String label,
+    String value, {
+    Widget? trailing,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -995,13 +1027,18 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10)),
-                Text(value,
-                    style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500)),
+                Text(
+                  label,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1015,13 +1052,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildShimmer(ColorScheme cs) {
     Widget block(double w, double h, {double r = 8}) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(r),
-          ),
-        );
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(r),
+      ),
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
@@ -1044,27 +1081,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   // ─── HELPERS ─────────────────────────────────────────────────────────────
 
   String _formatLastSeen(int secondsSinceEpoch) {
-    final diff = DateTime.now().millisecondsSinceEpoch - secondsSinceEpoch * 1000;
+    final diff =
+        DateTime.now().millisecondsSinceEpoch - secondsSinceEpoch * 1000;
     if (diff < 60000) return 'только что';
     if (diff < 3600000) return '${diff ~/ 60000} мин назад';
     if (diff < 86400000) return '${diff ~/ 3600000} ч назад';
     if (diff < 604800000) return '${diff ~/ 86400000} д назад';
     return 'давно';
-  }
-
-  String _formatPhone(int phone) {
-    final s = phone.toString();
-    if (s.length == 11 && s.startsWith('7')) {
-      return '+7 ${s.substring(1, 4)} ${s.substring(4, 7)}-'
-          '${s.substring(7, 9)}-${s.substring(9, 11)}';
-    }
-    return '+$s';
-  }
-
-  String _formatTs(int ts) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(ts);
-    return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year} '
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   String _pluralCount(int n, String one, String few, String many) {

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 
 class ServerSettingsSheet extends StatefulWidget {
   const ServerSettingsSheet({super.key});
@@ -57,10 +58,13 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       await api.disconnect();
       unawaited(api.connect());
       final online = await api.stateStream
-          .firstWhere((s) =>
-              s == SessionState.online || s == SessionState.disconnected)
-          .timeout(const Duration(seconds: 15),
-              onTimeout: () => SessionState.disconnected);
+          .firstWhere(
+            (s) => s == SessionState.online || s == SessionState.disconnected,
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => SessionState.disconnected,
+          );
       if (!mounted) return;
       if (online == SessionState.online) {
         showCustomNotification(context, l10n.serverSettingsSaved);
@@ -83,10 +87,13 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       await api.disconnect();
       api.connect();
       final online = await api.stateStream
-          .firstWhere((s) =>
-              s == SessionState.online || s == SessionState.disconnected)
-          .timeout(const Duration(seconds: 15),
-              onTimeout: () => SessionState.disconnected);
+          .firstWhere(
+            (s) => s == SessionState.online || s == SessionState.disconnected,
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => SessionState.disconnected,
+          );
       if (!mounted) return;
       if (online == SessionState.online) {
         showCustomNotification(context, l10n.serverSettingsSaved);
@@ -119,16 +126,8 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+              const Center(
+                child: SheetGrabber(margin: EdgeInsets.only(bottom: 16)),
               ),
               Text(
                 l10n.serverSettingsTitle,
@@ -153,9 +152,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
                 hintText: '${ServerConfig.defaultPort}',
                 cs: cs,
                 keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
               const SizedBox(height: 24),
               FilledButton(
@@ -199,10 +196,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           enabled: !_busy,
-          style: GoogleFonts.inter(
-            color: cs.onSurface,
-            fontSize: 15,
-          ),
+          style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15),
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: GoogleFonts.inter(

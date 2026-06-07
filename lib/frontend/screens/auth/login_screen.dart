@@ -16,6 +16,7 @@ import '../profile/spoof_screen.dart';
 import '../profile/debug_menu_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../widgets/sheet_helpers.dart';
 import '../../../backend/api.dart';
 import '../../../main.dart';
 
@@ -152,9 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
@@ -188,7 +187,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    KometApp.stateOf(appContext)?.applyLocale(const Locale('ru'));
+                    KometApp.stateOf(
+                      appContext,
+                    )?.applyLocale(const Locale('ru'));
                   },
                 ),
                 ListTile(
@@ -202,7 +203,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    KometApp.stateOf(appContext)?.applyLocale(const Locale('en'));
+                    KometApp.stateOf(
+                      appContext,
+                    )?.applyLocale(const Locale('en'));
                   },
                 ),
               ],
@@ -220,9 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (context) {
         double progress = _isTOSRead ? 1.0 : 0.0;
         return StatefulBuilder(
@@ -503,13 +504,9 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (_) {
-        return SafeArea(
-          child: const ServerSettingsSheet(),
-        );
+        return SafeArea(child: const ServerSettingsSheet());
       },
     );
   }
@@ -520,13 +517,9 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (_) {
-        return SafeArea(
-          child: const ProxySettingsSheet(),
-        );
+        return SafeArea(child: const ProxySettingsSheet());
       },
     );
   }
@@ -537,9 +530,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
@@ -614,9 +605,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -725,7 +714,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    onPressed: () => _showSecurityOptions(context),
+                                    onPressed: () =>
+                                        _showSecurityOptions(context),
                                     icon: Icon(
                                       Symbols.admin_panel_settings,
                                       color: cs.onSurfaceVariant,
@@ -840,7 +830,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                       fontWeight: FontWeight.w400,
                                     ),
                                     decoration: InputDecoration(
-                                      hintText: _phoneMaskHint(_selectedCountry),
+                                      hintText: _phoneMaskHint(
+                                        _selectedCountry,
+                                      ),
                                       hintStyle: TextStyle(
                                         color: cs.outline,
                                         fontSize: 15,
