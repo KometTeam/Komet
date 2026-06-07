@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/utils/format.dart';
+
 enum CallScreenState { incoming, outgoing, active }
 
 class CallScreen extends StatefulWidget {
@@ -68,12 +70,6 @@ class _CallScreenState extends State<CallScreen>
     });
   }
 
-  String get _timerText {
-    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (_seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
   void _accept() {
     setState(() {
       _state = CallScreenState.active;
@@ -127,13 +123,8 @@ class _CallScreenState extends State<CallScreen>
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
-        final scale = (isRinging || isOutgoing)
-            ? _pulseAnimation.value
-            : 1.0;
-        return Transform.scale(
-          scale: scale,
-          child: child,
-        );
+        final scale = (isRinging || isOutgoing) ? _pulseAnimation.value : 1.0;
+        return Transform.scale(scale: scale, child: child);
       },
       child: Container(
         width: size,
@@ -204,7 +195,7 @@ class _CallScreenState extends State<CallScreen>
       case CallScreenState.outgoing:
         text = 'Вызов...';
       case CallScreenState.active:
-        text = _timerText;
+        text = formatSecondsMmSs(_seconds, padMinutes: true);
     }
     return Text(
       text,
@@ -322,10 +313,7 @@ class _ActionButton extends StatelessWidget {
           Container(
             width: 64,
             height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color,
-            ),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
             alignment: Alignment.center,
             child: Icon(icon, color: Colors.white, size: 28, fill: 1),
           ),

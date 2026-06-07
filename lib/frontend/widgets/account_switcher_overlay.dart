@@ -1,6 +1,5 @@
 import 'dart:ui' as ui;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -8,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/haptics.dart';
+import 'komet_avatar.dart';
 
 class AccountSwitcherController extends ChangeNotifier {
   Offset? pointer;
@@ -301,9 +301,7 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
                     highlighted: _hoveredIndex == i,
                     active: _accounts[i].id == _activeId,
                   ),
-                _AddAccountRow(
-                  highlighted: _hoveredIndex == _accounts.length,
-                ),
+                _AddAccountRow(highlighted: _hoveredIndex == _accounts.length),
               ],
             ),
           ),
@@ -363,17 +361,15 @@ class _AccountRow extends StatelessWidget {
                         )
                       : null,
                 ),
-                child: ClipOval(
-                  child: profile.baseUrl != null && profile.baseUrl!.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: profile.baseUrl!,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 96,
-                          memCacheHeight: 96,
-                          errorWidget: (_, __, ___) =>
-                              _initialAvatar(cs, fullName, highlighted),
-                        )
-                      : _initialAvatar(cs, fullName, highlighted),
+                child: KometAvatar(
+                  name: fullName,
+                  imageUrl: profile.baseUrl,
+                  size: 36,
+                  backgroundColor: highlighted
+                      ? cs.primaryContainer
+                      : cs.surfaceContainerHighest,
+                  foregroundColor: cs.onSurface,
+                  fontSize: 16,
                 ),
               ),
               const SizedBox(width: 12),
@@ -414,21 +410,6 @@ class _AccountRow extends StatelessWidget {
                 ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _initialAvatar(ColorScheme cs, String name, bool highlighted) {
-    return Container(
-      color: highlighted ? cs.primaryContainer : cs.surfaceContainerHighest,
-      alignment: Alignment.center,
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: TextStyle(
-          color: cs.onSurface,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );

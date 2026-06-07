@@ -7,6 +7,7 @@ import 'package:komet/l10n/app_localizations.dart';
 
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 
 class ProxySettingsSheet extends StatefulWidget {
   const ProxySettingsSheet({super.key});
@@ -57,13 +58,15 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
     try {
       final username = _usernameController.text.trim();
       final password = _passwordController.text.trim();
-      await ProxyConfig.save(ProxySettings(
-        type: _selectedType,
-        host: host,
-        port: port,
-        username: username.isNotEmpty ? username : null,
-        password: password.isNotEmpty ? password : null,
-      ));
+      await ProxyConfig.save(
+        ProxySettings(
+          type: _selectedType,
+          host: host,
+          port: port,
+          username: username.isNotEmpty ? username : null,
+          password: password.isNotEmpty ? password : null,
+        ),
+      );
       await api.disconnect();
       await api.connect();
       if (!mounted) return;
@@ -120,16 +123,8 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+              const Center(
+                child: SheetGrabber(margin: EdgeInsets.only(bottom: 16)),
               ),
               Text(
                 l10n.proxySettingsTitle,
@@ -197,9 +192,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: _busy ? null : () => _apply(l10n),
-                child: Text(
-                  isActive ? l10n.proxyApply : l10n.proxyDisable,
-                ),
+                child: Text(isActive ? l10n.proxyApply : l10n.proxyDisable),
               ),
             ],
           ),
@@ -278,10 +271,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
           inputFormatters: inputFormatters,
           enabled: !_busy,
           obscureText: obscureText,
-          style: GoogleFonts.inter(
-            color: cs.onSurface,
-            fontSize: 15,
-          ),
+          style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15),
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: GoogleFonts.inter(

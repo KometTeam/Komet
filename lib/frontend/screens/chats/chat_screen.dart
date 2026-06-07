@@ -10,6 +10,8 @@ import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/backend/modules/upload_notification_service.dart';
+import 'package:komet/core/utils/format.dart';
+import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -37,11 +39,7 @@ class _UploadStatus {
   final int sent;
   final int total;
 
-  const _UploadStatus({
-    this.active = false,
-    this.sent = 0,
-    this.total = 0,
-  });
+  const _UploadStatus({this.active = false, this.sent = 0, this.total = 0});
 
   bool get awaitingResponse => active && total > 0 && sent >= total;
   double? get progressValue =>
@@ -82,19 +80,21 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen>
-    with TickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _listKey = GlobalKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
-  final ValueNotifier<_UploadStatus> _uploadStatus = ValueNotifier(const _UploadStatus());
+  final ValueNotifier<_UploadStatus> _uploadStatus = ValueNotifier(
+    const _UploadStatus(),
+  );
   StreamSubscription<UploadEvent>? _uploadSub;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<MessageEvent>? _messageEventSub;
-  final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers = {};
+  final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers =
+      {};
 
   ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
     final existing = _reactionNotifiers[m.id];
@@ -109,11 +109,14 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _pruneReactionNotifiers() {
     final liveIds = _messages.map((m) => m.id).toSet();
-    final dead = _reactionNotifiers.keys.where((id) => !liveIds.contains(id)).toList();
+    final dead = _reactionNotifiers.keys
+        .where((id) => !liveIds.contains(id))
+        .toList();
     for (final id in dead) {
       _reactionNotifiers.remove(id)?.dispose();
     }
   }
+
   final Set<int> _typingUserIds = {};
   final Map<int, Timer> _typingTimers = {};
   int _otherStatus = 0;
@@ -132,7 +135,8 @@ class _ChatScreenState extends State<ChatScreen>
   int _tempIdCounter = 0;
   late final AnimationController _attachAnim;
 
-  String _nextTempId() => 'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
+  String _nextTempId() =>
+      'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
   late AnimationController _shimmerController;
   Timer? _shimmerStartTimer;
   bool _historyKickedOff = false;
@@ -150,7 +154,7 @@ class _ChatScreenState extends State<ChatScreen>
   late final CurvedAnimation _floatingDateCurved;
   final Map<int, GlobalKey> _separatorKeys = {};
   String? _lastSentId;
-  
+
   @override
   void initState() {
     super.initState();
@@ -167,9 +171,9 @@ class _ChatScreenState extends State<ChatScreen>
     );
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _pushSub = api.pushStream
-        .where((p) =>
-            p.opcode == Opcode.notifMark ||
-            p.opcode == Opcode.notifTyping)
+        .where(
+          (p) => p.opcode == Opcode.notifMark || p.opcode == Opcode.notifTyping,
+        )
         .listen(_onIncomingPush);
     _messageEventSub = ChatsModule.messageEvents
         .where((e) => e.chatId == widget.chatId)
@@ -206,15 +210,17 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     _myId = p?.id ?? 0;
 
-    ChatsModule.getChat(_myId, widget.chatId).then((value) {
-      if (mounted && value.isNotEmpty) {
-        setState(() {
-          chat = value.first;
-        });
-        _recomputeHeaderStatus();
-        _syncOtherReadTime();
-      }
-    }).catchError((_) {});
+    ChatsModule.getChat(_myId, widget.chatId)
+        .then((value) {
+          if (mounted && value.isNotEmpty) {
+            setState(() {
+              chat = value.first;
+            });
+            _recomputeHeaderStatus();
+            _syncOtherReadTime();
+          }
+        })
+        .catchError((_) {});
 
     final firstRows = await AppDatabase.loadMessages(
       _myId,
@@ -254,6 +260,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       _kickoffHistory();
     }
+
     anim.addStatusListener(onStatus);
     safety = Timer(const Duration(milliseconds: 400), () {
       anim.removeStatusListener(onStatus);
@@ -322,10 +329,12 @@ class _ChatScreenState extends State<ChatScreen>
       if (mounted) {
         _applyMergedMessages(updatedRows, markLoaded: true);
       }
-      unawaited(ChatsModule.reconcileLastMessageIfPlaceholder(_myId, widget.chatId));
+      unawaited(
+        ChatsModule.reconcileLastMessageIfPlaceholder(_myId, widget.chatId),
+      );
       _loadForwardedSenderNames();
     } catch (e) {
-      debugPrint('Error fetching history: $e');
+      logger.e('Error fetching history: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -339,9 +348,7 @@ class _ChatScreenState extends State<ChatScreen>
     List<Map<String, dynamic>> rowsDesc, {
     bool markLoaded = false,
   }) {
-    final byId = <String, CachedMessage>{
-      for (final m in _messages) m.id: m,
-    };
+    final byId = <String, CachedMessage>{for (final m in _messages) m.id: m};
     final merged = <CachedMessage>[];
     for (final row in rowsDesc.reversed) {
       final fresh = CachedMessage.fromDbRow(row);
@@ -635,20 +642,6 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (_) {}
   }
 
-  String _formatLastSeen(int secondsSinceEpoch) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000);
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 2) return 'Был(-а) только что';
-    if (diff.inMinutes < 60) return 'Был(-а) ${diff.inMinutes} мин назад';
-    if (diff.inHours < 24) return 'Был(-а) ${diff.inHours} ч назад';
-    if (diff.inDays < 7) return 'Был(-а) ${diff.inDays} дн назад';
-    const months = [
-      'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-    ];
-    return 'Был(-а) ${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
-
   void _recomputeHeaderStatus() {
     _headerStatusNotifier.value = _headerStatus();
   }
@@ -666,7 +659,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_otherStatus == 1) return 'В сети';
     if (_otherStatus == 3) return 'Был(-а) недавно';
     final s = _otherSeenTime;
-    if (s != null && s > 0) return _formatLastSeen(s);
+    if (s != null && s > 0) return formatLastSeen(s);
     return '';
   }
 
@@ -720,7 +713,6 @@ class _ChatScreenState extends State<ChatScreen>
     final now = DateTime.now().millisecondsSinceEpoch;
 
     try {
-
       final tempMessage = CachedMessage(
         id: tempId,
         accountId: _myId,
@@ -747,7 +739,11 @@ class _ChatScreenState extends State<ChatScreen>
       _scrollToBottom();
       _checkPrankTrigger(tempMessage);
 
-      final actualId = await messagesModule.sendMessage(_myId, widget.chatId, text);
+      final actualId = await messagesModule.sendMessage(
+        _myId,
+        widget.chatId,
+        text,
+      );
 
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
@@ -902,26 +898,34 @@ class _ChatScreenState extends State<ChatScreen>
     for (int i = 0; i < _messages.length; i++) {
       final msg = _messages[i];
       final msgDate = DateTime.fromMillisecondsSinceEpoch(msg.time);
-      final dayMillis = DateTime(msgDate.year, msgDate.month, msgDate.day)
-          .millisecondsSinceEpoch;
+      final dayMillis = DateTime(
+        msgDate.year,
+        msgDate.month,
+        msgDate.day,
+      ).millisecondsSinceEpoch;
 
       bool needSeparator = i == 0;
       if (!needSeparator) {
-        final prevDate =
-            DateTime.fromMillisecondsSinceEpoch(_messages[i - 1].time);
-        final prevDayMillis =
-            DateTime(prevDate.year, prevDate.month, prevDate.day)
-                .millisecondsSinceEpoch;
+        final prevDate = DateTime.fromMillisecondsSinceEpoch(
+          _messages[i - 1].time,
+        );
+        final prevDayMillis = DateTime(
+          prevDate.year,
+          prevDate.month,
+          prevDate.day,
+        ).millisecondsSinceEpoch;
         needSeparator = dayMillis != prevDayMillis;
       }
 
       if (needSeparator) {
         _separatorKeys.putIfAbsent(dayMillis, () => GlobalKey());
         usedDates.add(dayMillis);
-        items.add(_DateSeparatorItem(
-          DateTime.fromMillisecondsSinceEpoch(dayMillis),
-          _separatorKeys[dayMillis]!,
-        ));
+        items.add(
+          _DateSeparatorItem(
+            DateTime.fromMillisecondsSinceEpoch(dayMillis),
+            _separatorKeys[dayMillis]!,
+          ),
+        );
       }
 
       items.add(_MessageItem(msg, i));
@@ -992,8 +996,18 @@ class _ChatScreenState extends State<ChatScreen>
     if (d == yesterday) return 'Вчера';
 
     const months = [
-      'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+      'января',
+      'февраля',
+      'марта',
+      'апреля',
+      'мая',
+      'июня',
+      'июля',
+      'августа',
+      'сентября',
+      'октября',
+      'ноября',
+      'декабря',
     ];
     if (date.year == now.year) {
       return '${date.day} ${months[date.month - 1]}';
@@ -1001,8 +1015,12 @@ class _ChatScreenState extends State<ChatScreen>
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  Widget _buildDateSeparatorWidget(BuildContext context, DateTime date,
-      {Key? key, bool floating = false}) {
+  Widget _buildDateSeparatorWidget(
+    BuildContext context,
+    DateTime date, {
+    Key? key,
+    bool floating = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       key: key,
@@ -1029,8 +1047,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme =
-        _prankActive ? _prankPinkTheme(Theme.of(context)) : Theme.of(context);
+    final theme = _prankActive
+        ? _prankPinkTheme(Theme.of(context))
+        : Theme.of(context);
     final cs = theme.colorScheme;
 
     // TODO: Локализация
@@ -1040,161 +1059,173 @@ class _ChatScreenState extends State<ChatScreen>
       child: RepaintBoundary(
         key: _prankCaptureKey,
         child: ValueListenableBuilder<bool>(
-      valueListenable: AppSwipeBackDesktop.current,
-      builder: (context, desktopSwipe, child) => SwipeToPop(
-        enabled: widget.embedded && desktopSwipe,
-        onPop: widget.onClose,
-        child: child!,
-      ),
-      child: Scaffold(
-      backgroundColor: cs.surface,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(kToolbarHeight),
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => ChatInfoScreen(
-              chatId: widget.chatId,
-              name: widget.name,
-              imageUrl: widget.imageUrl,
-              chatType: widget.chatType)
-            )
+          valueListenable: AppSwipeBackDesktop.current,
+          builder: (context, desktopSwipe, child) => SwipeToPop(
+            enabled: widget.embedded && desktopSwipe,
+            onPop: widget.onClose,
+            child: child!,
           ),
-          child: AppBar(
-            backgroundColor: cs.surfaceContainerHigh,
-            foregroundColor: cs.onSurface,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            iconTheme: IconThemeData(color: cs.onSurface),
-            leading: IconButton(
-              icon: Icon(
-                widget.embedded ? Symbols.close : Symbols.arrow_back,
-                weight: 400,
-              ),
-              onPressed: () {
-                if (widget.embedded) {
-                  widget.onClose?.call();
-                } else {
-                  Navigator.pop(context);
-                }
-              },
-            ),
-            titleSpacing: 0,
-            title: Row(
-              children: [
-                if (widget.imageUrl.isNotEmpty)
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundImage: CachedNetworkImageProvider(widget.imageUrl, maxWidth: 144, maxHeight: 144),
-                  )
-                else
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: cs.primaryContainer,
-                    child: Text(
-                      widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                      style: TextStyle(color: cs.onPrimaryContainer, fontSize: 12),
+          child: Scaffold(
+            backgroundColor: cs.surface,
+            appBar: PreferredSize(
+              preferredSize: Size.fromHeight(kToolbarHeight),
+              child: InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatInfoScreen(
+                      chatId: widget.chatId,
+                      name: widget.name,
+                      imageUrl: widget.imageUrl,
+                      chatType: widget.chatType,
                     ),
                   ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+                child: AppBar(
+                  backgroundColor: cs.surfaceContainerHigh,
+                  foregroundColor: cs.onSurface,
+                  elevation: 0,
+                  surfaceTintColor: Colors.transparent,
+                  iconTheme: IconThemeData(color: cs.onSurface),
+                  leading: IconButton(
+                    icon: Icon(
+                      widget.embedded ? Symbols.close : Symbols.arrow_back,
+                      weight: 400,
+                    ),
+                    onPressed: () {
+                      if (widget.embedded) {
+                        widget.onClose?.call();
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
+                  ),
+                  titleSpacing: 0,
+                  title: Row(
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              widget.name,
-                              style: TextStyle(
-                                color: cs.onSurface,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Outfit',
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                      if (widget.imageUrl.isNotEmpty)
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundImage: CachedNetworkImageProvider(
+                            widget.imageUrl,
+                            maxWidth: 144,
+                            maxHeight: 144,
+                          ),
+                        )
+                      else
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: cs.primaryContainer,
+                          child: Text(
+                            widget.name.isNotEmpty
+                                ? widget.name[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: cs.onPrimaryContainer,
+                              fontSize: 12,
                             ),
                           ),
-                          if (chat?.isOfficial ?? false) ...[
-                            const SizedBox(width: 4),
-                            Icon(
-                              Symbols.verified,
-                              color: cs.primary,
-                              size: 16,
-                              weight: 600,
-                              fill: 1,
+                        ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    widget.name,
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Outfit',
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (chat?.isOfficial ?? false) ...[
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Symbols.verified,
+                                    color: cs.primary,
+                                    size: 16,
+                                    weight: 600,
+                                    fill: 1,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            ValueListenableBuilder<String>(
+                              valueListenable: _headerStatusNotifier,
+                              builder: (context, status, _) => Text(
+                                status,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
                             ),
                           ],
-                        ],
-                      ),
-                      ValueListenableBuilder<String>(
-                        valueListenable: _headerStatusNotifier,
-                        builder: (context, status, _) => Text(
-                          status,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                          ),
                         ),
                       ),
                     ],
                   ),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Symbols.call, weight: 400),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: const Icon(Symbols.more_vert, weight: 400),
+                      onPressed: () {},
+                    ),
+                  ],
                 ),
+              ),
+            ),
+            body: Column(
+              children: [
+                Expanded(
+                  child: _isLoading && _messages.isEmpty
+                      ? _buildShimmerLoading()
+                      : _buildMessagesList(),
+                ),
+                AnimatedBuilder(
+                  animation: _attachAnim,
+                  builder: (context, _) {
+                    if (_attachAnim.value == 0) return const SizedBox.shrink();
+                    final curve = _attachAnim.status == AnimationStatus.reverse
+                        ? Curves.easeIn
+                        : Curves.easeOut;
+                    final t = curve.transform(_attachAnim.value);
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: ClipRect(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          heightFactor: t,
+                          child: Opacity(
+                            opacity: t,
+                            child: AttachmentPanel(
+                              onClose: () => _showAttachmentPanel.value = false,
+                              onPickFile: _pickAndUploadFile,
+                              onSendById: _sendFileById,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _buildInputArea(context),
               ],
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(Symbols.call, weight: 400),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: const Icon(Symbols.more_vert, weight: 400),
-                onPressed: () {},
-              ),
-            ],
           ),
-        )),
-      body: Column(
-        children: [
-          Expanded(
-            child: _isLoading && _messages.isEmpty
-                ? _buildShimmerLoading()
-                : _buildMessagesList(),
-          ),
-          AnimatedBuilder(
-            animation: _attachAnim,
-            builder: (context, _) {
-              if (_attachAnim.value == 0) return const SizedBox.shrink();
-              final curve = _attachAnim.status == AnimationStatus.reverse
-                  ? Curves.easeIn
-                  : Curves.easeOut;
-              final t = curve.transform(_attachAnim.value);
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: ClipRect(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    heightFactor: t,
-                    child: Opacity(
-                      opacity: t,
-                      child: AttachmentPanel(
-                        onClose: () => _showAttachmentPanel.value = false,
-                        onPickFile: _pickAndUploadFile,
-                        onSendById: _sendFileById,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          _buildInputArea(context),
-        ],
-      ),
-      ),
         ),
       ),
     );
@@ -1220,68 +1251,72 @@ class _ChatScreenState extends State<ChatScreen>
         ValueListenableBuilder<int>(
           valueListenable: _otherReadTime,
           builder: (context, _, _) => ValueListenableBuilder<double>(
-          valueListenable: AppCacheExtent.current,
-          builder: (context, cacheExtent, _) => ListView.builder(
-          controller: _scrollController,
-          reverse: true,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          cacheExtent: cacheExtent,
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[items.length - 1 - index];
+            valueListenable: AppCacheExtent.current,
+            builder: (context, cacheExtent, _) => ListView.builder(
+              controller: _scrollController,
+              reverse: true,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              cacheExtent: cacheExtent,
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[items.length - 1 - index];
 
-            if (item is _DateSeparatorItem) {
-              return _buildDateSeparatorWidget(context, item.date,
-                  key: item.key);
-            }
+                if (item is _DateSeparatorItem) {
+                  return _buildDateSeparatorWidget(
+                    context,
+                    item.date,
+                    key: item.key,
+                  );
+                }
 
-            final msgItem = item as _MessageItem;
-            final message = msgItem.message;
-            final msgIndex = msgItem.index;
-            final isMe = message.senderId == _myId;
-            final prevMessage =
-                msgIndex > 0 ? _messages[msgIndex - 1] : null;
-            final nextMessage = msgIndex < _messages.length - 1
-                ? _messages[msgIndex + 1]
-                : null;
+                final msgItem = item as _MessageItem;
+                final message = msgItem.message;
+                final msgIndex = msgItem.index;
+                final isMe = message.senderId == _myId;
+                final prevMessage = msgIndex > 0
+                    ? _messages[msgIndex - 1]
+                    : null;
+                final nextMessage = msgIndex < _messages.length - 1
+                    ? _messages[msgIndex + 1]
+                    : null;
 
-            final bubble = MessageBubble(
-              message: message,
-              isMe: isMe,
-              myId: _myId,
-              prevMessage: prevMessage,
-              nextMessage: nextMessage,
-              chatType: chat?.type ?? 'CHAT',
-              overrideStatus: _effectiveStatus(message),
-              reactionsListenable: _reactionNotifierFor(message),
-            );
+                final bubble = MessageBubble(
+                  message: message,
+                  isMe: isMe,
+                  myId: _myId,
+                  prevMessage: prevMessage,
+                  nextMessage: nextMessage,
+                  chatType: chat?.type ?? 'CHAT',
+                  overrideStatus: _effectiveStatus(message),
+                  reactionsListenable: _reactionNotifierFor(message),
+                );
 
-            final pressable = _LongPressBubble(
-              message: message,
-              isMe: isMe,
-              child: bubble,
-            );
+                final pressable = _LongPressBubble(
+                  message: message,
+                  isMe: isMe,
+                  child: bubble,
+                );
 
-            final Widget child = message.id == _lastSentId
-                ? _SentMessageAnimation(
-                    key: ValueKey('anim_${message.id}'),
-                    onComplete: () {
-                      if (mounted) setState(() => _lastSentId = null);
-                    },
-                    child: pressable,
-                  )
-                : pressable;
+                final Widget child = message.id == _lastSentId
+                    ? _SentMessageAnimation(
+                        key: ValueKey('anim_${message.id}'),
+                        onComplete: () {
+                          if (mounted) setState(() => _lastSentId = null);
+                        },
+                        child: pressable,
+                      )
+                    : pressable;
 
-            final builtItem = RepaintBoundary(
-              key: ValueKey('msg_${message.id}'),
-              child: child,
-            );
-            return message.id == _prankBubbleId
-                ? KeyedSubtree(key: _prankBubbleKey, child: builtItem)
-                : builtItem;
-          },
-        ),
-        ),
+                final builtItem = RepaintBoundary(
+                  key: ValueKey('msg_${message.id}'),
+                  child: child,
+                );
+                return message.id == _prankBubbleId
+                    ? KeyedSubtree(key: _prankBubbleKey, child: builtItem)
+                    : builtItem;
+              },
+            ),
+          ),
         ),
         Positioned(
           top: 8,
@@ -1304,7 +1339,11 @@ class _ChatScreenState extends State<ChatScreen>
                       ),
                     );
                   },
-                  child: _buildDateSeparatorWidget(context, date, floating: true),
+                  child: _buildDateSeparatorWidget(
+                    context,
+                    date,
+                    floating: true,
+                  ),
                 );
               },
             ),
@@ -1483,7 +1522,10 @@ class _ChatScreenState extends State<ChatScreen>
                         final t = _attachAnim.value;
                         return IgnorePointer(
                           ignoring: t > 0.5,
-                          child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: child),
+                          child: Opacity(
+                            opacity: (1 - t).clamp(0.0, 1.0),
+                            child: child,
+                          ),
                         );
                       },
                       child: Padding(
@@ -1491,14 +1533,22 @@ class _ChatScreenState extends State<ChatScreen>
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Icon(Symbols.face, color: mutedIcon, size: 24, weight: 400),
+                            Icon(
+                              Symbols.face,
+                              color: mutedIcon,
+                              size: 24,
+                              weight: 400,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Focus(
                                 onKeyEvent: (node, event) {
                                   if (event is KeyDownEvent &&
-                                      event.logicalKey == LogicalKeyboardKey.enter &&
-                                      !HardwareKeyboard.instance.isShiftPressed) {
+                                      event.logicalKey ==
+                                          LogicalKeyboardKey.enter &&
+                                      !HardwareKeyboard
+                                          .instance
+                                          .isShiftPressed) {
                                     if (_hasText.value) _sendMessage();
                                     return KeyEventResult.handled;
                                   }
@@ -1506,7 +1556,10 @@ class _ChatScreenState extends State<ChatScreen>
                                 },
                                 child: TextField(
                                   controller: _messageController,
-                                  style: TextStyle(color: cs.onSurface, fontSize: 16),
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                  ),
                                   maxLines: null,
                                   keyboardType: TextInputType.multiline,
                                   textAlignVertical: TextAlignVertical.center,
@@ -1548,7 +1601,10 @@ class _ChatScreenState extends State<ChatScreen>
                             final t = _attachAnim.value;
                             return IgnorePointer(
                               ignoring: t < 0.5,
-                              child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
+                              child: Opacity(
+                                opacity: t.clamp(0.0, 1.0),
+                                child: child,
+                              ),
                             );
                           },
                           child: _HistoryStrip(
@@ -1598,7 +1654,9 @@ class _ChatScreenState extends State<ChatScreen>
                         height: 54,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: hasText ? cs.primary : cs.surfaceContainerHighest,
+                          color: hasText
+                              ? cs.primary
+                              : cs.surfaceContainerHighest,
                           shape: BoxShape.circle,
                         ),
                         child: GestureDetector(
@@ -1670,12 +1728,14 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _sendHistoryFile(FileHistoryEntry entry) async {
-    final tempId = _addOptimisticFileMessage(FileAttachment(
-      fileId: entry.fileId,
-      fileToken: entry.token,
-      name: entry.filename,
-      size: entry.size,
-    ));
+    final tempId = _addOptimisticFileMessage(
+      FileAttachment(
+        fileId: entry.fileId,
+        fileToken: entry.token,
+        name: entry.filename,
+        size: entry.size,
+      ),
+    );
     _showAttachmentPanel.value = false;
     try {
       final ok = await messagesModule.sendFileMessage(
@@ -1695,10 +1755,9 @@ class _ChatScreenState extends State<ChatScreen>
       final ok = await messagesModule.sendFileMessage(widget.chatId, fileId);
       if (!mounted) return ok;
       if (ok) {
-        FileHistoryCache.add(FileHistoryEntry(
-          fileId: fileId,
-          sentAt: DateTime.now(),
-        ));
+        FileHistoryCache.add(
+          FileHistoryEntry(fileId: fileId, sentAt: DateTime.now()),
+        );
         _updateFileMessageStatus(tempId, 'sent');
         _showAttachmentPanel.value = false;
       } else {
@@ -1726,10 +1785,9 @@ class _ChatScreenState extends State<ChatScreen>
     _showAttachmentPanel.value = false;
     _uploadStatus.value = _UploadStatus(active: true, total: file.size);
 
-    final tempId = _addOptimisticFileMessage(FileAttachment(
-      name: file.name,
-      size: file.size,
-    ));
+    final tempId = _addOptimisticFileMessage(
+      FileAttachment(name: file.name, size: file.size),
+    );
 
     UploadNotificationService.start(file.name);
 
@@ -1743,83 +1801,94 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadSub?.cancel();
     _uploadSub = fileUploader
         .upload(
-      chatId: widget.chatId,
-      file: File(file.path!),
-      filename: file.name,
-      totalSize: file.size,
-    )
+          chatId: widget.chatId,
+          file: File(file.path!),
+          filename: file.name,
+          totalSize: file.size,
+        )
         .listen(
-      (event) {
-        if (!mounted) return;
-        switch (event) {
-          case UploadProgress(:final sent, :final total):
-            _uploadStatus.value = _UploadStatus(active: true, sent: sent, total: total);
-            final nowMs = DateTime.now().millisecondsSinceEpoch;
-            final elapsed = nowMs - notifLastMs;
-            if (elapsed >= 500) {
-              notifSpeedBps = ((sent - notifLastSent) * 1000 / elapsed).round();
-              notifLastSent = sent;
-              notifLastMs = nowMs;
+          (event) {
+            if (!mounted) return;
+            switch (event) {
+              case UploadProgress(:final sent, :final total):
+                _uploadStatus.value = _UploadStatus(
+                  active: true,
+                  sent: sent,
+                  total: total,
+                );
+                final nowMs = DateTime.now().millisecondsSinceEpoch;
+                final elapsed = nowMs - notifLastMs;
+                if (elapsed >= 500) {
+                  notifSpeedBps = ((sent - notifLastSent) * 1000 / elapsed)
+                      .round();
+                  notifLastSent = sent;
+                  notifLastMs = nowMs;
+                }
+                final percent = total > 0 ? (sent * 100 ~/ total) : 0;
+                if (percent != notifLastPercent) {
+                  notifLastPercent = percent;
+                  UploadNotificationService.update(
+                    filename: file.name,
+                    progressPercent: percent,
+                    speedBps: notifSpeedBps,
+                  );
+                }
+              case UploadDone(:final fileId, :final token, :final url):
+                stopNotif();
+                FileHistoryCache.add(
+                  FileHistoryEntry(
+                    fileId: fileId,
+                    url: url,
+                    token: token,
+                    filename: file.name,
+                    size: file.size,
+                    sentAt: DateTime.now(),
+                  ),
+                );
+                _updateFileMessageStatus(
+                  tempId,
+                  'sent',
+                  attachment: FileAttachment(
+                    fileId: fileId,
+                    fileToken: token,
+                    name: file.name,
+                    size: file.size,
+                  ),
+                );
+              case UploadError(:final message):
+                stopNotif();
+                showCustomNotification(context, 'Ошибка: $message');
+                _updateFileMessageStatus(tempId, 'error');
             }
-            final percent = total > 0 ? (sent * 100 ~/ total) : 0;
-            if (percent != notifLastPercent) {
-              notifLastPercent = percent;
-              UploadNotificationService.update(
-                filename: file.name,
-                progressPercent: percent,
-                speedBps: notifSpeedBps,
-              );
-            }
-          case UploadDone(:final fileId, :final token, :final url):
+          },
+          onDone: () {
+            if (!mounted) return;
             stopNotif();
-            FileHistoryCache.add(FileHistoryEntry(
-              fileId: fileId,
-              url: url,
-              token: token,
-              filename: file.name,
-              size: file.size,
-              sentAt: DateTime.now(),
-            ));
-            _updateFileMessageStatus(
-              tempId,
-              'sent',
-              attachment: FileAttachment(
-                fileId: fileId,
-                fileToken: token,
-                name: file.name,
-                size: file.size,
+            final inFlight = _messages.firstWhere(
+              (m) => m.id == tempId,
+              orElse: () => CachedMessage(
+                id: '',
+                accountId: 0,
+                chatId: 0,
+                senderId: 0,
+                time: 0,
               ),
             );
-          case UploadError(:final message):
+            if (inFlight.id == tempId && inFlight.status == 'sending') {
+              _updateFileMessageStatus(tempId, 'error');
+            }
+            _uploadStatus.value = const _UploadStatus();
+            _uploadSub = null;
+          },
+          onError: (Object e) {
+            if (!mounted) return;
             stopNotif();
-            showCustomNotification(context, 'Ошибка: $message');
+            showCustomNotification(context, 'Ошибка: $e');
             _updateFileMessageStatus(tempId, 'error');
-        }
-      },
-      onDone: () {
-        if (!mounted) return;
-        stopNotif();
-        final inFlight = _messages.firstWhere(
-          (m) => m.id == tempId,
-          orElse: () => CachedMessage(
-            id: '', accountId: 0, chatId: 0, senderId: 0, time: 0,
-          ),
+            _uploadStatus.value = const _UploadStatus();
+            _uploadSub = null;
+          },
         );
-        if (inFlight.id == tempId && inFlight.status == 'sending') {
-          _updateFileMessageStatus(tempId, 'error');
-        }
-        _uploadStatus.value = const _UploadStatus();
-        _uploadSub = null;
-      },
-      onError: (Object e) {
-        if (!mounted) return;
-        stopNotif();
-        showCustomNotification(context, 'Ошибка: $e');
-        _updateFileMessageStatus(tempId, 'error');
-        _uploadStatus.value = const _UploadStatus();
-        _uploadSub = null;
-      },
-    );
   }
 }
 
@@ -1848,8 +1917,8 @@ class _AttachButton extends StatelessWidget {
         final iconColor = status.awaitingResponse
             ? cs.primary
             : (status.active
-                ? cs.onSurfaceVariant.withValues(alpha: 0.5)
-                : mutedIcon);
+                  ? cs.onSurfaceVariant.withValues(alpha: 0.5)
+                  : mutedIcon);
         final onTap = (isText || status.active) ? null : onOpen;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -1933,86 +2002,98 @@ class _HistoryStrip extends StatelessWidget {
           itemCount: history.length,
           itemBuilder: (ctx, idx) {
             final e = history[idx];
-        final startInterval = (idx * 0.05).clamp(0.0, 0.45);
-        return AnimatedBuilder(
-          animation: anim,
-          builder: (context, child) {
-            final raw = ((anim.value - startInterval) / 0.45).clamp(0.0, 1.0);
-            final v = Curves.easeOutCubic.transform(raw);
-            return Opacity(
-              opacity: v,
-              child: Transform.translate(
-                offset: Offset(-14 * (1 - v), 0),
-                child: child,
-              ),
-            );
-          },
-          child: Container(
-            width: 54,
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
-            ),
-            child: Stack(children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onTapEntry(e),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _iconForFilename(e.filename),
-                        color: cs.onSurfaceVariant,
-                        size: 22,
-                      ),
-                      const SizedBox(height: 2),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: Text(
-                          _labelForEntry(e),
-                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 9),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          textAlign: TextAlign.center,
+            final startInterval = (idx * 0.05).clamp(0.0, 0.45);
+            return AnimatedBuilder(
+              animation: anim,
+              builder: (context, child) {
+                final raw = ((anim.value - startInterval) / 0.45).clamp(
+                  0.0,
+                  1.0,
+                );
+                final v = Curves.easeOutCubic.transform(raw);
+                return Opacity(
+                  opacity: v,
+                  child: Transform.translate(
+                    offset: Offset(-14 * (1 - v), 0),
+                    child: child,
+                  ),
+                );
+              },
+              child: Container(
+                width: 54,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onTapEntry(e),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _iconForFilename(e.filename),
+                              color: cs.onSurfaceVariant,
+                              size: 22,
+                            ),
+                            const SizedBox(height: 2),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 3,
+                              ),
+                              child: Text(
+                                _labelForEntry(e),
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 9,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                top: -2,
-                right: -2,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => FileHistoryCache.remove(e.fileId),
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.5),
-                        width: 0.5,
+                    ),
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => FileHistoryCache.remove(e.fileId),
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: cs.outlineVariant.withValues(alpha: 0.5),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Icon(
+                            Symbols.close,
+                            size: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                     ),
-                    child: Icon(
-                      Symbols.close,
-                      size: 12,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
+                  ],
                 ),
               ),
-            ]),
-          ),
-        );
+            );
           },
         );
       },
@@ -2215,10 +2296,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
             _controller?.updatePointer(d.globalPosition),
         onLongPressEnd: (_) => _controller?.commit(),
         onSecondaryTapDown: _onSecondaryTapDown,
-        child: RepaintBoundary(
-          key: _boundaryKey,
-          child: widget.child,
-        ),
+        child: RepaintBoundary(key: _boundaryKey, child: widget.child),
       ),
     );
   }
@@ -2252,9 +2330,10 @@ class _SentMessageAnimationState extends State<_SentMessageAnimation>
       duration: const Duration(milliseconds: 220),
     );
     _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 16, end: 0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 16,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
     _ctrl.forward().whenComplete(widget.onComplete);
   }
 

@@ -3,6 +3,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/utils/haptics.dart';
+import '../../widgets/confirm_dialog.dart';
 
 class PerformanceScreen extends StatefulWidget {
   const PerformanceScreen({super.key});
@@ -25,7 +26,8 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
   }
 
   bool _isInSafeZone(double v) =>
-      v >= AppCacheExtent.lowWarnThreshold && v < AppCacheExtent.highWarnThreshold;
+      v >= AppCacheExtent.lowWarnThreshold &&
+      v < AppCacheExtent.highWarnThreshold;
 
   void _onChanged(double v) {
     setState(() {
@@ -41,8 +43,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
 
     if (inLow && !_lowWarnDismissed) {
       final ok = await _showWarning(
-        text:
-            'Производительность приложения может снизиться, вы уверены?',
+        text: 'Производительность приложения может снизиться, вы уверены?',
       );
       if (ok) {
         _lowWarnDismissed = true;
@@ -73,37 +74,13 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
     await AppCacheExtent.save(v);
   }
 
-  Future<bool> _showWarning({required String text}) async {
-    final cs = Theme.of(context).colorScheme;
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: cs.surfaceContainerHigh,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          content: Text(
-            text,
-            style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.35),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Нет',
-                style: TextStyle(color: cs.onSurfaceVariant),
-              ),
-            ),
-            FilledButton.tonal(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Да'),
-            ),
-          ],
-        );
-      },
+  Future<bool> _showWarning({required String text}) {
+    return showConfirmDialog(
+      context,
+      message: text,
+      confirmLabel: 'Да',
+      cancelLabel: 'Нет',
     );
-    return res ?? false;
   }
 
   @override

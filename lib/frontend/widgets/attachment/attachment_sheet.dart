@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
+import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
 
 const List<PillNavItem> _navItems = [
@@ -126,7 +128,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
-              _buildHandle(cs),
+              const SheetGrabber(),
               Expanded(
                 child: Stack(
                   children: [
@@ -177,18 +179,6 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   static const double _pillMargin = 10;
   static const double _barHeight = SlidingPillNav.height + _pillMargin;
   static const Duration _navAnim = Duration(milliseconds: 300);
-
-  Widget _buildHandle(ColorScheme cs) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      width: 40,
-      height: 4,
-      decoration: BoxDecoration(
-        color: cs.onSurfaceVariant.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(2),
-      ),
-    );
-  }
 
   Widget _buildPages(
     ScrollController scrollController,
@@ -597,7 +587,7 @@ class _GalleryTileState extends State<_GalleryTile> {
                   ),
                   if (item.duration != null)
                     Text(
-                      _formatDuration(item.duration!),
+                      formatDurationMmSs(item.duration!),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
@@ -616,12 +606,6 @@ class _GalleryTileState extends State<_GalleryTile> {
         ],
       ),
     );
-  }
-
-  String _formatDuration(Duration d) {
-    final m = d.inMinutes;
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 }
 

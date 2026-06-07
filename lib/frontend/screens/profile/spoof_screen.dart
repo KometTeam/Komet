@@ -14,6 +14,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/info_action_sheet.dart';
+import '../../widgets/section_header.dart';
 import '../auth/login_screen.dart';
 
 enum SpoofingMethod { partial, full }
@@ -621,19 +622,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
   Widget _buildMainDataCard() {
     final l10n = AppLocalizations.of(context)!;
     return Card(
@@ -642,7 +630,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader(context, l10n.spoofMainSectionTitle),
+            SectionHeader(
+              l10n.spoofMainSectionTitle,
+              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
+              fontSize: 22,
+            ),
             TextField(
               controller: _deviceNameController,
               decoration: _inputDecoration(
@@ -672,7 +664,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader(context, l10n.spoofRegionalSectionTitle),
+            SectionHeader(
+              l10n.spoofRegionalSectionTitle,
+              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
+              fontSize: 22,
+            ),
             TextField(
               controller: _screenController,
               decoration: _inputDecoration(
@@ -721,7 +717,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader(context, l10n.spoofIdentifiersSectionTitle),
+            SectionHeader(
+              l10n.spoofIdentifiersSectionTitle,
+              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
+              fontSize: 22,
+            ),
             _buildDescriptionTile(
               icon: Icons.info_outline,
               color: Theme.of(context).colorScheme.tertiary,

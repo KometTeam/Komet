@@ -10,8 +10,10 @@ import 'chat_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
+import '../../../core/utils/format.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -342,9 +344,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     return showModalBottomSheet<bool>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -832,10 +832,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   String _formatTime(int? timestamp) {
     if (timestamp == null || timestamp == 0) return '';
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m';
+    return formatClock(DateTime.fromMillisecondsSinceEpoch(timestamp));
   }
 
   Widget _buildChatShimmer() {

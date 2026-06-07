@@ -5,7 +5,9 @@ import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart'
     show PrivacyConfig, BlockedContact;
 import '../../../core/storage/app_database.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 import 'password_entry_screen.dart';
 
 class SecurityScreen extends StatefulWidget {
@@ -539,14 +541,7 @@ class _SecurityScreenState extends State<SecurityScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+              const SheetGrabber(margin: EdgeInsets.zero),
               const SizedBox(height: 16),
               Text(
                 title,
@@ -598,37 +593,20 @@ class _SecurityScreenState extends State<SecurityScreen>
     );
   }
 
-  void _showHiddenStatusSheet(BuildContext context, ColorScheme cs) {
+  Future<void> _showHiddenStatusSheet(
+    BuildContext context,
+    ColorScheme cs,
+  ) async {
     final currentValue = _privacyConfig?.hidden == true ? 'NONE' : 'CONTACTS';
 
     if (currentValue == 'NONE') {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: cs.surfaceContainerHigh,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text('Вы уверены?', style: TextStyle(color: cs.onSurface)),
-          content: Text(
-            'Вы не сможете видеть статусы посещения других пользователей.',
-            style: TextStyle(color: cs.onSurfaceVariant),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Отмена', style: TextStyle(color: cs.primary)),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _updateSetting('HIDDEN', false);
-              },
-              child: Text('Да', style: TextStyle(color: cs.primary)),
-            ),
-          ],
-        ),
+      final confirmed = await showConfirmDialog(
+        context,
+        title: 'Вы уверены?',
+        message: 'Вы не сможете видеть статусы посещения других пользователей.',
+        confirmLabel: 'Да',
       );
+      if (confirmed) _updateSetting('HIDDEN', false);
       return;
     }
 
@@ -644,14 +622,7 @@ class _SecurityScreenState extends State<SecurityScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+              const SheetGrabber(margin: EdgeInsets.zero),
               const SizedBox(height: 16),
               Text(
                 'Видеть статус «в сети»',
@@ -683,32 +654,17 @@ class _SecurityScreenState extends State<SecurityScreen>
     );
   }
 
-  void _showHiddenStatusConfirmDialog(BuildContext context, ColorScheme cs) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Вы уверены?', style: TextStyle(color: cs.onSurface)),
-        content: Text(
-          'Вы не сможете видеть статусы посещения других пользователей.',
-          style: TextStyle(color: cs.onSurfaceVariant),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Отмена', style: TextStyle(color: cs.primary)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _updateSetting('HIDDEN', true);
-            },
-            child: Text('Да', style: TextStyle(color: cs.primary)),
-          ),
-        ],
-      ),
+  Future<void> _showHiddenStatusConfirmDialog(
+    BuildContext context,
+    ColorScheme cs,
+  ) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Вы уверены?',
+      message: 'Вы не сможете видеть статусы посещения других пользователей.',
+      confirmLabel: 'Да',
     );
+    if (confirmed) _updateSetting('HIDDEN', true);
   }
 
   Widget _buildOptionSheetItem(

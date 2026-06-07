@@ -7,8 +7,6 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, fileUploader, KometApp;
 import '../../widgets/custom_notification.dart';
 
-const int _maxAvatarBytes = 8 * 1024 * 1024;
-
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -62,7 +60,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final newProfile = await accountModule.updateProfileName(
         firstName,
-        _lastNameController.text.trim().isEmpty ? null : _lastNameController.text.trim(),
+        _lastNameController.text.trim().isEmpty
+            ? null
+            : _lastNameController.text.trim(),
       );
       _avatarUrl = newProfile.baseUrl;
       _photoId = newProfile.photoId;
@@ -92,8 +92,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) showCustomNotification(context, 'Не удалось прочитать файл');
       return;
     }
-    if (bytes.length > _maxAvatarBytes) {
-      if (mounted) showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
+    if (bytes.length > kMaxAvatarBytes) {
+      if (mounted) {
+        showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
+      }
       return;
     }
     if (!mounted) return;
@@ -183,7 +185,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   )
                 : Text(
                     l10n?.editProfileSave ?? 'Save',
-                    style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
           ),
         ],
@@ -214,7 +219,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   alignment: Alignment.center,
                                   child: Text(
                                     _firstNameController.text.isNotEmpty
-                                        ? _firstNameController.text[0].toUpperCase()
+                                        ? _firstNameController.text[0]
+                                              .toUpperCase()
                                         : '?',
                                     style: TextStyle(
                                       color: cs.onPrimaryContainer,
@@ -234,7 +240,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            icon: Icon(Symbols.camera_alt, color: cs.onPrimary, size: 20),
+                            icon: Icon(
+                              Symbols.camera_alt,
+                              color: cs.onPrimary,
+                              size: 20,
+                            ),
                             onPressed: _changeAvatar,
                           ),
                         ),
@@ -274,13 +284,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, ColorScheme cs, {bool enabled = true}) {
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller,
+    ColorScheme cs, {
+    bool enabled = true,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 6),
-          child: Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          child: Text(
+            label,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
         ),
         TextField(
           controller: controller,
@@ -292,7 +310,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
         ),
       ],

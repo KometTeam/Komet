@@ -11,8 +11,10 @@ import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/upload_manager.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/format.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/sheet_helpers.dart';
 
 enum _EnvState { loading, notConfigured, ready }
 
@@ -108,7 +110,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     final cachedId = await CloudStorageModule.getCachedEnvGroupId(profile.id);
     if (cachedId != null) {
       final rows = await ChatsModule.getChat(profile.id, cachedId);
-      if (rows.isNotEmpty && CloudStorageModule.isCloudStorageGroup(rows.first)) {
+      if (rows.isNotEmpty &&
+          CloudStorageModule.isCloudStorageGroup(rows.first)) {
         if (!mounted) return;
         setState(() {
           _envState = _EnvState.ready;
@@ -127,7 +130,10 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     final orphans = CloudStorageModule.findOrphanGroups(chats);
 
     if (envGroup == null && orphans.isNotEmpty) {
-      final repaired = await CloudStorageModule.repairOrphan(api, orphans.first);
+      final repaired = await CloudStorageModule.repairOrphan(
+        api,
+        orphans.first,
+      );
       if (repaired != null) {
         envGroup = repaired;
         await CloudStorageModule.cacheEnvGroupId(profile.id, repaired.id);
@@ -161,14 +167,23 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   void _deleteOrLeave(int accountId, CachedChat chat) async {
     final isAdmin = chat.owner == accountId || chat.admins.contains(accountId);
     if (isAdmin) {
-      await ChatsModule.deleteChat(api, chatId: chat.id, lastEventTime: chat.lastEventTime, forAll: true);
+      await ChatsModule.deleteChat(
+        api,
+        chatId: chat.id,
+        lastEventTime: chat.lastEventTime,
+        forAll: true,
+      );
     } else {
       await ChatsModule.leaveChat(api, chatId: chat.id);
     }
   }
 
   Future<void> _loadFiles(int accountId, int chatId) async {
-    final files = await CloudStorageModule.fetchFiles(messagesModule, accountId, chatId);
+    final files = await CloudStorageModule.fetchFiles(
+      messagesModule,
+      accountId,
+      chatId,
+    );
     if (!mounted) return;
     setState(() => _files = files.reversed.toList());
   }
@@ -179,8 +194,11 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       _animateNewCard = true;
     });
     if (_pageController.hasClients) {
-      _pageController.animateToPage(0,
-          duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+      _pageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+      );
     }
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) setState(() => _animateNewCard = false);
@@ -248,7 +266,10 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           final ok = await messagesModule.sendFileMessage(chatId, id);
           if (!ok) return false;
           final newest = await CloudStorageModule.fetchLatestFile(
-            messagesModule, accountId, chatId, expectedFileId: id,
+            messagesModule,
+            accountId,
+            chatId,
+            expectedFileId: id,
           );
           if (mounted) {
             if (newest != null) {
@@ -316,23 +337,45 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
             Text(
               'Среда для облачного хранилища не настроена',
               textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 6),
-            Text('Начнем? Это быстро.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+            Text(
+              'Начнем? Это быстро.',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _isCreatingEnv ? null : _setupEnv,
               style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               child: _isCreatingEnv
                   ? SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: cs.onPrimary,
+                      ),
                     )
-                  : const Text('Начать', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  : const Text(
+                      'Начать',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -382,7 +425,11 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     );
   }
 
-  Widget _buildUploadingCenterHint(ColorScheme cs, double t, double availableWidth) {
+  Widget _buildUploadingCenterHint(
+    ColorScheme cs,
+    double t,
+    double availableWidth,
+  ) {
     final cardSide = availableWidth * _cardViewportFraction;
     return Center(
       child: Opacity(
@@ -412,7 +459,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                         );
                         if (i == 0 && _animateNewCard) {
                           return _FadeScaleEntry(
-                            key: ValueKey('${_files[0].messageId}_${_files[0].time}'),
+                            key: ValueKey(
+                              '${_files[0].messageId}_${_files[0].time}',
+                            ),
                             child: padded,
                           );
                         }
@@ -448,8 +497,10 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                       const SizedBox(height: 8),
                       Text(
                         'Загрузка ${(progress * 100).toStringAsFixed(0)}%',
-                        style:
-                            TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
@@ -556,11 +607,11 @@ class _UploadModeController {
   final AnimationController anim;
 
   _UploadModeController(TickerProvider vsync)
-      : anim = AnimationController(
-          vsync: vsync,
-          duration: _openDuration,
-          reverseDuration: _closeDuration,
-        );
+    : anim = AnimationController(
+        vsync: vsync,
+        duration: _openDuration,
+        reverseDuration: _closeDuration,
+      );
 
   bool get isOpen => anim.value > 0;
 
@@ -706,10 +757,7 @@ class _DragDownHintState extends State<_DragDownHint>
     if (phase > _activeFraction) return (dy: 0, opacity: 0);
     final local = phase / _activeFraction;
     final eased = Curves.easeOutCubic.transform(local);
-    return (
-      dy: _startY + eased * _travel,
-      opacity: (1 - local) * _peakOpacity,
-    );
+    return (dy: _startY + eased * _travel, opacity: (1 - local) * _peakOpacity);
   }
 }
 
@@ -738,9 +786,15 @@ class _FadeScaleEntryState extends State<_FadeScaleEntry>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
     _scale = CurvedAnimation(parent: _c, curve: Curves.elasticOut);
-    _opacity = CurvedAnimation(parent: _c, curve: const Interval(0, 0.4, curve: Curves.easeIn));
+    _opacity = CurvedAnimation(
+      parent: _c,
+      curve: const Interval(0, 0.4, curve: Curves.easeIn),
+    );
     _c.forward();
   }
 
@@ -789,7 +843,7 @@ class _CloudFileCard extends StatelessWidget {
     final d = DateTime.fromMillisecondsSinceEpoch(millis);
     final now = DateTime.now();
     if (d.year == now.year && d.month == now.month && d.day == now.day) {
-      return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      return formatClock(d);
     }
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
   }
@@ -805,7 +859,10 @@ class _CloudFileCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5), width: 0.5),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.5,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -834,7 +891,10 @@ class _CloudFileCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       _formatTime(file.time),
-                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 10,
+                      ),
                     ),
                   ],
                 ),
@@ -889,18 +949,23 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
       chatId: f.chatId,
       messageId: f.messageId,
     );
-    if (mounted) setState(() { _link = result; _loading = false; });
+    if (mounted) {
+      setState(() {
+        _link = result;
+        _loading = false;
+      });
+    }
   }
 
   static String _formatSize(int? bytes) {
     if (bytes == null) return '—';
-    if (bytes < 1024) return '$bytes Б';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
+    return formatBytes(bytes);
   }
 
   static String _formatExpiry(int expiresMs) {
-    final remaining = DateTime.fromMillisecondsSinceEpoch(expiresMs).difference(DateTime.now());
+    final remaining = DateTime.fromMillisecondsSinceEpoch(
+      expiresMs,
+    ).difference(DateTime.now());
     if (remaining.isNegative) return 'истекла';
     final h = remaining.inHours;
     final m = remaining.inMinutes % 60;
@@ -913,7 +978,8 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final f = widget.file;
-    final isExpired = _link == null ||
+    final isExpired =
+        _link == null ||
         _link!.expires <= DateTime.now().millisecondsSinceEpoch;
 
     return Container(
@@ -922,25 +988,25 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(
-        24, 16, 24,
+        24,
+        16,
+        24,
         MediaQuery.of(context).viewInsets.bottom + 32,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
+          const Center(child: SheetGrabber(margin: EdgeInsets.zero)),
+          const SizedBox(height: 20),
+          Text(
+            f.name,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 20),
-          Text(f.name,
-              style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           _InfoRow(label: 'ID файла', value: f.fileId?.toString() ?? '—'),
           const SizedBox(height: 6),
@@ -952,16 +1018,27 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
             children: [
               Expanded(
                 child: isExpired
-                    ? Text('Ссылки пока нет. Создайте.',
-                        style: TextStyle(color: cs.error, fontSize: 13))
-                    : Text('Ссылка истечет ${_formatExpiry(_link!.expires)}',
-                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                    ? Text(
+                        'Ссылки пока нет. Создайте.',
+                        style: TextStyle(color: cs.error, fontSize: 13),
+                      )
+                    : Text(
+                        'Ссылка истечет ${_formatExpiry(_link!.expires)}',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
               ),
               const SizedBox(width: 8),
               _loading
                   ? SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: cs.primary,
+                      ),
                     )
                   : IconButton(
                       icon: Icon(
@@ -974,8 +1051,13 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
                       onPressed: isExpired
                           ? _generateLink
                           : () {
-                              Clipboard.setData(ClipboardData(text: _link!.url));
-                              showCustomNotification(context, 'Ссылка скопирована');
+                              Clipboard.setData(
+                                ClipboardData(text: _link!.url),
+                              );
+                              showCustomNotification(
+                                context,
+                                'Ссылка скопирована',
+                              );
                             },
                     ),
             ],
@@ -996,11 +1078,18 @@ class _InfoRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Text('$label: ', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+        Text(
+          '$label: ',
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+        ),
         Expanded(
           child: Text(
             value,
-            style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -1053,24 +1142,25 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(
-        24, 16, 24,
+        24,
+        16,
+        24,
         MediaQuery.of(context).viewInsets.bottom + 32,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant, borderRadius: BorderRadius.circular(2),
-              ),
+          const Center(child: SheetGrabber(margin: EdgeInsets.zero)),
+          const SizedBox(height: 20),
+          Text(
+            'Отправить по ID',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 20),
-          Text('Отправить по ID',
-              style: TextStyle(color: cs.onSurface, fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
@@ -1087,7 +1177,10 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -1095,14 +1188,23 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
             onPressed: _sending ? null : _submit,
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: _sending
                 ? SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: cs.onPrimary,
+                    ),
                   )
-                : const Text('Отправить', style: TextStyle(fontWeight: FontWeight.w600)),
+                : const Text(
+                    'Отправить',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
           ),
         ],
       ),

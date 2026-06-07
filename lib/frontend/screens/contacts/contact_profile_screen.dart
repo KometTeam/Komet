@@ -1,11 +1,12 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/cache/info_cache.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/format.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/komet_avatar.dart';
 import '../../widgets/swipe_route.dart';
 import '../chats/chat_screen.dart';
 
@@ -96,62 +97,8 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
     if (_isBot) return 'Бот';
     if (_presenceStatus == 1) return 'В сети';
     if (_presenceStatus == 3) return 'Был(-а) недавно';
-    if (_seenTime != null && _seenTime! > 0) return _formatLastSeen(_seenTime!);
+    if (_seenTime != null && _seenTime! > 0) return formatLastSeen(_seenTime!);
     return '';
-  }
-
-  String _formatLastSeen(int secondsSinceEpoch) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000);
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 2) return 'Был(-а) только что';
-    if (diff.inMinutes < 60) return 'Был(-а) ${diff.inMinutes} мин назад';
-    if (diff.inHours < 24) return 'Был(-а) ${diff.inHours} ч назад';
-    if (diff.inDays < 7) return 'Был(-а) ${diff.inDays} дн назад';
-    return 'Был(-а) ${_formatDate(dt)}';
-  }
-
-  String _formatDate(DateTime dt) {
-    const months = [
-      'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
-
-  String _formatDateTime(int msSinceEpoch) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(msSinceEpoch);
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    return '${_formatDate(dt)}, $hh:$mm';
-  }
-
-  String? _formatPhone(dynamic raw) {
-    String? digits;
-    if (raw is int && raw > 0) {
-      digits = raw.toString();
-    } else if (raw is String && raw.isNotEmpty && raw != '***') {
-      digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
-      if (digits.isEmpty) return null;
-    }
-    if (digits == null) return null;
-    if (digits.length == 11 && digits.startsWith('7')) {
-      final p = digits;
-      return '+${p[0]} (${p.substring(1, 4)}) ${p.substring(4, 7)}-${p.substring(7, 9)}-${p.substring(9)}';
-    }
-    return '+$digits';
-  }
-
-  String? _formatGender(dynamic raw) {
-    if (raw is! int) return null;
-    switch (raw) {
-      case 1:
-        return 'Мужской';
-      case 2:
-        return 'Женский';
-      default:
-        return null;
-    }
   }
 
   Future<void> _openChat() async {
@@ -204,7 +151,12 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               children: [
-                _buildAvatar(cs),
+                KometAvatar(
+                  name: _displayName(),
+                  imageUrl: _avatarUrl(),
+                  size: 96,
+                  fontSize: 36,
+                ),
                 const SizedBox(height: 14),
                 _buildNameRow(cs),
                 const SizedBox(height: 4),
@@ -222,41 +174,6 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildAvatar(ColorScheme cs) {
-    final url = _avatarUrl();
-    return Container(
-      width: 96,
-      height: 96,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: cs.primaryContainer,
-      ),
-      child: (url != null && url.isNotEmpty)
-          ? ClipOval(
-              child: CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                errorWidget: (_, _, _) => _avatarLetters(cs),
-              ),
-            )
-          : _avatarLetters(cs),
-    );
-  }
-
-  Widget _avatarLetters(ColorScheme cs) {
-    final name = _displayName();
-    return Center(
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: TextStyle(
-          color: cs.onPrimaryContainer,
-          fontSize: 36,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
     );
   }
 
@@ -280,12 +197,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
         ),
         if (_isVerified) ...[
           const SizedBox(width: 6),
-          Icon(
-            Symbols.verified,
-            color: cs.primary,
-            size: 20,
-            fill: 1,
-          ),
+          Icon(Symbols.verified, color: cs.primary, size: 20, fill: 1),
         ],
       ],
     );
@@ -295,8 +207,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
     final actions = <({IconData icon, String label, VoidCallback? onTap})>[
       (icon: Symbols.chat_bubble, label: 'Чат', onTap: _openChat),
       (icon: Symbols.notifications, label: 'Звук', onTap: null),
-      if (!_isBot)
-        (icon: Symbols.call, label: 'Звонок', onTap: null),
+      if (!_isBot) (icon: Symbols.call, label: 'Звонок', onTap: null),
     ];
     return Row(
       children: [
@@ -336,7 +247,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
 
     final rows = <Widget>[];
 
-    final phoneStr = _formatPhone(c['phone']);
+    final phoneStr = formatPhone(c['phone']);
     if (phoneStr != null) {
       rows.add(_infoRow(cs, Symbols.phone, 'Телефон', phoneStr));
     }
@@ -346,24 +257,45 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
       rows.add(_infoRow(cs, Symbols.public, 'Страна', country));
     }
 
-    final genderStr = _formatGender(c['gender']);
+    final genderStr = formatGender(c['gender']);
     if (genderStr != null) {
       rows.add(_infoRow(cs, Symbols.wc, 'Пол', genderStr));
     }
 
     final regTime = c['registrationTime'] as int?;
     if (regTime != null && regTime > 0) {
-      rows.add(_infoRow(cs, Symbols.event, 'Регистрация', _formatDateTime(regTime)));
+      rows.add(
+        _infoRow(
+          cs,
+          Symbols.event,
+          'Регистрация',
+          formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(regTime)),
+        ),
+      );
     }
 
     final updateTime = c['updateTime'] as int?;
     if (updateTime != null && updateTime > 0) {
-      rows.add(_infoRow(cs, Symbols.update, 'Обновлён', _formatDateTime(updateTime)));
+      rows.add(
+        _infoRow(
+          cs,
+          Symbols.update,
+          'Обновлён',
+          formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(updateTime)),
+        ),
+      );
     }
 
     final accountStatus = c['accountStatus'];
     if (accountStatus is int && accountStatus != 0) {
-      rows.add(_infoRow(cs, Symbols.account_circle, 'Статус аккаунта', accountStatus.toString()));
+      rows.add(
+        _infoRow(
+          cs,
+          Symbols.account_circle,
+          'Статус аккаунта',
+          accountStatus.toString(),
+        ),
+      );
     }
 
     final desc = (c['description'] as String?)?.trim();
@@ -383,7 +315,9 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
 
     final opts = _options();
     if (opts.isNotEmpty) {
-      rows.add(_infoRow(cs, Symbols.label, 'Флаги', opts.join(', '), multiline: true));
+      rows.add(
+        _infoRow(cs, Symbols.label, 'Флаги', opts.join(', '), multiline: true),
+      );
     }
 
     rows.add(_infoRow(cs, Symbols.tag, 'ID', widget.contactId.toString()));
@@ -401,7 +335,10 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
         children: [
           for (var i = 0; i < rows.length; i++) ...[
             if (i > 0)
-              Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
+              Divider(
+                height: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.3),
+              ),
             rows[i],
           ],
         ],

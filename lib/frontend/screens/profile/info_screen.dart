@@ -5,6 +5,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/section_header.dart';
 
 class InfoScreen extends StatefulWidget {
   const InfoScreen({super.key});
@@ -65,13 +66,13 @@ class _InfoScreenState extends State<InfoScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _info == null
-              ? Center(
-                  child: Text(
-                    'No data',
-                    style: TextStyle(color: cs.onSurfaceVariant),
-                  ),
-                )
-              : _buildContent(cs, l10n!),
+          ? Center(
+              child: Text(
+                'No data',
+                style: TextStyle(color: cs.onSurfaceVariant),
+              ),
+            )
+          : _buildContent(cs, l10n!),
     );
   }
 
@@ -114,29 +115,49 @@ class _InfoScreenState extends State<InfoScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _buildSectionTitle(l10n.infoAccountSection, cs),
-        ...accountKeys.entries.map((e) => _buildRow(e.key, e.value, _formatValue(info[e.key], e.key), cs)),
+        SectionHeader(l10n.infoAccountSection),
+        ...accountKeys.entries.map(
+          (e) =>
+              _buildRow(e.key, e.value, _formatValue(info[e.key], e.key), cs),
+        ),
 
         const SizedBox(height: 16),
-        _buildSectionTitle(l10n.infoServerSection, cs),
-        ...serverKeys.entries.map((e) => _buildRow(e.key, e.value, _formatValue(server?[e.key], e.key), cs)),
+        SectionHeader(l10n.infoServerSection),
+        ...serverKeys.entries.map(
+          (e) => _buildRow(
+            e.key,
+            e.value,
+            _formatValue(server?[e.key], e.key),
+            cs,
+          ),
+        ),
 
         const SizedBox(height: 8),
-        _buildSectionTitle(l10n.infoYMapSection, cs),
+        SectionHeader(l10n.infoYMapSection),
         _buildRow('tile', l10n.infoTile, yMap?['tile']?.toString() ?? '-', cs),
-        _buildRow('geocoder', l10n.infoGeocoder, yMap?['geocoder']?.toString() ?? '-', cs),
-        _buildRow('static', l10n.infoStatic, yMap?['static']?.toString() ?? '-', cs),
+        _buildRow(
+          'geocoder',
+          l10n.infoGeocoder,
+          yMap?['geocoder']?.toString() ?? '-',
+          cs,
+        ),
+        _buildRow(
+          'static',
+          l10n.infoStatic,
+          yMap?['static']?.toString() ?? '-',
+          cs,
+        ),
 
         const SizedBox(height: 8),
-        _buildSectionTitle(l10n.infoFileUploadTypes, cs),
+        SectionHeader(l10n.infoFileUploadTypes),
         _buildListRow(server?['file-upload-unsupported-types'] as List?, cs),
 
         const SizedBox(height: 8),
-        _buildSectionTitle(l10n.infoWhiteListLinks, cs),
+        SectionHeader(l10n.infoWhiteListLinks),
         _buildListRow(server?['white-list-links'] as List?, cs),
 
         const SizedBox(height: 8),
-        _buildSectionTitle(l10n.infoUserSection, cs),
+        SectionHeader(l10n.infoUserSection),
         if (user != null)
           ...user.entries
               .where((e) => e.value != null)
@@ -144,21 +165,6 @@ class _InfoScreenState extends State<InfoScreen> {
 
         const SizedBox(height: 120),
       ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title, ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 8, left: 4, right: 4),
-      child: Text(
-        title,
-        style: TextStyle(
-          color: cs.primary,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
-      ),
     );
   }
 
@@ -224,7 +230,10 @@ class _InfoScreenState extends State<InfoScreen> {
         children: items
             .map(
               (item) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
@@ -250,7 +259,10 @@ class _InfoScreenState extends State<InfoScreen> {
     if (key == 'edit-timeout' && value is int && value > 0) {
       final weeks = value ~/ 604800;
       final days = (value % 604800) ~/ 86400;
-      if (weeks > 0) return '$weeks ${_w(weeks)} ${days > 0 ? '$days ${_d(days)}' : ''}'.trim();
+      if (weeks > 0) {
+        return '$weeks ${_w(weeks)} ${days > 0 ? '$days ${_d(days)}' : ''}'
+            .trim();
+      }
       final h = value ~/ 3600;
       final m = (value % 3600) ~/ 60;
       if (h > 0) return '${h}h ${m}m';

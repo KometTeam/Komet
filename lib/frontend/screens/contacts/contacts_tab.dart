@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/protocol/opcode_map.dart';
@@ -6,6 +5,8 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../main.dart';
+import '../../widgets/komet_avatar.dart';
+import '../../widgets/sheet_helpers.dart';
 import 'contact_profile_screen.dart';
 
 class ContactsTab extends StatefulWidget {
@@ -31,9 +32,7 @@ class _ContactsTabState extends State<ContactsTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (_) => const _SearchContactSheet(),
     );
   }
@@ -53,21 +52,6 @@ class _ContactsTabState extends State<ContactsTab> {
         _isLoading = false;
       });
     }
-  }
-
-  Widget _buildPlaceholderAvatar(ColorScheme cs, String name) {
-    return Container(
-      color: cs.primaryContainer,
-      alignment: Alignment.center,
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: TextStyle(
-          color: cs.onPrimaryContainer,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
   }
 
   Widget _buildContactItem(
@@ -109,18 +93,10 @@ class _ContactsTabState extends State<ContactsTab> {
                     width: 1,
                   ),
                 ),
-                child: ClipOval(
-                  child: contact.baseUrl != null && contact.baseUrl!.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: contact.baseUrl!,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 144,
-                          memCacheHeight: 144,
-                          fadeInDuration: const Duration(milliseconds: 120),
-                          errorWidget: (context, url, error) =>
-                              _buildPlaceholderAvatar(cs, nameToDisplay),
-                        )
-                      : _buildPlaceholderAvatar(cs, nameToDisplay),
+                child: KometAvatar(
+                  name: nameToDisplay,
+                  imageUrl: contact.baseUrl,
+                  size: 48,
                 ),
               ),
               const SizedBox(width: 16),
@@ -366,8 +342,15 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
                 style: TextStyle(color: cs.onSurface, fontSize: 16),
                 decoration: InputDecoration(
                   hintText: 'Введите ID контакта',
-                  hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
-                  prefixIcon: Icon(Symbols.tag, color: cs.onSurfaceVariant, size: 20),
+                  hintStyle: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 16,
+                  ),
+                  prefixIcon: Icon(
+                    Symbols.tag,
+                    color: cs.onSurfaceVariant,
+                    size: 20,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -380,19 +363,29 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
               if (_error != null) ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: cs.errorContainer.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      Icon(Symbols.error_outline, size: 18, color: cs.onErrorContainer),
+                      Icon(
+                        Symbols.error_outline,
+                        size: 18,
+                        color: cs.onErrorContainer,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _error!,
-                          style: TextStyle(color: cs.onErrorContainer, fontSize: 13),
+                          style: TextStyle(
+                            color: cs.onErrorContainer,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -403,7 +396,9 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
               FilledButton(
                 onPressed: _loading ? null : _submit,
                 style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _loading
