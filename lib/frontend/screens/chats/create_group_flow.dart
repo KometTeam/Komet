@@ -159,13 +159,14 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
 
       if (!mounted) return;
       navigator.pop();
-      pushSwipeable(
-        context,
-        (_) => ChatScreen(
-          chatId: chat.id,
-          name: chat.title ?? title,
-          imageUrl: chat.iconUrl ?? '',
-          chatType: chat.type,
+      navigator.push(
+        SwipeRoute(
+          builder: (_) => ChatScreen(
+            chatId: chat.id,
+            name: chat.title ?? title,
+            imageUrl: chat.iconUrl ?? '',
+            chatType: chat.type,
+          ),
         ),
       );
     } catch (e) {

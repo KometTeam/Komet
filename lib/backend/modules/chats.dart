@@ -191,6 +191,7 @@ class ChatsModule {
 
   static StreamSubscription<Packet>? _globalPushSub;
   static StreamSubscription<SessionState>? _globalStateSub;
+  static Future<void> _pushQueue = Future.value();
 
   static final Set<int> _dirtyChats = {};
   static final Set<int> _knownChats = {};
@@ -203,7 +204,7 @@ class ChatsModule {
   static void attachGlobalPushHandlers(Api api) {
     _globalPushSub?.cancel();
     _globalStateSub?.cancel();
-    _globalPushSub = api.pushStream.listen(_handleGlobalPush);
+    _globalPushSub = api.pushStream.listen(_enqueueGlobalPush);
     _globalStateSub = api.stateStream.listen(_handleSessionState);
     if (api.state != SessionState.online) {
       _markAllKnownChatsDirty();
@@ -238,6 +239,14 @@ class ChatsModule {
       }
     }
     _dirtyChats.addAll(_knownChats);
+  }
+
+  static void _enqueueGlobalPush(Packet packet) {
+    _pushQueue = _pushQueue
+        .then((_) => _handleGlobalPush(packet))
+        .catchError((Object e) {
+          logger.w('Ошибка обработки пуша: $e');
+        });
   }
 
   static Future<void> _handleGlobalPush(Packet packet) async {

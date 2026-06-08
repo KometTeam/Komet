@@ -61,6 +61,12 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Камера нужна для сканирования QR-кода входа в веб-версию и приложение MAX на компьютере.</string>
+	<string>Камера нужна для съёмки фото и видео в чатах, сканирования QR-кода входа и работы веб-приложений.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Микрофон нужен для записи голосовых сообщений, видео и звонков.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
 </dict>
 </plist>

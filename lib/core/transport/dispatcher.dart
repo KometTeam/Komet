@@ -33,6 +33,12 @@ class PacketDispatcher {
   /// Регистрирует ожидание ответа — future завершится когда
   /// придёт пакет с совпадающим seq.
   Future<Packet> registerPending(int seq) {
+    final existing = _pendingRequests[seq];
+    if (existing != null && !existing.isCompleted) {
+      existing.completeError(
+        StateError('seq=$seq переиспользован до получения ответа'),
+      );
+    }
     final completer = Completer<Packet>();
     _pendingRequests[seq] = completer;
     _requestTimestamps[seq] = DateTime.now();
@@ -55,7 +61,7 @@ class PacketDispatcher {
         packet.cmd == CmdType.error ||
         packet.cmd == CmdType.notFound) {
       logger.i(
-        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${redactForLog(packet.payload)}}',
+        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${payloadForLog(packet.payload)}}',
       );
 
       final completer = _pendingRequests.remove(packet.seq);
@@ -84,7 +90,7 @@ class PacketDispatcher {
       }
     } else if (packet.isPush) {
       logger.i(
-        '<= push {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${redactForLog(packet.payload)}}',
+        '<= push {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${payloadForLog(packet.payload)}}',
       );
       _pushHandlers[packet.opcode]?.call(packet);
       _pushController.add(packet);

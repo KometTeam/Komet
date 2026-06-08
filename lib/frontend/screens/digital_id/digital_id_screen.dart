@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/digital_id.dart';
 import '../../../backend/modules/webapp.dart';
+import '../../../core/utils/webview_support.dart';
 import '../../../main.dart' show digitalIdModule;
 import '../../../models/digital_id.dart';
 import '../../widgets/custom_notification.dart';
@@ -89,6 +90,13 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
   Future<void> _linkGosuslugi() async {
     if (_busy) return;
+    if (!webViewSupported) {
+      showCustomNotification(
+        context,
+        'Привязка Госуслуг недоступна на этой платформе. Сделайте это в приложении на телефоне.',
+      );
+      return;
+    }
     setState(() => _busy = true);
     try {
       final link = await digitalIdModule.createEsiaLink();
@@ -173,14 +181,16 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     if (_error != null) {
       return _ErrorView(message: _error!, onRetry: _load);
     }
+    if (_docs == null) {
+      return _buildOnboarding(cs);
+    }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          if (_docs != null) ..._buildProfile(cs, _docs!),
-          if (_docs == null) _buildOnboarding(cs),
+          ..._buildProfile(cs, _docs!),
           if (_cards.isNotEmpty) ..._buildCards(cs),
           const SizedBox(height: 16),
           _buildBiometryInfo(cs),
@@ -190,51 +200,79 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
   }
 
   Widget _buildOnboarding(ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Symbols.badge, size: 40, color: cs.primary),
-          const SizedBox(height: 12),
-          Text(
-            'Цифровой ID не настроен',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurface,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        child: Column(
+          children: [
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Symbols.badge, size: 72, color: cs.primary),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Цифровой ID не настроен',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _needsGosuslugi
+                            ? 'Привяжите аккаунт Госуслуг, чтобы документы появились в Цифровом ID. Номер телефона в MAX должен совпадать с номером в профиле Госуслуг.'
+                            : 'Привяжите Госуслуги, чтобы получить доступ к документам, или обновите страницу, если уже настраивали Цифровой ID.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _needsGosuslugi
-                ? 'Привяжите аккаунт Госуслуг, чтобы документы появились в Цифровом ID. Номер телефона в MAX должен совпадать с номером в профиле Госуслуг.'
-                : 'Привяжите Госуслуги, чтобы получить доступ к документам, или обновите страницу, если уже настраивали Цифровой ID.',
-            style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: _busy ? null : _linkGosuslugi,
-            icon: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Symbols.link),
-            label: const Text('Привязать Госуслуги'),
-          ),
-          const SizedBox(height: 4),
-          TextButton.icon(
-            onPressed: _busy ? null : _loadDocsExplicit,
-            icon: const Icon(Symbols.sync),
-            label: const Text('Загрузить документы'),
-          ),
-        ],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : _loadDocsExplicit,
+                    icon: const Icon(Symbols.sync, size: 18),
+                    label: const Text(
+                      'Загрузить документы',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _busy ? null : _linkGosuslugi,
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Symbols.link, size: 18),
+                    label: const Text(
+                      'Привязать Госуслуги',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildBiometryInfo(cs),
+          ],
+        ),
       ),
     );
   }

@@ -30,7 +30,7 @@ class Connection {
   void _setState(SocketState newState) {
     if (_state == newState) return;
     _state = newState;
-    _stateController.add(newState);
+    if (!_stateController.isClosed) _stateController.add(newState);
   }
 
   Future<void> connect(
@@ -65,7 +65,9 @@ class Connection {
       logger.i('Подключено к $host:$port');
 
       _subscription = _socket!.listen(
-        (data) => _dataController.add(data),
+        (data) {
+          if (!_dataController.isClosed) _dataController.add(data);
+        },
         onError: (Object error) {
           logger.e('Ошибка сокета: $error');
           disconnect();
@@ -138,9 +140,9 @@ class Connection {
     _setState(SocketState.disconnected);
   }
 
-  void dispose() {
-    disconnect();
-    _dataController.close();
-    _stateController.close();
+  Future<void> dispose() async {
+    await disconnect();
+    await _dataController.close();
+    await _stateController.close();
   }
 }

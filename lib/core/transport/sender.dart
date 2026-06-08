@@ -18,7 +18,7 @@ class PacketSender {
     final data = packPacket(opcode, payload, seq: seq);
     connection.write(data);
     logger.i(
-      '=> {ver: 10, cmd: 0, seq: $seq, opcode: $opcode, payload: ${redactForLog(payload)}}',
+      '=> {ver: 10, cmd: 0, seq: $seq, opcode: $opcode, payload: ${payloadForLog(payload)}}',
     );
     return seq;
   }

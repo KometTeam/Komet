@@ -5,12 +5,20 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/webapp.dart';
-import '../../../main.dart' show webAppModule;
+import '../../../main.dart' show webAppModule, digitalIdModule;
+import '../../widgets/webview_permission_prompt.dart';
 
 Future<void> resetDigitalIdWebData() async {
   await CookieManager.instance().deleteAllCookies();
   try {
     await WebStorageManager.instance().deleteAllData();
+  } catch (_) {}
+}
+
+Future<void> resetDigitalIdSession() async {
+  digitalIdModule.reset();
+  try {
+    await resetDigitalIdWebData();
   } catch (_) {}
 }
 
@@ -256,12 +264,8 @@ class _DigitalIdWebScreenState extends State<DigitalIdWebScreen> {
           },
         );
       },
-      onPermissionRequest: (controller, request) async {
-        return PermissionResponse(
-          resources: request.resources,
-          action: PermissionResponseAction.GRANT,
-        );
-      },
+      onPermissionRequest: (controller, request) =>
+          askWebViewPermission(context, request),
       shouldOverrideUrlLoading: (controller, action) async {
         final uri = action.request.url;
         final url = uri?.toString() ?? '';

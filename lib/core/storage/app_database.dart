@@ -159,7 +159,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'komet.db'),
-      version: 10,
+      version: 11,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -209,6 +209,9 @@ class AppDatabase {
             'ALTER TABLE chats_cache ADD COLUMN admins TEXT',
           );
         }
+        if (oldVersion < 11) {
+          await _createIndexes(db);
+        }
       },
     );
   }
@@ -234,6 +237,19 @@ class AppDatabase {
     await db.execute(_chatsCacheSchema);
     await db.execute(_contactsSchema);
     await db.execute(_messagesSchema);
+    await _createIndexes(db);
+  }
+
+  static Future<void> _createIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(account_id, chat_id, time DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_chats_account ON chats_cache(account_id, last_event_time DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_contacts_account ON contacts(account_id)',
+    );
   }
 
   static const _contactsSchema = '''

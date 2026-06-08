@@ -32,10 +32,11 @@ class _InfoScreenState extends State<InfoScreen> {
         return;
       }
       final jsonStr = await AppDatabase.getLoginInfo(accountId);
+      if (!mounted) return;
       if (jsonStr != null) {
         setState(() => _info = jsonDecode(jsonStr) as Map<String, dynamic>);
       }
-      if (mounted) setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
         showCustomNotification(context, 'Error: $e');

@@ -19,6 +19,7 @@ import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
 import '../profile/settings_tab.dart';
 import '../auth/login_screen.dart';
+import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
 import '../../../backend/api.dart';
 import '../../../core/utils/haptics.dart';
@@ -2318,6 +2319,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         if (!mounted) return;
         if (accountId == null) {
           final previousId = await TokenStorage.getActiveAccountId();
+          await resetDigitalIdSession();
           try {
             await accountModule.beginAddAccount();
           } catch (_) {}
@@ -2330,6 +2332,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           );
           return;
         }
+        await resetDigitalIdSession();
         try {
           await accountModule.switchAccount(accountId);
         } catch (e) {

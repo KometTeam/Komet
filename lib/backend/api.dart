@@ -301,15 +301,15 @@ class Api {
   /// Стрим всех входящих пушей от сервера.
   Stream<Packet> get pushStream => _dispatcher.pushStream;
 
-  void dispose() {
+  Future<void> dispose() async {
     _autoReconnect = false;
     _reconnectTimer?.cancel();
     _cleanup();
     _dispatcher.dispose();
-    _connection.dispose();
-    _stateController.close();
-    _sessionExpiredController.close();
-    _handshakeSuccessController.close();
+    await _connection.dispose();
+    await _stateController.close();
+    await _sessionExpiredController.close();
+    await _handshakeSuccessController.close();
   }
 
   // Внутрянка

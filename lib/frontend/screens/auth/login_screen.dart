@@ -14,6 +14,7 @@ import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
 import '../profile/spoof_screen.dart';
 import '../profile/debug_menu_screen.dart';
+import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -53,6 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _onBackPressed() async {
     final returnId = widget.returnToAccountId;
     if (returnId != null) {
+      await resetDigitalIdSession();
       try {
         await accountModule.switchAccount(returnId);
       } catch (_) {}

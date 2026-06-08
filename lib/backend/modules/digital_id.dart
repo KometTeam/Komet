@@ -286,6 +286,7 @@ class DigitalIdModule {
     await _send('DELETE', '/v3/digital-id/delete-profile');
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
+      await TokenStorage.deleteSecure('${_tokenKey}_$accountId');
       await AppDatabase.setSyncValue(accountId, _tokenKey, '');
     }
   }
@@ -293,14 +294,23 @@ class DigitalIdModule {
   Future<String?> _storedToken() async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return null;
-    final value = await AppDatabase.getSyncValue(accountId, _tokenKey);
-    return (value != null && value.isNotEmpty) ? value : null;
+    final secureKey = '${_tokenKey}_$accountId';
+    final secured = await TokenStorage.readSecure(secureKey);
+    if (secured != null && secured.isNotEmpty) return secured;
+
+    final legacy = await AppDatabase.getSyncValue(accountId, _tokenKey);
+    if (legacy != null && legacy.isNotEmpty) {
+      await TokenStorage.writeSecure(secureKey, legacy);
+      await AppDatabase.setSyncValue(accountId, _tokenKey, '');
+      return legacy;
+    }
+    return null;
   }
 
   Future<void> _saveToken(String token) async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
-      await AppDatabase.setSyncValue(accountId, _tokenKey, token);
+      await TokenStorage.writeSecure('${_tokenKey}_$accountId', token);
     }
   }
 

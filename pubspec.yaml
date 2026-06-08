@@ -55,6 +55,7 @@ dependencies:
   material_symbols_icons: ^4.2906.0
   dynamic_color: ^1.8.1
   shared_preferences: ^2.5.4
+  flutter_secure_storage: ^9.2.2
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
   cached_network_image: ^3.4.1

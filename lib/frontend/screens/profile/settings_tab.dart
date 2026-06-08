@@ -16,6 +16,7 @@ import '../../widgets/sheet_helpers.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
 import '../../../core/config/app_digital_id_mode.dart';
+import '../../../core/utils/webview_support.dart';
 import '../digital_id/digital_id_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_screen.dart';
@@ -212,6 +213,7 @@ class _SettingsTabState extends State<SettingsTab> {
     ContactCache.clear();
     TranscriptionCache.clear();
     ChatsModule.resetForAccountSwitch();
+    await resetDigitalIdSession();
     try {
       await api.connect();
     } catch (_) {}
@@ -259,7 +261,9 @@ class _SettingsTabState extends State<SettingsTab> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => AppDigitalIdNative.current.value
+                            builder: (context) =>
+                                AppDigitalIdNative.current.value ||
+                                    !webViewSupported
                                 ? const DigitalIdScreen()
                                 : const DigitalIdWebScreen(),
                           ),

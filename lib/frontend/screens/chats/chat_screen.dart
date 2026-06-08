@@ -141,7 +141,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Timer? _shimmerStartTimer;
   bool _historyKickedOff = false;
   List<CachedMessage> _messages = [];
-  int _messagesRevision = 0;
+  final ValueNotifier<int> _messagesRev = ValueNotifier(0);
   List<Object>? _combinedItemsCache;
   int? _combinedItemsKey;
   bool _floatingDateScheduled = false;
@@ -234,7 +234,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           .toList();
       setState(() {
         _messages = first;
-        _messagesRevision++;
+        _messagesRev.value++;
         _isLoading = false;
         _onLoadingFinished();
       });
@@ -303,8 +303,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       widget.chatId,
       limit: 100,
     );
-    if (mounted && fullRows.length > _messages.length) {
-      _applyMergedMessages(fullRows);
+    final fullDecoded = await CachedMessage.fromDbRowsAsync(fullRows);
+    if (mounted && fullDecoded.length > _messages.length) {
+      _applyMergedMessages(fullDecoded);
     }
 
     if (!ChatsModule.isChatDirty(widget.chatId) && fullRows.isNotEmpty) {
@@ -326,8 +327,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         widget.chatId,
         limit: 100,
       );
+      final updatedDecoded = await CachedMessage.fromDbRowsAsync(updatedRows);
       if (mounted) {
-        _applyMergedMessages(updatedRows, markLoaded: true);
+        _applyMergedMessages(updatedDecoded, markLoaded: true);
       }
       unawaited(
         ChatsModule.reconcileLastMessageIfPlaceholder(_myId, widget.chatId),
@@ -345,13 +347,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _applyMergedMessages(
-    List<Map<String, dynamic>> rowsDesc, {
+    List<CachedMessage> decodedDesc, {
     bool markLoaded = false,
   }) {
     final byId = <String, CachedMessage>{for (final m in _messages) m.id: m};
     final merged = <CachedMessage>[];
-    for (final row in rowsDesc.reversed) {
-      final fresh = CachedMessage.fromDbRow(row);
+    for (final fresh in decodedDesc.reversed) {
       final old = byId[fresh.id];
       merged.add(old != null && _sameMessage(old, fresh) ? old : fresh);
     }
@@ -361,7 +362,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() {
       if (changed) {
         _messages = merged;
-        _messagesRevision++;
+        _messagesRev.value++;
       }
       if (markLoaded) {
         _isLoading = false;
@@ -437,6 +438,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _typingTimers.clear();
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
+    _messagesRev.dispose();
     _finishPrankReveal();
     _uploadStatus.dispose();
     _attachAnim.dispose();
@@ -594,17 +596,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _bumpMessages() {
+    _combinedItemsCache = null;
+    _messagesRev.value++;
+  }
+
   void _onMessageEvent(MessageEvent event) {
     if (!mounted) return;
     switch (event) {
       case MessageAddedEvent(:final message):
         if (message.senderId == _myId) return;
         if (_messages.any((m) => m.id == message.id)) return;
-        setState(() {
-          _lastSentId = message.id;
-          _messages.add(message);
-          _messagesRevision++;
-        });
+        _lastSentId = message.id;
+        _messages.add(message);
+        _bumpMessages();
         _clearTyping(message.senderId);
         Haptics.tap();
         _scrollToBottom();
@@ -612,17 +617,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       case MessageEditedEvent(:final message):
         final idx = _messages.indexWhere((m) => m.id == message.id);
         if (idx == -1) return;
-        setState(() {
-          _messages[idx] = message;
-          _messagesRevision++;
-        });
+        _messages[idx] = message;
+        _bumpMessages();
       case MessageRemovedEvent(:final messageId):
         final idx = _messages.indexWhere((m) => m.id == messageId);
         if (idx == -1) return;
-        setState(() {
-          _messages.removeAt(idx);
-          _messagesRevision++;
-        });
+        _messages.removeAt(idx);
+        _bumpMessages();
         _reactionNotifiers.remove(messageId)?.dispose();
       case MessageReactionsChangedEvent(:final messageId, :final reactionInfo):
         _reactionNotifiers[messageId]?.value = reactionInfo;
@@ -724,12 +725,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       );
 
       _hasText.value = false;
-      setState(() {
-        _lastSentId = tempId;
-        _messages.add(tempMessage);
-        _messagesRevision++;
-        _messageController.clear();
-      });
+      _lastSentId = tempId;
+      _messages.add(tempMessage);
+      _messageController.clear();
+      _bumpMessages();
       unawaited(_persistOutgoing(tempMessage));
 
       // Instant tactile "whoosh" the moment the message leaves the composer,
@@ -756,10 +755,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           time: now,
           status: 'sent',
         );
-        setState(() {
-          _messages[index] = sent;
-          _messagesRevision++;
-        });
+        _messages[index] = sent;
+        _bumpMessages();
         unawaited(_persistOutgoing(sent, removeId: tempId));
       }
 
@@ -785,10 +782,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           time: now,
           status: 'error',
         );
-        setState(() {
-          _messages[index] = failed;
-          _messagesRevision++;
-        });
+        _messages[index] = failed;
+        _bumpMessages();
         unawaited(_persistOutgoing(failed));
       }
     }
@@ -871,7 +866,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     if (anyChanged) {
-      setState(() => _messagesRevision++);
+      _bumpMessages();
     }
   }
 
@@ -888,7 +883,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   List<Object> _buildCombinedItems() {
-    final key = Object.hash(_messagesRevision, _messages.length);
+    final key = Object.hash(_messagesRev.value, _messages.length);
     final cached = _combinedItemsCache;
     if (cached != null && _combinedItemsKey == key) return cached;
 
@@ -1232,6 +1227,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMessagesList() {
+    return ValueListenableBuilder<int>(
+      valueListenable: _messagesRev,
+      builder: (context, _, _) => _buildMessagesListContent(),
+    );
+  }
+
+  Widget _buildMessagesListContent() {
     if (_messages.isEmpty) {
       return Center(
         child: Text(
@@ -1301,7 +1303,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ? _SentMessageAnimation(
                         key: ValueKey('anim_${message.id}'),
                         onComplete: () {
-                          if (mounted) setState(() => _lastSentId = null);
+                          if (mounted) {
+                            _lastSentId = null;
+                            _bumpMessages();
+                          }
                         },
                         child: pressable,
                       )
@@ -1692,11 +1697,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       status: 'sending',
       attachments: [attachment],
     );
-    setState(() {
-      _lastSentId = tempId;
-      _messages.add(msg);
-      _messagesRevision++;
-    });
+    _lastSentId = tempId;
+    _messages.add(msg);
+    _bumpMessages();
     Haptics.send();
     _scrollToBottom();
     return tempId;
@@ -1711,20 +1714,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final idx = _messages.indexWhere((m) => m.id == tempId);
     if (idx == -1) return;
     final old = _messages[idx];
-    setState(() {
-      _messages[idx] = CachedMessage(
-        id: tempId,
-        accountId: old.accountId,
-        chatId: old.chatId,
-        senderId: old.senderId,
-        text: old.text,
-        time: old.time,
-        status: status,
-        payload: old.payload,
-        attachments: attachment != null ? [attachment] : old.attachments,
-      );
-      _messagesRevision++;
-    });
+    _messages[idx] = CachedMessage(
+      id: tempId,
+      accountId: old.accountId,
+      chatId: old.chatId,
+      senderId: old.senderId,
+      text: old.text,
+      time: old.time,
+      status: status,
+      payload: old.payload,
+      attachments: attachment != null ? [attachment] : old.attachments,
+    );
+    _bumpMessages();
   }
 
   Future<void> _sendHistoryFile(FileHistoryEntry entry) async {

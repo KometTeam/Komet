@@ -45,6 +45,9 @@ class _BubbleCtx {
   }) : dim = text.withValues(alpha: 0.7);
 }
 
+final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
+final Expando<String> _clockTextCache = Expando<String>();
+
 class MessageBubble extends StatelessWidget {
   static const double photoMaxSize = 280.0;
   static const double photoMinSize = 100.0;
@@ -128,6 +131,13 @@ class MessageBubble extends StatelessWidget {
     if (groupedWithPrev && !groupedWithNext) return BubbleShape.singleBottom;
     return BubbleShape.groupedMiddle;
   }
+
+  MessageType get _contentType =>
+      _contentTypeCache[message] ??= _computeContentType();
+
+  String get _clockText =>
+      _clockTextCache[message] ??=
+          formatClock(DateTime.fromMillisecondsSinceEpoch(message.time));
 
   MessageType _computeContentType() {
     if (message.isControl) return MessageType.control;
@@ -269,7 +279,7 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final contentType = _computeContentType();
+    final contentType = _contentType;
 
     if (message.isControl) {
       const controlShape = BubbleShape.singleMiddle;
@@ -577,8 +587,8 @@ class MessageBubble extends StatelessWidget {
 
     final metaWidget = Text(
       message.status == 'EDITED'
-          ? '${formatClock(DateTime.fromMillisecondsSinceEpoch(message.time))} ред.'
-          : formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
+          ? '$_clockText ред.'
+          : _clockText,
       style: TextStyle(color: ctx.dim, fontSize: 10),
     );
 
@@ -1833,7 +1843,7 @@ class MessageBubble extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Text(
-            formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
+            _clockText,
             style: TextStyle(color: ctx.dim, fontSize: 11),
           ),
           if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
@@ -1854,7 +1864,7 @@ class MessageBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
+        _clockText,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 10,
@@ -2202,6 +2212,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
 
       TranscriptionCache.put(widget.messageId, result);
 
+      if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
         if (result.status == 1) {
@@ -2215,6 +2226,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
         _transcriptionText = 'ошибка транскрибации';

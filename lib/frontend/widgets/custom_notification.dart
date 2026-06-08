@@ -11,7 +11,7 @@ void showCustomNotificationOnOverlay(OverlayState overlay, String message) {
   );
   overlay.insert(entry);
   Future.delayed(const Duration(milliseconds: 2600), () {
-    entry.remove();
+    if (entry.mounted) entry.remove();
   });
 }
 

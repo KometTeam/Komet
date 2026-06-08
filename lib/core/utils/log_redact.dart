@@ -1,6 +1,14 @@
+import 'package:flutter/foundation.dart';
+
 const _redacted = '***';
 
-const _sensitiveSubstrings = ['password', 'token', 'phone', 'secret'];
+const _sensitiveSubstrings = [
+  'password',
+  'token',
+  'phone',
+  'secret',
+  'auth',
+];
 
 const _sensitiveExact = {
   'code',
@@ -12,6 +20,10 @@ const _sensitiveExact = {
   'qrlink',
   'text',
   'msisdn',
+  'deviceid',
+  'mt_instanceid',
+  'instanceid',
+  'webappdata',
 };
 
 bool _isSensitiveKey(Object? key) {
@@ -36,4 +48,9 @@ dynamic redactForLog(dynamic value) {
     return value.map(redactForLog).toList();
   }
   return value;
+}
+
+Object? payloadForLog(dynamic value) {
+  if (kReleaseMode) return '<payload hidden>';
+  return redactForLog(value);
 }

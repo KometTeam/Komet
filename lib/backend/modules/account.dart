@@ -19,6 +19,11 @@ String _normalizeAuthPhone(String phone) {
   return '+$digits';
 }
 
+String _maskPhone(String phone) {
+  if (phone.length <= 5) return '***';
+  return '${phone.substring(0, 3)}***${phone.substring(phone.length - 2)}';
+}
+
 class PrivacyConfig {
   final String searchByPhone;
   final String incomingCall;
@@ -1408,7 +1413,7 @@ class AccountModule {
       'language': language,
     };
 
-    logger.i('Запрос OTP-кода: phone=$normalizedPhone type=${type.value}');
+    logger.i('Запрос OTP-кода: phone=${_maskPhone(normalizedPhone)} type=${type.value}');
 
     final packet = await _api.sendRequest(Opcode.authRequest, payload);
 

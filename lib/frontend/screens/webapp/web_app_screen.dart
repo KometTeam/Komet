@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/webapp.dart';
+import '../../widgets/webview_permission_prompt.dart';
 
 class WebAppScreen extends StatefulWidget {
   final String title;
@@ -118,6 +119,8 @@ class _WebAppScreenState extends State<WebAppScreen> {
         useHybridComposition: true,
       ),
       onWebViewCreated: (controller) => _controller = controller,
+      onPermissionRequest: (controller, request) =>
+          askWebViewPermission(context, request),
       onProgressChanged: (controller, progress) {
         if (!mounted) return;
         setState(() => _progress = progress / 100);

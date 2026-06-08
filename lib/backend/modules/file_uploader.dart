@@ -7,6 +7,7 @@ import '../api.dart';
 import '../../core/config/proxy_config.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/transport/proxy_connector.dart';
+import '../../core/transport/tls_config.dart';
 import '../../core/utils/logger.dart';
 import 'messages.dart';
 
@@ -158,11 +159,12 @@ class FileUploader {
         ? await ProxyConnector(proxySettings).connect(uri.host, uri.port)
         : await Socket.connect(uri.host, uri.port);
     if (uri.scheme != 'https') return base;
-    return SecureSocket.secure(
-      base,
-      host: uri.host,
-      onBadCertificate: (_) => true,
-    );
+    final allowInsecure = await TlsConfig.isInsecureAllowed();
+    if (allowInsecure) {
+      logger.w('TLS: проверка сертификата отключена (дебаг) — загрузка уязвима к MitM');
+      return SecureSocket.secure(base, host: uri.host, onBadCertificate: (_) => true);
+    }
+    return SecureSocket.secure(base, host: uri.host);
   }
 
   void _writeHeaders(

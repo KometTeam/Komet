@@ -270,9 +270,9 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
         if (n is Map) name = n['name']?.toString();
       }
       if (!mounted) return;
-      Navigator.pop(context);
-      Navigator.push(
-        context,
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.push(
         MaterialPageRoute(
           builder: (_) => ContactProfileScreen(
             contactId: id,

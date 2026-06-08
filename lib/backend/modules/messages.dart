@@ -250,6 +250,18 @@ class CachedMessage {
     );
   }
 
+  static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
+      rows.map(CachedMessage.fromDbRow).toList();
+
+  static Future<List<CachedMessage>> fromDbRowsAsync(
+    List<Map<String, dynamic>> rows,
+  ) {
+    if (rows.length < 20) {
+      return Future.value(_decodeRows(rows));
+    }
+    return compute(_decodeRows, rows);
+  }
+
   Map<String, dynamic> toDbRow() => {
     'id': id,
     'account_id': accountId,
@@ -361,7 +373,7 @@ class MessagesModule {
       limit: limit,
       offset: offset,
     );
-    return rows.map(CachedMessage.fromDbRow).toList();
+    return CachedMessage.fromDbRowsAsync(rows);
   }
 
   CachedMessage? _parseMessage(
