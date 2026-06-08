@@ -5,6 +5,12 @@ import '../../core/storage/token_storage.dart';
 
 abstract class EntryBannerApps {
   static const String sferumKey = 'entry_banner_app_sferum';
+  static const String digitalIdKey = 'entry_banner_app_digital_id';
+
+  static const Map<String, String> iconMatchers = {
+    sferumKey: 'sferum',
+    digitalIdKey: 'digital',
+  };
 }
 
 class WebAppLaunch {
@@ -41,6 +47,16 @@ class WebAppModule {
     if (botId == null) {
       throw const WebAppUnavailable(
         'Сферум сейчас недоступен. Переподключитесь и попробуйте снова.',
+      );
+    }
+    return fetchLaunch(botId);
+  }
+
+  Future<WebAppLaunch> fetchDigitalId() async {
+    final botId = await _resolveEntryApp(EntryBannerApps.digitalIdKey);
+    if (botId == null) {
+      throw const WebAppUnavailable(
+        'Цифровой ID сейчас недоступен. Переподключитесь и попробуйте снова.',
       );
     }
     return fetchLaunch(botId);

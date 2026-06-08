@@ -15,6 +15,9 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
+import '../../../core/config/app_digital_id_mode.dart';
+import '../digital_id/digital_id_screen.dart';
+import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_screen.dart';
@@ -249,9 +252,19 @@ class _SettingsTabState extends State<SettingsTab> {
                   context,
                   cs,
                   items: [
-                    const _SettingsItem(
+                    _SettingsItem(
                       icon: Symbols.badge,
                       label: 'Цифровой ID',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AppDigitalIdNative.current.value
+                                ? const DigitalIdScreen()
+                                : const DigitalIdWebScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _SettingsItem(
                       icon: Symbols.language,

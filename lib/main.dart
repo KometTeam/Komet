@@ -24,6 +24,7 @@ import 'core/config/app_stories.dart';
 import 'core/config/app_media_cache.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
+import 'core/config/app_digital_id_mode.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/chats.dart';
 import 'backend/modules/contacts.dart';
@@ -31,6 +32,7 @@ import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
 import 'backend/modules/polls.dart';
 import 'backend/modules/webapp.dart';
+import 'backend/modules/digital_id.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
@@ -49,6 +51,7 @@ final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
 final pollsModule = PollsModule(api);
 final webAppModule = WebAppModule(api);
+final digitalIdModule = DigitalIdModule(webAppModule);
 final fileUploader = FileUploader(api: api, messages: messagesModule);
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
@@ -92,6 +95,7 @@ void main() async {
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
+  final digitalIdNativeFuture = AppDigitalIdNative.load();
 
   final packageInfo = await packageInfoFuture;
   if (packageInfo.packageName == 'ru.oneme.app') {
@@ -124,6 +128,7 @@ void main() async {
   AppPranks.current.value = await pranksFuture;
   AppStories.current.value = await storiesFuture;
   AppMediaCacheLimit.current.value = await cacheLimitFuture;
+  AppDigitalIdNative.current.value = await digitalIdNativeFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,

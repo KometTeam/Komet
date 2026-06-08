@@ -1297,22 +1297,24 @@ class AccountModule {
   Future<void> _persistEntryBannerApps(int accountId, Map serverConfig) async {
     final banners = serverConfig['settings-entry-banners'];
     if (banners is! List) return;
+    final resolved = <String, int>{};
     for (final banner in banners) {
       final items = (banner is Map) ? banner['items'] : null;
       if (items is! List) continue;
       for (final item in items) {
         if (item is! Map) continue;
         final appId = item['appid'];
+        if (appId is! int) continue;
         final icon = item['icon']?.toString().toLowerCase() ?? '';
-        if (appId is int && icon.contains('sferum')) {
-          await AppDatabase.setSyncValue(
-            accountId,
-            EntryBannerApps.sferumKey,
-            appId.toString(),
-          );
-          return;
+        for (final entry in EntryBannerApps.iconMatchers.entries) {
+          if (!resolved.containsKey(entry.key) && icon.contains(entry.value)) {
+            resolved[entry.key] = appId;
+          }
         }
       }
+    }
+    for (final entry in resolved.entries) {
+      await AppDatabase.setSyncValue(accountId, entry.key, entry.value.toString());
     }
   }
 

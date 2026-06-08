@@ -6,6 +6,7 @@ import '../../../backend/modules/chats.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
 import '../../../core/config/app_stories.dart';
+import '../../../core/config/app_digital_id_mode.dart';
 import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/storage/app_database.dart';
@@ -18,6 +19,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/login_success_screen.dart';
 import '../calls/call_screen.dart';
+import '../digital_id/digital_id_web_screen.dart';
 
 class DebugMenuScreen extends StatefulWidget {
   const DebugMenuScreen({super.key});
@@ -539,6 +541,130 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                       ),
                     );
                   },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppDigitalIdNative.current,
+                  builder: (context, native, _) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 17,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.badge,
+                              color: cs.onSurfaceVariant,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Нативный Цифровой ID',
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    native
+                                        ? 'Нативный экран (REST ext-api.max.ru)'
+                                        : 'Оригинальная страница в WebView',
+                                    style: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: native,
+                              onChanged: (v) {
+                                AppDigitalIdNative.save(v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Material(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () async {
+                      await resetDigitalIdWebData();
+                      if (!context.mounted) return;
+                      showCustomNotification(
+                        context,
+                        'Цифровой ID сброшен — Госуслуги спросят вход заново',
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.restart_alt,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Сбросить Цифровой ID',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Очистить куки и данные WebView',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
