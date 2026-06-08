@@ -41,6 +41,21 @@ jobs:
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
 
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist build/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
+          (cd build/ios && zip -qr ../../dist/Komet-ios-unsigned.ipa Payload)
+          rm -rf build/ios/Payload
+
+      - name: Upload unsigned iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-ios-unsigned
+          path: dist/Komet-ios-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Install ldid
         run: brew install ldid
 

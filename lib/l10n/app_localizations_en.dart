@@ -118,6 +118,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get codeError2faMissing => 'Error: missing data for 2FA';
 
   @override
+  String get codeConfirmation2faWarning =>
+      'MAX may require 2FA on your account to sign in. If you didn\'t receive the code, set up 2FA from a client where you\'re already signed in.';
+
+  @override
   String get proxySettingsTitle => 'Proxy';
 
   @override

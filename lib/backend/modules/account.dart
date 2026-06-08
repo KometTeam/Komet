@@ -12,6 +12,7 @@ import 'chats.dart';
 import 'contacts.dart';
 import 'folders.dart';
 import 'messages.dart';
+import 'webapp.dart';
 
 String _normalizeAuthPhone(String phone) {
   final digits = phone.replaceAll(RegExp(r'\D'), '');
@@ -666,9 +667,10 @@ class AccountModule {
     required String trackId,
     required String password,
     String? hint,
+    bool withEmail = true,
   }) async {
     _ensureOnline();
-    final capabilities = <int>[0, if (hint != null) 3, 4];
+    final capabilities = <int>[0, if (hint != null) 3, if (withEmail) 4];
     final payload = <dynamic, dynamic>{
       'expectedCapabilities': capabilities,
       'trackId': trackId,
@@ -726,7 +728,7 @@ class AccountModule {
 
   Future<void> check2faPassword(String trackId, String password) async {
     _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authLoginCheckPassword, {
+    final packet = await _api.sendRequest(Opcode.authCheckPassword, {
       'trackId': trackId,
       'password': password,
     });
@@ -773,31 +775,15 @@ class AccountModule {
     );
   }
 
-  Future<ProfileData> update2faEmail({
-    required String trackId,
-    required String email,
-    required String code,
-  }) async {
+  Future<ProfileData> commit2faEmailChange(String trackId) async {
     _ensureOnline();
-    final verifyPacket = await _api.sendRequest(Opcode.authVerifyEmail, {
-      'trackId': trackId,
-      'email': email,
-    });
-    _checkPacketError(verifyPacket, 'update2faEmail: verify');
-
-    final codePacket = await _api.sendRequest(Opcode.authCheckEmail, {
-      'trackId': trackId,
-      'verifyCode': code,
-    });
-    _checkPacketError(codePacket, 'update2faEmail: code');
-
     final payload = <dynamic, dynamic>{
       'expectedCapabilities': [4],
       'trackId': trackId,
     };
     return _processProfileUpdate(
       _api.sendRequest(Opcode.authSet2fa, payload),
-      'update2faEmail',
+      'commit2faEmailChange',
     );
   }
 
@@ -1281,6 +1267,9 @@ class AccountModule {
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
     final userConfig = config?['user'] as Map?;
+    if (serverConfig != null) {
+      await _persistEntryBannerApps(accountId, serverConfig);
+    }
     final yMap = serverConfig?['y-map'] as Map?;
     final whiteListLinks = serverConfig?['white-list-links'] as List?;
     final fileUploadUnsupported = serverConfig?['file-upload-unsupported-types'] as List?;
@@ -1303,6 +1292,30 @@ class AccountModule {
     };
 
     await AppDatabase.saveLoginInfo(accountId, jsonEncode(info));
+  }
+
+  Future<void> _persistEntryBannerApps(int accountId, Map serverConfig) async {
+    final banners = serverConfig['settings-entry-banners'];
+    if (banners is! List) return;
+    final resolved = <String, int>{};
+    for (final banner in banners) {
+      final items = (banner is Map) ? banner['items'] : null;
+      if (items is! List) continue;
+      for (final item in items) {
+        if (item is! Map) continue;
+        final appId = item['appid'];
+        if (appId is! int) continue;
+        final icon = item['icon']?.toString().toLowerCase() ?? '';
+        for (final entry in EntryBannerApps.iconMatchers.entries) {
+          if (!resolved.containsKey(entry.key) && icon.contains(entry.value)) {
+            resolved[entry.key] = appId;
+          }
+        }
+      }
+    }
+    for (final entry in resolved.entries) {
+      await AppDatabase.setSyncValue(accountId, entry.key, entry.value.toString());
+    }
   }
 
   Map<String, dynamic> _extractChatMarker(List<Map> chats) {
