@@ -667,9 +667,10 @@ class AccountModule {
     required String trackId,
     required String password,
     String? hint,
+    bool withEmail = true,
   }) async {
     _ensureOnline();
-    final capabilities = <int>[0, if (hint != null) 3, 4];
+    final capabilities = <int>[0, if (hint != null) 3, if (withEmail) 4];
     final payload = <dynamic, dynamic>{
       'expectedCapabilities': capabilities,
       'trackId': trackId,
@@ -727,7 +728,7 @@ class AccountModule {
 
   Future<void> check2faPassword(String trackId, String password) async {
     _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authLoginCheckPassword, {
+    final packet = await _api.sendRequest(Opcode.authCheckPassword, {
       'trackId': trackId,
       'password': password,
     });
@@ -774,31 +775,15 @@ class AccountModule {
     );
   }
 
-  Future<ProfileData> update2faEmail({
-    required String trackId,
-    required String email,
-    required String code,
-  }) async {
+  Future<ProfileData> commit2faEmailChange(String trackId) async {
     _ensureOnline();
-    final verifyPacket = await _api.sendRequest(Opcode.authVerifyEmail, {
-      'trackId': trackId,
-      'email': email,
-    });
-    _checkPacketError(verifyPacket, 'update2faEmail: verify');
-
-    final codePacket = await _api.sendRequest(Opcode.authCheckEmail, {
-      'trackId': trackId,
-      'verifyCode': code,
-    });
-    _checkPacketError(codePacket, 'update2faEmail: code');
-
     final payload = <dynamic, dynamic>{
       'expectedCapabilities': [4],
       'trackId': trackId,
     };
     return _processProfileUpdate(
       _api.sendRequest(Opcode.authSet2fa, payload),
-      'update2faEmail',
+      'commit2faEmailChange',
     );
   }
 

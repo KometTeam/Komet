@@ -308,6 +308,12 @@ abstract class AppLocalizations {
   /// **'Error: missing data for 2FA'**
   String get codeError2faMissing;
 
+  /// No description provided for @codeConfirmation2faWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'MAX may require 2FA on your account to sign in. If you didn\'t receive the code, set up 2FA from a client where you\'re already signed in.'**
+  String get codeConfirmation2faWarning;
+
   /// No description provided for @proxySettingsTitle.
   ///
   /// In en, this message translates to:

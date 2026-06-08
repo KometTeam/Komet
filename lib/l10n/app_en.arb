@@ -42,6 +42,7 @@
   },
   "codeResendSms": "Resend code via SMS",
   "codeError2faMissing": "Error: missing data for 2FA",
+  "codeConfirmation2faWarning": "MAX may require 2FA on your account to sign in. If you didn't receive the code, set up 2FA from a client where you're already signed in.",
 
   "proxySettingsTitle": "Proxy",
   "proxyTypeNone": "Disabled",

@@ -120,6 +120,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get codeError2faMissing => 'Ошибка: отсутствуют данные для 2FA';
 
   @override
+  String get codeConfirmation2faWarning =>
+      'MAX может требовать 2FA на вашем аккаунте для входа. Если вы не получили код — установите 2FA с клиента, на котором вы авторизованы.';
+
+  @override
   String get proxySettingsTitle => 'Прокси';
 
   @override

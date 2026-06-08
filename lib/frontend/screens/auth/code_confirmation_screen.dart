@@ -405,8 +405,20 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
               ),
               const Spacer(),
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  Expanded(
+                    child: Text(
+                      l10n.codeConfirmation2faWarning,
+                      style: TextStyle(
+                        color: cs.error.withValues(alpha: 0.5),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
                   FloatingActionButton(
                     onPressed: () {
                       if (_codeController.text.length == 6) _verifyCode();
