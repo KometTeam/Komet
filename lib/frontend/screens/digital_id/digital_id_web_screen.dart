@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -25,6 +26,24 @@ Future<void> resetDigitalIdSession() async {
 const String _kBridge = r'''
 (function(){
   var sawOpenLink = false;
+  var DBG = !!window.__KOMET_DID_DEBUG;
+  function log(m){ if (!DBG) return; try { console.log('[BRIDGE] ' + m); } catch(e){} }
+  if (DBG) {
+    try {
+      var origFetch = window.fetch;
+      window.fetch = function(){
+        var u;
+        try { u = (typeof arguments[0] === 'string') ? arguments[0] : (arguments[0] && arguments[0].url); } catch(e){}
+        var watched = ('' + u).indexOf('ext-api') >= 0;
+        return origFetch.apply(this, arguments).then(function(r){
+          if (watched) {
+            try { r.clone().text().then(function(t){ log('FETCH ' + r.status + ' ' + u + ' :: ' + t.slice(0, 200)); }); } catch(e){}
+          }
+          return r;
+        }).catch(function(err){ if (watched) log('FETCH ERR ' + u + ' ' + err); throw err; });
+      };
+    } catch(e){}
+  }
   function ssKey(k){ return 'komet_did_ss_' + k; }
   function userId(){
     try {
@@ -76,6 +95,7 @@ const String _kBridge = r'''
   function handle(type, dataStr){
     var data = {};
     try { data = JSON.parse(dataStr || '{}'); } catch(e){}
+    log('recv ' + type + ' ' + dataStr);
     var requestId = data.requestId;
     switch (type) {
       case 'WebAppBiometryGetInfo':
@@ -240,6 +260,10 @@ class _DigitalIdWebScreenState extends State<DigitalIdWebScreen> {
       initialUrlRequest: URLRequest(url: WebUri(launch.url)),
       initialUserScripts: UnmodifiableListView<UserScript>([
         UserScript(
+          source: 'window.__KOMET_DID_DEBUG=$kDebugMode;',
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        ),
+        UserScript(
           source: _kBridge,
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
@@ -266,11 +290,26 @@ class _DigitalIdWebScreenState extends State<DigitalIdWebScreen> {
       },
       onPermissionRequest: (controller, request) =>
           askWebViewPermission(context, request),
+      onConsoleMessage: kDebugMode
+          ? (controller, consoleMessage) {
+              debugPrint('[KOMET-DID] ${consoleMessage.message}');
+            }
+          : null,
+      onLoadStart: kDebugMode
+          ? (controller, url) {
+              final u = url?.toString() ?? '';
+              debugPrint('[KOMET-DID] loadStart: ${u.length > 160 ? u.substring(0, 160) : u}');
+            }
+          : null,
       shouldOverrideUrlLoading: (controller, action) async {
         final uri = action.request.url;
         final url = uri?.toString() ?? '';
         final scheme = uri?.scheme ?? '';
-        final isCallback = url.contains('externalCallback');
+        if (kDebugMode) {
+          debugPrint('[KOMET-DID] nav: ${url.length > 140 ? url.substring(0, 140) : url}');
+        }
+        final isCallback = url.contains('?externalCallback=') ||
+            url.contains('&externalCallback=');
         if (isCallback || (scheme != 'http' && scheme != 'https')) {
           final launchUrl = _launch?.url ?? 'https://digital-id.max.ru';
           final hashIdx = launchUrl.indexOf('#');
