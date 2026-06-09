@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -79,6 +81,7 @@ class MessageBubble extends StatelessWidget {
   final String chatType;
   final String? overrideStatus;
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
+  final ValueListenable<List<double>>? uploadProgress;
 
   const MessageBubble({
     super.key,
@@ -90,6 +93,7 @@ class MessageBubble extends StatelessWidget {
     required this.chatType,
     this.overrideStatus,
     this.reactionsListenable,
+    this.uploadProgress,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -847,7 +851,7 @@ class MessageBubble extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Flexible(child: _buildCaption(ctx)),
+                  Expanded(child: _buildCaption(ctx)),
                   _buildMeta(ctx),
                 ],
               ),
@@ -1023,7 +1027,6 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildSinglePhoto(_BubbleCtx ctx, PhotoAttachment photo) {
-    final imageUrl = photo.baseUrl ?? '';
     final width = photo.width?.toDouble() ?? 200;
     final height = photo.height?.toDouble() ?? 200;
 
@@ -1051,30 +1054,88 @@ class MessageBubble extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              width: constrainedWidth,
-              height: constrainedHeight,
-              fit: BoxFit.cover,
-              memCacheWidth: (constrainedWidth * dpr).round(),
-              memCacheHeight: (constrainedHeight * dpr).round(),
-              fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, _, _) => _buildPhotoPlaceholder(
-                ctx.cs,
-                constrainedWidth,
-                constrainedHeight,
-              ),
-            )
-          else
-            _buildPhotoPlaceholder(ctx.cs, constrainedWidth, constrainedHeight),
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _openPhotoViewer(ctx.context, photo),
-            ),
+          _buildPhotoImage(
+            ctx,
+            photo,
+            constrainedWidth,
+            constrainedHeight,
+            memWidth: (constrainedWidth * dpr).round(),
+            memHeight: (constrainedHeight * dpr).round(),
           ),
+          if (uploadProgress != null) _buildUploadOverlay(uploadProgress!, 0),
+          if (uploadProgress == null)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openPhotoViewer(ctx.context, photo),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoImage(
+    _BubbleCtx ctx,
+    PhotoAttachment photo,
+    double width,
+    double height, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final localPath = photo.localPath;
+    if (localPath != null) {
+      return Image.file(
+        File(localPath),
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        cacheWidth: memWidth,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) =>
+            _buildPhotoPlaceholder(ctx.cs, width, height),
+      );
+    }
+    final imageUrl = photo.baseUrl ?? '';
+    if (imageUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        memCacheWidth: memWidth,
+        memCacheHeight: memHeight,
+        fadeInDuration: const Duration(milliseconds: 120),
+        errorWidget: (_, _, _) => _buildPhotoPlaceholder(ctx.cs, width, height),
+      );
+    }
+    return _buildPhotoPlaceholder(ctx.cs, width, height);
+  }
+
+  Widget _buildUploadOverlay(
+    ValueListenable<List<double>> progress,
+    int index,
+  ) {
+    return Positioned.fill(
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: progress,
+        builder: (context, values, _) {
+          final value = index < values.length ? values[index] : 1.0;
+          final indeterminate = value <= 0 || value >= 1.0;
+          return Container(
+            color: Colors.black.withValues(alpha: 0.4),
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                value: indeterminate ? null : value,
+                color: Colors.white,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1105,9 +1166,9 @@ class MessageBubble extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(child: _buildPhotoTile(ctx, p1)),
+          Expanded(child: _buildPhotoTile(ctx, p1, 0)),
           const SizedBox(width: 2),
-          Expanded(child: _buildPhotoTile(ctx, p2)),
+          Expanded(child: _buildPhotoTile(ctx, p2, 1)),
         ],
       ),
     );
@@ -1143,42 +1204,38 @@ class MessageBubble extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         children: List.generate(displayCount, (i) {
           if (i == 3 && remaining > 0) {
-            return _buildPhotoTileWithOverlay(ctx, photos[i], '+$remaining');
+            return _buildPhotoTileWithOverlay(ctx, photos[i], '+$remaining', i);
           }
-          return _buildPhotoTile(ctx, photos[i]);
+          return _buildPhotoTile(ctx, photos[i], i);
         }),
       ),
     );
   }
 
-  Widget _buildPhotoTile(_BubbleCtx ctx, PhotoAttachment photo) {
-    final imageUrl = photo.baseUrl ?? '';
+  Widget _buildPhotoTile(_BubbleCtx ctx, PhotoAttachment photo, int index) {
     final cachePx = (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio)
         .round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
         children: [
-          if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              memCacheWidth: cachePx,
-              memCacheHeight: cachePx,
-              fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, _, _) =>
-                  _buildPhotoPlaceholder(ctx.cs, 100, 100),
-            )
-          else
-            _buildPhotoPlaceholder(ctx.cs, 100, 100),
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _openPhotoViewer(ctx.context, photo),
-            ),
+          _buildPhotoImage(
+            ctx,
+            photo,
+            double.infinity,
+            double.infinity,
+            memWidth: cachePx,
+            memHeight: cachePx,
           ),
+          if (uploadProgress != null)
+            _buildUploadOverlay(uploadProgress!, index),
+          if (uploadProgress == null)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openPhotoViewer(ctx.context, photo),
+              ),
+            ),
         ],
       ),
     );
@@ -1188,28 +1245,22 @@ class MessageBubble extends StatelessWidget {
     _BubbleCtx ctx,
     PhotoAttachment photo,
     String overlay,
+    int index,
   ) {
-    final imageUrl = photo.baseUrl ?? '';
     final cachePx = (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio)
         .round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
         children: [
-          if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              memCacheWidth: cachePx,
-              memCacheHeight: cachePx,
-              fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, _, _) =>
-                  _buildPhotoPlaceholder(ctx.cs, 100, 100),
-            )
-          else
-            _buildPhotoPlaceholder(ctx.cs, 100, 100),
+          _buildPhotoImage(
+            ctx,
+            photo,
+            double.infinity,
+            double.infinity,
+            memWidth: cachePx,
+            memHeight: cachePx,
+          ),
           Positioned.fill(
             child: Container(
               color: Colors.black45,
@@ -1225,6 +1276,8 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
           ),
+          if (uploadProgress != null)
+            _buildUploadOverlay(uploadProgress!, index),
         ],
       ),
     );

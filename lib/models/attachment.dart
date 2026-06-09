@@ -62,6 +62,7 @@ class PhotoAttachment extends MessageAttachment {
   final int? width;
   final int? height;
   final int? size;
+  final String? localPath;
 
   const PhotoAttachment({
     super.previewData,
@@ -72,6 +73,7 @@ class PhotoAttachment extends MessageAttachment {
     this.width,
     this.height,
     this.size,
+    this.localPath,
   }) : super(type: AttachmentType.photo);
 
   factory PhotoAttachment.fromMap(Map<String, dynamic> map) {

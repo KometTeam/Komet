@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -16,21 +18,26 @@ const List<PillNavItem> _navItems = [
   PillNavItem(icon: Symbols.person, label: 'Контакт'),
 ];
 
-Future<void> showAttachmentSheet(BuildContext context, {String? title}) {
+Future<void> showAttachmentSheet(
+  BuildContext context, {
+  String? title,
+  void Function(List<PickedPhoto> photos, String caption)? onSend,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     requestFocus: false,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    builder: (_) => AttachmentSheet(title: title),
+    builder: (_) => AttachmentSheet(title: title, onSend: onSend),
   );
 }
 
 class AttachmentSheet extends StatefulWidget {
   final String? title;
+  final void Function(List<PickedPhoto> photos, String caption)? onSend;
 
-  const AttachmentSheet({super.key, this.title});
+  const AttachmentSheet({super.key, this.title, this.onSend});
 
   @override
   State<AttachmentSheet> createState() => _AttachmentSheetState();
@@ -42,6 +49,8 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
+  final Map<String, File> _edited = {};
+  final TextEditingController _captionCtrl = TextEditingController();
   final PageController _pageController = PageController();
 
   bool _navDragging = false;
@@ -70,6 +79,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   void dispose() {
     _pageController.dispose();
     _selected.dispose();
+    _captionCtrl.dispose();
     super.dispose();
   }
 
@@ -111,7 +121,13 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           title: widget.title,
           selectedIds: _selected,
           onToggleSelection: () => _toggleSelection(item),
-          onSend: _onSend,
+          onSend: () => _sendSelection(fallback: item),
+          editedFile: _edited[item.id],
+          onEdited: (file) {
+            if (mounted) setState(() => _edited[item.id] = file);
+          },
+          initialCaption: _captionCtrl.text,
+          onCaptionChanged: (text) => _captionCtrl.text = text,
         ),
       ),
     );
@@ -129,14 +145,18 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     showCustomNotification(context, 'Камера скоро появится');
   }
 
-  void _onSend() {
-    final count = _selected.value.length;
-    final overlay = Overlay.of(context, rootOverlay: true);
+  void _sendSelection({GalleryItem? fallback}) {
+    final ids = _selected.value;
+    var chosen = _items.where((it) => ids.contains(it.id)).toList();
+    if (chosen.isEmpty && fallback != null) chosen = [fallback];
+    if (chosen.isEmpty) return;
+    final picked = chosen
+        .map((it) => PickedPhoto(item: it, editedFile: _edited[it.id]))
+        .toList();
+    final callback = widget.onSend;
+    final caption = _captionCtrl.text.trim();
     Navigator.of(context).pop();
-    showCustomNotificationOnOverlay(
-      overlay,
-      'Отправка $count выбранных скоро появится',
-    );
+    callback?.call(picked, caption);
   }
 
   @override
@@ -173,7 +193,8 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     ),
                     Positioned(
                       right: 16,
-                      bottom: barReserve + 8,
+                      bottom:
+                          barReserve + 8 + MediaQuery.viewInsetsOf(context).bottom,
                       child: AnimatedBuilder(
                         animation: Listenable.merge([
                           _selected,
@@ -192,7 +213,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                             opacity: galleryT,
                             child: IgnorePointer(
                               ignoring: galleryT < 0.5,
-                              child: _buildSendButton(cs, count),
+                              child: _buildSendButton(cs),
                             ),
                           );
                         },
@@ -211,6 +232,15 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   static const double _pillMargin = 10;
   static const double _barHeight = SlidingPillNav.height + _pillMargin;
   static const Duration _navAnim = Duration(milliseconds: 300);
+
+  // Matches the chat composer (message input field) surface.
+  Color _composerColor(ColorScheme cs) => Color.alphaBlend(
+    cs.surfaceContainerHighest.withValues(alpha: 0.92),
+    cs.surface,
+  );
+
+  Color _composerBorderColor(ColorScheme cs) =>
+      cs.outlineVariant.withValues(alpha: 0.5);
 
   Widget _buildPages(
     ScrollController scrollController,
@@ -301,6 +331,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     selectedIds: _selected,
                     onOpen: () => _openPreview(item),
                     onToggle: () => _toggleSelection(item),
+                    editedFile: _edited[item.id],
                     cs: cs,
                   );
                 }, childCount: gridPhotos.length),
@@ -323,6 +354,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         selectedIds: _selected,
         onOpen: () => _openPreview(item),
         onToggle: () => _toggleSelection(item),
+        editedFile: _edited[item.id],
         cs: cs,
       );
     }
@@ -480,31 +512,17 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
-  Widget _buildSendButton(ColorScheme cs, int count) {
+  Widget _buildSendButton(ColorScheme cs) {
     return Material(
       color: cs.primary,
       shape: const StadiumBorder(),
       elevation: 3,
       child: InkWell(
         customBorder: const StadiumBorder(),
-        onTap: _onSend,
+        onTap: () => _sendSelection(),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.send, color: cs.onPrimary, size: 22, weight: 500),
-              const SizedBox(width: 8),
-              Text(
-                '$count',
-                style: TextStyle(
-                  color: cs.onPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.all(14),
+          child: Icon(Symbols.send, color: cs.onPrimary, size: 24, weight: 500),
         ),
       ),
     );
@@ -543,36 +561,98 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildBottomBar() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, _pillMargin),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final geometry = PillNavGeometry.fromInnerWidth(
-              constraints.maxWidth - 4,
-              _navItems.length,
-            );
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (_) => _onPillDragStart(),
-              onHorizontalDragUpdate: (d) =>
-                  _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
-              onHorizontalDragEnd: (_) => _onPillDragEnd(),
-              onHorizontalDragCancel: _onPillDragEnd,
-              child: AnimatedBuilder(
-                animation: _pageController,
-                builder: (context, _) {
-                  return SlidingPillNav(
-                    items: _navItems,
-                    position: _currentPageT(),
-                    geometry: geometry,
-                    onTap: _onSectionTap,
-                  );
-                },
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: inset),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, _pillMargin),
+          child: ValueListenableBuilder<Set<String>>(
+            valueListenable: _selected,
+            builder: (context, selected, _) {
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: selected.isEmpty
+                    ? _buildPillNav()
+                    : _buildCaptionBar(Theme.of(context).colorScheme),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillNav() {
+    return LayoutBuilder(
+      key: const ValueKey('nav'),
+      builder: (context, constraints) {
+        final geometry = PillNavGeometry.fromInnerWidth(
+          constraints.maxWidth - 4,
+          _navItems.length,
+        );
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) => _onPillDragStart(),
+          onHorizontalDragUpdate: (d) =>
+              _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
+          onHorizontalDragEnd: (_) => _onPillDragEnd(),
+          onHorizontalDragCancel: _onPillDragEnd,
+          child: AnimatedBuilder(
+            animation: _pageController,
+            builder: (context, _) {
+              final cs = Theme.of(context).colorScheme;
+              return SlidingPillNav(
+                items: _navItems,
+                position: _currentPageT(),
+                geometry: geometry,
+                onTap: _onSectionTap,
+                backgroundColor: _composerColor(cs),
+                borderColor: _composerBorderColor(cs),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCaptionBar(ColorScheme cs) {
+    return SizedBox(
+      key: const ValueKey('caption'),
+      height: SlidingPillNav.height,
+      child: Center(
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: _composerColor(cs),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: _composerBorderColor(cs), width: 0.5),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _captionCtrl,
+                  style: TextStyle(color: cs.onSurface, fontSize: 15),
+                  cursorColor: cs.primary,
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    hintText: 'Добавить подпись...',
+                    hintStyle: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ),
     );
@@ -639,6 +719,7 @@ class _GalleryTile extends StatefulWidget {
   final ValueListenable<Set<String>> selectedIds;
   final VoidCallback onOpen;
   final VoidCallback onToggle;
+  final File? editedFile;
   final ColorScheme cs;
 
   const _GalleryTile({
@@ -647,6 +728,7 @@ class _GalleryTile extends StatefulWidget {
     required this.selectedIds,
     required this.onOpen,
     required this.onToggle,
+    this.editedFile,
     required this.cs,
   });
 
@@ -687,7 +769,11 @@ class _GalleryTileState extends State<_GalleryTile> {
             scale: _selected ? 0.86 : 1.0,
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            child: _Thumbnail(item: item, cs: widget.cs),
+            child: _Thumbnail(
+              item: item,
+              editedFile: widget.editedFile,
+              cs: widget.cs,
+            ),
           ),
           if (item.isVideo)
             Positioned(
@@ -722,7 +808,16 @@ class _GalleryTileState extends State<_GalleryTile> {
               behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.all(6),
-                child: _SelectionCheck(selected: _selected, cs: widget.cs),
+                child: ValueListenableBuilder<Set<String>>(
+                  valueListenable: widget.selectedIds,
+                  builder: (context, ids, _) {
+                    final index = ids.toList().indexOf(widget.item.id);
+                    return _SelectionCheck(
+                      number: index >= 0 ? index + 1 : null,
+                      cs: widget.cs,
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -733,23 +828,33 @@ class _GalleryTileState extends State<_GalleryTile> {
 }
 
 class _SelectionCheck extends StatelessWidget {
-  final bool selected;
+  final int? number;
   final ColorScheme cs;
 
-  const _SelectionCheck({required this.selected, required this.cs});
+  const _SelectionCheck({required this.number, required this.cs});
 
   @override
   Widget build(BuildContext context) {
+    final selected = number != null;
     return Container(
       width: 24,
       height: 24,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: selected ? cs.primary : Colors.black.withValues(alpha: 0.25),
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: selected
-          ? Icon(Symbols.check, size: 16, color: cs.onPrimary, weight: 700)
+          ? Text(
+              '$number',
+              style: TextStyle(
+                color: cs.onPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+              ),
+            )
           : null,
     );
   }
@@ -757,9 +862,10 @@ class _SelectionCheck extends StatelessWidget {
 
 class _Thumbnail extends StatefulWidget {
   final GalleryItem item;
+  final File? editedFile;
   final ColorScheme cs;
 
-  const _Thumbnail({required this.item, required this.cs});
+  const _Thumbnail({required this.item, this.editedFile, required this.cs});
 
   @override
   State<_Thumbnail> createState() => _ThumbnailState();
@@ -779,6 +885,16 @@ class _ThumbnailState extends State<_Thumbnail> {
 
   @override
   Widget build(BuildContext context) {
+    final edited = widget.editedFile;
+    if (edited != null) {
+      return Image.file(
+        edited,
+        fit: BoxFit.cover,
+        cacheWidth: _pixelSize,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => _placeholder(),
+      );
+    }
     final file = widget.item.localFile;
     if (file != null) {
       return Image.file(

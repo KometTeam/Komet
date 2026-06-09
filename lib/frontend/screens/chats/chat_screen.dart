@@ -4,12 +4,14 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/backend/modules/upload_notification_service.dart';
+import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -95,6 +97,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   StreamSubscription<MessageEvent>? _messageEventSub;
   final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers =
       {};
+  final Map<String, ValueNotifier<List<double>>> _photoUploadProgress = {};
+
+  ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
+      _photoUploadProgress[m.id];
 
   ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
     final existing = _reactionNotifiers[m.id];
@@ -432,6 +438,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       n.dispose();
     }
     _reactionNotifiers.clear();
+    for (final n in _photoUploadProgress.values) {
+      n.dispose();
+    }
+    _photoUploadProgress.clear();
     for (final t in _typingTimers.values) {
       t.cancel();
     }
@@ -1291,6 +1301,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   chatType: chat?.type ?? 'CHAT',
                   overrideStatus: _effectiveStatus(message),
                   reactionsListenable: _reactionNotifierFor(message),
+                  uploadProgress: _photoProgressFor(message),
                 );
 
                 final pressable = _LongPressBubble(
@@ -1774,7 +1785,175 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _openAttachmentSheet() {
-    showAttachmentSheet(context, title: widget.name);
+    showAttachmentSheet(context, title: widget.name, onSend: _sendPhotos);
+  }
+
+  Future<void> _sendPhotos(List<PickedPhoto> picked, String caption) async {
+    if (_myId == 0) return;
+    final photos = picked.where((ph) => !ph.item.isVideo).toList();
+    if (photos.isEmpty) {
+      if (mounted) showCustomNotification(context, 'Видео пока нельзя отправить');
+      return;
+    }
+
+    final files = <File>[];
+    final attachments = <PhotoAttachment>[];
+    for (final photo in photos) {
+      final edited = photo.editedFile;
+      final file =
+          edited ?? photo.item.localFile ?? await photo.item.originFile();
+      if (file == null) continue;
+      final dim = edited != null
+          ? await _decodeImageDimensions(edited)
+          : await photo.item.dimensions();
+      files.add(file);
+      attachments.add(
+        PhotoAttachment(
+          localPath: file.path,
+          width: dim?.$1,
+          height: dim?.$2,
+        ),
+      );
+    }
+    if (files.isEmpty || !mounted) return;
+
+    final tempId = _nextTempId();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final progress = ValueNotifier<List<double>>(
+      List<double>.filled(files.length, 0),
+    );
+    _photoUploadProgress[tempId] = progress;
+
+    _messages.add(
+      CachedMessage(
+        id: tempId,
+        accountId: _myId,
+        chatId: widget.chatId,
+        senderId: _myId,
+        text: caption.isEmpty ? null : caption,
+        time: now,
+        status: 'sending',
+        attachments: attachments,
+      ),
+    );
+    _lastSentId = tempId;
+    _bumpMessages();
+    Haptics.send();
+    _scrollToBottom();
+
+    try {
+      final tokens = await Future.wait(
+        List.generate(
+          files.length,
+          (i) => _uploadOnePhoto(files[i], i, progress),
+        ),
+      );
+      if (!mounted) {
+        _disposePhotoProgress(tempId);
+        return;
+      }
+      if (tokens.any((t) => t == null)) {
+        _failPhotoMessage(tempId);
+        return;
+      }
+
+      progress.value = List<double>.filled(files.length, 1);
+
+      final serverMsg = await messagesModule.sendPhotoMessage(
+        widget.chatId,
+        tokens.cast<String>(),
+        caption: caption.isEmpty ? null : caption,
+      );
+      if (!mounted) {
+        _disposePhotoProgress(tempId);
+        return;
+      }
+      if (serverMsg == null) {
+        _failPhotoMessage(tempId);
+        return;
+      }
+
+      final real = CachedMessage.fromPushPayload(_myId, widget.chatId, serverMsg);
+      final idx = _messages.indexWhere((m) => m.id == tempId);
+      if (idx != -1) {
+        _messages[idx] = real;
+        _bumpMessages();
+        unawaited(_persistOutgoing(real));
+      }
+      _disposePhotoProgress(tempId);
+    } catch (e) {
+      if (mounted) {
+        _failPhotoMessage(tempId);
+      } else {
+        _disposePhotoProgress(tempId);
+      }
+    }
+  }
+
+  Future<String?> _uploadOnePhoto(
+    File file,
+    int index,
+    ValueNotifier<List<double>> progress,
+  ) async {
+    final url = await messagesModule.requestPhotoUploadUrl();
+    if (url == null || url.isEmpty) return null;
+    return fileUploader.uploadPhoto(
+      Uri.parse(url),
+      file,
+      filename: _photoFilename(file),
+      onProgress: (sent, total) {
+        if (total <= 0) return;
+        final next = List<double>.from(progress.value);
+        if (index < next.length) {
+          next[index] = (sent / total).clamp(0.0, 1.0);
+          progress.value = next;
+        }
+      },
+    );
+  }
+
+  String _photoFilename(File file) {
+    final segments = file.uri.pathSegments;
+    final name = segments.isNotEmpty ? segments.last : '';
+    return name.isNotEmpty ? name : 'photo.jpg';
+  }
+
+  void _failPhotoMessage(String tempId) {
+    final idx = _messages.indexWhere((m) => m.id == tempId);
+    if (idx != -1) {
+      final old = _messages[idx];
+      _messages[idx] = CachedMessage(
+        id: old.id,
+        accountId: old.accountId,
+        chatId: old.chatId,
+        senderId: old.senderId,
+        text: old.text,
+        time: old.time,
+        status: 'error',
+        attachments: old.attachments,
+      );
+      _bumpMessages();
+    }
+    _disposePhotoProgress(tempId);
+    Haptics.error();
+  }
+
+  void _disposePhotoProgress(String tempId) {
+    _photoUploadProgress.remove(tempId)?.dispose();
+  }
+
+  Future<(int, int)?> _decodeImageDimensions(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final result = (frame.image.width, frame.image.height);
+      frame.image.dispose();
+      codec.dispose();
+      return result;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _pickAndUploadFile() async {

@@ -241,6 +241,73 @@ class FileUploader {
     }
   }
 
+  Future<String?> uploadPhoto(
+    Uri uri,
+    File file, {
+    String filename = 'photo.jpg',
+    void Function(int sent, int total)? onProgress,
+    Duration progressThrottle = const Duration(milliseconds: 16),
+  }) async {
+    Socket? socket;
+    try {
+      final fileLength = await file.length();
+      socket = await _openSocket(uri);
+      final boundary =
+          '----KometBoundary${DateTime.now().microsecondsSinceEpoch}';
+      final preamble = utf8.encode(
+        '--$boundary\r\n'
+        'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
+        'Content-Type: ${_contentTypeForFilename(filename)}\r\n'
+        '\r\n',
+      );
+      final epilogue = utf8.encode('\r\n--$boundary--\r\n');
+      _writeImageHeaders(
+        socket,
+        uri,
+        preamble.length + fileLength + epilogue.length,
+        boundary: boundary,
+      );
+      socket.add(preamble);
+
+      final stopwatch = Stopwatch()..start();
+      var sent = 0;
+      final body = file.openRead().map((chunk) {
+        sent += chunk.length;
+        if (onProgress != null && stopwatch.elapsed >= progressThrottle) {
+          onProgress(sent, fileLength);
+          stopwatch.reset();
+        }
+        return chunk;
+      });
+      await socket.addStream(body);
+      socket.add(epilogue);
+      await socket.flush();
+      onProgress?.call(fileLength, fileLength);
+
+      final response = await _readFullResponse(
+        socket,
+        timeout: const Duration(minutes: 2),
+      );
+      try {
+        socket.destroy();
+      } catch (_) {}
+
+      if (response == null) return null;
+      final (status, responseBody) = response;
+      if (status != 200) {
+        logger.w('uploadPhoto: status=$status');
+        return null;
+      }
+      return _parsePhotoToken(responseBody);
+    } catch (e) {
+      logger.w('uploadPhoto: $e');
+      try {
+        socket?.destroy();
+      } catch (_) {}
+      return null;
+    }
+  }
+
   void _writeImageHeaders(Socket socket, Uri uri, int total, {required String boundary}) {
     final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
     final headers = StringBuffer()

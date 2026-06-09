@@ -37,6 +37,8 @@ class SlidingPillNav extends StatelessWidget {
   final void Function(int index, Offset globalPosition)? onItemLongPress;
   final double iconSize;
   final double labelGap;
+  final Color? backgroundColor;
+  final Color? borderColor;
 
   const SlidingPillNav({
     super.key,
@@ -48,6 +50,8 @@ class SlidingPillNav extends StatelessWidget {
     this.onItemLongPress,
     this.iconSize = 22,
     this.labelGap = 6,
+    this.backgroundColor,
+    this.borderColor,
   });
 
   static const double height = 68;
@@ -71,8 +75,11 @@ class SlidingPillNav extends StatelessWidget {
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
+        color: backgroundColor ?? cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(34),
+        border: borderColor != null
+            ? Border.all(color: borderColor!, width: 0.5)
+            : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.5),

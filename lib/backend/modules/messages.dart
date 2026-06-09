@@ -562,6 +562,51 @@ class MessagesModule {
     return false;
   }
 
+  Future<String?> requestPhotoUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.photoUpload, {'count': 1});
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is! Map) return null;
+    return data['url'] as String?;
+  }
+
+  Future<Map<String, dynamic>?> sendPhotoMessage(
+    int chatId,
+    List<String> photoTokens, {
+    String? caption,
+    bool notify = true,
+    int maxAttempts = 20,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        for (final token in photoTokens)
+          {'_type': 'PHOTO', 'photoToken': token},
+      ],
+    };
+    if (caption != null && caption.isNotEmpty) message['text'] = caption;
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        if (!response.isOk) return null;
+        final data = response.payload;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is Map) return Map<String, dynamic>.from(msg);
+        }
+        return null;
+      } on PacketError catch (e) {
+        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (attempt == maxAttempts - 1) return null;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return null;
+  }
+
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {
