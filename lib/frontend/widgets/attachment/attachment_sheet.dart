@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
+import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -15,24 +16,30 @@ const List<PillNavItem> _navItems = [
   PillNavItem(icon: Symbols.person, label: 'Контакт'),
 ];
 
-Future<void> showAttachmentSheet(BuildContext context) {
+Future<void> showAttachmentSheet(BuildContext context, {String? title}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    requestFocus: false,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    builder: (_) => const AttachmentSheet(),
+    builder: (_) => AttachmentSheet(title: title),
   );
 }
 
 class AttachmentSheet extends StatefulWidget {
-  const AttachmentSheet({super.key});
+  final String? title;
+
+  const AttachmentSheet({super.key, this.title});
 
   @override
   State<AttachmentSheet> createState() => _AttachmentSheetState();
 }
 
 class _AttachmentSheetState extends State<AttachmentSheet> {
+  static List<GalleryItem>? _cachedItems;
+  static GalleryPermission _cachedPermission = GalleryPermission.granted;
+
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
   final PageController _pageController = PageController();
@@ -48,7 +55,15 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   @override
   void initState() {
     super.initState();
-    _loadGallery();
+    final cached = _cachedItems;
+    if (cached != null) {
+      _items = cached;
+      _permission = _cachedPermission;
+      _loading = false;
+      _loadGallery(silent: true);
+    } else {
+      _loadGallery();
+    }
   }
 
   @override
@@ -58,11 +73,12 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     super.dispose();
   }
 
-  Future<void> _loadGallery() async {
-    setState(() => _loading = true);
+  Future<void> _loadGallery({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     final permission = await _source.ensurePermission();
     if (!mounted) return;
     if (permission == GalleryPermission.denied) {
+      _cachedItems = null;
       setState(() {
         _permission = permission;
         _items = const [];
@@ -72,6 +88,8 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     }
     final items = await _source.load(limit: 120);
     if (!mounted) return;
+    _cachedItems = items;
+    _cachedPermission = permission;
     setState(() {
       _permission = permission;
       _items = items;
@@ -83,6 +101,20 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     final next = Set<String>.from(_selected.value);
     if (!next.remove(item.id)) next.add(item.id);
     _selected.value = next;
+  }
+
+  void _openPreview(GalleryItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MediaPreviewScreen(
+          item: item,
+          title: widget.title,
+          selectedIds: _selected,
+          onToggleSelection: () => _toggleSelection(item),
+          onSend: _onSend,
+        ),
+      ),
+    );
   }
 
   void _onSectionTap(int index) {
@@ -218,30 +250,102 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       );
     }
 
-    return CustomScrollView(
-      controller: scrollController,
-      slivers: [
-        if (_permission == GalleryPermission.limited)
-          SliverToBoxAdapter(child: _buildLimitedBanner(cs)),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(2, 2, 2, bottomReserve + 6),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 2,
-              crossAxisSpacing: 2,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 2.0;
+        const hpad = 2.0;
+        final cell = (constraints.maxWidth - hpad * 2 - spacing * 2) / 3;
+        final headerHeight = cell * 2 + spacing;
+        final headerPhotos = _items.take(4).toList();
+        final gridPhotos = _items.length > 4
+            ? _items.sublist(4)
+            : const <GalleryItem>[];
+
+        return CustomScrollView(
+          controller: scrollController,
+          slivers: [
+            if (_permission == GalleryPermission.limited)
+              SliverToBoxAdapter(child: _buildLimitedBanner(cs)),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(hpad, hpad, hpad, 0),
+              sliver: SliverToBoxAdapter(
+                child: SizedBox(
+                  height: headerHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: cell,
+                        child: _CameraTile(onTap: _onCameraTap, cs: cs),
+                      ),
+                      const SizedBox(width: spacing),
+                      Expanded(child: _buildHeaderPhotos(headerPhotos, cs)),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            delegate: SliverChildBuilderDelegate((context, index) {
-              if (index == 0) return _CameraTile(onTap: _onCameraTap, cs: cs);
-              final item = _items[index - 1];
-              return _GalleryTile(
-                key: ValueKey(item.id),
-                item: item,
-                selectedIds: _selected,
-                onTap: () => _toggleSelection(item),
-                cs: cs,
-              );
-            }, childCount: _items.length + 1),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(hpad, spacing, hpad, bottomReserve + 6),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: spacing,
+                  crossAxisSpacing: spacing,
+                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final item = gridPhotos[index];
+                  return _GalleryTile(
+                    key: ValueKey(item.id),
+                    item: item,
+                    selectedIds: _selected,
+                    onOpen: () => _openPreview(item),
+                    onToggle: () => _toggleSelection(item),
+                    cs: cs,
+                  );
+                }, childCount: gridPhotos.length),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeaderPhotos(List<GalleryItem> photos, ColorScheme cs) {
+    const spacing = 2.0;
+    Widget tile(int i) {
+      if (i >= photos.length) return const SizedBox.expand();
+      final item = photos[i];
+      return _GalleryTile(
+        key: ValueKey(item.id),
+        item: item,
+        selectedIds: _selected,
+        onOpen: () => _openPreview(item),
+        onToggle: () => _toggleSelection(item),
+        cs: cs,
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: tile(0)),
+              const SizedBox(width: spacing),
+              Expanded(child: tile(1)),
+            ],
+          ),
+        ),
+        const SizedBox(height: spacing),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: tile(2)),
+              const SizedBox(width: spacing),
+              Expanded(child: tile(3)),
+            ],
           ),
         ),
       ],
@@ -509,11 +613,21 @@ class _CameraTile extends StatelessWidget {
       child: Container(
         color: cs.surfaceContainerHighest,
         alignment: Alignment.center,
-        child: Icon(
-          Symbols.photo_camera,
-          size: 34,
-          color: cs.onSurface,
-          weight: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Symbols.photo_camera,
+              size: 34,
+              color: cs.onSurface,
+              weight: 400,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Камера',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+            ),
+          ],
         ),
       ),
     );
@@ -523,14 +637,16 @@ class _CameraTile extends StatelessWidget {
 class _GalleryTile extends StatefulWidget {
   final GalleryItem item;
   final ValueListenable<Set<String>> selectedIds;
-  final VoidCallback onTap;
+  final VoidCallback onOpen;
+  final VoidCallback onToggle;
   final ColorScheme cs;
 
   const _GalleryTile({
     super.key,
     required this.item,
     required this.selectedIds,
-    required this.onTap,
+    required this.onOpen,
+    required this.onToggle,
     required this.cs,
   });
 
@@ -563,7 +679,7 @@ class _GalleryTileState extends State<_GalleryTile> {
   Widget build(BuildContext context) {
     final item = widget.item;
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: widget.onOpen,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -599,9 +715,16 @@ class _GalleryTileState extends State<_GalleryTile> {
               ),
             ),
           Positioned(
-            top: 6,
-            right: 6,
-            child: _SelectionCheck(selected: _selected, cs: widget.cs),
+            top: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: widget.onToggle,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: _SelectionCheck(selected: _selected, cs: widget.cs),
+              ),
+            ),
           ),
         ],
       ),

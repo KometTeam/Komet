@@ -1774,7 +1774,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _openAttachmentSheet() {
-    showAttachmentSheet(context);
+    showAttachmentSheet(context, title: widget.name);
   }
 
   Future<void> _pickAndUploadFile() async {
