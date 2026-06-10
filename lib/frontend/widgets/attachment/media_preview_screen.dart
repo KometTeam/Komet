@@ -6,9 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
-import 'package:komet/frontend/widgets/attachment/photo_adjust_editor.dart';
-import 'package:komet/frontend/widgets/attachment/photo_crop_editor.dart';
-import 'package:komet/frontend/widgets/attachment/photo_draw_editor.dart';
+import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 
 const Color _kAccent = Color(0xFF2F8FFF);

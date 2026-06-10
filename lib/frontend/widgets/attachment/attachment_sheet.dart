@@ -7,7 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
-import 'package:komet/frontend/widgets/attachment/photo_crop_editor.dart';
+import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
