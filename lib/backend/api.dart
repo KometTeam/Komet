@@ -119,14 +119,21 @@ class Api {
       if (response.isOk) {
         _callsSeed = response.payload['callsSeed'] as int?;
         _registrationCountries = _parseRegistrationCountries(response.payload);
-        _setSessionState(SessionState.online);
+        _sessionState = SessionState.online;
         _startPinging();
         logger.i('Сессия онлайн, хэндшейк ок');
-        _handshakeSuccessController.add(
-          response.payload['device_name'] as String? ?? 'Unknown',
-        );
         if (_onReconnectCallback != null) {
-          _onReconnectCallback!();
+          try {
+            await _onReconnectCallback!();
+          } catch (e) {
+            logger.w('Авто-логин при хэндшейке не удался: $e');
+          }
+        }
+        if (_sessionState == SessionState.online) {
+          _stateController.add(SessionState.online);
+          _handshakeSuccessController.add(
+            response.payload['device_name'] as String? ?? 'Unknown',
+          );
         }
       } else {
         logger.e('Хэндшейк отклонён: ${response.payload}');
@@ -364,9 +371,9 @@ class Api {
     await connect();
   }
 
-  void Function()? _onReconnectCallback;
+  Future<void> Function()? _onReconnectCallback;
 
-  void setReconnectCallback(void Function() callback) {
+  void setReconnectCallback(Future<void> Function() callback) {
     _onReconnectCallback = callback;
   }
 

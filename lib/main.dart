@@ -56,6 +56,8 @@ final fileUploader = FileUploader(api: api, messages: messagesModule);
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
+bool isOnemeFlavor = false;
+
 Future<Locale> _loadInitialLocale() async {
   final prefs = await SharedPreferences.getInstance();
   final code = prefs.getString('app_locale');
@@ -98,9 +100,7 @@ void main() async {
   final digitalIdNativeFuture = AppDigitalIdNative.load();
 
   final packageInfo = await packageInfoFuture;
-  if (packageInfo.packageName == 'ru.oneme.app') {
-    await PushService.instance.init(api: api, account: accountModule);
-  }
+  isOnemeFlavor = packageInfo.packageName == 'ru.oneme.app';
 
   final initialLocale = await localeFuture;
 
@@ -232,9 +232,10 @@ class KometAppState extends State<KometApp>
       } catch (_) {}
     });
 
-    _loginStatusSub = accountModule.loginStatusStream.listen((status) {
-      if (status == LoginStatus.success) {
-        PushService.instance.onLoginSuccess();
+    _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
+      if (status == LoginStatus.success && isOnemeFlavor) {
+        await PushService.instance.init(api: api, account: accountModule);
+        await PushService.instance.onLoginSuccess();
       }
     });
 
