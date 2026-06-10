@@ -102,6 +102,12 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
     );
   }
 
+  void _disposeTemp(File? file, Set<String> keep) {
+    if (file == null || keep.contains(file.path)) return;
+    if (!file.uri.pathSegments.last.startsWith('komet_')) return;
+    file.delete().then((_) {}, onError: (_) {});
+  }
+
   Future<void> _openCrop() async {
     if (_workingFile == null) return;
     final source =
@@ -111,9 +117,11 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       PhotoCropEditor(source: source, initialState: _cropState),
     );
     if (result != null && mounted) {
+      final old = _workingFile;
       _cropState = result.state;
       setState(() => _workingFile = result.file);
       _reportEdit();
+      _disposeTemp(old, {result.file.path, _cropSource?.path ?? ''});
     }
   }
 
@@ -134,10 +142,14 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       ),
     );
     if (result != null && mounted) {
+      final oldWorking = _workingFile;
+      final oldCropSource = _cropSource;
       _cropSource = result;
       _cropState = null;
       setState(() => _workingFile = result);
       _reportEdit();
+      _disposeTemp(oldWorking, {result.path});
+      _disposeTemp(oldCropSource, {result.path, oldWorking?.path ?? ''});
     }
   }
 
@@ -146,10 +158,14 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
     if (file == null) return;
     final result = await _pushEditor<File>(PhotoAdjustEditor(source: file));
     if (result != null && mounted) {
+      final oldWorking = _workingFile;
+      final oldCropSource = _cropSource;
       _cropSource = result;
       _cropState = null;
       setState(() => _workingFile = result);
       _reportEdit();
+      _disposeTemp(oldWorking, {result.path});
+      _disposeTemp(oldCropSource, {result.path, oldWorking?.path ?? ''});
     }
   }
 
