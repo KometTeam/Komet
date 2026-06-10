@@ -84,6 +84,8 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
+  final FocusNode _messageFocusNode = FocusNode();
+  double _keyboardReserve = 0;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _listKey = GlobalKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
@@ -453,6 +455,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _uploadStatus.dispose();
     _attachAnim.dispose();
     _messageController.dispose();
+    _messageFocusNode.dispose();
     _scrollController.dispose();
     _shimmerStartTimer?.cancel();
     _shimmerController.dispose();
@@ -1059,176 +1062,188 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     // TODO: Локализация
     // TODO: Cклонения
-    return Theme(
-      data: theme,
-      child: RepaintBoundary(
-        key: _prankCaptureKey,
-        child: ValueListenableBuilder<bool>(
-          valueListenable: AppSwipeBackDesktop.current,
-          builder: (context, desktopSwipe, child) => SwipeToPop(
-            enabled: widget.embedded && desktopSwipe,
-            onPop: widget.onClose,
-            child: child!,
-          ),
-          child: Scaffold(
-            backgroundColor: cs.surface,
-            appBar: PreferredSize(
-              preferredSize: Size.fromHeight(kToolbarHeight),
-              child: InkWell(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatInfoScreen(
-                      chatId: widget.chatId,
-                      name: widget.name,
-                      imageUrl: widget.imageUrl,
-                      chatType: widget.chatType,
+    final mq = MediaQuery.of(context);
+    final bottomInset = _keyboardReserve > 0
+        ? math.max(mq.viewInsets.bottom, _keyboardReserve)
+        : mq.viewInsets.bottom;
+    return MediaQuery(
+      data: mq.copyWith(
+        viewInsets: mq.viewInsets.copyWith(bottom: bottomInset),
+      ),
+      child: Theme(
+        data: theme,
+        child: RepaintBoundary(
+          key: _prankCaptureKey,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: AppSwipeBackDesktop.current,
+            builder: (context, desktopSwipe, child) => SwipeToPop(
+              enabled: widget.embedded && desktopSwipe,
+              onPop: widget.onClose,
+              child: child!,
+            ),
+            child: Scaffold(
+              backgroundColor: cs.surface,
+              appBar: PreferredSize(
+                preferredSize: Size.fromHeight(kToolbarHeight),
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatInfoScreen(
+                        chatId: widget.chatId,
+                        name: widget.name,
+                        imageUrl: widget.imageUrl,
+                        chatType: widget.chatType,
+                      ),
                     ),
                   ),
-                ),
-                child: AppBar(
-                  backgroundColor: cs.surfaceContainerHigh,
-                  foregroundColor: cs.onSurface,
-                  elevation: 0,
-                  surfaceTintColor: Colors.transparent,
-                  iconTheme: IconThemeData(color: cs.onSurface),
-                  leading: IconButton(
-                    icon: Icon(
-                      widget.embedded ? Symbols.close : Symbols.arrow_back,
-                      weight: 400,
+                  child: AppBar(
+                    backgroundColor: cs.surfaceContainerHigh,
+                    foregroundColor: cs.onSurface,
+                    elevation: 0,
+                    surfaceTintColor: Colors.transparent,
+                    iconTheme: IconThemeData(color: cs.onSurface),
+                    leading: IconButton(
+                      icon: Icon(
+                        widget.embedded ? Symbols.close : Symbols.arrow_back,
+                        weight: 400,
+                      ),
+                      onPressed: () {
+                        if (widget.embedded) {
+                          widget.onClose?.call();
+                        } else {
+                          Navigator.pop(context);
+                        }
+                      },
                     ),
-                    onPressed: () {
-                      if (widget.embedded) {
-                        widget.onClose?.call();
-                      } else {
-                        Navigator.pop(context);
-                      }
-                    },
-                  ),
-                  titleSpacing: 0,
-                  title: Row(
-                    children: [
-                      if (widget.imageUrl.isNotEmpty)
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundImage: CachedNetworkImageProvider(
-                            widget.imageUrl,
-                            maxWidth: 144,
-                            maxHeight: 144,
-                          ),
-                        )
-                      else
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: cs.primaryContainer,
-                          child: Text(
-                            widget.name.isNotEmpty
-                                ? widget.name[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              color: cs.onPrimaryContainer,
-                              fontSize: 12,
+                    titleSpacing: 0,
+                    title: Row(
+                      children: [
+                        if (widget.imageUrl.isNotEmpty)
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundImage: CachedNetworkImageProvider(
+                              widget.imageUrl,
+                              maxWidth: 144,
+                              maxHeight: 144,
                             ),
-                          ),
-                        ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    widget.name,
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      fontFamily: 'Outfit',
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (chat?.isOfficial ?? false) ...[
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Symbols.verified,
-                                    color: cs.primary,
-                                    size: 16,
-                                    weight: 600,
-                                    fill: 1,
-                                  ),
-                                ],
-                              ],
-                            ),
-                            ValueListenableBuilder<String>(
-                              valueListenable: _headerStatusNotifier,
-                              builder: (context, status, _) => Text(
-                                status,
-                                style: TextStyle(
-                                  color: cs.onSurfaceVariant,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400,
-                                ),
+                          )
+                        else
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: cs.primaryContainer,
+                            child: Text(
+                              widget.name.isNotEmpty
+                                  ? widget.name[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                color: cs.onPrimaryContainer,
+                                fontSize: 12,
                               ),
                             ),
-                          ],
+                          ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      widget.name,
+                                      style: TextStyle(
+                                        color: cs.onSurface,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Outfit',
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (chat?.isOfficial ?? false) ...[
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Symbols.verified,
+                                      color: cs.primary,
+                                      size: 16,
+                                      weight: 600,
+                                      fill: 1,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              ValueListenableBuilder<String>(
+                                valueListenable: _headerStatusNotifier,
+                                builder: (context, status, _) => Text(
+                                  status,
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      ],
+                    ),
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Symbols.call, weight: 400),
+                        onPressed: () {},
+                      ),
+                      IconButton(
+                        icon: const Icon(Symbols.more_vert, weight: 400),
+                        onPressed: () {},
                       ),
                     ],
                   ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Symbols.call, weight: 400),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: const Icon(Symbols.more_vert, weight: 400),
-                      onPressed: () {},
-                    ),
-                  ],
                 ),
               ),
-            ),
-            body: Column(
-              children: [
-                Expanded(
-                  child: _isLoading && _messages.isEmpty
-                      ? _buildShimmerLoading()
-                      : _buildMessagesList(),
-                ),
-                AnimatedBuilder(
-                  animation: _attachAnim,
-                  builder: (context, _) {
-                    if (_attachAnim.value == 0) return const SizedBox.shrink();
-                    final curve = _attachAnim.status == AnimationStatus.reverse
-                        ? Curves.easeIn
-                        : Curves.easeOut;
-                    final t = curve.transform(_attachAnim.value);
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                      child: ClipRect(
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          heightFactor: t,
-                          child: Opacity(
-                            opacity: t,
-                            child: AttachmentPanel(
-                              onClose: () => _showAttachmentPanel.value = false,
-                              onPickFile: _pickAndUploadFile,
-                              onSendById: _sendFileById,
+              body: Column(
+                children: [
+                  Expanded(
+                    child: _isLoading && _messages.isEmpty
+                        ? _buildShimmerLoading()
+                        : _buildMessagesList(),
+                  ),
+                  AnimatedBuilder(
+                    animation: _attachAnim,
+                    builder: (context, _) {
+                      if (_attachAnim.value == 0)
+                        return const SizedBox.shrink();
+                      final curve =
+                          _attachAnim.status == AnimationStatus.reverse
+                          ? Curves.easeIn
+                          : Curves.easeOut;
+                      final t = curve.transform(_attachAnim.value);
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        child: ClipRect(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            heightFactor: t,
+                            child: Opacity(
+                              opacity: t,
+                              child: AttachmentPanel(
+                                onClose: () =>
+                                    _showAttachmentPanel.value = false,
+                                onPickFile: _pickAndUploadFile,
+                                onSendById: _sendFileById,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-                _buildInputArea(context),
-              ],
+                      );
+                    },
+                  ),
+                  _buildInputArea(context),
+                ],
+              ),
             ),
           ),
         ),
@@ -1572,6 +1587,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                 },
                                 child: TextField(
                                   controller: _messageController,
+                                  focusNode: _messageFocusNode,
                                   style: TextStyle(
                                     color: cs.onSurface,
                                     fontSize: 16,
@@ -1784,15 +1800,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _openAttachmentSheet() {
-    showAttachmentSheet(context, title: widget.name, onSend: _sendPhotos);
+  Future<void> _openAttachmentSheet() async {
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final hadKeyboard = keyboard > 0;
+    if (hadKeyboard) {
+      setState(() => _keyboardReserve = keyboard);
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+    await showAttachmentSheet(context, title: widget.name, onSend: _sendPhotos);
+    if (!mounted || !hadKeyboard) return;
+    _messageFocusNode.requestFocus();
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (mounted) setState(() => _keyboardReserve = 0);
   }
 
   Future<void> _sendPhotos(List<PickedPhoto> picked, String caption) async {
     if (_myId == 0) return;
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
     if (photos.isEmpty) {
-      if (mounted) showCustomNotification(context, 'Видео пока нельзя отправить');
+      if (mounted)
+        showCustomNotification(context, 'Видео пока нельзя отправить');
       return;
     }
 
@@ -1808,11 +1835,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           : await photo.item.dimensions();
       files.add(file);
       attachments.add(
-        PhotoAttachment(
-          localPath: file.path,
-          width: dim?.$1,
-          height: dim?.$2,
-        ),
+        PhotoAttachment(localPath: file.path, width: dim?.$1, height: dim?.$2),
       );
     }
     if (files.isEmpty || !mounted) return;
@@ -1873,7 +1896,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         return;
       }
 
-      final real = CachedMessage.fromPushPayload(_myId, widget.chatId, serverMsg);
+      final real = CachedMessage.fromPushPayload(
+        _myId,
+        widget.chatId,
+        serverMsg,
+      );
       final idx = _messages.indexWhere((m) => m.id == tempId);
       if (idx != -1) {
         _messages[idx] = real;
