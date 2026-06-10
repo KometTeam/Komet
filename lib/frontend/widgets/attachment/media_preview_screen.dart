@@ -1,15 +1,13 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
-import 'package:komet/core/utils/image_utils.dart';
+import 'package:komet/frontend/widgets/attachment/photo_adjust_editor.dart';
+import 'package:komet/frontend/widgets/attachment/photo_crop_editor.dart';
 import 'package:komet/frontend/widgets/attachment/photo_draw_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 
@@ -22,8 +20,8 @@ class MediaPreviewScreen extends StatefulWidget {
   final ValueListenable<Set<String>> selectedIds;
   final VoidCallback onToggleSelection;
   final VoidCallback onSend;
-  final File? editedFile;
-  final void Function(File edited)? onEdited;
+  final PhotoEditState? editState;
+  final ValueChanged<PhotoEditState>? onEditChanged;
   final String initialCaption;
   final ValueChanged<String>? onCaptionChanged;
 
@@ -34,8 +32,8 @@ class MediaPreviewScreen extends StatefulWidget {
     required this.onToggleSelection,
     required this.onSend,
     this.title,
-    this.editedFile,
-    this.onEdited,
+    this.editState,
+    this.onEditChanged,
     this.initialCaption = '',
     this.onCaptionChanged,
   });
@@ -44,61 +42,39 @@ class MediaPreviewScreen extends StatefulWidget {
   State<MediaPreviewScreen> createState() => _MediaPreviewScreenState();
 }
 
-class _MediaPreviewScreenState extends State<MediaPreviewScreen>
-    with SingleTickerProviderStateMixin {
+class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   late final TextEditingController _caption = TextEditingController(
     text: widget.initialCaption,
   );
   File? _workingFile;
-  File? _rotationOriginal;
-  int _appliedTurns = 0;
-  int _queuedTurns = 0;
-  bool _rotating = false;
-  late final AnimationController _rotCtrl;
-  Size? _boxSize;
-  double _aspect = 1;
-  double _rotFitScale = 1;
+  File? _cropSource;
+  CropState? _cropState;
 
   @override
   void initState() {
     super.initState();
-    _rotCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 260),
-    );
     _caption.addListener(
       () => widget.onCaptionChanged?.call(_caption.text),
     );
+    _cropState = widget.editState?.cropState;
+    _cropSource = widget.editState?.cropSource;
     _resolveWorkingFile();
   }
 
   Future<void> _resolveWorkingFile() async {
-    final initial = widget.editedFile ?? widget.item.localFile;
+    final initial = widget.editState?.working ?? widget.item.localFile;
     if (initial != null) {
       _workingFile = initial;
-      _rotationOriginal = initial;
-      _updateAspect();
       return;
     }
     final file = await widget.item.originFile();
     if (!mounted) return;
     setState(() => _workingFile = file);
-    _rotationOriginal = file;
-    _updateAspect();
-  }
-
-  Future<void> _updateAspect() async {
-    final file = _workingFile;
-    if (file == null) return;
-    final dims = await decodeImageFileDimensions(file);
-    if (!mounted || dims == null || dims.$2 == 0) return;
-    _aspect = dims.$1 / dims.$2;
   }
 
   @override
   void dispose() {
     _caption.dispose();
-    _rotCtrl.dispose();
     super.dispose();
   }
 
@@ -107,132 +83,75 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen>
     widget.onSend();
   }
 
-  // Each tap queues one more 90° step; taps are never dropped. Every step is
-  // baked from the pristine original at the net angle, so repeated rotation
-  // never stacks JPEG generations.
-  Future<void> _rotate() async {
-    if (_workingFile == null || _rotationOriginal == null) return;
-    _queuedTurns++;
-    if (_rotating) return;
-    _rotating = true;
-    while (_queuedTurns > 0 && mounted) {
-      _queuedTurns--;
-      await _rotateOneStep();
-    }
-    _rotating = false;
+  Future<T?> _pushEditor<T>(Widget editor) {
+    return Navigator.of(context).push<T>(
+      PageRouteBuilder<T>(
+        opaque: true,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => editor,
+      ),
+    );
   }
 
-  Future<void> _rotateOneStep() async {
-    final original = _rotationOriginal;
-    if (original == null) return;
-    final box = _boxSize;
-    _rotFitScale = box != null ? _rotatedFitScale(_aspect, box) : 1.0;
-    final target = (_appliedTurns + 1) % 4;
-    _rotCtrl.value = 0;
-    final bakeFut = _rotateImageFile(original, target);
-    await _rotCtrl.forward();
-    final baked = await bakeFut;
-    if (!mounted) return;
-    if (baked != null) {
-      try {
-        await precacheImage(FileImage(baked), context);
-      } catch (_) {}
-      if (!mounted) return;
-      _appliedTurns = target;
-      _aspect = _aspect > 0 ? 1 / _aspect : 1;
-      setState(() {
-        _workingFile = baked;
-        _rotCtrl.value = 0;
-      });
-      widget.onEdited?.call(baked);
-    } else {
-      setState(() => _rotCtrl.value = 0);
-    }
+  void _reportEdit() {
+    widget.onEditChanged?.call(
+      PhotoEditState(
+        working: _workingFile,
+        cropSource: _cropSource,
+        cropState: _cropState,
+      ),
+    );
   }
 
-  double _rotatedFitScale(double a, Size box) {
-    final bw = box.width;
-    final bh = box.height;
-    if (bw <= 0 || bh <= 0 || a <= 0) return 1;
-    double dw;
-    double dh;
-    if (bw / bh > a) {
-      dh = bh;
-      dw = bh * a;
-    } else {
-      dw = bw;
-      dh = bw / a;
-    }
-    final s = math.min(bw / dh, bh / dw);
-    return s.isFinite && s > 0 ? s : 1;
-  }
-
-  Future<File?> _rotateImageFile(File src, int quarterTurnsCCW) async {
-    final turns = ((quarterTurnsCCW % 4) + 4) % 4;
-    if (turns == 0) return src;
-    try {
-      final bytes = await src.readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final w = image.width;
-      final h = image.height;
-      final swap = turns.isOdd;
-      final outW = swap ? h : w;
-      final outH = swap ? w : h;
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      canvas.translate(outW / 2, outH / 2);
-      canvas.rotate(-math.pi / 2 * turns);
-      canvas.drawImage(image, Offset(-w / 2, -h / 2), Paint());
-      final picture = recorder.endRecording();
-      final rotated = await picture.toImage(outW, outH);
-      picture.dispose();
-      image.dispose();
-      codec.dispose();
-      final bd = await rotated.toByteData(format: ui.ImageByteFormat.rawRgba);
-      rotated.dispose();
-      if (bd == null) return null;
-      final jpeg = await encodeRgbaToJpeg(bd.buffer.asUint8List(), outW, outH);
-      if (jpeg == null) return null;
-      final dir = await getTemporaryDirectory();
-      final out = File(
-        p.join(dir.path, 'komet_rot_${DateTime.now().microsecondsSinceEpoch}.jpg'),
-      );
-      await out.writeAsBytes(jpeg);
-      return out;
-    } catch (_) {
-      return null;
+  Future<void> _openCrop() async {
+    if (_workingFile == null) return;
+    final source =
+        _cropSource ??= widget.item.localFile ?? await widget.item.originFile();
+    if (source == null || !mounted) return;
+    final result = await _pushEditor<CropResult>(
+      PhotoCropEditor(source: source, initialState: _cropState),
+    );
+    if (result != null && mounted) {
+      _cropState = result.state;
+      setState(() => _workingFile = result.file);
+      _reportEdit();
     }
   }
 
   Future<void> _openDraw() async {
     final file = _workingFile;
-    if (file == null || _rotating) return;
-    final dims = await decodeImageFileDimensions(file);
+    if (file == null) return;
+    final dims = await imageFileDimensions(file);
     if (!mounted) return;
     if (dims == null) {
       showCustomNotification(context, 'Не удалось открыть редактор');
       return;
     }
-    final result = await Navigator.of(context).push<File>(
-      PageRouteBuilder<File>(
-        opaque: true,
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => PhotoDrawEditor(
-          source: file,
-          imageWidth: dims.$1,
-          imageHeight: dims.$2,
-        ),
+    final result = await _pushEditor<File>(
+      PhotoDrawEditor(
+        source: file,
+        imageWidth: dims.$1,
+        imageHeight: dims.$2,
       ),
     );
     if (result != null && mounted) {
-      _rotationOriginal = result;
-      _appliedTurns = 0;
+      _cropSource = result;
+      _cropState = null;
       setState(() => _workingFile = result);
-      _updateAspect();
-      widget.onEdited?.call(result);
+      _reportEdit();
+    }
+  }
+
+  Future<void> _openAdjust() async {
+    final file = _workingFile;
+    if (file == null) return;
+    final result = await _pushEditor<File>(PhotoAdjustEditor(source: file));
+    if (result != null && mounted) {
+      _cropSource = result;
+      _cropState = null;
+      setState(() => _workingFile = result);
+      _reportEdit();
     }
   }
 
@@ -268,31 +187,11 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen>
       body: Column(
         children: [
           Expanded(
-            child: ClipRect(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _boxSize = constraints.biggest;
-                  return Center(
-                    child: AnimatedBuilder(
-                      animation: _rotCtrl,
-                      builder: (context, child) {
-                        final t = _rotCtrl.value;
-                        return Transform.rotate(
-                          angle: -math.pi / 2 * t,
-                          child: Transform.scale(
-                            scale: 1 + (_rotFitScale - 1) * t,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: InteractiveViewer(
-                        minScale: 1,
-                        maxScale: 4,
-                        child: _buildImage(),
-                      ),
-                    ),
-                  );
-                },
+            child: Center(
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: _buildImage(),
               ),
             ),
           ),
@@ -379,10 +278,10 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _ToolIcon(icon: Symbols.crop_rotate, onTap: _rotate),
+                _ToolIcon(icon: Symbols.crop_rotate, onTap: _openCrop),
                 _ToolIcon(icon: Symbols.brush, onTap: _openDraw),
                 const _FileToggle(),
-                _ToolIcon(icon: Symbols.tune, onTap: () {}),
+                _ToolIcon(icon: Symbols.tune, onTap: _openAdjust),
               ],
             ),
           ),

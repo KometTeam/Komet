@@ -25,6 +25,9 @@ class PillNavGeometry {
     return PillNavGeometry(navInnerW, unit * _activeWeight, unit);
   }
 
+  factory PillNavGeometry.equal(double itemWidth, int itemCount) =>
+      PillNavGeometry(itemWidth * itemCount, itemWidth, itemWidth);
+
   static const double _activeWeight = 2.2;
 }
 
@@ -39,6 +42,7 @@ class SlidingPillNav extends StatelessWidget {
   final double labelGap;
   final Color? backgroundColor;
   final Color? borderColor;
+  final bool iconsOnly;
 
   const SlidingPillNav({
     super.key,
@@ -52,6 +56,7 @@ class SlidingPillNav extends StatelessWidget {
     this.labelGap = 6,
     this.backgroundColor,
     this.borderColor,
+    this.iconsOnly = false,
   });
 
   static const double height = 68;
@@ -122,6 +127,7 @@ class SlidingPillNav extends StatelessWidget {
                       animationDuration: animationDuration,
                       iconSize: iconSize,
                       labelGap: labelGap,
+                      iconsOnly: iconsOnly,
                       onTap: () => onTap(i),
                       onLongPress:
                           (onItemLongPress == null || !items[i].longPressable)
@@ -146,6 +152,7 @@ class _PillNavCell extends StatelessWidget {
   final Duration animationDuration;
   final double iconSize;
   final double labelGap;
+  final bool iconsOnly;
   final VoidCallback onTap;
   final void Function(Offset globalPosition)? onLongPress;
 
@@ -156,6 +163,7 @@ class _PillNavCell extends StatelessWidget {
     required this.animationDuration,
     required this.iconSize,
     required this.labelGap,
+    required this.iconsOnly,
     required this.onTap,
     required this.onLongPress,
   });
@@ -172,44 +180,51 @@ class _PillNavCell extends StatelessWidget {
           : (d) => onLongPress!(d.globalPosition),
       behavior: HitTestBehavior.opaque,
       child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
+        child: iconsOnly
+            ? Icon(
                 item.icon,
                 color: selected ? cs.onPrimary : cs.onSurface,
                 size: iconSize,
                 fill: 1,
-              ),
-              AnimatedContainer(
-                duration: animationDuration,
-                curve: Curves.easeOutCubic,
-                width: selected ? null : 0,
-                child: AnimatedOpacity(
-                  duration: opacityDuration,
-                  opacity: selected ? 1.0 : 0.0,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(width: labelGap),
-                      Text(
-                        item.label,
-                        style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+              )
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      item.icon,
+                      color: selected ? cs.onPrimary : cs.onSurface,
+                      size: iconSize,
+                      fill: 1,
+                    ),
+                    AnimatedContainer(
+                      duration: animationDuration,
+                      curve: Curves.easeOutCubic,
+                      width: selected ? null : 0,
+                      child: AnimatedOpacity(
+                        duration: opacityDuration,
+                        opacity: selected ? 1.0 : 0.0,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(width: labelGap),
+                            Text(
+                              item.label,
+                              style: TextStyle(
+                                color: cs.onPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
       ),
     );
   }

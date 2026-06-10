@@ -23,6 +23,22 @@ class PickedPhoto {
   const PickedPhoto({required this.item, this.editedFile});
 }
 
+Future<(int, int)?> imageFileDimensions(File file) async {
+  ui.ImmutableBuffer? buffer;
+  ui.ImageDescriptor? descriptor;
+  try {
+    final bytes = await file.readAsBytes();
+    buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+    return (descriptor.width, descriptor.height);
+  } catch (_) {
+    return null;
+  } finally {
+    descriptor?.dispose();
+    buffer?.dispose();
+  }
+}
+
 abstract class GallerySource {
   Future<GalleryPermission> ensurePermission();
   Future<List<GalleryItem>> load({int limit});
@@ -178,17 +194,5 @@ class _FileGalleryItem implements GalleryItem {
   Future<File?> originFile() async => file;
 
   @override
-  Future<(int, int)?> dimensions() async {
-    try {
-      final bytes = await file.readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final result = (frame.image.width, frame.image.height);
-      frame.image.dispose();
-      codec.dispose();
-      return result;
-    } catch (_) {
-      return null;
-    }
-  }
+  Future<(int, int)?> dimensions() => imageFileDimensions(file);
 }

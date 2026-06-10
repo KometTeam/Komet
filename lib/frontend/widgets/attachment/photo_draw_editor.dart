@@ -66,20 +66,6 @@ class TextMark extends EditMark {
   });
 }
 
-Future<(int, int)?> decodeImageFileDimensions(File file) async {
-  try {
-    final bytes = await file.readAsBytes();
-    final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    final result = (frame.image.width, frame.image.height);
-    frame.image.dispose();
-    codec.dispose();
-    return result;
-  } catch (_) {
-    return null;
-  }
-}
-
 class PhotoDrawEditor extends StatefulWidget {
   final File source;
   final int imageWidth;
@@ -336,8 +322,6 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
     if (ro is! RenderBox || ro.size.isEmpty) return null;
     final box = ro.size;
     try {
-      // Composite at the image's native resolution rather than capturing the
-      // on-screen widget, so the photo keeps its full quality.
       final bytes = await widget.source.readAsBytes();
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
@@ -454,8 +438,6 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
     return Center(
       child: AspectRatio(
         aspectRatio: aspect <= 0 ? 1.0 : aspect,
-        // Only this subtree repaints while drawing (driven by _canvasRev),
-        // so the toolbar/tabs/slider don't rebuild on every pointer move.
         child: ValueListenableBuilder<int>(
           valueListenable: _canvasRev,
           child: Image.file(
@@ -787,8 +769,6 @@ class _DrawingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) => paintMarks(canvas, size);
 
   void paintMarks(Canvas canvas, Size size) {
-    // An isolated layer is only needed so the eraser can punch through the
-    // strokes to reveal the photo beneath — skip it otherwise (it's costly).
     final needsLayer = _hasEraser();
     if (needsLayer) canvas.saveLayer(Offset.zero & size, Paint());
     for (final m in marks) {
@@ -973,8 +953,6 @@ class _TextLayout {
   _TextLayout(this.text, this.fontSize, this.color, this.painter);
 }
 
-/// Laid-out [TextPainter] for a [TextMark], memoized per mark so a static text
-/// isn't re-laid-out every frame, and the size/paint passes share one layout.
 TextPainter layoutText(TextMark t) {
   final cached = _textLayoutCache[t];
   if (cached != null &&

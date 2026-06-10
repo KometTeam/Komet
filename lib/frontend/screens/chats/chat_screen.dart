@@ -1804,7 +1804,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           edited ?? photo.item.localFile ?? await photo.item.originFile();
       if (file == null) continue;
       final dim = edited != null
-          ? await _decodeImageDimensions(edited)
+          ? await imageFileDimensions(edited)
           : await photo.item.dimensions();
       files.add(file);
       attachments.add(
@@ -1940,20 +1940,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   void _disposePhotoProgress(String tempId) {
     _photoUploadProgress.remove(tempId)?.dispose();
-  }
-
-  Future<(int, int)?> _decodeImageDimensions(File file) async {
-    try {
-      final bytes = await file.readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final result = (frame.image.width, frame.image.height);
-      frame.image.dispose();
-      codec.dispose();
-      return result;
-    } catch (_) {
-      return null;
-    }
   }
 
   Future<void> _pickAndUploadFile() async {

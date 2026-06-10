@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
+import 'package:komet/frontend/widgets/attachment/photo_crop_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -49,7 +50,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
-  final Map<String, File> _edited = {};
+  final Map<String, PhotoEditState> _edits = {};
   final TextEditingController _captionCtrl = TextEditingController();
   final PageController _pageController = PageController();
 
@@ -122,9 +123,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           selectedIds: _selected,
           onToggleSelection: () => _toggleSelection(item),
           onSend: () => _sendSelection(fallback: item),
-          editedFile: _edited[item.id],
-          onEdited: (file) {
-            if (mounted) setState(() => _edited[item.id] = file);
+          editState: _edits[item.id],
+          onEditChanged: (state) {
+            if (mounted) setState(() => _edits[item.id] = state);
           },
           initialCaption: _captionCtrl.text,
           onCaptionChanged: (text) => _captionCtrl.text = text,
@@ -151,7 +152,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     if (chosen.isEmpty && fallback != null) chosen = [fallback];
     if (chosen.isEmpty) return;
     final picked = chosen
-        .map((it) => PickedPhoto(item: it, editedFile: _edited[it.id]))
+        .map((it) => PickedPhoto(item: it, editedFile: _edits[it.id]?.working))
         .toList();
     final callback = widget.onSend;
     final caption = _captionCtrl.text.trim();
@@ -233,7 +234,6 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   static const double _barHeight = SlidingPillNav.height + _pillMargin;
   static const Duration _navAnim = Duration(milliseconds: 300);
 
-  // Matches the chat composer (message input field) surface.
   Color _composerColor(ColorScheme cs) => Color.alphaBlend(
     cs.surfaceContainerHighest.withValues(alpha: 0.92),
     cs.surface,
@@ -331,7 +331,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     selectedIds: _selected,
                     onOpen: () => _openPreview(item),
                     onToggle: () => _toggleSelection(item),
-                    editedFile: _edited[item.id],
+                    editedFile: _edits[item.id]?.working,
                     cs: cs,
                   );
                 }, childCount: gridPhotos.length),
@@ -354,7 +354,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         selectedIds: _selected,
         onOpen: () => _openPreview(item),
         onToggle: () => _toggleSelection(item),
-        editedFile: _edited[item.id],
+        editedFile: _edits[item.id]?.working,
         cs: cs,
       );
     }
@@ -587,36 +587,32 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildPillNav() {
-    return LayoutBuilder(
+    final geometry = PillNavGeometry.equal(54, _navItems.length);
+    return Align(
       key: const ValueKey('nav'),
-      builder: (context, constraints) {
-        final geometry = PillNavGeometry.fromInnerWidth(
-          constraints.maxWidth - 4,
-          _navItems.length,
-        );
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: (_) => _onPillDragStart(),
-          onHorizontalDragUpdate: (d) =>
-              _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
-          onHorizontalDragEnd: (_) => _onPillDragEnd(),
-          onHorizontalDragCancel: _onPillDragEnd,
-          child: AnimatedBuilder(
-            animation: _pageController,
-            builder: (context, _) {
-              final cs = Theme.of(context).colorScheme;
-              return SlidingPillNav(
-                items: _navItems,
-                position: _currentPageT(),
-                geometry: geometry,
-                onTap: _onSectionTap,
-                backgroundColor: _composerColor(cs),
-                borderColor: _composerBorderColor(cs),
-              );
-            },
-          ),
-        );
-      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) => _onPillDragStart(),
+        onHorizontalDragUpdate: (d) =>
+            _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
+        onHorizontalDragEnd: (_) => _onPillDragEnd(),
+        onHorizontalDragCancel: _onPillDragEnd,
+        child: AnimatedBuilder(
+          animation: _pageController,
+          builder: (context, _) {
+            final cs = Theme.of(context).colorScheme;
+            return SlidingPillNav(
+              items: _navItems,
+              position: _currentPageT(),
+              geometry: geometry,
+              onTap: _onSectionTap,
+              iconsOnly: true,
+              backgroundColor: _composerColor(cs),
+              borderColor: _composerBorderColor(cs),
+            );
+          },
+        ),
+      ),
     );
   }
 
