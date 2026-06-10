@@ -19,6 +19,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/login_success_screen.dart';
 import '../calls/call_screen.dart';
+import '../../../core/calls/call_controller.dart';
 import '../digital_id/digital_id_web_screen.dart';
 
 class DebugMenuScreen extends StatefulWidget {
@@ -36,11 +37,24 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   final Map<String, String> _errors = {};
   int _cacheSize = 0;
   bool _clearingCache = false;
+  bool _micSignalOn = true;
 
   @override
   void initState() {
     super.initState();
     _loadCacheSize();
+  }
+
+  Future<void> _sendMicSignal(bool enabled) async {
+    setState(() => _micSignalOn = enabled);
+    final sent = await CallController.instance.sendMicSignal(enabled);
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      sent
+          ? 'Сигнал микрофона: ${enabled ? 'ВКЛ' : 'ВЫКЛ'} отправлен'
+          : 'Нет активного звонка',
+    );
   }
 
   Future<void> _loadCacheSize() async {
@@ -956,54 +970,46 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      _DebugCallButton(
+                        label: 'Экран звонка (превью)',
+                        icon: Symbols.phone,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CallScreen(name: 'Кирил Г.'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
-                            child: _DebugCallButton(
-                              label: 'Входящий',
-                              icon: Symbols.call_received,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CallScreen(
-                                    name: 'Кирил Г.',
-                                    initialState: CallScreenState.incoming,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Сигнал микрофона (тест)',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                              ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Шлёт change-media-settings в активный звонок, '
+                                  'не меняя реальный микрофон',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _DebugCallButton(
-                              label: 'Исходящий',
-                              icon: Symbols.call_made,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CallScreen(
-                                    name: 'Кирил Г.',
-                                    initialState: CallScreenState.outgoing,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _DebugCallButton(
-                              label: 'Активный',
-                              icon: Symbols.phone_in_talk,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CallScreen(
-                                    name: 'Кирил Г.',
-                                    initialState: CallScreenState.active,
-                                  ),
-                                ),
-                              ),
-                            ),
+                          Switch(
+                            value: _micSignalOn,
+                            onChanged: _sendMicSignal,
                           ),
                         ],
                       ),

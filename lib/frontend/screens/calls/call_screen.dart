@@ -2,22 +2,31 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' show Helper;
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/calls/call_controller.dart';
+import '../../../core/calls/call_session.dart';
 import '../../../core/utils/format.dart';
 
-enum CallScreenState { incoming, outgoing, active }
-
+/// Экран звонка. Управляется живым [CallSession].
+///
+/// Открывается в одном из режимов:
+/// - исходящий/активный: передан [session] (уже запущен);
+/// - входящий: передан [incoming] — показываем «принять/отклонить», сессия
+///   создаётся при принятии.
 class CallScreen extends StatefulWidget {
   final String name;
   final String? avatarUrl;
-  final CallScreenState initialState;
+  final CallSession? session;
+  final IncomingCall? incoming;
 
   const CallScreen({
     super.key,
     required this.name,
     this.avatarUrl,
-    this.initialState = CallScreenState.incoming,
+    this.session,
+    this.incoming,
   });
 
   @override
@@ -26,18 +35,21 @@ class CallScreen extends StatefulWidget {
 
 class _CallScreenState extends State<CallScreen>
     with SingleTickerProviderStateMixin {
-  late CallScreenState _state;
+  CallSession? _session;
+  StreamSubscription<CallSessionState>? _stateSub;
+  CallSessionState _state = CallSessionState.connecting;
+  bool _incomingPending = false;
+
   Timer? _timer;
-  int _seconds = 0;
   bool _isMuted = false;
   bool _isSpeaker = false;
+
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
-    _state = widget.initialState;
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -45,46 +57,88 @@ class _CallScreenState extends State<CallScreen>
     _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    if (_state == CallScreenState.outgoing) {
-      _startOutgoingTimer();
+
+    _incomingPending = widget.session == null && widget.incoming != null;
+    if (widget.session != null) _bind(widget.session!);
+  }
+
+  void _bind(CallSession session) {
+    _session = session;
+    _state = session.currentState;
+    _stateSub = session.stateStream.listen(_onState);
+    if (_state == CallSessionState.active) _startActiveTimer();
+  }
+
+  void _onState(CallSessionState state) {
+    if (!mounted) return;
+    setState(() => _state = state);
+    if (state == CallSessionState.active) {
+      _startActiveTimer();
+    } else if (state == CallSessionState.ended) {
+      _close();
     }
   }
 
-  void _startOutgoingTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => _seconds++);
-      if (_seconds >= 3 && _state == CallScreenState.outgoing) {
-        _timer?.cancel();
-        setState(() => _state = CallScreenState.active);
-        _startActiveTimer();
-      }
-    });
-  }
-
   void _startActiveTimer() {
-    _seconds = 0;
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() => _seconds++);
+      setState(() {});
     });
   }
 
-  void _accept() {
+  Future<void> _accept() async {
+    final incoming = widget.incoming;
+    if (incoming == null) return;
     setState(() {
-      _state = CallScreenState.active;
-      _seconds = 0;
+      _incomingPending = false;
+      _state = CallSessionState.connecting;
     });
-    _startActiveTimer();
+    try {
+      final session = await CallController.instance.acceptIncoming(incoming);
+      if (!mounted) return;
+      _bind(session);
+    } catch (_) {
+      _close();
+    }
   }
 
-  void _endCall() {
+  Future<void> _decline() async {
+    final incoming = widget.incoming;
+    if (incoming != null) {
+      await CallController.instance.rejectIncoming(incoming);
+    }
+    _close();
+  }
+
+  Future<void> _hangup() async {
+    final session = _session;
+    if (session != null) {
+      await session.hangup();
+    }
+    _close();
+  }
+
+  void _close() {
+    if (!mounted) return;
     _timer?.cancel();
-    Navigator.pop(context);
+    Navigator.of(context).maybePop();
+  }
+
+  Future<void> _toggleMute() async {
+    final next = !_isMuted;
+    setState(() => _isMuted = next);
+    await _session?.setMuted(next);
+  }
+
+  Future<void> _toggleSpeaker() async {
+    final next = !_isSpeaker;
+    setState(() => _isSpeaker = next);
+    await Helper.setSpeakerphoneOn(next);
   }
 
   @override
   void dispose() {
+    _stateSub?.cancel();
     _timer?.cancel();
     _pulseController.dispose();
     super.dispose();
@@ -97,33 +151,55 @@ class _CallScreenState extends State<CallScreen>
     return Scaffold(
       backgroundColor: const Color(0xFF0E0E14),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            const Spacer(flex: 3),
-            _buildAvatar(screenH),
-            const SizedBox(height: 24),
-            _buildName(),
-            const SizedBox(height: 8),
-            _buildStatus(),
-            const Spacer(flex: 2),
-            _buildActions(),
-            const SizedBox(height: 48),
+            Column(
+              children: [
+                const Spacer(flex: 3),
+                _buildAvatar(screenH),
+                const SizedBox(height: 24),
+                _buildName(),
+                const SizedBox(height: 8),
+                _buildStatus(),
+                const Spacer(flex: 2),
+                _buildActions(),
+                const SizedBox(height: 48),
+              ],
+            ),
+            Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: IconButton(
+                  icon: const Icon(
+                    Symbols.arrow_back,
+                    color: Colors.white,
+                    weight: 400,
+                  ),
+                  tooltip: 'Свернуть',
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
+  bool get _isRinging =>
+      _incomingPending ||
+      _state == CallSessionState.connecting ||
+      _state == CallSessionState.ringing;
+
   Widget _buildAvatar(double screenH) {
     final size = screenH * 0.18;
     final cs = Theme.of(context).colorScheme;
-    final isRinging = _state == CallScreenState.incoming;
-    final isOutgoing = _state == CallScreenState.outgoing;
 
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
-        final scale = (isRinging || isOutgoing) ? _pulseAnimation.value : 1.0;
+        final scale = _isRinging ? _pulseAnimation.value : 1.0;
         return Transform.scale(scale: scale, child: child);
       },
       child: Container(
@@ -189,13 +265,22 @@ class _CallScreenState extends State<CallScreen>
   Widget _buildStatus() {
     final cs = Theme.of(context).colorScheme;
     String text;
-    switch (_state) {
-      case CallScreenState.incoming:
-        text = 'Входящий звонок';
-      case CallScreenState.outgoing:
-        text = 'Вызов...';
-      case CallScreenState.active:
-        text = formatSecondsMmSs(_seconds, padMinutes: true);
+    if (_incomingPending) {
+      text = 'Входящий звонок';
+    } else {
+      switch (_state) {
+        case CallSessionState.connecting:
+          text = 'Соединение…';
+        case CallSessionState.ringing:
+          text = 'Вызов…';
+        case CallSessionState.active:
+          text = formatSecondsMmSs(
+            _session?.elapsedSeconds ?? 0,
+            padMinutes: true,
+          );
+        case CallSessionState.ended:
+          text = 'Звонок завершён';
+      }
     }
     return Text(
       text,
@@ -208,14 +293,9 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _buildActions() {
-    switch (_state) {
-      case CallScreenState.incoming:
-        return _buildIncomingActions();
-      case CallScreenState.outgoing:
-        return _buildOutgoingActions();
-      case CallScreenState.active:
-        return _buildActiveActions();
-    }
+    if (_incomingPending) return _buildIncomingActions();
+    if (_state == CallSessionState.active) return _buildActiveActions();
+    return _buildOutgoingActions();
   }
 
   Widget _buildIncomingActions() {
@@ -226,7 +306,7 @@ class _CallScreenState extends State<CallScreen>
           icon: Symbols.phone_disabled,
           label: 'Отклонить',
           color: const Color(0xFFBA1A1A),
-          onTap: _endCall,
+          onTap: _decline,
         ),
         const SizedBox(width: 48),
         _ActionButton(
@@ -247,7 +327,7 @@ class _CallScreenState extends State<CallScreen>
           icon: Symbols.phone_disabled,
           label: 'Отмена',
           color: const Color(0xFFBA1A1A),
-          onTap: _endCall,
+          onTap: _hangup,
         ),
       ],
     );
@@ -262,13 +342,13 @@ class _CallScreenState extends State<CallScreen>
             _CircleActionButton(
               icon: _isMuted ? Symbols.mic_off : Symbols.mic,
               active: _isMuted,
-              onTap: () => setState(() => _isMuted = !_isMuted),
+              onTap: _toggleMute,
             ),
             const SizedBox(width: 32),
             _CircleActionButton(
-              icon: _isMuted ? Symbols.volume_off : Symbols.volume_up,
+              icon: _isSpeaker ? Symbols.volume_up : Symbols.volume_down,
               active: _isSpeaker,
-              onTap: () => setState(() => _isSpeaker = !_isSpeaker),
+              onTap: _toggleSpeaker,
             ),
             const SizedBox(width: 32),
             _CircleActionButton(
@@ -283,7 +363,7 @@ class _CallScreenState extends State<CallScreen>
           icon: Symbols.phone_disabled,
           label: 'Завершить',
           color: const Color(0xFFBA1A1A),
-          onTap: _endCall,
+          onTap: _hangup,
         ),
       ],
     );

@@ -19,6 +19,8 @@ import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/modules/messages.dart';
+import '../../../core/calls/call_controller.dart';
+import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
@@ -656,6 +658,46 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     } catch (_) {}
   }
 
+  Future<void> _startCall() async {
+    if (widget.chatType != 'DIALOG') {
+      showCustomNotification(context, 'Звонки доступны только в диалогах');
+      return;
+    }
+    // Звонок уже идёт (возможно, свёрнут) — просто открываем его экран снова.
+    final active = CallController.instance.activeSession;
+    if (active != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            name: widget.name,
+            avatarUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
+            session: active,
+          ),
+        ),
+      );
+      return;
+    }
+    final peerId = widget.chatId ^ _myId;
+    if (peerId <= 0) return;
+    final navigator = Navigator.of(context);
+    try {
+      final session = await CallController.instance.startOutgoing(peerId);
+      if (!mounted) return;
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            name: widget.name,
+            avatarUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
+            session: session,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Не удалось начать звонок');
+    }
+  }
+
   void _recomputeHeaderStatus() {
     _headerStatusNotifier.value = _headerStatus();
   }
@@ -1194,7 +1236,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     actions: [
                       IconButton(
                         icon: const Icon(Symbols.call, weight: 400),
-                        onPressed: () {},
+                        onPressed: _startCall,
                       ),
                       IconButton(
                         icon: const Icon(Symbols.more_vert, weight: 400),

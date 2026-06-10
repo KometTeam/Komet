@@ -33,6 +33,8 @@ import 'backend/modules/messages.dart';
 import 'backend/modules/polls.dart';
 import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
+import 'core/calls/call_controller.dart';
+import 'frontend/screens/calls/call_screen.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
@@ -189,6 +191,7 @@ class KometAppState extends State<KometApp>
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
+  StreamSubscription<IncomingCall>? _callIncomingSub;
   Timer? _scheduleTimer;
   String? _lastVpnNotice;
   DateTime _lastVpnNoticeAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -233,11 +236,17 @@ class KometAppState extends State<KometApp>
     });
 
     _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
-      if (status == LoginStatus.success && isOnemeFlavor) {
-        await PushService.instance.init(api: api, account: accountModule);
-        await PushService.instance.onLoginSuccess();
+      if (status == LoginStatus.success) {
+        CallController.instance.init(api);
+        if (isOnemeFlavor) {
+          await PushService.instance.init(api: api, account: accountModule);
+          await PushService.instance.onLoginSuccess();
+        }
       }
     });
+
+    _callIncomingSub =
+        CallController.instance.incomingCalls.listen(_onIncomingCall);
 
     _sessionExpiredSub = api.sessionExpiredStream.listen((SessionExpiredException e) async {
       if (_isLoggingOut) return;
@@ -287,12 +296,44 @@ class KometAppState extends State<KometApp>
     });
   }
 
+  Future<void> _onIncomingCall(IncomingCall call) async {
+    String name = 'Входящий звонок';
+    String? avatar;
+    try {
+      final profile = await AppDatabase.loadActiveProfile();
+      if (profile != null) {
+        final contacts = await ContactsModule.getContacts(profile.id);
+        for (final c in contacts) {
+          if (c.id == call.callerId) {
+            final full = '${c.firstName} ${c.lastName ?? ''}'.trim();
+            if (full.isNotEmpty) name = full;
+            avatar = c.baseUrl;
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+
+    final navState = KometApp.navigatorKey.currentState;
+    if (navState == null) return;
+    navState.push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          name: name,
+          avatarUrl: avatar,
+          incoming: call,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _finishReveal();
     _sessionExpiredSub?.cancel();
     _loginStatusSub?.cancel();
     _vpnBypassSub?.cancel();
+    _callIncomingSub?.cancel();
     _scheduleTimer?.cancel();
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);
