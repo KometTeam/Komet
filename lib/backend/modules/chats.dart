@@ -181,6 +181,57 @@ class ChatsModule {
   /// а кеша истории нет — UI должен отрисовать курсивную плашку.
   static const String lastMsgPlaceholder = '__komet_lastmsg_placeholder__';
 
+  static String? attachPreviewLabel(dynamic attaches) {
+    if (attaches is! List || attaches.isEmpty) return null;
+    final first = attaches.first;
+    if (first is! Map) return null;
+    final type = (first['_type'] as String? ?? '').toUpperCase();
+    switch (type) {
+      case 'PHOTO':
+        return 'Фото';
+      case 'VIDEO':
+        return 'Видео';
+      case 'AUDIO':
+        return 'Голосовое сообщение';
+      case 'FILE':
+        final name = first['name']?.toString();
+        return name != null && name.isNotEmpty ? 'Файл: $name' : 'Файл';
+      case 'STICKER':
+        return 'Стикер';
+      case 'SHARE':
+        final title = first['title']?.toString();
+        return title != null && title.isNotEmpty ? 'Ссылка: $title' : 'Ссылка';
+      case 'POLL':
+        final title = first['title']?.toString();
+        return title != null && title.isNotEmpty ? 'Опрос: $title' : 'Опрос';
+      case 'LOCATION':
+        return 'Геопозиция';
+      case 'CONTACT':
+        return 'Контакт';
+      case 'CALL':
+        final video = first['callType']?.toString().toUpperCase() == 'VIDEO';
+        final dur = (first['duration'] as num?)?.toInt() ?? 0;
+        final hangup = first['hangupType']?.toString();
+        final failed = dur == 0 ||
+            hangup == 'CANCELED' ||
+            hangup == 'REJECTED' ||
+            hangup == 'MISSED';
+        if (first['joinLink'] != null) {
+          return video ? 'Групповой видеозвонок' : 'Групповой звонок';
+        }
+        if (failed) return video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок';
+        return video ? 'Видеозвонок' : 'Звонок';
+      default:
+        return null;
+    }
+  }
+
+  static String? messagePreviewText(Map msg) {
+    final text = msg['text']?.toString();
+    if (text != null && text.isNotEmpty) return text;
+    return attachPreviewLabel(msg['attaches']);
+  }
+
   static final _messageEventsController =
       StreamController<MessageEvent>.broadcast();
   static Stream<MessageEvent> get messageEvents =>
@@ -369,7 +420,7 @@ class ChatsModule {
           newRow['last_event_time'] = msgTime;
         }
       }
-      newRow['last_msg_text'] = msgText;
+      newRow['last_msg_text'] = messagePreviewText(msg);
       if (senderId != null) newRow['last_msg_sender'] = senderId;
     }
     if (unread != null) newRow['unread_count'] = unread;
@@ -388,8 +439,20 @@ class ChatsModule {
     final newRow = Map<String, dynamic>.from(chatRow);
     if (latest.isNotEmpty) {
       final m = latest.first;
+      String? previewText = m['text']?.toString();
+      if (previewText == null || previewText.isEmpty) {
+        final payloadRaw = m['payload'];
+        if (payloadRaw is String && payloadRaw.isNotEmpty) {
+          try {
+            final payload = jsonDecode(payloadRaw);
+            if (payload is Map) {
+              previewText = attachPreviewLabel(payload['attaches']);
+            }
+          } catch (_) {}
+        }
+      }
       newRow['last_msg_id'] = int.tryParse(m['id']?.toString() ?? '');
-      newRow['last_msg_text'] = m['text'];
+      newRow['last_msg_text'] = previewText ?? m['text'];
       newRow['last_msg_time'] = m['time'];
       newRow['last_msg_sender'] = m['sender_id'];
     } else {
@@ -781,7 +844,7 @@ class ChatsModule {
         if (lastMsg is Map) {
           lastMsgId = lastMsg['id'] as int?;
           lastMsgTime = lastMsg['time'] as int?;
-          lastMsgText = lastMsg['text'] as String?;
+          lastMsgText = messagePreviewText(lastMsg);
           lastMsgSenderId = lastMsg['sender'] as int?;
         }
 

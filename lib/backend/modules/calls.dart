@@ -63,13 +63,15 @@ class CallsModule {
     bool isVideo = false,
   }) async {
     final conversationId = _uuidV4();
+    // Структура подтверждена дампом основного сокета (opcode 78).
     final internalParams = jsonEncode({
-      'deviceId': _api.deviceId ?? '',
-      'sdkVersion': '2.8.9',
-      'clientAppKey': _clientAppKey(),
       'platform': 'ANDROID',
+      'sdkVersion': '0.1.16.4',
+      'clientAppKey': 'CGPGAGLGDIHBABABA',
+      'deviceId': _api.deviceId ?? '',
       'protocolVersion': 5,
-      'domainId': '',
+      'onlyAdminCanRecord': false,
+      'waitForAdmin': false,
       'capabilities': '3c03f',
     });
 
@@ -118,12 +120,6 @@ class CallsModule {
     final s = List.generate(16, hex).join();
     return '${s.substring(0, 8)}-${s.substring(8, 12)}-${s.substring(12, 16)}'
         '-${s.substring(16, 20)}-${s.substring(20)}';
-  }
-
-  static String _clientAppKey() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    final r = Random();
-    return List.generate(17, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
   /// Fetch call history from opcode 79

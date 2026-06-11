@@ -58,4 +58,34 @@ class PollsModule extends ChangeNotifier {
       _inFlight.remove(pollId);
     }
   }
+
+  Future<bool> vote(
+    int chatId,
+    String messageId,
+    int pollId,
+    List<int> answersIds,
+  ) async {
+    try {
+      final response = await _api.sendRequest(Opcode.sendVote, {
+        'messageId': int.tryParse(messageId) ?? 0,
+        'chatId': chatId,
+        'pollId': pollId,
+        'answersIds': answersIds,
+      });
+      if (!response.isOk) return false;
+
+      final data = response.payload;
+      final state = data is Map ? data['state'] : null;
+      final cached = _cache[pollId];
+      if (state is Map && cached != null) {
+        _cache[pollId] = cached.withStateMap(state);
+        notifyListeners();
+      } else {
+        await fetch(chatId, messageId, pollId, force: true);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

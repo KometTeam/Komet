@@ -6,6 +6,7 @@ import '../../../backend/modules/chats.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
 import '../../../core/config/app_stories.dart';
+import '../../../core/config/app_link_preview.dart';
 import '../../../core/config/app_digital_id_mode.dart';
 import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
@@ -734,6 +735,68 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                               value: storiesOn,
                               onChanged: (v) {
                                 AppStories.save(v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppLinkPreview.current,
+                  builder: (context, linkPreviewOn, _) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 17,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.link,
+                              color: cs.onSurfaceVariant,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Предпросмотр ссылок',
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Карточки с превью для ссылок в сообщениях',
+                                    style: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: linkPreviewOn,
+                              onChanged: (v) {
+                                AppLinkPreview.save(v);
                               },
                             ),
                           ],

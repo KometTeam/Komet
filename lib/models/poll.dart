@@ -4,6 +4,7 @@ class PollAnswer {
   final int voteCount;
   final double rate;
   final List<int> votes;
+  final bool mine;
 
   const PollAnswer({
     required this.answerId,
@@ -11,6 +12,7 @@ class PollAnswer {
     this.voteCount = 0,
     this.rate = 0,
     this.votes = const [],
+    this.mine = false,
   });
 }
 
@@ -35,8 +37,36 @@ class Poll {
 
   bool get isMultiple => settings & 0x1 != 0;
 
+  bool get hasMyVote => answers.any((a) => a.mine);
+
   bool votedBy(int userId) =>
-      answers.any((a) => a.votes.contains(userId));
+      answers.any((a) => a.mine || a.votes.contains(userId));
+
+  static List<int> _parseVoterIds(dynamic votes) {
+    if (votes is! List) return const [];
+    final ids = <int>[];
+    for (final v in votes) {
+      if (v is int) {
+        ids.add(v);
+      } else if (v is Map && v['userId'] is int) {
+        ids.add(v['userId'] as int);
+      }
+    }
+    return ids;
+  }
+
+  Poll withStateMap(Map<dynamic, dynamic> stateMap) {
+    return Poll.fromServerMap({
+      'pollId': pollId,
+      'title': title,
+      'settings': settings,
+      'version': version,
+      'answers': [
+        for (final a in answers) {'answerId': a.answerId, 'text': a.text},
+      ],
+      'state': stateMap,
+    });
+  }
 
   factory Poll.fromServerMap(Map<dynamic, dynamic> map) {
     final state = map['state'];
@@ -64,10 +94,8 @@ class Poll {
           text: a['text']?.toString() ?? '',
           voteCount: (res?['voteCount'] as num?)?.toInt() ?? 0,
           rate: (res?['rate'] as num?)?.toDouble() ?? 0,
-          votes: (res?['votes'] as List?)
-                  ?.whereType<int>()
-                  .toList() ??
-              const [],
+          votes: _parseVoterIds(res?['votes']),
+          mine: ((res?['options'] as num?)?.toInt() ?? 0) & 0x1 != 0,
         ));
       }
     }

@@ -21,6 +21,7 @@ import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
+import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
@@ -98,6 +99,7 @@ void main() async {
   final swipeBackFuture = AppSwipeBackDesktop.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
+  final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
 
@@ -129,6 +131,7 @@ void main() async {
   AppSwipeBackDesktop.current.value = await swipeBackFuture;
   AppPranks.current.value = await pranksFuture;
   AppStories.current.value = await storiesFuture;
+  AppLinkPreview.current.value = await linkPreviewFuture;
   AppMediaCacheLimit.current.value = await cacheLimitFuture;
   AppDigitalIdNative.current.value = await digitalIdNativeFuture;
   runApp(
@@ -245,10 +248,13 @@ class KometAppState extends State<KometApp>
       }
     });
 
-    _callIncomingSub =
-        CallController.instance.incomingCalls.listen(_onIncomingCall);
+    _callIncomingSub = CallController.instance.incomingCalls.listen(
+      _onIncomingCall,
+    );
 
-    _sessionExpiredSub = api.sessionExpiredStream.listen((SessionExpiredException e) async {
+    _sessionExpiredSub = api.sessionExpiredStream.listen((
+      SessionExpiredException e,
+    ) async {
       if (_isLoggingOut) return;
       _isLoggingOut = true;
 
@@ -318,11 +324,8 @@ class KometAppState extends State<KometApp>
     if (navState == null) return;
     navState.push(
       MaterialPageRoute(
-        builder: (_) => CallScreen(
-          name: name,
-          avatarUrl: avatar,
-          incoming: call,
-        ),
+        builder: (_) =>
+            CallScreen(name: name, avatarUrl: avatar, incoming: call),
       ),
     );
   }
@@ -474,13 +477,10 @@ class KometAppState extends State<KometApp>
 
     WidgetsBinding.instance.endOfFrame.then((_) {
       if (_revealController != controller) return;
-      controller.forward().then(
-        (_) {
-          if (_revealController != controller) return;
-          _finishReveal();
-        },
-        onError: (_) {},
-      );
+      controller.forward().then((_) {
+        if (_revealController != controller) return;
+        _finishReveal();
+      }, onError: (_) {});
     });
   }
 
