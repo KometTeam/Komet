@@ -303,29 +303,15 @@ class KometAppState extends State<KometApp>
   }
 
   Future<void> _onIncomingCall(IncomingCall call) async {
-    String name = 'Входящий звонок';
-    String? avatar;
-    try {
-      final profile = await AppDatabase.loadActiveProfile();
-      if (profile != null) {
-        final contacts = await ContactsModule.getContacts(profile.id);
-        for (final c in contacts) {
-          if (c.id == call.callerId) {
-            final full = '${c.firstName} ${c.lastName ?? ''}'.trim();
-            if (full.isNotEmpty) name = full;
-            avatar = c.baseUrl;
-            break;
-          }
-        }
-      }
-    } catch (_) {}
-
     final navState = KometApp.navigatorKey.currentState;
     if (navState == null) return;
     navState.push(
       MaterialPageRoute(
-        builder: (_) =>
-            CallScreen(name: name, avatarUrl: avatar, incoming: call),
+        builder: (_) => CallScreen(
+          name: ContactCache.get(call.callerId) ?? '',
+          avatarUrl: ContactCache.getAvatar(call.callerId),
+          incoming: call,
+        ),
       ),
     );
   }
