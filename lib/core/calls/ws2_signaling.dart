@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../utils/logger.dart';
 import 'conversation_params.dart';
 
 /// Параметры подключения к сигналинг-сокету ws2.
@@ -144,6 +145,11 @@ class Ws2Signaling {
       return;
     }
     if (decoded is! Map<String, dynamic>) return;
+
+    final label =
+        decoded['notification'] ?? decoded['response'] ?? decoded['type'];
+    logger.t('[ws2] ← $label');
+    logger.t(decoded);
 
     final type = decoded['type'];
     if (type == 'response') {

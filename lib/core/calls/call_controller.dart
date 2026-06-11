@@ -17,11 +17,16 @@ class IncomingCall {
   final bool isVideo;
   final ConversationParams params;
 
+  final String? country;
+  final bool? isContact;
+
   const IncomingCall({
     required this.conversationId,
     required this.callerId,
     required this.isVideo,
     required this.params,
+    this.country,
+    this.isContact,
   });
 }
 
@@ -80,6 +85,8 @@ class CallController {
       callerId: callerId,
       isVideo: payload['type'] == 'VIDEO',
       params: params,
+      country: payload['country'] as String?,
+      isContact: payload['isContact'] as bool?,
     );
     _pending = incoming;
     _incoming.add(incoming);
