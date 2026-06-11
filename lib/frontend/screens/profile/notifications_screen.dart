@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/sheet_helpers.dart';
 
@@ -164,11 +165,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _card(ColorScheme cs, List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Column(children: children),
     );
   }

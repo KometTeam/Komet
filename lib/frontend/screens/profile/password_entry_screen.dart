@@ -4,6 +4,7 @@ import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show TwoFactorDetails;
 import '../../../core/storage/app_database.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 
 class PasswordEntryScreen extends StatefulWidget {
   const PasswordEntryScreen({super.key});
@@ -185,11 +186,10 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   }
 
   Widget _buildSetupSection(ColorScheme cs) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Column(
         children: [
           _buildHeaderTile(
@@ -217,14 +217,14 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   }
 
   Widget _buildPasswordGate(ColorScheme cs) {
-    return Container(
-      width: double.infinity,
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
+      depth: 6,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -296,20 +296,21 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
   Widget _buildManageSection(ColorScheme cs) {
     return Column(
       children: [
-        Container(
-          width: double.infinity,
+        GlossyPill(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
+          depth: 6,
+          child: SizedBox(
+            width: double.infinity,
+            child: Row(
             children: [
               Container(
                 width: 48,
@@ -360,13 +361,13 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               ),
             ],
           ),
+          ),
         ),
         const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-          ),
+        GlossyPill(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
+          depth: 6,
           child: Column(
             children: [
               _buildActionRow(

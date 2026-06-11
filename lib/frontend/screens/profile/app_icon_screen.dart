@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/app_icon.dart';
 import '../../../core/utils/haptics.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 
 class AppIconScreen extends StatefulWidget {
   const AppIconScreen({super.key});
@@ -55,51 +56,50 @@ class _AppIconScreenState extends State<AppIconScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: [
-            Material(
+            GlossyPill(
               color: cs.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(28),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Внешний вид иконки',
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              depth: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Внешний вид иконки',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      AppIconConfig.isSupported
-                          ? 'На Android приложение закроется — лаунчер подхватит новую иконку. На iOS — мгновенно с системным диалогом.'
-                          : 'Доступно только на Android и iOS',
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 13,
-                        height: 1.35,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    AppIconConfig.isSupported
+                        ? 'На Android приложение закроется — лаунчер подхватит новую иконку. На iOS — мгновенно с системным диалогом.'
+                        : 'Доступно только на Android и iOS',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 13,
+                      height: 1.35,
                     ),
-                    const SizedBox(height: 12),
-                    ValueListenableBuilder<AppIcon>(
-                      valueListenable: AppIconConfig.current,
-                      builder: (context, current, _) {
-                        return Column(
-                          children: [
-                            for (final icon in AppIcon.values)
-                              _IconTile(
-                                icon: icon,
-                                selected: current == icon,
-                                onTap: () => _select(icon),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<AppIcon>(
+                    valueListenable: AppIconConfig.current,
+                    builder: (context, current, _) {
+                      return Column(
+                        children: [
+                          for (final icon in AppIcon.values)
+                            _IconTile(
+                              icon: icon,
+                              selected: current == icon,
+                              onTap: () => _select(icon),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ],

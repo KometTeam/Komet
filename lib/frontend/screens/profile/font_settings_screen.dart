@@ -6,6 +6,7 @@ import '../../../core/config/app_fonts.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 
 class FontSettingsScreen extends StatefulWidget {
   const FontSettingsScreen({super.key});
@@ -138,10 +139,7 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
-        titleText: 'Шрифты',
-        backgroundColor: cs.surface,
-      ),
+      appBar: AppBarM3E(titleText: 'Шрифты', backgroundColor: cs.surface),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -217,42 +215,44 @@ class _PreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ПРЕДПРОСМОТР',
-            style: TextStyle(
-              color: cs.primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+      depth: 6,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ПРЕДПРОСМОТР',
+              style: TextStyle(
+                color: cs.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Съешь ещё этих мягких булок',
-            style: AppFonts.sample(fontId, fontSize: 22).copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w600,
-              height: 1.25,
+            const SizedBox(height: 16),
+            Text(
+              'Съешь ещё этих мягких булок',
+              style: AppFonts.sample(fontId, fontSize: 22).copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w600,
+                height: 1.25,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'The quick brown fox 0123',
-            style: AppFonts.sample(fontId, fontSize: 15).copyWith(
-              color: cs.onSurfaceVariant,
+            const SizedBox(height: 10),
+            Text(
+              'The quick brown fox 0123',
+              style: AppFonts.sample(
+                fontId,
+                fontSize: 15,
+              ).copyWith(color: cs.onSurfaceVariant),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -316,10 +316,7 @@ class _FontOption extends StatelessWidget {
             : (font.isSystem ? Symbols.smartphone : Symbols.font_download),
         fill: selected ? 1 : 0,
       ),
-      label: Text(
-        font.label,
-        style: AppFonts.sample(font.id, fontSize: 16),
-      ),
+      label: Text(font.label, style: AppFonts.sample(font.id, fontSize: 16)),
     );
 
     if (onDelete == null) {
@@ -357,12 +354,11 @@ class _FontSizeControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDefault = (scale - AppFonts.defaultScale).abs() < 0.001;
-    return Container(
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
-      ),
+      depth: 6,
       child: Column(
         children: [
           Row(
@@ -378,9 +374,8 @@ class _FontSizeControl extends StatelessWidget {
                     value: AppFonts.clampScale(scale),
                     min: AppFonts.minScale,
                     max: AppFonts.maxScale,
-                    divisions:
-                        ((AppFonts.maxScale - AppFonts.minScale) / 0.05)
-                            .round(),
+                    divisions: ((AppFonts.maxScale - AppFonts.minScale) / 0.05)
+                        .round(),
                     onChanged: onChanged,
                     onChangeEnd: onChangeEnd,
                   ),

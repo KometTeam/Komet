@@ -23,6 +23,8 @@ import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
 import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
+import 'core/config/app_pill_gradient.dart';
+import 'core/config/app_visual_style.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
@@ -94,6 +96,8 @@ void main() async {
   final cacheExtentFuture = AppCacheExtent.load();
   final themeModeFuture = AppThemeModeConfig.load();
   final amoledFuture = AppAmoled.load();
+  final pillGradientFuture = AppPillGradient.load();
+  final visualStyleFuture = AppVisualStyle.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
@@ -126,6 +130,8 @@ void main() async {
   AppCacheExtent.current.value = await cacheExtentFuture;
   AppThemeModeConfig.current.value = await themeModeFuture;
   AppAmoled.current.value = await amoledFuture;
+  AppPillGradient.current.value = await pillGradientFuture;
+  AppVisualStyle.current.value = await visualStyleFuture;
   AppThemeSchedule.current.value = await themeScheduleFuture;
   AppMessageActionsStyle.current.value = await messageActionsFuture;
   AppSwipeBackDesktop.current.value = await swipeBackFuture;

@@ -6,6 +6,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/format.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/swipe_route.dart';
 import '../chats/chat_screen.dart';
@@ -215,12 +216,11 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
           Expanded(
             child: GestureDetector(
               onTap: actions[i].onTap,
-              child: Container(
+              child: GlossyPill(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(14),
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                depth: 6,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -324,24 +324,25 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
 
     if (rows.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0)
-              Divider(
-                height: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.3),
-              ),
-            rows[i],
+      depth: 6,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.3),
+                ),
+              rows[i],
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

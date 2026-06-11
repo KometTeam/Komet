@@ -14,6 +14,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 
 enum _EnvState { loading, notConfigured, ready }
@@ -656,16 +657,11 @@ class _CornerAction extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
+        child: GlossyPill(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-          ),
+          depth: 6,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -855,15 +851,10 @@ class _CloudFileCard extends StatelessWidget {
       onTap: onTap,
       child: AspectRatio(
         aspectRatio: 1.0,
-        child: Container(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-          ),
+        child: GlossyPill(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          depth: 6,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

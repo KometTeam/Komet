@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/utils/haptics.dart';
+import '../../widgets/glossy_pill.dart';
 
 class MessageActionsScreen extends StatelessWidget {
   const MessageActionsScreen({super.key});
@@ -52,12 +53,12 @@ class _StyleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-        child: Column(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      depth: 6,
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -97,7 +98,6 @@ class _StyleCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }

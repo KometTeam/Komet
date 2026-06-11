@@ -20,6 +20,7 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/utils/format.dart';
+import '../../widgets/glossy_pill.dart';
 
 const Color _kEndRed = Color(0xFFE5484D);
 const Color _kAcceptGreen = Color(0xFF2EC36B);
@@ -283,6 +284,11 @@ class _CallScreenState extends State<CallScreen>
   @override
   Widget build(BuildContext context) {
     final cs = _darkScheme(context);
+    final avatar = _buildAvatar(cs);
+    final name = _buildName(cs);
+    final status = _buildStatus(cs);
+    final peerBar = _peerStateBar(cs);
+    final controls = _buildControls(cs);
 
     return Theme(
       data: Theme.of(context).copyWith(colorScheme: cs),
@@ -296,16 +302,29 @@ class _CallScreenState extends State<CallScreen>
           backgroundColor: cs.surface,
           body: AnimatedBuilder(
             animation: _videoController,
-            builder: (context, _) => _buildBody(cs),
+            builder: (context, _) => _buildBody(
+              cs,
+              avatar: avatar,
+              name: name,
+              status: status,
+              peerBar: peerBar,
+              controls: controls,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildBody(ColorScheme cs) {
+  Widget _buildBody(
+    ColorScheme cs, {
+    required Widget avatar,
+    required Widget name,
+    required Widget status,
+    required Widget? peerBar,
+    required Widget controls,
+  }) {
     final t = Curves.easeInOut.transform(_videoController.value);
-    final peerBar = _peerStateBar(cs);
     final showVideo = t > 0.001 && _remoteRenderer.srcObject != null;
 
     return Stack(
@@ -351,17 +370,17 @@ class _CallScreenState extends State<CallScreen>
             children: [
               _buildTopBar(cs, t),
               const Spacer(flex: 2),
-              _collapse(t, _buildAvatar(cs)),
+              _collapse(t, avatar),
               SizedBox(height: 36 * (1 - t)),
-              _collapse(t, _buildName(cs)),
+              _collapse(t, name),
               SizedBox(height: 12 * (1 - t)),
-              _collapse(t, _buildStatus(cs)),
+              _collapse(t, status),
               if (peerBar != null) ...[
                 SizedBox(height: 14 * (1 - t)),
                 _collapse(t, peerBar),
               ],
               const Spacer(flex: 5),
-              _buildControls(cs),
+              controls,
               const SizedBox(height: 24),
             ],
           ),
@@ -479,12 +498,11 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _statePill(ColorScheme cs, IconData icon, String label) {
-    return Container(
+    return GlossyPill(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(100),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(100),
-      ),
+      depth: 5,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -763,15 +781,13 @@ class _CallButton extends StatelessWidget {
         SizedBox(
           width: 62,
           height: 62,
-          child: Material(
+          child: GlossyPill(
             color: background,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onTap,
-              child: Center(
-                child: Icon(icon, color: foreground, size: 26, fill: 1),
-              ),
+            borderRadius: BorderRadius.circular(31),
+            onTap: onTap,
+            depth: 9,
+            child: Center(
+              child: Icon(icon, color: foreground, size: 26, fill: 1),
             ),
           ),
         ),

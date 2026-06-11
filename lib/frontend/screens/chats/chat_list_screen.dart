@@ -10,6 +10,7 @@ import 'chat_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
@@ -1228,43 +1229,44 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
-                            child: Container(
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: cs.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(50),
-                              ),
+                            child: GlossyPill(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(50),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                               ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Symbols.search,
-                                    color: cs.outline,
-                                    size: 20,
-                                    weight: 400,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: TextField(
-                                      style: TextStyle(
-                                        color: cs.onSurface,
-                                        fontSize: 15,
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Поиск',
-                                        hintStyle: TextStyle(
-                                          color: cs.outline,
+                              depth: 6,
+                              child: SizedBox(
+                                height: 44,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Symbols.search,
+                                      color: cs.outline,
+                                      size: 20,
+                                      weight: 400,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: TextField(
+                                        style: TextStyle(
+                                          color: cs.onSurface,
                                           fontSize: 15,
                                         ),
-                                        border: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero,
+                                        decoration: InputDecoration(
+                                          hintText: 'Поиск',
+                                          hintStyle: TextStyle(
+                                            color: cs.outline,
+                                            fontSize: 15,
+                                          ),
+                                          border: InputBorder.none,
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.zero,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1805,18 +1807,25 @@ class _ChatListScreenState extends State<ChatListScreen>
                           Positioned(
                             right: 20,
                             bottom: bottomInset + 90,
-                            child: FloatingActionButton(
-                              onPressed: _toggleFab,
-                              backgroundColor: cs.primaryContainer,
-                              elevation: 4,
-                              shape: const CircleBorder(),
-                              child: Transform.rotate(
-                                angle: val * (pi / 4),
-                                child: Icon(
-                                  Symbols.add,
-                                  color: cs.onPrimaryContainer,
-                                  size: 28,
-                                  weight: 400,
+                            child: GlossyPill(
+                              onTap: _toggleFab,
+                              color: cs.primaryContainer,
+                              borderRadius: BorderRadius.circular(28),
+                              elevated: true,
+                              depth: 12,
+                              child: SizedBox(
+                                width: 56,
+                                height: 56,
+                                child: Center(
+                                  child: Transform.rotate(
+                                    angle: val * (pi / 4),
+                                    child: Icon(
+                                      Symbols.add,
+                                      color: cs.onPrimaryContainer,
+                                      size: 28,
+                                      weight: 400,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -2025,20 +2034,20 @@ class _ChatListScreenState extends State<ChatListScreen>
           );
         }
       },
-      child: Container(
-        alignment: Alignment.center,
+      child: GlossyPill(
+        color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(50),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(50),
-        ),
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: isSelected ? cs.onPrimaryContainer : cs.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
+        depth: 4,
+        child: Center(
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? cs.onPrimaryContainer : cs.primary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -2372,38 +2381,27 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   Widget _buildFabMenuItem(IconData icon, String title, {VoidCallback? onTap}) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    return SizedBox(
       width: 220,
-      decoration: BoxDecoration(
+      child: GlossyPill(
+        onTap: onTap,
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(100),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Icon(icon, color: cs.onSurface, size: 22),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+        elevated: true,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: cs.onSurface, size: 22),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

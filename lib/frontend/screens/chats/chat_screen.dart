@@ -32,7 +32,9 @@ import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
+import '../../../core/config/app_visual_style.dart';
 import '../../../models/attachment.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/theme_reveal.dart';
 import '../../widgets/message_actions_overlay.dart';
@@ -172,6 +174,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     super.initState();
     _messageController.addListener(_onTextChanged);
     _scrollController.addListener(_onScrollForDate);
+    AppVisualStyle.current.addListener(_onVisualStyleChanged);
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -430,6 +433,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void dispose() {
     _messageController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScrollForDate);
+    AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     _floatingDateTimer?.cancel();
     _floatingDateCurved.dispose();
     _floatingDateAnimController.dispose();
@@ -658,6 +662,132 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _otherSeenTime = entry['seen'] as int?;
       _recomputeHeaderStatus();
     } catch (_) {}
+  }
+
+  void _onVisualStyleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  PreferredSizeWidget _materialAppBar(ColorScheme cs) {
+    return PreferredSize(
+      preferredSize: Size.fromHeight(kToolbarHeight),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatInfoScreen(
+              chatId: widget.chatId,
+              name: widget.name,
+              imageUrl: widget.imageUrl,
+              chatType: widget.chatType,
+            ),
+          ),
+        ),
+        child: AppBar(
+          backgroundColor: cs.surfaceContainerHigh,
+          foregroundColor: cs.onSurface,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          iconTheme: IconThemeData(color: cs.onSurface),
+          leading: IconButton(
+            icon: Icon(
+              widget.embedded ? Symbols.close : Symbols.arrow_back,
+              weight: 400,
+            ),
+            onPressed: () {
+              if (widget.embedded) {
+                widget.onClose?.call();
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          titleSpacing: 0,
+          title: Row(
+            children: [
+              if (widget.imageUrl.isNotEmpty)
+                CircleAvatar(
+                  radius: 18,
+                  backgroundImage: CachedNetworkImageProvider(
+                    widget.imageUrl,
+                    maxWidth: 144,
+                    maxHeight: 144,
+                  ),
+                )
+              else
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(
+                    widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: cs.onPrimaryContainer,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            widget.name,
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Outfit',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (chat?.isOfficial ?? false) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Symbols.verified,
+                            color: cs.primary,
+                            size: 16,
+                            weight: 600,
+                            fill: 1,
+                          ),
+                        ],
+                      ],
+                    ),
+                    ValueListenableBuilder<String>(
+                      valueListenable: _headerStatusNotifier,
+                      builder: (context, status, _) => Text(
+                        status,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Symbols.call, weight: 400),
+              onPressed: _startCall,
+            ),
+            IconButton(
+              icon: const Icon(Symbols.more_vert, weight: 400),
+              onPressed: () {},
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _startCall() async {
@@ -1127,127 +1257,170 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             ),
             child: Scaffold(
               backgroundColor: cs.surface,
-              appBar: PreferredSize(
-                preferredSize: Size.fromHeight(kToolbarHeight),
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatInfoScreen(
-                        chatId: widget.chatId,
-                        name: widget.name,
-                        imageUrl: widget.imageUrl,
-                        chatType: widget.chatType,
-                      ),
-                    ),
-                  ),
-                  child: AppBar(
-                    backgroundColor: cs.surfaceContainerHigh,
-                    foregroundColor: cs.onSurface,
-                    elevation: 0,
-                    surfaceTintColor: Colors.transparent,
-                    iconTheme: IconThemeData(color: cs.onSurface),
-                    leading: IconButton(
-                      icon: Icon(
-                        widget.embedded ? Symbols.close : Symbols.arrow_back,
-                        weight: 400,
-                      ),
-                      onPressed: () {
-                        if (widget.embedded) {
-                          widget.onClose?.call();
-                        } else {
-                          Navigator.pop(context);
-                        }
-                      },
-                    ),
-                    titleSpacing: 0,
-                    title: Row(
-                      children: [
-                        if (widget.imageUrl.isNotEmpty)
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundImage: CachedNetworkImageProvider(
-                              widget.imageUrl,
-                              maxWidth: 144,
-                              maxHeight: 144,
+              appBar: AppVisualStyle.current.value == VisualStyle.glossy
+                  ? AppBar(
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                toolbarHeight: 76,
+                automaticallyImplyLeading: false,
+                titleSpacing: 0,
+                title: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: GlossyPill(
+                          onTap: () {
+                            if (widget.embedded) {
+                              widget.onClose?.call();
+                            } else {
+                              Navigator.pop(context);
+                            }
+                          },
+                          child: Center(
+                            child: Icon(
+                              widget.embedded
+                                  ? Symbols.close
+                                  : Symbols.arrow_back,
+                              color: cs.onSurface,
+                              weight: 500,
+                              size: 24,
                             ),
-                          )
-                        else
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundColor: cs.primaryContainer,
-                            child: Text(
-                              widget.name.isNotEmpty
-                                  ? widget.name[0].toUpperCase()
-                                  : '?',
-                              style: TextStyle(
-                                color: cs.onPrimaryContainer,
-                                fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GlossyPill(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatInfoScreen(
+                                chatId: widget.chatId,
+                                name: widget.name,
+                                imageUrl: widget.imageUrl,
+                                chatType: widget.chatType,
                               ),
                             ),
                           ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
+                          child: Row(
                             children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      widget.name,
-                                      style: TextStyle(
-                                        color: cs.onSurface,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        fontFamily: 'Outfit',
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                              if (widget.imageUrl.isNotEmpty)
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundImage: CachedNetworkImageProvider(
+                                    widget.imageUrl,
+                                    maxWidth: 144,
+                                    maxHeight: 144,
+                                  ),
+                                )
+                              else
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: cs.primaryContainer,
+                                  child: Text(
+                                    widget.name.isNotEmpty
+                                        ? widget.name[0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                      color: cs.onPrimaryContainer,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Outfit',
                                     ),
                                   ),
-                                  if (chat?.isOfficial ?? false) ...[
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Symbols.verified,
-                                      color: cs.primary,
-                                      size: 16,
-                                      weight: 600,
-                                      fill: 1,
+                                ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            widget.name,
+                                            style: TextStyle(
+                                              color: cs.onSurface,
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w600,
+                                              fontFamily: 'Outfit',
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (chat?.isOfficial ?? false) ...[
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            Symbols.verified,
+                                            color: cs.primary,
+                                            size: 16,
+                                            weight: 600,
+                                            fill: 1,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    ValueListenableBuilder<String>(
+                                      valueListenable: _headerStatusNotifier,
+                                      builder: (context, status, _) => Text(
+                                        status,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: cs.onSurfaceVariant,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
                                     ),
                                   ],
-                                ],
-                              ),
-                              ValueListenableBuilder<String>(
-                                valueListenable: _headerStatusNotifier,
-                                builder: (context, status, _) => Text(
-                                  status,
-                                  style: TextStyle(
-                                    color: cs.onSurfaceVariant,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w400,
-                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Symbols.call, weight: 400),
-                        onPressed: _startCall,
                       ),
-                      IconButton(
-                        icon: const Icon(Symbols.more_vert, weight: 400),
-                        onPressed: () {},
+                      const SizedBox(width: 8),
+                      GlossyPill(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: SizedBox(
+                          height: 56,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  Symbols.call,
+                                  weight: 500,
+                                  color: cs.onSurface,
+                                ),
+                                onPressed: _startCall,
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Symbols.more_vert,
+                                  weight: 500,
+                                  color: cs.onSurface,
+                                ),
+                                onPressed: () {},
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
+                  )
+                  : _materialAppBar(cs),
               body: Column(
                 children: [
                   Expanded(
@@ -1531,22 +1704,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-          child: GestureDetector(
+          child: GlossyPill(
             onTap: () {},
-            child: Container(
+            color: Color.alphaBlend(
+              cs.surfaceContainerHighest.withValues(alpha: 0.92),
+              cs.surface,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            depth: 8,
+            borderSide: BorderSide(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.5,
+            ),
+            child: SizedBox(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: Color.alphaBlend(
-                  cs.surfaceContainerHighest.withValues(alpha: 0.92),
-                  cs.surface,
-                ),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: cs.outlineVariant.withValues(alpha: 0.5),
-                  width: 0.5,
-                ),
-              ),
               child: Center(
                 child: Text(
                   'Отключить уведомления',
@@ -1576,19 +1748,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   minHeight: 54,
                   maxHeight: 180,
                 ),
-                decoration: BoxDecoration(
+                child: GlossyPill(
                   color: Color.alphaBlend(
                     cs.surfaceContainerHighest.withValues(alpha: 0.92),
                     cs.surface,
                   ),
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
+                  depth: 8,
+                  borderSide: BorderSide(
                     color: cs.outlineVariant.withValues(alpha: 0.5),
                     width: 0.5,
                   ),
-                ),
-                clipBehavior: Clip.hardEdge,
-                child: Stack(
+                  child: Stack(
                   alignment: Alignment.center,
                   children: [
                     AnimatedBuilder(
@@ -1693,6 +1864,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
+                ),
               ),
             ),
             AnimatedBuilder(
@@ -1725,23 +1897,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     },
                     child: ValueListenableBuilder<bool>(
                       valueListenable: _hasText,
-                      builder: (context, hasText, _) => Container(
-                        width: 54,
-                        height: 54,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: hasText
-                              ? cs.primary
-                              : cs.surfaceContainerHighest,
-                          shape: BoxShape.circle,
-                        ),
-                        child: GestureDetector(
-                          onTap: hasText ? _sendMessage : null,
-                          child: Icon(
-                            hasText ? Symbols.send : Symbols.mic,
-                            color: hasText ? cs.onPrimary : cs.onSurface,
-                            size: 24,
-                            weight: 400,
+                      builder: (context, hasText, _) => GlossyPill(
+                        color: hasText
+                            ? cs.primary
+                            : cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(27),
+                        onTap: hasText ? _sendMessage : null,
+                        depth: 8,
+                        child: SizedBox(
+                          width: 54,
+                          height: 54,
+                          child: Center(
+                            child: Icon(
+                              hasText ? Symbols.send : Symbols.mic,
+                              color: hasText ? cs.onPrimary : cs.onSurface,
+                              size: 24,
+                              weight: 400,
+                            ),
                           ),
                         ),
                       ),

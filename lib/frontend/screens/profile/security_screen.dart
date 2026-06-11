@@ -7,6 +7,7 @@ import '../../../backend/modules/account.dart'
 import '../../../core/storage/app_database.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'password_entry_screen.dart';
 
@@ -238,11 +239,10 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   Widget _buildTopSection(ColorScheme cs) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Column(
         children: [
           _buildPasswordRow(cs),
@@ -336,11 +336,10 @@ class _SecurityScreenState extends State<SecurityScreen>
 
   Widget _buildPrivacySettings(ColorScheme cs) {
     final isSafeMode = _privacyConfig?.safeMode ?? false;
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Column(
         children: [
           Padding(
@@ -725,11 +724,10 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   Widget _buildConfidentialSection(ColorScheme cs) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Column(
         children: [
           _buildSwitchRow(
@@ -771,11 +769,10 @@ class _SecurityScreenState extends State<SecurityScreen>
 
   Widget _buildBlacklistSection(ColorScheme cs) {
     final count = _blockedContacts.length;
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Material(
         color: Colors.transparent,
         child: InkWell(

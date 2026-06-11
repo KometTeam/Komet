@@ -10,6 +10,7 @@ import '../../../core/utils/format.dart';
 import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show SessionInfo;
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'web_qr_scan_screen.dart';
 
@@ -352,14 +353,14 @@ class _DevicesScreenState extends State<DevicesScreen>
   }
 
   Widget _buildPromoCard(BuildContext context, ColorScheme cs) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GlossyPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(24),
-      ),
-      child: Center(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        depth: 6,
+        child: Center(
         child: Column(
           children: [
             Container(
@@ -414,19 +415,20 @@ class _DevicesScreenState extends State<DevicesScreen>
             ),
           ],
         ),
+        ),
       ),
     );
   }
 
   Widget _buildDevicesList(BuildContext context, ColorScheme cs) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GlossyPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        depth: 6,
+        child: Column(
         children: [
           if (_isLoading)
             ...List.generate(5, (index) => _buildShimmerItem(cs))
@@ -475,6 +477,7 @@ class _DevicesScreenState extends State<DevicesScreen>
             ),
           ],
         ],
+        ),
       ),
     );
   }
@@ -671,15 +674,16 @@ class _DevicesScreenState extends State<DevicesScreen>
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutQuart,
             child: isExpanded && details != null
-                ? Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: GlossyPill(
                       color: cs.onSurface.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Stack(
+                      padding: const EdgeInsets.all(12),
+                      depth: 6,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Stack(
                       children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -740,6 +744,8 @@ class _DevicesScreenState extends State<DevicesScreen>
                           ),
                         ),
                       ],
+                        ),
+                      ),
                     ),
                   )
                 : const SizedBox(width: double.infinity, height: 0),

@@ -39,6 +39,10 @@ class CallSession {
   bool _peerMuted = false;
   bool _peerVideo = false;
   bool _mediaConnected = false;
+  bool _remoteDescSet = false;
+  bool _ownRemoteStream = false;
+  final List<RTCIceCandidate> _pendingCandidates = [];
+  Future<void> _tail = Future.value();
 
   final CallInfo info = CallInfo();
 
@@ -81,9 +85,13 @@ class CallSession {
     info.region = ws2Config.uri.host;
     final signaling = Ws2Signaling(ws2Config);
     _signaling = signaling;
-    signaling.notifications.listen(_onNotification, onError: (_) => _end());
+    signaling.notifications.listen(_enqueue, onError: (_) => _end());
     signaling.done.then((_) => _end());
     await signaling.connect();
+  }
+
+  void _enqueue(Map<String, dynamic> msg) {
+    _tail = _tail.then((_) => _onNotification(msg)).catchError((_) {});
   }
 
   Future<void> _onNotification(Map<String, dynamic> msg) async {
@@ -195,7 +203,10 @@ class CallSession {
 
   Future<void> _pushRemoteTrack(MediaStreamTrack track) async {
     var stream = _remoteStreamRef;
-    stream ??= await createLocalMediaStream('komet_remote');
+    if (stream == null) {
+      stream = await createLocalMediaStream('komet_remote');
+      _ownRemoteStream = true;
+    }
     _remoteStreamRef = stream;
     if (!stream.getTracks().any((t) => t.id == track.id)) {
       try {
@@ -322,6 +333,8 @@ class CallSession {
       }
 
       await pc.setRemoteDescription(RTCSessionDescription(desc, type));
+      _remoteDescSet = true;
+      await _flushCandidates();
 
       if (type == 'offer') {
         final answer = await pc.createAnswer({});
@@ -348,11 +361,30 @@ class CallSession {
     final candidate = data['candidate'];
     if (candidate is Map) {
       _applyRemoteCandidate(candidate['candidate']);
-      await pc.addCandidate(RTCIceCandidate(
+      final ice = RTCIceCandidate(
         candidate['candidate'] as String?,
         candidate['sdpMid'] as String?,
         candidate['sdpMLineIndex'] as int?,
-      ));
+      );
+      if (_remoteDescSet) {
+        try {
+          await pc.addCandidate(ice);
+        } catch (_) {}
+      } else {
+        _pendingCandidates.add(ice);
+      }
+    }
+  }
+
+  Future<void> _flushCandidates() async {
+    final pc = _pc;
+    if (pc == null || _pendingCandidates.isEmpty) return;
+    final pending = List<RTCIceCandidate>.from(_pendingCandidates);
+    _pendingCandidates.clear();
+    for (final c in pending) {
+      try {
+        await pc.addCandidate(c);
+      } catch (_) {}
     }
   }
 
@@ -411,6 +443,11 @@ class CallSession {
     }
     await _localStream?.dispose();
     await _pc?.close();
+    if (_ownRemoteStream) {
+      try {
+        await _remoteStreamRef?.dispose();
+      } catch (_) {}
+    }
     await _signaling?.close();
     if (!_state.isClosed) await _state.close();
     if (!_remoteStream.isClosed) await _remoteStream.close();

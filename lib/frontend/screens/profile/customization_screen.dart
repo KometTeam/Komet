@@ -3,6 +3,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/utils/haptics.dart';
+import '../../widgets/glossy_pill.dart';
 import 'app_icon_screen.dart';
 import 'appearance_screen.dart';
 import 'font_settings_screen.dart';
@@ -118,18 +119,16 @@ class _CategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      depth: 6,
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
                 height: 48,
                 decoration: BoxDecoration(
                   color: cs.primaryContainer,
@@ -172,8 +171,6 @@ class _CategoryCard extends StatelessWidget {
               Icon(Symbols.chevron_right, color: cs.outline, size: 22),
             ],
           ),
-        ),
-      ),
     );
   }
 }

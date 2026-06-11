@@ -6,9 +6,12 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_bubble_behavior.dart';
 import '../../../core/config/app_bubble_shape.dart';
+import '../../../core/config/app_pill_gradient.dart';
+import '../../../core/config/app_visual_style.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
+import '../../widgets/glossy_pill.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -83,10 +86,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
-        titleText: 'Внешний вид',
-        backgroundColor: cs.surface,
-      ),
+      appBar: AppBarM3E(titleText: 'Внешний вид', backgroundColor: cs.surface),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -107,8 +107,121 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             _BubbleShapeCard(onChanged: _onStyleChanged),
             const SizedBox(height: 12),
             _BubbleBehaviorCard(onChanged: _onBehaviorChanged),
+            const SizedBox(height: 12),
+            const _VisualStyleCard(),
+            const SizedBox(height: 12),
+            const _GradientToggleCard(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _VisualStyleCard extends StatelessWidget {
+  const _VisualStyleCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Визуал',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Material You или объёмные Glossy-капсулы',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<VisualStyle>(
+            valueListenable: AppVisualStyle.current,
+            builder: (context, current, _) {
+              return SegmentedButton<VisualStyle>(
+                segments: const [
+                  ButtonSegment(
+                    value: VisualStyle.materialYou,
+                    label: Text('Material You'),
+                  ),
+                  ButtonSegment(
+                    value: VisualStyle.glossy,
+                    label: Text('Glossy'),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppVisualStyle.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GradientToggleCard extends StatelessWidget {
+  const _GradientToggleCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+      depth: 6,
+      child: Row(
+        children: [
+          Icon(Symbols.blur_on, color: cs.onSurface, size: 24, weight: 500),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Градиент',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Объём и блики в Glossy-капсулах',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: AppPillGradient.current,
+            builder: (context, value, _) => Switch(
+              value: value,
+              onChanged: (v) {
+                Haptics.selection();
+                AppPillGradient.save(v);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -162,9 +275,9 @@ class _PreviewSectionState extends State<_PreviewSection> {
           valueListenable: widget.color,
           builder: (context, color, _) {
             return Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: _schemeFor(color, brightness),
-              ),
+              data: Theme.of(
+                context,
+              ).copyWith(colorScheme: _schemeFor(color, brightness)),
               child: const _ChatPreview(),
             );
           },
@@ -204,25 +317,23 @@ class _ChatPreview extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return ListenableBuilder(
-      listenable: Listenable.merge(
-        [AppBubbleShape.current, AppBubbleBehavior.current],
-      ),
+      listenable: Listenable.merge([
+        AppBubbleShape.current,
+        AppBubbleBehavior.current,
+      ]),
       builder: (context, _) {
         final style = AppBubbleShape.current.value;
         final behavior = AppBubbleBehavior.current.value;
-        return Container(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
-          ),
+        return GlossyPill(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(28),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          depth: 6,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (var i = 0; i < _messages.length; i++) ...[
-                if (i > 0)
-                  SizedBox(height: _messages[i].isTop ? 8 : 2),
+                if (i > 0) SizedBox(height: _messages[i].isTop ? 8 : 2),
                 _PreviewBubble(
                   text: _messages[i].text,
                   isMe: _messages[i].isMe,
@@ -313,10 +424,10 @@ class _ColorPickerCard extends StatelessWidget {
   Widget _buildBody(ColorScheme cs, Color col, bool sys) {
     final swatchColor = sys ? cs.primary : col;
 
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
-      clipBehavior: Clip.antiAlias,
+      depth: 6,
       child: Column(
         children: [
           InkWell(
@@ -385,10 +496,7 @@ class _ColorPickerCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _HueStripPicker(
-                          color: col,
-                          onChanged: onColorChanged,
-                        ),
+                        _HueStripPicker(color: col, onChanged: onColorChanged),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
@@ -402,11 +510,17 @@ class _ColorPickerCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Symbols.auto_awesome, size: 18, weight: 500),
+                                Icon(
+                                  Symbols.auto_awesome,
+                                  size: 18,
+                                  weight: 500,
+                                ),
                                 const SizedBox(width: 8),
-                                Text(sys
-                                    ? 'Системный цвет активен'
-                                    : 'Сбросить на системный'),
+                                Text(
+                                  sys
+                                      ? 'Системный цвет активен'
+                                      : 'Сбросить на системный',
+                                ),
                               ],
                             ),
                           ),
@@ -431,53 +545,52 @@ class _BubbleShapeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Форма сообщения',
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Форма сообщения',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Скругление углов пузырей',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            ValueListenableBuilder<BubbleStyle>(
-              valueListenable: AppBubbleShape.current,
-              builder: (context, current, _) {
-                return SegmentedButton<BubbleStyle>(
-                  segments: const [
-                    ButtonSegment(
-                      value: BubbleStyle.mobile,
-                      label: Text('TG Mobile'),
-                      icon: Icon(Symbols.smartphone),
-                    ),
-                    ButtonSegment(
-                      value: BubbleStyle.desktop,
-                      label: Text('TG Desktop'),
-                      icon: Icon(Symbols.desktop_windows),
-                    ),
-                  ],
-                  selected: {current},
-                  onSelectionChanged: (set) {
-                    if (set.isNotEmpty) onChanged(set.first);
-                  },
-                );
-              },
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Скругление углов пузырей',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<BubbleStyle>(
+            valueListenable: AppBubbleShape.current,
+            builder: (context, current, _) {
+              return SegmentedButton<BubbleStyle>(
+                segments: const [
+                  ButtonSegment(
+                    value: BubbleStyle.mobile,
+                    label: Text('TG Mobile'),
+                    icon: Icon(Symbols.smartphone),
+                  ),
+                  ButtonSegment(
+                    value: BubbleStyle.desktop,
+                    label: Text('TG Desktop'),
+                    icon: Icon(Symbols.desktop_windows),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) onChanged(set.first);
+                },
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -492,53 +605,52 @@ class _BubbleBehaviorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Поведение сообщения',
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Поведение сообщения',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Меняется ли форма пузыря по соседям в группе',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            ValueListenableBuilder<BubbleBehavior>(
-              valueListenable: AppBubbleBehavior.current,
-              builder: (context, current, _) {
-                return SegmentedButton<BubbleBehavior>(
-                  segments: const [
-                    ButtonSegment(
-                      value: BubbleBehavior.mutable,
-                      label: Text('Изменяемая'),
-                      icon: Icon(Symbols.auto_fix),
-                    ),
-                    ButtonSegment(
-                      value: BubbleBehavior.immutable,
-                      label: Text('Неизменяемая'),
-                      icon: Icon(Symbols.lock),
-                    ),
-                  ],
-                  selected: {current},
-                  onSelectionChanged: (set) {
-                    if (set.isNotEmpty) onChanged(set.first);
-                  },
-                );
-              },
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Меняется ли форма пузыря по соседям в группе',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<BubbleBehavior>(
+            valueListenable: AppBubbleBehavior.current,
+            builder: (context, current, _) {
+              return SegmentedButton<BubbleBehavior>(
+                segments: const [
+                  ButtonSegment(
+                    value: BubbleBehavior.mutable,
+                    label: Text('Изменяемая'),
+                    icon: Icon(Symbols.auto_fix),
+                  ),
+                  ButtonSegment(
+                    value: BubbleBehavior.immutable,
+                    label: Text('Неизменяемая'),
+                    icon: Icon(Symbols.lock),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) onChanged(set.first);
+                },
+              );
+            },
+          ),
+        ],
       ),
     );
   }

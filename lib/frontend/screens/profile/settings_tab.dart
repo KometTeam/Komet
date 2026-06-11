@@ -10,6 +10,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -631,11 +632,10 @@ class _SettingsTabState extends State<SettingsTab> {
     ColorScheme cs, {
     required List<_SettingsItem> items,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Column(
         children: List.generate(items.length, (index) {
           final item = items[index];

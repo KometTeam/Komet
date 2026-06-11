@@ -4,6 +4,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/utils/haptics.dart';
 import '../../widgets/confirm_dialog.dart';
+import '../../widgets/glossy_pill.dart';
 
 class PerformanceScreen extends StatefulWidget {
   const PerformanceScreen({super.key});
@@ -100,55 +101,54 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: [
-            Material(
+            GlossyPill(
               color: cs.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(28),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Кеш сообщений',
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+              depth: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Кеш сообщений',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Сколько пикселей сообщений держать построенными за пределами видимой области.',
+                    style: TextStyle(color: hint, fontSize: 13, height: 1.3),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Текущий cacheExtent: ${_value.round()}',
+                    style: TextStyle(color: hint, fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Slider(
+                    value: _value,
+                    min: AppCacheExtent.min,
+                    max: AppCacheExtent.max,
+                    onChanged: _onChanged,
+                    onChangeEnd: _onChangeEnd,
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Меньше потребление',
+                        style: TextStyle(color: hint, fontSize: 11),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Сколько пикселей сообщений держать построенными за пределами видимой области.',
-                      style: TextStyle(color: hint, fontSize: 13, height: 1.3),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Текущий cacheExtent: ${_value.round()}',
-                      style: TextStyle(color: hint, fontSize: 12),
-                    ),
-                    const SizedBox(height: 4),
-                    Slider(
-                      value: _value,
-                      min: AppCacheExtent.min,
-                      max: AppCacheExtent.max,
-                      onChanged: _onChanged,
-                      onChangeEnd: _onChangeEnd,
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Меньше потребление',
-                          style: TextStyle(color: hint, fontSize: 11),
-                        ),
-                        Text(
-                          'Больше FPS',
-                          style: TextStyle(color: hint, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      Text(
+                        'Больше FPS',
+                        style: TextStyle(color: hint, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
