@@ -16,6 +16,7 @@ const List<PillNavItem> _navItems = [
   PillNavItem(icon: Symbols.image, label: 'Галерея'),
   PillNavItem(icon: Symbols.description, label: 'Файл'),
   PillNavItem(icon: Symbols.location_on, label: 'Геопозиция'),
+  PillNavItem(icon: Symbols.bar_chart, label: 'Опрос'),
   PillNavItem(icon: Symbols.person, label: 'Контакт'),
 ];
 
@@ -23,6 +24,9 @@ Future<void> showAttachmentSheet(
   BuildContext context, {
   String? title,
   void Function(List<PickedPhoto> photos, String caption)? onSend,
+  VoidCallback? onPickFile,
+  VoidCallback? onShareLocation,
+  VoidCallback? onCreatePoll,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -30,15 +34,31 @@ Future<void> showAttachmentSheet(
     requestFocus: false,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    builder: (_) => AttachmentSheet(title: title, onSend: onSend),
+    builder: (_) => AttachmentSheet(
+      title: title,
+      onSend: onSend,
+      onPickFile: onPickFile,
+      onShareLocation: onShareLocation,
+      onCreatePoll: onCreatePoll,
+    ),
   );
 }
 
 class AttachmentSheet extends StatefulWidget {
   final String? title;
   final void Function(List<PickedPhoto> photos, String caption)? onSend;
+  final VoidCallback? onPickFile;
+  final VoidCallback? onShareLocation;
+  final VoidCallback? onCreatePoll;
 
-  const AttachmentSheet({super.key, this.title, this.onSend});
+  const AttachmentSheet({
+    super.key,
+    this.title,
+    this.onSend,
+    this.onPickFile,
+    this.onShareLocation,
+    this.onCreatePoll,
+  });
 
   @override
   State<AttachmentSheet> createState() => _AttachmentSheetState();
@@ -253,10 +273,94 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         _KeepAlivePage(
           child: _buildGalleryPage(scrollController, cs, bottomReserve),
         ),
-        _buildPlaceholderPage(cs, bottomReserve),
-        _buildPlaceholderPage(cs, bottomReserve),
+        _buildActionPage(
+          cs,
+          bottomReserve,
+          icon: Symbols.description,
+          title: 'Отправить файл',
+          subtitle: 'Документ, архив или любой другой файл',
+          buttonLabel: 'Выбрать файл',
+          onTap: widget.onPickFile,
+        ),
+        _buildActionPage(
+          cs,
+          bottomReserve,
+          icon: Symbols.location_on,
+          title: 'Поделиться геопозицией',
+          subtitle: 'Отправить ваше текущее местоположение',
+          buttonLabel: 'Отправить геопозицию',
+          onTap: widget.onShareLocation,
+        ),
+        _buildActionPage(
+          cs,
+          bottomReserve,
+          icon: Symbols.bar_chart,
+          title: 'Создать опрос',
+          subtitle: 'Вопрос с вариантами ответа',
+          buttonLabel: 'Создать опрос',
+          onTap: widget.onCreatePoll,
+        ),
         _buildPlaceholderPage(cs, bottomReserve),
       ],
+    );
+  }
+
+  Widget _buildActionPage(
+    ColorScheme cs,
+    double bottomReserve, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String buttonLabel,
+    required VoidCallback? onTap,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomReserve),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 34, color: cs.onPrimaryContainer),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: onTap == null
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        onTap();
+                      },
+                child: Text(buttonLabel),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -544,7 +648,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     _navDragAccumDx += dx;
     final pageT = (_navDragBasePageT + _navDragAccumDx / inactiveWidth).clamp(
       0.0,
-      3.0,
+      (_navItems.length - 1).toDouble(),
     );
     _pageController.jumpTo(pageT * _pageController.position.viewportDimension);
   }
@@ -552,7 +656,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   void _onPillDragEnd() {
     if (!_navDragging) return;
     _navDragging = false;
-    final target = _currentPageT().round().clamp(0, 3);
+    final target = _currentPageT().round().clamp(0, _navItems.length - 1);
     _pageController.animateToPage(
       target,
       duration: _navAnim,

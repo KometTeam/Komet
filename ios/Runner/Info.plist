@@ -64,6 +64,8 @@
 	<string>Камера нужна для съёмки фото и видео в чатах, сканирования QR-кода входа и работы веб-приложений.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Микрофон нужен для записи голосовых сообщений, видео и звонков.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Геолокация нужна, чтобы отправлять ваше текущее местоположение в чатах.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

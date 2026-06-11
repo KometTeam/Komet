@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -15,6 +16,7 @@ import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
+import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
@@ -1849,7 +1851,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       setState(() => _keyboardReserve = keyboard);
       FocusManager.instance.primaryFocus?.unfocus();
     }
-    await showAttachmentSheet(context, title: widget.name, onSend: _sendPhotos);
+    await showAttachmentSheet(
+      context,
+      title: widget.name,
+      onSend: _sendPhotos,
+      onPickFile: _pickAndUploadFile,
+      onShareLocation: _shareLocation,
+      onCreatePoll: _createPoll,
+    );
     if (!mounted || !hadKeyboard) return;
     _messageFocusNode.requestFocus();
     await Future.delayed(const Duration(milliseconds: 350));
@@ -1957,6 +1966,102 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _disposePhotoProgress(tempId);
       }
     }
+  }
+
+  Future<void> _sendAttachMessage(
+    List<MessageAttachment> optimistic,
+    Future<Map<String, dynamic>?> Function() send,
+  ) async {
+    if (_myId == 0) return;
+    final tempId = _nextTempId();
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final tempMessage = CachedMessage(
+      id: tempId,
+      accountId: _myId,
+      chatId: widget.chatId,
+      senderId: _myId,
+      time: now,
+      status: 'sending',
+      attachments: optimistic,
+    );
+    _messages.add(tempMessage);
+    _lastSentId = tempId;
+    _bumpMessages();
+    Haptics.send();
+    _scrollToBottom();
+
+    try {
+      final serverMsg = await send();
+      if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == tempId);
+      if (idx == -1) return;
+      if (serverMsg == null) {
+        _updateFileMessageStatus(tempId, 'error');
+        showCustomNotification(context, 'Ошибка отправки');
+        return;
+      }
+      final real = CachedMessage.fromPushPayload(_myId, widget.chatId, serverMsg);
+      _messages[idx] = real;
+      _bumpMessages();
+      unawaited(_persistOutgoing(real, removeId: tempId));
+    } catch (e) {
+      if (!mounted) return;
+      _updateFileMessageStatus(tempId, 'error');
+      showCustomNotification(context, 'Ошибка: $e');
+    }
+  }
+
+  Future<void> _shareLocation() async {
+    final position = await _resolveCurrentPosition();
+    if (position == null || !mounted) return;
+    final lat = position.latitude;
+    final lon = position.longitude;
+    await _sendAttachMessage(
+      [LocationAttachment(latitude: lat, longitude: lon, zoom: 15)],
+      () => messagesModule.sendLocationMessage(widget.chatId, lat, lon),
+    );
+  }
+
+  Future<Position?> _resolveCurrentPosition() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) showCustomNotification(context, 'Включите геолокацию');
+        return null;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) showCustomNotification(context, 'Нет доступа к геолокации');
+        return null;
+      }
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+    } catch (e) {
+      if (mounted) showCustomNotification(context, 'Не удалось получить геопозицию');
+      return null;
+    }
+  }
+
+  Future<void> _createPoll() async {
+    final draft = await showCreatePollSheet(context);
+    if (draft == null || !mounted) return;
+    await _sendAttachMessage(
+      [PollAttachment(pollId: 0, title: draft.title)],
+      () => messagesModule.sendPollMessage(
+        widget.chatId,
+        draft.title,
+        draft.answers,
+        multiple: draft.multiple,
+        anonymous: draft.anonymous,
+      ),
+    );
   }
 
   Future<String?> _uploadOnePhoto(

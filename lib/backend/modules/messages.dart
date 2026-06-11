@@ -607,6 +607,76 @@ class MessagesModule {
     return null;
   }
 
+  Future<Map<String, dynamic>?> sendLocationMessage(
+    int chatId,
+    double latitude,
+    double longitude, {
+    double zoom = 15,
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {
+            '_type': 'LOCATION',
+            'latitude': latitude,
+            'longitude': longitude,
+            'zoom': zoom,
+          },
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is Map) return Map<String, dynamic>.from(msg);
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> sendPollMessage(
+    int chatId,
+    String title,
+    List<String> answers, {
+    bool multiple = false,
+    bool anonymous = true,
+    bool notify = true,
+  }) async {
+    final settings = (anonymous ? 4 : 0) | (multiple ? 1 : 0);
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {
+            '_type': 'POLL',
+            'title': title,
+            'settings': settings,
+            'answers': [
+              for (final a in answers) {'text': a},
+            ],
+          },
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is Map) return Map<String, dynamic>.from(msg);
+    }
+    return null;
+  }
+
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {
