@@ -587,32 +587,36 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildPillNav() {
-    final geometry = PillNavGeometry.equal(54, _navItems.length);
-    return Align(
+    return LayoutBuilder(
       key: const ValueKey('nav'),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: (_) => _onPillDragStart(),
-        onHorizontalDragUpdate: (d) =>
-            _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
-        onHorizontalDragEnd: (_) => _onPillDragEnd(),
-        onHorizontalDragCancel: _onPillDragEnd,
-        child: AnimatedBuilder(
-          animation: _pageController,
-          builder: (context, _) {
-            final cs = Theme.of(context).colorScheme;
-            return SlidingPillNav(
-              items: _navItems,
-              position: _currentPageT(),
-              geometry: geometry,
-              onTap: _onSectionTap,
-              iconsOnly: true,
-              backgroundColor: _composerColor(cs),
-              borderColor: _composerBorderColor(cs),
-            );
-          },
-        ),
-      ),
+      builder: (context, constraints) {
+        final geometry = PillNavGeometry.fromInnerWidth(
+          constraints.maxWidth - 4,
+          _navItems.length,
+        );
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) => _onPillDragStart(),
+          onHorizontalDragUpdate: (d) =>
+              _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
+          onHorizontalDragEnd: (_) => _onPillDragEnd(),
+          onHorizontalDragCancel: _onPillDragEnd,
+          child: AnimatedBuilder(
+            animation: _pageController,
+            builder: (context, _) {
+              final cs = Theme.of(context).colorScheme;
+              return SlidingPillNav(
+                items: _navItems,
+                position: _currentPageT(),
+                geometry: geometry,
+                onTap: _onSectionTap,
+                backgroundColor: _composerColor(cs),
+                borderColor: _composerBorderColor(cs),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
