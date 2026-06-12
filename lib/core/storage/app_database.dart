@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:komet/core/storage/app_instance.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class ProfileData {
@@ -155,10 +157,34 @@ class AppDatabase {
     return _db!;
   }
 
+  static Future<String> _databasesDir() async {
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      final dir = await getApplicationSupportDirectory();
+      return dir.path;
+    }
+    return getDatabasesPath();
+  }
+
+  static Future<void> _migrateLegacyDb(String target) async {
+    if (AppInstance.isNamed) return;
+    if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) return;
+    try {
+      if (await File(target).exists()) return;
+      final legacy = File(join(await getDatabasesPath(), 'komet.db'));
+      if (legacy.path == target) return;
+      if (await legacy.exists()) {
+        await legacy.copy(target);
+        logger.i('[db] перенёс komet.db -> $target');
+      }
+    } catch (_) {}
+  }
+
   static Future<Database> _open() async {
-    final dbPath = await getDatabasesPath();
+    final dbPath = await _databasesDir();
+    final target = join(dbPath, 'komet${AppInstance.suffix}.db');
+    await _migrateLegacyDb(target);
     return openDatabase(
-      join(dbPath, 'komet.db'),
+      target,
       version: 11,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),

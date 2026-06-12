@@ -11,6 +11,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
+import 'core/storage/app_instance.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_bubble_behavior.dart';
@@ -78,6 +79,9 @@ Future<Locale> _loadInitialLocale() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (AppInstance.isNamed) {
+    SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
+  }
   await AppDatabase.init();
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {

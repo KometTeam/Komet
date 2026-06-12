@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
@@ -33,6 +34,14 @@ class CallParticipant {
     this.screenSharing = false,
     this.handRaised = false,
   });
+}
+
+class CallChatMessage {
+  final String text;
+  final bool mine;
+  final DateTime time;
+
+  CallChatMessage({required this.text, required this.mine, required this.time});
 }
 
 class CallSession {
@@ -89,6 +98,17 @@ class CallSession {
 
   static const String _probeQuestion = 'AreYouKomet?';
   static const String _probeAnswer = 'YesImKomet😎';
+
+  final List<CallChatMessage> _chat = [];
+  final _chatController = StreamController<CallChatMessage>.broadcast();
+  final _gameController = StreamController<Map<String, dynamic>>.broadcast();
+
+  List<CallChatMessage> get chatLog => List.unmodifiable(_chat);
+  Stream<CallChatMessage> get chatMessages => _chatController.stream;
+  Stream<Map<String, dynamic>> get gameMessages => _gameController.stream;
+
+  int get selfUserId => ws2Config.userId;
+  int? get peerUserId => _peerId;
 
   bool get localVideo => _localVideo;
   bool get localScreen => _localScreen;
@@ -160,6 +180,7 @@ class CallSession {
   Future<void> _sampleLevels() async {
     final pc = _pc;
     if (pc == null || _ended) return;
+    if (!_mediaConnected || _current != CallSessionState.active) return;
 
     var local = 0.0;
     var remote = 0.0;
@@ -571,6 +592,21 @@ class CallSession {
   void _onProbeMessage(RTCDataChannel channel, RTCDataChannelMessage message) {
     if (message.isBinary) return;
     final text = message.text;
+
+    final frame = _decodeFrame(text);
+    if (frame != null && frame['t'] == 'chat') {
+      final body = frame['text'];
+      if (body is String && body.isNotEmpty) {
+        _addChat(CallChatMessage(text: body, mine: false, time: DateTime.now()));
+      }
+      return;
+    }
+    if (frame != null && frame['t'] == 'game') {
+      final data = Map<String, dynamic>.of(frame)..remove('t');
+      if (!_gameController.isClosed) _gameController.add(data);
+      return;
+    }
+
     if (text == _probeQuestion) {
       _sendProbe(channel, _probeAnswer);
     } else if (text == _probeAnswer) {
@@ -578,10 +614,44 @@ class CallSession {
     }
   }
 
+  Map<String, dynamic>? _decodeFrame(String text) {
+    try {
+      final v = jsonDecode(text);
+      return v is Map<String, dynamic> ? v : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _sendProbe(RTCDataChannel channel, String text) {
     try {
       channel.send(RTCDataChannelMessage(text));
     } catch (_) {}
+  }
+
+  void sendChatMessage(String text) {
+    final body = text.trim();
+    final channel = _probeChannel;
+    if (body.isEmpty || channel == null) return;
+    try {
+      channel.send(RTCDataChannelMessage(jsonEncode({'t': 'chat', 'text': body})));
+    } catch (_) {
+      return;
+    }
+    _addChat(CallChatMessage(text: body, mine: true, time: DateTime.now()));
+  }
+
+  void sendGame(Map<String, dynamic> data) {
+    final channel = _probeChannel;
+    if (channel == null) return;
+    try {
+      channel.send(RTCDataChannelMessage(jsonEncode({'t': 'game', ...data})));
+    } catch (_) {}
+  }
+
+  void _addChat(CallChatMessage message) {
+    _chat.add(message);
+    if (!_chatController.isClosed) _chatController.add(message);
   }
 
   void _markPeerKomet() {
@@ -1097,6 +1167,8 @@ class CallSession {
     if (!_remoteStream.isClosed) await _remoteStream.close();
     if (!_info.isClosed) await _info.close();
     if (!_kometDetected.isClosed) await _kometDetected.close();
+    if (!_chatController.isClosed) await _chatController.close();
+    if (!_gameController.isClosed) await _gameController.close();
   }
 
   void _applyConnectionInfo(Map<String, dynamic> msg, List iceServers) {

@@ -22,6 +22,7 @@ import '../../../core/calls/call_session.dart';
 import '../../../core/utils/format.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
+import 'komet_hub.dart';
 
 const Color _kEndRed = Color(0xFFE5484D);
 const Color _kAcceptGreen = Color(0xFF2EC36B);
@@ -52,7 +53,9 @@ class _CallScreenState extends State<CallScreen>
   StreamSubscription<CallSessionState>? _stateSub;
   StreamSubscription<void>? _infoSub;
   StreamSubscription<void>? _kometSub;
+  StreamSubscription<CallChatMessage>? _chatSub;
   StreamSubscription<MediaStream>? _remoteStreamSub;
+  bool _chatOpen = false;
   CallSessionState _state = CallSessionState.connecting;
   bool _incomingPending = false;
 
@@ -215,6 +218,7 @@ class _CallScreenState extends State<CallScreen>
     });
     _remoteStreamSub = session.remoteStreamStream.listen(_attachStream);
     _kometSub = session.peerKometDetected.listen((_) => _showKometBadge());
+    _chatSub = session.chatMessages.listen(_onChatMessage);
     if (session.peerIsKomet) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showKometBadge());
     }
@@ -227,6 +231,19 @@ class _CallScreenState extends State<CallScreen>
   void _showKometBadge() {
     if (!mounted) return;
     showCustomNotification(context, 'Этот человек использует Komet! :3');
+  }
+
+  void _onChatMessage(CallChatMessage message) {
+    if (!mounted || message.mine || _chatOpen) return;
+    showCustomNotification(context, message.text);
+  }
+
+  Future<void> _openKometHub() async {
+    final session = _session;
+    if (session == null) return;
+    setState(() => _chatOpen = true);
+    await showKometHub(context, session: session, scheme: _darkScheme(context));
+    if (mounted) setState(() => _chatOpen = false);
   }
 
   void _resolveParticipants() {
@@ -349,6 +366,7 @@ class _CallScreenState extends State<CallScreen>
     _stateSub?.cancel();
     _infoSub?.cancel();
     _kometSub?.cancel();
+    _chatSub?.cancel();
     _remoteStreamSub?.cancel();
     _dotsController.dispose();
     _videoController.dispose();
@@ -825,15 +843,32 @@ class _CallScreenState extends State<CallScreen>
           if (_session != null)
             Align(
               alignment: Alignment.centerRight,
-              child: IconButton(
-                onPressed: _showInfoSheet,
-                tooltip: 'О звонке',
-                icon: Icon(
-                  Symbols.info,
-                  color: cs.onSurface,
-                  weight: 500,
-                  size: 26,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_session?.peerIsKomet == true)
+                    IconButton(
+                      onPressed: _openKometHub,
+                      tooltip: 'Komet',
+                      //TODO: Бля иконку кометы в код дайтtе' мориарти 00. ал.о
+                      icon: Icon(
+                        Symbols.auto_awesome,
+                        color: cs.primary,
+                        weight: 500,
+                        size: 26,
+                      ),
+                    ),
+                  IconButton(
+                    onPressed: _showInfoSheet,
+                    tooltip: 'О звонке',
+                    icon: Icon(
+                      Symbols.info,
+                      color: cs.onSurface,
+                      weight: 500,
+                      size: 26,
+                    ),
+                  ),
+                ],
               ),
             ),
           if (showTimer)
