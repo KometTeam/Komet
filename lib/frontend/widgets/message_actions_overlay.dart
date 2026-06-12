@@ -73,6 +73,7 @@ void showMessageActions({
   required MessageActionsController controller,
   required MessageActionsStyle style,
   required VoidCallback onDispose,
+  VoidCallback? onDelete,
   MessageActionsInteraction interaction = MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
@@ -87,6 +88,7 @@ void showMessageActions({
       controller: controller,
       style: style,
       interaction: interaction,
+      onDelete: onDelete,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -106,6 +108,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final MessageActionsStyle style;
   final MessageActionsInteraction interaction;
   final VoidCallback onDismiss;
+  final VoidCallback? onDelete;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -117,6 +120,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.style,
     required this.interaction,
     required this.onDismiss,
+    this.onDelete,
   });
 
   @override
@@ -286,7 +290,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       _Action(
         Symbols.delete,
         'Удалить',
-        () => _stub('Удаление'),
+        _delete,
         destructive: true,
       ),
     ];
@@ -344,6 +348,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       showCustomNotification(context, 'Скопировано');
     }
     await _close();
+  }
+
+  Future<void> _delete() async {
+    final onDelete = widget.onDelete;
+    await _close();
+    onDelete?.call();
   }
 
   Future<void> _stub(String name) async {

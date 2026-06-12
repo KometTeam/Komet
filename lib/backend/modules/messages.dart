@@ -467,6 +467,28 @@ class MessagesModule {
     return '';
   }
 
+  Future<bool> deleteMessages(
+    int chatId,
+    List<String> messageIds, {
+    bool forEveryone = false,
+  }) async {
+    final ids = messageIds
+        .map((id) => int.tryParse(id))
+        .whereType<int>()
+        .toList();
+    if (ids.isEmpty) return false;
+
+    final payload = {
+      'messageIds': ids,
+      'chatId': chatId,
+      'forMe': !forEveryone,
+      'itemType': 'REGULAR',
+    };
+
+    final response = await _api.sendRequest(Opcode.msgDelete, payload);
+    return response.isOk;
+  }
+
   Future<TranscriptionResult> requestTranscription(
     int chatId,
     int messageId,

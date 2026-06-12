@@ -156,6 +156,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _historyKickedOff = false;
   List<CachedMessage> _messages = [];
   final ValueNotifier<int> _messagesRev = ValueNotifier(0);
+  final Set<String> _deletingIds = {};
   List<Object>? _combinedItemsCache;
   int? _combinedItemsKey;
   bool _floatingDateScheduled = false;
@@ -620,6 +621,123 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _bumpMessages() {
     _combinedItemsCache = null;
     _messagesRev.value++;
+  }
+
+  Future<void> _confirmDeleteMessage(CachedMessage message, bool isMe) async {
+    final isLocalOnly = message.id.startsWith('temp_');
+    final canForEveryone = isMe && !isLocalOnly;
+
+    if (isLocalOnly) {
+      _startDeleteAnimation(message.id);
+      return;
+    }
+
+    final forEveryone = await _showDeleteMessageDialog(canForEveryone);
+    if (forEveryone == null || !mounted) return;
+
+    final ok = await messagesModule.deleteMessages(
+      widget.chatId,
+      [message.id],
+      forEveryone: forEveryone,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      Haptics.error();
+      showCustomNotification(context, 'Не удалось удалить сообщение');
+      return;
+    }
+    _startDeleteAnimation(message.id);
+  }
+
+  void _startDeleteAnimation(String messageId) {
+    if (!_deletingIds.add(messageId)) return;
+    Haptics.tap();
+    _bumpMessages();
+  }
+
+  Future<void> _finalizeDelete(String messageId) async {
+    if (!mounted) return;
+    _deletingIds.remove(messageId);
+    final idx = _messages.indexWhere((m) => m.id == messageId);
+    if (idx != -1) {
+      _messages.removeAt(idx);
+      _reactionNotifiers.remove(messageId)?.dispose();
+    }
+    _bumpMessages();
+    try {
+      await AppDatabase.deleteMessage(_myId, widget.chatId, messageId);
+    } catch (_) {}
+  }
+
+  Future<bool?> _showDeleteMessageDialog(bool canForEveryone) {
+    final cs = Theme.of(context).colorScheme;
+    var alsoForEveryone = canForEveryone;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) {
+            return AlertDialog(
+              backgroundColor: cs.surfaceContainerHigh,
+              title: const Text('Удалить сообщение'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Вы точно хотите удалить это сообщение?',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+                  ),
+                  if (canForEveryone) ...[
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () => setLocalState(
+                        () => alsoForEveryone = !alsoForEveryone,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: alsoForEveryone,
+                            onChanged: (v) => setLocalState(
+                              () => alsoForEveryone = v ?? false,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              'Также удалить для ${widget.name}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(
+                    ctx,
+                    canForEveryone && alsoForEveryone,
+                  ),
+                  child: Text('Удалить', style: TextStyle(color: cs.error)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _onMessageEvent(MessageEvent event) {
@@ -1539,21 +1657,31 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 final pressable = _LongPressBubble(
                   message: message,
                   isMe: isMe,
+                  onDelete: () => _confirmDeleteMessage(message, isMe),
                   child: bubble,
                 );
 
-                final Widget child = message.id == _lastSentId
-                    ? _SentMessageAnimation(
-                        key: ValueKey('anim_${message.id}'),
-                        onComplete: () {
-                          if (mounted) {
-                            _lastSentId = null;
-                            _bumpMessages();
-                          }
-                        },
-                        child: pressable,
-                      )
-                    : pressable;
+                final Widget child;
+                if (_deletingIds.contains(message.id)) {
+                  child = _DeletingMessageAnimation(
+                    key: ValueKey('del_${message.id}'),
+                    onComplete: () => _finalizeDelete(message.id),
+                    child: IgnorePointer(child: pressable),
+                  );
+                } else if (message.id == _lastSentId) {
+                  child = _SentMessageAnimation(
+                    key: ValueKey('anim_${message.id}'),
+                    onComplete: () {
+                      if (mounted) {
+                        _lastSentId = null;
+                        _bumpMessages();
+                      }
+                    },
+                    child: pressable,
+                  );
+                } else {
+                  child = pressable;
+                }
 
                 final builtItem = RepaintBoundary(
                   key: ValueKey('msg_${message.id}'),
@@ -2699,11 +2827,13 @@ class _LongPressBubble extends StatefulWidget {
   final Widget child;
   final CachedMessage message;
   final bool isMe;
+  final VoidCallback onDelete;
 
   const _LongPressBubble({
     required this.child,
     required this.message,
     required this.isMe,
+    required this.onDelete,
   });
 
   @override
@@ -2754,6 +2884,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       messageText: widget.message.text,
       controller: controller,
       style: AppMessageActionsStyle.current.value,
+      onDelete: widget.onDelete,
       onDispose: () {
         if (identical(_controller, controller)) {
           _controller = null;
@@ -2785,6 +2916,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       controller: controller,
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
+      onDelete: widget.onDelete,
       onDispose: () {
         if (identical(_controller, controller)) {
           _controller = null;
@@ -2809,6 +2941,75 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
         onLongPressEnd: (_) => _controller?.commit(),
         onSecondaryTapDown: _onSecondaryTapDown,
         child: RepaintBoundary(key: _boundaryKey, child: widget.child),
+      ),
+    );
+  }
+}
+
+class _DeletingMessageAnimation extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onComplete;
+
+  const _DeletingMessageAnimation({
+    super.key,
+    required this.child,
+    required this.onComplete,
+  });
+
+  @override
+  State<_DeletingMessageAnimation> createState() =>
+      _DeletingMessageAnimationState();
+}
+
+class _DeletingMessageAnimationState extends State<_DeletingMessageAnimation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _opacity;
+  late final Animation<double> _scale;
+  late final Animation<double> _collapse;
+  bool _fired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _opacity = Tween<double>(begin: 1, end: 0).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.6)),
+    );
+    _scale = Tween<double>(begin: 1, end: 0.82).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.6)),
+    );
+    _collapse = Tween<double>(begin: 1, end: 0).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.35, 1.0, curve: Curves.easeInOut)),
+    );
+    _ctrl.forward().whenComplete(() {
+      if (_fired) return;
+      _fired = true;
+      widget.onComplete();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizeTransition(
+      sizeFactor: _collapse,
+      alignment: Alignment.center,
+      child: FadeTransition(
+        opacity: _opacity,
+        child: ScaleTransition(
+          scale: _scale,
+          alignment: Alignment.center,
+          child: widget.child,
+        ),
       ),
     );
   }
