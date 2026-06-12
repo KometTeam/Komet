@@ -3002,7 +3002,7 @@ class _DeletingMessageAnimationState extends State<_DeletingMessageAnimation>
   Widget build(BuildContext context) {
     return SizeTransition(
       sizeFactor: _collapse,
-      alignment: Alignment.center,
+      axisAlignment: 0.0,
       child: FadeTransition(
         opacity: _opacity,
         child: ScaleTransition(
