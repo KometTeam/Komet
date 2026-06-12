@@ -32,19 +32,46 @@ class PollView extends StatefulWidget {
   State<PollView> createState() => _PollViewState();
 }
 
-class _PollViewState extends State<PollView> {
+class _PollViewState extends State<PollView>
+    with SingleTickerProviderStateMixin {
   final Set<int> _selected = {};
   bool _voting = false;
+  bool _justVoted = false;
+  bool _resultsShown = false;
+
+  late final AnimationController _reveal;
+  late final CurvedAnimation _morph;
+  late final CurvedAnimation _fill;
 
   @override
   void initState() {
     super.initState();
+    _reveal = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 640),
+    );
+    _morph = CurvedAnimation(
+      parent: _reveal,
+      curve: const Interval(0.0, 0.55, curve: Curves.easeOutCubic),
+    );
+    _fill = CurvedAnimation(
+      parent: _reveal,
+      curve: const Interval(0.42, 1.0, curve: Curves.easeOutCubic),
+    );
     pollsModule.fetch(
       widget.chatId,
       widget.messageId,
       widget.pollId,
       force: true,
     );
+  }
+
+  @override
+  void dispose() {
+    _morph.dispose();
+    _fill.dispose();
+    _reveal.dispose();
+    super.dispose();
   }
 
   Future<void> _vote(List<int> answersIds) async {
@@ -60,7 +87,10 @@ class _PollViewState extends State<PollView> {
     if (!mounted) return;
     setState(() {
       _voting = false;
-      if (ok) _selected.clear();
+      if (ok) {
+        _justVoted = true;
+        _selected.clear();
+      }
     });
     if (!ok) {
       showCustomNotification(context, 'Не удалось проголосовать');
@@ -84,6 +114,17 @@ class _PollViewState extends State<PollView> {
         : (widget.fallbackTitle ?? 'Опрос');
     final showResults = poll != null && poll.votedBy(widget.myId);
 
+    if (showResults && !_resultsShown) {
+      _resultsShown = true;
+      if (_justVoted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _reveal.forward(from: 0.0);
+        });
+      } else {
+        _reveal.value = 1.0;
+      }
+    }
+
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 280),
       child: Column(
@@ -105,7 +146,23 @@ class _PollViewState extends State<PollView> {
           ),
           const SizedBox(height: 10),
           if (poll != null && showResults)
-            ...poll.answers.map((a) => _buildResultRow(a, poll.total)),
+            RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _reveal,
+                builder: (context, _) {
+                  final m = _morph.value;
+                  final f = _fill.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final a in poll.answers)
+                        _buildResultRow(a, poll.total, poll.isMultiple, m, f),
+                    ],
+                  );
+                },
+              ),
+            ),
           if (poll != null && !showResults) ...[
             ...poll.answers.map((a) => _buildChoiceRow(a, poll.isMultiple)),
             if (poll.isMultiple) _buildVoteButton(),
@@ -208,9 +265,28 @@ class _PollViewState extends State<PollView> {
     );
   }
 
-  Widget _buildResultRow(PollAnswer answer, int total) {
+  Widget _buildResultRow(
+    PollAnswer answer,
+    int total,
+    bool multiple,
+    double m,
+    double f,
+  ) {
     final pct = total > 0 ? answer.voteCount / total : 0.0;
-    final pctLabel = '${(answer.rate > 0 ? answer.rate : pct * 100).round()}%';
+    final value = answer.rate > 0 ? (answer.rate / 100.0).clamp(0.0, 1.0) : pct;
+    final pctLabel =
+        '${(answer.rate > 0 ? answer.rate : pct * 100).round()}%';
+
+    final leadWidth = 30.0 * (1 - m);
+    final dotOpacity = (1 - m * 1.8).clamp(0.0, 1.0);
+    final fillFactor = (value * f).clamp(0.0, 1.0);
+
+    final dotIcon = multiple
+        ? (answer.mine ? Symbols.check_box : Symbols.check_box_outline_blank)
+        : (answer.mine
+              ? Symbols.radio_button_checked
+              : Symbols.radio_button_unchecked);
+    final dotColor = answer.mine ? widget.accentColor : widget.dimColor;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -219,34 +295,74 @@ class _PollViewState extends State<PollView> {
         children: [
           Row(
             children: [
+              ClipRect(
+                child: SizedBox(
+                  width: leadWidth,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Opacity(
+                      opacity: dotOpacity,
+                      child: Icon(dotIcon, size: 20, color: dotColor),
+                    ),
+                  ),
+                ),
+              ),
               Expanded(
                 child: Text(
                   answer.text,
                   style: TextStyle(color: widget.textColor, fontSize: 14),
                 ),
               ),
-              if (answer.mine) ...[
-                Icon(Symbols.check_circle, size: 14, color: widget.accentColor),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                pctLabel,
-                style: TextStyle(
-                  color: widget.dimColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+              ClipRect(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  widthFactor: m,
+                  child: Opacity(
+                    opacity: m,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (answer.mine) ...[
+                          Icon(
+                            Symbols.check_circle,
+                            size: 14,
+                            color: widget.accentColor,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(
+                          pctLabel,
+                          style: TextStyle(
+                            color: widget.dimColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: pct,
-              minHeight: 6,
-              backgroundColor: widget.dimColor.withValues(alpha: 0.2),
-              valueColor: AlwaysStoppedAnimation<Color>(widget.accentColor),
+          ClipRect(
+            child: Align(
+              alignment: Alignment.topLeft,
+              heightFactor: m,
+              widthFactor: m,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: fillFactor,
+                    minHeight: 6,
+                    backgroundColor: widget.dimColor.withValues(alpha: 0.2),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(widget.accentColor),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
