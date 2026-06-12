@@ -20,6 +20,7 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/utils/format.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 
 const Color _kEndRed = Color(0xFFE5484D);
@@ -50,6 +51,7 @@ class _CallScreenState extends State<CallScreen>
   CallSession? _session;
   StreamSubscription<CallSessionState>? _stateSub;
   StreamSubscription<void>? _infoSub;
+  StreamSubscription<void>? _kometSub;
   StreamSubscription<MediaStream>? _remoteStreamSub;
   CallSessionState _state = CallSessionState.connecting;
   bool _incomingPending = false;
@@ -212,10 +214,19 @@ class _CallScreenState extends State<CallScreen>
       setState(() {});
     });
     _remoteStreamSub = session.remoteStreamStream.listen(_attachStream);
+    _kometSub = session.peerKometDetected.listen((_) => _showKometBadge());
+    if (session.peerIsKomet) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showKometBadge());
+    }
     final existing = session.remoteStream;
     if (existing != null) _attachStream(existing);
     _resolveParticipants();
     _syncVideo();
+  }
+
+  void _showKometBadge() {
+    if (!mounted) return;
+    showCustomNotification(context, 'Этот человек использует Komet! :3');
   }
 
   void _resolveParticipants() {
@@ -337,6 +348,7 @@ class _CallScreenState extends State<CallScreen>
   void dispose() {
     _stateSub?.cancel();
     _infoSub?.cancel();
+    _kometSub?.cancel();
     _remoteStreamSub?.cancel();
     _dotsController.dispose();
     _videoController.dispose();

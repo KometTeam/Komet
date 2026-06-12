@@ -84,6 +84,12 @@ class CallSession {
   static const double _speakLevelOn = 0.05;
   static const int _speakHoldTicks = 3;
 
+  RTCDataChannel? _probeChannel;
+  bool _peerIsKomet = false;
+
+  static const String _probeQuestion = 'AreYouKomet?';
+  static const String _probeAnswer = 'YesImKomet😎';
+
   bool get localVideo => _localVideo;
   bool get localScreen => _localScreen;
   MediaStream? get localVideoStream => _localVideoStream;
@@ -104,12 +110,16 @@ class CallSession {
   final _state = StreamController<CallSessionState>.broadcast();
   final _remoteStream = StreamController<MediaStream>.broadcast();
   final _info = StreamController<void>.broadcast();
+  final _kometDetected = StreamController<void>.broadcast();
 
   Stream<CallSessionState> get stateStream => _state.stream;
   Stream<MediaStream> get remoteStreamStream => _remoteStream.stream;
   MediaStream? get remoteStream => _remoteStreamRef;
 
   Stream<void> get infoUpdates => _info.stream;
+
+  Stream<void> get peerKometDetected => _kometDetected.stream;
+  bool get peerIsKomet => _peerIsKomet;
 
   bool get isMuted => _muted;
   bool get peerMuted => _peerMuted;
@@ -482,6 +492,8 @@ class CallSession {
       init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
     );
 
+    await _setupKometProbe(pc);
+
     if (role == CallRole.caller) {
       _setState(CallSessionState.ringing);
       await _createAndSendOffer();
@@ -499,6 +511,7 @@ class CallSession {
     });
     pc.onIceCandidate = _onLocalCandidate;
     pc.onTrack = (event) => unawaited(_onRemoteTrack(event));
+    pc.onDataChannel = (channel) => _bindProbeChannel(channel, ask: false);
     pc.onIceConnectionState = (s) => logger.t('[call] ice $s');
     pc.onConnectionState = (s) {
       logger.t('[call] pc $s');
@@ -534,10 +547,56 @@ class CallSession {
     }
   }
 
+  Future<void> _setupKometProbe(RTCPeerConnection pc) async {
+    if (_topology == 'SERVER') return;
+    try {
+      final channel = await pc.createDataChannel(
+        'komet',
+        RTCDataChannelInit()..ordered = true,
+      );
+      _probeChannel = channel;
+      _bindProbeChannel(channel, ask: true);
+    } catch (_) {}
+  }
+
+  void _bindProbeChannel(RTCDataChannel channel, {required bool ask}) {
+    channel.onMessage = (message) => _onProbeMessage(channel, message);
+    channel.onDataChannelState = (state) {
+      if (ask && state == RTCDataChannelState.RTCDataChannelOpen) {
+        _sendProbe(channel, _probeQuestion);
+      }
+    };
+  }
+
+  void _onProbeMessage(RTCDataChannel channel, RTCDataChannelMessage message) {
+    if (message.isBinary) return;
+    final text = message.text;
+    if (text == _probeQuestion) {
+      _sendProbe(channel, _probeAnswer);
+    } else if (text == _probeAnswer) {
+      _markPeerKomet();
+    }
+  }
+
+  void _sendProbe(RTCDataChannel channel, String text) {
+    try {
+      channel.send(RTCDataChannelMessage(text));
+    } catch (_) {}
+  }
+
+  void _markPeerKomet() {
+    if (_peerIsKomet) return;
+    _peerIsKomet = true;
+    logger.t('[call] peer is Komet');
+    if (!_kometDetected.isClosed) _kometDetected.add(null);
+    _notifyInfo();
+  }
+
   Future<void> _setupSfu() async {
     if (_pc != null) {
       await _pc!.close();
       _pc = null;
+      _probeChannel = null;
       _remoteDescSet = false;
       _pendingCandidates.clear();
       for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
@@ -1018,6 +1077,10 @@ class CallSession {
 
   Future<void> _dispose() async {
     _levelTimer?.cancel();
+    try {
+      await _probeChannel?.close();
+    } catch (_) {}
+    _probeChannel = null;
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       await track.stop();
     }
@@ -1033,6 +1096,7 @@ class CallSession {
     if (!_state.isClosed) await _state.close();
     if (!_remoteStream.isClosed) await _remoteStream.close();
     if (!_info.isClosed) await _info.close();
+    if (!_kometDetected.isClosed) await _kometDetected.close();
   }
 
   void _applyConnectionInfo(Map<String, dynamic> msg, List iceServers) {

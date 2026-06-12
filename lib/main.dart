@@ -11,7 +11,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
-import 'core/utils/logger.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_bubble_behavior.dart';
@@ -79,8 +78,6 @@ Future<Locale> _loadInitialLocale() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await startFileLogging();
-  logger.i('[log] file: ${logFilePath ?? '—'}');
   await AppDatabase.init();
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {

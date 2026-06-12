@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 
-import 'file_log_output.dart';
-
 Level _minimumLogLevel() {
   const raw = String.fromEnvironment('KOMET_LOG_LEVEL', defaultValue: '');
   switch (raw.toLowerCase()) {
@@ -43,12 +41,8 @@ final logger = Logger(
   filter: _logFilter(),
   level: _minimumLogLevel(),
   printer: KometLogPrinter(),
-  output: MultiOutput([ConsoleOutput(), FileLogOutput.instance]),
+  output: ConsoleOutput(),
 );
-
-Future<void> startFileLogging() => FileLogOutput.instance.start();
-
-String? get logFilePath => FileLogOutput.instance.path;
 
 int _importanceSortKey(Level level) {
   final v = level.value;
