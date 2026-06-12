@@ -103,6 +103,20 @@ class CallController {
     return session;
   }
 
+  Future<CallLinkPreview?> previewCallLink(String url) =>
+      _calls!.resolveCallLink(url);
+
+  Future<CallSession> joinByLink(String token, {bool isVideo = false}) async {
+    if (_active != null) throw StateError('уже идёт звонок');
+    final params = await _calls!.joinByLink(token, isVideo: isVideo);
+    final config =
+        Ws2Config.fromEndpoint(params.endpoint, userId: params.callsUserId);
+    final session = CallSession(ws2Config: config, role: CallRole.joiner);
+    _bind(session);
+    await session.start();
+    return session;
+  }
+
   /// Принять входящий звонок.
   Future<CallSession> acceptIncoming(IncomingCall call) async {
     _pending = null;

@@ -30,6 +30,20 @@ class OutgoingCallParams {
   });
 }
 
+class CallLinkPreview {
+  final String? conferenceId;
+  final String? callName;
+  final int participantsCount;
+  final bool isVideo;
+
+  const CallLinkPreview({
+    this.conferenceId,
+    this.callName,
+    this.participantsCount = 0,
+    this.isVideo = false,
+  });
+}
+
 class CallLogEntry {
   final String id;
   final int accountId;
@@ -63,22 +77,11 @@ class CallsModule {
     bool isVideo = false,
   }) async {
     final conversationId = _uuidV4();
-    // Структура подтверждена дампом основного сокета (opcode 78).
-    final internalParams = jsonEncode({
-      'platform': 'ANDROID',
-      'sdkVersion': '0.1.16.4',
-      'clientAppKey': 'CGPGAGLGDIHBABABA',
-      'deviceId': _api.deviceId ?? '',
-      'protocolVersion': 5,
-      'onlyAdminCanRecord': false,
-      'waitForAdmin': false,
-      'capabilities': '3c03f',
-    });
 
     final response = await _api.sendRequest(Opcode.videoChatStartActive, {
       'conversationId': conversationId,
       'calleeIds': [calleeId],
-      'internalParams': internalParams,
+      'internalParams': _internalParams(),
       'isVideo': isVideo,
     });
 
@@ -107,6 +110,69 @@ class CallsModule {
       endpoint: endpoint,
       callsUserId: callsUserId,
       peerExternalId: external,
+      isVideo: isVideo,
+    );
+  }
+
+  String _internalParams() => jsonEncode({
+        'platform': 'ANDROID',
+        'sdkVersion': '0.1.16.4',
+        'clientAppKey': 'CGPGAGLGDIHBABABA',
+        'deviceId': _api.deviceId ?? '',
+        'protocolVersion': 5,
+        'onlyAdminCanRecord': false,
+        'waitForAdmin': false,
+        'capabilities': '3c03f',
+      });
+
+  Future<CallLinkPreview?> resolveCallLink(String url) async {
+    final response = await _api.sendRequest(Opcode.linkInfo, {'link': url});
+    if (!response.isOk || response.payload is! Map) return null;
+
+    final vc = (response.payload as Map)['videoConference'];
+    if (vc is! Map) return null;
+
+    return CallLinkPreview(
+      conferenceId: vc['conferenceId']?.toString(),
+      callName: (vc['callName'] as String?)?.trim(),
+      participantsCount: (vc['participantsCount'] as int?) ?? 0,
+      isVideo: vc['callType'] == 'VIDEO',
+    );
+  }
+
+  Future<OutgoingCallParams> joinByLink(
+    String token, {
+    bool isVideo = false,
+  }) async {
+    final response = await _api.sendRequest(Opcode.videoChatJoinByLink, {
+      'joinLink': token,
+      'internalParams': _internalParams(),
+      'isVideo': isVideo,
+    });
+
+    if (!response.isOk || response.payload is! Map) {
+      throw Exception('joinByLink: bad response');
+    }
+    final payload = response.payload as Map;
+
+    final ipRaw = payload['internalParams'];
+    final ip = ipRaw is String
+        ? jsonDecode(ipRaw) as Map<dynamic, dynamic>
+        : const <dynamic, dynamic>{};
+
+    final endpoint = ip['endpoint'] as String?;
+    if (endpoint == null) {
+      throw Exception('joinByLink: no endpoint');
+    }
+
+    final id = ip['id'];
+    final callsUserId = (id is Map ? id['internal'] as int? : null) ?? 0;
+
+    return OutgoingCallParams(
+      conversationId: (payload['conversationId'] as String?) ?? '',
+      endpoint: endpoint,
+      callsUserId: callsUserId,
+      peerExternalId: 0,
       isVideo: isVideo,
     );
   }

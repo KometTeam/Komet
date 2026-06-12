@@ -148,11 +148,14 @@ class Ws2Signaling {
 
     final label =
         decoded['notification'] ?? decoded['response'] ?? decoded['type'];
+    final dump = jsonEncode(decoded);
     logger.t('[ws2] ← $label');
-    logger.t(decoded);
+    logger.t(dump.length > 1500
+        ? '${dump.substring(0, 1500)}… (${dump.length}b)'
+        : dump);
 
     final type = decoded['type'];
-    if (type == 'response') {
+    if (type == 'response' || type == 'error') {
       final seq = decoded['sequence'];
       if (seq is int) {
         final completer = _pending.remove(seq);
@@ -160,6 +163,7 @@ class Ws2Signaling {
           completer.complete(decoded);
         }
       }
+      if (type == 'error') _notifications.add(decoded);
       return;
     }
 
@@ -256,7 +260,6 @@ class Ws2Signaling {
     bool isVideoEnabled = false,
     bool isScreenSharingEnabled = false,
     bool isAnimojiEnabled = false,
-    bool isAudioSharingEnabled = false,
   }) {
     return sendCommand(
       'change-media-settings',
@@ -266,7 +269,6 @@ class Ws2Signaling {
           'isAudioEnabled': isAudioEnabled,
           'isScreenSharingEnabled': isScreenSharingEnabled,
           'isAnimojiEnabled': isAnimojiEnabled,
-          'isAudioSharingEnabled': isAudioSharingEnabled,
         },
       },
     );
@@ -277,6 +279,54 @@ class Ws2Signaling {
 
   Future<void> hangup({String reason = 'HUNGUP'}) =>
       sendCommand('hangup', extra: {'reason': reason});
+
+  Future<void> allocateConsumer() => sendCommand(
+        'allocate-consumer',
+        extra: const {
+          'capabilities': {
+            'maxH264Decoders': 10,
+            'producerNotificationDataChannelVersion': 7,
+            'producerCommandDataChannelVersion': 2,
+            'audioMix': true,
+            'consumerUpdate': true,
+            'onDemandTracks': true,
+            'singleSession': true,
+            'unifiedPlan': true,
+            'fastScreenShare': true,
+            'producerScreenDataChannelVersion': 1,
+            'consumerScreenDataChannelVersion': 1,
+            'animojiDataChannelVersion': 2,
+            'animojiBackendRender': true,
+            'asrDataChannelVersion': 1,
+            'consumerFastScreenShare': true,
+            'consumerFastScreenShareQualityOnDemand': true,
+            'audioShare': true,
+            'simulcast': true,
+            'simulcastNativeOrder': true,
+            'red': true,
+            'videoTracksCount': 10,
+            'csrcAccessible': true,
+          },
+        },
+      );
+
+  Future<void> acceptProducer({
+    required String description,
+    required List<int> ssrcs,
+    Object? sessionId,
+  }) =>
+      sendCommand('accept-producer', extra: {
+        'description': description,
+        'ssrcs': ssrcs,
+        'sessionId': ?sessionId,
+      });
+
+  Future<void> changeSimulcast({
+    String mediaSource = 'CAMERA',
+    required List<Map<String, dynamic>> layers,
+  }) =>
+      sendCommand('change-simulcast',
+          extra: {'mediaSource': mediaSource, 'layers': layers});
 
   Future<void> close() async {
     await _socket?.close();

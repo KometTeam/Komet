@@ -30,6 +30,7 @@ class CallScreen extends StatefulWidget {
   final String? avatarUrl;
   final CallSession? session;
   final IncomingCall? incoming;
+  final bool isGroup;
 
   const CallScreen({
     super.key,
@@ -37,6 +38,7 @@ class CallScreen extends StatefulWidget {
     this.avatarUrl,
     this.session,
     this.incoming,
+    this.isGroup = false,
   });
 
   @override
@@ -58,7 +60,9 @@ class _CallScreenState extends State<CallScreen>
   late final AnimationController _dotsController;
   late final AnimationController _videoController;
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   bool _rendererReady = false;
+  bool _localRendererReady = false;
   bool _videoAttached = false;
   MediaStream? _pendingStream;
 
@@ -67,6 +71,21 @@ class _CallScreenState extends State<CallScreen>
 
   late String _name = widget.name;
   late String? _avatarUrl = widget.avatarUrl;
+
+  final Map<int, _PeerInfo> _peerInfo = {};
+
+  bool get _isGroup =>
+      widget.isGroup || (_session?.participantCount ?? 0) > 2;
+
+  bool get _tileVideoReady {
+    if (_session?.topology == 'SERVER') return false;
+    final others = (_session?.participants ?? const <CallParticipant>[])
+        .where((x) => !x.isSelf)
+        .length;
+    if (others != 1) return false;
+    final src = _remoteRenderer.srcObject;
+    return src != null && src.getVideoTracks().isNotEmpty;
+  }
 
   @override
   void initState() {
@@ -130,12 +149,15 @@ class _CallScreenState extends State<CallScreen>
 
   Future<void> _initRenderer() async {
     await _remoteRenderer.initialize();
+    await _localRenderer.initialize();
     if (!mounted) return;
     _rendererReady = true;
+    _localRendererReady = true;
     if (_pendingStream != null) {
       _remoteRenderer.srcObject = _pendingStream;
       _pendingStream = null;
     }
+    _syncLocalPreview();
     setState(() {});
   }
 
@@ -183,13 +205,44 @@ class _CallScreenState extends State<CallScreen>
     _stateSub = session.stateStream.listen(_onState);
     _infoSub = session.infoUpdates.listen((_) {
       if (!mounted) return;
+      _isMuted = session.isMuted;
+      _resolveParticipants();
       _syncVideo();
+      _syncLocalPreview();
       setState(() {});
     });
     _remoteStreamSub = session.remoteStreamStream.listen(_attachStream);
     final existing = session.remoteStream;
     if (existing != null) _attachStream(existing);
+    _resolveParticipants();
     _syncVideo();
+  }
+
+  void _resolveParticipants() {
+    final session = _session;
+    if (session == null) return;
+    for (final p in session.participants) {
+      final ext = p.externalId;
+      if (ext == null || p.isSelf || _peerInfo.containsKey(ext)) continue;
+      _peerInfo[ext] = const _PeerInfo(resolving: true);
+      unawaited(_resolveParticipant(ext));
+    }
+  }
+
+  Future<void> _resolveParticipant(int id) async {
+    var name = ContactCache.get(id);
+    var avatar = ContactCache.getAvatar(id);
+    if (name == null) {
+      final info = await ContactInfoFetch.get(id);
+      if (info != null) {
+        name = _contactName(info);
+        avatar ??= info['baseUrl'] as String?;
+        if (name != null) ContactCache.put(id, name);
+        ContactCache.putAvatar(id, avatar);
+      }
+    }
+    if (!mounted) return;
+    setState(() => _peerInfo[id] = _PeerInfo(name: name, avatar: avatar));
   }
 
   void _onState(CallSessionState state) {
@@ -247,6 +300,39 @@ class _CallScreenState extends State<CallScreen>
     await Helper.setSpeakerphoneOn(next);
   }
 
+  bool _videoBusy = false;
+
+  Future<void> _toggleVideo() async {
+    final session = _session;
+    if (session == null || _videoBusy) return;
+    setState(() => _videoBusy = true);
+    await WidgetsBinding.instance.endOfFrame;
+    try {
+      await session.setVideoEnabled(!session.localVideo);
+    } finally {
+      _syncLocalPreview();
+      if (mounted) setState(() => _videoBusy = false);
+    }
+  }
+
+  Future<void> _toggleScreen() async {
+    final session = _session;
+    if (session == null || _videoBusy) return;
+    setState(() => _videoBusy = true);
+    await WidgetsBinding.instance.endOfFrame;
+    try {
+      await session.setScreenSharing(!session.localScreen);
+    } finally {
+      _syncLocalPreview();
+      if (mounted) setState(() => _videoBusy = false);
+    }
+  }
+
+  void _syncLocalPreview() {
+    if (!_localRendererReady) return;
+    _localRenderer.srcObject = _session?.localVideoStream;
+  }
+
   @override
   void dispose() {
     _stateSub?.cancel();
@@ -256,6 +342,8 @@ class _CallScreenState extends State<CallScreen>
     _videoController.dispose();
     _remoteRenderer.srcObject = null;
     _remoteRenderer.dispose();
+    _localRenderer.srcObject = null;
+    _localRenderer.dispose();
     super.dispose();
   }
 
@@ -284,11 +372,21 @@ class _CallScreenState extends State<CallScreen>
   @override
   Widget build(BuildContext context) {
     final cs = _darkScheme(context);
-    final avatar = _buildAvatar(cs);
-    final name = _buildName(cs);
-    final status = _buildStatus(cs);
-    final peerBar = _peerStateBar(cs);
-    final controls = _buildControls(cs);
+    final group = _isGroup && !_incomingPending;
+
+    final Widget body = group
+        ? _buildGroupBody(cs)
+        : AnimatedBuilder(
+            animation: _videoController,
+            builder: (context, _) => _buildBody(
+              cs,
+              avatar: _buildAvatar(cs),
+              name: _buildName(cs),
+              status: _buildStatus(cs),
+              peerBar: _peerStateBar(cs),
+              controls: _buildControls(cs),
+            ),
+          );
 
     return Theme(
       data: Theme.of(context).copyWith(colorScheme: cs),
@@ -300,20 +398,288 @@ class _CallScreenState extends State<CallScreen>
         ),
         child: Scaffold(
           backgroundColor: cs.surface,
-          body: AnimatedBuilder(
-            animation: _videoController,
-            builder: (context, _) => _buildBody(
-              cs,
-              avatar: avatar,
-              name: name,
-              status: status,
-              peerBar: peerBar,
-              controls: controls,
-            ),
+          body: Stack(
+            children: [
+              body,
+              if (_session?.localVideo == true || _session?.localScreen == true)
+                _localPreview(cs),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _localPreview(ColorScheme cs) {
+    return Positioned(
+      right: 16,
+      top: MediaQuery.of(context).padding.top + 56,
+      child: SafeArea(
+        child: Container(
+          width: 96,
+          height: 140,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: cs.surfaceContainerHighest,
+            border: Border.all(color: cs.outlineVariant, width: 1),
+          ),
+          child: _localRendererReady && _localRenderer.srcObject != null
+              ? RTCVideoView(
+                  _localRenderer,
+                  mirror: _session?.localScreen != true,
+                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                )
+              : Center(
+                  child: Icon(
+                    _session?.localScreen == true
+                        ? Symbols.screen_share
+                        : Symbols.videocam,
+                    color: cs.onSurfaceVariant,
+                    size: 28,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupBody(ColorScheme cs) {
+    final participants = _session?.participants ?? const <CallParticipant>[];
+    return SafeArea(
+      child: Column(
+        children: [
+          _buildTopBar(cs, 0),
+          const SizedBox(height: 4),
+          _groupHeader(cs, participants.length),
+          const SizedBox(height: 8),
+          Expanded(
+            child: participants.isEmpty
+                ? Center(child: _statusWithDots(cs, 'Соединение'))
+                : _participantGrid(cs, participants),
+          ),
+          const SizedBox(height: 12),
+          _activeControls(cs),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _groupHeader(ColorScheme cs, int count) {
+    final String subtitle;
+    if (count == 0) {
+      subtitle = 'Соединение…';
+    } else if (count <= 1) {
+      subtitle = 'Ожидание участников…';
+    } else {
+      subtitle = _participantsLabel(count);
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        children: [
+          Text(
+            _displayName,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Outfit',
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _participantGrid(ColorScheme cs, List<CallParticipant> ps) {
+    final cols = ps.length <= 1
+        ? 1
+        : ps.length <= 4
+            ? 2
+            : 3;
+    return GridView.count(
+      crossAxisCount: cols,
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+      mainAxisSpacing: 14,
+      crossAxisSpacing: 14,
+      childAspectRatio: 0.84,
+      children: [for (final p in ps) _participantTile(cs, p)],
+    );
+  }
+
+  Widget _participantTile(ColorScheme cs, CallParticipant p) {
+    final ext = p.externalId;
+    final info = ext != null ? _peerInfo[ext] : null;
+    final name = p.isSelf
+        ? 'Вы'
+        : (info?.name?.isNotEmpty == true ? info!.name! : 'Участник');
+    final url = p.isSelf ? _avatarUrl : info?.avatar;
+    final muted = p.isSelf ? _isMuted : !p.audioEnabled;
+    final speaking = !muted && _session?.isSpeaking(p.id) == true;
+    final showVideo =
+        !p.isSelf && (p.videoEnabled || p.screenSharing) && _tileVideoReady;
+
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
+      borderSide:
+          speaking ? const BorderSide(color: _kAcceptGreen, width: 2.5) : null,
+      padding: EdgeInsets.all(showVideo ? 0 : 12),
+      child: showVideo
+          ? _videoTile(cs, name, muted, p.handRaised, p.screenSharing)
+          : _avatarTile(cs, name, url, muted, p.handRaised, p.screenSharing),
+    );
+  }
+
+  Widget _avatarTile(ColorScheme cs, String name, String? url, bool muted,
+      bool hand, bool screen) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = constraints.biggest.shortestSide.clamp(48.0, 96.0);
+              return Center(
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _circleAvatar(size, cs, name: name, url: url),
+                      if (hand)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: _tileBadge(cs, Symbols.front_hand,
+                              cs.tertiaryContainer, cs.onTertiaryContainer),
+                        ),
+                      if (screen)
+                        Positioned(
+                          top: -2,
+                          left: -2,
+                          child: _tileBadge(cs, Symbols.screen_share,
+                              cs.primaryContainer, cs.onPrimaryContainer),
+                        ),
+                      if (muted)
+                        Positioned(
+                          bottom: -2,
+                          right: -2,
+                          child: _tileBadge(cs, Symbols.mic_off,
+                              cs.surfaceContainerHighest, cs.onSurfaceVariant),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: cs.onSurface,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _videoTile(
+      ColorScheme cs, String name, bool muted, bool hand, bool screen) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          RTCVideoView(
+            _remoteRenderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+          Positioned(
+            left: 8,
+            right: 8,
+            bottom: 8,
+            child: Row(
+              children: [
+                if (muted)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(Symbols.mic_off,
+                        size: 16, color: Colors.white, fill: 1),
+                  ),
+                Flexible(
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (hand)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: _tileBadge(cs, Symbols.front_hand, cs.tertiaryContainer,
+                  cs.onTertiaryContainer),
+            ),
+          if (screen)
+            Positioned(
+              top: 8,
+              left: 8,
+              child: _tileBadge(cs, Symbols.screen_share, cs.primaryContainer,
+                  cs.onPrimaryContainer),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tileBadge(ColorScheme cs, IconData icon, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: bg,
+        shape: BoxShape.circle,
+        border: Border.all(color: cs.surface, width: 2),
+      ),
+      child: Icon(icon, size: 14, color: fg, fill: 1),
+    );
+  }
+
+  String _participantsLabel(int n) {
+    final mod10 = n % 10;
+    final mod100 = n % 100;
+    if (mod10 == 1 && mod100 != 11) return '$n участник';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return '$n участника';
+    }
+    return '$n участников';
   }
 
   Widget _buildBody(
@@ -529,8 +895,15 @@ class _CallScreenState extends State<CallScreen>
 
   String get _displayName => _name.isEmpty ? 'Неизвестный' : _name;
 
-  Widget _avatarCircle(double size, ColorScheme cs) {
-    final url = _avatarUrl;
+  Widget _avatarCircle(double size, ColorScheme cs) =>
+      _circleAvatar(size, cs, name: _displayName, url: _avatarUrl);
+
+  Widget _circleAvatar(
+    double size,
+    ColorScheme cs, {
+    required String name,
+    String? url,
+  }) {
     return Container(
       width: size,
       height: size,
@@ -556,14 +929,14 @@ class _CallScreenState extends State<CallScreen>
               fit: BoxFit.cover,
               memCacheWidth: 420,
               memCacheHeight: 420,
-              errorWidget: (_, _, _) => _avatarFallback(size, cs),
+              errorWidget: (_, _, _) => _avatarFallback(size, cs, name),
             )
-          : _avatarFallback(size, cs),
+          : _avatarFallback(size, cs, name),
     );
   }
 
-  Widget _avatarFallback(double size, ColorScheme cs) {
-    final letter = _displayName[0].toUpperCase();
+  Widget _avatarFallback(double size, ColorScheme cs, String name) {
+    final letter = (name.isEmpty ? '?' : name[0]).toUpperCase();
     return Container(
       color: cs.primaryContainer,
       alignment: Alignment.center,
@@ -683,8 +1056,10 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _activeControls(ColorScheme cs) {
+    final video = _session?.localVideo == true;
+    final screen = _session?.localScreen == true;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -696,11 +1071,20 @@ class _CallScreenState extends State<CallScreen>
             onTap: _toggleSpeaker,
           ),
           _CallButton(
-            icon: Symbols.videocam_off,
+            icon: video ? Symbols.videocam : Symbols.videocam_off,
             label: 'Видео',
-            background: cs.surfaceContainerHighest,
-            foreground: cs.onSurface,
-            onTap: () {},
+            background: video ? cs.primary : cs.surfaceContainerHighest,
+            foreground: video ? cs.onPrimary : cs.onSurface,
+            busy: _videoBusy,
+            onTap: _toggleVideo,
+          ),
+          _CallButton(
+            icon: Symbols.screen_share,
+            label: 'Экран',
+            background: screen ? cs.primary : cs.surfaceContainerHighest,
+            foreground: screen ? cs.onPrimary : cs.onSurface,
+            busy: _videoBusy,
+            onTap: _toggleScreen,
           ),
           _CallButton(
             icon: _isMuted ? Symbols.mic_off : Symbols.mic,
@@ -720,6 +1104,14 @@ class _CallScreenState extends State<CallScreen>
       ),
     );
   }
+}
+
+class _PeerInfo {
+  final String? name;
+  final String? avatar;
+  final bool resolving;
+
+  const _PeerInfo({this.name, this.avatar, this.resolving = false});
 }
 
 class _CallingDots extends StatelessWidget {
@@ -763,6 +1155,7 @@ class _CallButton extends StatelessWidget {
   final Color background;
   final Color foreground;
   final VoidCallback onTap;
+  final bool busy;
 
   const _CallButton({
     required this.icon,
@@ -770,6 +1163,7 @@ class _CallButton extends StatelessWidget {
     required this.background,
     required this.foreground,
     required this.onTap,
+    this.busy = false,
   });
 
   @override
@@ -784,10 +1178,19 @@ class _CallButton extends StatelessWidget {
           child: GlossyPill(
             color: background,
             borderRadius: BorderRadius.circular(31),
-            onTap: onTap,
+            onTap: busy ? null : onTap,
             depth: 9,
             child: Center(
-              child: Icon(icon, color: foreground, size: 26, fill: 1),
+              child: busy
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation(foreground),
+                      ),
+                    )
+                  : Icon(icon, color: foreground, size: 26, fill: 1),
             ),
           ),
         ),
