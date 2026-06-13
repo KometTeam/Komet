@@ -679,9 +679,22 @@ class _ChatScreenState extends State<ChatScreen>
       case Opcode.notifMsgDelayed:
         final p = packet.payload;
         if (p is Map && p['chatId'] == widget.chatId) {
-          _refreshScheduledCount();
+          // lastDelayedUpdateTime — авторитетный признак от сервера:
+          // 0 — отложенных в чате не осталось, иначе они есть. Реагируем
+          // мгновенно по пушу, не дожидаясь повторного запроса.
+          final t = p['lastDelayedUpdateTime'];
+          if (t is int && t == 0) {
+            _scheduledCount.value = 0;
+          } else {
+            if (_scheduledCount.value == 0) _scheduledCount.value = 1;
+            _refreshScheduledCount();
+          }
         }
     }
+  }
+
+  void _markHasScheduled() {
+    if (_scheduledCount.value == 0) _scheduledCount.value = 1;
   }
 
   Future<void> _refreshScheduledCount() async {
@@ -1356,6 +1369,7 @@ class _ChatScreenState extends State<ChatScreen>
       _hasText.value = false;
       _messageController.clear();
       Haptics.send();
+      _markHasScheduled();
       showCustomNotification(
         context,
         'Запланировано на ${formatDateTimeWords(when)}',
@@ -2668,6 +2682,7 @@ class _ChatScreenState extends State<ChatScreen>
 
       if (scheduled) {
         Haptics.send();
+        _markHasScheduled();
         showCustomNotification(
           context,
           'Запланировано на '
@@ -2752,6 +2767,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       if (result != null) {
         Haptics.send();
+        _markHasScheduled();
         showCustomNotification(
           context,
           'Запланировано на '
