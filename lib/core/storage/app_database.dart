@@ -185,7 +185,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 11,
+      version: 12,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -237,6 +237,11 @@ class AppDatabase {
         }
         if (oldVersion < 11) {
           await _createIndexes(db);
+        }
+        if (oldVersion < 12) {
+          await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN last_msg_status TEXT',
+          );
         }
       },
     );
@@ -313,6 +318,7 @@ class AppDatabase {
       last_msg_time   INTEGER,
       last_msg_text   TEXT,
       last_msg_sender INTEGER,
+      last_msg_status TEXT,
       unread_count    INTEGER NOT NULL DEFAULT 0,
       last_event_time INTEGER NOT NULL DEFAULT 0,
       cached_at       INTEGER NOT NULL,
@@ -480,14 +486,19 @@ class AppDatabase {
     if (rows.isEmpty) return;
     try {
       final db = await _instance;
+      final cols = rows.first.keys.toList();
+      final placeholders = List.filled(cols.length, '?').join(', ');
+      final updates = cols
+          .where((c) => c != 'id' && c != 'account_id')
+          .map((c) => '$c = excluded.$c')
+          .join(', ');
+      final sql = 'INSERT INTO chats_cache (${cols.join(', ')}) '
+          'VALUES ($placeholders) '
+          'ON CONFLICT(id, account_id) DO UPDATE SET $updates';
       await db.transaction((txn) async {
         final batch = txn.batch();
         for (final row in rows) {
-          batch.insert(
-            'chats_cache',
-            row,
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          batch.rawInsert(sql, cols.map((c) => row[c]).toList());
         }
         await batch.commit(noResult: true);
       });
@@ -659,6 +670,18 @@ class AppDatabase {
       'messages',
       where: 'account_id = ? AND chat_id = ? AND id = ?',
       whereArgs: [accountId, chatId, messageId],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadPendingMessages(
+    int accountId,
+  ) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: 'account_id = ? AND status = ?',
+      whereArgs: [accountId, 'pending'],
+      orderBy: 'time ASC',
     );
   }
 }

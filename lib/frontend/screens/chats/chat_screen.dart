@@ -20,12 +20,14 @@ import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
+import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/calls/call_controller.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/draft_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
@@ -89,7 +91,8 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
@@ -170,10 +173,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   late final CurvedAnimation _floatingDateCurved;
   final Map<int, GlobalKey> _separatorKeys = {};
   String? _lastSentId;
+  String? _lastMarkedId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _messageController.addListener(_onTextChanged);
     _scrollController.addListener(_onScrollForDate);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
@@ -226,6 +231,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final p = await AppDatabase.loadActiveProfile();
     if (!mounted) return;
     _myId = p?.id ?? 0;
+    _restoreDraft();
 
     ChatsModule.getChat(_myId, widget.chatId)
         .then((value) {
@@ -233,6 +239,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             setState(() {
               chat = value.first;
             });
+            _seedPresenceFromChat();
             _recomputeHeaderStatus();
             _syncOtherReadTime();
           }
@@ -300,6 +307,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _shimmerStartTimer?.cancel();
     _shimmerStartTimer = null;
     if (_shimmerController.isAnimating) _shimmerController.stop();
+    _markRead();
+  }
+
+  void _markRead() {
+    if (_myId == 0 || _messages.isEmpty) return;
+    final newest = _messages.last;
+    if (newest.senderId == _myId) return;
+    if (newest.id == _lastMarkedId) return;
+    _lastMarkedId = newest.id;
+    unawaited(
+      ChatsModule.markRead(api, _myId, widget.chatId, newest.id, newest.time),
+    );
   }
 
   Future<void> _loadHistory() async {
@@ -325,7 +344,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _applyMergedMessages(fullDecoded);
     }
 
-    if (!ChatsModule.isChatDirty(widget.chatId) && fullRows.isNotEmpty) {
+    if (fullRows.isNotEmpty &&
+        ChatsModule.wasHistoryFetched(widget.chatId)) {
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -338,7 +358,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     try {
       await messagesModule.fetchHistory(_myId, widget.chatId);
-      ChatsModule.markChatClean(widget.chatId);
+      ChatsModule.markHistoryFetched(widget.chatId);
       final updatedRows = await AppDatabase.loadMessages(
         _myId,
         widget.chatId,
@@ -432,7 +452,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   @override
+  void deactivate() {
+    _saveDraft();
+    super.deactivate();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _saveDraft();
+    }
+    super.didChangeAppLifecycleState(state);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _saveDraft();
     _messageController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScrollForDate);
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
@@ -477,6 +514,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (newHasText != _hasText.value) {
       _hasText.value = newHasText;
     }
+  }
+
+  void _restoreDraft() {
+    if (_myId == 0 || _messageController.text.isNotEmpty) return;
+    final draft = DraftStore.instance.get(_myId, widget.chatId);
+    if (draft == null || draft.isEmpty) return;
+    _messageController.text = draft;
+    _messageController.selection =
+        TextSelection.collapsed(offset: draft.length);
+  }
+
+  void _saveDraft() {
+    if (_myId == 0) return;
+    unawaited(
+      DraftStore.instance.set(_myId, widget.chatId, _messageController.text),
+    );
   }
 
   void _onAttachPanelToggle() {
@@ -777,6 +830,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _bumpMessages();
     try {
       await AppDatabase.deleteMessage(_myId, widget.chatId, messageId);
+      await ChatsModule.reconcileLastMessage(_myId, widget.chatId);
     } catch (_) {}
   }
 
@@ -864,9 +918,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         Haptics.tap();
         _scrollToBottom();
         _checkPrankTrigger(message);
+        _markRead();
       case MessageEditedEvent(:final message):
         final idx = _messages.indexWhere((m) => m.id == message.id);
         if (idx == -1) return;
+        _messages[idx] = message;
+        _bumpMessages();
+      case MessageSentEvent(:final tempId, :final message):
+        final idx = _messages.indexWhere((m) => m.id == tempId);
+        if (idx == -1) return;
+        _lastSentId = message.id;
         _messages[idx] = message;
         _bumpMessages();
       case MessageRemovedEvent(:final messageId):
@@ -1063,6 +1124,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _seedPresenceFromChat() {
+    if (widget.chatType != 'DIALOG' || _myId == 0) return;
+    if (_otherStatus != 0 || _otherSeenTime != null) return;
+    final otherId = widget.chatId ^ _myId;
+    if (otherId <= 0) return;
+    final p = PresenceFetch.peek(otherId);
+    if (p == null) return;
+    _otherStatus = (p['status'] as int?) ?? 0;
+    _otherSeenTime = p['seen'] as int?;
+  }
+
   void _recomputeHeaderStatus() {
     _headerStatusNotifier.value = _headerStatus();
   }
@@ -1078,7 +1150,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       return '$count подписчиков';
     }
     if (_otherStatus == 1) return 'В сети';
-    if (_otherStatus == 3) return 'Был(-а) недавно';
+    if (_otherStatus == 2 || _otherStatus == 3) return 'Был(-а) недавно';
     final s = _otherSeenTime;
     if (s != null && s > 0) return formatLastSeen(s);
     return '';
@@ -1132,32 +1204,46 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
+    final online = api.state == SessionState.online;
+
+    final composed = CachedMessage(
+      id: tempId,
+      accountId: _myId,
+      chatId: widget.chatId,
+      senderId: _myId,
+      text: text,
+      time: now,
+      status: online ? 'sending' : 'pending',
+    );
+
+    _hasText.value = false;
+    _lastSentId = tempId;
+    _messages.add(composed);
+    _messageController.clear();
+    if (DraftStore.instance.get(_myId, widget.chatId) != null) {
+      unawaited(DraftStore.instance.clear(_myId, widget.chatId));
+    }
+    _bumpMessages();
+    unawaited(_persistOutgoing(composed));
+    unawaited(ChatsModule.applyOutgoing(
+      _myId,
+      widget.chatId,
+      messageId: tempId,
+      time: now,
+      text: text,
+      status: composed.status ?? 'sending',
+    ));
+
+    // Instant tactile "whoosh" the moment the message leaves the composer,
+    // not after the network round-trip — feedback must feel immediate.
+    Haptics.send();
+
+    _scrollToBottom();
+    _checkPrankTrigger(composed);
+
+    if (!online) return;
 
     try {
-      final tempMessage = CachedMessage(
-        id: tempId,
-        accountId: _myId,
-        chatId: widget.chatId,
-        senderId: _myId,
-        text: text,
-        time: now,
-        status: 'sending',
-      );
-
-      _hasText.value = false;
-      _lastSentId = tempId;
-      _messages.add(tempMessage);
-      _messageController.clear();
-      _bumpMessages();
-      unawaited(_persistOutgoing(tempMessage));
-
-      // Instant tactile "whoosh" the moment the message leaves the composer,
-      // not after the network round-trip — feedback must feel immediate.
-      Haptics.send();
-
-      _scrollToBottom();
-      _checkPrankTrigger(tempMessage);
-
       final actualId = await messagesModule.sendMessage(
         _myId,
         widget.chatId,
@@ -1178,6 +1264,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _messages[index] = sent;
         _bumpMessages();
         unawaited(_persistOutgoing(sent, removeId: tempId));
+        unawaited(ChatsModule.applyOutgoing(
+          _myId,
+          widget.chatId,
+          messageId: sent.id,
+          time: now,
+          text: text,
+          status: 'sent',
+        ));
       }
 
       if (chat == null) {
@@ -1190,21 +1284,28 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         );
       }
     } catch (e) {
-      Haptics.error();
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
-        final failed = CachedMessage(
+        final queued = CachedMessage(
           id: tempId,
           accountId: _myId,
           chatId: widget.chatId,
           senderId: _myId,
           text: text,
           time: now,
-          status: 'error',
+          status: 'pending',
         );
-        _messages[index] = failed;
+        _messages[index] = queued;
         _bumpMessages();
-        unawaited(_persistOutgoing(failed));
+        unawaited(_persistOutgoing(queued));
+        unawaited(ChatsModule.applyOutgoing(
+          _myId,
+          widget.chatId,
+          messageId: tempId,
+          time: now,
+          text: text,
+          status: 'pending',
+        ));
       }
     }
   }

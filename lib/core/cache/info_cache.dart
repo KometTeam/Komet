@@ -135,6 +135,16 @@ class PresenceFetch {
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 
+  static void primeAll(Map<dynamic, dynamic> presence) {
+    final now = DateTime.now();
+    presence.forEach((key, value) {
+      if (value is! Map) return;
+      final id = key is int ? key : int.tryParse(key.toString());
+      if (id == null) return;
+      _cache.putValue(id, Map<String, dynamic>.from(value), at: now);
+    });
+  }
+
   static Future<Map<String, dynamic>?> _fetch(int id) async {
     final results = await _fetchBatch([id]);
     return results[id];

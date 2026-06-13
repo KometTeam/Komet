@@ -376,9 +376,11 @@ class MessagesModule {
     }
 
     if (rows.isNotEmpty) {
-      AppDatabase.saveMessages(rows).catchError((e) {
+      try {
+        await AppDatabase.saveMessages(rows);
+      } catch (e) {
         logger.e('saveMessages error: $e');
-      });
+      }
     }
 
     return results;

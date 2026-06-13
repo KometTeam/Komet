@@ -31,6 +31,7 @@ import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../main.dart'
     show accountModule, api, messagesModule, appRouteObserver;
@@ -123,6 +124,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   Timer? _contactRebuildTimer;
   bool _deferReloads = false;
   bool _reloadQueued = false;
+  bool _reloadInFlight = false;
   Timer? _settleTimer;
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
   bool? _foldersListKnown;
@@ -488,8 +490,13 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
     });
     ChatsModule.chatsChanged.addListener(_onChatsChanged);
+    DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
-    _reloadChatsAndFolders();
+    unawaited(_runReload());
+  }
+
+  void _onDraftsChanged() {
+    if (mounted) _requestReload();
   }
 
   void _onStoriesEnabledChanged() {
@@ -526,18 +533,31 @@ class _ChatListScreenState extends State<ChatListScreen>
       _deferReloads = false;
       if (_reloadQueued) {
         _reloadQueued = false;
-        _reloadChatsAndFolders();
+        unawaited(_runReload());
       }
     });
   }
 
   void _requestReload() {
     if (!mounted) return;
-    if (_deferReloads) {
+    if (_deferReloads || _reloadInFlight) {
       _reloadQueued = true;
       return;
     }
-    _reloadChatsAndFolders();
+    unawaited(_runReload());
+  }
+
+  Future<void> _runReload() async {
+    _reloadInFlight = true;
+    try {
+      await _reloadChatsAndFolders();
+    } finally {
+      _reloadInFlight = false;
+      if (_reloadQueued && mounted && !_deferReloads) {
+        _reloadQueued = false;
+        unawaited(_runReload());
+      }
+    }
   }
 
   void _onChatsChanged() {
@@ -1019,6 +1039,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     ChatsModule.chatsChanged.removeListener(_onChatsChanged);
+    DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
@@ -1458,6 +1479,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isPinned: isPinned,
                     chatType: "DIALOG",
                     messageItalic: isPlaceholder,
+                    draft: _draftFor(chat.id),
+                    ownStatus: _ownStatusFor(chat, isPlaceholder),
+                    ownRead: chat.lastMsgReadByOthers,
                   );
                 } else {
                   final isPlaceholder =
@@ -1493,6 +1517,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     isPinned: isPinned,
                     chatType: chat.type,
                     messageItalic: isPlaceholder,
+                    draft: chat.id == 0 ? null : _draftFor(chat.id),
+                    ownStatus: _ownStatusFor(chat, isPlaceholder),
+                    ownRead: chat.lastMsgReadByOthers,
                   );
                 }
               }, childCount: totalItems),
@@ -2054,6 +2081,46 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  String? _draftFor(int chatId) {
+    final raw = DraftStore.instance.get(_profile?.id ?? 0, chatId);
+    if (raw == null) return null;
+    final oneLine = raw.replaceAll('\n', ' ').trim();
+    return oneLine.isEmpty ? null : oneLine;
+  }
+
+  String? _ownStatusFor(CachedChat chat, bool isPlaceholder) {
+    if (isPlaceholder || chat.id == 0) return null;
+    final me = _profile?.id;
+    if (me == null || chat.lastMsgSenderId != me) return null;
+    return chat.lastMsgStatus ?? 'sent';
+  }
+
+  Widget _ownStatusIcon(ColorScheme cs, String status, bool read) {
+    IconData icon;
+    Color color;
+    switch (status) {
+      case 'sending':
+      case 'pending':
+        icon = Symbols.schedule;
+        color = cs.outline;
+      case 'error':
+        icon = Symbols.error;
+        color = Colors.redAccent;
+      default:
+        if (read) {
+          icon = Symbols.done_all;
+          color = const Color(0xFF4FC3F7);
+        } else {
+          icon = Symbols.check;
+          color = cs.outline;
+        }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Icon(icon, size: 16, color: color, fill: 1),
+    );
+  }
+
   Widget _buildChatItem(
     String id,
     String name,
@@ -2069,9 +2136,15 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isPinned = false,
     String chatType = "CHAT",
     bool messageItalic = false,
+    String? draft,
+    String? ownStatus,
+    bool ownRead = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
+    final Widget? statusIcon = (ownStatus != null && draft == null)
+        ? _ownStatusIcon(cs, ownStatus, ownRead)
+        : null;
 
     return InkWell(
       key: ValueKey('chat_$id'),
@@ -2255,23 +2328,47 @@ class _ChatListScreenState extends State<ChatListScreen>
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Expanded(
-                              child: Text(
-                                message,
-                                style: TextStyle(
-                                  color: isTyping ? cs.primary : cs.outline,
-                                  fontSize: 14,
-                                  fontWeight: isTyping
-                                      ? FontWeight.w500
-                                      : FontWeight.w400,
-                                  fontStyle: messageItalic
-                                      ? FontStyle.italic
-                                      : FontStyle.normal,
-                                  height: 1.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: draft != null
+                                  ? Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text: 'Черновик: ',
+                                            style: TextStyle(color: cs.error),
+                                          ),
+                                          TextSpan(
+                                            text: draft,
+                                            style: TextStyle(color: cs.outline),
+                                          ),
+                                        ],
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w400,
+                                          fontStyle: FontStyle.italic,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  : Text(
+                                      message,
+                                      style: TextStyle(
+                                        color: isTyping ? cs.primary : cs.outline,
+                                        fontSize: 14,
+                                        fontWeight: isTyping
+                                            ? FontWeight.w500
+                                            : FontWeight.w400,
+                                        fontStyle: messageItalic
+                                            ? FontStyle.italic
+                                            : FontStyle.normal,
+                                        height: 1.2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                             ),
+                            ?statusIcon,
                             const SizedBox(width: 8),
                             if (unreadCount > 0)
                               Container(
@@ -2282,13 +2379,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 decoration: BoxDecoration(
                                   color: isMuted
                                       ? cs.surfaceContainerHighest
-                                      : cs.surfaceContainerHigh,
+                                      : cs.primary,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   unreadCount.toString(),
                                   style: TextStyle(
-                                    color: isMuted ? cs.outline : cs.onSurface,
+                                    color: isMuted ? cs.outline : cs.onPrimary,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     height: 1.1,

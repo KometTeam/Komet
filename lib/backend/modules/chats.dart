@@ -39,6 +39,7 @@ class CachedChat {
   final String? lastMsgText;
   final String? lastMsgTextOneLine;
   final int? lastMsgSenderId;
+  final String? lastMsgStatus;
   final int unreadCount;
   final int lastEventTime;
   final int cachedAt;
@@ -61,6 +62,7 @@ class CachedChat {
     this.lastMsgTime,
     this.lastMsgText,
     this.lastMsgSenderId,
+    this.lastMsgStatus,
     required this.unreadCount,
     required this.lastEventTime,
     required this.cachedAt,
@@ -77,6 +79,15 @@ class CachedChat {
             : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
+
+  bool get lastMsgReadByOthers {
+    final t = lastMsgTime;
+    if (t == null) return false;
+    for (final entry in participants.entries) {
+      if (entry.key != accountId && entry.value >= t) return true;
+    }
+    return false;
+  }
 
   bool iAmAdmin(int myId) => owner == myId || admins.contains(myId);
 
@@ -96,6 +107,7 @@ class CachedChat {
     lastMsgTime: row['last_msg_time'] as int?,
     lastMsgText: row['last_msg_text'] as String?,
     lastMsgSenderId: row['last_msg_sender'] as int?,
+    lastMsgStatus: row['last_msg_status'] as String?,
     unreadCount: row['unread_count'] as int,
     lastEventTime: row['last_event_time'] as int,
     cachedAt: row['cached_at'] as int,
@@ -133,6 +145,7 @@ class CachedChat {
     'last_msg_time': lastMsgTime,
     'last_msg_text': lastMsgText,
     'last_msg_sender': lastMsgSenderId,
+    'last_msg_status': lastMsgStatus,
     'unread_count': unreadCount,
     'last_event_time': lastEventTime,
     'cached_at': cachedAt,
@@ -171,6 +184,12 @@ class MessageReactionsChangedEvent extends MessageEvent {
   final String messageId;
   final Map<String, dynamic>? reactionInfo;
   const MessageReactionsChangedEvent(super.chatId, this.messageId, this.reactionInfo);
+}
+
+class MessageSentEvent extends MessageEvent {
+  final String tempId;
+  final CachedMessage message;
+  const MessageSentEvent(super.chatId, this.tempId, this.message);
 }
 
 class ChatsModule {
@@ -237,6 +256,63 @@ class ChatsModule {
   static Stream<MessageEvent> get messageEvents =>
       _messageEventsController.stream;
 
+  static void emitMessageSent(int chatId, String tempId, CachedMessage message) {
+    _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
+  }
+
+  static Future<void> markRead(
+    Api api,
+    int accountId,
+    int chatId,
+    String messageId,
+    int mark,
+  ) async {
+    final msgIdNum = int.tryParse(messageId);
+    if (msgIdNum != null) {
+      try {
+        await api.sendRequest(Opcode.chatMark, {
+          'type': 'READ_MESSAGE',
+          'chatId': chatId,
+          'messageId': msgIdNum,
+          'mark': mark,
+        });
+      } catch (_) {}
+    }
+
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final row = Map<String, dynamic>.from(rows.first);
+    if ((row['unread_count'] as int? ?? 0) == 0) return;
+    row['unread_count'] = 0;
+    await AppDatabase.saveChats([row]);
+    _bump();
+  }
+
+  static Future<void> applyOutgoing(
+    int accountId,
+    int chatId, {
+    required String messageId,
+    required int time,
+    required String text,
+    required String status,
+  }) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final row = Map<String, dynamic>.from(rows.first);
+    final thisId = int.tryParse(messageId);
+    final existingTime = (row['last_msg_time'] as int?) ?? 0;
+    final existingId = row['last_msg_id'] as int?;
+    if (time < existingTime && existingId != thisId) return;
+    row['last_msg_id'] = thisId;
+    row['last_msg_text'] = text;
+    row['last_msg_time'] = time;
+    row['last_event_time'] = time;
+    row['last_msg_sender'] = accountId;
+    row['last_msg_status'] = status;
+    await AppDatabase.saveChats([row]);
+    _bump();
+  }
+
   static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   static void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
@@ -244,52 +320,33 @@ class ChatsModule {
   static StreamSubscription<SessionState>? _globalStateSub;
   static Future<void> _pushQueue = Future.value();
 
-  static final Set<int> _dirtyChats = {};
-  static final Set<int> _knownChats = {};
+  static final Set<int> _historyFetched = {};
 
-  static bool isChatDirty(int chatId) => _dirtyChats.contains(chatId);
-  static void markChatClean(int chatId) => _dirtyChats.remove(chatId);
-  static void markChatDirty(int chatId) => _dirtyChats.add(chatId);
-  static void registerKnownChat(int chatId) => _knownChats.add(chatId);
+  static bool wasHistoryFetched(int chatId) =>
+      _historyFetched.contains(chatId);
+  static void markHistoryFetched(int chatId) => _historyFetched.add(chatId);
 
   static void attachGlobalPushHandlers(Api api) {
     _globalPushSub?.cancel();
     _globalStateSub?.cancel();
     _globalPushSub = api.pushStream.listen(_enqueueGlobalPush);
     _globalStateSub = api.stateStream.listen(_handleSessionState);
-    if (api.state != SessionState.online) {
-      _markAllKnownChatsDirty();
-    }
   }
 
-  static Future<void> _handleSessionState(SessionState state) async {
+  static void _handleSessionState(SessionState state) {
     if (state == SessionState.disconnected) {
       ContactInfoFetch.clear();
       PresenceFetch.clear();
       ChatInfoFetch.clear();
-      await _markAllKnownChatsDirty();
+      _historyFetched.clear();
     }
   }
 
   static void resetForAccountSwitch() {
-    _dirtyChats.clear();
-    _knownChats.clear();
+    _historyFetched.clear();
     ContactInfoFetch.clear();
     PresenceFetch.clear();
     ChatInfoFetch.clear();
-  }
-
-  static Future<void> _markAllKnownChatsDirty() async {
-    if (_knownChats.isEmpty) {
-      final accountId = await TokenStorage.getActiveAccountId();
-      if (accountId == null) return;
-      final rows = await AppDatabase.loadChats(accountId);
-      for (final row in rows) {
-        final id = row['id'];
-        if (id is int) _knownChats.add(id);
-      }
-    }
-    _dirtyChats.addAll(_knownChats);
   }
 
   static void _enqueueGlobalPush(Packet packet) {
@@ -308,7 +365,37 @@ class ChatsModule {
         await _handleNotifMark(packet);
       case Opcode.notifMsgReactionsChanged:
         await _handleNotifMsgReactionsChanged(packet);
+      case Opcode.notifMsgDelete:
+        await _handleNotifMsgDelete(packet);
     }
+  }
+
+  static Future<void> _handleNotifMsgDelete(Packet packet) async {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+
+    final chatMap = payload['chat'];
+    int? chatId;
+    if (chatMap is Map && chatMap['id'] is int) {
+      chatId = chatMap['id'] as int;
+      await cacheServerChat(chatMap.cast<dynamic, dynamic>(), accountId);
+    } else if (payload['chatId'] is int) {
+      chatId = payload['chatId'] as int;
+    }
+    if (chatId == null) return;
+
+    final ids = payload['messageIds'];
+    if (ids is List) {
+      for (final raw in ids) {
+        final id = raw?.toString();
+        if (id == null || id.isEmpty) continue;
+        await AppDatabase.deleteMessage(accountId, chatId, id);
+        _messageEventsController.add(MessageRemovedEvent(chatId, id));
+      }
+    }
+    _bump();
   }
 
   static Future<void> _handleNotifMessage(Packet packet) async {
@@ -422,6 +509,7 @@ class ChatsModule {
       }
       newRow['last_msg_text'] = messagePreviewText(msg);
       if (senderId != null) newRow['last_msg_sender'] = senderId;
+      newRow['last_msg_status'] = 'sent';
     }
     if (unread != null) newRow['unread_count'] = unread;
 
@@ -455,10 +543,12 @@ class ChatsModule {
       newRow['last_msg_text'] = previewText ?? m['text'];
       newRow['last_msg_time'] = m['time'];
       newRow['last_msg_sender'] = m['sender_id'];
+      newRow['last_msg_status'] = m['status'];
     } else {
       newRow['last_msg_id'] = null;
       newRow['last_msg_text'] = lastMsgPlaceholder;
       newRow['last_msg_sender'] = null;
+      newRow['last_msg_status'] = null;
     }
     if (unread != null) newRow['unread_count'] = unread;
     await AppDatabase.saveChats([newRow]);
@@ -475,6 +565,13 @@ class ChatsModule {
     if (rows.isEmpty) return;
     final chat = CachedChat.fromDbRow(rows.first);
     if (chat.lastMsgText != lastMsgPlaceholder) return;
+    await _reconcileLastMessage(accountId, chatId, rows.first);
+    _bump();
+  }
+
+  static Future<void> reconcileLastMessage(int accountId, int chatId) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
     await _reconcileLastMessage(accountId, chatId, rows.first);
     _bump();
   }
@@ -550,6 +647,7 @@ class ChatsModule {
     if (cached.participants[userId] == mark) return;
     cached.participants[userId] = mark;
     await AppDatabase.saveChats([cached.toDbRow()]);
+    _bump();
   }
 
   static final Set<int> _pendingContactUpdates = {};
@@ -655,7 +753,6 @@ class ChatsModule {
       logger.w('cacheServerChat: parse returned null for chat=${chat['id']}');
       return null;
     }
-    _knownChats.add(parsed.id);
     final ex = existing[parsed.id];
     if (ex != null && _sameContent(ex, parsed)) {
       return parsed;
@@ -713,6 +810,7 @@ class ChatsModule {
 
       // Presence for online statuses
       final presenceMap = data['presence'] is Map ? data['presence'] as Map : {};
+      PresenceFetch.primeAll(presenceMap);
       final cachedAt = DateTime.now().millisecondsSinceEpoch;
 
       final existingRows = await AppDatabase.loadChats(accountId);
@@ -752,9 +850,6 @@ class ChatsModule {
     try {
       final rows = await AppDatabase.loadChats(accountId);
       final chats = rows.map(CachedChat.fromDbRow).toList();
-      for (final c in chats) {
-        _knownChats.add(c.id);
-      }
       return chats;
     } catch (e) {
       logger.e("Ошибка при получении чатов: $e");
