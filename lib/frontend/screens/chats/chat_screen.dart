@@ -43,6 +43,7 @@ import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
+import '../../widgets/schedule_time_picker.dart';
 import 'scheduled_messages_screen.dart';
 
 class _UploadStatus {
@@ -110,6 +111,7 @@ class _ChatScreenState extends State<ChatScreen>
   final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers =
       {};
   final Map<String, ValueNotifier<List<double>>> _photoUploadProgress = {};
+  final ValueNotifier<int> _scheduledCount = ValueNotifier(0);
 
   ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
       _photoUploadProgress[m.id];
@@ -194,7 +196,10 @@ class _ChatScreenState extends State<ChatScreen>
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _pushSub = api.pushStream
         .where(
-          (p) => p.opcode == Opcode.notifMark || p.opcode == Opcode.notifTyping,
+          (p) =>
+              p.opcode == Opcode.notifMark ||
+              p.opcode == Opcode.notifTyping ||
+              p.opcode == Opcode.notifMsgDelayed,
         )
         .listen(_onIncomingPush);
     _messageEventSub = ChatsModule.messageEvents
@@ -330,6 +335,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (widget.chatType == 'DIALOG') {
       unawaited(_loadOtherPresence());
     }
+    unawaited(_refreshScheduledCount());
     await _loadRemainingHistory();
   }
 
@@ -478,6 +484,7 @@ class _ChatScreenState extends State<ChatScreen>
     _floatingDateAnimController.dispose();
     _floatingDate.dispose();
     _hasText.dispose();
+    _scheduledCount.dispose();
     _showAttachmentPanel.removeListener(_onAttachPanelToggle);
     _showAttachmentPanel.dispose();
     _uploadSub?.cancel();
@@ -669,7 +676,23 @@ class _ChatScreenState extends State<ChatScreen>
         _onMessageRead(packet);
       case Opcode.notifTyping:
         _onTyping(packet);
+      case Opcode.notifMsgDelayed:
+        final p = packet.payload;
+        if (p is Map && p['chatId'] == widget.chatId) {
+          _refreshScheduledCount();
+        }
     }
+  }
+
+  Future<void> _refreshScheduledCount() async {
+    if (_myId == 0) return;
+    try {
+      final list = await messagesModule.fetchDelayedMessages(
+        _myId,
+        widget.chatId,
+      );
+      if (mounted) _scheduledCount.value = list.length;
+    } catch (_) {}
   }
 
   void _bumpMessages() {
@@ -1066,9 +1089,14 @@ class _ChatScreenState extends State<ChatScreen>
             ],
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Symbols.schedule, weight: 400),
-              onPressed: _openScheduledMessages,
+            ValueListenableBuilder<int>(
+              valueListenable: _scheduledCount,
+              builder: (_, count, _) => count > 0
+                  ? IconButton(
+                      icon: const Icon(Symbols.schedule, weight: 400),
+                      onPressed: _openScheduledMessages,
+                    )
+                  : const SizedBox.shrink(),
             ),
             IconButton(
               icon: const Icon(Symbols.call, weight: 400),
@@ -1339,47 +1367,22 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  Future<DateTime?> _pickScheduleTime() async {
-    final now = DateTime.now();
-    final suggested = now.add(const Duration(hours: 1));
-    final date = await showDatePicker(
-      context: context,
-      initialDate: suggested,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-    );
-    if (date == null || !mounted) return null;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(suggested),
-    );
-    if (time == null) return null;
-    final result = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
-    if (!result.isAfter(DateTime.now())) {
-      if (mounted) {
-        showCustomNotification(context, 'Время должно быть в будущем');
-      }
-      return null;
-    }
-    return result;
-  }
+  Future<DateTime?> _pickScheduleTime() => showScheduleTimePicker(context);
 
   void _openScheduledMessages() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ScheduledMessagesScreen(
-          chatId: widget.chatId,
-          accountId: _myId,
-          chatName: widget.name,
-        ),
-      ),
-    );
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => ScheduledMessagesScreen(
+              chatId: widget.chatId,
+              accountId: _myId,
+              chatName: widget.name,
+            ),
+          ),
+        )
+        .then((_) {
+          if (mounted) _refreshScheduledCount();
+        });
   }
 
   Future<void> _persistOutgoing(CachedMessage msg, {String? removeId}) async {
@@ -1802,13 +1805,18 @@ class _ChatScreenState extends State<ChatScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              IconButton(
-                                icon: Icon(
-                                  Symbols.schedule,
-                                  weight: 500,
-                                  color: cs.onSurface,
-                                ),
-                                onPressed: _openScheduledMessages,
+                              ValueListenableBuilder<int>(
+                                valueListenable: _scheduledCount,
+                                builder: (_, count, _) => count > 0
+                                    ? IconButton(
+                                        icon: Icon(
+                                          Symbols.schedule,
+                                          weight: 500,
+                                          color: cs.onSurface,
+                                        ),
+                                        onPressed: _openScheduledMessages,
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
                               IconButton(
                                 icon: Icon(

@@ -12,6 +12,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/schedule_time_picker.dart';
 
 class ScheduledMessagesScreen extends StatefulWidget {
   final int chatId;
@@ -69,34 +70,8 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
     });
   }
 
-  Future<DateTime?> _pickTime(DateTime initial) async {
-    final now = DateTime.now();
-    final base = initial.isAfter(now) ? initial : now.add(const Duration(hours: 1));
-    final date = await showDatePicker(
-      context: context,
-      initialDate: base,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-    );
-    if (date == null || !mounted) return null;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(base),
-    );
-    if (time == null) return null;
-    final result = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
-    if (!result.isAfter(DateTime.now())) {
-      if (mounted) showCustomNotification(context, 'Время должно быть в будущем');
-      return null;
-    }
-    return result;
-  }
+  Future<DateTime?> _pickTime(DateTime initial) =>
+      showScheduleTimePicker(context, initial: initial, title: 'Когда отправить');
 
   Future<void> _edit(CachedMessage msg) async {
     final controller = TextEditingController(text: msg.text ?? '');
