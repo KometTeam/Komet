@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
@@ -145,6 +146,11 @@ class _ChatListScreenState extends State<ChatListScreen>
   ProfileData? _profile;
 
   List<CachedChat> _chats = [];
+
+  int _chatListRevision = 0;
+  final Set<String> _knownChatIds = {};
+  bool _didInitialChatLoad = false;
+  Set<String> _enteringChatIds = {};
 
   SessionState _sessionState = SessionState.disconnected;
 
@@ -599,12 +605,25 @@ class _ChatListScreenState extends State<ChatListScreen>
 
       final pageCount = folders.isEmpty ? 1 : folders.length;
       _syncFolderChatScrollControllersForCount(pageCount);
+
+      final filteredChats = chats
+          .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
+          .toList();
+      final newIds = filteredChats.map((c) => c.id.toString()).toSet();
+      final entering = _didInitialChatLoad
+          ? newIds.difference(_knownChatIds)
+          : <String>{};
+      _knownChatIds
+        ..clear()
+        ..addAll(newIds);
+      _didInitialChatLoad = true;
+
       if (mounted) {
         setState(() {
           _profile = p;
-          _chats = chats
-              .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
-              .toList();
+          _chats = filteredChats;
+          _enteringChatIds = entering;
+          _chatListRevision++;
           _folders = folders;
           _foldersListKnown = foldersKnown;
           if (_selectedFolderId != null &&
@@ -626,6 +645,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _jumpFolderPageToSelection();
+          if (_enteringChatIds.isNotEmpty) _enteringChatIds = <String>{};
         });
       }
     } catch (_) {
@@ -1382,6 +1402,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     final totalItems = _isInitialLoading
         ? 10
         : chats.length + (hasSeparator ? 1 : 0);
+    final idToIndex = <String, int>{
+      for (var i = 0; i < chats.length; i++) chats[i].id.toString(): i,
+    };
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification n) {
         if (_currentNavIndex != 0) return false;
@@ -1467,7 +1490,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                   final previewText = isPlaceholder
                       ? 'зайдите в чат для подгрузки'
                       : (chat.lastMsgTextOneLine ?? '');
-                  return _buildChatItem(
+                  return _animateChatTile(
+                    chat.id.toString(),
+                    _buildChatItem(
                     chat.id.toString(),
                     name ?? "Пользователь",
                     previewText,
@@ -1483,6 +1508,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     draft: _draftFor(chat.id),
                     ownStatus: _ownStatusFor(chat, isPlaceholder),
                     ownRead: chat.lastMsgReadByOthers,
+                  ),
                   );
                 } else {
                   final isPlaceholder =
@@ -1503,7 +1529,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     }
                   }
 
-                  return _buildChatItem(
+                  return _animateChatTile(
+                    chat.id.toString(),
+                    _buildChatItem(
                     chat.id.toString(),
                     chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
                     fullMsg,
@@ -1520,9 +1548,17 @@ class _ChatListScreenState extends State<ChatListScreen>
                     draft: chat.id == 0 ? null : _draftFor(chat.id),
                     ownStatus: _ownStatusFor(chat, isPlaceholder),
                     ownRead: chat.lastMsgReadByOthers,
+                  ),
                   );
                 }
-              }, childCount: totalItems),
+              }, childCount: totalItems, findChildIndexCallback: (Key key) {
+                if (key is! ValueKey<String>) return null;
+                final v = key.value;
+                if (!v.startsWith('chat_')) return null;
+                final idx = idToIndex[v.substring(5)];
+                if (idx == null) return null;
+                return hasSeparator && idx >= pinnedCount ? idx + 1 : idx;
+              }),
             ),
           SliverPadding(
             padding: EdgeInsets.only(
@@ -2121,6 +2157,16 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Widget _animateChatTile(String id, Widget child) {
+    return _AnimatedChatTile(
+      key: ValueKey('chat_$id'),
+      id: id,
+      revision: _chatListRevision,
+      isNew: _enteringChatIds.contains(id),
+      child: child,
+    );
+  }
+
   Widget _buildChatItem(
     String id,
     String name,
@@ -2552,4 +2598,122 @@ class _StoriesUi extends ChangeNotifier {
   bool shouldCollapseSearch = false;
 
   void notify() => notifyListeners();
+}
+
+class _AnimatedChatTile extends StatefulWidget {
+  final Widget child;
+  final String id;
+  final int revision;
+  final bool isNew;
+
+  const _AnimatedChatTile({
+    required Key key,
+    required this.child,
+    required this.id,
+    required this.revision,
+    required this.isNew,
+  }) : super(key: key);
+
+  @override
+  State<_AnimatedChatTile> createState() => _AnimatedChatTileState();
+}
+
+class _AnimatedChatTileState extends State<_AnimatedChatTile>
+    with SingleTickerProviderStateMixin {
+  static const Duration _moveDuration = Duration(milliseconds: 300);
+  static const Duration _enterDuration = Duration(milliseconds: 260);
+
+  AnimationController? _controller;
+  double? _lastContentY;
+  late int _lastRevision;
+  double _moveDy = 0;
+  bool _entering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastRevision = widget.revision;
+    if (widget.isNew) {
+      _entering = true;
+      final c = _controller = AnimationController(
+        vsync: this,
+        duration: _enterDuration,
+      );
+      c.forward(from: 0).whenComplete(() {
+        if (mounted) setState(() => _entering = false);
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _lastContentY = _measureContentY();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedChatTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.revision == _lastRevision) return;
+    _lastRevision = widget.revision;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _runMove();
+    });
+  }
+
+  double? _measureContentY() {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached) return null;
+    try {
+      return RenderAbstractViewport.of(box).getOffsetToReveal(box, 0.0).offset;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _runMove() {
+    final newY = _measureContentY();
+    final oldY = _lastContentY;
+    if (newY != null) _lastContentY = newY;
+    debugPrint('[FLIP] move id=${widget.id} oldY=$oldY newY=$newY');
+    if (_entering || oldY == null || newY == null) return;
+    final dy = oldY - newY;
+    if (dy.abs() < 1.0 || dy.abs() > 2000) return;
+    final c = _controller ??= AnimationController(vsync: this);
+    c.duration = _moveDuration;
+    setState(() => _moveDy = dy);
+    c.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    if (c == null) return SizedBox(child: widget.child);
+    return SizedBox(
+      child: AnimatedBuilder(
+        animation: c,
+        builder: (context, child) {
+          if (_entering) {
+            final t = Curves.easeOut.transform(c.value);
+            return Opacity(
+              opacity: t,
+              child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
+            );
+          }
+          if (_moveDy != 0) {
+            final t = 1 - Curves.easeOutCubic.transform(c.value);
+            return Transform.translate(
+              offset: Offset(0, _moveDy * t),
+              child: child,
+            );
+          }
+          return child!;
+        },
+        child: widget.child,
+      ),
+    );
+  }
 }
