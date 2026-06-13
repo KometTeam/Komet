@@ -24,6 +24,8 @@ class SelfCheckService {
     _timer = Timer.periodic(interval, (_) => unawaited(_check()));
   }
 
+  void checkNow() => unawaited(_check());
+
   Future<void> _check() async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return;

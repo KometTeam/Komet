@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import '../../../main.dart' show api;
+import '../../../main.dart' show api, accountModule;
+import '../../../backend/api.dart';
+import '../../../backend/modules/account.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../backend/modules/calls.dart';
@@ -17,11 +21,28 @@ class _CallsTabState extends State<CallsTab> {
   List<CallLogEntry> _calls = [];
   bool _isLoading = true;
   int _selectedTabIndex = 0; // 0 for 'Все', 1 for 'Пропущенные'
+  StreamSubscription<LoginStatus>? _loginSub;
 
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+    if (api.state == SessionState.online) {
+      _loadHistory();
+    } else {
+      _loginSub = accountModule.loginStatusStream.listen((status) {
+        if (status == LoginStatus.success) {
+          _loginSub?.cancel();
+          _loginSub = null;
+          _loadHistory();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _loginSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {

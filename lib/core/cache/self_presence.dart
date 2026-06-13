@@ -11,6 +11,10 @@ class SelfPresence {
     isOnline.value = true;
   }
 
+  static void markOffline() {
+    isOnline.value = false;
+  }
+
   static void markOfflineFromPing() {
     if (isOnline.value || lastSeenSeconds.value == null) {
       lastSeenSeconds.value = _nowSeconds;

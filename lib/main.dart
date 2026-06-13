@@ -127,7 +127,7 @@ void main() async {
   await FileHistoryCache.load(prefs);
   await DraftStore.instance.load();
   await KometSettings.load();
-  if (KometSettings.ghostMode.value) SelfPresence.markOfflineFromPing();
+  if (KometSettings.ghostMode.value) SelfPresence.markOffline();
   await ContactCache.load();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
@@ -262,6 +262,7 @@ class KometAppState extends State<KometApp>
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
         SelfCheckService.instance.init(api);
+        SelfCheckService.instance.checkNow();
         if (isOnemeFlavor) {
           await PushService.instance.init(api: api, account: accountModule);
           await PushService.instance.onLoginSuccess();
