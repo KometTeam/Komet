@@ -52,6 +52,7 @@ class FileUploader {
     required File file,
     required String filename,
     required int totalSize,
+    int? scheduledTime,
     Duration autoForceAfter = const Duration(seconds: 1),
     Duration overallTimeout = const Duration(minutes: 5),
     Duration progressThrottle = const Duration(milliseconds: 16),
@@ -125,6 +126,7 @@ class FileUploader {
           chatId,
           info.fileId,
           token: info.token,
+          scheduledTime: scheduledTime,
         );
         if (cancelled) return;
         if (!ok) {
@@ -301,6 +303,135 @@ class FileUploader {
       return _parsePhotoToken(responseBody);
     } catch (e) {
       logger.w('uploadPhoto: $e');
+      try {
+        socket?.destroy();
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  /// Загружает видео на CDN-URL (vu.okcdn.ru/upload.do), полученный из
+  /// [MessagesModule.requestVideoUploadUrl], по протоколу OK с докачкой:
+  /// сначала GET-хендшейк (возвращает уже загруженный оффсет), затем
+  /// параллельная отправка чанков по [chunkSize] байт через `Content-Range`
+  /// ([concurrency] одновременных соединений, режим `X-Uploading-Mode:
+  /// parallel`). Токен уже известен, поэтому возвращается только признак
+  /// успеха.
+  Future<bool> uploadVideoFile(
+    Uri uri,
+    File file, {
+    void Function(int sent, int total)? onProgress,
+    int chunkSize = 2 * 1024 * 1024,
+    int concurrency = 4,
+    Duration overallTimeout = const Duration(minutes: 30),
+  }) async {
+    final total = await file.length();
+    if (total <= 0) return false;
+
+    final fileName =
+        (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
+
+    final handshake = await _okCdnRequest(
+      uri,
+      method: 'GET',
+      fileName: fileName,
+      timeout: const Duration(seconds: 30),
+    );
+    if (handshake == null || handshake.$1 != 200) return false;
+
+    var startOffset = 0;
+    final resumed = int.tryParse(handshake.$2.trim());
+    if (resumed != null && resumed > 0 && resumed <= total) {
+      startOffset = resumed;
+    }
+
+    final ranges = <(int, int)>[];
+    for (var o = startOffset; o < total; o += chunkSize) {
+      ranges.add((o, o + chunkSize < total ? o + chunkSize : total));
+    }
+    if (ranges.isEmpty) return true;
+
+    var nextIndex = 0;
+    var sent = startOffset;
+    var failed = false;
+
+    Future<void> worker() async {
+      while (!failed) {
+        final i = nextIndex++;
+        if (i >= ranges.length) return;
+        final (start, end) = ranges[i];
+        final bytes = await _readRange(file, start, end);
+
+        final resp = await _okCdnRequest(
+          uri,
+          method: 'POST',
+          fileName: fileName,
+          body: bytes,
+          contentRange: 'bytes $start-${end - 1}/$total',
+          timeout: overallTimeout,
+        );
+        if (resp == null || (resp.$1 != 200 && resp.$1 != 201)) {
+          logger.w('uploadVideoFile: chunk status=${resp?.$1}');
+          failed = true;
+          return;
+        }
+
+        sent += end - start;
+        onProgress?.call(sent, total);
+      }
+    }
+
+    final workerCount = concurrency < ranges.length
+        ? concurrency
+        : ranges.length;
+    await Future.wait(List.generate(workerCount, (_) => worker()));
+    return !failed;
+  }
+
+  Future<Uint8List> _readRange(File file, int start, int end) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in file.openRead(start, end)) {
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
+  }
+
+  Future<(int, String)?> _okCdnRequest(
+    Uri uri, {
+    required String method,
+    required String fileName,
+    Uint8List? body,
+    String? contentRange,
+    required Duration timeout,
+  }) async {
+    Socket? socket;
+    try {
+      socket = await _openSocket(uri);
+      final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
+      final headers = StringBuffer()
+        ..write('$method $path HTTP/1.1\r\n')
+        ..write('Host: ${uri.host}\r\n')
+        ..write('Content-Type: application/x-binary; charset=x-user-defined\r\n')
+        ..write('Content-Disposition: attachment; fileName="$fileName"\r\n');
+      if (contentRange != null) {
+        headers.write('Content-Range: $contentRange\r\n');
+      }
+      headers
+        ..write('Content-Length: ${body?.length ?? 0}\r\n')
+        ..write('X-Uploading-Mode: parallel\r\n')
+        ..write('Connection: close\r\n')
+        ..write('\r\n');
+      socket.add(utf8.encode(headers.toString()));
+      if (body != null && body.isNotEmpty) socket.add(body);
+      await socket.flush();
+
+      final response = await _readFullResponse(socket, timeout: timeout);
+      try {
+        socket.destroy();
+      } catch (_) {}
+      return response;
+    } catch (e) {
+      logger.w('_okCdnRequest($method): $e');
       try {
         socket?.destroy();
       } catch (_) {}

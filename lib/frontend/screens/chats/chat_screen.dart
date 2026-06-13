@@ -41,6 +41,7 @@ import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
+import 'scheduled_messages_screen.dart';
 
 class _UploadStatus {
   final bool active;
@@ -623,6 +624,116 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _messagesRev.value++;
   }
 
+  bool _canEditMessage(CachedMessage message) {
+    if (message.senderId != _myId) return false;
+    if (message.id.startsWith('temp_')) return false;
+    if (message.isControl) return false;
+    final status = message.status;
+    if (status == 'sending' || status == 'error') return false;
+    return true;
+  }
+
+  Future<void> _startEditMessage(CachedMessage message) async {
+    final cs = Theme.of(context).colorScheme;
+    final controller = TextEditingController(text: message.text ?? '');
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Изменить сообщение',
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Outfit',
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 1,
+              maxLines: 6,
+              style: TextStyle(color: cs.onSurface),
+              decoration: InputDecoration(
+                hintText: 'Текст сообщения',
+                filled: true,
+                fillColor: cs.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+              child: const Text('Сохранить'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true || !mounted) {
+      controller.dispose();
+      return;
+    }
+
+    final newText = controller.text.trim();
+    controller.dispose();
+    if (newText == (message.text ?? '')) return;
+
+    final ok = await messagesModule.editMessage(
+      widget.chatId,
+      message.id,
+      text: newText,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      Haptics.error();
+      showCustomNotification(context, 'Не удалось изменить сообщение');
+      return;
+    }
+
+    final idx = _messages.indexWhere((m) => m.id == message.id);
+    if (idx != -1) {
+      final old = _messages[idx];
+      final edited = CachedMessage(
+        id: old.id,
+        accountId: old.accountId,
+        chatId: old.chatId,
+        senderId: old.senderId,
+        text: newText.isEmpty ? null : newText,
+        time: old.time,
+        status: 'EDITED',
+        payload: old.payload,
+        attachments: old.attachments,
+        isControl: old.isControl,
+      );
+      _messages[idx] = edited;
+      _bumpMessages();
+      unawaited(_persistOutgoing(edited));
+    }
+    Haptics.send();
+  }
+
   Future<void> _confirmDeleteMessage(CachedMessage message, bool isMe) async {
     final isLocalOnly = message.id.startsWith('temp_');
     final canForEveryone = isMe && !isLocalOnly;
@@ -895,6 +1006,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
           actions: [
             IconButton(
+              icon: const Icon(Symbols.schedule, weight: 400),
+              onPressed: _openScheduledMessages,
+            ),
+            IconButton(
               icon: const Icon(Symbols.call, weight: 400),
               onPressed: _startCall,
             ),
@@ -1092,6 +1207,78 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         unawaited(_persistOutgoing(failed));
       }
     }
+  }
+
+  Future<void> _scheduleMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _myId == 0) return;
+
+    final when = await _pickScheduleTime();
+    if (when == null || !mounted) return;
+
+    try {
+      await messagesModule.sendMessage(
+        _myId,
+        widget.chatId,
+        text,
+        scheduledTime: when.millisecondsSinceEpoch,
+      );
+      if (!mounted) return;
+      _hasText.value = false;
+      _messageController.clear();
+      Haptics.send();
+      showCustomNotification(
+        context,
+        'Запланировано на ${formatDateTimeWords(when)}',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      Haptics.error();
+      showCustomNotification(context, 'Не удалось запланировать сообщение');
+    }
+  }
+
+  Future<DateTime?> _pickScheduleTime() async {
+    final now = DateTime.now();
+    final suggested = now.add(const Duration(hours: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: suggested,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return null;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(suggested),
+    );
+    if (time == null) return null;
+    final result = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    if (!result.isAfter(DateTime.now())) {
+      if (mounted) {
+        showCustomNotification(context, 'Время должно быть в будущем');
+      }
+      return null;
+    }
+    return result;
+  }
+
+  void _openScheduledMessages() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ScheduledMessagesScreen(
+          chatId: widget.chatId,
+          accountId: _myId,
+          chatName: widget.name,
+        ),
+      ),
+    );
   }
 
   Future<void> _persistOutgoing(CachedMessage msg, {String? removeId}) async {
@@ -1516,6 +1703,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             children: [
                               IconButton(
                                 icon: Icon(
+                                  Symbols.schedule,
+                                  weight: 500,
+                                  color: cs.onSurface,
+                                ),
+                                onPressed: _openScheduledMessages,
+                              ),
+                              IconButton(
+                                icon: Icon(
                                   Symbols.call,
                                   weight: 500,
                                   color: cs.onSurface,
@@ -1658,6 +1853,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   message: message,
                   isMe: isMe,
                   onDelete: () => _confirmDeleteMessage(message, isMe),
+                  onEdit: _canEditMessage(message)
+                      ? () => _startEditMessage(message)
+                      : null,
                   child: bubble,
                 );
 
@@ -1956,6 +2154,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             _AttachButton(
                               hasText: _hasText,
                               onOpen: _openAttachmentSheet,
+                              onLongOpen: _openAttachmentSheetScheduled,
                               uploadStatus: _uploadStatus,
                               mutedIcon: mutedIcon,
                               cs: cs,
@@ -2031,6 +2230,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             : cs.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(27),
                         onTap: hasText ? _sendMessage : null,
+                        onLongPress: hasText ? _scheduleMessage : null,
                         depth: 8,
                         child: SizedBox(
                           width: 54,
@@ -2144,7 +2344,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _openAttachmentSheet() async {
+  Future<void> _openAttachmentSheetScheduled() async {
+    final when = await _pickScheduleTime();
+    if (when == null || !mounted) return;
+    await _openAttachmentSheet(scheduledTime: when.millisecondsSinceEpoch);
+  }
+
+  Future<void> _openAttachmentSheet({int? scheduledTime}) async {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final hadKeyboard = keyboard > 0;
     if (hadKeyboard) {
@@ -2154,8 +2360,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     await showAttachmentSheet(
       context,
       title: widget.name,
-      onSend: _sendPhotos,
-      onPickFile: _pickAndUploadFile,
+      onSend: scheduledTime == null
+          ? _sendPhotos
+          : (picked, caption) =>
+                _sendScheduledPhotos(picked, caption, scheduledTime),
+      onPickFile: scheduledTime == null
+          ? _pickAndUploadFile
+          : () => _pickAndUploadFile(scheduledTime: scheduledTime),
       onShareLocation: _shareLocation,
       onCreatePoll: _createPoll,
     );
@@ -2167,12 +2378,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<void> _sendPhotos(List<PickedPhoto> picked, String caption) async {
     if (_myId == 0) return;
+    final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
-    if (photos.isEmpty) {
-      if (mounted)
-        showCustomNotification(context, 'Видео пока нельзя отправить');
-      return;
+    if (photos.isEmpty && videos.isEmpty) return;
+
+    for (var i = 0; i < videos.length; i++) {
+      final cap = (photos.isEmpty && i == 0) ? caption : '';
+      await _sendVideo(videos[i], cap);
     }
+    if (photos.isEmpty) return;
 
     final files = <File>[];
     final attachments = <PhotoAttachment>[];
@@ -2265,6 +2479,185 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       } else {
         _disposePhotoProgress(tempId);
       }
+    }
+  }
+
+  Future<void> _sendVideo(
+    PickedPhoto video,
+    String caption, {
+    int? scheduledTime,
+  }) async {
+    if (_myId == 0) return;
+    final file =
+        video.editedFile ??
+        video.item.localFile ??
+        await video.item.originFile();
+    if (file == null || !mounted) return;
+
+    final scheduled = scheduledTime != null;
+    final durationMs = video.item.duration?.inMilliseconds;
+
+    String? tempId;
+    ValueNotifier<List<double>>? progress;
+    if (scheduled) {
+      showCustomNotification(context, 'Загрузка…');
+    } else {
+      tempId = _nextTempId();
+      progress = ValueNotifier<List<double>>(const [0]);
+      _photoUploadProgress[tempId] = progress;
+      _messages.add(
+        CachedMessage(
+          id: tempId,
+          accountId: _myId,
+          chatId: widget.chatId,
+          senderId: _myId,
+          text: caption.isEmpty ? null : caption,
+          time: DateTime.now().millisecondsSinceEpoch,
+          status: 'sending',
+          attachments: [VideoAttachment(duration: durationMs)],
+        ),
+      );
+      _lastSentId = tempId;
+      _bumpMessages();
+      Haptics.send();
+      _scrollToBottom();
+    }
+
+    final progressNotifier = progress;
+    try {
+      final info = await messagesModule.requestVideoUploadUrl();
+      if (info == null || info.url.isEmpty) throw Exception('no_url');
+
+      final ok = await fileUploader.uploadVideoFile(
+        Uri.parse(info.url),
+        file,
+        onProgress: progressNotifier == null
+            ? null
+            : (sent, total) {
+                if (total > 0) {
+                  progressNotifier.value = [(sent / total).clamp(0.0, 1.0)];
+                }
+              },
+      );
+      if (!ok) throw Exception('upload_failed');
+      if (!mounted) {
+        if (tempId != null) _disposePhotoProgress(tempId);
+        return;
+      }
+
+      final serverMsg = await messagesModule.sendVideoMessage(
+        widget.chatId,
+        info.token,
+        caption: caption.isEmpty ? null : caption,
+        scheduledTime: scheduledTime,
+      );
+      if (!mounted) {
+        if (tempId != null) _disposePhotoProgress(tempId);
+        return;
+      }
+      if (serverMsg == null) throw Exception('send_failed');
+
+      if (scheduled) {
+        Haptics.send();
+        showCustomNotification(
+          context,
+          'Запланировано на '
+          '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(scheduledTime))}',
+        );
+      } else {
+        final real = CachedMessage.fromPushPayload(
+          _myId,
+          widget.chatId,
+          serverMsg,
+        );
+        final idx = _messages.indexWhere((m) => m.id == tempId);
+        if (idx != -1) {
+          _messages[idx] = real;
+          _bumpMessages();
+          unawaited(_persistOutgoing(real, removeId: tempId));
+        }
+        _disposePhotoProgress(tempId!);
+      }
+    } catch (_) {
+      if (!mounted) {
+        if (tempId != null) _disposePhotoProgress(tempId);
+        return;
+      }
+      if (scheduled) {
+        Haptics.error();
+        showCustomNotification(context, 'Не удалось запланировать видео');
+      } else {
+        _failPhotoMessage(tempId!);
+      }
+    }
+  }
+
+  Future<void> _sendScheduledPhotos(
+    List<PickedPhoto> picked,
+    String caption,
+    int scheduledTime,
+  ) async {
+    if (_myId == 0) return;
+    final videos = picked.where((ph) => ph.item.isVideo).toList();
+    final photos = picked.where((ph) => !ph.item.isVideo).toList();
+    if (photos.isEmpty && videos.isEmpty) return;
+
+    for (var i = 0; i < videos.length; i++) {
+      final cap = (photos.isEmpty && i == 0) ? caption : '';
+      await _sendVideo(videos[i], cap, scheduledTime: scheduledTime);
+    }
+    if (photos.isEmpty) return;
+
+    final files = <File>[];
+    for (final photo in photos) {
+      final edited = photo.editedFile;
+      final file =
+          edited ?? photo.item.localFile ?? await photo.item.originFile();
+      if (file != null) files.add(file);
+    }
+    if (files.isEmpty || !mounted) return;
+
+    showCustomNotification(context, 'Загрузка…');
+    final progress = ValueNotifier<List<double>>(
+      List<double>.filled(files.length, 0),
+    );
+    try {
+      final tokens = await Future.wait(
+        List.generate(
+          files.length,
+          (i) => _uploadOnePhoto(files[i], i, progress),
+        ),
+      );
+      if (!mounted) return;
+      if (tokens.any((t) => t == null)) {
+        showCustomNotification(context, 'Не удалось загрузить фото');
+        return;
+      }
+
+      final result = await messagesModule.sendPhotoMessage(
+        widget.chatId,
+        tokens.cast<String>(),
+        caption: caption.isEmpty ? null : caption,
+        scheduledTime: scheduledTime,
+      );
+      if (!mounted) return;
+      if (result != null) {
+        Haptics.send();
+        showCustomNotification(
+          context,
+          'Запланировано на '
+          '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(scheduledTime))}',
+        );
+      } else {
+        showCustomNotification(context, 'Не удалось запланировать');
+      }
+    } catch (_) {
+      if (mounted) {
+        Haptics.error();
+        showCustomNotification(context, 'Ошибка при загрузке');
+      }
+    } finally {
+      progress.dispose();
     }
   }
 
@@ -2416,7 +2809,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _photoUploadProgress.remove(tempId)?.dispose();
   }
 
-  Future<void> _pickAndUploadFile() async {
+  Future<void> _pickAndUploadFile({int? scheduledTime}) async {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
@@ -2425,9 +2818,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _showAttachmentPanel.value = false;
     _uploadStatus.value = _UploadStatus(active: true, total: file.size);
 
-    final tempId = _addOptimisticFileMessage(
-      FileAttachment(name: file.name, size: file.size),
-    );
+    final scheduled = scheduledTime != null;
+    final tempId = scheduled
+        ? null
+        : _addOptimisticFileMessage(
+            FileAttachment(name: file.name, size: file.size),
+          );
 
     UploadNotificationService.start(file.name);
 
@@ -2445,6 +2841,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           file: File(file.path!),
           filename: file.name,
           totalSize: file.size,
+          scheduledTime: scheduledTime,
         )
         .listen(
           (event) {
@@ -2485,37 +2882,48 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     sentAt: DateTime.now(),
                   ),
                 );
-                _updateFileMessageStatus(
-                  tempId,
-                  'sent',
-                  attachment: FileAttachment(
-                    fileId: fileId,
-                    fileToken: token,
-                    name: file.name,
-                    size: file.size,
-                  ),
-                );
+                if (scheduled) {
+                  Haptics.send();
+                  showCustomNotification(
+                    context,
+                    'Запланировано на '
+                    '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(scheduledTime))}',
+                  );
+                } else {
+                  _updateFileMessageStatus(
+                    tempId!,
+                    'sent',
+                    attachment: FileAttachment(
+                      fileId: fileId,
+                      fileToken: token,
+                      name: file.name,
+                      size: file.size,
+                    ),
+                  );
+                }
               case UploadError(:final message):
                 stopNotif();
                 showCustomNotification(context, 'Ошибка: $message');
-                _updateFileMessageStatus(tempId, 'error');
+                if (tempId != null) _updateFileMessageStatus(tempId, 'error');
             }
           },
           onDone: () {
             if (!mounted) return;
             stopNotif();
-            final inFlight = _messages.firstWhere(
-              (m) => m.id == tempId,
-              orElse: () => CachedMessage(
-                id: '',
-                accountId: 0,
-                chatId: 0,
-                senderId: 0,
-                time: 0,
-              ),
-            );
-            if (inFlight.id == tempId && inFlight.status == 'sending') {
-              _updateFileMessageStatus(tempId, 'error');
+            if (tempId != null) {
+              final inFlight = _messages.firstWhere(
+                (m) => m.id == tempId,
+                orElse: () => CachedMessage(
+                  id: '',
+                  accountId: 0,
+                  chatId: 0,
+                  senderId: 0,
+                  time: 0,
+                ),
+              );
+              if (inFlight.id == tempId && inFlight.status == 'sending') {
+                _updateFileMessageStatus(tempId, 'error');
+              }
             }
             _uploadStatus.value = const _UploadStatus();
             _uploadSub = null;
@@ -2524,7 +2932,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             if (!mounted) return;
             stopNotif();
             showCustomNotification(context, 'Ошибка: $e');
-            _updateFileMessageStatus(tempId, 'error');
+            if (tempId != null) _updateFileMessageStatus(tempId, 'error');
             _uploadStatus.value = const _UploadStatus();
             _uploadSub = null;
           },
@@ -2535,6 +2943,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 class _AttachButton extends StatelessWidget {
   final ValueNotifier<bool> hasText;
   final VoidCallback onOpen;
+  final VoidCallback onLongOpen;
   final ValueNotifier<_UploadStatus> uploadStatus;
   final Color mutedIcon;
   final ColorScheme cs;
@@ -2542,6 +2951,7 @@ class _AttachButton extends StatelessWidget {
   const _AttachButton({
     required this.hasText,
     required this.onOpen,
+    required this.onLongOpen,
     required this.uploadStatus,
     required this.mutedIcon,
     required this.cs,
@@ -2559,7 +2969,9 @@ class _AttachButton extends StatelessWidget {
             : (status.active
                   ? cs.onSurfaceVariant.withValues(alpha: 0.5)
                   : mutedIcon);
-        final onTap = (isText || status.active) ? null : onOpen;
+        final disabled = isText || status.active;
+        final onTap = disabled ? null : onOpen;
+        final onLongPress = disabled ? null : onLongOpen;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: isText ? 0 : 36,
@@ -2571,6 +2983,7 @@ class _AttachButton extends StatelessWidget {
                 : GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: onTap,
+                    onLongPress: onLongPress,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 12),
                       child: Stack(
@@ -2828,12 +3241,14 @@ class _LongPressBubble extends StatefulWidget {
   final CachedMessage message;
   final bool isMe;
   final VoidCallback onDelete;
+  final VoidCallback? onEdit;
 
   const _LongPressBubble({
     required this.child,
     required this.message,
     required this.isMe,
     required this.onDelete,
+    this.onEdit,
   });
 
   @override
@@ -2885,6 +3300,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       controller: controller,
       style: AppMessageActionsStyle.current.value,
       onDelete: widget.onDelete,
+      onEdit: widget.onEdit,
       onDispose: () {
         if (identical(_controller, controller)) {
           _controller = null;
@@ -2917,6 +3333,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
       onDelete: widget.onDelete,
+      onEdit: widget.onEdit,
       onDispose: () {
         if (identical(_controller, controller)) {
           _controller = null;

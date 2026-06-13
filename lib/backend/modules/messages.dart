@@ -174,6 +174,18 @@ class FileUploadInfo {
   });
 }
 
+class VideoUploadInfo {
+  final String url;
+  final int videoId;
+  final String token;
+
+  VideoUploadInfo({
+    required this.url,
+    required this.videoId,
+    required this.token,
+  });
+}
+
 class CachedMessage {
   final String id;
   final int accountId;
@@ -249,6 +261,18 @@ class CachedMessage {
           attachments?.any((a) => a.type == AttachmentType.control) ?? false,
     );
   }
+
+  int? get delayedTimeToFire {
+    final attrs = payload?['delayedAttributes'];
+    if (attrs is Map) {
+      final t = attrs['timeToFire'];
+      if (t is int) return t;
+      if (t is String) return int.tryParse(t);
+    }
+    return null;
+  }
+
+  bool get isDelayed => delayedTimeToFire != null;
 
   static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
       rows.map(CachedMessage.fromDbRow).toList();
@@ -435,15 +459,23 @@ class MessagesModule {
     int chatId,
     String text, {
     bool notify = true,
+    int? scheduledTime,
   }) async {
+    final message = <String, dynamic>{
+      'text': text,
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'elements': [],
+      'attaches': [],
+    };
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
     final payload = {
       'chatId': chatId,
-      'message': {
-        'text': text,
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
-        'elements': [],
-        'attaches': [],
-      },
+      'message': message,
       'notify': notify,
     };
 
@@ -467,10 +499,107 @@ class MessagesModule {
     return '';
   }
 
+  /// Загружает отложенные (запланированные) сообщения чата.
+  ///
+  /// В отличие от обычной истории, отложенные сообщения не сохраняются
+  /// в локальную БД — они живут только до момента отправки.
+  Future<List<CachedMessage>> fetchDelayedMessages(
+    int accountId,
+    int chatId,
+  ) async {
+    final payload = {
+      'chatId': chatId,
+      'forward': 0,
+      'backwardTime': 0,
+      'getChat': false,
+      'from': 1,
+      'itemType': 'DELAYED',
+      'getMessages': true,
+      'forwardTime': 0,
+      'interactive': true,
+      'backward': 150,
+    };
+
+    final response = await _api.sendRequest(Opcode.chatHistory, payload);
+    if (!response.isOk) return [];
+
+    final data = response.payload;
+    if (data is! Map) return [];
+
+    final messagesData = data['messages'];
+    if (messagesData is! List) return [];
+
+    final results = <CachedMessage>[];
+    for (final m in messagesData) {
+      if (m is! Map) continue;
+      final msg = _parseMessage(m.cast<dynamic, dynamic>(), accountId, chatId);
+      if (msg != null) results.add(msg);
+    }
+
+    results.sort(
+      (a, b) => (a.delayedTimeToFire ?? a.time).compareTo(
+        b.delayedTimeToFire ?? b.time,
+      ),
+    );
+
+    return results;
+  }
+
+  /// Редактирует текст (подпись) обычного сообщения.
+  ///
+  /// Поле `attachments` не передаётся — сервер сохраняет существующие
+  /// вложения.
+  Future<bool> editMessage(
+    int chatId,
+    String messageId, {
+    required String text,
+  }) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return false;
+
+    final payload = {
+      'messageId': id,
+      'chatId': chatId,
+      'elements': <dynamic>[],
+      'text': text,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgEdit, payload);
+    return response.isOk;
+  }
+
+  /// Редактирует отложенное сообщение: меняет текст и/или время отправки.
+  ///
+  /// Вложения сервер сохраняет сам — в payload они не передаются.
+  Future<bool> editScheduledMessage(
+    int chatId,
+    String messageId, {
+    required String text,
+    required int timeToFire,
+  }) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return false;
+
+    final payload = {
+      'messageId': id,
+      'chatId': chatId,
+      'elements': <dynamic>[],
+      'text': text,
+      'delayedAttributes': {
+        'timeToFire': timeToFire,
+        'notifySender': true,
+      },
+    };
+
+    final response = await _api.sendRequest(Opcode.msgEdit, payload);
+    return response.isOk;
+  }
+
   Future<bool> deleteMessages(
     int chatId,
     List<String> messageIds, {
     bool forEveryone = false,
+    String itemType = 'REGULAR',
   }) async {
     final ids = messageIds
         .map((id) => int.tryParse(id))
@@ -482,7 +611,7 @@ class MessagesModule {
       'messageIds': ids,
       'chatId': chatId,
       'forMe': !forEveryone,
-      'itemType': 'REGULAR',
+      'itemType': itemType,
     };
 
     final response = await _api.sendRequest(Opcode.msgDelete, payload);
@@ -547,24 +676,32 @@ class MessagesModule {
     int fileId, {
     String? token,
     bool notify = true,
+    int? scheduledTime,
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
     Duration initialDelay = const Duration(seconds: 3),
   }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch,
+      'attaches': [
+        if (token != null)
+          {'_type': 'FILE', 'token': token}
+        else
+          {'_type': 'FILE', 'fileId': fileId},
+      ],
+    };
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
     final payload = {
       'chatId': chatId,
-      'message': {
-        'isLive': false,
-        'detectShare': false,
-        'elements': <dynamic>[],
-        'cid': DateTime.now().millisecondsSinceEpoch,
-        'attaches': [
-          if (token != null)
-            {'_type': 'FILE', 'token': token}
-          else
-            {'_type': 'FILE', 'fileId': fileId},
-        ],
-      },
+      'message': message,
       'notify': notify,
     };
 
@@ -597,6 +734,7 @@ class MessagesModule {
     List<String> photoTokens, {
     String? caption,
     bool notify = true,
+    int? scheduledTime,
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
   }) async {
@@ -608,6 +746,86 @@ class MessagesModule {
       ],
     };
     if (caption != null && caption.isNotEmpty) message['text'] = caption;
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        if (!response.isOk) return null;
+        final data = response.payload;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is Map) return Map<String, dynamic>.from(msg);
+        }
+        return null;
+      } on PacketError catch (e) {
+        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (attempt == maxAttempts - 1) return null;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return null;
+  }
+
+  /// Запрашивает URL для загрузки видео (опкод 82).
+  Future<VideoUploadInfo?> requestVideoUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.videoUpload, {
+      'uploaderType': 0,
+      'type': 0,
+      'count': 1,
+    });
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return VideoUploadInfo(
+      url: info['url'] as String? ?? '',
+      videoId: info['videoId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  /// Отправляет сообщение с видео по [token], полученному из
+  /// [requestVideoUploadUrl]. Сервер может ответить `attachment.not.ready`,
+  /// пока обрабатывает загруженное видео — в этом случае запрос повторяется.
+  Future<Map<String, dynamic>?> sendVideoMessage(
+    int chatId,
+    String token, {
+    String? caption,
+    bool notify = true,
+    int? scheduledTime,
+    int maxAttempts = 30,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        {'videoType': 0, '_type': 'VIDEO', 'token': token},
+      ],
+    };
+    if (caption != null && caption.isNotEmpty) message['text'] = caption;
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     for (var attempt = 0; attempt < maxAttempts; attempt++) {

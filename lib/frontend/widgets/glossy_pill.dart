@@ -86,6 +86,7 @@ class GlossyPill extends StatelessWidget {
   final BorderRadius borderRadius;
   final Color? color;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final double depth;
   final bool elevated;
   final BorderSide? borderSide;
@@ -97,6 +98,7 @@ class GlossyPill extends StatelessWidget {
     BorderRadius? borderRadius,
     this.color,
     this.onTap,
+    this.onLongPress,
     this.depth = 10,
     this.elevated = false,
     this.borderSide,
@@ -131,7 +133,9 @@ class GlossyPill extends StatelessWidget {
         side: borderSide ?? BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
-      child: onTap == null ? content : InkWell(onTap: onTap, child: content),
+      child: onTap == null && onLongPress == null
+          ? content
+          : InkWell(onTap: onTap, onLongPress: onLongPress, child: content),
     );
   }
 
@@ -173,12 +177,16 @@ class GlossyPill extends StatelessWidget {
                   ),
                 ),
               ],
-              if (onTap == null)
+              if (onTap == null && onLongPress == null)
                 content
               else
                 Material(
                   type: MaterialType.transparency,
-                  child: InkWell(onTap: onTap, child: content),
+                  child: InkWell(
+                    onTap: onTap,
+                    onLongPress: onLongPress,
+                    child: content,
+                  ),
                 ),
             ],
           ),
