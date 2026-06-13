@@ -1,11 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 abstract class TlsConfig {
   static const String prefKey = 'dev_tls_insecure';
 
   static Future<bool> isInsecureAllowed() async {
-    if (kReleaseMode) return false;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(prefKey) ?? false;
   }
