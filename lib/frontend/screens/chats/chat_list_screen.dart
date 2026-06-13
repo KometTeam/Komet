@@ -9,6 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -1472,7 +1473,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     previewText,
                     _formatTime(chat.lastMsgTime),
                     avatar ?? "",
-                    isOnline: chat.isOnline,
+                    presenceUserId: secondId,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.isMuted,
                     isVerified: isVerified,
@@ -1510,7 +1511,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                     (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
                         ? chat.iconUrl!
                         : '',
-                    isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.isMuted,
                     isVerified: chat.isOfficial,
@@ -2127,7 +2127,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     String message,
     String time,
     String imageUrl, {
-    bool isOnline = false,
+    int presenceUserId = 0,
     bool isTyping = false,
     bool isRead = false,
     int unreadCount = 0,
@@ -2238,18 +2238,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ),
                     )
-                  else if (isOnline)
+                  else if (presenceUserId != 0)
                     Positioned(
                       right: 0,
                       bottom: 0,
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: cs.surface, width: 2),
-                        ),
+                      child: OnlineDot(
+                        userId: presenceUserId,
+                        borderColor: cs.surface,
                       ),
                     ),
                 ],

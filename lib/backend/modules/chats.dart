@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/cache/info_cache.dart';
@@ -180,6 +181,11 @@ class MessageRemovedEvent extends MessageEvent {
   const MessageRemovedEvent(super.chatId, this.messageId);
 }
 
+class MessageMarkedDeletedEvent extends MessageEvent {
+  final String messageId;
+  const MessageMarkedDeletedEvent(super.chatId, this.messageId);
+}
+
 class MessageReactionsChangedEvent extends MessageEvent {
   final String messageId;
   final Map<String, dynamic>? reactionInfo;
@@ -267,6 +273,11 @@ class ChatsModule {
     String messageId,
     int mark,
   ) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final row = Map<String, dynamic>.from(rows.first);
+    if ((row['unread_count'] as int? ?? 0) == 0) return;
+
     final msgIdNum = int.tryParse(messageId);
     if (msgIdNum != null) {
       try {
@@ -279,10 +290,6 @@ class ChatsModule {
       } catch (_) {}
     }
 
-    final rows = await AppDatabase.loadChat(accountId, chatId);
-    if (rows.isEmpty) return;
-    final row = Map<String, dynamic>.from(rows.first);
-    if ((row['unread_count'] as int? ?? 0) == 0) return;
     row['unread_count'] = 0;
     await AppDatabase.saveChats([row]);
     _bump();
@@ -367,7 +374,19 @@ class ChatsModule {
         await _handleNotifMsgReactionsChanged(packet);
       case Opcode.notifMsgDelete:
         await _handleNotifMsgDelete(packet);
+      case Opcode.notifPresence:
+        _handlePresence(packet);
     }
+  }
+
+  static void _handlePresence(Packet packet) {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final userId = payload['userId'];
+    if (userId is! int) return;
+    final presence = payload['presence'];
+    if (presence is! Map) return;
+    PresenceFetch.apply(userId, Map<String, dynamic>.from(presence));
   }
 
   static Future<void> _handleNotifMsgDelete(Packet packet) async {
@@ -386,13 +405,19 @@ class ChatsModule {
     }
     if (chatId == null) return;
 
+    final keepDeleted = KometSettings.viewDeleted.value;
     final ids = payload['messageIds'];
     if (ids is List) {
       for (final raw in ids) {
         final id = raw?.toString();
         if (id == null || id.isEmpty) continue;
-        await AppDatabase.deleteMessage(accountId, chatId, id);
-        _messageEventsController.add(MessageRemovedEvent(chatId, id));
+        if (keepDeleted) {
+          await AppDatabase.markMessageDeleted(accountId, chatId, id);
+          _messageEventsController.add(MessageMarkedDeletedEvent(chatId, id));
+        } else {
+          await AppDatabase.deleteMessage(accountId, chatId, id);
+          _messageEventsController.add(MessageRemovedEvent(chatId, id));
+        }
       }
     }
     _bump();
@@ -435,7 +460,12 @@ class ChatsModule {
     }
 
     if (status == 'REMOVED' && msgIdStr != null) {
-      await AppDatabase.deleteMessage(accountId, chatId, msgIdStr);
+      final keepDeleted = KometSettings.viewDeleted.value;
+      if (keepDeleted) {
+        await AppDatabase.markMessageDeleted(accountId, chatId, msgIdStr);
+      } else {
+        await AppDatabase.deleteMessage(accountId, chatId, msgIdStr);
+      }
       final cachedChat = CachedChat.fromDbRow(rows.first);
       if (cachedChat.lastMsgId == msgIdInt) {
         await _reconcileLastMessage(accountId, chatId, rows.first, unread: unread);
@@ -444,7 +474,11 @@ class ChatsModule {
         newRow['unread_count'] = unread;
         await AppDatabase.saveChats([newRow]);
       }
-      _messageEventsController.add(MessageRemovedEvent(chatId, msgIdStr));
+      _messageEventsController.add(
+        keepDeleted
+            ? MessageMarkedDeletedEvent(chatId, msgIdStr)
+            : MessageRemovedEvent(chatId, msgIdStr),
+      );
       _bump();
       return;
     }
@@ -523,7 +557,12 @@ class ChatsModule {
     Map<String, dynamic> chatRow, {
     int? unread,
   }) async {
-    final latest = await AppDatabase.loadMessages(accountId, chatId, limit: 1);
+    final latest = await AppDatabase.loadMessages(
+      accountId,
+      chatId,
+      limit: 1,
+      onlyVisible: true,
+    );
     final newRow = Map<String, dynamic>.from(chatRow);
     if (latest.isNotEmpty) {
       final m = latest.first;
@@ -574,6 +613,54 @@ class ChatsModule {
     if (rows.isEmpty) return;
     await _reconcileLastMessage(accountId, chatId, rows.first);
     _bump();
+  }
+
+  static Future<List<String>> reconcileDeletedFromFetch(
+    int accountId,
+    int chatId,
+    List<CachedMessage> serverMessages,
+  ) async {
+    if (serverMessages.isEmpty) return const [];
+
+    final serverIds = <String>{};
+    var minTime = serverMessages.first.time;
+    var maxTime = serverMessages.first.time;
+    for (final m in serverMessages) {
+      serverIds.add(m.id);
+      if (m.time < minTime) minTime = m.time;
+      if (m.time > maxTime) maxTime = m.time;
+    }
+
+    final cached = await AppDatabase.loadMessages(
+      accountId,
+      chatId,
+      limit: 300,
+      onlyVisible: true,
+    );
+
+    final newlyDeleted = <String>[];
+    for (final row in cached) {
+      final id = row['id']?.toString();
+      if (id == null || id.isEmpty || id.startsWith('temp_')) continue;
+      if (serverIds.contains(id)) continue;
+
+      final status = row['status']?.toString();
+      if (status == 'pending' || status == 'sending' || status == 'error') {
+        continue;
+      }
+
+      final time = row['time'] is int
+          ? row['time'] as int
+          : int.tryParse(row['time']?.toString() ?? '') ?? 0;
+      if (time < minTime || time > maxTime) continue;
+
+      newlyDeleted.add(id);
+    }
+
+    if (newlyDeleted.isNotEmpty) {
+      await AppDatabase.markMessagesDeleted(accountId, chatId, newlyDeleted);
+    }
+    return newlyDeleted;
   }
 
   static Future<void> _handleNotifMsgReactionsChanged(Packet packet) async {

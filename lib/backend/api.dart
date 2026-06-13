@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
 import '../core/config/countries.dart';
+import '../core/config/komet_settings.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
@@ -380,10 +382,19 @@ class Api {
   void _startPinging() {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(ServerConfig.pingInterval, (_) {
-      if (_connection.isConnected) {
-        _sender.send(_connection, Opcode.ping, {});
-      }
+      sendPing(interactive: !KometSettings.ghostMode.value);
     });
+  }
+
+  void sendPing({required bool interactive}) {
+    if (_connection.isConnected) {
+      _sender.send(_connection, Opcode.ping, {'interactive': interactive});
+      if (interactive) {
+        SelfPresence.markOnline();
+      } else {
+        SelfPresence.markOfflineFromPing();
+      }
+    }
   }
 
   static List<CountryName>? _parseRegistrationCountries(dynamic payload) {

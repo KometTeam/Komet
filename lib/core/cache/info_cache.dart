@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../../backend/api.dart';
 import '../protocol/opcode_map.dart';
 
@@ -132,8 +134,27 @@ class PresenceFetch {
 
   static Map<String, dynamic>? peek(int id) => _cache.peek(id);
 
+  static final Map<int, Map<String, dynamic>> _live = {};
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  static Map<String, dynamic>? live(int id) => _live[id] ?? _cache.peek(id);
+
+  static bool isOnline(int id) => (live(id)?['status'] as int?) == 1;
+
+  static void apply(int id, Map<String, dynamic> presence) {
+    if (id <= 0) return;
+    _live[id] = presence;
+    _cache.putValue(id, presence);
+    revision.value++;
+  }
+
   static void invalidate(int id) => _cache.invalidate(id);
-  static void clear() => _cache.clear();
+
+  static void clear() {
+    _cache.clear();
+    _live.clear();
+    revision.value++;
+  }
 
   static void primeAll(Map<dynamic, dynamic> presence) {
     final now = DateTime.now();
@@ -141,8 +162,11 @@ class PresenceFetch {
       if (value is! Map) return;
       final id = key is int ? key : int.tryParse(key.toString());
       if (id == null) return;
-      _cache.putValue(id, Map<String, dynamic>.from(value), at: now);
+      final map = Map<String, dynamic>.from(value);
+      _cache.putValue(id, map, at: now);
+      _live[id] = map;
     });
+    revision.value++;
   }
 
   static Future<Map<String, dynamic>?> _fetch(int id) async {

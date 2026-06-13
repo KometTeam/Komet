@@ -38,8 +38,10 @@ String formatDurationMmSs(Duration d, {bool padMinutes = false}) {
 String formatSecondsMmSs(int seconds, {bool padMinutes = false}) =>
     formatDurationMmSs(Duration(seconds: seconds), padMinutes: padMinutes);
 
-/// "HH:mm".
-String formatClock(DateTime dt) => '${_two(dt.hour)}:${_two(dt.minute)}';
+/// "HH:mm" or "HH:mm:ss" when [withSeconds] is set.
+String formatClock(DateTime dt, {bool withSeconds = false}) => withSeconds
+    ? '${_two(dt.hour)}:${_two(dt.minute)}:${_two(dt.second)}'
+    : '${_two(dt.hour)}:${_two(dt.minute)}';
 
 /// "5 мая 2024".
 String formatDateWords(DateTime dt) =>

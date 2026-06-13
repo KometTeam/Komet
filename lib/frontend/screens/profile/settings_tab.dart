@@ -5,8 +5,11 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/messages.dart';
+import '../../../core/cache/self_presence.dart';
+import '../../../core/config/komet_settings.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
@@ -28,6 +31,7 @@ import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
 import 'info_screen.dart';
+import 'komet_settings_screen.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
@@ -282,6 +286,19 @@ class _SettingsTabState extends State<SettingsTab> {
                               title: 'Сферум',
                               loader: () => webAppModule.fetchSferum(),
                             ),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsItem(
+                      // Иконку кометы блять дайте!!!!!!!1
+                      icon: Symbols.auto_awesome,
+                      label: 'Komet',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const KometSettingsScreen(),
                           ),
                         );
                       },
@@ -584,7 +601,7 @@ class _SettingsTabState extends State<SettingsTab> {
               fontSize: 32,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           Text(
             name,
             style: TextStyle(
@@ -594,7 +611,8 @@ class _SettingsTabState extends State<SettingsTab> {
               fontFamily: 'Outfit',
             ),
           ),
-          const SizedBox(height: 4),
+          _buildOnlineStatus(cs),
+          const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -624,6 +642,64 @@ class _SettingsTabState extends State<SettingsTab> {
           ),
         ],
       ),
+    );
+  }
+
+  String _formatSelfSeen(int seconds) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+    final now = DateTime.now();
+    final time = formatClock(dt);
+    final isToday =
+        dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    if (isToday) return time;
+    final datePart = dt.year == now.year
+        ? '${dt.day} ${kRuMonthsShort[dt.month - 1]}'
+        : '${dt.day} ${kRuMonthsShort[dt.month - 1]} ${dt.year}';
+    return '$datePart, $time';
+  }
+
+  Widget _buildOnlineStatus(ColorScheme cs) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: KometSettings.selfOnlineCheck,
+      builder: (context, enabled, _) {
+        if (!enabled) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: ValueListenableBuilder<bool>(
+            valueListenable: SelfPresence.isOnline,
+            builder: (context, online, _) => ValueListenableBuilder<int?>(
+              valueListenable: SelfPresence.lastSeenSeconds,
+              builder: (context, seen, _) {
+                final label = online
+                    ? 'онлайн'
+                    : (seen != null ? 'Был(-а) ${_formatSelfSeen(seen)}' : 'офлайн');
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Symbols.check_circle,
+                      fill: 1,
+                      size: 15,
+                      color: online
+                          ? const Color(0xFF34C759)
+                          : cs.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

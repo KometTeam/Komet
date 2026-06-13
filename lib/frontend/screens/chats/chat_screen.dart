@@ -35,8 +35,10 @@ import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
 import '../../../core/config/app_visual_style.dart';
+import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/online_dot.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/theme_reveal.dart';
 import '../../widgets/message_actions_overlay.dart';
@@ -176,11 +178,13 @@ class _ChatScreenState extends State<ChatScreen>
   final Map<int, GlobalKey> _separatorKeys = {};
   String? _lastSentId;
   String? _lastMarkedId;
+  final ValueNotifier<int> _otherUnread = ValueNotifier(0);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ChatsModule.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
     _scrollController.addListener(_onScrollForDate);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
@@ -205,6 +209,7 @@ class _ChatScreenState extends State<ChatScreen>
     _messageEventSub = ChatsModule.messageEvents
         .where((e) => e.chatId == widget.chatId)
         .listen(_onMessageEvent);
+    PresenceFetch.revision.addListener(_onPresenceChanged);
     _floatingDateAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -237,6 +242,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     _myId = p?.id ?? 0;
     _restoreDraft();
+    unawaited(_refreshBadge());
 
     ChatsModule.getChat(_myId, widget.chatId)
         .then((value) {
@@ -255,6 +261,7 @@ class _ChatScreenState extends State<ChatScreen>
       _myId,
       widget.chatId,
       limit: 20,
+      onlyVisible: !KometSettings.viewDeleted.value,
     );
     if (!mounted) return;
     if (firstRows.isNotEmpty) {
@@ -326,6 +333,37 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  bool _badgeRefreshing = false;
+  bool _badgeRefreshQueued = false;
+
+  void _onChatsBump() {
+    if (_badgeRefreshing) {
+      _badgeRefreshQueued = true;
+      return;
+    }
+    unawaited(_runBadgeRefresh());
+  }
+
+  Future<void> _runBadgeRefresh() async {
+    _badgeRefreshing = true;
+    try {
+      await _refreshBadge();
+    } finally {
+      _badgeRefreshing = false;
+      if (_badgeRefreshQueued && mounted) {
+        _badgeRefreshQueued = false;
+        unawaited(_runBadgeRefresh());
+      }
+    }
+  }
+
+  Future<void> _refreshBadge() async {
+    if (_myId == 0) return;
+    final total =
+        await AppDatabase.sumUnread(_myId, excludeChatId: widget.chatId);
+    if (mounted) _otherUnread.value = total;
+  }
+
   Future<void> _loadHistory() async {
     if (_myId == 0) {
       final activeProfile = await AppDatabase.loadActiveProfile();
@@ -340,10 +378,12 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _loadRemainingHistory() async {
+    final onlyVisible = !KometSettings.viewDeleted.value;
     final fullRows = await AppDatabase.loadMessages(
       _myId,
       widget.chatId,
       limit: 100,
+      onlyVisible: onlyVisible,
     );
     final fullDecoded = await CachedMessage.fromDbRowsAsync(fullRows);
     if (mounted && fullDecoded.length > _messages.length) {
@@ -363,12 +403,23 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     try {
-      await messagesModule.fetchHistory(_myId, widget.chatId);
+      final serverMessages = await messagesModule.fetchHistory(
+        _myId,
+        widget.chatId,
+      );
       ChatsModule.markHistoryFetched(widget.chatId);
+      if (KometSettings.viewDeleted.value) {
+        await ChatsModule.reconcileDeletedFromFetch(
+          _myId,
+          widget.chatId,
+          serverMessages,
+        );
+      }
       final updatedRows = await AppDatabase.loadMessages(
         _myId,
         widget.chatId,
         limit: 100,
+        onlyVisible: onlyVisible,
       );
       final updatedDecoded = await CachedMessage.fromDbRowsAsync(updatedRows);
       if (mounted) {
@@ -446,7 +497,8 @@ class _ChatScreenState extends State<ChatScreen>
         a.time == b.time &&
         a.status == b.status &&
         a.text == b.text &&
-        a.senderId == b.senderId;
+        a.senderId == b.senderId &&
+        a.deleted == b.deleted;
   }
 
   bool _listsEquivalent(List<CachedMessage> a, List<CachedMessage> b) {
@@ -475,6 +527,8 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ChatsModule.chatsChanged.removeListener(_onChatsBump);
+    _otherUnread.dispose();
     _saveDraft();
     _messageController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScrollForDate);
@@ -502,6 +556,7 @@ class _ChatScreenState extends State<ChatScreen>
       t.cancel();
     }
     _typingTimers.clear();
+    PresenceFetch.revision.removeListener(_onPresenceChanged);
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
     _messagesRev.dispose();
@@ -972,6 +1027,12 @@ class _ChatScreenState extends State<ChatScreen>
         _messages.removeAt(idx);
         _bumpMessages();
         _reactionNotifiers.remove(messageId)?.dispose();
+      case MessageMarkedDeletedEvent(:final messageId):
+        final idx = _messages.indexWhere((m) => m.id == messageId);
+        if (idx == -1) return;
+        if (_messages[idx].deleted) return;
+        _messages[idx] = _messages[idx].copyWith(deleted: true);
+        _bumpMessages();
       case MessageReactionsChangedEvent(:final messageId, :final reactionInfo):
         _reactionNotifiers[messageId]?.value = reactionInfo;
     }
@@ -981,17 +1042,95 @@ class _ChatScreenState extends State<ChatScreen>
     if (_myId == 0) return;
     final otherId = widget.chatId ^ _myId;
     if (otherId <= 0) return;
+    if (PresenceFetch.live(otherId) != null) return;
     try {
       final entry = await PresenceFetch.get(otherId);
       if (!mounted || entry == null) return;
-      _otherStatus = (entry['status'] as int?) ?? 0;
-      _otherSeenTime = entry['seen'] as int?;
-      _recomputeHeaderStatus();
+      PresenceFetch.apply(otherId, entry);
     } catch (_) {}
+  }
+
+  void _onPresenceChanged() {
+    if (!mounted || widget.chatType != 'DIALOG' || _myId == 0) return;
+    final otherId = widget.chatId ^ _myId;
+    if (otherId <= 0) return;
+    final p = PresenceFetch.live(otherId);
+    if (p == null) return;
+    _otherStatus = (p['status'] as int?) ?? 0;
+    _otherSeenTime = p['seen'] as int?;
+    _recomputeHeaderStatus();
+  }
+
+  Widget _withOnlineDot(ColorScheme cs, Widget avatar, {double dotSize = 12}) {
+    if (widget.chatType != 'DIALOG' || _myId == 0) return avatar;
+    final otherId = widget.chatId ^ _myId;
+    if (otherId <= 0) return avatar;
+    return Stack(
+      children: [
+        avatar,
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: OnlineDot(
+            userId: otherId,
+            borderColor: cs.surface,
+            size: dotSize,
+          ),
+        ),
+      ],
+    );
   }
 
   void _onVisualStyleChanged() {
     if (mounted) setState(() {});
+  }
+
+  Widget _backWithBadge(ColorScheme cs, Widget button) {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        button,
+        Positioned(
+          right: -2,
+          bottom: 0,
+          child: IgnorePointer(child: _backUnreadBadge(cs)),
+        ),
+      ],
+    );
+  }
+
+  Widget _backUnreadBadge(ColorScheme cs) {
+    return ValueListenableBuilder<int>(
+      valueListenable: _otherUnread,
+      builder: (context, count, _) {
+        return AnimatedScale(
+          scale: count > 0 ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutBack,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 18),
+            height: 18,
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: cs.surface, width: 1.5),
+            ),
+            alignment: Alignment.center,
+            child: _RollingCount(
+              count: count > 99 ? 99 : count,
+              style: TextStyle(
+                color: cs.onPrimary,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   PreferredSizeWidget _materialAppBar(ColorScheme cs) {
@@ -1015,43 +1154,51 @@ class _ChatScreenState extends State<ChatScreen>
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           iconTheme: IconThemeData(color: cs.onSurface),
-          leading: IconButton(
-            icon: Icon(
-              widget.embedded ? Symbols.close : Symbols.arrow_back,
-              weight: 400,
+          leading: _backWithBadge(
+            cs,
+            IconButton(
+              icon: Icon(
+                widget.embedded ? Symbols.close : Symbols.arrow_back,
+                weight: 400,
+              ),
+              onPressed: () {
+                if (widget.embedded) {
+                  widget.onClose?.call();
+                } else {
+                  Navigator.pop(context);
+                }
+              },
             ),
-            onPressed: () {
-              if (widget.embedded) {
-                widget.onClose?.call();
-              } else {
-                Navigator.pop(context);
-              }
-            },
           ),
           titleSpacing: 0,
           title: Row(
             children: [
-              if (widget.imageUrl.isNotEmpty)
-                CircleAvatar(
-                  radius: 18,
-                  backgroundImage: CachedNetworkImageProvider(
-                    widget.imageUrl,
-                    maxWidth: 144,
-                    maxHeight: 144,
-                  ),
-                )
-              else
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: cs.primaryContainer,
-                  child: Text(
-                    widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: cs.onPrimaryContainer,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+              _withOnlineDot(
+                cs,
+                widget.imageUrl.isNotEmpty
+                    ? CircleAvatar(
+                        radius: 18,
+                        backgroundImage: CachedNetworkImageProvider(
+                          widget.imageUrl,
+                          maxWidth: 144,
+                          maxHeight: 144,
+                        ),
+                      )
+                    : CircleAvatar(
+                        radius: 18,
+                        backgroundColor: cs.primaryContainer,
+                        child: Text(
+                          widget.name.isNotEmpty
+                              ? widget.name[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            color: cs.onPrimaryContainer,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                dotSize: 11,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1131,9 +1278,10 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
     // Звонок уже идёт (возможно, свёрнут) — просто открываем его экран снова.
+    final navigator = Navigator.of(context);
     final active = CallController.instance.activeSession;
     if (active != null) {
-      Navigator.of(context).push(
+      await navigator.push(
         MaterialPageRoute(
           builder: (_) => CallScreen(
             name: widget.name,
@@ -1142,15 +1290,15 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       );
+      _onCallScreenClosed();
       return;
     }
     final peerId = widget.chatId ^ _myId;
     if (peerId <= 0) return;
-    final navigator = Navigator.of(context);
     try {
       final session = await CallController.instance.startOutgoing(peerId);
       if (!mounted) return;
-      navigator.push(
+      await navigator.push(
         MaterialPageRoute(
           builder: (_) => CallScreen(
             name: widget.name,
@@ -1159,10 +1307,41 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       );
+      _onCallScreenClosed();
     } catch (_) {
       if (!mounted) return;
       showCustomNotification(context, 'Не удалось начать звонок');
     }
+  }
+
+  void _onCallScreenClosed() {
+    if (!mounted) return;
+    if (CallController.instance.activeSession != null) return;
+    unawaited(_refreshAfterCall());
+  }
+
+  Future<void> _refreshAfterCall() async {
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (!mounted || _myId == 0) return;
+    try {
+      final serverMessages =
+          await messagesModule.fetchHistory(_myId, widget.chatId);
+      if (KometSettings.viewDeleted.value) {
+        await ChatsModule.reconcileDeletedFromFetch(
+          _myId,
+          widget.chatId,
+          serverMessages,
+        );
+      }
+      final rows = await AppDatabase.loadMessages(
+        _myId,
+        widget.chatId,
+        limit: 100,
+        onlyVisible: !KometSettings.viewDeleted.value,
+      );
+      final decoded = await CachedMessage.fromDbRowsAsync(rows);
+      if (mounted) _applyMergedMessages(decoded);
+    } catch (_) {}
   }
 
   void _seedPresenceFromChat() {
@@ -1170,7 +1349,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_otherStatus != 0 || _otherSeenTime != null) return;
     final otherId = widget.chatId ^ _myId;
     if (otherId <= 0) return;
-    final p = PresenceFetch.peek(otherId);
+    final p = PresenceFetch.live(otherId);
     if (p == null) return;
     _otherStatus = (p['status'] as int?) ?? 0;
     _otherSeenTime = p['seen'] as int?;
@@ -1414,7 +1593,8 @@ class _ChatScreenState extends State<ChatScreen>
       if (msg.attachments != null) {
         for (final a in msg.attachments!) {
           if (a is ForwardedMessageAttachment) {
-            if (a.originalSenderName == null) {
+            if (a.originalSenderName == null &&
+                ContactCache.get(a.originalSenderId) == null) {
               forwardIds.add(a.originalSenderId);
             }
           }
@@ -1692,25 +1872,28 @@ class _ChatScreenState extends State<ChatScreen>
                   padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
                   child: Row(
                     children: [
-                      SizedBox(
-                        width: 56,
-                        height: 56,
-                        child: GlossyPill(
-                          onTap: () {
-                            if (widget.embedded) {
-                              widget.onClose?.call();
-                            } else {
-                              Navigator.pop(context);
-                            }
-                          },
-                          child: Center(
-                            child: Icon(
-                              widget.embedded
-                                  ? Symbols.close
-                                  : Symbols.arrow_back,
-                              color: cs.onSurface,
-                              weight: 500,
-                              size: 24,
+                      _backWithBadge(
+                        cs,
+                        SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: GlossyPill(
+                            onTap: () {
+                              if (widget.embedded) {
+                                widget.onClose?.call();
+                              } else {
+                                Navigator.pop(context);
+                              }
+                            },
+                            child: Center(
+                              child: Icon(
+                                widget.embedded
+                                    ? Symbols.close
+                                    : Symbols.arrow_back,
+                                color: cs.onSurface,
+                                weight: 500,
+                                size: 24,
+                              ),
                             ),
                           ),
                         ),
@@ -1732,31 +1915,34 @@ class _ChatScreenState extends State<ChatScreen>
                           padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
                           child: Row(
                             children: [
-                              if (widget.imageUrl.isNotEmpty)
-                                CircleAvatar(
-                                  radius: 22,
-                                  backgroundImage: CachedNetworkImageProvider(
-                                    widget.imageUrl,
-                                    maxWidth: 144,
-                                    maxHeight: 144,
-                                  ),
-                                )
-                              else
-                                CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: cs.primaryContainer,
-                                  child: Text(
-                                    widget.name.isNotEmpty
-                                        ? widget.name[0].toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      color: cs.onPrimaryContainer,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      fontFamily: 'Outfit',
-                                    ),
-                                  ),
-                                ),
+                              _withOnlineDot(
+                                cs,
+                                widget.imageUrl.isNotEmpty
+                                    ? CircleAvatar(
+                                        radius: 22,
+                                        backgroundImage:
+                                            CachedNetworkImageProvider(
+                                          widget.imageUrl,
+                                          maxWidth: 144,
+                                          maxHeight: 144,
+                                        ),
+                                      )
+                                    : CircleAvatar(
+                                        radius: 22,
+                                        backgroundColor: cs.primaryContainer,
+                                        child: Text(
+                                          widget.name.isNotEmpty
+                                              ? widget.name[0].toUpperCase()
+                                              : '?',
+                                          style: TextStyle(
+                                            color: cs.onPrimaryContainer,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            fontFamily: 'Outfit',
+                                          ),
+                                        ),
+                                      ),
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -3610,6 +3796,62 @@ class _SentMessageAnimationState extends State<_SentMessageAnimation>
         ),
       ),
       child: widget.child,
+    );
+  }
+}
+
+class _RollingCount extends StatefulWidget {
+  final int count;
+  final TextStyle style;
+
+  const _RollingCount({required this.count, required this.style});
+
+  @override
+  State<_RollingCount> createState() => _RollingCountState();
+}
+
+class _RollingCountState extends State<_RollingCount> {
+  late int _count = widget.count;
+  bool _increasing = true;
+
+  @override
+  void didUpdateWidget(_RollingCount old) {
+    super.didUpdateWidget(old);
+    if (widget.count != _count) {
+      _increasing = widget.count > _count;
+      _count = widget.count;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, anim) {
+        final incoming = (child.key as ValueKey<int>).value == _count;
+        final Offset begin;
+        if (incoming) {
+          begin = _increasing ? const Offset(0, -1) : const Offset(0, 1);
+        } else {
+          begin = _increasing ? const Offset(0, 1) : const Offset(0, -1);
+        }
+        return ClipRect(
+          child: FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween(begin: begin, end: Offset.zero).animate(anim),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: Text(
+        '${widget.count}',
+        key: ValueKey<int>(widget.count),
+        style: widget.style,
+      ),
     );
   }
 }

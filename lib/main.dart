@@ -11,11 +11,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
+import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_bubble_behavior.dart';
+import 'core/config/komet_settings.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
@@ -37,6 +39,7 @@ import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
 import 'backend/modules/outbox.dart';
 import 'backend/modules/polls.dart';
+import 'backend/modules/self_check.dart';
 import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
 import 'core/calls/call_controller.dart';
@@ -123,6 +126,9 @@ void main() async {
   final prefs = await prefsFuture;
   await FileHistoryCache.load(prefs);
   await DraftStore.instance.load();
+  await KometSettings.load();
+  if (KometSettings.ghostMode.value) SelfPresence.markOfflineFromPing();
+  await ContactCache.load();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
   final initialTlsInsecure = prefs.getBool(TlsConfig.prefKey) ?? false;
@@ -255,6 +261,7 @@ class KometAppState extends State<KometApp>
       if (status == LoginStatus.success) {
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
+        SelfCheckService.instance.init(api);
         if (isOnemeFlavor) {
           await PushService.instance.init(api: api, account: accountModule);
           await PushService.instance.onLoginSuccess();

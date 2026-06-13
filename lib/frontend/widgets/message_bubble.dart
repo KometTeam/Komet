@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
 import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
+import '../../core/config/komet_settings.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
@@ -51,7 +52,7 @@ class _BubbleCtx {
 }
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
-final Expando<String> _clockTextCache = Expando<String>();
+final Expando<({bool full, String text})> _clockTextCache = Expando();
 
 class MessageBubble extends StatelessWidget {
   static const double photoMaxSize = 280.0;
@@ -149,9 +150,17 @@ class MessageBubble extends StatelessWidget {
     return _contentTypeCache[message] ??= _computeContentType();
   }
 
-  String get _clockText => _clockTextCache[message] ??= formatClock(
-    DateTime.fromMillisecondsSinceEpoch(message.time),
-  );
+  String get _clockText {
+    final full = KometSettings.fullTimestamp.value;
+    final cached = _clockTextCache[message];
+    if (cached != null && cached.full == full) return cached.text;
+    final text = formatClock(
+      DateTime.fromMillisecondsSinceEpoch(message.time),
+      withSeconds: full,
+    );
+    _clockTextCache[message] = (full: full, text: text);
+    return text;
+  }
 
   MessageType _computeContentType() {
     if (message.isControl) return MessageType.control;
@@ -653,6 +662,10 @@ class MessageBubble extends StatelessWidget {
                   child: metaWidget,
                 ),
                 if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
+                if (message.deleted) ...[
+                  const SizedBox(width: 4),
+                  _buildDeletedIcon(ctx),
+                ],
               ],
             ),
           ],
@@ -680,6 +693,10 @@ class MessageBubble extends StatelessWidget {
               child: metaWidget,
             ),
             if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
+            if (message.deleted) ...[
+              const SizedBox(width: 4),
+              _buildDeletedIcon(ctx),
+            ],
           ],
         ),
       ],
@@ -691,9 +708,13 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
   ) {
     final headerColor = ctx.dim;
-    final senderName = forwarded.originalSenderName;
-    final displaySender = senderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
+    final displaySender =
+        forwarded.originalSenderName ??
+        ContactCache.get(forwarded.originalSenderId) ??
+        forwarded.originalSenderId.toString();
+    final senderAvatar =
+        forwarded.originalSenderAvatar ??
+        ContactCache.getAvatar(forwarded.originalSenderId);
     final origText = forwarded.originalText;
     final hasOrigText = origText != null && origText.isNotEmpty;
 
@@ -757,6 +778,62 @@ class MessageBubble extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildForwardedHeader(
+    _BubbleCtx ctx,
+    ForwardedMessageAttachment forwarded,
+  ) {
+    final headerColor = ctx.dim;
+    final displaySender =
+        forwarded.originalSenderName ??
+        ContactCache.get(forwarded.originalSenderId) ??
+        forwarded.originalSenderId.toString();
+    final senderAvatar =
+        forwarded.originalSenderAvatar ??
+        ContactCache.getAvatar(forwarded.originalSenderId);
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 8, right: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Symbols.forward, size: 14, color: headerColor),
+          const SizedBox(width: 4),
+          if (senderAvatar != null && senderAvatar.isNotEmpty)
+            CircleAvatar(
+              radius: 10,
+              backgroundImage: CachedNetworkImageProvider(
+                senderAvatar,
+                maxWidth: 96,
+                maxHeight: 96,
+              ),
+              backgroundColor: ctx.cs.primaryContainer,
+            )
+          else
+            CircleAvatar(
+              radius: 10,
+              backgroundColor: ctx.cs.primaryContainer,
+              child: Text(
+                displaySender.isNotEmpty ? displaySender[0].toUpperCase() : '?',
+                style: TextStyle(fontSize: 9, color: ctx.cs.onPrimaryContainer),
+              ),
+            ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              displaySender,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: headerColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1053,59 +1130,13 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
     List<PhotoAttachment> photos,
   ) {
-    final headerColor = ctx.dim;
-    final displaySender =
-        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
     final hasCaption = message.text != null && message.text!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              if (senderAvatar != null && senderAvatar.isNotEmpty)
-                CircleAvatar(
-                  radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(
-                    senderAvatar,
-                    maxWidth: 96,
-                    maxHeight: 96,
-                  ),
-                  backgroundColor: ctx.cs.primaryContainer,
-                )
-              else
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: ctx.cs.primaryContainer,
-                  child: Text(
-                    displaySender.isNotEmpty
-                        ? displaySender[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: ctx.cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 6),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+        _buildForwardedHeader(ctx, forwarded),
         const SizedBox(height: 4),
         if (hasCaption) ...[
           Padding(
@@ -1127,66 +1158,21 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
     List<MessageAttachment> attachments,
   ) {
-    final headerColor = ctx.dim;
-    final displaySender =
-        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              if (senderAvatar != null && senderAvatar.isNotEmpty)
-                CircleAvatar(
-                  radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(
-                    senderAvatar,
-                    maxWidth: 96,
-                    maxHeight: 96,
-                  ),
-                  backgroundColor: ctx.cs.primaryContainer,
-                )
-              else
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: ctx.cs.primaryContainer,
-                  child: Text(
-                    displaySender.isNotEmpty
-                        ? displaySender[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: ctx.cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 6),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        ...attachments.map((a) {
-          if (a is FileAttachment) {
-            return _buildFileAttachment(ctx, a);
-          }
-          return const SizedBox.shrink();
-        }),
-      ],
+    return IntrinsicWidth(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildForwardedHeader(ctx, forwarded),
+          const SizedBox(height: 4),
+          ...attachments.map((a) {
+            if (a is FileAttachment) {
+              return _buildFileAttachment(ctx, a, fill: true);
+            }
+            return const SizedBox.shrink();
+          }),
+        ],
+      ),
     );
   }
 
@@ -1774,7 +1760,11 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildFileAttachment(_BubbleCtx ctx, MessageAttachment file) {
+  Widget _buildFileAttachment(
+    _BubbleCtx ctx,
+    MessageAttachment file, {
+    bool fill = false,
+  }) {
     final name = (file as dynamic).name as String? ?? 'File';
     final size = (file as dynamic).size as int? ?? 0;
     final sizeStr = formatBytes(size);
@@ -1784,132 +1774,129 @@ class MessageBubble extends StatelessWidget {
     final preview = file is FileAttachment ? file.preview : null;
     final previewUrl = preview?.baseUrl ?? preview?.previewData ?? '';
 
-    return IntrinsicWidth(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (previewUrl.isNotEmpty) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: CachedNetworkImage(
-                  imageUrl: previewUrl,
-                  width: 240,
-                  height: 160,
-                  fit: BoxFit.cover,
-                  memCacheWidth: 480,
-                  fadeInDuration: const Duration(milliseconds: 120),
-                  errorWidget: (_, _, _) => const SizedBox.shrink(),
+    final inner = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (previewUrl.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: CachedNetworkImage(
+                imageUrl: previewUrl,
+                width: 240,
+                height: 160,
+                fit: BoxFit.cover,
+                memCacheWidth: 480,
+                fadeInDuration: const Duration(milliseconds: 120),
+                errorWidget: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                      : ctx.cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Symbols.description,
+                  color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                  size: 20,
                 ),
               ),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: isMe
-                        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                        : ctx.cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Symbols.description,
-                    color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        name,
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        color: ctx.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    ValueListenableBuilder<double?>(
+                      valueListenable: MediaDownloadProgress.notifier(
+                        cacheName,
+                      ),
+                      builder: (context, progress, _) => Text(
+                        progress != null
+                            ? '${(progress * 100).round()}% · $sizeStr'
+                            : sizeStr,
                         style: TextStyle(
-                          color: ctx.text,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          color: ctx.dim,
+                          fontSize: 12,
                           height: 1.2,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      ValueListenableBuilder<double?>(
-                        valueListenable: MediaDownloadProgress.notifier(
-                          cacheName,
-                        ),
-                        builder: (context, progress, _) => Text(
-                          progress != null
-                              ? '${(progress * 100).round()}% · $sizeStr'
-                              : sizeStr,
-                          style: TextStyle(
-                            color: ctx.dim,
-                            fontSize: 12,
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                ValueListenableBuilder<double?>(
-                  valueListenable: MediaDownloadProgress.notifier(cacheName),
-                  builder: (context, progress, _) {
-                    final downloading = progress != null;
-                    return GestureDetector(
-                      onTap: downloading
-                          ? null
-                          : () => _downloadFile(ctx.context, file, name),
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? ctx.cs.onPrimaryContainer.withValues(
-                                  alpha: 0.12,
-                                )
-                              : ctx.cs.surfaceContainerHighest,
-                          shape: BoxShape.circle,
-                        ),
-                        child: downloading
-                            ? Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  value: progress > 0 ? progress : null,
-                                  color: isMe
-                                      ? ctx.cs.onPrimaryContainer
-                                      : ctx.cs.primary,
-                                ),
-                              )
-                            : Icon(
-                                Symbols.download,
+              ),
+              const SizedBox(width: 12),
+              ValueListenableBuilder<double?>(
+                valueListenable: MediaDownloadProgress.notifier(cacheName),
+                builder: (context, progress, _) {
+                  final downloading = progress != null;
+                  return GestureDetector(
+                    onTap: downloading
+                        ? null
+                        : () => _downloadFile(ctx.context, file, name),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                            : ctx.cs.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: downloading
+                          ? Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                value: progress > 0 ? progress : null,
                                 color: isMe
                                     ? ctx.cs.onPrimaryContainer
                                     : ctx.cs.primary,
-                                size: 18,
                               ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-            _buildMeta(ctx),
-          ],
-        ),
+                            )
+                          : Icon(
+                              Symbols.download,
+                              color: isMe
+                                  ? ctx.cs.onPrimaryContainer
+                                  : ctx.cs.primary,
+                              size: 18,
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          _buildMeta(ctx),
+        ],
       ),
     );
+    return fill ? inner : IntrinsicWidth(child: inner);
   }
 
   Widget _buildStickerAttachment(_BubbleCtx ctx, MessageAttachment sticker) {
@@ -2047,59 +2034,12 @@ class MessageBubble extends StatelessWidget {
     final bgColor = isMe
         ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
         : ctx.cs.surfaceContainerHighest;
-    final headerColor = ctx.dim;
-
-    final displaySender =
-        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              if (senderAvatar != null && senderAvatar.isNotEmpty)
-                CircleAvatar(
-                  radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(
-                    senderAvatar,
-                    maxWidth: 96,
-                    maxHeight: 96,
-                  ),
-                  backgroundColor: ctx.cs.primaryContainer,
-                )
-              else
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: ctx.cs.primaryContainer,
-                  child: Text(
-                    displaySender.isNotEmpty
-                        ? displaySender[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: ctx.cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 6),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+        _buildForwardedHeader(ctx, forwarded),
         const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2254,6 +2194,7 @@ class MessageBubble extends StatelessWidget {
       url: url,
       textColor: ctx.text,
       isMe: isMe,
+      deleted: message.deleted,
       status: overrideStatus ?? message.status,
       time: message.time,
       cs: ctx.cs,
@@ -2274,6 +2215,10 @@ class MessageBubble extends StatelessWidget {
         children: [
           Text(_clockText, style: TextStyle(color: ctx.dim, fontSize: 11)),
           if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
+          if (message.deleted) ...[
+            const SizedBox(width: 4),
+            _buildDeletedIcon(ctx),
+          ],
         ],
       ),
     );
@@ -2290,15 +2235,28 @@ class MessageBubble extends StatelessWidget {
         color: bgColor,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        _clockText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _clockText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (message.deleted) ...[
+            const SizedBox(width: 3),
+            const Icon(Symbols.delete, size: 11, color: Colors.white),
+          ],
+        ],
       ),
     );
+  }
+
+  Widget _buildDeletedIcon(_BubbleCtx ctx) {
+    return Icon(Symbols.delete, size: 13, color: ctx.dim);
   }
 
   Widget _buildStatusIcon(_BubbleCtx ctx) {
@@ -2338,6 +2296,7 @@ class _VoiceMessageBubble extends StatefulWidget {
   final String url;
   final Color textColor;
   final bool isMe;
+  final bool deleted;
   final String? status;
   final int time;
   final ColorScheme cs;
@@ -2352,6 +2311,7 @@ class _VoiceMessageBubble extends StatefulWidget {
     required this.url,
     required this.textColor,
     required this.isMe,
+    this.deleted = false,
     this.status,
     required this.time,
     required this.cs,
@@ -2565,7 +2525,10 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
               ),
               if (!_transcriptionVisible) ...[
                 Text(
-                  formatClock(DateTime.fromMillisecondsSinceEpoch(widget.time)),
+                  formatClock(
+                    DateTime.fromMillisecondsSinceEpoch(widget.time),
+                    withSeconds: KometSettings.fullTimestamp.value,
+                  ),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),
                     fontSize: 10,
@@ -2575,6 +2538,14 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                   const SizedBox(width: 2),
                   _buildStatusIcon(),
                 ],
+                if (widget.deleted) ...[
+                  const SizedBox(width: 2),
+                  Icon(
+                    Symbols.delete,
+                    size: 13,
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
+                ],
               ],
             ],
           ),
@@ -2583,7 +2554,10 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  formatClock(DateTime.fromMillisecondsSinceEpoch(widget.time)),
+                  formatClock(
+                    DateTime.fromMillisecondsSinceEpoch(widget.time),
+                    withSeconds: KometSettings.fullTimestamp.value,
+                  ),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),
                     fontSize: 10,
@@ -2592,6 +2566,14 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                 if (widget.isMe) ...[
                   const SizedBox(width: 2),
                   _buildStatusIcon(),
+                ],
+                if (widget.deleted) ...[
+                  const SizedBox(width: 2),
+                  Icon(
+                    Symbols.delete,
+                    size: 13,
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
                 ],
               ],
             ),

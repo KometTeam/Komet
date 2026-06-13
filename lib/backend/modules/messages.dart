@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,13 +15,48 @@ class ContactCache {
   static final Map<int, String> _avatarCache = {};
   static final Map<int, Set<String>> _optionsCache = {};
 
-  static void put(int id, String name) => _nameCache[id] = name;
+  static const _prefsKey = 'contact_cache_v1';
+  static Timer? _saveTimer;
+  static bool _loaded = false;
 
-  static void putAvatar(int id, String? baseUrl) {
-    if (baseUrl != null) _avatarCache[id] = baseUrl;
+  static Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsKey);
+    if (raw == null) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      decoded.forEach((key, value) {
+        final id = int.tryParse(key.toString());
+        if (id == null || value is! Map) return;
+        final name = value['n'];
+        final avatar = value['a'];
+        final opts = value['o'];
+        if (name is String) _nameCache[id] = name;
+        if (avatar is String) _avatarCache[id] = avatar;
+        if (opts is List) _optionsCache[id] = opts.whereType<String>().toSet();
+      });
+    } catch (_) {}
   }
 
-  static void putOptions(int id, Set<String> opts) => _optionsCache[id] = opts;
+  static void put(int id, String name) {
+    _nameCache[id] = name;
+    _scheduleSave();
+  }
+
+  static void putAvatar(int id, String? baseUrl) {
+    if (baseUrl != null) {
+      _avatarCache[id] = baseUrl;
+      _scheduleSave();
+    }
+  }
+
+  static void putOptions(int id, Set<String> opts) {
+    _optionsCache[id] = opts;
+    _scheduleSave();
+  }
 
   static String? get(int id) => _nameCache[id];
   static String? getAvatar(int id) => _avatarCache[id];
@@ -32,6 +68,40 @@ class ContactCache {
     _nameCache.clear();
     _avatarCache.clear();
     _optionsCache.clear();
+    _saveTimer?.cancel();
+    _saveTimer = null;
+    unawaited(_wipePersisted());
+  }
+
+  static void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 3), () => unawaited(_save()));
+  }
+
+  static Future<void> _save() async {
+    final ids = <int>{
+      ..._nameCache.keys,
+      ..._avatarCache.keys,
+      ..._optionsCache.keys,
+    };
+    final map = <String, dynamic>{};
+    for (final id in ids) {
+      final entry = <String, dynamic>{};
+      final name = _nameCache[id];
+      final avatar = _avatarCache[id];
+      final opts = _optionsCache[id];
+      if (name != null) entry['n'] = name;
+      if (avatar != null) entry['a'] = avatar;
+      if (opts != null && opts.isNotEmpty) entry['o'] = opts.toList();
+      if (entry.isNotEmpty) map['$id'] = entry;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, jsonEncode(map));
+  }
+
+  static Future<void> _wipePersisted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
   }
 }
 
@@ -197,6 +267,7 @@ class CachedMessage {
   final Map<String, dynamic>? payload;
   final List<MessageAttachment>? attachments;
   final bool isControl;
+  final bool deleted;
 
   const CachedMessage({
     required this.id,
@@ -209,7 +280,26 @@ class CachedMessage {
     this.payload,
     this.attachments,
     this.isControl = false,
+    this.deleted = false,
   });
+
+  CachedMessage copyWith({
+    String? status,
+    bool? deleted,
+    List<MessageAttachment>? attachments,
+  }) => CachedMessage(
+    id: id,
+    accountId: accountId,
+    chatId: chatId,
+    senderId: senderId,
+    text: text,
+    time: time,
+    status: status ?? this.status,
+    payload: payload,
+    attachments: attachments ?? this.attachments,
+    isControl: isControl,
+    deleted: deleted ?? this.deleted,
+  );
 
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
     Map<String, dynamic>? payload;
@@ -259,6 +349,9 @@ class CachedMessage {
       attachments: attachments,
       isControl:
           attachments?.any((a) => a.type == AttachmentType.control) ?? false,
+      deleted: row['deleted'] is int
+          ? row['deleted'] == 1
+          : row['deleted']?.toString() == '1',
     );
   }
 
@@ -295,6 +388,7 @@ class CachedMessage {
     'time': time,
     'status': status,
     'payload': payload != null ? jsonEncode(payload) : null,
+    'deleted': deleted ? 1 : 0,
   };
 
   static CachedMessage fromPushPayload(int accountId, int chatId, Map msg) {

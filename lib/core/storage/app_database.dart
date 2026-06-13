@@ -185,7 +185,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 12,
+      version: 13,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -241,6 +241,11 @@ class AppDatabase {
         if (oldVersion < 12) {
           await db.execute(
             'ALTER TABLE chats_cache ADD COLUMN last_msg_status TEXT',
+          );
+        }
+        if (oldVersion < 13) {
+          await db.execute(
+            'ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0',
           );
         }
       },
@@ -344,6 +349,7 @@ class AppDatabase {
       time       INTEGER NOT NULL,
       status     TEXT,
       payload    TEXT,
+      deleted    INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, account_id),
       FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
     )
@@ -351,10 +357,17 @@ class AppDatabase {
 
   static Future<void> saveProfile(ProfileData profile, {bool isActive = true}) async {
     final db = await _instance;
-    await db.insert(
-      'profile',
-      profile.toDbRow(isActive: isActive),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    final row = profile.toDbRow(isActive: isActive);
+    final cols = row.keys.toList();
+    final placeholders = List.filled(cols.length, '?').join(', ');
+    final updates = cols
+        .where((c) => c != 'id')
+        .map((c) => '$c = excluded.$c')
+        .join(', ');
+    await db.rawInsert(
+      'INSERT INTO profile (${cols.join(', ')}) VALUES ($placeholders) '
+      'ON CONFLICT(id) DO UPDATE SET $updates',
+      cols.map((c) => row[c]).toList(),
     );
   }
 
@@ -527,6 +540,22 @@ class AppDatabase {
     );
   }
 
+  static Future<int> sumUnread(int accountId, {int? excludeChatId}) async {
+    final db = await _instance;
+    final where = excludeChatId != null
+        ? 'account_id = ? AND id != ?'
+        : 'account_id = ?';
+    final args = excludeChatId != null
+        ? [accountId, excludeChatId]
+        : [accountId];
+    final result = await db.rawQuery(
+      'SELECT COALESCE(SUM(unread_count), 0) AS total '
+      'FROM chats_cache WHERE $where',
+      args,
+    );
+    return (result.first['total'] as int?) ?? 0;
+  }
+
   static Future<int?> findDialogChatByParticipant(int accountId, int contactId) async {
     final db = await _instance;
     final rows = await db.query(
@@ -623,16 +652,54 @@ class AppDatabase {
     int chatId, {
     int? limit,
     int? offset,
+    bool onlyVisible = false,
   }) async {
     final db = await _instance;
     return db.query(
       'messages',
-      where: 'account_id = ? AND chat_id = ?',
+      where: onlyVisible
+          ? 'account_id = ? AND chat_id = ? AND deleted = 0'
+          : 'account_id = ? AND chat_id = ?',
       whereArgs: [accountId, chatId],
       orderBy: 'time DESC',
       limit: limit,
       offset: offset,
     );
+  }
+
+  static Future<void> markMessageDeleted(
+    int accountId,
+    int chatId,
+    String messageId,
+  ) async {
+    final db = await _instance;
+    await db.update(
+      'messages',
+      {'deleted': 1},
+      where: 'account_id = ? AND chat_id = ? AND id = ?',
+      whereArgs: [accountId, chatId, messageId],
+    );
+  }
+
+  static Future<void> markMessagesDeleted(
+    int accountId,
+    int chatId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return;
+    final db = await _instance;
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      for (final id in messageIds) {
+        batch.update(
+          'messages',
+          {'deleted': 1},
+          where: 'account_id = ? AND chat_id = ? AND id = ?',
+          whereArgs: [accountId, chatId, id],
+        );
+      }
+      await batch.commit(noResult: true);
+    });
   }
 
   static Future<void> clearMessages(int accountId, int chatId) async {
