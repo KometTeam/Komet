@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 
@@ -139,7 +140,10 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(titleText: 'Шрифты', backgroundColor: cs.surface),
+      appBar: ConnectionTitleBar(
+        titleText: 'Шрифты',
+        backgroundColor: cs.surface,
+      ),
       body: SafeArea(
         top: false,
         child: ListView(

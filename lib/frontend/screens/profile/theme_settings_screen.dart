@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_amoled.dart';
 import '../../../core/config/app_theme_mode.dart';
@@ -18,7 +19,7 @@ class ThemeSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(titleText: 'Тема', backgroundColor: cs.surface),
+      appBar: ConnectionTitleBar(titleText: 'Тема', backgroundColor: cs.surface),
       body: SafeArea(
         top: false,
         child: ListView(

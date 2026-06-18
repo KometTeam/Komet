@@ -13,6 +13,7 @@ import '../../../backend/modules/upload_manager.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../main.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -315,7 +316,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           icon: Icon(Symbols.arrow_back, color: cs.onSurface),
           onPressed: _onBack,
         ),
-        title: Text(
+        title: ConnectionTitleText(
           'Облачное хранилище',
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),

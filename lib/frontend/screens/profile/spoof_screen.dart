@@ -13,6 +13,7 @@ import '../../../core/storage/spoofing_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/section_header.dart';
 import '../auth/login_screen.dart';
@@ -438,7 +439,10 @@ class _SpoofScreenState extends State<SpoofScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.spoofScreenTitle), centerTitle: true),
+      appBar: AppBar(
+        title: ConnectionTitleText(l10n.spoofScreenTitle),
+        centerTitle: true,
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

@@ -6,6 +6,7 @@ import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
 
@@ -190,6 +191,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
     return Scaffold(
       backgroundColor: bg,
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: const ConnectionSpinner(),
       body: SafeArea(
         child: _isLoading ? _buildShimmer(cs) : _buildScrollBody(cs),
       ),

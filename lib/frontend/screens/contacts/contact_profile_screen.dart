@@ -8,6 +8,7 @@ import '../../../core/utils/format.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/swipe_route.dart';
 import '../chats/chat_screen.dart';
 
@@ -127,6 +128,8 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: const ConnectionSpinner(),
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())

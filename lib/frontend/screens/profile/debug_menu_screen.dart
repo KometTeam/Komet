@@ -22,6 +22,7 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/login_success_screen.dart';
 import '../calls/call_screen.dart';
 import '../../../core/calls/call_controller.dart';
+import '../../widgets/connection_status.dart';
 import '../digital_id/digital_id_web_screen.dart';
 
 class DebugMenuScreen extends StatefulWidget {
@@ -205,6 +206,8 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
 
     return Scaffold(
       backgroundColor: cs.surface,
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: const ConnectionSpinner(),
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
@@ -366,6 +369,64 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                           );
                         },
                       ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: debugForceOffline,
+                  builder: (context, offline, _) {
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.wifi_off,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Офлайн (тест)',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Показать индикаторы соединения во всех '
+                                  'экранах, не разрывая реальную сессию',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: offline,
+                            onChanged: (v) => debugForceOffline.value = v,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
             SliverToBoxAdapter(

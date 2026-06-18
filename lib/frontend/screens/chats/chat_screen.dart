@@ -39,6 +39,7 @@ import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/online_dot.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/theme_reveal.dart';
 import '../../widgets/message_actions_overlay.dart';
@@ -110,6 +111,7 @@ class _ChatScreenState extends State<ChatScreen>
   StreamSubscription<UploadEvent>? _uploadSub;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<MessageEvent>? _messageEventSub;
+  StreamSubscription<SessionState>? _connSub;
   final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers =
       {};
   final Map<String, ValueNotifier<List<double>>> _photoUploadProgress = {};
@@ -209,6 +211,10 @@ class _ChatScreenState extends State<ChatScreen>
     _messageEventSub = ChatsModule.messageEvents
         .where((e) => e.chatId == widget.chatId)
         .listen(_onMessageEvent);
+    _connSub = api.stateStream.listen((_) {
+      if (mounted) _recomputeHeaderStatus();
+    });
+    debugForceOffline.addListener(_recomputeHeaderStatus);
     PresenceFetch.revision.addListener(_onPresenceChanged);
     _floatingDateAnimController = AnimationController(
       vsync: this,
@@ -544,6 +550,8 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadSub?.cancel();
     _pushSub?.cancel();
     _messageEventSub?.cancel();
+    _connSub?.cancel();
+    debugForceOffline.removeListener(_recomputeHeaderStatus);
     for (final n in _reactionNotifiers.values) {
       n.dispose();
     }
@@ -1360,6 +1368,8 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   String _headerStatus() {
+    final conn = connectionStatusLabel(api.state);
+    if (conn != null) return conn;
     if (_typingUserIds.isNotEmpty) return 'Печатает...';
     if (widget.chatType == 'CHAT') {
       final count = _participantsCount ?? chat?.participants.length ?? 0;

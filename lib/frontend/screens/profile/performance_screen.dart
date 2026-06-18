@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:m3e_collection/m3e_collection.dart';
+import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/utils/haptics.dart';
@@ -91,7 +91,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
+      appBar: ConnectionTitleBar(
         titleText: 'Производительность',
         backgroundColor: cs.surface,
       ),

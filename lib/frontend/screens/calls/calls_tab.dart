@@ -9,6 +9,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/connection_status.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -260,14 +261,20 @@ class _CallsTabState extends State<CallsTab> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(
-                'Звонки',
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Outfit',
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Звонки',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Outfit',
+                    ),
+                  ),
+                  const ConnectionStatusLine(),
+                ],
               ),
             ),
             InkWell(

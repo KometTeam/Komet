@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/utils/haptics.dart';
@@ -14,7 +15,7 @@ class MessageActionsScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
+      appBar: ConnectionTitleBar(
         titleText: 'Меню действий',
         backgroundColor: cs.surface,
       ),

@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/webapp.dart';
 import '../../../main.dart' show webAppModule, digitalIdModule;
+import '../../widgets/connection_status.dart';
 import '../../widgets/webview_permission_prompt.dart';
 
 Future<void> resetDigitalIdWebData() async {
@@ -218,6 +219,8 @@ class _DigitalIdWebScreenState extends State<DigitalIdWebScreen> {
       },
       child: Scaffold(
         backgroundColor: cs.surface,
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+        floatingActionButton: const ConnectionSpinner(),
         appBar: AppBar(
           backgroundColor: cs.surface,
           surfaceTintColor: Colors.transparent,

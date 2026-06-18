@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/section_header.dart';
@@ -60,7 +61,7 @@ class _InfoScreenState extends State<InfoScreen> {
           icon: Icon(Symbols.arrow_back, color: cs.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
+        title: ConnectionTitleText(
           l10n?.infoTitle ?? 'Info',
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),

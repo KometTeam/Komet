@@ -7,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../widgets/connection_status.dart';
+
 class WebQrScanScreen extends StatefulWidget {
   const WebQrScanScreen({super.key});
 
@@ -58,6 +60,8 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: const ConnectionSpinner(),
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,

@@ -10,6 +10,7 @@ import '../../../core/utils/format.dart';
 import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show SessionInfo;
 import '../../widgets/custom_notification.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'web_qr_scan_screen.dart';
@@ -327,7 +328,7 @@ class _DevicesScreenState extends State<DevicesScreen>
           icon: const Icon(Symbols.chevron_left, size: 28),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
+        title: ConnectionTitleText(
           'Устройства',
           style: GoogleFonts.outfit(
             fontSize: 20,

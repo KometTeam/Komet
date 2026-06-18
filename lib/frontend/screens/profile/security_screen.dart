@@ -7,6 +7,7 @@ import '../../../backend/modules/account.dart'
 import '../../../core/storage/app_database.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'password_entry_screen.dart';
@@ -197,7 +198,7 @@ class _SecurityScreenState extends State<SecurityScreen>
             onPressed: () => Navigator.pop(context),
           ),
           const SizedBox(width: 4),
-          Text(
+          ConnectionTitleText(
             'Безопасность',
             style: TextStyle(
               color: cs.onSurface,

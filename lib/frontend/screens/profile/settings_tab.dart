@@ -13,6 +13,7 @@ import '../../../core/utils/format.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
@@ -564,6 +565,9 @@ class _SettingsTabState extends State<SettingsTab> {
                   weight: 400,
                 ),
                 onPressed: () {},
+              ),
+              const Expanded(
+                child: ConnectionStatusLine(textAlign: TextAlign.center),
               ),
               IconButton(
                 icon: Icon(

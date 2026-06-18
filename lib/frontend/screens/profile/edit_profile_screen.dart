@@ -5,6 +5,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, fileUploader, KometApp;
+import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -170,7 +171,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           icon: Icon(Symbols.arrow_back, color: cs.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
+        title: ConnectionTitleText(
           l10n?.editProfileTitle ?? 'Edit Profile',
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),

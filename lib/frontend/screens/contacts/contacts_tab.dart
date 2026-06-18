@@ -6,6 +6,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../main.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'contact_profile_screen.dart';
 
@@ -168,14 +169,21 @@ class _ContactsTabState extends State<ContactsTab> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      'Контакты',
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Outfit',
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Контакты',
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Outfit',
+                          ),
+                        ),
+                        const ConnectionStatusLine(),
+                      ],
                     ),
                   ),
                   IconButton(

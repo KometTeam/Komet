@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../widgets/connection_status.dart';
 
 import '../../../core/utils/haptics.dart';
 import '../../widgets/glossy_pill.dart';
@@ -80,7 +81,7 @@ class CustomizationScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
+      appBar: ConnectionTitleBar(
         titleText: 'Кастомизация',
         backgroundColor: cs.surface,
       ),

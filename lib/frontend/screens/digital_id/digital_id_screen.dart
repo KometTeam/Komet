@@ -6,6 +6,7 @@ import '../../../backend/modules/webapp.dart';
 import '../../../core/utils/webview_support.dart';
 import '../../../main.dart' show digitalIdModule;
 import '../../../models/digital_id.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../webapp/web_app_screen.dart';
 
@@ -155,6 +156,8 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: const ConnectionSpinner(),
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,

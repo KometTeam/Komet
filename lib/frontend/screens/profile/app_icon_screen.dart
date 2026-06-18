@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_icon.dart';
 import '../../../core/utils/haptics.dart';
@@ -46,7 +47,7 @@ class _AppIconScreenState extends State<AppIconScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
+      appBar: ConnectionTitleBar(
         titleText: 'Иконка приложения',
         backgroundColor: cs.surface,
       ),
