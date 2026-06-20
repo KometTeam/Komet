@@ -335,23 +335,33 @@ class _LoginScreenState extends State<LoginScreen> {
                           duration: const Duration(milliseconds: 300),
                           opacity: progress == 1.0 ? 1.0 : 0.0,
                           curve: Curves.easeIn,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            transform: Matrix4.translationValues(
-                              progress == 1.0 ? 0 : 20,
-                              0,
-                              0,
-                            ),
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: cs.primaryContainer,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Symbols.check,
-                              color: cs.onPrimaryContainer,
-                              size: 24,
+                          child: IgnorePointer(
+                            ignoring: progress < 1.0,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              transform: Matrix4.translationValues(
+                                progress == 1.0 ? 0 : 20,
+                                0,
+                                0,
+                              ),
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: cs.primaryContainer,
+                                shape: BoxShape.circle,
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => Navigator.pop(context),
+                                  child: Icon(
+                                    Symbols.check,
+                                    color: cs.onPrimaryContainer,
+                                    size: 24,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
