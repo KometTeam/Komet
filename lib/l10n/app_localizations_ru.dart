@@ -199,7 +199,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofDeviceTypeDescription =>
-      'Данное поле не изменяемое, во избежании проблем с ассоциацией токена';
+      'Определяет, какие устройства генерируются: Android или iOS';
 
   @override
   String get spoofDeviceTypeLabel => 'Тип устройства';

@@ -101,11 +101,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
     if (profile != null && profile.enabled) {
       _spoofingEnabled = true;
       _applyProfileToControllers(profile);
-      if (mounted) setState(() => _isLoading = false);
     } else {
       _spoofingEnabled = false;
       await _loadDeviceData();
     }
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _applyProfileToControllers(SpoofProfile profile) {
@@ -163,7 +163,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
   }
 
   Future<void> _loadDeviceData() async {
-    setState(() => _isLoading = true);
     _userAgent = '';
     _spoofingEnabled = false;
 
@@ -204,6 +203,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
+      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text =
           '${androidInfo.manufacturer} ${androidInfo.model}';
       _osVersionController.text = 'Android ${androidInfo.version.release}';
@@ -213,34 +213,44 @@ class _SpoofScreenState extends State<SpoofScreen> {
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       _selectedDeviceType = 'IOS';
+      _selectedArch = 'arm64';
       _deviceNameController.text = iosInfo.utsname.machine;
       _osVersionController.text = iosInfo.systemVersion;
     } else if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
+      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text = linuxInfo.prettyName;
       _osVersionController.text = linuxInfo.name;
     } else if (Platform.isWindows) {
       final windowsInfo = await deviceInfo.windowsInfo;
+      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text = windowsInfo.productName;
       _osVersionController.text = windowsInfo.productName;
     } else if (Platform.isMacOS) {
       final macInfo = await deviceInfo.macOsInfo;
+      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text = macInfo.model;
       _osVersionController.text = 'macOS ${macInfo.osRelease}';
     }
 
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) setState(() {});
   }
 
   Future<void> _applyGeneratedData() async {
     final filteredPresets = devicePresets
-        .where((p) => p.deviceType == 'ANDROID' || p.deviceType == 'IOS')
+        .where((p) => p.deviceType == _selectedDeviceType)
         .toList();
 
     if (filteredPresets.isEmpty) return;
 
     final preset = filteredPresets[_random.nextInt(filteredPresets.length)];
     await _applyPreset(preset);
+  }
+
+  void _onDeviceTypeChanged(String type) {
+    if (type == _selectedDeviceType) return;
+    setState(() => _selectedDeviceType = type);
+    if (_spoofingEnabled) _applyGeneratedData();
   }
 
   Future<void> _applyPreset(DevicePreset preset) async {
@@ -470,7 +480,13 @@ class _SpoofScreenState extends State<SpoofScreen> {
               : l10n.spoofEnableSubtitleOff,
         ),
         value: _spoofingEnabled,
-        onChanged: (value) => setState(() => _spoofingEnabled = value),
+        onChanged: (value) async {
+          if (value) {
+            await _applyGeneratedData();
+          } else {
+            await _loadDeviceData();
+          }
+        },
       ),
     );
   }
@@ -586,12 +602,14 @@ class _SpoofScreenState extends State<SpoofScreen> {
               text: l10n.spoofDeviceTypeDescription,
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                _buildDisabledChip('ANDROID', Icons.android_outlined, theme),
-                const SizedBox(width: 8),
-                _buildDisabledChip('iOS', Icons.phone_iphone_outlined, theme),
-                const SizedBox(width: 8),
+            _buildChipSelector<String>(
+              options: const [
+                _ChipOption('ANDROID', 'Android', Icons.android_outlined),
+                _ChipOption('IOS', 'iOS', Icons.phone_iphone_outlined),
+              ],
+              selected: _selectedDeviceType,
+              onSelected: _onDeviceTypeChanged,
+              trailing: [
                 _buildDisabledChip(
                   'Desktop',
                   Icons.desktop_windows_outlined,
@@ -845,14 +863,16 @@ class _SpoofScreenState extends State<SpoofScreen> {
     required List<_ChipOption<T>> options,
     required T selected,
     required ValueChanged<T> onSelected,
+    List<Widget> trailing = const [],
   }) {
     final cs = Theme.of(context).colorScheme;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: options.map((opt) {
-        final isSelected = opt.value == selected;
-        return ChoiceChip(
+      children: [
+        ...options.map((opt) {
+          final isSelected = opt.value == selected;
+          return ChoiceChip(
           label: Text(opt.label),
           avatar: isSelected
               ? Icon(Icons.check, size: 18, color: cs.onSecondaryContainer)
@@ -878,7 +898,9 @@ class _SpoofScreenState extends State<SpoofScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         );
-      }).toList(),
+        }),
+        ...trailing,
+      ],
     );
   }
 

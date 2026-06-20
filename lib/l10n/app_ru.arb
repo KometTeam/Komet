@@ -68,7 +68,7 @@
   "spoofMethodPartialDescription": "Рекомендуемый метод. Используются случайные данные, но ваш реальный часовой пояс и локаль для большей правдоподобности.",
   "spoofMethodFullDescription": "Все данные, включая часовой пояс и локаль, генерируются случайно. Использование этого метода на ваш страх и риск!",
   "spoofDeviceTypeTitle": "Тип устройства",
-  "spoofDeviceTypeDescription": "Данное поле не изменяемое, во избежании проблем с ассоциацией токена",
+  "spoofDeviceTypeDescription": "Определяет, какие устройства генерируются: Android или iOS",
   "spoofDeviceTypeLabel": "Тип устройства",
   "spoofMainSectionTitle": "Основные данные",
   "spoofFieldDeviceName": "Имя устройства",

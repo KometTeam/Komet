@@ -68,7 +68,7 @@
   "spoofMethodPartialDescription": "Recommended method. Random data is used, but your real timezone and locale are kept for plausibility.",
   "spoofMethodFullDescription": "All data including timezone and locale is generated randomly. Use this method at your own risk!",
   "spoofDeviceTypeTitle": "Device type",
-  "spoofDeviceTypeDescription": "This field is not changeable, to avoid token association issues",
+  "spoofDeviceTypeDescription": "Controls which devices are generated: Android or iOS",
   "spoofDeviceTypeLabel": "Device type",
   "spoofMainSectionTitle": "Main data",
   "spoofFieldDeviceName": "Device name",

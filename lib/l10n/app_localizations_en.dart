@@ -196,7 +196,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spoofDeviceTypeDescription =>
-      'This field is not changeable, to avoid token association issues';
+      'Controls which devices are generated: Android or iOS';
 
   @override
   String get spoofDeviceTypeLabel => 'Device type';

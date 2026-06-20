@@ -455,7 +455,7 @@ abstract class AppLocalizations {
   /// No description provided for @spoofDeviceTypeDescription.
   ///
   /// In en, this message translates to:
-  /// **'This field is not changeable, to avoid token association issues'**
+  /// **'Controls which devices are generated: Android or iOS'**
   String get spoofDeviceTypeDescription;
 
   /// No description provided for @spoofDeviceTypeLabel.
