@@ -7,6 +7,7 @@ import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import 'chats.dart';
@@ -883,6 +884,7 @@ class AccountModule {
     if (sessionToken != null && accountId != null) {
       await TokenStorage.saveToken(sessionToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
+      await SpoofingService.commitPendingSpoof(accountId);
     }
 
     return result;
@@ -938,6 +940,7 @@ class AccountModule {
     final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
     await AppDatabase.saveProfile(profile, isActive: true);
     await TokenStorage.setActiveAccount(accountId);
+    await SpoofingService.commitPendingSpoof(accountId);
 
     logger.i('Регистрация завершена, accountId=$accountId');
     return accountId;
@@ -992,6 +995,7 @@ class AccountModule {
         }
         await TokenStorage.saveToken(authToken, resolvedAccountId);
         await TokenStorage.setActiveAccount(resolvedAccountId);
+        await SpoofingService.commitPendingSpoof(resolvedAccountId);
       }
 
       final result = await _processLoginResponse(dataMap, resolvedAccountId);
@@ -1038,6 +1042,11 @@ class AccountModule {
   }
 
   Future<void> beginAddAccount() async {
+    final existing = await AppDatabase.loadAllProfiles();
+    await SpoofingService.prepareNewAccountSpoof(
+      existing.map((p) => p.id).toList(growable: false),
+    );
+
     try {
       await _api.disconnect();
     } catch (_) {}
@@ -1088,6 +1097,7 @@ class AccountModule {
   Future<void> removeAccount(int accountId) async {
     await AppDatabase.deleteAccount(accountId);
     await TokenStorage.deleteAccount(accountId);
+    await SpoofingService.clearAccountSpoof(accountId);
     logger.i('Аккаунт $accountId удалён локально');
   }
 

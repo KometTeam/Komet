@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/webapp.dart';
+import '../../../core/storage/spoofing_service.dart';
 import '../../../main.dart' show webAppModule, digitalIdModule;
 import '../../widgets/connection_status.dart';
 import '../../widgets/webview_permission_prompt.dart';
@@ -175,6 +176,7 @@ class _DigitalIdWebScreenState extends State<DigitalIdWebScreen> {
   InAppWebViewController? _controller;
   WebAppLaunch? _launch;
   String? _loadError;
+  String _userAgent = '';
   double _progress = 0;
 
   @override
@@ -189,6 +191,7 @@ class _DigitalIdWebScreenState extends State<DigitalIdWebScreen> {
       _launch = null;
     });
     try {
+      _userAgent = await SpoofingService.getWebViewUserAgent() ?? '';
       final launch = await webAppModule.fetchDigitalId();
       if (!mounted) return;
       setState(() => _launch = launch);
@@ -280,6 +283,7 @@ class _DigitalIdWebScreenState extends State<DigitalIdWebScreen> {
         mediaPlaybackRequiresUserGesture: false,
         useHybridComposition: true,
         useShouldOverrideUrlLoading: true,
+        userAgent: _userAgent,
       ),
       onWebViewCreated: (controller) {
         _controller = controller;

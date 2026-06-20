@@ -201,6 +201,7 @@ class Api {
       );
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
+      deviceType = 'IOS';
       osVersion = iosInfo.systemVersion;
       deviceName = iosInfo.utsname.machine;
     } else if (Platform.isAndroid) {

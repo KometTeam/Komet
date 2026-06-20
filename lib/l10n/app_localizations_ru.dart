@@ -164,6 +164,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get spoofScreenTitle => 'Подмена данных сессии';
 
   @override
+  String get spoofEnableTitle => 'Подмена устройства';
+
+  @override
+  String get spoofEnableSubtitleOn => 'Включена для этого аккаунта';
+
+  @override
+  String get spoofEnableSubtitleOff =>
+      'Выключена — используется реальное устройство';
+
+  @override
   String get spoofInfoHint =>
       'Нажмите \"Сгенерировать\":\n• Короткое нажатие: случайный пресет.\n• Длинное нажатие: реальные данные.';
 

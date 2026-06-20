@@ -162,6 +162,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get spoofScreenTitle => 'Session spoofing';
 
   @override
+  String get spoofEnableTitle => 'Device spoofing';
+
+  @override
+  String get spoofEnableSubtitleOn => 'Enabled for this account';
+
+  @override
+  String get spoofEnableSubtitleOff => 'Disabled — using the real device';
+
+  @override
   String get spoofInfoHint =>
       'Tap \"Generate\":\n• Short tap: random preset.\n• Long press: real device data.';
 

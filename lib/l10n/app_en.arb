@@ -58,6 +58,9 @@
   "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)",
 
   "spoofScreenTitle": "Session spoofing",
+  "spoofEnableTitle": "Device spoofing",
+  "spoofEnableSubtitleOn": "Enabled for this account",
+  "spoofEnableSubtitleOff": "Disabled — using the real device",
   "spoofInfoHint": "Tap \"Generate\":\n• Short tap: random preset.\n• Long press: real device data.",
   "spoofMethodTitle": "Spoofing method",
   "spoofMethodPartial": "Partial",

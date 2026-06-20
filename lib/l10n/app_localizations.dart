@@ -392,6 +392,24 @@ abstract class AppLocalizations {
   /// **'Session spoofing'**
   String get spoofScreenTitle;
 
+  /// No description provided for @spoofEnableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Device spoofing'**
+  String get spoofEnableTitle;
+
+  /// No description provided for @spoofEnableSubtitleOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled for this account'**
+  String get spoofEnableSubtitleOn;
+
+  /// No description provided for @spoofEnableSubtitleOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled — using the real device'**
+  String get spoofEnableSubtitleOff;
+
   /// No description provided for @spoofInfoHint.
   ///
   /// In en, this message translates to:

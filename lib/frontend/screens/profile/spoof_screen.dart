@@ -1,17 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/config/device_presets.dart';
 import '../../../core/storage/device_identity.dart';
 import '../../../core/storage/spoofing_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/spoof_profile.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/info_action_sheet.dart';
@@ -47,6 +48,9 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
   String _selectedDeviceType = 'ANDROID';
   String _selectedArch = 'arm64-v8a';
+  String _userAgent = '';
+  bool _spoofingEnabled = false;
+  SpoofProfile? _initialProfile;
   SpoofingMethod _selectedMethod = SpoofingMethod.partial;
   bool _isLoading = true;
 
@@ -89,49 +93,79 @@ class _SpoofScreenState extends State<SpoofScreen> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     await _loadSessionIdentifiers();
-    final prefs = await SharedPreferences.getInstance();
-    final isSpoofingEnabled = prefs.getBool('spoofing_enabled') ?? false;
 
-    if (isSpoofingEnabled) {
-      _deviceNameController.text = prefs.getString('spoof_devicename') ?? '';
-      _osVersionController.text = prefs.getString('spoof_osversion') ?? '';
-      _screenController.text = prefs.getString('spoof_screen') ?? '';
-      _timezoneController.text = prefs.getString('spoof_timezone') ?? '';
-      _localeController.text = prefs.getString('spoof_locale') ?? '';
-      _deviceIdController.text = prefs.getString('spoof_deviceid') ?? '';
-      _appVersionController.text =
-          prefs.getString('spoof_appversion') ?? _hardcodedVersion;
-      _selectedArch = prefs.getString('spoof_arch') ?? 'arm64-v8a';
-      _buildNumberController.text =
-          prefs.getInt('spoof_buildnumber')?.toString() ??
-          '$_hardcodedBuildNumber';
-      _pushDeviceTypeController.text =
-          prefs.getString('spoof_pushdevicetype') ?? 'GCM';
+    final scope = await SpoofingService.activeScope();
+    final profile = await SpoofingService.loadProfile(scope);
+    _initialProfile = profile;
 
-      final savedDeviceLocale = prefs.getString('spoof_devicelocale');
-      if (savedDeviceLocale != null && savedDeviceLocale.isNotEmpty) {
-        _deviceLocaleController.text = savedDeviceLocale;
-      }
-      final savedInstanceId = prefs.getString('spoof_instanceid');
-      if (savedInstanceId != null && savedInstanceId.isNotEmpty) {
-        _instanceIdController.text = savedInstanceId;
-      }
-      final savedClientSessionId = prefs.getInt('spoof_clientsessionid');
-      if (savedClientSessionId != null) {
-        _clientSessionIdController.text = '$savedClientSessionId';
-      }
-
-      String savedType = prefs.getString('spoof_devicetype') ?? 'ANDROID';
-      if (savedType == 'WEB') savedType = 'ANDROID';
-      _selectedDeviceType = savedType;
+    if (profile != null && profile.enabled) {
+      _spoofingEnabled = true;
+      _applyProfileToControllers(profile);
       if (mounted) setState(() => _isLoading = false);
     } else {
+      _spoofingEnabled = false;
       await _loadDeviceData();
     }
   }
 
+  void _applyProfileToControllers(SpoofProfile profile) {
+    _deviceNameController.text = profile.deviceName;
+    _osVersionController.text = profile.osVersion;
+    _screenController.text = profile.screen;
+    _timezoneController.text = profile.timezone;
+    _localeController.text = profile.locale;
+    _deviceIdController.text = profile.deviceId;
+    _appVersionController.text =
+        profile.appVersion.isEmpty ? _hardcodedVersion : profile.appVersion;
+    _selectedArch = profile.arch.isEmpty ? 'arm64-v8a' : profile.arch;
+    _buildNumberController.text = profile.buildNumber == 0
+        ? '$_hardcodedBuildNumber'
+        : '${profile.buildNumber}';
+    _pushDeviceTypeController.text =
+        profile.pushDeviceType.isEmpty ? 'GCM' : profile.pushDeviceType;
+    _userAgent = profile.userAgent;
+
+    if (profile.deviceLocale.isNotEmpty) {
+      _deviceLocaleController.text = profile.deviceLocale;
+    }
+    if (profile.instanceId.isNotEmpty) {
+      _instanceIdController.text = profile.instanceId;
+    }
+    if (profile.clientSessionId != null) {
+      _clientSessionIdController.text = '${profile.clientSessionId}';
+    }
+
+    var type = profile.deviceType.isEmpty ? 'ANDROID' : profile.deviceType;
+    if (type == 'WEB') type = 'ANDROID';
+    _selectedDeviceType = type;
+  }
+
+  SpoofProfile _buildProfileFromControllers() {
+    return SpoofProfile(
+      enabled: _spoofingEnabled,
+      deviceName: _deviceNameController.text,
+      osVersion: _osVersionController.text,
+      screen: _screenController.text,
+      timezone: _timezoneController.text,
+      locale: _localeController.text,
+      deviceLocale: _deviceLocaleController.text,
+      deviceId: _deviceIdController.text,
+      deviceType: _selectedDeviceType,
+      arch: _selectedArch,
+      appVersion: _appVersionController.text,
+      buildNumber:
+          int.tryParse(_buildNumberController.text) ?? _hardcodedBuildNumber,
+      pushDeviceType: _pushDeviceTypeController.text,
+      instanceId: _instanceIdController.text,
+      clientSessionId: int.tryParse(_clientSessionIdController.text),
+      userAgent: _userAgent,
+    );
+  }
+
   Future<void> _loadDeviceData() async {
     setState(() => _isLoading = true);
+    _userAgent = '';
+    _spoofingEnabled = false;
 
     final deviceInfo = DeviceInfoPlugin();
     final pixelRatio = View.of(context).devicePixelRatio;
@@ -158,13 +192,8 @@ class _SpoofScreenState extends State<SpoofScreen> {
     _screenController.text =
         '$densityBucket ${dpi}dpi ${size.width.round()}x${size.height.round()}';
 
-    final prefs = await SharedPreferences.getInstance();
-    var realDeviceId = prefs.getString('real_device_id');
-    if (realDeviceId == null || realDeviceId.isEmpty) {
-      realDeviceId = _generateDeviceId();
-      await prefs.setString('real_device_id', realDeviceId);
-    }
-    _deviceIdController.text = realDeviceId;
+    _deviceIdController.text = await DeviceIdentity.deviceId();
+    _buildNumberController.text = '$_hardcodedBuildNumber';
 
     try {
       final timezoneInfo = await FlutterTimezone.getLocalTimezone();
@@ -181,9 +210,23 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _selectedArch = androidInfo.supportedAbis.isNotEmpty
           ? androidInfo.supportedAbis.first
           : 'arm64-v8a';
-      _buildNumberController.text = '$_hardcodedBuildNumber';
-    } else {
-      await _applyGeneratedData();
+    } else if (Platform.isIOS) {
+      final iosInfo = await deviceInfo.iosInfo;
+      _selectedDeviceType = 'IOS';
+      _deviceNameController.text = iosInfo.utsname.machine;
+      _osVersionController.text = iosInfo.systemVersion;
+    } else if (Platform.isLinux) {
+      final linuxInfo = await deviceInfo.linuxInfo;
+      _deviceNameController.text = linuxInfo.prettyName;
+      _osVersionController.text = linuxInfo.name;
+    } else if (Platform.isWindows) {
+      final windowsInfo = await deviceInfo.windowsInfo;
+      _deviceNameController.text = windowsInfo.productName;
+      _osVersionController.text = windowsInfo.productName;
+    } else if (Platform.isMacOS) {
+      final macInfo = await deviceInfo.macOsInfo;
+      _deviceNameController.text = macInfo.model;
+      _osVersionController.text = 'macOS ${macInfo.osRelease}';
     }
 
     if (mounted) setState(() => _isLoading = false);
@@ -191,9 +234,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
   Future<void> _applyGeneratedData() async {
     final filteredPresets = devicePresets
-        .where(
-          (p) => p.deviceType != 'WEB' && p.deviceType == _selectedDeviceType,
-        )
+        .where((p) => p.deviceType == 'ANDROID' || p.deviceType == 'IOS')
         .toList();
 
     if (filteredPresets.isEmpty) return;
@@ -209,8 +250,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _screenController.text = preset.screen;
       _appVersionController.text = _hardcodedVersion;
       _deviceIdController.text = _generateDeviceId();
+      _userAgent = preset.userAgent;
+      _spoofingEnabled = true;
 
-      _selectedArch = 'arm64-v8a';
+      _selectedDeviceType = preset.deviceType;
+      _selectedArch = preset.deviceType == 'IOS' ? 'arm64' : 'arm64-v8a';
       _buildNumberController.text = '$_hardcodedBuildNumber';
 
       if (_selectedMethod == SpoofingMethod.full) {
@@ -241,53 +285,21 @@ class _SpoofScreenState extends State<SpoofScreen> {
   Future<void> _saveSpoofingSettings() async {
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
-
-    final oldValues = {
-      'device_name': prefs.getString('spoof_devicename') ?? '',
-      'os_version': prefs.getString('spoof_osversion') ?? '',
-      'screen': prefs.getString('spoof_screen') ?? '',
-      'timezone': prefs.getString('spoof_timezone') ?? '',
-      'locale': prefs.getString('spoof_locale') ?? '',
-      'device_id': prefs.getString('spoof_deviceid') ?? '',
-      'device_type': prefs.getString('spoof_devicetype') ?? 'ANDROID',
-      'arch': prefs.getString('spoof_arch') ?? '',
-      'device_locale': prefs.getString('spoof_devicelocale') ?? '',
-      'app_version': prefs.getString('spoof_appversion') ?? '',
-      'build_number': prefs.getInt('spoof_buildnumber')?.toString() ?? '',
-      'push_device_type': prefs.getString('spoof_pushdevicetype') ?? '',
-      'instance_id': prefs.getString('spoof_instanceid') ?? '',
-      'client_session_id':
-          prefs.getInt('spoof_clientsessionid')?.toString() ?? '',
-    };
-
-    final newValues = {
-      'device_name': _deviceNameController.text,
-      'os_version': _osVersionController.text,
-      'screen': _screenController.text,
-      'timezone': _timezoneController.text,
-      'locale': _localeController.text,
-      'device_id': _deviceIdController.text,
-      'device_type': _selectedDeviceType,
-      'arch': _selectedArch,
-      'device_locale': _deviceLocaleController.text,
-      'app_version': _appVersionController.text,
-      'build_number': _buildNumberController.text,
-      'push_device_type': _pushDeviceTypeController.text,
-      'instance_id': _instanceIdController.text,
-      'client_session_id': _clientSessionIdController.text,
-    };
-
-    bool otherDataChanged = false;
-    for (final key in oldValues.keys) {
-      if (oldValues[key] != newValues[key]) {
-        otherDataChanged = true;
-        break;
-      }
+    final newProfile = _buildProfileFromControllers();
+    final wasActive = _initialProfile?.enabled ?? false;
+    final isActive = newProfile.enabled;
+    final bool identityChanged;
+    if (!wasActive && !isActive) {
+      identityChanged = false;
+    } else if (wasActive != isActive) {
+      identityChanged = true;
+    } else {
+      identityChanged =
+          jsonEncode(_initialProfile!.toJson()) != jsonEncode(newProfile.toJson());
     }
 
-    if (!otherDataChanged) {
-      await _saveAllData(prefs);
+    if (!identityChanged) {
+      await _persistProfile();
       if (mounted) Navigator.of(context).pop();
       return;
     }
@@ -333,14 +345,12 @@ class _SpoofScreenState extends State<SpoofScreen> {
     if (!mounted || confirmed == null) return;
 
     if (confirmed == 'relogin') {
-      final prefs = await SharedPreferences.getInstance();
-      await _saveAllData(prefs);
+      await _persistProfile();
       await api.disconnect();
       final accountId = await TokenStorage.getActiveAccountId();
       if (accountId != null) {
         await TokenStorage.deleteToken(accountId);
       }
-      await prefs.setBool('spoofing_enabled', true);
       await api.connect();
       if (mounted) {
         final navState = KometApp.navigatorKey.currentState;
@@ -356,7 +366,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
     if (confirmed != 'apply') return;
 
-    await _saveAllData(prefs);
+    await _persistProfile();
 
     try {
       await api.disconnect();
@@ -378,37 +388,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
     }
   }
 
-  Future<void> _saveAllData(SharedPreferences prefs) async {
-    await prefs.setBool('spoofing_enabled', true);
-    await prefs.setString('spoof_devicename', _deviceNameController.text);
-    await prefs.setString('spoof_osversion', _osVersionController.text);
-    await prefs.setString('spoof_screen', _screenController.text);
-    await prefs.setString('spoof_timezone', _timezoneController.text);
-    await prefs.setString('spoof_locale', _localeController.text);
-    await prefs.setString('spoof_deviceid', _deviceIdController.text);
-    await prefs.setString('spoof_devicetype', _selectedDeviceType);
-    await prefs.setString('spoof_arch', _selectedArch);
-    await prefs.setString('spoof_devicelocale', _deviceLocaleController.text);
-    await prefs.setString('spoof_appversion', _appVersionController.text);
-    await prefs.setString(
-      'spoof_pushdevicetype',
-      _pushDeviceTypeController.text,
-    );
-    await prefs.setString('spoof_instanceid', _instanceIdController.text);
-
-    final buildNumber = int.tryParse(_buildNumberController.text);
-    if (buildNumber != null) {
-      await prefs.setInt('spoof_buildnumber', buildNumber);
-    } else {
-      await prefs.remove('spoof_buildnumber');
-    }
-
-    final clientSessionId = int.tryParse(_clientSessionIdController.text);
-    if (clientSessionId != null) {
-      await prefs.setInt('spoof_clientsessionid', clientSessionId);
-    } else {
-      await prefs.remove('spoof_clientsessionid');
-    }
+  Future<void> _persistProfile() async {
+    final scope = await SpoofingService.activeScope();
+    final profile = _buildProfileFromControllers();
+    await SpoofingService.saveProfile(scope, profile);
+    _initialProfile = profile;
   }
 
   void _generateNewDeviceId() {
@@ -450,6 +434,8 @@ class _SpoofScreenState extends State<SpoofScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _buildEnableCard(),
+                  const SizedBox(height: 16),
                   _buildInfoCard(),
                   const SizedBox(height: 16),
                   _buildSpoofingMethodCard(),
@@ -466,6 +452,26 @@ class _SpoofScreenState extends State<SpoofScreen> {
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _buildFloatingActionButtons(),
+    );
+  }
+
+  Widget _buildEnableCard() {
+    final l10n = AppLocalizations.of(context)!;
+    return Card(
+      child: SwitchListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        title: Text(
+          l10n.spoofEnableTitle,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        subtitle: Text(
+          _spoofingEnabled
+              ? l10n.spoofEnableSubtitleOn
+              : l10n.spoofEnableSubtitleOff,
+        ),
+        value: _spoofingEnabled,
+        onChanged: (value) => setState(() => _spoofingEnabled = value),
+      ),
     );
   }
 

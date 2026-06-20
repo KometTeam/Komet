@@ -139,3 +139,11 @@ komet.txt
 original_app.txt
 fingerprint.py
 PCAPdroid_*.txt
+
+# Локальные рабочие файлы и эксперименты (не для репозитория)
+PR_FullStack.md
+docs/
+maxmint/
+maxtun/
+turnprobe/
+test/live_server_probe_test.dart
