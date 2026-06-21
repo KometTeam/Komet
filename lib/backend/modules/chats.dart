@@ -177,6 +177,22 @@ class ChatSearchHit {
   });
 }
 
+class MessageSearchHit {
+  final int chatId;
+  final String? messageId;
+  final String? text;
+  final int time;
+  final int senderId;
+
+  const MessageSearchHit({
+    required this.chatId,
+    this.messageId,
+    this.text,
+    required this.time,
+    required this.senderId,
+  });
+}
+
 sealed class MessageEvent {
   final int chatId;
   const MessageEvent(this.chatId);
@@ -1192,7 +1208,28 @@ class ChatsModule {
     return hits;
   }
 
-  static Future<List<ChatSearchHit>> searchChats(
+  static List<MessageSearchHit> _parseMessageResult(dynamic payload) {
+    final result = (payload as Map?)?['result'];
+    if (result is! List) return const [];
+    final hits = <MessageSearchHit>[];
+    for (final item in result) {
+      if (item is! Map) continue;
+      final message = item['message'];
+      if (message is! Map) continue;
+      final chatId = item['chatId'];
+      if (chatId is! int || chatId == 0) continue;
+      hits.add(MessageSearchHit(
+        chatId: chatId,
+        messageId: message['id']?.toString(),
+        text: message['text'] as String?,
+        time: (message['time'] as int?) ?? 0,
+        senderId: (message['sender'] as int?) ?? 0,
+      ));
+    }
+    return hits;
+  }
+
+  static Future<List<MessageSearchHit>> searchMessages(
     Api api,
     String query, {
     int count = 50,
@@ -1205,9 +1242,9 @@ class ChatsModule {
         'query': term,
       });
       if (packet.isError) return const [];
-      return _parseSearchResult(packet.payload);
+      return _parseMessageResult(packet.payload);
     } catch (e) {
-      logger.w('searchChats failed: $e');
+      logger.w('searchMessages failed: $e');
       return const [];
     }
   }
@@ -1230,6 +1267,39 @@ class ChatsModule {
     } catch (e) {
       logger.w('searchPublic failed: $e');
       return const [];
+    }
+  }
+
+  static Future<void> subscribeChat(
+    Api api,
+    int chatId, {
+    bool subscribe = true,
+  }) async {
+    try {
+      await api.sendRequest(Opcode.chatSubscribe, {
+        'chatId': chatId,
+        'subscribe': subscribe,
+      });
+    } catch (e) {
+      logger.w('subscribeChat failed: $e');
+    }
+  }
+
+  static Future<bool> ensureChatCached(
+    Api api,
+    int accountId,
+    int chatId,
+  ) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isNotEmpty) return true;
+    try {
+      final info = await getChatInfo(api, chatId);
+      if (info == null) return false;
+      await cacheServerChat(info, accountId);
+      return true;
+    } catch (e) {
+      logger.w('ensureChatCached failed for $chatId: $e');
+      return false;
     }
   }
 

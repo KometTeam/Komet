@@ -29,8 +29,9 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _loading = false;
   PhoneLookupResult? _phoneResult;
   List<Map<String, dynamic>> _contacts = const [];
-  List<ChatSearchHit> _chats = const [];
-  List<Map<String, dynamic>> _messages = const [];
+  List<Map<String, dynamic>> _chats = const [];
+  List<MessageSearchHit> _messages = const [];
+  Map<int, Map<String, dynamic>> _msgChatMeta = const {};
   List<ChatSearchHit> _public = const [];
 
   @override
@@ -62,9 +63,13 @@ class _SearchScreenState extends State<SearchScreen> {
         _contacts = const [];
         _chats = const [];
         _messages = const [];
+        _msgChatMeta = const {};
         _public = const [];
       });
       return;
+    }
+    if (_phoneResult != null) {
+      setState(() => _phoneResult = null);
     }
     _debounce = Timer(const Duration(milliseconds: 300), _runSearch);
   }
@@ -81,10 +86,10 @@ class _SearchScreenState extends State<SearchScreen> {
       accountId == null
           ? Future.value(const <Map<String, dynamic>>[])
           : AppDatabase.searchContacts(accountId, query),
-      ChatsModule.searchChats(api, query),
       accountId == null
           ? Future.value(const <Map<String, dynamic>>[])
-          : AppDatabase.searchMessages(accountId, query),
+          : AppDatabase.searchChatsByTitle(accountId, query),
+      ChatsModule.searchMessages(api, query),
       ChatsModule.searchPublic(api, query),
       phoneQuery == null
           ? Future<PhoneLookupResult?>.value(null)
@@ -93,17 +98,27 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (!mounted || token != _seq) return;
 
-    final chats = results[1] as List<ChatSearchHit>;
-    final chatIds = chats.map((c) => c.id).toSet();
+    final chats = results[1] as List<Map<String, dynamic>>;
+    final messages = results[2] as List<MessageSearchHit>;
+    final localChatIds = chats.map((c) => c['id'] as int).toSet();
     final public = (results[3] as List<ChatSearchHit>)
-        .where((c) => !chatIds.contains(c.id))
+        .where((c) => !localChatIds.contains(c.id))
         .toList();
+
+    var meta = <int, Map<String, dynamic>>{};
+    if (accountId != null && messages.isNotEmpty) {
+      final ids = messages.map((m) => m.chatId).toSet().toList();
+      final rows = await AppDatabase.loadChatsByIds(accountId, ids);
+      meta = {for (final r in rows) r['id'] as int: r};
+      if (!mounted || token != _seq) return;
+    }
 
     setState(() {
       _phoneResult = results[4] as PhoneLookupResult?;
       _contacts = results[0] as List<Map<String, dynamic>>;
       _chats = chats;
-      _messages = results[2] as List<Map<String, dynamic>>;
+      _messages = messages;
+      _msgChatMeta = meta;
       _public = public;
       _loading = false;
     });
@@ -246,22 +261,21 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
         if (_chats.isNotEmpty) ...[
           _sectionHeader(cs, 'Чаты'),
-          for (final hit in _chats) _chatTile(hit),
+          for (final row in _chats)
+            _ResultTile(
+              name: (row['title'] as String?) ?? '',
+              imageUrl: row['icon_url'] as String?,
+              onTap: () => _openChat(
+                row['id'] as int,
+                (row['title'] as String?) ?? '',
+                row['icon_url'] as String?,
+                (row['type'] as String?) ?? 'CHAT',
+              ),
+            ),
         ],
         if (_messages.isNotEmpty) ...[
           _sectionHeader(cs, 'Сообщения'),
-          for (final row in _messages)
-            _ResultTile(
-              name: (row['chat_title'] as String?) ?? '',
-              imageUrl: row['chat_icon'] as String?,
-              subtitle: (row['text'] as String?)?.trim(),
-              onTap: () => _openChat(
-                row['chat_id'] as int,
-                (row['chat_title'] as String?) ?? '',
-                row['chat_icon'] as String?,
-                (row['chat_type'] as String?) ?? 'CHAT',
-              ),
-            ),
+          for (final hit in _messages) _messageTile(hit),
         ],
         if (_public.isNotEmpty) ...[
           _sectionHeader(cs, 'Глобальный поиск'),
@@ -278,6 +292,19 @@ class _SearchScreenState extends State<SearchScreen> {
         subtitle: hit.subtitle,
         onTap: () => _openChat(hit.id, hit.title ?? '', hit.avatarUrl, hit.type),
       );
+
+  Widget _messageTile(MessageSearchHit hit) {
+    final meta = _msgChatMeta[hit.chatId];
+    final title = (meta?['title'] as String?) ?? 'Чат';
+    final icon = meta?['icon_url'] as String?;
+    final type = (meta?['type'] as String?) ?? 'CHAT';
+    return _ResultTile(
+      name: title,
+      imageUrl: icon,
+      subtitle: hit.text?.trim(),
+      onTap: () => _openChat(hit.chatId, title, icon, type),
+    );
+  }
 
   Widget _sectionHeader(ColorScheme cs, String title) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),

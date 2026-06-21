@@ -409,6 +409,11 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     try {
+      final cachedRows = await AppDatabase.loadChat(_myId, widget.chatId);
+      if (cachedRows.isEmpty) {
+        await ChatsModule.ensureChatCached(api, _myId, widget.chatId);
+        await ChatsModule.subscribeChat(api, widget.chatId);
+      }
       final serverMessages = await messagesModule.fetchHistory(
         _myId,
         widget.chatId,

@@ -601,24 +601,21 @@ class AppDatabase {
     );
   }
 
-  static Future<List<Map<String, dynamic>>> searchMessages(
+  static Future<List<Map<String, dynamic>>> searchChatsByTitle(
     int accountId,
     String query, {
-    int limit = 50,
+    int limit = 30,
   }) async {
     final term = query.trim();
     if (term.isEmpty) return const [];
     final db = await _instance;
     final like = '%${_escapeLike(term)}%';
-    return db.rawQuery(
-      'SELECT m.id AS id, m.chat_id AS chat_id, m.sender_id AS sender_id, '
-      'm.text AS text, m.time AS time, '
-      'c.title AS chat_title, c.icon_url AS chat_icon, c.type AS chat_type '
-      'FROM messages m '
-      'LEFT JOIN chats_cache c ON c.id = m.chat_id AND c.account_id = m.account_id '
-      "WHERE m.account_id = ? AND m.deleted = 0 AND m.text LIKE ? ESCAPE '\\' "
-      'ORDER BY m.time DESC LIMIT ?',
-      [accountId, like, limit],
+    return db.query(
+      'chats_cache',
+      where: "account_id = ? AND title LIKE ? ESCAPE '\\'",
+      whereArgs: [accountId, like],
+      orderBy: 'last_event_time DESC',
+      limit: limit,
     );
   }
 
