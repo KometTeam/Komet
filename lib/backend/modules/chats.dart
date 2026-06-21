@@ -161,6 +161,38 @@ class CachedChat {
   };
 }
 
+class ChatSearchHit {
+  final int id;
+  final String type;
+  final String? title;
+  final String? avatarUrl;
+  final String? subtitle;
+
+  const ChatSearchHit({
+    required this.id,
+    required this.type,
+    this.title,
+    this.avatarUrl,
+    this.subtitle,
+  });
+}
+
+class MessageSearchHit {
+  final int chatId;
+  final String? messageId;
+  final String? text;
+  final int time;
+  final int senderId;
+
+  const MessageSearchHit({
+    required this.chatId,
+    this.messageId,
+    this.text,
+    required this.time,
+    required this.senderId,
+  });
+}
+
 sealed class MessageEvent {
   final int chatId;
   const MessageEvent(this.chatId);
@@ -814,6 +846,7 @@ class ChatsModule {
     Map<dynamic, dynamic> chat,
     int accountId, {
     Map<int, CachedChat>? preloadedExisting,
+    bool inList = true,
   }) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
@@ -844,7 +877,9 @@ class ChatsModule {
     if (ex != null && _sameContent(ex, parsed)) {
       return parsed;
     }
-    await AppDatabase.saveChats([parsed.toDbRow()]);
+    final row = parsed.toDbRow();
+    row['in_list'] = inList ? 1 : 0;
+    await AppDatabase.saveChats([row]);
     _bump();
     return parsed;
   }
@@ -921,7 +956,7 @@ class ChatsModule {
             ),
           )
           .whereType<CachedChat>()
-          .map((c) => c.toDbRow())
+          .map((c) => c.toDbRow()..['in_list'] = 1)
           .toList();
 
       if (rows.isNotEmpty) {
@@ -1149,6 +1184,126 @@ class ChatsModule {
       'count': 10,
     });
     return packet.payload;
+  }
+
+  static List<ChatSearchHit> _parseSearchResult(dynamic payload) {
+    final result = (payload as Map?)?['result'];
+    if (result is! List) return const [];
+    final hits = <ChatSearchHit>[];
+    for (final item in result) {
+      if (item is! Map) continue;
+      final chat = item['chat'];
+      if (chat is! Map) continue;
+      final id = chat['id'];
+      if (id is! int) continue;
+      final last = chat['lastMessage'];
+      final link = chat['link'];
+      hits.add(ChatSearchHit(
+        id: id,
+        type: (chat['type'] as String?) ?? 'CHAT',
+        title: chat['title'] as String?,
+        avatarUrl: chat['baseIconUrl'] as String?,
+        subtitle: link is String && link.isNotEmpty
+            ? '@$link'
+            : (last is Map ? last['text'] as String? : null),
+      ));
+    }
+    return hits;
+  }
+
+  static List<MessageSearchHit> _parseMessageResult(dynamic payload) {
+    final result = (payload as Map?)?['result'];
+    if (result is! List) return const [];
+    final hits = <MessageSearchHit>[];
+    for (final item in result) {
+      if (item is! Map) continue;
+      final message = item['message'];
+      if (message is! Map) continue;
+      final chatId = item['chatId'];
+      if (chatId is! int || chatId == 0) continue;
+      hits.add(MessageSearchHit(
+        chatId: chatId,
+        messageId: message['id']?.toString(),
+        text: message['text'] as String?,
+        time: (message['time'] as int?) ?? 0,
+        senderId: (message['sender'] as int?) ?? 0,
+      ));
+    }
+    return hits;
+  }
+
+  static Future<List<MessageSearchHit>> searchMessages(
+    Api api,
+    String query, {
+    int count = 50,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    try {
+      final packet = await api.sendRequest(Opcode.chatSearch, {
+        'count': count,
+        'query': term,
+      });
+      if (packet.isError) return const [];
+      return _parseMessageResult(packet.payload);
+    } catch (e) {
+      logger.w('searchMessages failed: $e');
+      return const [];
+    }
+  }
+
+  static Future<List<ChatSearchHit>> searchPublic(
+    Api api,
+    String query, {
+    int count = 20,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    try {
+      final packet = await api.sendRequest(Opcode.publicSearch, {
+        'type': 'ALL',
+        'count': count,
+        'query': term,
+      });
+      if (packet.isError) return const [];
+      return _parseSearchResult(packet.payload);
+    } catch (e) {
+      logger.w('searchPublic failed: $e');
+      return const [];
+    }
+  }
+
+  static Future<void> subscribeChat(
+    Api api,
+    int chatId, {
+    bool subscribe = true,
+  }) async {
+    try {
+      await api.sendRequest(Opcode.chatSubscribe, {
+        'chatId': chatId,
+        'subscribe': subscribe,
+      });
+    } catch (e) {
+      logger.w('subscribeChat failed: $e');
+    }
+  }
+
+  static Future<bool> ensureChatCached(
+    Api api,
+    int accountId,
+    int chatId,
+  ) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isNotEmpty) return true;
+    try {
+      final info = await getChatInfo(api, chatId);
+      if (info == null) return false;
+      await cacheServerChat(info, accountId, inList: false);
+      return true;
+    } catch (e) {
+      logger.w('ensureChatCached failed for $chatId: $e');
+      return false;
+    }
   }
 
   static Future<CachedChat?> createGroupChat(

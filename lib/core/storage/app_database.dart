@@ -185,7 +185,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 13,
+      version: 14,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -246,6 +246,11 @@ class AppDatabase {
         if (oldVersion < 13) {
           await db.execute(
             'ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0',
+          );
+        }
+        if (oldVersion < 14) {
+          await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN in_list INTEGER NOT NULL DEFAULT 1',
           );
         }
       },
@@ -335,6 +340,7 @@ class AppDatabase {
       options         TEXT,
       owner           INTEGER,
       admins          TEXT,
+      in_list         INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -534,7 +540,7 @@ class AppDatabase {
     final db = await _instance;
     return db.query(
       'chats_cache',
-      where: 'account_id = ?',
+      where: 'account_id = ? AND in_list = 1',
       whereArgs: [accountId],
       orderBy: 'last_event_time DESC',
     );
@@ -543,8 +549,8 @@ class AppDatabase {
   static Future<int> sumUnread(int accountId, {int? excludeChatId}) async {
     final db = await _instance;
     final where = excludeChatId != null
-        ? 'account_id = ? AND id != ?'
-        : 'account_id = ?';
+        ? 'account_id = ? AND in_list = 1 AND id != ?'
+        : 'account_id = ? AND in_list = 1';
     final args = excludeChatId != null
         ? [accountId, excludeChatId]
         : [accountId];
@@ -575,6 +581,47 @@ class AppDatabase {
       'chats_cache',
       where: "account_id = ? AND type = 'DIALOG'",
       whereArgs: [accountId],
+    );
+  }
+
+  static String _escapeLike(String value) =>
+      value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+
+  static Future<List<Map<String, dynamic>>> searchContacts(
+    int accountId,
+    String query, {
+    int limit = 30,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final db = await _instance;
+    final like = '%${_escapeLike(term)}%';
+    return db.query(
+      'contacts',
+      where: 'account_id = ? AND '
+          "(first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
+          "OR CAST(phone AS TEXT) LIKE ? ESCAPE '\\')",
+      whereArgs: [accountId, like, like, like],
+      orderBy: 'first_name ASC, last_name ASC',
+      limit: limit,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> searchChatsByTitle(
+    int accountId,
+    String query, {
+    int limit = 30,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final db = await _instance;
+    final like = '%${_escapeLike(term)}%';
+    return db.query(
+      'chats_cache',
+      where: "account_id = ? AND title LIKE ? ESCAPE '\\'",
+      whereArgs: [accountId, like],
+      orderBy: 'last_event_time DESC',
+      limit: limit,
     );
   }
 

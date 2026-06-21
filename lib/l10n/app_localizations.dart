@@ -248,6 +248,42 @@ abstract class AppLocalizations {
   /// **'Sign in with token'**
   String get loginSignInWithToken;
 
+  /// No description provided for @tokenLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Token login'**
+  String get tokenLoginTitle;
+
+  /// No description provided for @tokenLoginTokenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Token'**
+  String get tokenLoginTokenLabel;
+
+  /// No description provided for @tokenLoginNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Token login only works with spoofing. Enter the data of the device the token belongs to, otherwise the account may be banned.'**
+  String get tokenLoginNote;
+
+  /// No description provided for @tokenLoginButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get tokenLoginButton;
+
+  /// No description provided for @tokenLoginError.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in the token, device name, OS version and Device ID'**
+  String get tokenLoginError;
+
+  /// No description provided for @tokenLoginFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in failed'**
+  String get tokenLoginFailed;
+
   /// No description provided for @loginSignInWithSessionFile.
   ///
   /// In en, this message translates to:

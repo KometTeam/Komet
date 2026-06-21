@@ -85,6 +85,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginSignInWithToken => 'Sign in with token';
 
   @override
+  String get tokenLoginTitle => 'Token login';
+
+  @override
+  String get tokenLoginTokenLabel => 'Token';
+
+  @override
+  String get tokenLoginNote =>
+      'Token login only works with spoofing. Enter the data of the device the token belongs to, otherwise the account may be banned.';
+
+  @override
+  String get tokenLoginButton => 'Sign in';
+
+  @override
+  String get tokenLoginError =>
+      'Fill in the token, device name, OS version and Device ID';
+
+  @override
+  String get tokenLoginFailed => 'Sign in failed';
+
+  @override
   String get loginSignInWithSessionFile => 'Sign in with session file';
 
   @override

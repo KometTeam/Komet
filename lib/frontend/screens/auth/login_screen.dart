@@ -9,6 +9,7 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/l10n/terms_of_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
+import 'token_login_screen.dart';
 import 'select_country_screen.dart';
 import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
@@ -654,6 +655,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TokenLoginScreen(
+                          returnToAccountId: widget.returnToAccountId,
+                        ),
+                      ),
+                    );
                   },
                 ),
                 ListTile(
