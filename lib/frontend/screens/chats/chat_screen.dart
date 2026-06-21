@@ -34,10 +34,14 @@ import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
+import '../../../core/config/app_commands.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
+import '../../commands/command_registry.dart';
+import '../../commands/slash_command.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/command_suggestions_panel.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
@@ -158,6 +162,8 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<int> _otherReadTime = ValueNotifier(0);
   int _tempIdCounter = 0;
   late final AnimationController _attachAnim;
+  late final AnimationController _commandAnim;
+  bool _commandPanelVisible = false;
 
   String _nextTempId() =>
       'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
@@ -201,6 +207,11 @@ class _ChatScreenState extends State<ChatScreen>
       reverseDuration: const Duration(milliseconds: 240),
     );
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
+    _commandAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    AppCommands.current.addListener(_updateCommandPanel);
     _pushSub = api.pushStream
         .where(
           (p) =>
@@ -581,6 +592,8 @@ class _ChatScreenState extends State<ChatScreen>
     _finishPrankReveal();
     _uploadStatus.dispose();
     _attachAnim.dispose();
+    AppCommands.current.removeListener(_updateCommandPanel);
+    _commandAnim.dispose();
     _messageController.dispose();
     _messageFocusNode.dispose();
     _scrollController.dispose();
@@ -594,6 +607,28 @@ class _ChatScreenState extends State<ChatScreen>
     if (newHasText != _hasText.value) {
       _hasText.value = newHasText;
     }
+    _updateCommandPanel();
+  }
+
+  void _updateCommandPanel() {
+    final show =
+        AppCommands.current.value && _messageController.text.startsWith('/');
+    if (show == _commandPanelVisible) return;
+    _commandPanelVisible = show;
+    if (show) {
+      _commandAnim.forward();
+    } else {
+      _commandAnim.reverse();
+    }
+  }
+
+  void _onCommandSelected(SlashCommand c) {
+    final text = '${c.name} ';
+    _messageController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _messageFocusNode.requestFocus();
   }
 
   void _restoreDraft() {
@@ -618,6 +653,26 @@ class _ChatScreenState extends State<ChatScreen>
     } else {
       _attachAnim.reverse();
     }
+  }
+
+  Widget _buildCommandPanel() {
+    return AnimatedBuilder(
+      animation: _commandAnim,
+      builder: (context, _) {
+        final t = _commandAnim.value;
+        if (t == 0) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: IgnorePointer(
+            ignoring: t < 1,
+            child: Opacity(
+              opacity: t,
+              child: CommandSuggestionsPanel(onSelected: _onCommandSelected),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   int _computeOtherReadTime() {
@@ -1442,6 +1497,16 @@ class _ChatScreenState extends State<ChatScreen>
     final text = _messageController.text.trim();
     if (text.isEmpty || _myId == 0) return;
 
+    if (AppCommands.current.value) {
+      final command = findSlashCommand(text);
+      if (command?.run != null) {
+        _messageController.clear();
+        _hasText.value = false;
+        unawaited(command!.run!(_commandContext()));
+        return;
+      }
+    }
+
     final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
     final online = api.state == SessionState.online;
@@ -1549,6 +1614,111 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
   }
+
+  int? _resolveOtherId() {
+    if (widget.chatType != 'DIALOG' || _myId == 0) return null;
+    final id = widget.chatId ^ _myId;
+    return id > 0 ? id : null;
+  }
+
+  CachedMessage _replaceMessage(
+    int index, {
+    String? id,
+    String? text,
+    String? status,
+  }) {
+    final old = _messages[index];
+    final updated = CachedMessage(
+      id: id ?? old.id,
+      accountId: old.accountId,
+      chatId: old.chatId,
+      senderId: old.senderId,
+      text: text ?? old.text,
+      time: old.time,
+      status: status ?? old.status,
+      payload: old.payload,
+      attachments: old.attachments,
+      isControl: old.isControl,
+    );
+    _messages[index] = updated;
+    _bumpMessages();
+    return updated;
+  }
+
+  Future<String> _postCommandMessage(String text) async {
+    if (!mounted || _myId == 0) return '';
+    final tempId = _nextTempId();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final online = api.state == SessionState.online;
+    final composed = CachedMessage(
+      id: tempId,
+      accountId: _myId,
+      chatId: widget.chatId,
+      senderId: _myId,
+      text: text,
+      time: now,
+      status: online ? 'sending' : 'pending',
+    );
+    _messages.add(composed);
+    _bumpMessages();
+    _scrollToBottom();
+    unawaited(_persistOutgoing(composed));
+    unawaited(ChatsModule.applyOutgoing(
+      _myId,
+      widget.chatId,
+      messageId: tempId,
+      time: now,
+      text: text,
+      status: composed.status ?? 'sending',
+    ));
+    if (!online) return tempId;
+    try {
+      final actualId = await messagesModule.sendMessage(_myId, widget.chatId, text);
+      final realId = actualId.isNotEmpty ? actualId : tempId;
+      final i = _messages.indexWhere((m) => m.id == tempId);
+      if (i != -1) {
+        final sent = _replaceMessage(i, id: realId, status: 'sent');
+        unawaited(_persistOutgoing(sent, removeId: tempId));
+        unawaited(ChatsModule.applyOutgoing(
+          _myId,
+          widget.chatId,
+          messageId: realId,
+          time: now,
+          text: text,
+          status: 'sent',
+        ));
+      }
+      return realId;
+    } catch (_) {
+      return tempId;
+    }
+  }
+
+  Future<void> _updateCommandMessage(String id, String text) async {
+    if (id.isEmpty) return;
+    final i = _messages.indexWhere((m) => m.id == id);
+    if (i != -1) {
+      final edited = _replaceMessage(i, text: text, status: 'EDITED');
+      unawaited(_persistOutgoing(edited));
+    }
+    if (!id.startsWith('temp_')) {
+      await messagesModule.editMessage(widget.chatId, id, text: text);
+    }
+  }
+
+  CommandContext _commandContext() => CommandContext(
+    accountId: _myId,
+    chatId: widget.chatId,
+    otherUserId: _resolveOtherId(),
+    messages: messagesModule,
+    isOnline: () => api.state == SessionState.online,
+    isActive: () => mounted,
+    notify: (message) {
+      if (mounted) showCustomNotification(context, message);
+    },
+    postMessage: _postCommandMessage,
+    updateMessage: _updateCommandMessage,
+  );
 
   Future<void> _scheduleMessage() async {
     final text = _messageController.text.trim();
@@ -2066,9 +2236,21 @@ class _ChatScreenState extends State<ChatScreen>
               body: Column(
                 children: [
                   Expanded(
-                    child: _isLoading && _messages.isEmpty
-                        ? _buildShimmerLoading()
-                        : _buildMessagesList(),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: _isLoading && _messages.isEmpty
+                              ? _buildShimmerLoading()
+                              : _buildMessagesList(),
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _buildCommandPanel(),
+                        ),
+                      ],
+                    ),
                   ),
                   AnimatedBuilder(
                     animation: _attachAnim,

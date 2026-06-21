@@ -649,16 +649,19 @@ class MessagesModule {
     int chatId,
     String messageId, {
     required String text,
+    List<Map<String, dynamic>> elements = const [],
+    bool sendAttachments = false,
   }) async {
     final id = int.tryParse(messageId);
     if (id == null) return false;
 
-    final payload = {
+    final payload = <String, dynamic>{
       'messageId': id,
       'chatId': chatId,
-      'elements': <dynamic>[],
+      'elements': elements,
       'text': text,
     };
+    if (sendAttachments) payload['attachments'] = const <dynamic>[];
 
     final response = await _api.sendRequest(Opcode.msgEdit, payload);
     return response.isOk;

@@ -25,6 +25,7 @@ import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
+import 'core/config/app_commands.dart';
 import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
 import 'core/config/app_pill_gradient.dart';
@@ -112,6 +113,7 @@ void main() async {
   final swipeBackFuture = AppSwipeBackDesktop.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
+  final commandsFuture = AppCommands.load();
   final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
@@ -150,6 +152,7 @@ void main() async {
   AppSwipeBackDesktop.current.value = await swipeBackFuture;
   AppPranks.current.value = await pranksFuture;
   AppStories.current.value = await storiesFuture;
+  AppCommands.current.value = await commandsFuture;
   AppLinkPreview.current.value = await linkPreviewFuture;
   AppMediaCacheLimit.current.value = await cacheLimitFuture;
   AppDigitalIdNative.current.value = await digitalIdNativeFuture;

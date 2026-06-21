@@ -6,6 +6,7 @@ import '../../../backend/modules/chats.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
 import '../../../core/config/app_stories.dart';
+import '../../../core/config/app_commands.dart';
 import '../../../core/config/app_link_preview.dart';
 import '../../../core/config/app_digital_id_mode.dart';
 import '../../../core/config/app_media_cache.dart';
@@ -777,6 +778,65 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                             value: storiesOn,
                             onChanged: (v) {
                               AppStories.save(v);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppCommands.current,
+                  builder: (context, commandsOn, _) {
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.terminal,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Команды',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Панель команд по вводу «/» в строке сообщения',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: commandsOn,
+                            onChanged: (v) {
+                              AppCommands.save(v);
                             },
                           ),
                         ],
