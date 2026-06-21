@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppIcon {
-  defaultIcon('default', 'Default', 'assets/komet_icon.png', 'DefaultIcon'),
+  defaultIcon('default', 'Default', 'assets/komet_icon.png', 'MainActivity'),
   minimal('minimal', 'Minimal', 'assets/meteor_icon.png', 'MinimalIcon');
 
   final String id;

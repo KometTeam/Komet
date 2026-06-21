@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MainActivity : FlutterActivity() {
 
     private val channelName = "ru.komet.app/vpn_bypass"
-    private val iconAliases = listOf("DefaultIcon", "MinimalIcon")
+    private val iconComponents = listOf("MainActivity", "MinimalIcon")
 
     private var nfcAdapter: NfcAdapter? = null
     private var nfcEvents: EventChannel.EventSink? = null
@@ -60,7 +60,7 @@ class MainActivity : FlutterActivity() {
 
     private fun applyIcon(name: String) {
         val pm = packageManager
-        for (alias in iconAliases) {
+        for (alias in iconComponents) {
             val component = ComponentName(packageName, "$packageName.$alias")
             val state = if (alias == name) {
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED
@@ -139,7 +139,7 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "setAppIcon" -> {
                     val name = call.argument<String>("name")
-                    if (name == null || !iconAliases.contains(name)) {
+                    if (name == null || !iconComponents.contains(name)) {
                         result.error("INVALID_ICON", "Unknown icon: $name", null)
                         return@setMethodCallHandler
                     }
