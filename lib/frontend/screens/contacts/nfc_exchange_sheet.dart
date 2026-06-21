@@ -12,7 +12,7 @@ import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 
-enum _Stage { checking, unsupported, disabled, scanning, found, adding, added }
+enum _Stage { checking, unsupported, disabled, failed, scanning, found, adding, added }
 
 class NfcExchangeSheet extends StatefulWidget {
   const NfcExchangeSheet({super.key});
@@ -30,6 +30,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
   _Stage _stage = _Stage.checking;
   int? _peerId;
   Map<String, dynamic>? _peerInfo;
+  String _failReason = '';
 
   @override
   void initState() {
@@ -75,6 +76,15 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
     if (event.type == NfcEventType.cancelled) {
       if (mounted && _stage == _Stage.scanning) {
         setState(() => _stage = _Stage.disabled);
+      }
+      return;
+    }
+    if (event.type == NfcEventType.error) {
+      if (mounted && _peerId == null) {
+        setState(() {
+          _failReason = _reasonText(event.reason);
+          _stage = _Stage.failed;
+        });
       }
       return;
     }
@@ -141,6 +151,17 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
     }
   }
 
+  String _reasonText(String? reason) {
+    switch (reason) {
+      case 'bluetooth_off':
+        return 'Включите Bluetooth и попробуйте снова';
+      case 'permission':
+        return 'Нужны разрешения Bluetooth для обмена';
+      default:
+        return 'Не удалось установить соединение';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -191,6 +212,8 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           Symbols.nfc,
           'Включите NFC в настройках телефона и попробуйте снова',
         );
+      case _Stage.failed:
+        return _message(cs, Symbols.bluetooth_disabled, _failReason);
       case _Stage.scanning:
         return _scanning(cs);
       case _Stage.found:
