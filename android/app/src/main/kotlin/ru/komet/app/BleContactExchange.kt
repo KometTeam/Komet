@@ -35,7 +35,7 @@ class BleContactExchange(private val context: Context) {
         const val MFG_ID = 0x4B4D
     }
 
-    var onReceived: ((Long) -> Unit)? = null
+    var onReceived: ((Long, Long) -> Unit)? = null
     var onSent: ((Long) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
@@ -54,11 +54,12 @@ class BleContactExchange(private val context: Context) {
 
     @Volatile private var selfId: Long = 0L
     @Volatile private var selfSession: String = ""
+    @Volatile private var selfPhone: Long = 0L
     @Volatile private var peerIdForWrite: Long = 0L
     @Volatile private var connecting = false
     @Volatile private var running = false
 
-    fun start(selfId: Long, selfSession: String) {
+    fun start(selfId: Long, selfSession: String, selfPhone: Long) {
         val adapter = this.adapter
         if (adapter == null || !adapter.isEnabled) {
             emitError("bluetooth_off")
@@ -66,6 +67,7 @@ class BleContactExchange(private val context: Context) {
         }
         this.selfId = selfId
         this.selfSession = selfSession
+        this.selfPhone = selfPhone
         running = true
         startGattServer()
     }
@@ -266,8 +268,10 @@ class BleContactExchange(private val context: Context) {
                 }
             }
             if (characteristic?.uuid != CHAR_UUID || value == null) return
-            val peerId = String(value, Charsets.UTF_8).trim().toLongOrNull() ?: return
-            if (peerId > 0L) emitReceived(peerId)
+            val parts = String(value, Charsets.UTF_8).trim().split(":")
+            val peerId = parts.getOrNull(0)?.toLongOrNull() ?: return
+            val peerPhone = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+            if (peerId > 0L) emitReceived(peerId, peerPhone)
         }
     }
 
@@ -301,7 +305,7 @@ class BleContactExchange(private val context: Context) {
             }
             characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             @Suppress("DEPRECATION")
-            characteristic.value = selfId.toString().toByteArray(Charsets.UTF_8)
+            characteristic.value = "$selfId:$selfPhone".toByteArray(Charsets.UTF_8)
             try {
                 @Suppress("DEPRECATION")
                 gatt.writeCharacteristic(characteristic)
@@ -324,8 +328,8 @@ class BleContactExchange(private val context: Context) {
         }
     }
 
-    private fun emitReceived(id: Long) {
-        main.post { onReceived?.invoke(id) }
+    private fun emitReceived(id: Long, phone: Long) {
+        main.post { onReceived?.invoke(id, phone) }
     }
 
     private fun emitSent(id: Long) {

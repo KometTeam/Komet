@@ -42,7 +42,9 @@ class MainActivity : FlutterActivity() {
 
     private var ble: BleContactExchange? = null
     private var pendingSelfId = 0L
+    private var pendingSelfPhone = 0L
     private var pendingSession = ""
+    private var pendingPeer: NfcExchange.Peer? = null
     @Volatile private var exchangingEmitted = false
 
     private companion object {
@@ -88,15 +90,12 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "status" -> result.success(nfcStatus())
                 "start" -> {
-                    val selfId = when (val v = call.argument<Any>("selfId")) {
-                        is Int -> v.toLong()
-                        is Long -> v
-                        else -> 0L
-                    }
+                    val selfId = longArg(call.argument<Any>("selfId"))
+                    val selfPhone = longArg(call.argument<Any>("selfPhone"))
                     if (selfId <= 0L) {
                         result.error("INVALID_ID", "selfId must be positive", null)
                     } else {
-                        startNfcExchange(selfId)
+                        startNfcExchange(selfId, selfPhone)
                         result.success(null)
                     }
                 }
@@ -206,15 +205,18 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun startNfcExchange(selfId: Long) {
+    private fun startNfcExchange(selfId: Long, selfPhone: Long) {
         val session = "%08x".format(nfcJitter.nextInt())
         NfcExchange.selfId = selfId
         NfcExchange.selfSession = session
+        NfcExchange.selfPhone = selfPhone
         NfcExchange.active = true
         NfcExchange.onServed = { onNfcServed() }
         seenPeers.clear()
         exchangingEmitted = false
+        pendingPeer = null
         pendingSelfId = selfId
+        pendingSelfPhone = selfPhone
         pendingSession = session
         nfcCycling = true
         nfcHandler.removeCallbacksAndMessages(null)
@@ -227,7 +229,9 @@ class MainActivity : FlutterActivity() {
         NfcExchange.active = false
         NfcExchange.selfId = 0L
         NfcExchange.selfSession = ""
+        NfcExchange.selfPhone = 0L
         NfcExchange.onServed = null
+        pendingPeer = null
         nfcHandler.removeCallbacksAndMessages(null)
         nfcReaderDisable()
         ble?.stop()
@@ -259,12 +263,12 @@ class MainActivity : FlutterActivity() {
 
     private fun startBle() {
         val exchange = ble ?: BleContactExchange(applicationContext).also {
-            it.onReceived = { id -> onBleReceived(id) }
-            it.onSent = { id -> onBleReceived(id) }
+            it.onReceived = { id, phone -> revealPeer(id, phone) }
+            it.onSent = { _ -> pendingPeer?.let { p -> revealPeer(p.id, p.phone) } }
             it.onError = { reason -> onBleError(reason) }
             ble = it
         }
-        exchange.start(pendingSelfId, pendingSession)
+        exchange.start(pendingSelfId, pendingSession, pendingSelfPhone)
     }
 
     private fun emitExchanging() {
@@ -273,9 +277,15 @@ class MainActivity : FlutterActivity() {
         nfcEvents?.success(mapOf("event" to "exchanging"))
     }
 
-    private fun onBleReceived(id: Long) {
+    private fun revealPeer(id: Long, phone: Long) {
         if (id == NfcExchange.selfId || !seenPeers.add(id)) return
-        nfcEvents?.success(mapOf("event" to "received", "id" to id))
+        nfcEvents?.success(mapOf("event" to "received", "id" to id, "phone" to phone))
+    }
+
+    private fun longArg(value: Any?): Long = when (value) {
+        is Int -> value.toLong()
+        is Long -> value
+        else -> 0L
     }
 
     private fun onBleError(reason: String) {
@@ -360,8 +370,9 @@ class MainActivity : FlutterActivity() {
             nfcCycling = false
             nfcReaderDisable()
             emitExchanging()
+            pendingPeer = peer
             ble?.connectTo(peer.session, peer.id)
-            nfcHandler.postDelayed({ onBleReceived(peer.id) }, 3000L)
+            nfcHandler.postDelayed({ revealPeer(peer.id, peer.phone) }, 3000L)
         }
     }
 

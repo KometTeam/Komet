@@ -11,17 +11,19 @@ object NfcExchange {
     @Volatile var active: Boolean = false
     @Volatile var selfId: Long = 0L
     @Volatile var selfSession: String = ""
+    @Volatile var selfPhone: Long = 0L
 
     @Volatile var onServed: (() -> Unit)? = null
 
-    data class Peer(val id: Long, val session: String)
+    data class Peer(val id: Long, val session: String, val phone: Long)
 
     fun buildSelectResponse(): ByteArray {
         val id = selfId
         val session = selfSession
         if (!active || id <= 0L || session.isEmpty()) return STATUS_NOT_FOUND
         onServed?.invoke()
-        return (PREFIX + id + ":" + session).toByteArray(Charsets.UTF_8) + STATUS_OK
+        return (PREFIX + id + ":" + session + ":" + selfPhone)
+            .toByteArray(Charsets.UTF_8) + STATUS_OK
     }
 
     fun buildSelectCommand(): ByteArray {
@@ -42,7 +44,8 @@ object NfcExchange {
         val id = parts[0].toLongOrNull() ?: return null
         val session = parts[1]
         if (session.isEmpty()) return null
-        return Peer(id, session)
+        val phone = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+        return Peer(id, session, phone)
     }
 
     private fun hexToBytes(hex: String): ByteArray {

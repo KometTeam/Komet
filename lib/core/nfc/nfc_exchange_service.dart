@@ -8,9 +8,10 @@ enum NfcEventType { received, exchanging, cancelled, error }
 class NfcEvent {
   final NfcEventType type;
   final int? id;
+  final int? phone;
   final String? reason;
 
-  const NfcEvent(this.type, this.id, {this.reason});
+  const NfcEvent(this.type, this.id, {this.phone, this.reason});
 }
 
 class NfcStatus {
@@ -47,8 +48,8 @@ class NfcExchangeService {
   Stream<NfcEvent> get events =>
       _events.receiveBroadcastStream().map(_decodeEvent);
 
-  Future<void> start(int selfId) =>
-      _method.invokeMethod('start', {'selfId': selfId});
+  Future<void> start(int selfId, int selfPhone) =>
+      _method.invokeMethod('start', {'selfId': selfId, 'selfPhone': selfPhone});
 
   Future<void> stop() async {
     if (!_supported) return;
@@ -61,9 +62,11 @@ class NfcExchangeService {
     final map = raw is Map ? raw : const {};
     final id = map['id'];
     final parsedId = id is int ? id : (id is num ? id.toInt() : null);
+    final phone = map['phone'];
+    final parsedPhone = phone is int ? phone : (phone is num ? phone.toInt() : null);
     switch (map['event']) {
       case 'received':
-        return NfcEvent(NfcEventType.received, parsedId);
+        return NfcEvent(NfcEventType.received, parsedId, phone: parsedPhone);
       case 'exchanging':
         return const NfcEvent(NfcEventType.exchanging, null);
       case 'error':

@@ -60,8 +60,9 @@ class ContactsModule {
   static Future<CachedContact?> addContact(
     Api api,
     int id,
-    String firstName,
-  ) async {
+    String firstName, {
+    int phone = 0,
+  }) async {
     final resp = await api.sendRequest(Opcode.contactUpdate, {
       'action': 'ADD',
       'contactId': id,
@@ -92,6 +93,9 @@ class ContactsModule {
           };
 
     if (row == null) return null;
+    if (phone > 0 && ((row['phone'] as int?) ?? 0) == 0) {
+      row['phone'] = phone;
+    }
     await AppDatabase.saveContacts([row]);
     if (contact != null) _primeContactCache(contact);
     revision.value++;

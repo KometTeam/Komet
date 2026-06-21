@@ -9,6 +9,7 @@ import '../../../backend/modules/contacts.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/nfc/nfc_exchange_service.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/format.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
@@ -41,6 +42,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
 
   _Stage _stage = _Stage.checking;
   int? _peerId;
+  int? _peerPhone;
   Map<String, dynamic>? _peerInfo;
   String _failReason = '';
 
@@ -85,7 +87,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       return;
     }
     _sub = _nfc.events.listen(_onEvent);
-    await _nfc.start(profile.id);
+    await _nfc.start(profile.id, profile.phone);
     if (mounted) setState(() => _stage = _Stage.scanning);
   }
 
@@ -114,6 +116,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
     final id = event.id;
     if (id == null || _peerId != null) return;
     _peerId = id;
+    _peerPhone = (event.phone != null && event.phone! > 0) ? event.phone : null;
     HapticFeedback.mediumImpact();
     _reveal.forward(from: 0);
     setState(() => _stage = _Stage.found);
@@ -163,7 +166,12 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
     if (id == null) return;
     setState(() => _stage = _Stage.adding);
     try {
-      await ContactsModule.addContact(api, id, _firstNameForAdd());
+      await ContactsModule.addContact(
+        api,
+        id,
+        _firstNameForAdd(),
+        phone: _peerPhone ?? 0,
+      );
       if (!mounted) return;
       setState(() => _stage = _Stage.added);
       showCustomNotification(context, 'Контакт добавлен');
@@ -413,7 +421,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 4),
           Text(
-            'ID ${_peerId ?? ''}',
+            formatPhone(_peerPhone) ?? 'ID ${_peerId ?? ''}',
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 24),
