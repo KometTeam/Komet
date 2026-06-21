@@ -164,6 +164,7 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _shimmerController;
   Timer? _shimmerStartTimer;
   bool _historyKickedOff = false;
+  bool _previewChat = false;
   List<CachedMessage> _messages = [];
   final ValueNotifier<int> _messagesRev = ValueNotifier(0);
   final Set<String> _deletingIds = {};
@@ -411,6 +412,7 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       final cachedRows = await AppDatabase.loadChat(_myId, widget.chatId);
       if (cachedRows.isEmpty) {
+        _previewChat = true;
         await ChatsModule.ensureChatCached(api, _myId, widget.chatId);
         await ChatsModule.subscribeChat(api, widget.chatId);
       }
@@ -537,6 +539,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    if (_previewChat) {
+      unawaited(ChatsModule.subscribeChat(api, widget.chatId, subscribe: false));
+    }
     WidgetsBinding.instance.removeObserver(this);
     ChatsModule.chatsChanged.removeListener(_onChatsBump);
     _otherUnread.dispose();

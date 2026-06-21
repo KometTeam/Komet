@@ -185,7 +185,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 13,
+      version: 14,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -246,6 +246,11 @@ class AppDatabase {
         if (oldVersion < 13) {
           await db.execute(
             'ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0',
+          );
+        }
+        if (oldVersion < 14) {
+          await db.execute(
+            'ALTER TABLE chats_cache ADD COLUMN in_list INTEGER NOT NULL DEFAULT 1',
           );
         }
       },
@@ -335,6 +340,7 @@ class AppDatabase {
       options         TEXT,
       owner           INTEGER,
       admins          TEXT,
+      in_list         INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -534,7 +540,7 @@ class AppDatabase {
     final db = await _instance;
     return db.query(
       'chats_cache',
-      where: 'account_id = ?',
+      where: 'account_id = ? AND in_list = 1',
       whereArgs: [accountId],
       orderBy: 'last_event_time DESC',
     );
@@ -543,8 +549,8 @@ class AppDatabase {
   static Future<int> sumUnread(int accountId, {int? excludeChatId}) async {
     final db = await _instance;
     final where = excludeChatId != null
-        ? 'account_id = ? AND id != ?'
-        : 'account_id = ?';
+        ? 'account_id = ? AND in_list = 1 AND id != ?'
+        : 'account_id = ? AND in_list = 1';
     final args = excludeChatId != null
         ? [accountId, excludeChatId]
         : [accountId];

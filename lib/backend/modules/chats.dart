@@ -846,6 +846,7 @@ class ChatsModule {
     Map<dynamic, dynamic> chat,
     int accountId, {
     Map<int, CachedChat>? preloadedExisting,
+    bool inList = true,
   }) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
@@ -876,7 +877,9 @@ class ChatsModule {
     if (ex != null && _sameContent(ex, parsed)) {
       return parsed;
     }
-    await AppDatabase.saveChats([parsed.toDbRow()]);
+    final row = parsed.toDbRow();
+    row['in_list'] = inList ? 1 : 0;
+    await AppDatabase.saveChats([row]);
     _bump();
     return parsed;
   }
@@ -953,7 +956,7 @@ class ChatsModule {
             ),
           )
           .whereType<CachedChat>()
-          .map((c) => c.toDbRow())
+          .map((c) => c.toDbRow()..['in_list'] = 1)
           .toList();
 
       if (rows.isNotEmpty) {
@@ -1295,7 +1298,7 @@ class ChatsModule {
     try {
       final info = await getChatInfo(api, chatId);
       if (info == null) return false;
-      await cacheServerChat(info, accountId);
+      await cacheServerChat(info, accountId, inList: false);
       return true;
     } catch (e) {
       logger.w('ensureChatCached failed for $chatId: $e');
