@@ -9,6 +9,7 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'contact_profile_screen.dart';
+import 'nfc_exchange_sheet.dart';
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key});
@@ -25,6 +26,24 @@ class _ContactsTabState extends State<ContactsTab> {
   void initState() {
     super.initState();
     _loadContacts();
+    ContactsModule.revision.addListener(_loadContacts);
+  }
+
+  @override
+  void dispose() {
+    ContactsModule.revision.removeListener(_loadContacts);
+    super.dispose();
+  }
+
+  Future<void> _openNfcExchange() async {
+    final cs = Theme.of(context).colorScheme;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: kSheetShape,
+      builder: (_) => const NfcExchangeSheet(),
+    );
   }
 
   Future<void> _openSearchById() async {
@@ -188,7 +207,7 @@ class _ContactsTabState extends State<ContactsTab> {
                   ),
                   IconButton(
                     icon: Icon(Symbols.person_add, color: cs.onSurface),
-                    onPressed: () {},
+                    onPressed: _openNfcExchange,
                   ),
                   IconButton(
                     icon: Icon(Symbols.search, color: cs.onSurface),

@@ -8,15 +8,20 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.nfc.NfcAdapter
+import android.nfc.Tag
+import android.nfc.tech.IsoDep
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.net.NetworkInterface
 import java.util.Collections
+import java.util.Random
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : FlutterActivity() {
@@ -24,8 +29,22 @@ class MainActivity : FlutterActivity() {
     private val channelName = "ru.komet.app/vpn_bypass"
     private val iconAliases = listOf("DefaultIcon", "MinimalIcon")
 
+    private var nfcAdapter: NfcAdapter? = null
+    private var nfcEvents: EventChannel.EventSink? = null
+    private val nfcHandler = Handler(Looper.getMainLooper())
+    private val nfcJitter = Random()
+    private val seenPeers = HashSet<Long>()
+    @Volatile private var nfcCycling = false
+    private val nfcReaderCallback = NfcAdapter.ReaderCallback { tag -> onNfcTagDiscovered(tag) }
+
     private companion object {
         const val LOG_TAG = "VpnBypass"
+        const val NFC_TAG = "NfcExchange"
+        const val NFC_PHASE_MIN_MS = 350L
+        const val NFC_PHASE_JITTER_MS = 400
+        val NFC_READER_FLAGS = NfcAdapter.FLAG_READER_NFC_A or
+            NfcAdapter.FLAG_READER_NFC_B or
+            NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
     }
 
     private fun applyIcon(name: String) {
@@ -50,6 +69,49 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/nfc",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "status" -> result.success(nfcStatus())
+                "start" -> {
+                    val selfId = when (val v = call.argument<Any>("selfId")) {
+                        is Int -> v.toLong()
+                        is Long -> v
+                        else -> 0L
+                    }
+                    if (selfId <= 0L) {
+                        result.error("INVALID_ID", "selfId must be positive", null)
+                    } else {
+                        startNfcExchange(selfId)
+                        result.success(null)
+                    }
+                }
+                "stop" -> {
+                    stopNfcExchange()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/nfc_events",
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                nfcEvents = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                nfcEvents = null
+            }
+        })
+
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             channelName,
@@ -124,6 +186,94 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun nfcStatus(): Map<String, Any> {
+        val adapter = nfcAdapter
+        return mapOf(
+            "supported" to (adapter != null),
+            "enabled" to (adapter?.isEnabled == true),
+        )
+    }
+
+    private fun startNfcExchange(selfId: Long) {
+        NfcExchange.selfId = selfId
+        NfcExchange.active = true
+        seenPeers.clear()
+        nfcCycling = true
+        nfcHandler.removeCallbacksAndMessages(null)
+        nfcReaderOn()
+    }
+
+    private fun stopNfcExchange() {
+        nfcCycling = false
+        NfcExchange.active = false
+        NfcExchange.selfId = 0L
+        nfcHandler.removeCallbacksAndMessages(null)
+        nfcReaderDisable()
+    }
+
+    private fun nfcReaderOn() {
+        if (!nfcCycling) return
+        nfcReaderEnable()
+        nfcHandler.postDelayed({ nfcReaderOff() }, nfcPhaseDuration())
+    }
+
+    private fun nfcReaderOff() {
+        if (!nfcCycling) return
+        nfcReaderDisable()
+        nfcHandler.postDelayed({ nfcReaderOn() }, nfcPhaseDuration())
+    }
+
+    private fun nfcPhaseDuration(): Long =
+        NFC_PHASE_MIN_MS + nfcJitter.nextInt(NFC_PHASE_JITTER_MS)
+
+    private fun nfcReaderEnable() {
+        val adapter = nfcAdapter ?: return
+        try {
+            adapter.enableReaderMode(this, nfcReaderCallback, NFC_READER_FLAGS, null)
+        } catch (e: Exception) {
+            Log.w(NFC_TAG, "enableReaderMode failed: ${e.message}")
+        }
+    }
+
+    private fun nfcReaderDisable() {
+        try {
+            nfcAdapter?.disableReaderMode(this)
+        } catch (e: Exception) {
+            Log.w(NFC_TAG, "disableReaderMode failed: ${e.message}")
+        }
+    }
+
+    private fun onNfcTagDiscovered(tag: Tag) {
+        val isoDep = IsoDep.get(tag) ?: return
+        val peer = try {
+            isoDep.connect()
+            NfcExchange.parsePeerId(isoDep.transceive(NfcExchange.buildSelectCommand()))
+        } catch (e: Exception) {
+            Log.w(NFC_TAG, "transceive failed: ${e.message}")
+            null
+        } finally {
+            try {
+                isoDep.close()
+            } catch (_: Exception) {
+            }
+        }
+        if (peer == null || peer <= 0L) return
+        nfcHandler.post {
+            if (peer == NfcExchange.selfId || !seenPeers.add(peer)) return@post
+            nfcCycling = false
+            nfcReaderDisable()
+            nfcEvents?.success(mapOf("event" to "received", "id" to peer))
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (NfcExchange.active) {
+            stopNfcExchange()
+            nfcEvents?.success(mapOf("event" to "cancelled"))
         }
     }
 

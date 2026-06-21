@@ -1,0 +1,344 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
+import '../../../backend/modules/contacts.dart';
+import '../../../core/cache/info_cache.dart';
+import '../../../core/nfc/nfc_exchange_service.dart';
+import '../../../core/storage/app_database.dart';
+import '../../../main.dart';
+import '../../widgets/custom_notification.dart';
+import '../../widgets/komet_avatar.dart';
+
+enum _Stage { checking, unsupported, disabled, scanning, found, adding, added }
+
+class NfcExchangeSheet extends StatefulWidget {
+  const NfcExchangeSheet({super.key});
+
+  @override
+  State<NfcExchangeSheet> createState() => _NfcExchangeSheetState();
+}
+
+class _NfcExchangeSheetState extends State<NfcExchangeSheet>
+    with SingleTickerProviderStateMixin {
+  final _nfc = NfcExchangeService.instance;
+  late final AnimationController _pulse;
+  StreamSubscription<NfcEvent>? _sub;
+
+  _Stage _stage = _Stage.checking;
+  int? _peerId;
+  Map<String, dynamic>? _peerInfo;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+    _begin();
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _nfc.stop();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  Future<void> _begin() async {
+    final status = await _nfc.status();
+    if (!mounted) return;
+    if (!status.supported) {
+      setState(() => _stage = _Stage.unsupported);
+      return;
+    }
+    if (!status.enabled) {
+      setState(() => _stage = _Stage.disabled);
+      return;
+    }
+    final profile = await AppDatabase.loadActiveProfile();
+    if (!mounted) return;
+    if (profile == null) {
+      setState(() => _stage = _Stage.unsupported);
+      return;
+    }
+    _sub = _nfc.events.listen(_onEvent);
+    await _nfc.start(profile.id);
+    if (mounted) setState(() => _stage = _Stage.scanning);
+  }
+
+  Future<void> _onEvent(NfcEvent event) async {
+    if (event.type == NfcEventType.cancelled) {
+      if (mounted && _stage == _Stage.scanning) {
+        setState(() => _stage = _Stage.disabled);
+      }
+      return;
+    }
+    final id = event.id;
+    if (id == null || _peerId != null) return;
+    _peerId = id;
+    setState(() => _stage = _Stage.found);
+    final info = await ContactInfoFetch.get(id);
+    if (!mounted) return;
+    setState(() => _peerInfo = info);
+  }
+
+  String _peerName() {
+    final info = _peerInfo;
+    if (info != null) {
+      final names = info['names'];
+      if (names is List && names.isNotEmpty) {
+        for (final n in names) {
+          if (n is! Map) continue;
+          final full = n['name']?.toString();
+          if (full != null && full.isNotEmpty) return full;
+          final first = n['firstName']?.toString() ?? '';
+          final last = n['lastName']?.toString() ?? '';
+          final combined = '$first $last'.trim();
+          if (combined.isNotEmpty) return combined;
+        }
+      }
+    }
+    return 'Контакт #${_peerId ?? ''}';
+  }
+
+  String _firstNameForAdd() {
+    final info = _peerInfo;
+    if (info != null) {
+      final names = info['names'];
+      if (names is List && names.isNotEmpty) {
+        for (final n in names) {
+          if (n is! Map) continue;
+          final first = n['firstName']?.toString();
+          if (first != null && first.isNotEmpty) return first;
+          final full = n['name']?.toString();
+          if (full != null && full.isNotEmpty) return full;
+        }
+      }
+    }
+    return 'Контакт';
+  }
+
+  Future<void> _add() async {
+    final id = _peerId;
+    if (id == null) return;
+    setState(() => _stage = _Stage.adding);
+    try {
+      await ContactsModule.addContact(api, id, _firstNameForAdd());
+      if (!mounted) return;
+      setState(() => _stage = _Stage.added);
+      showCustomNotification(context, 'Контакт добавлен');
+      await Future.delayed(const Duration(milliseconds: 700));
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stage = _Stage.found);
+      showCustomNotification(context, 'Не удалось добавить: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Обмен контактом',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Symbols.close, color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildContent(cs),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(ColorScheme cs) {
+    switch (_stage) {
+      case _Stage.checking:
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(),
+        );
+      case _Stage.unsupported:
+        return _message(cs, Symbols.nfc, 'NFC недоступен на этом устройстве');
+      case _Stage.disabled:
+        return _message(
+          cs,
+          Symbols.nfc,
+          'Включите NFC в настройках телефона и попробуйте снова',
+        );
+      case _Stage.scanning:
+        return _scanning(cs);
+      case _Stage.found:
+      case _Stage.adding:
+      case _Stage.added:
+        return _foundCard(cs);
+    }
+  }
+
+  Widget _message(ColorScheme cs, IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Column(
+        children: [
+          Icon(icon, color: cs.onSurfaceVariant, size: 44),
+          const SizedBox(height: 14),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scanning(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 180,
+            height: 180,
+            child: AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, child) => CustomPaint(
+                painter: _RadarPainter(_pulse.value, cs.primary),
+                child: child,
+              ),
+              child: Center(
+                child: Icon(Symbols.nfc, color: cs.primary, size: 48),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Поднесите телефоны друг к другу',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Оба устройства должны держать этот экран открытым',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _foundCard(ColorScheme cs) {
+    final loading = _peerInfo == null && _stage == _Stage.found;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        children: [
+          KometAvatar(
+            name: _peerName(),
+            imageUrl: _peerInfo?['baseUrl'] as String?,
+            size: 88,
+            fontSize: 34,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            _peerName(),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'ID ${_peerId ?? ''}',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: (_stage == _Stage.adding || loading) ? null : _add,
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: _stage == _Stage.adding
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_stage == _Stage.added ? 'Добавлено' : 'Добавить контакт'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RadarPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _RadarPainter(this.progress, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.width / 2;
+    for (var i = 0; i < 3; i++) {
+      final t = (progress + i / 3) % 1.0;
+      final radius = maxRadius * t;
+      final opacity = (1.0 - t) * 0.35;
+      if (opacity <= 0) continue;
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = color.withValues(alpha: opacity);
+      canvas.drawCircle(center, radius, paint);
+    }
+    final corePaint = Paint()
+      ..color = color.withValues(alpha: 0.10 + 0.05 * math.sin(progress * 2 * math.pi));
+    canvas.drawCircle(center, maxRadius * 0.32, corePaint);
+  }
+
+  @override
+  bool shouldRepaint(_RadarPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
+}

@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+    <uses-permission android:name="android.permission.NFC"/>
+    <uses-feature android:name="android.hardware.nfc.hce" android:required="false"/>
     <application
         android:label="Komet"
         android:name="${applicationName}"
@@ -67,6 +69,17 @@
             android:name=".UploadForegroundService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
+        <service
+            android:name=".NfcHostApduService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/komet_nfc_apdu"/>
+        </service>
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

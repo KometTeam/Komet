@@ -1,4 +1,8 @@
+import 'package:flutter/foundation.dart';
+
+import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
+import '../api.dart';
 import 'messages.dart';
 
 class CachedContact {
@@ -51,6 +55,49 @@ class CachedContact {
 }
 
 class ContactsModule {
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  static Future<CachedContact?> addContact(
+    Api api,
+    int id,
+    String firstName,
+  ) async {
+    final resp = await api.sendRequest(Opcode.contactUpdate, {
+      'action': 'ADD',
+      'contactId': id,
+      'firstName': firstName,
+    });
+
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile == null) return null;
+
+    final data = resp.payload;
+    final contact = (data is Map && data['contact'] is Map)
+        ? (data['contact'] as Map).cast<dynamic, dynamic>()
+        : null;
+
+    final row = contact != null
+        ? _parseContact(contact, profile.id)
+        : {
+            'id': id,
+            'account_id': profile.id,
+            'first_name': firstName,
+            'last_name': null,
+            'phone': 0,
+            'photo_id': null,
+            'base_url': null,
+            'base_raw_url': null,
+            'update_time': 0,
+            'options': null,
+          };
+
+    if (row == null) return null;
+    await AppDatabase.saveContacts([row]);
+    if (contact != null) _primeContactCache(contact);
+    revision.value++;
+    return CachedContact.fromDbRow(row);
+  }
+
   static Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
     int accountId,
