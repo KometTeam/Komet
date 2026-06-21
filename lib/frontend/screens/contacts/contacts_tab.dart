@@ -36,13 +36,26 @@ class _ContactsTabState extends State<ContactsTab> {
   }
 
   Future<void> _openNfcExchange() async {
-    final cs = Theme.of(context).colorScheme;
-    await showModalBottomSheet<void>(
+    await showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: cs.surfaceContainerHigh,
-      shape: kSheetShape,
-      builder: (_) => const NfcExchangeSheet(),
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (_, _, _) => const Align(
+        alignment: Alignment.topCenter,
+        child: NfcExchangeSheet(),
+      ),
+      transitionBuilder: (_, anim, _, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return SlideTransition(
+          position: Tween(
+            begin: const Offset(0, -1),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        );
+      },
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/contacts.dart';
@@ -32,9 +33,10 @@ class NfcExchangeSheet extends StatefulWidget {
 }
 
 class _NfcExchangeSheetState extends State<NfcExchangeSheet>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _nfc = NfcExchangeService.instance;
   late final AnimationController _pulse;
+  late final AnimationController _reveal;
   StreamSubscription<NfcEvent>? _sub;
 
   _Stage _stage = _Stage.checking;
@@ -49,6 +51,10 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat();
+    _reveal = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
     _begin();
   }
 
@@ -57,6 +63,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
     _sub?.cancel();
     _nfc.stop();
     _pulse.dispose();
+    _reveal.dispose();
     super.dispose();
   }
 
@@ -107,6 +114,8 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
     final id = event.id;
     if (id == null || _peerId != null) return;
     _peerId = id;
+    HapticFeedback.mediumImpact();
+    _reveal.forward(from: 0);
     setState(() => _stage = _Stage.found);
     final info = await ContactInfoFetch.get(id);
     if (!mounted) return;
@@ -181,13 +190,22 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
+    return SizedBox(
+      width: double.infinity,
+      child: Material(
+      color: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
               children: [
                 Expanded(
                   child: Text(
@@ -219,8 +237,10 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
                 child: _buildContent(cs),
               ),
             ),
-          ],
+            ],
+          ),
         ),
+      ),
       ),
     );
   }
@@ -356,11 +376,28 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         children: [
-          KometAvatar(
-            name: _peerName(),
-            imageUrl: _peerInfo?['baseUrl'] as String?,
-            size: 88,
-            fontSize: 34,
+          SizedBox(
+            width: 160,
+            height: 160,
+            child: AnimatedBuilder(
+              animation: _reveal,
+              builder: (context, child) {
+                final t = _reveal.value;
+                final pop = Curves.elasticOut.transform(t.clamp(0.0, 1.0));
+                return CustomPaint(
+                  painter: _BurstPainter(t, cs.primary),
+                  child: Center(
+                    child: Transform.scale(scale: pop, child: child),
+                  ),
+                );
+              },
+              child: KometAvatar(
+                name: _peerName(),
+                imageUrl: _peerInfo?['baseUrl'] as String?,
+                size: 92,
+                fontSize: 34,
+              ),
+            ),
           ),
           const SizedBox(height: 14),
           Text(
@@ -433,5 +470,43 @@ class _RadarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RadarPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
+}
+
+class _BurstPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _BurstPainter(this.progress, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.width / 2;
+    final eased = Curves.easeOut.transform(progress.clamp(0.0, 1.0));
+
+    final glow = Paint()
+      ..color = color.withValues(alpha: (1.0 - eased) * 0.18);
+    canvas.drawCircle(center, maxRadius * (0.45 + 0.55 * eased), glow);
+
+    for (var i = 0; i < 3; i++) {
+      final delay = i * 0.18;
+      final t = ((progress - delay) / (1.0 - delay)).clamp(0.0, 1.0);
+      if (t <= 0) continue;
+      final wave = Curves.easeOut.transform(t);
+      final radius = maxRadius * (0.3 + 0.7 * wave);
+      final opacity = (1.0 - wave) * 0.5;
+      if (opacity <= 0) continue;
+      final ring = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5 * (1.0 - wave) + 0.5
+        ..color = color.withValues(alpha: opacity);
+      canvas.drawCircle(center, radius, ring);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BurstPainter oldDelegate) =>
       oldDelegate.progress != progress || oldDelegate.color != color;
 }
