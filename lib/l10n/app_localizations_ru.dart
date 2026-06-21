@@ -87,6 +87,26 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginSignInWithToken => 'По токену';
 
   @override
+  String get tokenLoginTitle => 'Вход по токену';
+
+  @override
+  String get tokenLoginTokenLabel => 'Токен';
+
+  @override
+  String get tokenLoginNote =>
+      'Вход по токену работает только со спуфом. Укажите данные устройства, к которому привязан токен, иначе аккаунт могут заблокировать.';
+
+  @override
+  String get tokenLoginButton => 'Войти';
+
+  @override
+  String get tokenLoginError =>
+      'Заполните токен, имя устройства, версию ОС и Device ID';
+
+  @override
+  String get tokenLoginFailed => 'Не удалось войти';
+
+  @override
   String get loginSignInWithSessionFile => 'По файлу сессии';
 
   @override

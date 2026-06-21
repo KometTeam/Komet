@@ -1060,6 +1060,25 @@ class AccountModule {
     logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
   }
 
+  Future<LoginResult> loginWithToken(String token) async {
+    await TokenStorage.clearActiveAccount();
+    try {
+      await _api.disconnect();
+    } catch (_) {}
+
+    ContactCache.clear();
+    TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
+
+    await _api.connect();
+    if (_api.state != SessionState.online) {
+      throw StateError('loginWithToken: нет соединения с сервером');
+    }
+
+    logger.i('Вход по токену: сессия поднята со спуфом, выполняю login');
+    return login(token: token);
+  }
+
   Future<ProfileData> switchAccount(int accountId) async {
     final profile = await AppDatabase.loadProfile(accountId);
     if (profile == null) {
