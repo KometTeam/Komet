@@ -8,6 +8,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
+import 'search_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/online_dot.dart';
@@ -1271,43 +1272,39 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
-                            child: GlossyPill(
-                              color: cs.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(50),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => pushSwipeable(
+                                context,
+                                (_) => const SearchScreen(),
                               ),
-                              depth: 6,
-                              child: SizedBox(
-                                height: 44,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Symbols.search,
-                                      color: cs.outline,
-                                      size: 20,
-                                      weight: 400,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: TextField(
+                              child: GlossyPill(
+                                color: cs.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(50),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                depth: 6,
+                                child: SizedBox(
+                                  height: 44,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Symbols.search,
+                                        color: cs.outline,
+                                        size: 20,
+                                        weight: 400,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Поиск',
                                         style: TextStyle(
-                                          color: cs.onSurface,
+                                          color: cs.outline,
                                           fontSize: 15,
                                         ),
-                                        decoration: InputDecoration(
-                                          hintText: 'Поиск',
-                                          hintStyle: TextStyle(
-                                            color: cs.outline,
-                                            fontSize: 15,
-                                          ),
-                                          border: InputBorder.none,
-                                          isDense: true,
-                                          contentPadding: EdgeInsets.zero,
-                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

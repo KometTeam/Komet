@@ -54,8 +54,54 @@ class CachedContact {
   }
 }
 
+class PhoneLookupResult {
+  final int id;
+  final String? name;
+  final String? avatarUrl;
+
+  const PhoneLookupResult({required this.id, this.name, this.avatarUrl});
+}
+
 class ContactsModule {
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  static Future<PhoneLookupResult?> findByPhone(Api api, String phone) async {
+    final normalized = _normalizePhone(phone);
+    if (normalized == null) return null;
+    final packet = await api.sendRequest(Opcode.contactInfoByPhone, {
+      'phone': normalized,
+    });
+    if (packet.isError) return null;
+    final contact = (packet.payload as Map?)?['contact'];
+    if (contact is! Map) return null;
+    final id = contact['id'];
+    if (id is! int) return null;
+
+    String? name;
+    final names = contact['names'];
+    if (names is List) {
+      final n = names.firstWhere((e) => e is Map, orElse: () => null);
+      if (n is Map) {
+        final first =
+            (n['firstName'] as String?) ?? (n['name'] as String?) ?? '';
+        final last = (n['lastName'] as String?) ?? '';
+        final full = '$first $last'.trim();
+        if (full.isNotEmpty) name = full;
+      }
+    }
+
+    return PhoneLookupResult(
+      id: id,
+      name: name,
+      avatarUrl: contact['baseUrl'] as String?,
+    );
+  }
+
+  static String? _normalizePhone(String raw) {
+    final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
+    if (digits.length < 5) return null;
+    return '+$digits';
+  }
 
   static Future<CachedContact?> addContact(
     Api api,

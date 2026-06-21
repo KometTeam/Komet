@@ -161,6 +161,22 @@ class CachedChat {
   };
 }
 
+class ChatSearchHit {
+  final int id;
+  final String type;
+  final String? title;
+  final String? avatarUrl;
+  final String? subtitle;
+
+  const ChatSearchHit({
+    required this.id,
+    required this.type,
+    this.title,
+    this.avatarUrl,
+    this.subtitle,
+  });
+}
+
 sealed class MessageEvent {
   final int chatId;
   const MessageEvent(this.chatId);
@@ -1149,6 +1165,72 @@ class ChatsModule {
       'count': 10,
     });
     return packet.payload;
+  }
+
+  static List<ChatSearchHit> _parseSearchResult(dynamic payload) {
+    final result = (payload as Map?)?['result'];
+    if (result is! List) return const [];
+    final hits = <ChatSearchHit>[];
+    for (final item in result) {
+      if (item is! Map) continue;
+      final chat = item['chat'];
+      if (chat is! Map) continue;
+      final id = chat['id'];
+      if (id is! int) continue;
+      final last = chat['lastMessage'];
+      final link = chat['link'];
+      hits.add(ChatSearchHit(
+        id: id,
+        type: (chat['type'] as String?) ?? 'CHAT',
+        title: chat['title'] as String?,
+        avatarUrl: chat['baseIconUrl'] as String?,
+        subtitle: link is String && link.isNotEmpty
+            ? '@$link'
+            : (last is Map ? last['text'] as String? : null),
+      ));
+    }
+    return hits;
+  }
+
+  static Future<List<ChatSearchHit>> searchChats(
+    Api api,
+    String query, {
+    int count = 50,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    try {
+      final packet = await api.sendRequest(Opcode.chatSearch, {
+        'count': count,
+        'query': term,
+      });
+      if (packet.isError) return const [];
+      return _parseSearchResult(packet.payload);
+    } catch (e) {
+      logger.w('searchChats failed: $e');
+      return const [];
+    }
+  }
+
+  static Future<List<ChatSearchHit>> searchPublic(
+    Api api,
+    String query, {
+    int count = 20,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    try {
+      final packet = await api.sendRequest(Opcode.publicSearch, {
+        'type': 'ALL',
+        'count': count,
+        'query': term,
+      });
+      if (packet.isError) return const [];
+      return _parseSearchResult(packet.payload);
+    } catch (e) {
+      logger.w('searchPublic failed: $e');
+      return const [];
+    }
   }
 
   static Future<CachedChat?> createGroupChat(

@@ -578,6 +578,50 @@ class AppDatabase {
     );
   }
 
+  static String _escapeLike(String value) =>
+      value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+
+  static Future<List<Map<String, dynamic>>> searchContacts(
+    int accountId,
+    String query, {
+    int limit = 30,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final db = await _instance;
+    final like = '%${_escapeLike(term)}%';
+    return db.query(
+      'contacts',
+      where: 'account_id = ? AND '
+          "(first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
+          "OR CAST(phone AS TEXT) LIKE ? ESCAPE '\\')",
+      whereArgs: [accountId, like, like, like],
+      orderBy: 'first_name ASC, last_name ASC',
+      limit: limit,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> searchMessages(
+    int accountId,
+    String query, {
+    int limit = 50,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final db = await _instance;
+    final like = '%${_escapeLike(term)}%';
+    return db.rawQuery(
+      'SELECT m.id AS id, m.chat_id AS chat_id, m.sender_id AS sender_id, '
+      'm.text AS text, m.time AS time, '
+      'c.title AS chat_title, c.icon_url AS chat_icon, c.type AS chat_type '
+      'FROM messages m '
+      'LEFT JOIN chats_cache c ON c.id = m.chat_id AND c.account_id = m.account_id '
+      "WHERE m.account_id = ? AND m.deleted = 0 AND m.text LIKE ? ESCAPE '\\' "
+      'ORDER BY m.time DESC LIMIT ?',
+      [accountId, like, limit],
+    );
+  }
+
   static Future<List<Map<String, dynamic>>> loadChatsByIds(
     int accountId,
     List<int> ids,
