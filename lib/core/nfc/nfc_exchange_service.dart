@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-enum NfcEventType { received, cancelled, error }
+enum NfcEventType { received, exchanging, cancelled, error }
 
 class NfcEvent {
   final NfcEventType type;
@@ -64,6 +64,8 @@ class NfcExchangeService {
     switch (map['event']) {
       case 'received':
         return NfcEvent(NfcEventType.received, parsedId);
+      case 'exchanging':
+        return const NfcEvent(NfcEventType.exchanging, null);
       case 'error':
         return NfcEvent(NfcEventType.error, null, reason: map['reason'] as String?);
       default:

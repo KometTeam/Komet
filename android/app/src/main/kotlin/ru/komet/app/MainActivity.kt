@@ -43,6 +43,7 @@ class MainActivity : FlutterActivity() {
     private var ble: BleContactExchange? = null
     private var pendingSelfId = 0L
     private var pendingSession = ""
+    @Volatile private var exchangingEmitted = false
 
     private companion object {
         const val LOG_TAG = "VpnBypass"
@@ -212,6 +213,7 @@ class MainActivity : FlutterActivity() {
         NfcExchange.active = true
         NfcExchange.onServed = { onNfcServed() }
         seenPeers.clear()
+        exchangingEmitted = false
         pendingSelfId = selfId
         pendingSession = session
         nfcCycling = true
@@ -258,10 +260,17 @@ class MainActivity : FlutterActivity() {
     private fun startBle() {
         val exchange = ble ?: BleContactExchange(applicationContext).also {
             it.onReceived = { id -> onBleReceived(id) }
+            it.onSent = { id -> onBleReceived(id) }
             it.onError = { reason -> onBleError(reason) }
             ble = it
         }
         exchange.start(pendingSelfId, pendingSession)
+    }
+
+    private fun emitExchanging() {
+        if (exchangingEmitted) return
+        exchangingEmitted = true
+        nfcEvents?.success(mapOf("event" to "exchanging"))
     }
 
     private fun onBleReceived(id: Long) {
@@ -278,6 +287,7 @@ class MainActivity : FlutterActivity() {
             if (!NfcExchange.active) return@post
             nfcCycling = false
             nfcReaderDisable()
+            emitExchanging()
         }
     }
 
@@ -349,10 +359,9 @@ class MainActivity : FlutterActivity() {
             if (peer.id == NfcExchange.selfId) return@post
             nfcCycling = false
             nfcReaderDisable()
-            ble?.connectTo(peer.session)
-            if (seenPeers.add(peer.id)) {
-                nfcEvents?.success(mapOf("event" to "received", "id" to peer.id))
-            }
+            emitExchanging()
+            ble?.connectTo(peer.session, peer.id)
+            nfcHandler.postDelayed({ onBleReceived(peer.id) }, 3000L)
         }
     }
 

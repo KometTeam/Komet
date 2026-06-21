@@ -12,7 +12,17 @@ import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 
-enum _Stage { checking, unsupported, disabled, failed, scanning, found, adding, added }
+enum _Stage {
+  checking,
+  unsupported,
+  disabled,
+  failed,
+  scanning,
+  exchanging,
+  found,
+  adding,
+  added,
+}
 
 class NfcExchangeSheet extends StatefulWidget {
   const NfcExchangeSheet({super.key});
@@ -85,6 +95,12 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           _failReason = _reasonText(event.reason);
           _stage = _Stage.failed;
         });
+      }
+      return;
+    }
+    if (event.type == NfcEventType.exchanging) {
+      if (mounted && _peerId == null && _stage == _Stage.scanning) {
+        setState(() => _stage = _Stage.exchanging);
       }
       return;
     }
@@ -190,7 +206,19 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
               ],
             ),
             const SizedBox(height: 12),
-            _buildContent(cs),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: animation, child: child),
+              ),
+              child: KeyedSubtree(
+                key: ValueKey(_stage == _Stage.found ? 'found' : _stage.name),
+                child: _buildContent(cs),
+              ),
+            ),
           ],
         ),
       ),
@@ -216,6 +244,8 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
         return _message(cs, Symbols.bluetooth_disabled, _failReason);
       case _Stage.scanning:
         return _scanning(cs);
+      case _Stage.exchanging:
+        return _exchanging(cs);
       case _Stage.found:
       case _Stage.adding:
       case _Stage.added:
@@ -272,6 +302,46 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           const SizedBox(height: 6),
           Text(
             'Оба устройства должны держать этот экран открытым',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _exchanging(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 120,
+            height: 120,
+            child: AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, child) => CustomPaint(
+                painter: _RadarPainter(_pulse.value, cs.primary),
+                child: child,
+              ),
+              child: Center(
+                child: Icon(Symbols.sync, color: cs.primary, size: 40),
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            'Идёт обмен контактами…',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Почти готово',
             textAlign: TextAlign.center,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),

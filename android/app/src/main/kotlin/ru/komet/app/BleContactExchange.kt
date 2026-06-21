@@ -36,6 +36,7 @@ class BleContactExchange(private val context: Context) {
     }
 
     var onReceived: ((Long) -> Unit)? = null
+    var onSent: ((Long) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
     private val main = Handler(Looper.getMainLooper())
@@ -53,6 +54,7 @@ class BleContactExchange(private val context: Context) {
 
     @Volatile private var selfId: Long = 0L
     @Volatile private var selfSession: String = ""
+    @Volatile private var peerIdForWrite: Long = 0L
     @Volatile private var connecting = false
     @Volatile private var running = false
 
@@ -68,8 +70,9 @@ class BleContactExchange(private val context: Context) {
         startGattServer()
     }
 
-    fun connectTo(peerSession: String) {
+    fun connectTo(peerSession: String, peerId: Long) {
         if (!running || connecting) return
+        peerIdForWrite = peerId
         startScan(peerSession)
     }
 
@@ -313,12 +316,20 @@ class BleContactExchange(private val context: Context) {
             characteristic: BluetoothGattCharacteristic?,
             status: Int,
         ) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                val id = peerIdForWrite
+                if (id > 0L) emitSent(id)
+            }
             gatt?.disconnect()
         }
     }
 
     private fun emitReceived(id: Long) {
         main.post { onReceived?.invoke(id) }
+    }
+
+    private fun emitSent(id: Long) {
+        main.post { onSent?.invoke(id) }
     }
 
     private fun emitError(reason: String) {
