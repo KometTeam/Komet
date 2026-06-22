@@ -370,9 +370,7 @@ class MessageBubble extends StatelessWidget {
     final reactionsUnder = _reactionsUnderBubble(contentType);
     final reactionsInside = contentType != MessageType.text && !reactionsUnder;
 
-    return GestureDetector(
-      onTap: Haptics.tap,
-      child: Padding(
+    return Padding(
         padding: EdgeInsets.only(
           left: 12,
           right: 12,
@@ -435,8 +433,7 @@ class MessageBubble extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Map? _resolveReactionInfo() {

@@ -191,6 +191,11 @@ class _ChatScreenState extends State<ChatScreen>
   String? _lastMarkedId;
   final ValueNotifier<int> _otherUnread = ValueNotifier(0);
 
+  final ValueNotifier<Set<String>> _selectedIds = ValueNotifier(const {});
+  late final AnimationController _selectionAnim;
+
+  bool get _selectionMode => _selectedIds.value.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -212,6 +217,11 @@ class _ChatScreenState extends State<ChatScreen>
     _commandAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
+    );
+    _selectionAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 200),
     );
     AppCommands.current.addListener(_updateCommandPanel);
     _pushSub = api.pushStream
@@ -596,6 +606,8 @@ class _ChatScreenState extends State<ChatScreen>
     _attachAnim.dispose();
     AppCommands.current.removeListener(_updateCommandPanel);
     _commandAnim.dispose();
+    _selectionAnim.dispose();
+    _selectedIds.dispose();
     _commandMatches.dispose();
     _messageController.dispose();
     _messageFocusNode.dispose();
@@ -866,6 +878,38 @@ class _ChatScreenState extends State<ChatScreen>
   void _bumpMessages() {
     _combinedItemsCache = null;
     _messagesRev.value++;
+  }
+
+  void _enterSelection(CachedMessage message) {
+    if (message.isControl) return;
+    Haptics.medium();
+    if (_selectedIds.value.contains(message.id)) return;
+    _selectedIds.value = {..._selectedIds.value, message.id};
+    _syncSelectionAnim();
+  }
+
+  void _toggleSelection(CachedMessage message) {
+    if (message.isControl) return;
+    final next = Set<String>.from(_selectedIds.value);
+    if (!next.remove(message.id)) next.add(message.id);
+    Haptics.selection();
+    _selectedIds.value = next;
+    _syncSelectionAnim();
+  }
+
+  void _clearSelection() {
+    if (_selectedIds.value.isEmpty) return;
+    _selectedIds.value = const {};
+    _syncSelectionAnim();
+  }
+
+  void _syncSelectionAnim() {
+    if (_selectedIds.value.isEmpty) {
+      _selectionAnim.reverse();
+    } else if (_selectionAnim.status != AnimationStatus.forward &&
+        _selectionAnim.value < 1) {
+      _selectionAnim.forward();
+    }
   }
 
   bool _canEditMessage(CachedMessage message) {
@@ -2068,7 +2112,16 @@ class _ChatScreenState extends State<ChatScreen>
     final bottomInset = _keyboardReserve > 0
         ? math.max(mq.viewInsets.bottom, _keyboardReserve)
         : mq.viewInsets.bottom;
-    return MediaQuery(
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: _selectedIds,
+      builder: (context, selected, child) => PopScope(
+        canPop: selected.isEmpty,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _clearSelection();
+        },
+        child: child!,
+      ),
+      child: MediaQuery(
       data: mq.copyWith(
         viewInsets: mq.viewInsets.copyWith(bottom: bottomInset),
       ),
@@ -2288,41 +2341,67 @@ class _ChatScreenState extends State<ChatScreen>
                     ),
                   ),
                   AnimatedBuilder(
-                    animation: _attachAnim,
-                    builder: (context, _) {
-                      if (_attachAnim.value == 0)
-                        return const SizedBox.shrink();
-                      final curve =
-                          _attachAnim.status == AnimationStatus.reverse
-                          ? Curves.easeIn
-                          : Curves.easeOut;
-                      final t = curve.transform(_attachAnim.value);
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                        child: ClipRect(
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            heightFactor: t,
-                            child: Opacity(
-                              opacity: t,
-                              child: AttachmentPanel(
-                                onClose: () =>
-                                    _showAttachmentPanel.value = false,
-                                onPickFile: _pickAndUploadFile,
-                                onSendById: _sendFileById,
-                              ),
-                            ),
+                    animation: _selectionAnim,
+                    builder: (context, child) {
+                      final t = Curves.easeOut.transform(
+                        _selectionAnim.value.clamp(0.0, 1.0),
+                      );
+                      if (t == 0) return child!;
+                      if (t == 1) return const SizedBox.shrink();
+                      return ClipRect(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          heightFactor: 1 - t,
+                          child: Transform.translate(
+                            offset: Offset(0, 48 * t),
+                            child: Opacity(opacity: 1 - t, child: child),
                           ),
                         ),
                       );
                     },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedBuilder(
+                          animation: _attachAnim,
+                          builder: (context, _) {
+                            if (_attachAnim.value == 0)
+                              return const SizedBox.shrink();
+                            final curve =
+                                _attachAnim.status == AnimationStatus.reverse
+                                ? Curves.easeIn
+                                : Curves.easeOut;
+                            final t = curve.transform(_attachAnim.value);
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                              child: ClipRect(
+                                child: Align(
+                                  alignment: Alignment.bottomCenter,
+                                  heightFactor: t,
+                                  child: Opacity(
+                                    opacity: t,
+                                    child: AttachmentPanel(
+                                      onClose: () =>
+                                          _showAttachmentPanel.value = false,
+                                      onPickFile: _pickAndUploadFile,
+                                      onSendById: _sendFileById,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildInputArea(context),
+                      ],
+                    ),
                   ),
-                  _buildInputArea(context),
                 ],
               ),
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -2395,9 +2474,14 @@ class _ChatScreenState extends State<ChatScreen>
                   uploadProgress: _photoProgressFor(message),
                 );
 
-                final pressable = _LongPressBubble(
+                final pressable = _SelectableMessageRow(
                   message: message,
                   isMe: isMe,
+                  selectedIds: _selectedIds,
+                  selectionAnim: _selectionAnim,
+                  isSelectionActive: () => _selectionMode,
+                  onToggleSelection: () => _toggleSelection(message),
+                  onEnterSelection: () => _enterSelection(message),
                   onDelete: () => _confirmDeleteMessage(message, isMe),
                   onEdit: _canEditMessage(message)
                       ? () => _startEditMessage(message)
@@ -3784,37 +3868,42 @@ IconData _iconForFilename(String? name) {
   }
 }
 
-class _LongPressBubble extends StatefulWidget {
+class _SelectableMessageRow extends StatefulWidget {
   final Widget child;
   final CachedMessage message;
   final bool isMe;
+  final ValueListenable<Set<String>> selectedIds;
+  final Animation<double> selectionAnim;
+  final bool Function() isSelectionActive;
+  final VoidCallback onToggleSelection;
+  final VoidCallback onEnterSelection;
   final VoidCallback onDelete;
   final VoidCallback? onEdit;
 
-  const _LongPressBubble({
+  const _SelectableMessageRow({
     required this.child,
     required this.message,
     required this.isMe,
+    required this.selectedIds,
+    required this.selectionAnim,
+    required this.isSelectionActive,
+    required this.onToggleSelection,
+    required this.onEnterSelection,
     required this.onDelete,
     this.onEdit,
   });
 
   @override
-  State<_LongPressBubble> createState() => _LongPressBubbleState();
+  State<_SelectableMessageRow> createState() => _SelectableMessageRowState();
 }
 
-class _LongPressBubbleState extends State<_LongPressBubble> {
+class _SelectableMessageRowState extends State<_SelectableMessageRow> {
+  static const double _gutterWidth = 40;
+
   final GlobalKey _boundaryKey = GlobalKey();
-  MessageActionsController? _controller;
+  Offset? _lastTapDown;
 
-  @override
-  void dispose() {
-    _controller?.commit();
-    _controller = null;
-    super.dispose();
-  }
-
-  void _onLongPressStart(LongPressStartDetails details) {
+  void _openMenu() {
     final ctx = _boundaryKey.currentContext;
     if (ctx == null) return;
     final renderObject = ctx.findRenderObject();
@@ -3832,34 +3921,26 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       return;
     }
 
-    Haptics.medium();
+    Haptics.tap();
 
     final controller = MessageActionsController();
-    controller.attach(details.globalPosition);
-    _controller = controller;
-
     showMessageActions(
       context: ctx,
       snapshot: snapshot,
       originRect: rect,
-      tapPoint: details.globalPosition,
+      tapPoint: _lastTapDown ?? rect.center,
       isMe: widget.isMe,
       messageText: widget.message.text,
       controller: controller,
       style: AppMessageActionsStyle.current.value,
+      interaction: MessageActionsInteraction.tap,
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
-      onDispose: () {
-        if (identical(_controller, controller)) {
-          _controller = null;
-        }
-        controller.dispose();
-      },
+      onDispose: controller.dispose,
     );
   }
 
   void _onSecondaryTapDown(TapDownDetails details) {
-    if (_controller != null) return;
     final ctx = _boundaryKey.currentContext;
     if (ctx == null) return;
     final renderObject = ctx.findRenderObject();
@@ -3869,8 +3950,6 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
     final rect = origin & renderObject.size;
 
     final controller = MessageActionsController();
-    _controller = controller;
-
     showMessageActions(
       context: ctx,
       originRect: rect,
@@ -3882,31 +3961,103 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       interaction: MessageActionsInteraction.click,
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
-      onDispose: () {
-        if (identical(_controller, controller)) {
-          _controller = null;
-        }
-        controller.dispose();
-      },
+      onDispose: controller.dispose,
+    );
+  }
+
+  void _handleTap() {
+    if (widget.isSelectionActive()) {
+      widget.onToggleSelection();
+    } else {
+      _openMenu();
+    }
+  }
+
+  void _handleLongPress() {
+    if (widget.isSelectionActive()) {
+      widget.onToggleSelection();
+    } else {
+      widget.onEnterSelection();
+    }
+  }
+
+  Widget _buildCheckCircle(bool selected, ColorScheme cs) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? cs.primary : Colors.transparent,
+        border: Border.all(
+          color: selected
+              ? cs.primary
+              : cs.onSurfaceVariant.withValues(alpha: 0.6),
+          width: 2,
+        ),
+      ),
+      child: selected
+          ? Icon(Symbols.check, size: 16, weight: 700, color: cs.onPrimary)
+          : null,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.deferToChild,
-      onPointerMove: (event) => _controller?.updatePointer(event.position),
-      onPointerUp: (event) => _controller?.commit(),
-      onPointerCancel: (event) => _controller?.commit(),
-      child: GestureDetector(
-        behavior: HitTestBehavior.deferToChild,
-        onLongPressStart: _onLongPressStart,
-        onLongPressMoveUpdate: (d) =>
-            _controller?.updatePointer(d.globalPosition),
-        onLongPressEnd: (_) => _controller?.commit(),
-        onSecondaryTapDown: _onSecondaryTapDown,
-        child: RepaintBoundary(key: _boundaryKey, child: widget.child),
-      ),
+    if (widget.message.isControl) return widget.child;
+    final cs = Theme.of(context).colorScheme;
+
+    return AnimatedBuilder(
+      animation: widget.selectionAnim,
+      builder: (context, _) {
+        final t = Curves.easeOut.transform(
+          widget.selectionAnim.value.clamp(0.0, 1.0),
+        );
+        return ValueListenableBuilder<Set<String>>(
+          valueListenable: widget.selectedIds,
+          builder: (context, selected, _) {
+            final isSelected = selected.contains(widget.message.id);
+            final active = selected.isNotEmpty;
+
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (d) => _lastTapDown = d.globalPosition,
+              onTap: _handleTap,
+              onLongPress: _handleLongPress,
+              onSecondaryTapDown: active ? null : _onSecondaryTapDown,
+              child: ColoredBox(
+                color: isSelected
+                    ? cs.primary.withValues(alpha: 0.10)
+                    : Colors.transparent,
+                child: Stack(
+                  children: [
+                    RepaintBoundary(
+                      key: _boundaryKey,
+                      child: IgnorePointer(
+                        ignoring: active,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: _gutterWidth * t),
+                          child: widget.child,
+                        ),
+                      ),
+                    ),
+                    if (t > 0)
+                      Positioned(
+                        left: 8,
+                        bottom: 10,
+                        child: Opacity(
+                          opacity: t,
+                          child: _buildCheckCircle(isSelected, cs),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
