@@ -10,7 +10,7 @@ import '../../core/config/app_message_actions_style.dart';
 import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
-enum MessageActionsInteraction { dragAndRelease, click }
+enum MessageActionsInteraction { dragAndRelease, click, tap }
 
 class MessageActionsController extends ChangeNotifier {
   Offset? pointer;
@@ -247,7 +247,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final menuHeight = n * itemHeight + vPad * 2;
     late double menuX;
     late double menuY;
-    if (widget.interaction == MessageActionsInteraction.click) {
+    if (widget.interaction != MessageActionsInteraction.dragAndRelease) {
       final spaceBelow = screenSize.height - widget.tapPoint.dy - 8;
       _showBelow = spaceBelow >= menuHeight || widget.tapPoint.dy < menuHeight;
       final rawY = _showBelow
@@ -446,7 +446,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final cs = Theme.of(context).colorScheme;
     final eased = Curves.easeOutCubic.transform(t);
     final scale = 0.88 + 0.12 * eased;
-    final isClick = widget.interaction == MessageActionsInteraction.click;
+    final tapAnchored =
+        widget.interaction != MessageActionsInteraction.dragAndRelease;
     return Positioned(
       left: _menuRect.left,
       top: _menuRect.top,
@@ -456,7 +457,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         opacity: eased,
         child: Transform.scale(
           scale: scale,
-          alignment: isClick
+          alignment: tapAnchored
               ? Alignment(-1.0, _showBelow ? -1.0 : 1.0)
               : Alignment(
                   widget.isMe ? 1.0 : -1.0,
@@ -476,7 +477,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                   _ListMenuItem(
                     action: _actions[i],
                     highlighted: _hoveredIndex == i,
-                    onHoverChanged: isClick
+                    onHoverChanged: tapAnchored
                         ? (hovered) {
                             if (hovered) {
                               if (_hoveredIndex != i) {

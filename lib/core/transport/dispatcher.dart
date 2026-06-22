@@ -17,9 +17,21 @@ class PacketDispatcher {
   final Map<int, PacketHandler> _pushHandlers = {};
 
   final _pushController = StreamController<Packet>.broadcast();
+  final _errorController = StreamController<String>.broadcast();
 
   /// Стрим всех входящих пушей (cmd == 1)
   Stream<Packet> get pushStream => _pushController.stream;
+
+  Stream<String> get errorStream => _errorController.stream;
+
+  static String? _serverErrorText(dynamic payload) {
+    if (payload is! Map) return null;
+    for (final key in ['localizedMessage', 'title']) {
+      final v = payload[key];
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    }
+    return null;
+  }
 
   Timer? _cleanupTimer;
 
@@ -60,9 +72,21 @@ class PacketDispatcher {
     if (packet.cmd == CmdType.ok ||
         packet.cmd == CmdType.error ||
         packet.cmd == CmdType.notFound) {
+      final payloadLog = packet.opcode == Opcode.login
+          ? '<скрыто: ответ login>'
+          : payloadForLog(packet.payload);
       logger.i(
-        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${payloadForLog(packet.payload)}}',
+        '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: $payloadLog}',
       );
+
+      if (packet.isError) {
+        final isSessionExpired = packet.payload is Map &&
+            packet.payload['message'] == 'FAIL_LOGIN_TOKEN';
+        final serverText = _serverErrorText(packet.payload);
+        if (serverText != null && !isSessionExpired) {
+          _errorController.add(serverText);
+        }
+      }
 
       final completer = _pendingRequests.remove(packet.seq);
       _requestTimestamps.remove(packet.seq);
@@ -130,5 +154,6 @@ class PacketDispatcher {
     _cleanupTimer?.cancel();
     clearPending();
     _pushController.close();
+    _errorController.close();
   }
 }

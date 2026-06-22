@@ -386,9 +386,7 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    return GestureDetector(
-      onTap: Haptics.tap,
-      child: Padding(
+    return Padding(
         padding: EdgeInsets.only(
           left: 12,
           right: 12,
@@ -453,8 +451,7 @@ class MessageBubble extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Map? _resolveReactionInfo() {

@@ -217,9 +217,12 @@ class KometAppState extends State<KometApp>
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
   StreamSubscription<IncomingCall>? _callIncomingSub;
+  StreamSubscription<String>? _serverErrorSub;
   Timer? _scheduleTimer;
   String? _lastVpnNotice;
   DateTime _lastVpnNoticeAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _lastServerError;
+  DateTime _lastServerErrorAt = DateTime.fromMillisecondsSinceEpoch(0);
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
     widget.initialFpsOverlay,
   );
@@ -325,6 +328,21 @@ class KometAppState extends State<KometApp>
         showCustomNotificationOnOverlay(overlay, msg);
       }
     });
+
+    _serverErrorSub = api.errorStream.listen((msg) {
+      final now = DateTime.now();
+      if (msg == _lastServerError &&
+          now.difference(_lastServerErrorAt).inSeconds < 3) {
+        return;
+      }
+      _lastServerError = msg;
+      _lastServerErrorAt = now;
+
+      final overlay = KometApp.navigatorKey.currentState?.overlay;
+      if (overlay != null) {
+        showCustomNotificationOnOverlay(overlay, msg);
+      }
+    });
   }
 
   Future<void> _onIncomingCall(IncomingCall call) async {
@@ -348,6 +366,7 @@ class KometAppState extends State<KometApp>
     _loginStatusSub?.cancel();
     _vpnBypassSub?.cancel();
     _callIncomingSub?.cancel();
+    _serverErrorSub?.cancel();
     _scheduleTimer?.cancel();
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);

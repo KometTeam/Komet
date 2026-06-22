@@ -1,23 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-void showCustomNotification(BuildContext context, String message) {
-  showCustomNotificationOnOverlay(Overlay.of(context), message);
+const Duration _defaultNotificationDuration = Duration(milliseconds: 2600);
+
+void showCustomNotification(
+  BuildContext context,
+  String message, {
+  Duration? duration,
+}) {
+  showCustomNotificationOnOverlay(
+    Overlay.of(context),
+    message,
+    duration: duration,
+  );
 }
 
-void showCustomNotificationOnOverlay(OverlayState overlay, String message) {
+void showCustomNotificationOnOverlay(
+  OverlayState overlay,
+  String message, {
+  Duration? duration,
+}) {
+  final total = duration ?? _defaultNotificationDuration;
   final entry = OverlayEntry(
-    builder: (context) => CustomNotification(message: message),
+    builder: (context) => CustomNotification(message: message, duration: total),
   );
   overlay.insert(entry);
-  Future.delayed(const Duration(milliseconds: 2600), () {
+  Future.delayed(total, () {
     if (entry.mounted) entry.remove();
   });
 }
 
 class CustomNotification extends StatefulWidget {
   final String message;
-  const CustomNotification({required this.message, super.key});
+  final Duration duration;
+  const CustomNotification({
+    required this.message,
+    this.duration = _defaultNotificationDuration,
+    super.key,
+  });
 
   @override
   State<CustomNotification> createState() => _CustomNotificationState();
@@ -38,7 +58,8 @@ class _CustomNotificationState extends State<CustomNotification>
     );
     _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
-    Future.delayed(const Duration(milliseconds: 2300), () {
+    final fadeOutDelay = widget.duration - const Duration(milliseconds: 300);
+    Future.delayed(fadeOutDelay > Duration.zero ? fadeOutDelay : Duration.zero, () {
       if (mounted) _controller.reverse();
     });
   }

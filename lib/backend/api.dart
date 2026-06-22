@@ -57,6 +57,7 @@ class Api {
       _sessionExpiredController.stream;
   Stream<String> get handshakeSuccessStream =>
       _handshakeSuccessController.stream;
+  Stream<String> get errorStream => _dispatcher.errorStream;
   SessionState get state => _sessionState;
 
   StreamSubscription<Uint8List>? _dataSubscription;
