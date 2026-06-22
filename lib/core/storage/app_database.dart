@@ -712,6 +712,25 @@ class AppDatabase {
     );
   }
 
+  static Future<List<Map<String, dynamic>>> loadMessagesBefore(
+    int accountId,
+    int chatId, {
+    required int beforeTime,
+    int limit = 30,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: onlyVisible
+          ? 'account_id = ? AND chat_id = ? AND deleted = 0 AND time < ?'
+          : 'account_id = ? AND chat_id = ? AND time < ?',
+      whereArgs: [accountId, chatId, beforeTime],
+      orderBy: 'time DESC',
+      limit: limit,
+    );
+  }
+
   static Future<void> markMessageDeleted(
     int accountId,
     int chatId,
