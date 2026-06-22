@@ -16,6 +16,7 @@ import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
+import 'package:komet/frontend/screens/chats/forward_picker_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
@@ -994,7 +995,49 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _forwardSelected() {
-    showCustomNotification(context, 'Пересылка — пока в разработке');
+    final msgs = _selectedMessages(_selectedIds.value);
+    _clearSelection();
+    unawaited(_forwardMessages(msgs));
+  }
+
+  Future<void> _forwardMessages(List<CachedMessage> msgs) async {
+    final forwardable =
+        msgs.where((m) => !m.id.startsWith('temp_')).toList();
+    if (forwardable.isEmpty) {
+      showCustomNotification(context, 'Нечего пересылать');
+      return;
+    }
+
+    final target = await showForwardPicker(
+      context: context,
+      accountId: _myId,
+      messageCount: forwardable.length,
+    );
+    if (target == null || !mounted) return;
+
+    final ordered = [...forwardable]..sort((a, b) => a.time.compareTo(b.time));
+    var ok = 0;
+    for (final m in ordered) {
+      final mid = int.tryParse(m.id);
+      if (mid == null) continue;
+      try {
+        await messagesModule.forwardMessage(target.chatId, widget.chatId, mid);
+        ok++;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    if (ok == 0) {
+      Haptics.error();
+      showCustomNotification(context, 'Не удалось переслать');
+      return;
+    }
+    Haptics.send();
+    showCustomNotification(
+      context,
+      target.chatId == widget.chatId
+          ? 'Переслано'
+          : 'Переслано в «${target.name}»',
+    );
   }
 
   Widget _buildComposerArea(BuildContext context) {
@@ -2950,6 +2993,9 @@ class _ChatScreenState extends State<ChatScreen>
                   onReply: message.isControl
                       ? null
                       : () => _startReply(message),
+                  onForward: message.isControl
+                      ? null
+                      : () => _forwardMessages([message]),
                   child: bubble,
                 );
 
@@ -4541,6 +4587,7 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
+  final VoidCallback? onForward;
 
   const _SelectableMessageRow({
     required this.child,
@@ -4554,6 +4601,7 @@ class _SelectableMessageRow extends StatefulWidget {
     required this.onDelete,
     this.onEdit,
     this.onReply,
+    this.onForward,
   });
 
   @override
@@ -4600,6 +4648,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
       onReply: widget.onReply,
+      onForward: widget.onForward,
       onDispose: controller.dispose,
     );
   }
@@ -4626,6 +4675,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
       onReply: widget.onReply,
+      onForward: widget.onForward,
       onDispose: controller.dispose,
     );
   }

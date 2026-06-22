@@ -688,6 +688,55 @@ class MessagesModule {
     return '';
   }
 
+  /// Пересылает сообщение [messageId] из чата [sourceChatId] в [targetChatId].
+  ///
+  /// Пересылка — это отдельное сообщение без текста и вложений, со ссылкой
+  /// `link.type = FORWARD`, указывающей на оригинал. Сервер сам подставит
+  /// тело оригинала в ответе.
+  Future<String> forwardMessage(
+    int targetChatId,
+    int sourceChatId,
+    int messageId, {
+    bool notify = true,
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': [],
+      'attaches': [],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'link': {
+        'type': 'FORWARD',
+        'chatId': sourceChatId,
+        'messageId': messageId,
+      },
+    };
+    final payload = {
+      'chatId': targetChatId,
+      'message': message,
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) {
+      final msg = (response.payload is Map)
+          ? (response.payload['localizedMessage'] ??
+                response.payload['message'] ??
+                'Ошибка пересылки')
+          : 'Ошибка пересылки';
+      throw Exception(msg.toString());
+    }
+    final data = response.payload;
+    if (data is Map) {
+      final msgMap = data['message'];
+      if (msgMap is Map) {
+        final id = msgMap['id'];
+        if (id != null) return id.toString();
+      }
+    }
+    return '';
+  }
+
   /// Загружает отложенные (запланированные) сообщения чата.
   ///
   /// В отличие от обычной истории, отложенные сообщения не сохраняются

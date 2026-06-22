@@ -76,6 +76,7 @@ void showMessageActions({
   VoidCallback? onDelete,
   VoidCallback? onEdit,
   VoidCallback? onReply,
+  VoidCallback? onForward,
   MessageActionsInteraction interaction = MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
@@ -93,6 +94,7 @@ void showMessageActions({
       onDelete: onDelete,
       onEdit: onEdit,
       onReply: onReply,
+      onForward: onForward,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -115,6 +117,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
+  final VoidCallback? onForward;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -129,6 +132,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onDelete,
     this.onEdit,
     this.onReply,
+    this.onForward,
   });
 
   @override
@@ -297,7 +301,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         _Action(Symbols.edit, 'Изменить', _edit),
       if (widget.onReply != null)
         _Action(Symbols.reply, 'Ответить', _reply),
-      _Action(Symbols.forward, 'Переслать', () => _stub('Пересылка')),
+      if (widget.onForward != null)
+        _Action(Symbols.forward, 'Переслать', _forward),
       _Action(
         Symbols.delete,
         'Удалить',
@@ -379,10 +384,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     onReply?.call();
   }
 
-  Future<void> _stub(String name) async {
-    if (!mounted) return;
-    showCustomNotification(context, '$name — пока в разработке');
+  Future<void> _forward() async {
+    final onForward = widget.onForward;
     await _close();
+    onForward?.call();
   }
 
   @override
