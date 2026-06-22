@@ -1111,7 +1111,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _replySelected() {
-    showCustomNotification(context, 'Ответ — пока в разработке');
+    final msgs = _selectedMessages(_selectedIds.value);
+    if (msgs.isEmpty) return;
+    final message = msgs.first;
+    _clearSelection();
+    _startReply(message);
   }
 
   void _forwardSelected() {
