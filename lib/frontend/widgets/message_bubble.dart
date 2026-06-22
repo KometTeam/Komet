@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
@@ -53,6 +54,22 @@ class _BubbleCtx {
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
 final Expando<({bool full, String text})> _clockTextCache = Expando();
+
+class _ZeroIntrinsicWidth extends SingleChildRenderObjectWidget {
+  const _ZeroIntrinsicWidth({required Widget super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderZeroIntrinsicWidth();
+}
+
+class _RenderZeroIntrinsicWidth extends RenderProxyBox {
+  @override
+  double computeMinIntrinsicWidth(double height) => 0;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) => 0;
+}
 
 class MessageBubble extends StatelessWidget {
   static const double photoMaxSize = 280.0;
@@ -375,14 +392,24 @@ class MessageBubble extends StatelessWidget {
     final reply = message.replyInfo;
     Widget withReply(Widget content) {
       if (reply == null) return content;
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildReplyQuote(context, cs, textColor, reply),
-          const SizedBox(height: 4),
-          content,
-        ],
+      final quote = _buildReplyQuote(context, cs, textColor, reply);
+      if (contentType != MessageType.text) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [quote, const SizedBox(height: 4), content],
+        );
+      }
+      return IntrinsicWidth(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ZeroIntrinsicWidth(child: quote),
+            const SizedBox(height: 4),
+            content,
+          ],
+        ),
       );
     }
 

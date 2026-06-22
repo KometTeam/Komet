@@ -31,6 +31,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
@@ -181,6 +182,13 @@ class _ChatScreenState extends State<ChatScreen>
   List<CachedMessage> _messages = [];
   final ValueNotifier<int> _messagesRev = ValueNotifier(0);
   final Set<String> _deletingIds = {};
+
+  static const int _historyPageSize = 30;
+  static const int _historyInitialLimit = 50;
+  static const double _avgMessageHeight = 72.0;
+  static const double _historyPrefetchExtent = _avgMessageHeight * 8;
+  bool _isLoadingMore = false;
+  bool _hasMoreHistory = true;
   List<Object>? _combinedItemsCache;
   int? _combinedItemsKey;
   bool _floatingDateScheduled = false;
@@ -208,6 +216,7 @@ class _ChatScreenState extends State<ChatScreen>
     ChatsModule.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
     _scrollController.addListener(_onScrollForDate);
+    _scrollController.addListener(_maybeLoadMoreHistory);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
     _shimmerController = AnimationController(
       vsync: this,
@@ -291,6 +300,19 @@ class _ChatScreenState extends State<ChatScreen>
           }
         })
         .catchError((_) {});
+
+    final cached = MessageSessionCache.get(_myId, widget.chatId);
+    if (cached != null && cached.messages.isNotEmpty) {
+      setState(() {
+        _messages = List<CachedMessage>.of(cached.messages);
+        _hasMoreHistory = !cached.reachedStart;
+        _messagesRev.value++;
+        _isLoading = false;
+        _onLoadingFinished();
+      });
+      _syncReactionNotifiersFromMessages();
+      return;
+    }
 
     final firstRows = await AppDatabase.loadMessages(
       _myId,
@@ -417,11 +439,11 @@ class _ChatScreenState extends State<ChatScreen>
     final fullRows = await AppDatabase.loadMessages(
       _myId,
       widget.chatId,
-      limit: 100,
+      limit: _historyInitialLimit,
       onlyVisible: onlyVisible,
     );
     final fullDecoded = await CachedMessage.fromDbRowsAsync(fullRows);
-    if (mounted && fullDecoded.length > _messages.length) {
+    if (mounted) {
       _applyMergedMessages(fullDecoded);
     }
 
@@ -459,7 +481,7 @@ class _ChatScreenState extends State<ChatScreen>
       final updatedRows = await AppDatabase.loadMessages(
         _myId,
         widget.chatId,
-        limit: 100,
+        limit: _historyInitialLimit,
         onlyVisible: onlyVisible,
       );
       final updatedDecoded = await CachedMessage.fromDbRowsAsync(updatedRows);
@@ -481,19 +503,123 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  void _maybeLoadMoreHistory() {
+    if (!_scrollController.hasClients) return;
+    if (_isLoading || _isLoadingMore || !_hasMoreHistory) return;
+    if (_messages.isEmpty) return;
+    final pos = _scrollController.position;
+    if (pos.maxScrollExtent <= 0) return;
+    if (pos.maxScrollExtent - pos.pixels <= _historyPrefetchExtent) {
+      unawaited(_loadMoreHistory());
+    }
+  }
+
+  Future<void> _loadMoreHistory() async {
+    if (_isLoadingMore || !_hasMoreHistory || _messages.isEmpty) return;
+    _isLoadingMore = true;
+    setState(() {});
+
+    final oldest = _messages.first;
+    final onlyVisible = !KometSettings.viewDeleted.value;
+
+    try {
+      var older = await _loadOlderFromDb(oldest.time, onlyVisible);
+
+      if (older.length < _historyPageSize) {
+        final fetched = await messagesModule.fetchHistory(
+          _myId,
+          widget.chatId,
+          fromTime: oldest.time,
+          count: _historyPageSize,
+        );
+        if (fetched.isNotEmpty) {
+          if (KometSettings.viewDeleted.value) {
+            await ChatsModule.reconcileDeletedFromFetch(
+              _myId,
+              widget.chatId,
+              fetched,
+            );
+          }
+          older = await _loadOlderFromDb(oldest.time, onlyVisible);
+        }
+      }
+
+      if (!mounted) return;
+      final added = _prependOlder(older);
+      setState(() {
+        _isLoadingMore = false;
+        if (added == 0) _hasMoreHistory = false;
+      });
+      _persistSessionCache();
+    } catch (e) {
+      logger.e('Error loading more history: $e');
+      if (mounted) setState(() => _isLoadingMore = false);
+    }
+  }
+
+  Future<List<CachedMessage>> _loadOlderFromDb(
+    int beforeTime,
+    bool onlyVisible,
+  ) async {
+    final rows = await AppDatabase.loadMessagesBefore(
+      _myId,
+      widget.chatId,
+      beforeTime: beforeTime,
+      limit: _historyPageSize,
+      onlyVisible: onlyVisible,
+    );
+    return CachedMessage.fromDbRowsAsync(rows);
+  }
+
+  int _prependOlder(List<CachedMessage> olderDesc) {
+    if (olderDesc.isEmpty) return 0;
+    final existing = _messages.map((m) => m.id).toSet();
+    final toAdd = <CachedMessage>[];
+    for (final m in olderDesc.reversed) {
+      if (existing.add(m.id)) toAdd.add(m);
+    }
+    if (toAdd.isEmpty) return 0;
+    _messages = [...toAdd, ..._messages];
+    _messagesRev.value++;
+    _syncReactionNotifiersFromMessages();
+    return toAdd.length;
+  }
+
+  void _persistSessionCache() {
+    if (_myId == 0 || _messages.isEmpty) return;
+    MessageSessionCache.save(
+      _myId,
+      widget.chatId,
+      _messages,
+      reachedStart: !_hasMoreHistory,
+    );
+  }
+
   void _applyMergedMessages(
     List<CachedMessage> decodedDesc, {
     bool markLoaded = false,
   }) {
     final byId = <String, CachedMessage>{for (final m in _messages) m.id: m};
-    final merged = <CachedMessage>[];
-    for (final fresh in decodedDesc.reversed) {
+    var changed = false;
+    for (final fresh in decodedDesc) {
       final old = byId[fresh.id];
-      merged.add(old != null && _sameMessage(old, fresh) ? old : fresh);
+      if (old == null) {
+        byId[fresh.id] = fresh;
+        changed = true;
+      } else if (!_sameMessage(old, fresh)) {
+        byId[fresh.id] = fresh;
+        changed = true;
+      }
     }
 
-    final changed = !_listsEquivalent(_messages, merged);
     if (!changed && !markLoaded) return;
+
+    final merged = byId.values.toList()
+      ..sort((a, b) {
+        final byTime = a.time.compareTo(b.time);
+        return byTime != 0 ? byTime : a.id.compareTo(b.id);
+      });
+
     setState(() {
       if (changed) {
         _messages = merged;
@@ -507,6 +633,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (changed) {
       _syncReactionNotifiersFromMessages();
       _pruneReactionNotifiers();
+      _persistSessionCache();
     }
   }
 
@@ -542,14 +669,6 @@ class _ChatScreenState extends State<ChatScreen>
         a.deleted == b.deleted;
   }
 
-  bool _listsEquivalent(List<CachedMessage> a, List<CachedMessage> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (!identical(a[i], b[i])) return false;
-    }
-    return true;
-  }
-
   @override
   void deactivate() {
     _saveDraft();
@@ -567,6 +686,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    _persistSessionCache();
     if (_previewChat) {
       unawaited(ChatsModule.subscribeChat(api, widget.chatId, subscribe: false));
     }
@@ -576,6 +696,7 @@ class _ChatScreenState extends State<ChatScreen>
     _saveDraft();
     _messageController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScrollForDate);
+    _scrollController.removeListener(_maybeLoadMoreHistory);
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     _floatingDateTimer?.cancel();
     _floatingDateCurved.dispose();
@@ -991,7 +1112,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _replySelected() {
-    showCustomNotification(context, 'Ответ — пока в разработке');
+    final msgs = _selectedMessages(_selectedIds.value);
+    if (msgs.isEmpty) return;
+    final message = msgs.first;
+    _clearSelection();
+    _startReply(message);
   }
 
   void _forwardSelected() {
@@ -2916,6 +3041,23 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Widget _buildLoadMoreIndicator() {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.2,
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessagesListContent() {
     if (_messages.isEmpty) {
       return Center(
@@ -2942,8 +3084,11 @@ class _ChatScreenState extends State<ChatScreen>
               reverse: true,
               padding: const EdgeInsets.symmetric(vertical: 8),
               cacheExtent: cacheExtent,
-              itemCount: items.length,
+              itemCount: items.length + (_isLoadingMore ? 1 : 0),
               itemBuilder: (context, index) {
+                if (index >= items.length) {
+                  return _buildLoadMoreIndicator();
+                }
                 final item = items[items.length - 1 - index];
 
                 if (item is _DateSeparatorItem) {
