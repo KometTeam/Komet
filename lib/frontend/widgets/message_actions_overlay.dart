@@ -75,6 +75,7 @@ void showMessageActions({
   required VoidCallback onDispose,
   VoidCallback? onDelete,
   VoidCallback? onEdit,
+  VoidCallback? onReply,
   MessageActionsInteraction interaction = MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
@@ -91,6 +92,7 @@ void showMessageActions({
       interaction: interaction,
       onDelete: onDelete,
       onEdit: onEdit,
+      onReply: onReply,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -112,6 +114,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback onDismiss;
   final VoidCallback? onDelete;
   final VoidCallback? onEdit;
+  final VoidCallback? onReply;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -125,6 +128,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.onDismiss,
     this.onDelete,
     this.onEdit,
+    this.onReply,
   });
 
   @override
@@ -291,7 +295,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       if (hasText) _Action(Symbols.content_copy, 'Копировать', _copy),
       if (widget.isMe && widget.onEdit != null)
         _Action(Symbols.edit, 'Изменить', _edit),
-      _Action(Symbols.reply, 'Ответить', () => _stub('Ответ')),
+      if (widget.onReply != null)
+        _Action(Symbols.reply, 'Ответить', _reply),
       _Action(Symbols.forward, 'Переслать', () => _stub('Пересылка')),
       _Action(
         Symbols.delete,
@@ -366,6 +371,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final onEdit = widget.onEdit;
     await _close();
     onEdit?.call();
+  }
+
+  Future<void> _reply() async {
+    final onReply = widget.onReply;
+    await _close();
+    onReply?.call();
   }
 
   Future<void> _stub(String name) async {

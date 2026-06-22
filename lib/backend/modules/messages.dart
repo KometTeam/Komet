@@ -256,6 +256,89 @@ class VideoUploadInfo {
   });
 }
 
+class ReplyInfo {
+  final String? messageId;
+  final int senderId;
+  final String? text;
+  final int? time;
+  final List<MessageAttachment>? attachments;
+
+  const ReplyInfo({
+    this.messageId,
+    required this.senderId,
+    this.text,
+    this.time,
+    this.attachments,
+  });
+
+  static ReplyInfo? fromPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+    final link = payload['link'];
+    if (link is! Map) return null;
+    if ((link['type'] as String?)?.toUpperCase() != 'REPLY') return null;
+
+    final msg = link['message'];
+    if (msg is! Map) {
+      final mid = link['messageId'];
+      if (mid == null) return null;
+      return ReplyInfo(messageId: mid.toString(), senderId: 0);
+    }
+
+    List<MessageAttachment>? attaches;
+    final raw = msg['attaches'];
+    if (raw is List && raw.isNotEmpty) {
+      attaches = raw
+          .whereType<Map>()
+          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+          .toList();
+    }
+
+    final sender = msg['sender'];
+    return ReplyInfo(
+      messageId: msg['id']?.toString(),
+      senderId: sender is int
+          ? sender
+          : int.tryParse(sender?.toString() ?? '') ?? 0,
+      text: msg['text']?.toString(),
+      time: msg['time'] is int ? msg['time'] as int : null,
+      attachments: attaches,
+    );
+  }
+
+  String previewText() {
+    final t = text;
+    if (t != null && t.trim().isNotEmpty) return t;
+    final a = attachments;
+    if (a != null && a.isNotEmpty) {
+      switch (a.first.type) {
+        case AttachmentType.photo:
+          return 'Фото';
+        case AttachmentType.video:
+          return 'Видео';
+        case AttachmentType.audio:
+          return 'Голосовое сообщение';
+        case AttachmentType.file:
+          return 'Файл';
+        case AttachmentType.sticker:
+          return 'Стикер';
+        case AttachmentType.contact:
+          return 'Контакт';
+        case AttachmentType.location:
+          return 'Геолокация';
+        case AttachmentType.poll:
+          return 'Опрос';
+        case AttachmentType.call:
+          return 'Звонок';
+        case AttachmentType.share:
+          return 'Ссылка';
+        case AttachmentType.control:
+          return '';
+      }
+    }
+    return '';
+  }
+}
+
 class CachedMessage {
   final String id;
   final int accountId;
@@ -366,6 +449,8 @@ class CachedMessage {
   }
 
   bool get isDelayed => delayedTimeToFire != null;
+
+  ReplyInfo? get replyInfo => ReplyInfo.fromPayload(payload);
 
   static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
       rows.map(CachedMessage.fromDbRow).toList();
@@ -556,6 +641,7 @@ class MessagesModule {
     String text, {
     bool notify = true,
     int? scheduledTime,
+    int? replyToMessageId,
   }) async {
     final message = <String, dynamic>{
       'text': text,
@@ -563,6 +649,13 @@ class MessagesModule {
       'elements': [],
       'attaches': [],
     };
+    if (replyToMessageId != null) {
+      message['link'] = {
+        'type': 'REPLY',
+        'chatId': chatId,
+        'messageId': replyToMessageId,
+      };
+    }
     if (scheduledTime != null) {
       message['delayedAttributes'] = {
         'timeToFire': scheduledTime,

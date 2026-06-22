@@ -151,6 +151,9 @@ class _ChatScreenState extends State<ChatScreen>
   int? _otherSeenTime;
   int? _participantsCount;
 
+  final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
+  final ValueNotifier<String?> _highlightMessageId = ValueNotifier(null);
+
   bool _prankActive = false;
   String? _prankBubbleId;
   final GlobalKey _prankBubbleKey = GlobalKey();
@@ -599,6 +602,8 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.dispose();
     _shimmerStartTimer?.cancel();
     _shimmerController.dispose();
+    _replyTo.dispose();
+    _highlightMessageId.dispose();
     super.dispose();
   }
 
@@ -1511,6 +1516,26 @@ class _ChatScreenState extends State<ChatScreen>
     final now = DateTime.now().millisecondsSinceEpoch;
     final online = api.state == SessionState.online;
 
+    final reply = _replyTo.value;
+    final int? replyId = reply == null ? null : int.tryParse(reply.id);
+    Map<String, dynamic>? replyPayload;
+    if (reply != null && replyId != null) {
+      replyPayload = {
+        'link': {
+          'type': 'REPLY',
+          'chatId': widget.chatId,
+          'message': {
+            'id': replyId,
+            'sender': reply.senderId,
+            'text': reply.text,
+            'time': reply.time,
+            'attaches': reply.payload?['attaches'] ?? const [],
+          },
+        },
+      };
+    }
+    _replyTo.value = null;
+
     final composed = CachedMessage(
       id: tempId,
       accountId: _myId,
@@ -1519,6 +1544,7 @@ class _ChatScreenState extends State<ChatScreen>
       text: text,
       time: now,
       status: online ? 'sending' : 'pending',
+      payload: replyPayload,
     );
 
     _hasText.value = false;
@@ -1553,6 +1579,7 @@ class _ChatScreenState extends State<ChatScreen>
         _myId,
         widget.chatId,
         text,
+        replyToMessageId: replyId,
       );
 
       final index = _messages.indexWhere((m) => m.id == tempId);
@@ -1565,6 +1592,7 @@ class _ChatScreenState extends State<ChatScreen>
           text: text,
           time: now,
           status: 'sent',
+          payload: replyPayload,
         );
         _messages[index] = sent;
         _bumpMessages();
@@ -1599,6 +1627,7 @@ class _ChatScreenState extends State<ChatScreen>
           text: text,
           time: now,
           status: 'pending',
+          payload: replyPayload,
         );
         _messages[index] = queued;
         _bumpMessages();
@@ -1861,6 +1890,46 @@ class _ChatScreenState extends State<ChatScreen>
       }
     });
   }
+
+  void _startReply(CachedMessage message) {
+    _replyTo.value = message;
+    _messageFocusNode.requestFocus();
+  }
+
+  void _cancelReply() {
+    _replyTo.value = null;
+  }
+
+  void _jumpToMessage(String messageId) {
+    final index = _messages.indexWhere((m) => m.id == messageId);
+    if (index == -1) {
+      showCustomNotification(context, 'Сообщение не загружено');
+      return;
+    }
+
+    final key = _keyForMessage(messageId);
+    final ctx = key.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+        alignment: 0.4,
+      );
+    }
+
+    _highlightMessageId.value = messageId;
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (_highlightMessageId.value == messageId) {
+        _highlightMessageId.value = null;
+      }
+    });
+  }
+
+  final Map<String, GlobalKey> _messageKeys = {};
+
+  GlobalKey _keyForMessage(String messageId) =>
+      _messageKeys.putIfAbsent(messageId, () => GlobalKey());
 
   List<Object> _buildCombinedItems() {
     final key = Object.hash(_messagesRev.value, _messages.length);
@@ -2358,6 +2427,7 @@ class _ChatScreenState extends State<ChatScreen>
                   overrideStatus: _effectiveStatus(message),
                   reactionsListenable: _reactionNotifierFor(message),
                   uploadProgress: _photoProgressFor(message),
+                  onReplyTap: _jumpToMessage,
                 );
 
                 final pressable = _LongPressBubble(
@@ -2367,15 +2437,28 @@ class _ChatScreenState extends State<ChatScreen>
                   onEdit: _canEditMessage(message)
                       ? () => _startEditMessage(message)
                       : null,
+                  onReply: message.isControl
+                      ? null
+                      : () => _startReply(message),
                   child: bubble,
                 );
+
+                final isChannel =
+                    (chat?.type ?? widget.chatType) == 'CHANNEL';
+                final swipeable = (message.isControl || isChannel)
+                    ? pressable
+                    : _SwipeToReply(
+                        isMe: isMe,
+                        onReply: () => _startReply(message),
+                        child: pressable,
+                      );
 
                 final Widget child;
                 if (_deletingIds.contains(message.id)) {
                   child = _DeletingMessageAnimation(
                     key: ValueKey('del_${message.id}'),
                     onComplete: () => _finalizeDelete(message.id),
-                    child: IgnorePointer(child: pressable),
+                    child: IgnorePointer(child: swipeable),
                   );
                 } else if (message.id == _lastSentId) {
                   child = _SentMessageAnimation(
@@ -2386,15 +2469,32 @@ class _ChatScreenState extends State<ChatScreen>
                         _bumpMessages();
                       }
                     },
-                    child: pressable,
+                    child: swipeable,
                   );
                 } else {
-                  child = pressable;
+                  child = swipeable;
                 }
+
+                final highlightable = ValueListenableBuilder<String?>(
+                  valueListenable: _highlightMessageId,
+                  builder: (context, hl, c) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    color: hl == message.id
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.12)
+                        : Colors.transparent,
+                    child: c,
+                  ),
+                  child: child,
+                );
 
                 final builtItem = RepaintBoundary(
                   key: ValueKey('msg_${message.id}'),
-                  child: child,
+                  child: KeyedSubtree(
+                    key: _keyForMessage(message.id),
+                    child: highlightable,
+                  ),
                 );
                 return message.id == _prankBubbleId
                     ? KeyedSubtree(key: _prankBubbleKey, child: builtItem)
@@ -2573,11 +2673,18 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildReplyPreview(cs),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 8.0,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
             Expanded(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -2763,7 +2870,71 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ],
         ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildReplyPreview(ColorScheme cs) {
+    return ValueListenableBuilder<CachedMessage?>(
+      valueListenable: _replyTo,
+      builder: (context, reply, _) {
+        if (reply == null) return const SizedBox.shrink();
+        final name = reply.senderId == _myId
+            ? 'Вы'
+            : (ContactCache.get(reply.senderId) ?? 'Сообщение');
+        final info = ReplyInfo(
+          senderId: reply.senderId,
+          text: reply.text,
+          attachments: reply.attachments,
+        );
+        final preview = info.previewText();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+          child: Row(
+            children: [
+              Icon(Symbols.reply, size: 20, color: cs.primary),
+              const SizedBox(width: 10),
+              Container(width: 2, height: 34, color: cs.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ответ $name',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (preview.isNotEmpty)
+                      Text(
+                        preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Symbols.close, size: 20),
+                color: cs.onSurfaceVariant,
+                onPressed: _cancelReply,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -3749,12 +3920,112 @@ IconData _iconForFilename(String? name) {
   }
 }
 
+class _SwipeToReply extends StatefulWidget {
+  final Widget child;
+  final bool isMe;
+  final VoidCallback onReply;
+
+  const _SwipeToReply({
+    required this.child,
+    required this.isMe,
+    required this.onReply,
+  });
+
+  @override
+  State<_SwipeToReply> createState() => _SwipeToReplyState();
+}
+
+class _SwipeToReplyState extends State<_SwipeToReply>
+    with SingleTickerProviderStateMixin {
+  static const double _maxDrag = 72.0;
+  static const double _triggerThreshold = 56.0;
+
+  late final AnimationController _springBack;
+  double _dragX = 0.0;
+  double _springFrom = 0.0;
+  bool _triggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _springBack = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..addListener(() {
+      final t = Curves.easeOut.transform(_springBack.value);
+      setState(() => _dragX = _springFrom * (1 - t));
+    });
+  }
+
+  @override
+  void dispose() {
+    _springBack.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (_springBack.isAnimating) _springBack.stop();
+    var next = _dragX + d.delta.dx;
+    if (next > 0) next = 0;
+    if (next < -_maxDrag) next = -_maxDrag;
+    final wasTriggered = _triggered;
+    _triggered = next <= -_triggerThreshold;
+    if (_triggered && !wasTriggered) Haptics.medium();
+    setState(() => _dragX = next);
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    if (_triggered) widget.onReply();
+    _triggered = false;
+    _springFrom = _dragX;
+    _springBack.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final progress = (-_dragX / _triggerThreshold).clamp(0.0, 1.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          Positioned(
+            right: 16,
+            child: Opacity(
+              opacity: progress,
+              child: Transform.scale(
+                scale: 0.6 + 0.4 * progress,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Symbols.reply, size: 20, color: cs.primary),
+                ),
+              ),
+            ),
+          ),
+          Transform.translate(
+            offset: Offset(_dragX, 0),
+            child: widget.child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LongPressBubble extends StatefulWidget {
   final Widget child;
   final CachedMessage message;
   final bool isMe;
   final VoidCallback onDelete;
   final VoidCallback? onEdit;
+  final VoidCallback? onReply;
 
   const _LongPressBubble({
     required this.child,
@@ -3762,6 +4033,7 @@ class _LongPressBubble extends StatefulWidget {
     required this.isMe,
     required this.onDelete,
     this.onEdit,
+    this.onReply,
   });
 
   @override
@@ -3814,6 +4086,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       style: AppMessageActionsStyle.current.value,
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
+      onReply: widget.onReply,
       onDispose: () {
         if (identical(_controller, controller)) {
           _controller = null;
@@ -3847,6 +4120,7 @@ class _LongPressBubbleState extends State<_LongPressBubble> {
       interaction: MessageActionsInteraction.click,
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
+      onReply: widget.onReply,
       onDispose: () {
         if (identical(_controller, controller)) {
           _controller = null;

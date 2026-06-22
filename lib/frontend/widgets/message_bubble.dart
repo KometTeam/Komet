@@ -86,6 +86,7 @@ class MessageBubble extends StatelessWidget {
   final String? overrideStatus;
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
   final ValueListenable<List<double>>? uploadProgress;
+  final void Function(String messageId)? onReplyTap;
 
   const MessageBubble({
     super.key,
@@ -98,6 +99,7 @@ class MessageBubble extends StatelessWidget {
     this.overrideStatus,
     this.reactionsListenable,
     this.uploadProgress,
+    this.onReplyTap,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -370,6 +372,20 @@ class MessageBubble extends StatelessWidget {
     final reactionsUnder = _reactionsUnderBubble(contentType);
     final reactionsInside = contentType != MessageType.text && !reactionsUnder;
 
+    final reply = message.replyInfo;
+    Widget withReply(Widget content) {
+      if (reply == null) return content;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildReplyQuote(context, cs, textColor, reply),
+          const SizedBox(height: 4),
+          content,
+        ],
+      );
+    }
+
     return GestureDetector(
       onTap: Haptics.tap,
       child: Padding(
@@ -421,13 +437,15 @@ class MessageBubble extends StatelessWidget {
                       padding: padding,
                       child: child,
                     ),
-                    child: reactionsInside
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [bubbleContent, _reactionsBar(cs)],
-                          )
-                        : bubbleContent,
+                    child: withReply(
+                      reactionsInside
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [bubbleContent, _reactionsBar(cs)],
+                            )
+                          : bubbleContent,
+                    ),
                   ),
                   if (reactionsUnder) _reactionsBar(cs),
                 ],
@@ -701,6 +719,65 @@ class MessageBubble extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildReplyQuote(
+    BuildContext context,
+    ColorScheme cs,
+    Color textColor,
+    ReplyInfo reply,
+  ) {
+    final accent = isMe ? cs.onPrimaryContainer : cs.primary;
+    final name = reply.senderId == myId
+        ? 'Вы'
+        : (ContactCache.get(reply.senderId) ?? 'Сообщение');
+    final preview = reply.previewText();
+
+    final quote = Container(
+      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        color: accent.withValues(alpha: 0.10),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: accent,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (preview.isNotEmpty)
+            Text(
+              preview,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.85),
+                fontSize: 13,
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final mid = reply.messageId;
+    final cb = onReplyTap;
+    if (mid != null && mid != '0' && cb != null) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => cb(mid),
+        child: quote,
+      );
+    }
+    return quote;
   }
 
   Widget _buildForwardedInlineText(
