@@ -138,6 +138,9 @@ class _SpoofScreenState extends State<SpoofScreen> {
     var type = profile.deviceType.isEmpty ? 'ANDROID' : profile.deviceType;
     if (type == 'WEB') type = 'ANDROID';
     _selectedDeviceType = type;
+    if (type == 'IOS' || type == 'DESKTOP') {
+      _selectedMethod = SpoofingMethod.full;
+    }
   }
 
   SpoofProfile _buildProfileFromControllers() {
@@ -237,9 +240,10 @@ class _SpoofScreenState extends State<SpoofScreen> {
   }
 
   Future<void> _applyGeneratedData() async {
-    final filteredPresets = devicePresets
-        .where((p) => p.deviceType == _selectedDeviceType)
-        .toList();
+    final type =
+        _selectedMethod == SpoofingMethod.full ? _selectedDeviceType : 'ANDROID';
+    final filteredPresets =
+        devicePresets.where((p) => p.deviceType == type).toList();
 
     if (filteredPresets.isEmpty) return;
 
@@ -574,6 +578,10 @@ class _SpoofScreenState extends State<SpoofScreen> {
                   if (!confirmed || !mounted) return;
                 }
                 setState(() => _selectedMethod = next);
+                if (next == SpoofingMethod.partial &&
+                    _selectedDeviceType != 'ANDROID') {
+                  _onDeviceTypeChanged('ANDROID');
+                }
                 _syncDeviceLocale();
               },
             ),
@@ -602,21 +610,40 @@ class _SpoofScreenState extends State<SpoofScreen> {
               text: l10n.spoofDeviceTypeDescription,
             ),
             const SizedBox(height: 12),
-            _buildChipSelector<String>(
-              options: const [
-                _ChipOption('ANDROID', 'Android', Icons.android_outlined),
-                _ChipOption('IOS', 'iOS', Icons.phone_iphone_outlined),
-              ],
-              selected: _selectedDeviceType,
-              onSelected: _onDeviceTypeChanged,
-              trailing: [
-                _buildDisabledChip(
-                  'Desktop',
-                  Icons.desktop_windows_outlined,
-                  theme,
-                ),
-              ],
-            ),
+            if (_selectedMethod == SpoofingMethod.full)
+              _buildChipSelector<String>(
+                options: const [
+                  _ChipOption('ANDROID', 'Android', Icons.android_outlined),
+                  _ChipOption('IOS', 'iOS', Icons.phone_iphone_outlined),
+                  _ChipOption(
+                    'DESKTOP',
+                    'Desktop',
+                    Icons.desktop_windows_outlined,
+                  ),
+                ],
+                selected: _selectedDeviceType,
+                onSelected: _onDeviceTypeChanged,
+              )
+            else
+              _buildChipSelector<String>(
+                options: const [
+                  _ChipOption('ANDROID', 'Android', Icons.android_outlined),
+                ],
+                selected: 'ANDROID',
+                onSelected: _onDeviceTypeChanged,
+                trailing: [
+                  _buildDisabledChip(
+                    'iOS',
+                    Icons.phone_iphone_outlined,
+                    theme,
+                  ),
+                  _buildDisabledChip(
+                    'Desktop',
+                    Icons.desktop_windows_outlined,
+                    theme,
+                  ),
+                ],
+              ),
           ],
         ),
       ),

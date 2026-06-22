@@ -80,12 +80,12 @@ class SpoofingService {
       }
     }
 
-    bool isMobile(DevicePreset p) =>
-        p.deviceType == 'ANDROID' || p.deviceType == 'IOS';
+    bool isAndroid(DevicePreset p) => p.deviceType == 'ANDROID';
     final fresh = devicePresets
-        .where((p) => isMobile(p) && !used.contains(p.deviceName))
+        .where((p) => isAndroid(p) && !used.contains(p.deviceName))
         .toList();
-    final pool = fresh.isNotEmpty ? fresh : devicePresets.where(isMobile).toList();
+    final pool =
+        fresh.isNotEmpty ? fresh : devicePresets.where(isAndroid).toList();
     final preset = pool[_rng.nextInt(pool.length)];
     final shortLocale = preset.locale.split(RegExp(r'[-_]')).first;
 
@@ -99,7 +99,7 @@ class SpoofingService {
       deviceLocale: shortLocale,
       deviceId: _hex(8),
       deviceType: preset.deviceType,
-      arch: preset.deviceType == 'IOS' ? 'arm64' : 'arm64-v8a',
+      arch: 'arm64-v8a',
       appVersion: hardcodedAppVersion,
       buildNumber: hardcodedBuildNumber,
       pushDeviceType: 'GCM',
