@@ -201,7 +201,6 @@ class Api {
       );
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
-      deviceType = 'IOS';
       osVersion = iosInfo.systemVersion;
       deviceName = iosInfo.utsname.machine;
     } else if (Platform.isAndroid) {
@@ -220,7 +219,8 @@ class Api {
 
     final spoofed = await SpoofingService.getSpoofedSessionData();
     if (spoofed != null) {
-      deviceType = (spoofed['device_type'] as String?) ?? deviceType;
+      final sDeviceType = spoofed['device_type'] as String?;
+      if (sDeviceType != null && sDeviceType != 'IOS') deviceType = sDeviceType;
       final sDeviceName = spoofed['device_name'] as String?;
       if (sDeviceName != null && sDeviceName.isNotEmpty) {
         deviceName = sDeviceName;

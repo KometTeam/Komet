@@ -136,9 +136,9 @@ class _SpoofScreenState extends State<SpoofScreen> {
     }
 
     var type = profile.deviceType.isEmpty ? 'ANDROID' : profile.deviceType;
-    if (type == 'WEB') type = 'ANDROID';
+    if (type == 'WEB' || type == 'IOS') type = 'ANDROID';
     _selectedDeviceType = type;
-    if (type == 'IOS' || type == 'DESKTOP') {
+    if (type == 'DESKTOP') {
       _selectedMethod = SpoofingMethod.full;
     }
   }
@@ -215,7 +215,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
           : 'arm64-v8a';
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
-      _selectedDeviceType = 'IOS';
+      _selectedDeviceType = 'ANDROID';
       _selectedArch = 'arm64';
       _deviceNameController.text = iosInfo.utsname.machine;
       _osVersionController.text = iosInfo.systemVersion;
@@ -614,7 +614,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
               _buildChipSelector<String>(
                 options: const [
                   _ChipOption('ANDROID', 'Android', Icons.android_outlined),
-                  _ChipOption('IOS', 'iOS', Icons.phone_iphone_outlined),
                   _ChipOption(
                     'DESKTOP',
                     'Desktop',
@@ -623,6 +622,13 @@ class _SpoofScreenState extends State<SpoofScreen> {
                 ],
                 selected: _selectedDeviceType,
                 onSelected: _onDeviceTypeChanged,
+                trailing: [
+                  _buildDisabledChip(
+                    'iOS',
+                    Icons.phone_iphone_outlined,
+                    theme,
+                  ),
+                ],
               )
             else
               _buildChipSelector<String>(
