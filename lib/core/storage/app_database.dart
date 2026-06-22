@@ -190,8 +190,8 @@ class AppDatabase {
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          await db.execute(
-            'ALTER TABLE profile ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0',
+          await _addColumnIfMissing(
+            db, 'profile', 'is_active', 'INTEGER NOT NULL DEFAULT 0',
           );
           await db.execute('DROP TABLE IF EXISTS sync_state');
           await db.execute(_syncStateSchema);
@@ -210,47 +210,33 @@ class AppDatabase {
           await db.execute(_messagesSchema);
         }
         if (oldVersion < 7) {
-          await db.execute(
-            'ALTER TABLE profile ADD COLUMN profile_options TEXT',
-          );
+          await _addColumnIfMissing(db, 'profile', 'profile_options', 'TEXT');
         }
         if (oldVersion < 8) {
-            await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN participants TEXT',
-          );
+          await _addColumnIfMissing(db, 'chats_cache', 'participants', 'TEXT');
         }
         if (oldVersion < 9) {
-          await db.execute(
-            'ALTER TABLE contacts ADD COLUMN options TEXT',
-          );
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN options TEXT',
-          );
+          await _addColumnIfMissing(db, 'contacts', 'options', 'TEXT');
+          await _addColumnIfMissing(db, 'chats_cache', 'options', 'TEXT');
         }
         if (oldVersion < 10) {
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN owner INTEGER',
-          );
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN admins TEXT',
-          );
+          await _addColumnIfMissing(db, 'chats_cache', 'owner', 'INTEGER');
+          await _addColumnIfMissing(db, 'chats_cache', 'admins', 'TEXT');
         }
         if (oldVersion < 11) {
           await _createIndexes(db);
         }
         if (oldVersion < 12) {
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN last_msg_status TEXT',
-          );
+          await _addColumnIfMissing(db, 'chats_cache', 'last_msg_status', 'TEXT');
         }
         if (oldVersion < 13) {
-          await db.execute(
-            'ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0',
+          await _addColumnIfMissing(
+            db, 'messages', 'deleted', 'INTEGER NOT NULL DEFAULT 0',
           );
         }
         if (oldVersion < 14) {
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN in_list INTEGER NOT NULL DEFAULT 1',
+          await _addColumnIfMissing(
+            db, 'chats_cache', 'in_list', 'INTEGER NOT NULL DEFAULT 1',
           );
         }
       },
@@ -279,6 +265,18 @@ class AppDatabase {
     await db.execute(_contactsSchema);
     await db.execute(_messagesSchema);
     await _createIndexes(db);
+  }
+
+  static Future<void> _addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final info = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = info.any((row) => row['name'] == column);
+    if (exists) return;
+    await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
   }
 
   static Future<void> _createIndexes(Database db) async {

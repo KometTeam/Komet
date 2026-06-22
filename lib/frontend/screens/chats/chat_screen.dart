@@ -164,6 +164,8 @@ class _ChatScreenState extends State<ChatScreen>
   late final AnimationController _attachAnim;
   late final AnimationController _commandAnim;
   bool _commandPanelVisible = false;
+  final ValueNotifier<List<SlashCommand>> _commandMatches =
+      ValueNotifier(const []);
 
   String _nextTempId() =>
       'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
@@ -594,6 +596,7 @@ class _ChatScreenState extends State<ChatScreen>
     _attachAnim.dispose();
     AppCommands.current.removeListener(_updateCommandPanel);
     _commandAnim.dispose();
+    _commandMatches.dispose();
     _messageController.dispose();
     _messageFocusNode.dispose();
     _scrollController.dispose();
@@ -610,9 +613,26 @@ class _ChatScreenState extends State<ChatScreen>
     _updateCommandPanel();
   }
 
+  List<SlashCommand> _matchingCommands(String raw) {
+    if (!AppCommands.current.value) return const [];
+    final text = raw.trimLeft();
+    if (!text.startsWith('/')) return const [];
+    if (text.contains(RegExp(r'\s'))) return const [];
+    final query = text.toLowerCase();
+    for (final c in kSlashCommands) {
+      if (!c.hidden && c.name.toLowerCase() == query) return const [];
+    }
+    return kSlashCommands
+        .where((c) => !c.hidden && c.name.toLowerCase().startsWith(query))
+        .toList(growable: false);
+  }
+
   void _updateCommandPanel() {
-    final show =
-        AppCommands.current.value && _messageController.text.startsWith('/');
+    final matches = _matchingCommands(_messageController.text);
+    final show = matches.isNotEmpty;
+    if (show && !listEquals(_commandMatches.value, matches)) {
+      _commandMatches.value = matches;
+    }
     if (show == _commandPanelVisible) return;
     _commandPanelVisible = show;
     if (show) {
@@ -658,7 +678,14 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildCommandPanel() {
     return AnimatedBuilder(
       animation: _commandAnim,
-      builder: (context, _) {
+      child: ValueListenableBuilder<List<SlashCommand>>(
+        valueListenable: _commandMatches,
+        builder: (context, matches, _) => CommandSuggestionsPanel(
+          commands: matches,
+          onSelected: _onCommandSelected,
+        ),
+      ),
+      builder: (context, child) {
         final t = _commandAnim.value;
         if (t == 0) return const SizedBox.shrink();
         return Padding(
@@ -667,7 +694,7 @@ class _ChatScreenState extends State<ChatScreen>
             ignoring: t < 1,
             child: Opacity(
               opacity: t,
-              child: CommandSuggestionsPanel(onSelected: _onCommandSelected),
+              child: child,
             ),
           ),
         );
@@ -1497,12 +1524,19 @@ class _ChatScreenState extends State<ChatScreen>
     final text = _messageController.text.trim();
     if (text.isEmpty || _myId == 0) return;
 
-    if (AppCommands.current.value) {
+    if (AppCommands.current.value && text.startsWith('/')) {
       final command = findSlashCommand(text);
-      if (command?.run != null) {
+      if (command == null) {
         _messageController.clear();
         _hasText.value = false;
-        unawaited(command!.run!(_commandContext()));
+        showCustomNotification(context, 'ТАКОЙ КОМАНДЫ НЕТУ🚨🚨🚨');
+        return;
+      }
+      if (command.run != null) {
+        final args = commandArgs(text);
+        _messageController.clear();
+        _hasText.value = false;
+        unawaited(command.run!(_commandContext(args)));
         return;
       }
     }
@@ -1706,15 +1740,16 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  CommandContext _commandContext() => CommandContext(
+  CommandContext _commandContext(String args) => CommandContext(
     accountId: _myId,
     chatId: widget.chatId,
     otherUserId: _resolveOtherId(),
+    args: args,
     messages: messagesModule,
     isOnline: () => api.state == SessionState.online,
     isActive: () => mounted,
-    notify: (message) {
-      if (mounted) showCustomNotification(context, message);
+    notify: (message, {duration}) {
+      if (mounted) showCustomNotification(context, message, duration: duration);
     },
     postMessage: _postCommandMessage,
     updateMessage: _updateCommandMessage,
