@@ -912,6 +912,247 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  List<CachedMessage> _selectedMessages(Set<String> ids) =>
+      _messages.where((m) => ids.contains(m.id)).toList();
+
+  CachedMessage? _singleCopyableText(Set<String> ids) {
+    CachedMessage? found;
+    var textCount = 0;
+    for (final m in _messages) {
+      if (!ids.contains(m.id)) continue;
+      if ((m.text ?? '').isEmpty) continue;
+      if (++textCount > 1) return null;
+      found = m;
+    }
+    return found;
+  }
+
+  CachedMessage? _singleEditable(Set<String> ids) {
+    if (ids.length != 1) return null;
+    final list = _selectedMessages(ids);
+    if (list.isEmpty) return null;
+    return _canEditMessage(list.first) ? list.first : null;
+  }
+
+  void _copySelected(CachedMessage message) {
+    final text = message.text;
+    if (text == null || text.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: text));
+    Haptics.tap();
+    showCustomNotification(context, 'Скопировано');
+    _clearSelection();
+  }
+
+  void _editSelected(CachedMessage message) {
+    _clearSelection();
+    _startEditMessage(message);
+  }
+
+  Future<void> _deleteSelected() async {
+    final msgs = _selectedMessages(_selectedIds.value);
+    if (msgs.isEmpty) return;
+
+    final serverMsgs =
+        msgs.where((m) => !m.id.startsWith('temp_')).toList();
+    if (serverMsgs.isEmpty) {
+      for (final m in msgs) {
+        _startDeleteAnimation(m.id);
+      }
+      _clearSelection();
+      return;
+    }
+
+    final canForEveryone = serverMsgs.every((m) => m.senderId == _myId);
+    final forEveryone = await _showDeleteMessageDialog(canForEveryone);
+    if (forEveryone == null || !mounted) return;
+
+    final ok = await messagesModule.deleteMessages(
+      widget.chatId,
+      serverMsgs.map((m) => m.id).toList(),
+      forEveryone: forEveryone,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      Haptics.error();
+      showCustomNotification(context, 'Не удалось удалить сообщения');
+      return;
+    }
+    for (final m in msgs) {
+      _startDeleteAnimation(m.id);
+    }
+    _clearSelection();
+  }
+
+  void _replySelected() {
+    showCustomNotification(context, 'Ответ — пока в разработке');
+  }
+
+  void _forwardSelected() {
+    showCustomNotification(context, 'Пересылка — пока в разработке');
+  }
+
+  Widget _buildComposerArea(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: _selectionAnim,
+          builder: (context, child) {
+            final t = Curves.easeOut.transform(
+              _selectionAnim.value.clamp(0.0, 1.0),
+            );
+            if (t == 0) return child!;
+            if (t == 1) return const SizedBox.shrink();
+            return ClipRect(
+              child: Align(
+                alignment: Alignment.topCenter,
+                heightFactor: 1 - t,
+                child: Transform.translate(
+                  offset: Offset(0, 48 * t),
+                  child: Opacity(opacity: 1 - t, child: child),
+                ),
+              ),
+            );
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedBuilder(
+                animation: _attachAnim,
+                builder: (context, _) {
+                  if (_attachAnim.value == 0) {
+                    return const SizedBox.shrink();
+                  }
+                  final curve = _attachAnim.status == AnimationStatus.reverse
+                      ? Curves.easeIn
+                      : Curves.easeOut;
+                  final t = curve.transform(_attachAnim.value);
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: ClipRect(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        heightFactor: t,
+                        child: Opacity(
+                          opacity: t,
+                          child: AttachmentPanel(
+                            onClose: () => _showAttachmentPanel.value = false,
+                            onPickFile: _pickAndUploadFile,
+                            onSendById: _sendFileById,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _buildInputArea(context),
+            ],
+          ),
+        ),
+        AnimatedBuilder(
+          animation: _selectionAnim,
+          builder: (context, child) {
+            final t = Curves.easeOut.transform(
+              _selectionAnim.value.clamp(0.0, 1.0),
+            );
+            if (t == 0) return const SizedBox.shrink();
+            return ClipRect(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                heightFactor: t,
+                child: Opacity(opacity: t, child: child),
+              ),
+            );
+          },
+          child: ValueListenableBuilder<Set<String>>(
+            valueListenable: _selectedIds,
+            builder: (context, selected, _) =>
+                _buildSelectionBottomBar(cs, selected),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionBottomBar(ColorScheme cs, Set<String> selected) {
+    final single = selected.length == 1;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            if (single) ...[
+              Expanded(
+                child: _selectionActionPill(
+                  cs,
+                  icon: Symbols.reply,
+                  label: 'Ответить',
+                  iconLeading: false,
+                  onTap: _replySelected,
+                ),
+              ),
+              const SizedBox(width: 12),
+            ] else
+              const Spacer(),
+            Expanded(
+              child: _selectionActionPill(
+                cs,
+                icon: Symbols.forward,
+                label: 'Переслать',
+                iconLeading: true,
+                onTap: _forwardSelected,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _selectionActionPill(
+    ColorScheme cs, {
+    required IconData icon,
+    required String label,
+    required bool iconLeading,
+    required VoidCallback onTap,
+  }) {
+    final textWidget = Text(
+      label,
+      style: TextStyle(
+        color: cs.onSurface,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        fontFamily: 'Outfit',
+      ),
+    );
+    final iconWidget = Icon(icon, color: cs.onSurface, size: 22, weight: 500);
+    return GlossyPill(
+      onTap: onTap,
+      color: Color.alphaBlend(
+        cs.surfaceContainerHighest.withValues(alpha: 0.92),
+        cs.surface,
+      ),
+      borderRadius: BorderRadius.circular(28),
+      depth: 8,
+      borderSide: BorderSide(
+        color: cs.outlineVariant.withValues(alpha: 0.5),
+        width: 0.5,
+      ),
+      child: SizedBox(
+        height: 54,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: iconLeading
+              ? [iconWidget, const SizedBox(width: 8), textWidget]
+              : [textWidget, const SizedBox(width: 8), iconWidget],
+        ),
+      ),
+    );
+  }
+
   bool _canEditMessage(CachedMessage message) {
     if (message.senderId != _myId) return false;
     if (message.id.startsWith('temp_')) return false;
@@ -1277,141 +1518,483 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  PreferredSizeWidget _materialAppBar(ColorScheme cs) {
-    return PreferredSize(
-      preferredSize: Size.fromHeight(kToolbarHeight),
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatInfoScreen(
-              chatId: widget.chatId,
-              name: widget.name,
-              imageUrl: widget.imageUrl,
-              chatType: widget.chatType,
+  PreferredSizeWidget _buildAppBar(ColorScheme cs) {
+    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    final height = glossy ? 76.0 : kToolbarHeight;
+    return AppBar(
+      backgroundColor: glossy ? Colors.transparent : cs.surfaceContainerHigh,
+      foregroundColor: cs.onSurface,
+      surfaceTintColor: Colors.transparent,
+      iconTheme: IconThemeData(color: cs.onSurface),
+      elevation: 0,
+      toolbarHeight: height,
+      automaticallyImplyLeading: false,
+      titleSpacing: 0,
+      centerTitle: false,
+      title: SizedBox(
+        height: height,
+        child: AnimatedBuilder(
+          animation: _selectionAnim,
+          builder: (context, _) {
+            final t = Curves.easeOut.transform(
+              _selectionAnim.value.clamp(0.0, 1.0),
+            );
+            return ValueListenableBuilder<Set<String>>(
+              valueListenable: _selectedIds,
+              builder: (context, selected, _) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (t < 1)
+                    IgnorePointer(
+                      ignoring: t > 0.5,
+                      child: Opacity(
+                        opacity: 1 - t,
+                        child: Transform.translate(
+                          offset: Offset(0, -height * 0.4 * t),
+                          child: glossy
+                              ? _glossyHeaderRow(cs)
+                              : _materialHeaderRow(cs),
+                        ),
+                      ),
+                    ),
+                  if (t > 0)
+                    IgnorePointer(
+                      ignoring: t < 0.5,
+                      child: Opacity(
+                        opacity: t,
+                        child: Transform.translate(
+                          offset: Offset(0, height * 0.4 * (1 - t)),
+                          child: _selectionTopBar(cs, selected, glossy),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _glossyHeaderRow(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+      child: Row(
+        children: [
+          _backWithBadge(
+            cs,
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: GlossyPill(
+                onTap: () {
+                  if (widget.embedded) {
+                    widget.onClose?.call();
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+                child: Center(
+                  child: Icon(
+                    widget.embedded ? Symbols.close : Symbols.arrow_back,
+                    color: cs.onSurface,
+                    weight: 500,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GlossyPill(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatInfoScreen(
+                    chatId: widget.chatId,
+                    name: widget.name,
+                    imageUrl: widget.imageUrl,
+                    chatType: widget.chatType,
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
+              child: Row(
+                children: [
+                  _withOnlineDot(
+                    cs,
+                    widget.imageUrl.isNotEmpty
+                        ? CircleAvatar(
+                            radius: 22,
+                            backgroundImage: CachedNetworkImageProvider(
+                              widget.imageUrl,
+                              maxWidth: 144,
+                              maxHeight: 144,
+                            ),
+                          )
+                        : CircleAvatar(
+                            radius: 22,
+                            backgroundColor: cs.primaryContainer,
+                            child: Text(
+                              widget.name.isNotEmpty
+                                  ? widget.name[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                color: cs.onPrimaryContainer,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Outfit',
+                              ),
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                widget.name,
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Outfit',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (chat?.isOfficial ?? false) ...[
+                              const SizedBox(width: 4),
+                              Icon(
+                                Symbols.verified,
+                                color: cs.primary,
+                                size: 16,
+                                weight: 600,
+                                fill: 1,
+                              ),
+                            ],
+                          ],
+                        ),
+                        ValueListenableBuilder<String>(
+                          valueListenable: _headerStatusNotifier,
+                          builder: (context, status, _) => Text(
+                            status,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GlossyPill(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: SizedBox(
+              height: 56,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder<int>(
+                    valueListenable: _scheduledCount,
+                    builder: (_, count, _) => count > 0
+                        ? IconButton(
+                            icon: Icon(
+                              Symbols.schedule,
+                              weight: 500,
+                              color: cs.onSurface,
+                            ),
+                            onPressed: _openScheduledMessages,
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  IconButton(
+                    icon: Icon(Symbols.call, weight: 500, color: cs.onSurface),
+                    onPressed: _startCall,
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Symbols.more_vert,
+                      weight: 500,
+                      color: cs.onSurface,
+                    ),
+                    onPressed: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _materialHeaderRow(ColorScheme cs) {
+    return Row(
+      children: [
+        _backWithBadge(
+          cs,
+          IconButton(
+            icon: Icon(
+              widget.embedded ? Symbols.close : Symbols.arrow_back,
+              weight: 400,
+              color: cs.onSurface,
+            ),
+            onPressed: () {
+              if (widget.embedded) {
+                widget.onClose?.call();
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+        ),
+        Expanded(
+          child: InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatInfoScreen(
+                  chatId: widget.chatId,
+                  name: widget.name,
+                  imageUrl: widget.imageUrl,
+                  chatType: widget.chatType,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                _withOnlineDot(
+                  cs,
+                  widget.imageUrl.isNotEmpty
+                      ? CircleAvatar(
+                          radius: 18,
+                          backgroundImage: CachedNetworkImageProvider(
+                            widget.imageUrl,
+                            maxWidth: 144,
+                            maxHeight: 144,
+                          ),
+                        )
+                      : CircleAvatar(
+                          radius: 18,
+                          backgroundColor: cs.primaryContainer,
+                          child: Text(
+                            widget.name.isNotEmpty
+                                ? widget.name[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: cs.onPrimaryContainer,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                  dotSize: 11,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.name,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Outfit',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (chat?.isOfficial ?? false) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              Symbols.verified,
+                              color: cs.primary,
+                              size: 16,
+                              weight: 600,
+                              fill: 1,
+                            ),
+                          ],
+                        ],
+                      ),
+                      ValueListenableBuilder<String>(
+                        valueListenable: _headerStatusNotifier,
+                        builder: (context, status, _) => Text(
+                          status,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        child: AppBar(
-          backgroundColor: cs.surfaceContainerHigh,
-          foregroundColor: cs.onSurface,
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          iconTheme: IconThemeData(color: cs.onSurface),
-          leading: _backWithBadge(
-            cs,
+        ValueListenableBuilder<int>(
+          valueListenable: _scheduledCount,
+          builder: (_, count, _) => count > 0
+              ? IconButton(
+                  icon: Icon(Symbols.schedule, weight: 400, color: cs.onSurface),
+                  onPressed: _openScheduledMessages,
+                )
+              : const SizedBox.shrink(),
+        ),
+        IconButton(
+          icon: Icon(Symbols.call, weight: 400, color: cs.onSurface),
+          onPressed: _startCall,
+        ),
+        IconButton(
+          icon: Icon(Symbols.more_vert, weight: 400, color: cs.onSurface),
+          onPressed: () {},
+        ),
+      ],
+    );
+  }
+
+  Widget _selectionTopBar(ColorScheme cs, Set<String> selected, bool glossy) {
+    final count = selected.length;
+    final copyMsg = _singleCopyableText(selected);
+    final editMsg = _singleEditable(selected);
+    final label = 'Выбрано $count';
+
+    if (!glossy) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
             IconButton(
-              icon: Icon(
-                widget.embedded ? Symbols.close : Symbols.arrow_back,
-                weight: 400,
-              ),
-              onPressed: () {
-                if (widget.embedded) {
-                  widget.onClose?.call();
-                } else {
-                  Navigator.pop(context);
-                }
-              },
+              icon: Icon(Symbols.close, color: cs.onSurface),
+              onPressed: _clearSelection,
             ),
-          ),
-          titleSpacing: 0,
-          title: Row(
-            children: [
-              _withOnlineDot(
-                cs,
-                widget.imageUrl.isNotEmpty
-                    ? CircleAvatar(
-                        radius: 18,
-                        backgroundImage: CachedNetworkImageProvider(
-                          widget.imageUrl,
-                          maxWidth: 144,
-                          maxHeight: 144,
-                        ),
-                      )
-                    : CircleAvatar(
-                        radius: 18,
-                        backgroundColor: cs.primaryContainer,
-                        child: Text(
-                          widget.name.isNotEmpty
-                              ? widget.name[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                            color: cs.onPrimaryContainer,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                dotSize: 11,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            widget.name,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Outfit',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (chat?.isOfficial ?? false) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Symbols.verified,
-                            color: cs.primary,
-                            size: 16,
-                            weight: 600,
-                            fill: 1,
-                          ),
-                        ],
-                      ],
-                    ),
-                    ValueListenableBuilder<String>(
-                      valueListenable: _headerStatusNotifier,
-                      builder: (context, status, _) => Text(
-                        status,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                  ],
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Outfit',
                 ),
               ),
-            ],
-          ),
-          actions: [
-            ValueListenableBuilder<int>(
-              valueListenable: _scheduledCount,
-              builder: (_, count, _) => count > 0
-                  ? IconButton(
-                      icon: const Icon(Symbols.schedule, weight: 400),
-                      onPressed: _openScheduledMessages,
-                    )
-                  : const SizedBox.shrink(),
             ),
+            if (copyMsg != null)
+              IconButton(
+                icon: Icon(Symbols.content_copy, color: cs.onSurface),
+                onPressed: () => _copySelected(copyMsg),
+              ),
+            if (editMsg != null)
+              IconButton(
+                icon: Icon(Symbols.edit, color: cs.onSurface),
+                onPressed: () => _editSelected(editMsg),
+              ),
             IconButton(
-              icon: const Icon(Symbols.call, weight: 400),
-              onPressed: _startCall,
-            ),
-            IconButton(
-              icon: const Icon(Symbols.more_vert, weight: 400),
-              onPressed: () {},
+              icon: Icon(Symbols.delete, color: cs.onSurface),
+              onPressed: _deleteSelected,
             ),
           ],
         ),
+      );
+    }
+
+    Widget actionBtn(IconData icon, VoidCallback onTap) => IconButton(
+      icon: Icon(icon, weight: 500, color: cs.onSurface),
+      onPressed: onTap,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: GlossyPill(
+              onTap: _clearSelection,
+              child: Center(
+                child: Icon(
+                  Symbols.close,
+                  color: cs.onSurface,
+                  weight: 500,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GlossyPill(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SizedBox(
+                height: 56,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Outfit',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GlossyPill(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: SizedBox(
+              height: 56,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (copyMsg != null)
+                    actionBtn(Symbols.content_copy, () => _copySelected(copyMsg)),
+                  if (editMsg != null)
+                    actionBtn(Symbols.edit, () => _editSelected(editMsg)),
+                  actionBtn(Symbols.delete, _deleteSelected),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2138,189 +2721,7 @@ class _ChatScreenState extends State<ChatScreen>
             ),
             child: Scaffold(
               backgroundColor: cs.surface,
-              appBar: AppVisualStyle.current.value == VisualStyle.glossy
-                  ? AppBar(
-                backgroundColor: Colors.transparent,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                toolbarHeight: 76,
-                automaticallyImplyLeading: false,
-                titleSpacing: 0,
-                title: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-                  child: Row(
-                    children: [
-                      _backWithBadge(
-                        cs,
-                        SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: GlossyPill(
-                            onTap: () {
-                              if (widget.embedded) {
-                                widget.onClose?.call();
-                              } else {
-                                Navigator.pop(context);
-                              }
-                            },
-                            child: Center(
-                              child: Icon(
-                                widget.embedded
-                                    ? Symbols.close
-                                    : Symbols.arrow_back,
-                                color: cs.onSurface,
-                                weight: 500,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: GlossyPill(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ChatInfoScreen(
-                                chatId: widget.chatId,
-                                name: widget.name,
-                                imageUrl: widget.imageUrl,
-                                chatType: widget.chatType,
-                              ),
-                            ),
-                          ),
-                          padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
-                          child: Row(
-                            children: [
-                              _withOnlineDot(
-                                cs,
-                                widget.imageUrl.isNotEmpty
-                                    ? CircleAvatar(
-                                        radius: 22,
-                                        backgroundImage:
-                                            CachedNetworkImageProvider(
-                                          widget.imageUrl,
-                                          maxWidth: 144,
-                                          maxHeight: 144,
-                                        ),
-                                      )
-                                    : CircleAvatar(
-                                        radius: 22,
-                                        backgroundColor: cs.primaryContainer,
-                                        child: Text(
-                                          widget.name.isNotEmpty
-                                              ? widget.name[0].toUpperCase()
-                                              : '?',
-                                          style: TextStyle(
-                                            color: cs.onPrimaryContainer,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            fontFamily: 'Outfit',
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            widget.name,
-                                            style: TextStyle(
-                                              color: cs.onSurface,
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w600,
-                                              fontFamily: 'Outfit',
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        if (chat?.isOfficial ?? false) ...[
-                                          const SizedBox(width: 4),
-                                          Icon(
-                                            Symbols.verified,
-                                            color: cs.primary,
-                                            size: 16,
-                                            weight: 600,
-                                            fill: 1,
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    ValueListenableBuilder<String>(
-                                      valueListenable: _headerStatusNotifier,
-                                      builder: (context, status, _) => Text(
-                                        status,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: cs.onSurfaceVariant,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GlossyPill(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: SizedBox(
-                          height: 56,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ValueListenableBuilder<int>(
-                                valueListenable: _scheduledCount,
-                                builder: (_, count, _) => count > 0
-                                    ? IconButton(
-                                        icon: Icon(
-                                          Symbols.schedule,
-                                          weight: 500,
-                                          color: cs.onSurface,
-                                        ),
-                                        onPressed: _openScheduledMessages,
-                                      )
-                                    : const SizedBox.shrink(),
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Symbols.call,
-                                  weight: 500,
-                                  color: cs.onSurface,
-                                ),
-                                onPressed: _startCall,
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Symbols.more_vert,
-                                  weight: 500,
-                                  color: cs.onSurface,
-                                ),
-                                onPressed: () {},
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                  )
-                  : _materialAppBar(cs),
+              appBar: _buildAppBar(cs),
               body: Column(
                 children: [
                   Expanded(
@@ -2340,62 +2741,7 @@ class _ChatScreenState extends State<ChatScreen>
                       ],
                     ),
                   ),
-                  AnimatedBuilder(
-                    animation: _selectionAnim,
-                    builder: (context, child) {
-                      final t = Curves.easeOut.transform(
-                        _selectionAnim.value.clamp(0.0, 1.0),
-                      );
-                      if (t == 0) return child!;
-                      if (t == 1) return const SizedBox.shrink();
-                      return ClipRect(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          heightFactor: 1 - t,
-                          child: Transform.translate(
-                            offset: Offset(0, 48 * t),
-                            child: Opacity(opacity: 1 - t, child: child),
-                          ),
-                        ),
-                      );
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedBuilder(
-                          animation: _attachAnim,
-                          builder: (context, _) {
-                            if (_attachAnim.value == 0)
-                              return const SizedBox.shrink();
-                            final curve =
-                                _attachAnim.status == AnimationStatus.reverse
-                                ? Curves.easeIn
-                                : Curves.easeOut;
-                            final t = curve.transform(_attachAnim.value);
-                            return Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                              child: ClipRect(
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  heightFactor: t,
-                                  child: Opacity(
-                                    opacity: t,
-                                    child: AttachmentPanel(
-                                      onClose: () =>
-                                          _showAttachmentPanel.value = false,
-                                      onPickFile: _pickAndUploadFile,
-                                      onSendById: _sendFileById,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildInputArea(context),
-                      ],
-                    ),
-                  ),
+                  _buildComposerArea(context),
                 ],
               ),
             ),
