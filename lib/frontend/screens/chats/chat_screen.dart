@@ -18,6 +18,7 @@ import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
@@ -1729,13 +1730,15 @@ class _ChatScreenState extends State<ChatScreen>
                     icon: Icon(Symbols.call, weight: 500, color: cs.onSurface),
                     onPressed: _startCall,
                   ),
-                  IconButton(
-                    icon: Icon(
-                      Symbols.more_vert,
-                      weight: 500,
-                      color: cs.onSurface,
+                  Builder(
+                    builder: (btnContext) => IconButton(
+                      icon: Icon(
+                        Symbols.more_vert,
+                        weight: 500,
+                        color: cs.onSurface,
+                      ),
+                      onPressed: () => _openChatMenu(btnContext),
                     ),
-                    onPressed: () {},
                   ),
                 ],
               ),
@@ -1874,9 +1877,11 @@ class _ChatScreenState extends State<ChatScreen>
           icon: Icon(Symbols.call, weight: 400, color: cs.onSurface),
           onPressed: _startCall,
         ),
-        IconButton(
-          icon: Icon(Symbols.more_vert, weight: 400, color: cs.onSurface),
-          onPressed: () {},
+        Builder(
+          builder: (btnContext) => IconButton(
+            icon: Icon(Symbols.more_vert, weight: 400, color: cs.onSurface),
+            onPressed: () => _openChatMenu(btnContext),
+          ),
         ),
       ],
     );
@@ -1996,6 +2001,46 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ],
       ),
+    );
+  }
+
+  void _openChatMenu(BuildContext btnContext) {
+    final box = btnContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final anchorRect = box.localToGlobal(Offset.zero) & box.size;
+    showChatMenu(
+      context: context,
+      anchorRect: anchorRect,
+      items: [
+        ChatMenuItem(
+          icon: Symbols.volume_up,
+          label: 'Уведомления',
+          showChevron: true,
+          dividerAfter: true,
+          onTap: () {},
+        ),
+        ChatMenuItem(
+          icon: Symbols.videocam,
+          label: 'Видеозвонок',
+          onTap: () {},
+        ),
+        ChatMenuItem(icon: Symbols.search, label: 'Поиск', onTap: () {}),
+        ChatMenuItem(
+          icon: Symbols.wallpaper,
+          label: 'Изменить обои',
+          onTap: () {},
+        ),
+        ChatMenuItem(
+          icon: Symbols.mop,
+          label: 'Очистить историю',
+          onTap: () {},
+        ),
+        ChatMenuItem(
+          icon: Symbols.delete,
+          label: 'Удалить чат',
+          onTap: () {},
+        ),
+      ],
     );
   }
 
