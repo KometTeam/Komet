@@ -237,7 +237,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     final accountId = _accountId;
     if (chatId == null || accountId == null) return;
 
-    final result = await FilePicker.platform.pickFiles();
+    final result = await FilePicker.pickFiles();
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
     if (picked.path == null) return;

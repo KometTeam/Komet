@@ -97,7 +97,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
 
   Future<void> _pickAvatar() async {
     if (_creating) return;
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await FilePicker.pickFiles(type: FileType.image);
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
     if (path == null) return;
