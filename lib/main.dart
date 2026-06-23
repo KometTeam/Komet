@@ -44,6 +44,7 @@ import 'backend/modules/self_check.dart';
 import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
 import 'core/calls/call_controller.dart';
+import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
@@ -95,6 +96,7 @@ void main() async {
   }
   attachInfoCacheApi(api);
   ChatsModule.attachGlobalPushHandlers(api);
+  unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
   final localeFuture = _loadInitialLocale();
@@ -265,6 +267,7 @@ class KometAppState extends State<KometApp>
 
     _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
       if (status == LoginStatus.success) {
+        DeepLinkService.instance.markReady();
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
         SelfCheckService.instance.init(api);

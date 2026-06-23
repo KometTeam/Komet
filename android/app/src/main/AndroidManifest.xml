@@ -48,6 +48,22 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="max.ru"/>
+                <data android:scheme="https" android:host="www.max.ru"/>
+                <data android:scheme="http" android:host="max.ru"/>
+                <data android:scheme="http" android:host="www.max.ru"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="komet"/>
+                <data android:scheme="max"/>
+            </intent-filter>
         </activity>
         <activity-alias
             android:name=".MinimalIcon"

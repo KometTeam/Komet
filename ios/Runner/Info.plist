@@ -70,5 +70,17 @@
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ru.komet.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>komet</string>
+				<string>max</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

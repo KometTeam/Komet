@@ -428,10 +428,19 @@ class LoginResult {
 class AccountModule {
   final Api _api;
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
+  bool _loggedIn = false;
 
-  AccountModule(this._api);
+  AccountModule(this._api) {
+    _api.stateStream.listen((state) {
+      if (state != SessionState.online) _loggedIn = false;
+    });
+  }
 
   Stream<LoginStatus> get loginStatusStream => _loginStatusController.stream;
+
+  /// `true`, только когда сервер считает сессию ONLINE — после успешного
+  /// login (opcode 19), а не просто после хэндшейка (opcode 6).
+  bool get isLoggedIn => _loggedIn;
 
   Future<PrivacyConfig> getPrivacyConfig() async {
     final accountId = await TokenStorage.getActiveAccountId();
@@ -999,6 +1008,7 @@ class AccountModule {
       }
 
       final result = await _processLoginResponse(dataMap, resolvedAccountId);
+      _loggedIn = true;
       _loginStatusController.add(LoginStatus.success);
       return result;
     } catch (e) {

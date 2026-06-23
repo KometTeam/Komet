@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show api, accountModule;
-import '../../../backend/api.dart';
 import '../../../backend/modules/account.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
@@ -27,7 +26,7 @@ class _CallsTabState extends State<CallsTab> {
   @override
   void initState() {
     super.initState();
-    if (api.state == SessionState.online) {
+    if (accountModule.isLoggedIn) {
       _loadHistory();
     } else {
       _loginSub = accountModule.loginStatusStream.listen((status) {

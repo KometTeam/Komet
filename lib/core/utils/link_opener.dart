@@ -1,11 +1,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../frontend/widgets/call_link_handler.dart';
 import '../../frontend/widgets/custom_notification.dart';
+import '../../frontend/widgets/max_link_handler.dart';
 
 Future<void> openExternalUrl(BuildContext context, String url) async {
-  if (await tryHandleCallLink(context, url)) return;
+  if (await tryHandleMaxLink(context, url)) return;
   if (!context.mounted) return;
 
   final uri = Uri.tryParse(url);
