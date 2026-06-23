@@ -4195,7 +4195,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _pickAndUploadFile({int? scheduledTime}) async {
-    final result = await FilePicker.pickFiles();
+    final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.path == null) return;
