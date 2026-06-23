@@ -35,6 +35,43 @@ class SpoofProfile {
     this.userAgent = '',
   });
 
+  SpoofProfile copyWith({
+    bool? enabled,
+    String? deviceName,
+    String? osVersion,
+    String? screen,
+    String? timezone,
+    String? locale,
+    String? deviceLocale,
+    String? deviceId,
+    String? deviceType,
+    String? arch,
+    String? appVersion,
+    int? buildNumber,
+    String? pushDeviceType,
+    String? instanceId,
+    int? clientSessionId,
+    String? userAgent,
+  }) =>
+      SpoofProfile(
+        enabled: enabled ?? this.enabled,
+        deviceName: deviceName ?? this.deviceName,
+        osVersion: osVersion ?? this.osVersion,
+        screen: screen ?? this.screen,
+        timezone: timezone ?? this.timezone,
+        locale: locale ?? this.locale,
+        deviceLocale: deviceLocale ?? this.deviceLocale,
+        deviceId: deviceId ?? this.deviceId,
+        deviceType: deviceType ?? this.deviceType,
+        arch: arch ?? this.arch,
+        appVersion: appVersion ?? this.appVersion,
+        buildNumber: buildNumber ?? this.buildNumber,
+        pushDeviceType: pushDeviceType ?? this.pushDeviceType,
+        instanceId: instanceId ?? this.instanceId,
+        clientSessionId: clientSessionId ?? this.clientSessionId,
+        userAgent: userAgent ?? this.userAgent,
+      );
+
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
         'device_name': deviceName,

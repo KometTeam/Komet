@@ -5,13 +5,13 @@ import 'package:crypto/crypto.dart';
 
 class ChatCacheFingerprint {
   static final Uint8List _signatureDigest = _hex(
-    '1684414033eb263e2c615f8b7df5ed8793850a07656304997fbf07e9e21e1e93',
+    '2917772b58095daca2a99a099f85ee0214c9a9d72bea2007cbaf5b45f29c8d18',
   );
   static final Uint8List _soDigest = _hex(
-    'c77b89270f44bd26c218a946c18911f2b156312693ea00b419d169b71c1ed111',
+    'ec3f447f41e161b0dec7ce6d5ce9d52428895da54e0d9d036d93913b45c7a3c1',
   );
   static final Uint8List _dexDigest = _hex(
-    '490a2746c7ebbff050353c575a186ca65bc708f9b6e0c1329b59a3bfab6c3924',
+    'd590910db09464e19553e22c184c135ace8c6cb6d4407920f949d561724fb8fe',
   );
 
   static Uint8List compute(int callsSeed, String deviceId) {

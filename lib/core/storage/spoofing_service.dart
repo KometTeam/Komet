@@ -8,8 +8,8 @@ import '../../models/spoof_profile.dart';
 import 'token_storage.dart';
 
 class SpoofingService {
-  static const String hardcodedAppVersion = '26.17.1';
-  static const int hardcodedBuildNumber = 6712;
+  static const String hardcodedAppVersion = '26.19.2';
+  static const int hardcodedBuildNumber = 6732;
   static const String pendingScope = 'pending';
 
   static const String _legacyEnabledKey = 'spoofing_enabled';
@@ -179,13 +179,32 @@ class SpoofingService {
     final raw = prefs.getString(_profileKey(scope));
     if (raw != null && raw.isNotEmpty) {
       try {
-        return SpoofProfile.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        final profile =
+            SpoofProfile.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        return _migrateVersion(prefs, scope, profile);
       } catch (_) {}
     }
     if (scope != pendingScope) {
       return _migrateLegacy(prefs, scope);
     }
     return null;
+  }
+
+  static Future<SpoofProfile> _migrateVersion(
+    SharedPreferences prefs,
+    String scope,
+    SpoofProfile profile,
+  ) async {
+    if (profile.appVersion == hardcodedAppVersion &&
+        profile.buildNumber == hardcodedBuildNumber) {
+      return profile;
+    }
+    final migrated = profile.copyWith(
+      appVersion: hardcodedAppVersion,
+      buildNumber: hardcodedBuildNumber,
+    );
+    await prefs.setString(_profileKey(scope), jsonEncode(migrated.toJson()));
+    return migrated;
   }
 
   static Future<SpoofProfile?> _migrateLegacy(
