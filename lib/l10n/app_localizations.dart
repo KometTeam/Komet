@@ -248,6 +248,42 @@ abstract class AppLocalizations {
   /// **'Sign in with token'**
   String get loginSignInWithToken;
 
+  /// No description provided for @tokenLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Token login'**
+  String get tokenLoginTitle;
+
+  /// No description provided for @tokenLoginTokenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Token'**
+  String get tokenLoginTokenLabel;
+
+  /// No description provided for @tokenLoginNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Token login only works with spoofing. Enter the data of the device the token belongs to, otherwise the account may be banned.'**
+  String get tokenLoginNote;
+
+  /// No description provided for @tokenLoginButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get tokenLoginButton;
+
+  /// No description provided for @tokenLoginError.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in the token, device name, OS version and Device ID'**
+  String get tokenLoginError;
+
+  /// No description provided for @tokenLoginFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in failed'**
+  String get tokenLoginFailed;
+
   /// No description provided for @loginSignInWithSessionFile.
   ///
   /// In en, this message translates to:
@@ -392,6 +428,24 @@ abstract class AppLocalizations {
   /// **'Session spoofing'**
   String get spoofScreenTitle;
 
+  /// No description provided for @spoofEnableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Device spoofing'**
+  String get spoofEnableTitle;
+
+  /// No description provided for @spoofEnableSubtitleOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled for this account'**
+  String get spoofEnableSubtitleOn;
+
+  /// No description provided for @spoofEnableSubtitleOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled — using the real device'**
+  String get spoofEnableSubtitleOff;
+
   /// No description provided for @spoofInfoHint.
   ///
   /// In en, this message translates to:
@@ -437,7 +491,7 @@ abstract class AppLocalizations {
   /// No description provided for @spoofDeviceTypeDescription.
   ///
   /// In en, this message translates to:
-  /// **'This field is not changeable, to avoid token association issues'**
+  /// **'Controls which devices are generated: Android or iOS'**
   String get spoofDeviceTypeDescription;
 
   /// No description provided for @spoofDeviceTypeLabel.

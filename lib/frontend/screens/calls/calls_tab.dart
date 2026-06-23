@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import '../../../main.dart' show api;
+import '../../../main.dart' show api, accountModule;
+import '../../../backend/modules/account.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/connection_status.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -17,11 +21,28 @@ class _CallsTabState extends State<CallsTab> {
   List<CallLogEntry> _calls = [];
   bool _isLoading = true;
   int _selectedTabIndex = 0; // 0 for 'Все', 1 for 'Пропущенные'
+  StreamSubscription<LoginStatus>? _loginSub;
 
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+    if (accountModule.isLoggedIn) {
+      _loadHistory();
+    } else {
+      _loginSub = accountModule.loginStatusStream.listen((status) {
+        if (status == LoginStatus.success) {
+          _loginSub?.cancel();
+          _loginSub = null;
+          _loadHistory();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _loginSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {
@@ -239,14 +260,20 @@ class _CallsTabState extends State<CallsTab> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(
-                'Звонки',
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Outfit',
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Звонки',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Outfit',
+                    ),
+                  ),
+                  const ConnectionStatusLine(),
+                ],
               ),
             ),
             InkWell(

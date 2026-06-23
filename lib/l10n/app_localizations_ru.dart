@@ -87,6 +87,26 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginSignInWithToken => 'По токену';
 
   @override
+  String get tokenLoginTitle => 'Вход по токену';
+
+  @override
+  String get tokenLoginTokenLabel => 'Токен';
+
+  @override
+  String get tokenLoginNote =>
+      'Вход по токену работает только со спуфом. Укажите данные устройства, к которому привязан токен, иначе аккаунт могут заблокировать.';
+
+  @override
+  String get tokenLoginButton => 'Войти';
+
+  @override
+  String get tokenLoginError =>
+      'Заполните токен, имя устройства, версию ОС и Device ID';
+
+  @override
+  String get tokenLoginFailed => 'Не удалось войти';
+
+  @override
   String get loginSignInWithSessionFile => 'По файлу сессии';
 
   @override
@@ -164,6 +184,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get spoofScreenTitle => 'Подмена данных сессии';
 
   @override
+  String get spoofEnableTitle => 'Подмена устройства';
+
+  @override
+  String get spoofEnableSubtitleOn => 'Включена для этого аккаунта';
+
+  @override
+  String get spoofEnableSubtitleOff =>
+      'Выключена — используется реальное устройство';
+
+  @override
   String get spoofInfoHint =>
       'Нажмите \"Сгенерировать\":\n• Короткое нажатие: случайный пресет.\n• Длинное нажатие: реальные данные.';
 
@@ -189,7 +219,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofDeviceTypeDescription =>
-      'Данное поле не изменяемое, во избежании проблем с ассоциацией токена';
+      'Определяет, какие устройства генерируются: Android или iOS';
 
   @override
   String get spoofDeviceTypeLabel => 'Тип устройства';

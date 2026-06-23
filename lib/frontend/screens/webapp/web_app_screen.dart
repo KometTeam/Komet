@@ -3,6 +3,9 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/webapp.dart';
+import '../../../core/storage/spoofing_service.dart';
+import '../../widgets/connection_status.dart';
+import '../../widgets/webview_permission_prompt.dart';
 
 class WebAppScreen extends StatefulWidget {
   final String title;
@@ -22,6 +25,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
   InAppWebViewController? _controller;
   WebAppLaunch? _launch;
   String? _loadError;
+  String _userAgent = '';
   double _progress = 0;
 
   @override
@@ -36,6 +40,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
       _launch = null;
     });
     try {
+      _userAgent = await SpoofingService.getWebViewUserAgent() ?? '';
       final launch = await widget.loader();
       if (!mounted) return;
       setState(() => _launch = launch);
@@ -66,6 +71,8 @@ class _WebAppScreenState extends State<WebAppScreen> {
       },
       child: Scaffold(
         backgroundColor: cs.surface,
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+        floatingActionButton: const ConnectionSpinner(),
         appBar: AppBar(
           backgroundColor: cs.surface,
           surfaceTintColor: Colors.transparent,
@@ -116,8 +123,11 @@ class _WebAppScreenState extends State<WebAppScreen> {
         transparentBackground: true,
         mediaPlaybackRequiresUserGesture: false,
         useHybridComposition: true,
+        userAgent: _userAgent,
       ),
       onWebViewCreated: (controller) => _controller = controller,
+      onPermissionRequest: (controller, request) =>
+          askWebViewPermission(context, request),
       onProgressChanged: (controller, progress) {
         if (!mounted) return;
         setState(() => _progress = progress / 100);

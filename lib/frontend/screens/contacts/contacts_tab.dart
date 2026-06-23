@@ -6,8 +6,10 @@ import '../../../core/storage/app_database.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../main.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'contact_profile_screen.dart';
+import 'nfc_exchange_sheet.dart';
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key});
@@ -24,6 +26,37 @@ class _ContactsTabState extends State<ContactsTab> {
   void initState() {
     super.initState();
     _loadContacts();
+    ContactsModule.revision.addListener(_loadContacts);
+  }
+
+  @override
+  void dispose() {
+    ContactsModule.revision.removeListener(_loadContacts);
+    super.dispose();
+  }
+
+  Future<void> _openNfcExchange() async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (_, _, _) => const Align(
+        alignment: Alignment.topCenter,
+        child: NfcExchangeSheet(),
+      ),
+      transitionBuilder: (_, anim, _, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return SlideTransition(
+          position: Tween(
+            begin: const Offset(0, -1),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        );
+      },
+    );
   }
 
   Future<void> _openSearchById() async {
@@ -168,19 +201,26 @@ class _ContactsTabState extends State<ContactsTab> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      'Контакты',
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Outfit',
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Контакты',
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Outfit',
+                          ),
+                        ),
+                        const ConnectionStatusLine(),
+                      ],
                     ),
                   ),
                   IconButton(
                     icon: Icon(Symbols.person_add, color: cs.onSurface),
-                    onPressed: () {},
+                    onPressed: _openNfcExchange,
                   ),
                   IconButton(
                     icon: Icon(Symbols.search, color: cs.onSurface),
@@ -270,9 +310,9 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
         if (n is Map) name = n['name']?.toString();
       }
       if (!mounted) return;
-      Navigator.pop(context);
-      Navigator.push(
-        context,
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.push(
         MaterialPageRoute(
           builder: (_) => ContactProfileScreen(
             contactId: id,

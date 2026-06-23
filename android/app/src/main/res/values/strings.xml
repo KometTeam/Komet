@@ -1,0 +1,4 @@
+<resources>
+    <string name="nfc_service_description">Komet contact exchange</string>
+    <string name="nfc_aid_group_description">Komet contact exchange</string>
+</resources>

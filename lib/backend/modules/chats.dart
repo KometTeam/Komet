@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/cache/info_cache.dart';
@@ -39,6 +40,7 @@ class CachedChat {
   final String? lastMsgText;
   final String? lastMsgTextOneLine;
   final int? lastMsgSenderId;
+  final String? lastMsgStatus;
   final int unreadCount;
   final int lastEventTime;
   final int cachedAt;
@@ -61,6 +63,7 @@ class CachedChat {
     this.lastMsgTime,
     this.lastMsgText,
     this.lastMsgSenderId,
+    this.lastMsgStatus,
     required this.unreadCount,
     required this.lastEventTime,
     required this.cachedAt,
@@ -77,6 +80,15 @@ class CachedChat {
             : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
+
+  bool get lastMsgReadByOthers {
+    final t = lastMsgTime;
+    if (t == null) return false;
+    for (final entry in participants.entries) {
+      if (entry.key != accountId && entry.value >= t) return true;
+    }
+    return false;
+  }
 
   bool iAmAdmin(int myId) => owner == myId || admins.contains(myId);
 
@@ -96,6 +108,7 @@ class CachedChat {
     lastMsgTime: row['last_msg_time'] as int?,
     lastMsgText: row['last_msg_text'] as String?,
     lastMsgSenderId: row['last_msg_sender'] as int?,
+    lastMsgStatus: row['last_msg_status'] as String?,
     unreadCount: row['unread_count'] as int,
     lastEventTime: row['last_event_time'] as int,
     cachedAt: row['cached_at'] as int,
@@ -133,6 +146,7 @@ class CachedChat {
     'last_msg_time': lastMsgTime,
     'last_msg_text': lastMsgText,
     'last_msg_sender': lastMsgSenderId,
+    'last_msg_status': lastMsgStatus,
     'unread_count': unreadCount,
     'last_event_time': lastEventTime,
     'cached_at': cachedAt,
@@ -145,6 +159,38 @@ class CachedChat {
     'owner': owner,
     'admins': admins.isEmpty ? null : admins.join(','),
   };
+}
+
+class ChatSearchHit {
+  final int id;
+  final String type;
+  final String? title;
+  final String? avatarUrl;
+  final String? subtitle;
+
+  const ChatSearchHit({
+    required this.id,
+    required this.type,
+    this.title,
+    this.avatarUrl,
+    this.subtitle,
+  });
+}
+
+class MessageSearchHit {
+  final int chatId;
+  final String? messageId;
+  final String? text;
+  final int time;
+  final int senderId;
+
+  const MessageSearchHit({
+    required this.chatId,
+    this.messageId,
+    this.text,
+    required this.time,
+    required this.senderId,
+  });
 }
 
 sealed class MessageEvent {
@@ -167,10 +213,21 @@ class MessageRemovedEvent extends MessageEvent {
   const MessageRemovedEvent(super.chatId, this.messageId);
 }
 
+class MessageMarkedDeletedEvent extends MessageEvent {
+  final String messageId;
+  const MessageMarkedDeletedEvent(super.chatId, this.messageId);
+}
+
 class MessageReactionsChangedEvent extends MessageEvent {
   final String messageId;
   final Map<String, dynamic>? reactionInfo;
   const MessageReactionsChangedEvent(super.chatId, this.messageId, this.reactionInfo);
+}
+
+class MessageSentEvent extends MessageEvent {
+  final String tempId;
+  final CachedMessage message;
+  const MessageSentEvent(super.chatId, this.tempId, this.message);
 }
 
 class ChatsModule {
@@ -181,63 +238,162 @@ class ChatsModule {
   /// а кеша истории нет — UI должен отрисовать курсивную плашку.
   static const String lastMsgPlaceholder = '__komet_lastmsg_placeholder__';
 
+  static String? attachPreviewLabel(dynamic attaches) {
+    if (attaches is! List || attaches.isEmpty) return null;
+    final first = attaches.first;
+    if (first is! Map) return null;
+    final type = (first['_type'] as String? ?? '').toUpperCase();
+    switch (type) {
+      case 'PHOTO':
+        return 'Фото';
+      case 'VIDEO':
+        return 'Видео';
+      case 'AUDIO':
+        return 'Голосовое сообщение';
+      case 'FILE':
+        final name = first['name']?.toString();
+        return name != null && name.isNotEmpty ? 'Файл: $name' : 'Файл';
+      case 'STICKER':
+        return 'Стикер';
+      case 'SHARE':
+        final title = first['title']?.toString();
+        return title != null && title.isNotEmpty ? 'Ссылка: $title' : 'Ссылка';
+      case 'POLL':
+        final title = first['title']?.toString();
+        return title != null && title.isNotEmpty ? 'Опрос: $title' : 'Опрос';
+      case 'LOCATION':
+        return 'Геопозиция';
+      case 'CONTACT':
+        return 'Контакт';
+      case 'CALL':
+        final video = first['callType']?.toString().toUpperCase() == 'VIDEO';
+        final dur = (first['duration'] as num?)?.toInt() ?? 0;
+        final hangup = first['hangupType']?.toString();
+        final failed = dur == 0 ||
+            hangup == 'CANCELED' ||
+            hangup == 'REJECTED' ||
+            hangup == 'MISSED';
+        if (first['joinLink'] != null) {
+          return video ? 'Групповой видеозвонок' : 'Групповой звонок';
+        }
+        if (failed) return video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок';
+        return video ? 'Видеозвонок' : 'Звонок';
+      default:
+        return null;
+    }
+  }
+
+  static String? messagePreviewText(Map msg) {
+    final text = msg['text']?.toString();
+    if (text != null && text.isNotEmpty) return text;
+    return attachPreviewLabel(msg['attaches']);
+  }
+
   static final _messageEventsController =
       StreamController<MessageEvent>.broadcast();
   static Stream<MessageEvent> get messageEvents =>
       _messageEventsController.stream;
+
+  static void emitMessageSent(int chatId, String tempId, CachedMessage message) {
+    _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
+  }
+
+  static Future<void> markRead(
+    Api api,
+    int accountId,
+    int chatId,
+    String messageId,
+    int mark,
+  ) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final row = Map<String, dynamic>.from(rows.first);
+    if ((row['unread_count'] as int? ?? 0) == 0) return;
+
+    final msgIdNum = int.tryParse(messageId);
+    if (msgIdNum != null) {
+      try {
+        await api.sendRequest(Opcode.chatMark, {
+          'type': 'READ_MESSAGE',
+          'chatId': chatId,
+          'messageId': msgIdNum,
+          'mark': mark,
+        });
+      } catch (_) {}
+    }
+
+    row['unread_count'] = 0;
+    await AppDatabase.saveChats([row]);
+    _bump();
+  }
+
+  static Future<void> applyOutgoing(
+    int accountId,
+    int chatId, {
+    required String messageId,
+    required int time,
+    required String text,
+    required String status,
+  }) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final row = Map<String, dynamic>.from(rows.first);
+    final thisId = int.tryParse(messageId);
+    final existingTime = (row['last_msg_time'] as int?) ?? 0;
+    final existingId = row['last_msg_id'] as int?;
+    if (time < existingTime && existingId != thisId) return;
+    row['last_msg_id'] = thisId;
+    row['last_msg_text'] = text;
+    row['last_msg_time'] = time;
+    row['last_event_time'] = time;
+    row['last_msg_sender'] = accountId;
+    row['last_msg_status'] = status;
+    await AppDatabase.saveChats([row]);
+    _bump();
+  }
 
   static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   static void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
   static StreamSubscription<Packet>? _globalPushSub;
   static StreamSubscription<SessionState>? _globalStateSub;
+  static Future<void> _pushQueue = Future.value();
 
-  static final Set<int> _dirtyChats = {};
-  static final Set<int> _knownChats = {};
+  static final Set<int> _historyFetched = {};
 
-  static bool isChatDirty(int chatId) => _dirtyChats.contains(chatId);
-  static void markChatClean(int chatId) => _dirtyChats.remove(chatId);
-  static void markChatDirty(int chatId) => _dirtyChats.add(chatId);
-  static void registerKnownChat(int chatId) => _knownChats.add(chatId);
+  static bool wasHistoryFetched(int chatId) =>
+      _historyFetched.contains(chatId);
+  static void markHistoryFetched(int chatId) => _historyFetched.add(chatId);
 
   static void attachGlobalPushHandlers(Api api) {
     _globalPushSub?.cancel();
     _globalStateSub?.cancel();
-    _globalPushSub = api.pushStream.listen(_handleGlobalPush);
+    _globalPushSub = api.pushStream.listen(_enqueueGlobalPush);
     _globalStateSub = api.stateStream.listen(_handleSessionState);
-    if (api.state != SessionState.online) {
-      _markAllKnownChatsDirty();
-    }
   }
 
-  static Future<void> _handleSessionState(SessionState state) async {
+  static void _handleSessionState(SessionState state) {
     if (state == SessionState.disconnected) {
       ContactInfoFetch.clear();
       PresenceFetch.clear();
       ChatInfoFetch.clear();
-      await _markAllKnownChatsDirty();
+      _historyFetched.clear();
     }
   }
 
   static void resetForAccountSwitch() {
-    _dirtyChats.clear();
-    _knownChats.clear();
+    _historyFetched.clear();
     ContactInfoFetch.clear();
     PresenceFetch.clear();
     ChatInfoFetch.clear();
   }
 
-  static Future<void> _markAllKnownChatsDirty() async {
-    if (_knownChats.isEmpty) {
-      final accountId = await TokenStorage.getActiveAccountId();
-      if (accountId == null) return;
-      final rows = await AppDatabase.loadChats(accountId);
-      for (final row in rows) {
-        final id = row['id'];
-        if (id is int) _knownChats.add(id);
-      }
-    }
-    _dirtyChats.addAll(_knownChats);
+  static void _enqueueGlobalPush(Packet packet) {
+    _pushQueue = _pushQueue
+        .then((_) => _handleGlobalPush(packet))
+        .catchError((Object e) {
+          logger.w('Ошибка обработки пуша: $e');
+        });
   }
 
   static Future<void> _handleGlobalPush(Packet packet) async {
@@ -248,7 +404,55 @@ class ChatsModule {
         await _handleNotifMark(packet);
       case Opcode.notifMsgReactionsChanged:
         await _handleNotifMsgReactionsChanged(packet);
+      case Opcode.notifMsgDelete:
+        await _handleNotifMsgDelete(packet);
+      case Opcode.notifPresence:
+        _handlePresence(packet);
     }
+  }
+
+  static void _handlePresence(Packet packet) {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final userId = payload['userId'];
+    if (userId is! int) return;
+    final presence = payload['presence'];
+    if (presence is! Map) return;
+    PresenceFetch.apply(userId, Map<String, dynamic>.from(presence));
+  }
+
+  static Future<void> _handleNotifMsgDelete(Packet packet) async {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+
+    final chatMap = payload['chat'];
+    int? chatId;
+    if (chatMap is Map && chatMap['id'] is int) {
+      chatId = chatMap['id'] as int;
+      await cacheServerChat(chatMap.cast<dynamic, dynamic>(), accountId);
+    } else if (payload['chatId'] is int) {
+      chatId = payload['chatId'] as int;
+    }
+    if (chatId == null) return;
+
+    final keepDeleted = KometSettings.viewDeleted.value;
+    final ids = payload['messageIds'];
+    if (ids is List) {
+      for (final raw in ids) {
+        final id = raw?.toString();
+        if (id == null || id.isEmpty) continue;
+        if (keepDeleted) {
+          await AppDatabase.markMessageDeleted(accountId, chatId, id);
+          _messageEventsController.add(MessageMarkedDeletedEvent(chatId, id));
+        } else {
+          await AppDatabase.deleteMessage(accountId, chatId, id);
+          _messageEventsController.add(MessageRemovedEvent(chatId, id));
+        }
+      }
+    }
+    _bump();
   }
 
   static Future<void> _handleNotifMessage(Packet packet) async {
@@ -288,7 +492,12 @@ class ChatsModule {
     }
 
     if (status == 'REMOVED' && msgIdStr != null) {
-      await AppDatabase.deleteMessage(accountId, chatId, msgIdStr);
+      final keepDeleted = KometSettings.viewDeleted.value;
+      if (keepDeleted) {
+        await AppDatabase.markMessageDeleted(accountId, chatId, msgIdStr);
+      } else {
+        await AppDatabase.deleteMessage(accountId, chatId, msgIdStr);
+      }
       final cachedChat = CachedChat.fromDbRow(rows.first);
       if (cachedChat.lastMsgId == msgIdInt) {
         await _reconcileLastMessage(accountId, chatId, rows.first, unread: unread);
@@ -297,7 +506,11 @@ class ChatsModule {
         newRow['unread_count'] = unread;
         await AppDatabase.saveChats([newRow]);
       }
-      _messageEventsController.add(MessageRemovedEvent(chatId, msgIdStr));
+      _messageEventsController.add(
+        keepDeleted
+            ? MessageMarkedDeletedEvent(chatId, msgIdStr)
+            : MessageRemovedEvent(chatId, msgIdStr),
+      );
       _bump();
       return;
     }
@@ -360,8 +573,9 @@ class ChatsModule {
           newRow['last_event_time'] = msgTime;
         }
       }
-      newRow['last_msg_text'] = msgText;
+      newRow['last_msg_text'] = messagePreviewText(msg);
       if (senderId != null) newRow['last_msg_sender'] = senderId;
+      newRow['last_msg_status'] = 'sent';
     }
     if (unread != null) newRow['unread_count'] = unread;
 
@@ -375,18 +589,37 @@ class ChatsModule {
     Map<String, dynamic> chatRow, {
     int? unread,
   }) async {
-    final latest = await AppDatabase.loadMessages(accountId, chatId, limit: 1);
+    final latest = await AppDatabase.loadMessages(
+      accountId,
+      chatId,
+      limit: 1,
+      onlyVisible: true,
+    );
     final newRow = Map<String, dynamic>.from(chatRow);
     if (latest.isNotEmpty) {
       final m = latest.first;
+      String? previewText = m['text']?.toString();
+      if (previewText == null || previewText.isEmpty) {
+        final payloadRaw = m['payload'];
+        if (payloadRaw is String && payloadRaw.isNotEmpty) {
+          try {
+            final payload = jsonDecode(payloadRaw);
+            if (payload is Map) {
+              previewText = attachPreviewLabel(payload['attaches']);
+            }
+          } catch (_) {}
+        }
+      }
       newRow['last_msg_id'] = int.tryParse(m['id']?.toString() ?? '');
-      newRow['last_msg_text'] = m['text'];
+      newRow['last_msg_text'] = previewText ?? m['text'];
       newRow['last_msg_time'] = m['time'];
       newRow['last_msg_sender'] = m['sender_id'];
+      newRow['last_msg_status'] = m['status'];
     } else {
       newRow['last_msg_id'] = null;
       newRow['last_msg_text'] = lastMsgPlaceholder;
       newRow['last_msg_sender'] = null;
+      newRow['last_msg_status'] = null;
     }
     if (unread != null) newRow['unread_count'] = unread;
     await AppDatabase.saveChats([newRow]);
@@ -405,6 +638,61 @@ class ChatsModule {
     if (chat.lastMsgText != lastMsgPlaceholder) return;
     await _reconcileLastMessage(accountId, chatId, rows.first);
     _bump();
+  }
+
+  static Future<void> reconcileLastMessage(int accountId, int chatId) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    await _reconcileLastMessage(accountId, chatId, rows.first);
+    _bump();
+  }
+
+  static Future<List<String>> reconcileDeletedFromFetch(
+    int accountId,
+    int chatId,
+    List<CachedMessage> serverMessages,
+  ) async {
+    if (serverMessages.isEmpty) return const [];
+
+    final serverIds = <String>{};
+    var minTime = serverMessages.first.time;
+    var maxTime = serverMessages.first.time;
+    for (final m in serverMessages) {
+      serverIds.add(m.id);
+      if (m.time < minTime) minTime = m.time;
+      if (m.time > maxTime) maxTime = m.time;
+    }
+
+    final cached = await AppDatabase.loadMessages(
+      accountId,
+      chatId,
+      limit: 300,
+      onlyVisible: true,
+    );
+
+    final newlyDeleted = <String>[];
+    for (final row in cached) {
+      final id = row['id']?.toString();
+      if (id == null || id.isEmpty || id.startsWith('temp_')) continue;
+      if (serverIds.contains(id)) continue;
+
+      final status = row['status']?.toString();
+      if (status == 'pending' || status == 'sending' || status == 'error') {
+        continue;
+      }
+
+      final time = row['time'] is int
+          ? row['time'] as int
+          : int.tryParse(row['time']?.toString() ?? '') ?? 0;
+      if (time < minTime || time > maxTime) continue;
+
+      newlyDeleted.add(id);
+    }
+
+    if (newlyDeleted.isNotEmpty) {
+      await AppDatabase.markMessagesDeleted(accountId, chatId, newlyDeleted);
+    }
+    return newlyDeleted;
   }
 
   static Future<void> _handleNotifMsgReactionsChanged(Packet packet) async {
@@ -478,6 +766,7 @@ class ChatsModule {
     if (cached.participants[userId] == mark) return;
     cached.participants[userId] = mark;
     await AppDatabase.saveChats([cached.toDbRow()]);
+    _bump();
   }
 
   static final Set<int> _pendingContactUpdates = {};
@@ -557,6 +846,7 @@ class ChatsModule {
     Map<dynamic, dynamic> chat,
     int accountId, {
     Map<int, CachedChat>? preloadedExisting,
+    bool inList = true,
   }) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
@@ -583,12 +873,13 @@ class ChatsModule {
       logger.w('cacheServerChat: parse returned null for chat=${chat['id']}');
       return null;
     }
-    _knownChats.add(parsed.id);
     final ex = existing[parsed.id];
     if (ex != null && _sameContent(ex, parsed)) {
       return parsed;
     }
-    await AppDatabase.saveChats([parsed.toDbRow()]);
+    final row = parsed.toDbRow();
+    row['in_list'] = inList ? 1 : 0;
+    await AppDatabase.saveChats([row]);
     _bump();
     return parsed;
   }
@@ -641,6 +932,7 @@ class ChatsModule {
 
       // Presence for online statuses
       final presenceMap = data['presence'] is Map ? data['presence'] as Map : {};
+      PresenceFetch.primeAll(presenceMap);
       final cachedAt = DateTime.now().millisecondsSinceEpoch;
 
       final existingRows = await AppDatabase.loadChats(accountId);
@@ -664,7 +956,7 @@ class ChatsModule {
             ),
           )
           .whereType<CachedChat>()
-          .map((c) => c.toDbRow())
+          .map((c) => c.toDbRow()..['in_list'] = 1)
           .toList();
 
       if (rows.isNotEmpty) {
@@ -680,9 +972,6 @@ class ChatsModule {
     try {
       final rows = await AppDatabase.loadChats(accountId);
       final chats = rows.map(CachedChat.fromDbRow).toList();
-      for (final c in chats) {
-        _knownChats.add(c.id);
-      }
       return chats;
     } catch (e) {
       logger.e("Ошибка при получении чатов: $e");
@@ -772,7 +1061,7 @@ class ChatsModule {
         if (lastMsg is Map) {
           lastMsgId = lastMsg['id'] as int?;
           lastMsgTime = lastMsg['time'] as int?;
-          lastMsgText = lastMsg['text'] as String?;
+          lastMsgText = messagePreviewText(lastMsg);
           lastMsgSenderId = lastMsg['sender'] as int?;
         }
 
@@ -895,6 +1184,126 @@ class ChatsModule {
       'count': 10,
     });
     return packet.payload;
+  }
+
+  static List<ChatSearchHit> _parseSearchResult(dynamic payload) {
+    final result = (payload as Map?)?['result'];
+    if (result is! List) return const [];
+    final hits = <ChatSearchHit>[];
+    for (final item in result) {
+      if (item is! Map) continue;
+      final chat = item['chat'];
+      if (chat is! Map) continue;
+      final id = chat['id'];
+      if (id is! int) continue;
+      final last = chat['lastMessage'];
+      final link = chat['link'];
+      hits.add(ChatSearchHit(
+        id: id,
+        type: (chat['type'] as String?) ?? 'CHAT',
+        title: chat['title'] as String?,
+        avatarUrl: chat['baseIconUrl'] as String?,
+        subtitle: link is String && link.isNotEmpty
+            ? '@$link'
+            : (last is Map ? last['text'] as String? : null),
+      ));
+    }
+    return hits;
+  }
+
+  static List<MessageSearchHit> _parseMessageResult(dynamic payload) {
+    final result = (payload as Map?)?['result'];
+    if (result is! List) return const [];
+    final hits = <MessageSearchHit>[];
+    for (final item in result) {
+      if (item is! Map) continue;
+      final message = item['message'];
+      if (message is! Map) continue;
+      final chatId = item['chatId'];
+      if (chatId is! int || chatId == 0) continue;
+      hits.add(MessageSearchHit(
+        chatId: chatId,
+        messageId: message['id']?.toString(),
+        text: message['text'] as String?,
+        time: (message['time'] as int?) ?? 0,
+        senderId: (message['sender'] as int?) ?? 0,
+      ));
+    }
+    return hits;
+  }
+
+  static Future<List<MessageSearchHit>> searchMessages(
+    Api api,
+    String query, {
+    int count = 50,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    try {
+      final packet = await api.sendRequest(Opcode.chatSearch, {
+        'count': count,
+        'query': term,
+      });
+      if (packet.isError) return const [];
+      return _parseMessageResult(packet.payload);
+    } catch (e) {
+      logger.w('searchMessages failed: $e');
+      return const [];
+    }
+  }
+
+  static Future<List<ChatSearchHit>> searchPublic(
+    Api api,
+    String query, {
+    int count = 20,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    try {
+      final packet = await api.sendRequest(Opcode.publicSearch, {
+        'type': 'ALL',
+        'count': count,
+        'query': term,
+      });
+      if (packet.isError) return const [];
+      return _parseSearchResult(packet.payload);
+    } catch (e) {
+      logger.w('searchPublic failed: $e');
+      return const [];
+    }
+  }
+
+  static Future<void> subscribeChat(
+    Api api,
+    int chatId, {
+    bool subscribe = true,
+  }) async {
+    try {
+      await api.sendRequest(Opcode.chatSubscribe, {
+        'chatId': chatId,
+        'subscribe': subscribe,
+      });
+    } catch (e) {
+      logger.w('subscribeChat failed: $e');
+    }
+  }
+
+  static Future<bool> ensureChatCached(
+    Api api,
+    int accountId,
+    int chatId,
+  ) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isNotEmpty) return true;
+    try {
+      final info = await getChatInfo(api, chatId);
+      if (info == null) return false;
+      await cacheServerChat(info, accountId, inList: false);
+      return true;
+    } catch (e) {
+      logger.w('ensureChatCached failed for $chatId: $e');
+      return false;
+    }
   }
 
   static Future<CachedChat?> createGroupChat(

@@ -4,6 +4,7 @@ import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show TwoFactorDetails;
 import '../../../core/storage/app_database.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 
 class PasswordEntryScreen extends StatefulWidget {
   const PasswordEntryScreen({super.key});
@@ -16,7 +17,6 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   bool _isLoading = true;
   bool _is2faEnabled = false;
   bool _isAuthenticated = false;
-  String? _verifiedPassword;
   TwoFactorDetails? _details;
 
   final _passwordController = TextEditingController();
@@ -47,14 +47,53 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
       if (!mounted) return;
       setState(() {
         _isAuthenticated = true;
-        _verifiedPassword = _passwordController.text;
         _details = details;
       });
+      _passwordController.clear();
     } catch (_) {
       if (mounted) setState(() => _errorMessage = 'Неверный пароль');
     } finally {
       if (mounted) _isVerifying.value = false;
     }
+  }
+
+  Future<String?> _promptPassword() async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Подтвердите пароль'),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Текущий пароль'),
+            onSubmitted: (v) => Navigator.of(ctx).pop(v),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text),
+              child: const Text('Продолжить'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _openWithPassword(Widget Function(String password) builder) async {
+    final password = await _promptPassword();
+    if (password == null || password.isEmpty || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => builder(password)),
+    );
   }
 
   Future<void> _check2faStatus() async {
@@ -147,11 +186,10 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   }
 
   Widget _buildSetupSection(ColorScheme cs) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      depth: 6,
       child: Column(
         children: [
           _buildHeaderTile(
@@ -179,14 +217,14 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   }
 
   Widget _buildPasswordGate(ColorScheme cs) {
-    return Container(
-      width: double.infinity,
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
+      depth: 6,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -258,20 +296,21 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
   Widget _buildManageSection(ColorScheme cs) {
     return Column(
       children: [
-        Container(
-          width: double.infinity,
+        GlossyPill(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
+          depth: 6,
+          child: SizedBox(
+            width: double.infinity,
+            child: Row(
             children: [
               Container(
                 width: 48,
@@ -322,13 +361,13 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               ),
             ],
           ),
+          ),
         ),
         const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-          ),
+        GlossyPill(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
+          depth: 6,
           child: Column(
             children: [
               _buildActionRow(
@@ -336,13 +375,8 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
                 icon: Symbols.password,
                 label: 'Изменить пароль',
                 isLast: false,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TwoFactorPasswordChangeScreen(
-                      currentPassword: _verifiedPassword!,
-                    ),
-                  ),
+                onTap: () => _openWithPassword(
+                  (pwd) => TwoFactorPasswordChangeScreen(currentPassword: pwd),
                 ),
               ),
               Divider(
@@ -354,13 +388,8 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
                 icon: Icons.email_outlined,
                 label: 'Изменить почту',
                 isLast: false,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TwoFactorEmailChangeScreen(
-                      currentPassword: _verifiedPassword!,
-                    ),
-                  ),
+                onTap: () => _openWithPassword(
+                  (pwd) => TwoFactorEmailChangeScreen(currentPassword: pwd),
                 ),
               ),
               Divider(
@@ -373,13 +402,8 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
                 label: 'Удалить пароль',
                 isLast: true,
                 textColor: cs.error,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TwoFactorRemoveScreen(
-                      currentPassword: _verifiedPassword!,
-                    ),
-                  ),
+                onTap: () => _openWithPassword(
+                  (pwd) => TwoFactorRemoveScreen(currentPassword: pwd),
                 ),
               ),
             ],
@@ -541,6 +565,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
             break;
           }
           final trackId = await accountModule.create2faTrack();
+          if (!mounted) return;
           setState(() {
             _trackId = trackId;
             _step = 1;
@@ -555,12 +580,14 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
             _trackId!,
             _passwordController.text,
           );
+          if (!mounted) return;
           setState(() => _step = 2);
           break;
         case 2:
           if (_hintController.text.isNotEmpty) {
             await accountModule.set2faHint(_trackId!, _hintController.text);
           }
+          if (!mounted) return;
           setState(() => _step = 3);
           break;
         case 3:
@@ -573,6 +600,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
             break;
           }
           await accountModule.verify2faEmail(_trackId!, _emailController.text);
+          if (!mounted) return;
           setState(() => _step = 4);
           break;
         case 4:
@@ -585,7 +613,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           break;
       }
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
       if (mounted) {
         _isLoading.value = false;
@@ -976,7 +1004,7 @@ class _TwoFactorPasswordChangeScreenState
         );
       }
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
       if (mounted) _isLoading.value = false;
     }
@@ -1144,6 +1172,7 @@ class _TwoFactorEmailChangeScreenState
           }
           final trackId = await _ensureTrack();
           await accountModule.verify2faEmail(trackId, _emailController.text);
+          if (!mounted) return;
           setState(() => _step = 1);
           break;
         case 1:
@@ -1164,7 +1193,7 @@ class _TwoFactorEmailChangeScreenState
           break;
       }
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
       if (mounted) _isLoading.value = false;
     }
@@ -1333,7 +1362,7 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
         );
       }
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
       if (mounted) _isLoading.value = false;
     }

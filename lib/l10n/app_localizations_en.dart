@@ -85,6 +85,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginSignInWithToken => 'Sign in with token';
 
   @override
+  String get tokenLoginTitle => 'Token login';
+
+  @override
+  String get tokenLoginTokenLabel => 'Token';
+
+  @override
+  String get tokenLoginNote =>
+      'Token login only works with spoofing. Enter the data of the device the token belongs to, otherwise the account may be banned.';
+
+  @override
+  String get tokenLoginButton => 'Sign in';
+
+  @override
+  String get tokenLoginError =>
+      'Fill in the token, device name, OS version and Device ID';
+
+  @override
+  String get tokenLoginFailed => 'Sign in failed';
+
+  @override
   String get loginSignInWithSessionFile => 'Sign in with session file';
 
   @override
@@ -162,6 +182,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get spoofScreenTitle => 'Session spoofing';
 
   @override
+  String get spoofEnableTitle => 'Device spoofing';
+
+  @override
+  String get spoofEnableSubtitleOn => 'Enabled for this account';
+
+  @override
+  String get spoofEnableSubtitleOff => 'Disabled — using the real device';
+
+  @override
   String get spoofInfoHint =>
       'Tap \"Generate\":\n• Short tap: random preset.\n• Long press: real device data.';
 
@@ -187,7 +216,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spoofDeviceTypeDescription =>
-      'This field is not changeable, to avoid token association issues';
+      'Controls which devices are generated: Android or iOS';
 
   @override
   String get spoofDeviceTypeLabel => 'Device type';

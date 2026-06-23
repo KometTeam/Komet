@@ -10,7 +10,7 @@ import '../../core/config/app_message_actions_style.dart';
 import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
-enum MessageActionsInteraction { dragAndRelease, click }
+enum MessageActionsInteraction { dragAndRelease, click, tap }
 
 class MessageActionsController extends ChangeNotifier {
   Offset? pointer;
@@ -73,6 +73,10 @@ void showMessageActions({
   required MessageActionsController controller,
   required MessageActionsStyle style,
   required VoidCallback onDispose,
+  VoidCallback? onDelete,
+  VoidCallback? onEdit,
+  VoidCallback? onReply,
+  VoidCallback? onForward,
   MessageActionsInteraction interaction = MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
@@ -87,6 +91,10 @@ void showMessageActions({
       controller: controller,
       style: style,
       interaction: interaction,
+      onDelete: onDelete,
+      onEdit: onEdit,
+      onReply: onReply,
+      onForward: onForward,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -106,6 +114,10 @@ class _MessageActionsLayer extends StatefulWidget {
   final MessageActionsStyle style;
   final MessageActionsInteraction interaction;
   final VoidCallback onDismiss;
+  final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onReply;
+  final VoidCallback? onForward;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -117,6 +129,10 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.style,
     required this.interaction,
     required this.onDismiss,
+    this.onDelete,
+    this.onEdit,
+    this.onReply,
+    this.onForward,
   });
 
   @override
@@ -235,7 +251,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final menuHeight = n * itemHeight + vPad * 2;
     late double menuX;
     late double menuY;
-    if (widget.interaction == MessageActionsInteraction.click) {
+    if (widget.interaction != MessageActionsInteraction.dragAndRelease) {
       final spaceBelow = screenSize.height - widget.tapPoint.dy - 8;
       _showBelow = spaceBelow >= menuHeight || widget.tapPoint.dy < menuHeight;
       final rawY = _showBelow
@@ -281,12 +297,16 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final hasText = widget.messageText != null && widget.messageText!.isNotEmpty;
     return <_Action>[
       if (hasText) _Action(Symbols.content_copy, 'Копировать', _copy),
-      _Action(Symbols.reply, 'Ответить', () => _stub('Ответ')),
-      _Action(Symbols.forward, 'Переслать', () => _stub('Пересылка')),
+      if (widget.isMe && widget.onEdit != null)
+        _Action(Symbols.edit, 'Изменить', _edit),
+      if (widget.onReply != null)
+        _Action(Symbols.reply, 'Ответить', _reply),
+      if (widget.onForward != null)
+        _Action(Symbols.forward, 'Переслать', _forward),
       _Action(
         Symbols.delete,
         'Удалить',
-        () => _stub('Удаление'),
+        _delete,
         destructive: true,
       ),
     ];
@@ -346,10 +366,28 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     await _close();
   }
 
-  Future<void> _stub(String name) async {
-    if (!mounted) return;
-    showCustomNotification(context, '$name — пока в разработке');
+  Future<void> _delete() async {
+    final onDelete = widget.onDelete;
     await _close();
+    onDelete?.call();
+  }
+
+  Future<void> _edit() async {
+    final onEdit = widget.onEdit;
+    await _close();
+    onEdit?.call();
+  }
+
+  Future<void> _reply() async {
+    final onReply = widget.onReply;
+    await _close();
+    onReply?.call();
+  }
+
+  Future<void> _forward() async {
+    final onForward = widget.onForward;
+    await _close();
+    onForward?.call();
   }
 
   @override
@@ -413,7 +451,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final cs = Theme.of(context).colorScheme;
     final eased = Curves.easeOutCubic.transform(t);
     final scale = 0.88 + 0.12 * eased;
-    final isClick = widget.interaction == MessageActionsInteraction.click;
+    final tapAnchored =
+        widget.interaction != MessageActionsInteraction.dragAndRelease;
     return Positioned(
       left: _menuRect.left,
       top: _menuRect.top,
@@ -423,7 +462,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         opacity: eased,
         child: Transform.scale(
           scale: scale,
-          alignment: isClick
+          alignment: tapAnchored
               ? Alignment(-1.0, _showBelow ? -1.0 : 1.0)
               : Alignment(
                   widget.isMe ? 1.0 : -1.0,
@@ -443,7 +482,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                   _ListMenuItem(
                     action: _actions[i],
                     highlighted: _hoveredIndex == i,
-                    onHoverChanged: isClick
+                    onHoverChanged: tapAnchored
                         ? (hovered) {
                             if (hovered) {
                               if (_hoveredIndex != i) {

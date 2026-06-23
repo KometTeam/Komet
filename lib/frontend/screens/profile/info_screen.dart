@@ -4,7 +4,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/section_header.dart';
 
 class InfoScreen extends StatefulWidget {
@@ -32,10 +34,11 @@ class _InfoScreenState extends State<InfoScreen> {
         return;
       }
       final jsonStr = await AppDatabase.getLoginInfo(accountId);
+      if (!mounted) return;
       if (jsonStr != null) {
         setState(() => _info = jsonDecode(jsonStr) as Map<String, dynamic>);
       }
-      if (mounted) setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
         showCustomNotification(context, 'Error: $e');
@@ -58,7 +61,7 @@ class _InfoScreenState extends State<InfoScreen> {
           icon: Icon(Symbols.arrow_back, color: cs.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
+        title: ConnectionTitleText(
           l10n?.infoTitle ?? 'Info',
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),
@@ -169,14 +172,14 @@ class _InfoScreenState extends State<InfoScreen> {
   }
 
   Widget _buildRow(String key, String label, String value, ColorScheme cs) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 1),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 1),
+      child: GlossyPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        depth: 6,
+        child: Row(
         children: [
           Expanded(
             flex: 2,
@@ -203,27 +206,26 @@ class _InfoScreenState extends State<InfoScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
 
   Widget _buildListRow(List? items, ColorScheme cs) {
     if (items == null || items.isEmpty) {
-      return Container(
+      return GlossyPill(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
-        ),
+        depth: 6,
         child: Text('-', style: TextStyle(color: cs.onSurfaceVariant)),
       );
     }
-    return Container(
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      depth: 6,
       child: Wrap(
         spacing: 8,
         runSpacing: 4,

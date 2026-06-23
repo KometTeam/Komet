@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/utils/haptics.dart';
+import '../../widgets/glossy_pill.dart';
 
 class MessageActionsScreen extends StatelessWidget {
   const MessageActionsScreen({super.key});
@@ -13,7 +15,7 @@ class MessageActionsScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(
+      appBar: ConnectionTitleBar(
         titleText: 'Меню действий',
         backgroundColor: cs.surface,
       ),
@@ -52,12 +54,12 @@ class _StyleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-        child: Column(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      depth: 6,
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -97,7 +99,6 @@ class _StyleCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }

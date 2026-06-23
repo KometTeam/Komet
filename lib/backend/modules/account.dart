@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import '../api.dart';
+import '../../core/config/komet_settings.dart';
 import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import 'chats.dart';
@@ -17,6 +19,11 @@ import 'webapp.dart';
 String _normalizeAuthPhone(String phone) {
   final digits = phone.replaceAll(RegExp(r'\D'), '');
   return '+$digits';
+}
+
+String _maskPhone(String phone) {
+  if (phone.length <= 5) return '***';
+  return '${phone.substring(0, 3)}***${phone.substring(phone.length - 2)}';
 }
 
 class PrivacyConfig {
@@ -421,10 +428,19 @@ class LoginResult {
 class AccountModule {
   final Api _api;
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
+  bool _loggedIn = false;
 
-  AccountModule(this._api);
+  AccountModule(this._api) {
+    _api.stateStream.listen((state) {
+      if (state != SessionState.online) _loggedIn = false;
+    });
+  }
 
   Stream<LoginStatus> get loginStatusStream => _loginStatusController.stream;
+
+  /// `true`, только когда сервер считает сессию ONLINE — после успешного
+  /// login (opcode 19), а не просто после хэндшейка (opcode 6).
+  bool get isLoggedIn => _loggedIn;
 
   Future<PrivacyConfig> getPrivacyConfig() async {
     final accountId = await TokenStorage.getActiveAccountId();
@@ -488,6 +504,7 @@ class AccountModule {
     _ensureOnline();
     final packet = await _api.sendRequest(Opcode.config, <dynamic, dynamic>{
       'pushToken': pushToken,
+      'pushOptions': 131072,
     });
     if (packet.isError) {
       final msg = messageFromErrorPayload(packet.payload).toUpperCase();
@@ -876,6 +893,7 @@ class AccountModule {
     if (sessionToken != null && accountId != null) {
       await TokenStorage.saveToken(sessionToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
+      await SpoofingService.commitPendingSpoof(accountId);
     }
 
     return result;
@@ -931,6 +949,7 @@ class AccountModule {
     final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
     await AppDatabase.saveProfile(profile, isActive: true);
     await TokenStorage.setActiveAccount(accountId);
+    await SpoofingService.commitPendingSpoof(accountId);
 
     logger.i('Регистрация завершена, accountId=$accountId');
     return accountId;
@@ -985,9 +1004,11 @@ class AccountModule {
         }
         await TokenStorage.saveToken(authToken, resolvedAccountId);
         await TokenStorage.setActiveAccount(resolvedAccountId);
+        await SpoofingService.commitPendingSpoof(resolvedAccountId);
       }
 
       final result = await _processLoginResponse(dataMap, resolvedAccountId);
+      _loggedIn = true;
       _loginStatusController.add(LoginStatus.success);
       return result;
     } catch (e) {
@@ -1031,6 +1052,11 @@ class AccountModule {
   }
 
   Future<void> beginAddAccount() async {
+    final existing = await AppDatabase.loadAllProfiles();
+    await SpoofingService.prepareNewAccountSpoof(
+      existing.map((p) => p.id).toList(growable: false),
+    );
+
     try {
       await _api.disconnect();
     } catch (_) {}
@@ -1042,6 +1068,25 @@ class AccountModule {
     ChatsModule.resetForAccountSwitch();
 
     logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
+  }
+
+  Future<LoginResult> loginWithToken(String token) async {
+    await TokenStorage.clearActiveAccount();
+    try {
+      await _api.disconnect();
+    } catch (_) {}
+
+    ContactCache.clear();
+    TranscriptionCache.clear();
+    ChatsModule.resetForAccountSwitch();
+
+    await _api.connect();
+    if (_api.state != SessionState.online) {
+      throw StateError('loginWithToken: нет соединения с сервером');
+    }
+
+    logger.i('Вход по токену: сессия поднята со спуфом, выполняю login');
+    return login(token: token);
   }
 
   Future<ProfileData> switchAccount(int accountId) async {
@@ -1081,6 +1126,7 @@ class AccountModule {
   Future<void> removeAccount(int accountId) async {
     await AppDatabase.deleteAccount(accountId);
     await TokenStorage.deleteAccount(accountId);
+    await SpoofingService.clearAccountSpoof(accountId);
     logger.i('Аккаунт $accountId удалён локально');
   }
 
@@ -1140,7 +1186,7 @@ class AccountModule {
   ) {
     final payload = <dynamic, dynamic>{
       'token': token,
-      'interactive': true,
+      'interactive': !KometSettings.ghostMode.value,
       'exp': {
         'chatsCountGroups': Uint8List.fromList([0x0b, 0x32]),
       },
@@ -1408,7 +1454,7 @@ class AccountModule {
       'language': language,
     };
 
-    logger.i('Запрос OTP-кода: phone=$normalizedPhone type=${type.value}');
+    logger.i('Запрос OTP-кода: phone=${_maskPhone(normalizedPhone)} type=${type.value}');
 
     final packet = await _api.sendRequest(Opcode.authRequest, payload);
 

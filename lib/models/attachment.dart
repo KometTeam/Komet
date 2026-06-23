@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum AttachmentType {
   photo,
   video,
@@ -8,6 +10,19 @@ enum AttachmentType {
   sticker,
   control,
   poll,
+  share,
+  call,
+}
+
+String? decodeAttachPreview(dynamic raw) {
+  if (raw is String) return raw;
+  if (raw is List) {
+    try {
+      final bytes = List<int>.from(raw);
+      return 'data:image/webp;base64,${base64Encode(bytes)}';
+    } catch (_) {}
+  }
+  return null;
 }
 
 abstract class MessageAttachment {
@@ -44,8 +59,10 @@ abstract class MessageAttachment {
         return ControlAttachment.fromMap(map);
       case 'POLL':
         return PollAttachment.fromMap(map);
+      case 'CALL':
+        return CallAttachment.fromMap(map);
       case 'SHARE':
-        return FileAttachment.fromMap(map);
+        return ShareAttachment.fromMap(map);
       case 'INLINE_KEYBOARD':
         return UnknownAttachment(map);
       default:
@@ -62,6 +79,7 @@ class PhotoAttachment extends MessageAttachment {
   final int? width;
   final int? height;
   final int? size;
+  final String? localPath;
 
   const PhotoAttachment({
     super.previewData,
@@ -72,24 +90,13 @@ class PhotoAttachment extends MessageAttachment {
     this.width,
     this.height,
     this.size,
+    this.localPath,
   }) : super(type: AttachmentType.photo);
 
   factory PhotoAttachment.fromMap(Map<String, dynamic> map) {
-    String? previewStr;
-    final previewRaw = map['previewData'];
-    if (previewRaw is String) {
-      previewStr = previewRaw;
-    } else if (previewRaw is List) {
-      try {
-        final bytes = List<int>.from(previewRaw);
-        final base64 = String.fromCharCodes(bytes);
-        previewStr = 'data:image/webp;base64,$base64';
-      } catch (_) {}
-    }
-
     return PhotoAttachment(
-      previewData: previewStr,
-      baseUrl: map['baseUrl'] as String?,
+      previewData: decodeAttachPreview(map['previewData']),
+      baseUrl: (map['baseUrl'] ?? map['url']) as String?,
       photoId: map['photoId'] as int?,
       photoToken: map['photoToken'] as String?,
       width: map['width'] as int?,
@@ -114,6 +121,7 @@ class PhotoAttachment extends MessageAttachment {
 class VideoAttachment extends MessageAttachment {
   final int? videoId;
   final String? videoToken;
+  final String? thumbnail;
   final int? width;
   final int? height;
   final int? duration;
@@ -125,6 +133,7 @@ class VideoAttachment extends MessageAttachment {
     super.fileUrl,
     this.videoId,
     this.videoToken,
+    this.thumbnail,
     this.width,
     this.height,
     this.duration,
@@ -132,23 +141,12 @@ class VideoAttachment extends MessageAttachment {
   }) : super(type: AttachmentType.video);
 
   factory VideoAttachment.fromMap(Map<String, dynamic> map) {
-    String? previewStr;
-    final previewRaw = map['previewData'];
-    if (previewRaw is String) {
-      previewStr = previewRaw;
-    } else if (previewRaw is List) {
-      try {
-        final bytes = List<int>.from(previewRaw);
-        final base64 = String.fromCharCodes(bytes);
-        previewStr = 'data:image/webp;base64,$base64';
-      } catch (_) {}
-    }
-
     return VideoAttachment(
-      previewData: previewStr,
+      previewData: decodeAttachPreview(map['previewData']),
       baseUrl: map['baseUrl'] as String?,
       videoId: map['videoId'] as int?,
-      videoToken: map['videoToken'] as String?,
+      videoToken: (map['token'] ?? map['videoToken'])?.toString(),
+      thumbnail: map['thumbnail'] as String?,
       width: map['width'] as int?,
       height: map['height'] as int?,
       duration: map['duration'] as int?,
@@ -163,6 +161,7 @@ class VideoAttachment extends MessageAttachment {
     'baseUrl': baseUrl,
     'videoId': videoId,
     'videoToken': videoToken,
+    'thumbnail': thumbnail,
     'width': width,
     'height': height,
     'duration': duration,
@@ -189,18 +188,6 @@ class AudioAttachment extends MessageAttachment {
   }) : super(type: AttachmentType.audio);
 
   factory AudioAttachment.fromMap(Map<String, dynamic> map) {
-    String? previewStr;
-    final previewRaw = map['previewData'];
-    if (previewRaw is String) {
-      previewStr = previewRaw;
-    } else if (previewRaw is List) {
-      try {
-        final bytes = List<int>.from(previewRaw);
-        final base64 = String.fromCharCodes(bytes);
-        previewStr = 'data:image/webp;base64,$base64';
-      } catch (_) {}
-    }
-
     String? waveStr;
     final waveRaw = map['wave'];
     if (waveRaw is String) {
@@ -208,13 +195,12 @@ class AudioAttachment extends MessageAttachment {
     } else if (waveRaw is List) {
       try {
         final bytes = List<int>.from(waveRaw);
-        final base64 = String.fromCharCodes(bytes);
-        waveStr = 'data:image/webp;base64,$base64';
+        waveStr = String.fromCharCodes(bytes);
       } catch (_) {}
     }
 
     return AudioAttachment(
-      previewData: previewStr,
+      previewData: decodeAttachPreview(map['previewData']),
       baseUrl: map['baseUrl']?.toString(),
       fileUrl: map['url']?.toString(),
       audioId: map['audioId'] as int?,
@@ -243,6 +229,7 @@ class FileAttachment extends MessageAttachment {
   final String? fileToken;
   final String? name;
   final int? size;
+  final PhotoAttachment? preview;
 
   const FileAttachment({
     super.previewData,
@@ -252,28 +239,24 @@ class FileAttachment extends MessageAttachment {
     this.fileToken,
     this.name,
     this.size,
+    this.preview,
   }) : super(type: AttachmentType.file);
 
   factory FileAttachment.fromMap(Map<String, dynamic> map) {
-    String? previewStr;
-    final previewRaw = map['previewData'];
-    if (previewRaw is String) {
-      previewStr = previewRaw;
-    } else if (previewRaw is List) {
-      try {
-        final bytes = List<int>.from(previewRaw);
-        final base64 = String.fromCharCodes(bytes);
-        previewStr = 'data:image/webp;base64,$base64';
-      } catch (_) {}
+    PhotoAttachment? preview;
+    final previewRaw = map['preview'];
+    if (previewRaw is Map) {
+      preview = PhotoAttachment.fromMap(Map<String, dynamic>.from(previewRaw));
     }
 
     return FileAttachment(
-      previewData: previewStr,
+      previewData: decodeAttachPreview(map['previewData']),
       baseUrl: map['baseUrl'] as String?,
       fileId: map['fileId'] as int?,
-      fileToken: map['fileToken'] as String?,
+      fileToken: (map['fileToken'] ?? map['token'])?.toString(),
       name: map['name'] as String?,
       size: map['size'] as int?,
+      preview: preview,
     );
   }
 
@@ -286,6 +269,7 @@ class FileAttachment extends MessageAttachment {
     'fileToken': fileToken,
     'name': name,
     'size': size,
+    if (preview != null) 'preview': preview!.toMap(),
   };
 }
 
@@ -306,20 +290,8 @@ class StickerAttachment extends MessageAttachment {
   }) : super(type: AttachmentType.sticker);
 
   factory StickerAttachment.fromMap(Map<String, dynamic> map) {
-    String? previewStr;
-    final previewRaw = map['previewData'];
-    if (previewRaw is String) {
-      previewStr = previewRaw;
-    } else if (previewRaw is List) {
-      try {
-        final bytes = List<int>.from(previewRaw);
-        final base64 = String.fromCharCodes(bytes);
-        previewStr = 'data:image/webp;base64,$base64';
-      } catch (_) {}
-    }
-
     return StickerAttachment(
-      previewData: previewStr,
+      previewData: decodeAttachPreview(map['previewData']),
       baseUrl: (map['url'] ?? map['baseUrl'])?.toString(),
       stickerId: map['stickerId']?.toString(),
       stickerPackId: map['setId']?.toString() ?? map['stickerPackId']?.toString(),
@@ -394,6 +366,7 @@ class ContactAttachment extends MessageAttachment {
 class LocationAttachment extends MessageAttachment {
   final double? latitude;
   final double? longitude;
+  final double? zoom;
   final String? title;
   final String? address;
 
@@ -403,6 +376,7 @@ class LocationAttachment extends MessageAttachment {
     super.fileUrl,
     this.latitude,
     this.longitude,
+    this.zoom,
     this.title,
     this.address,
   }) : super(type: AttachmentType.location);
@@ -413,6 +387,7 @@ class LocationAttachment extends MessageAttachment {
       baseUrl: map['baseUrl'] as String?,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      zoom: (map['zoom'] as num?)?.toDouble(),
       title: map['title'] as String?,
       address: map['address'] as String?,
     );
@@ -425,6 +400,7 @@ class LocationAttachment extends MessageAttachment {
     'baseUrl': baseUrl,
     'latitude': latitude,
     'longitude': longitude,
+    'zoom': zoom,
     'title': title,
     'address': address,
   };
@@ -496,6 +472,103 @@ class PollAttachment extends MessageAttachment {
     '_type': 'POLL',
     'pollId': pollId,
     'title': title,
+  };
+}
+
+class CallAttachment extends MessageAttachment {
+  final bool isVideo;
+  final int durationMs;
+  final String? hangupType;
+  final String? conversationId;
+  final String? joinLink;
+  final List<int> contactIds;
+
+  const CallAttachment({
+    required this.isVideo,
+    this.durationMs = 0,
+    this.hangupType,
+    this.conversationId,
+    this.joinLink,
+    this.contactIds = const [],
+  }) : super(type: AttachmentType.call);
+
+  bool get isGroup => joinLink != null;
+
+  bool get isMissedOrFailed =>
+      durationMs == 0 ||
+      hangupType == 'CANCELED' ||
+      hangupType == 'REJECTED' ||
+      hangupType == 'MISSED';
+
+  factory CallAttachment.fromMap(Map<String, dynamic> map) {
+    return CallAttachment(
+      isVideo: (map['callType']?.toString().toUpperCase() == 'VIDEO'),
+      durationMs: (map['duration'] as num?)?.toInt() ?? 0,
+      hangupType: map['hangupType']?.toString(),
+      conversationId: map['conversationId']?.toString(),
+      joinLink: map['joinLink']?.toString(),
+      contactIds: (map['contactIds'] as List?)
+              ?.map((e) => e is int ? e : int.tryParse(e?.toString() ?? '') ?? 0)
+              .toList() ??
+          const [],
+    );
+  }
+
+  @override
+  Map<String, dynamic> toMap() => {
+    '_type': 'CALL',
+    'callType': isVideo ? 'VIDEO' : 'AUDIO',
+    'duration': durationMs,
+    'hangupType': hangupType,
+    'conversationId': conversationId,
+    if (joinLink != null) 'joinLink': joinLink,
+    if (contactIds.isNotEmpty) 'contactIds': contactIds,
+  };
+}
+
+class ShareAttachment extends MessageAttachment {
+  final int? shareId;
+  final String? title;
+  final String? description;
+  final String? url;
+  final String? host;
+  final PhotoAttachment? image;
+
+  const ShareAttachment({
+    this.shareId,
+    this.title,
+    this.description,
+    this.url,
+    this.host,
+    this.image,
+  }) : super(type: AttachmentType.share);
+
+  factory ShareAttachment.fromMap(Map<String, dynamic> map) {
+    PhotoAttachment? image;
+    final imageRaw = map['image'];
+    if (imageRaw is Map) {
+      image = PhotoAttachment.fromMap(Map<String, dynamic>.from(imageRaw));
+    }
+
+    return ShareAttachment(
+      shareId: map['shareId'] as int?,
+      title: map['title']?.toString(),
+      description: map['description']?.toString(),
+      url: map['url']?.toString(),
+      host: map['host']?.toString(),
+      image: image,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toMap() => {
+    '_type': 'SHARE',
+    'shareId': shareId,
+    'title': title,
+    'description': description,
+    'url': url,
+    'host': host,
+    if (image != null) 'image': image!.toMap(),
   };
 }
 

@@ -6,6 +6,8 @@ import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../widgets/connection_status.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
 
 class _MemberInfo {
@@ -189,6 +191,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
     return Scaffold(
       backgroundColor: bg,
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: const ConnectionSpinner(),
       body: SafeArea(
         child: _isLoading ? _buildShimmer(cs) : _buildScrollBody(cs),
       ),
@@ -331,12 +335,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _actionBtn(ColorScheme cs, IconData icon, String label) {
     return Expanded(
-      child: Container(
+      child: GlossyPill(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
         padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(14),
-        ),
+        depth: 6,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -400,41 +403,41 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     String value, {
     bool isLink = false,
   }) {
-    return Container(
-      width: double.infinity,
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              color: isLink ? const Color(0xFF007AFF) : cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+      depth: 6,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                color: isLink ? const Color(0xFF007AFF) : cs.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _linkCard(ColorScheme cs, String link) {
-    return Container(
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      depth: 6,
       child: Row(
         children: [
           Expanded(
@@ -473,38 +476,41 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     const int collapsedLines = 3;
     final isLong = desc.length > 120;
 
-    return Container(
-      width: double.infinity,
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Описание',
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            desc,
-            style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
-            maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
-            overflow: (_descExpanded || !isLong) ? null : TextOverflow.ellipsis,
-          ),
-          if (isLong) ...[
-            const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () => setState(() => _descExpanded = !_descExpanded),
-              child: Text(
-                _descExpanded ? 'Свернуть' : 'Ещё',
-                style: const TextStyle(color: Color(0xFF007AFF), fontSize: 13),
-              ),
+      depth: 6,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Описание',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
+            const SizedBox(height: 4),
+            Text(
+              desc,
+              style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
+              maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
+              overflow:
+                  (_descExpanded || !isLong) ? null : TextOverflow.ellipsis,
+            ),
+            if (isLong) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => setState(() => _descExpanded = !_descExpanded),
+                child: Text(
+                  _descExpanded ? 'Свернуть' : 'Ещё',
+                  style:
+                      const TextStyle(color: Color(0xFF007AFF), fontSize: 13),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -668,41 +674,41 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _buildInfoRowsCard(ColorScheme cs) {
-    return Container(
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      depth: 6,
       child: _buildAllInfoRows(cs),
     );
   }
 
   Widget _infoCard(ColorScheme cs, String label, String value) {
-    return Container(
-      width: double.infinity,
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+      depth: 6,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

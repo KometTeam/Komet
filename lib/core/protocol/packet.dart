@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'package:dart_lz4/dart_lz4.dart';
 import 'package:libcompress/libcompress.dart';
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
+import 'lz4_block.dart';
 
 /// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
 const int headerSize = 10;
@@ -119,60 +120,57 @@ Uint8List packPacket(int opcode, Map<dynamic, dynamic> payload, {int seq = 0}) {
   return out;
 }
 
-/// Распаковка пакета от сервера
+const int _isolateDecodeThreshold = 4096;
+
 Future<Packet> unpackPacket(Uint8List packet) async {
-  return Isolate.run(() {
-    // Для удобства расшифровки пакета переводим в ByteData
-    ByteData packetData = ByteData.view(
-      packet.buffer,
-      packet.offsetInBytes,
-      packet.lengthInBytes,
-    );
+  final header = ByteData.sublistView(packet);
 
-    // API версия и cmd представляют из себя 8 битные числа
-    final apiVer = packetData.getUint8(0) & 0xFF;
-    final cmd = packetData.getUint8(1) & 0xFF;
+  final apiVer = header.getUint8(0) & 0xFF;
+  final cmd = header.getUint8(1) & 0xFF;
+  final seq = header.getUint16(2) & 0xFFFF;
+  final opcode = header.getUint16(4) & 0xFFFF;
+  final packedLen = header.getUint32(6);
+  final compFlag = packedLen >> 24;
+  final payloadLength = packedLen & 0xFFFFFF;
 
-    // Sequence и OPCode представляют из себя 16 битные числа
-    final seq = packetData.getUint16(2) & 0xFFFF;
-    final opcode = packetData.getUint16(4) & 0xFFFF;
+  if (payloadLength == 0) {
+    return Packet(api: apiVer, cmd: cmd, seq: seq, opcode: opcode);
+  }
 
-    // После базовых переменных идет длина пакета, является 32 битным числом
-    final packedLen = packetData.getUint32(6);
+  final end = headerSize + payloadLength;
+  if (end > packet.length) {
+    throw Exception('Packet payload length $payloadLength exceeds buffer');
+  }
+  final slice = Uint8List.sublistView(packet, headerSize, end);
 
-    // Compression flag показывает, сжат ли payload
-    final compFlag = packedLen >> 24;
+  dynamic payload;
+  if (compFlag == 0 && slice.length < _isolateDecodeThreshold) {
+    payload = _deserializePayload(slice, compFlag);
+  } else {
+    final owned = Uint8List.fromList(slice);
+    payload = await Isolate.run(() => _deserializePayload(owned, compFlag));
+  }
 
-    // Длина payload'а
-    final payloadLength = packedLen & 0xFFFFFF;
+  return Packet(
+    api: apiVer,
+    cmd: cmd,
+    seq: seq,
+    opcode: opcode,
+    payload: payload,
+  );
+}
 
-    // Байты payload'а, могут быть сжаты LZ4
-    var payloadBytes = packet.buffer.asUint8List(10, payloadLength);
-
-    dynamic payload;
-
-    if (payloadBytes.isNotEmpty) {
-      if (compFlag != 0) {
-        payloadBytes = _decompressPayload(payloadBytes);
-      }
-
-      try {
-        payload = msgpack.deserialize(payloadBytes);
-      } catch (e) {
-        if (payloadBytes.isNotEmpty) {
-          throw Exception("MsgPack deserialization error: $e");
-        }
-      }
-    }
-
-    return Packet(
-      api: apiVer,
-      cmd: cmd,
-      seq: seq,
-      opcode: opcode,
-      payload: payload,
-    );
-  });
+dynamic _deserializePayload(Uint8List payloadBytes, int compFlag) {
+  var bytes = payloadBytes;
+  if (compFlag != 0) {
+    bytes = _decompressPayload(bytes);
+  }
+  if (bytes.isEmpty) return null;
+  try {
+    return msgpack.deserialize(bytes);
+  } catch (e) {
+    throw Exception('MsgPack deserialization error: $e');
+  }
 }
 
 /// Определяет формат сжатия по magic-number и распаковывает payload.
@@ -185,7 +183,7 @@ Uint8List _decompressPayload(Uint8List src) {
       src[2] == 0x2F &&
       src[3] == 0xFD) {
     try {
-      return ZstdCodec().decompress(src);
+      return ZstdCodec(maxDecompressedSize: _maxDecompressedSize).decompress(src);
     } catch (e) {
       throw Exception('Zstd decompression error: $e');
     }
@@ -206,57 +204,9 @@ Uint8List _decompressPayload(Uint8List src) {
 
   // По умолчанию — LZ4 block (без magic)
   try {
-    return _lz4BlockDecompress(src, _maxDecompressedSize);
+    return lz4BlockDecompress(src, _maxDecompressedSize);
   } catch (e) {
     throw Exception('LZ4 block decompression error: $e');
   }
 }
 
-/// LZ4 block декомпрессия (без frame-заголовка).
-/// Сервер шлёт именно block-формат, dart_lz4 его не поддерживает.
-Uint8List _lz4BlockDecompress(Uint8List src, int maxSize) {
-  final dst = BytesBuilder(copy: false);
-  int pos = 0;
-
-  while (pos < src.length) {
-    final token = src[pos++];
-    var litLen = token >> 4;
-
-    if (litLen == 15) {
-      while (pos < src.length) {
-        final b = src[pos++];
-        litLen += b;
-        if (b != 255) break;
-      }
-    }
-
-    if (litLen > 0) {
-      dst.add(src.sublist(pos, pos + litLen));
-      pos += litLen;
-    }
-
-    if (pos >= src.length) break;
-
-    if (pos + 1 >= src.length) throw StateError('LZ4: unexpected end of input');
-    final offset = src[pos] | (src[pos + 1] << 8);
-    pos += 2;
-    if (offset == 0) throw StateError('LZ4: offset = 0');
-
-    var matchLen = (token & 0x0F) + 4;
-    if ((token & 0x0F) == 0x0F) {
-      while (pos < src.length) {
-        final b = src[pos++];
-        matchLen += b;
-        if (b != 255) break;
-      }
-    }
-
-    final out = dst.toBytes();
-    final start = out.length - offset;
-    dst.add(List<int>.generate(matchLen, (i) => out[start + (i % offset)]));
-
-    if (dst.length > maxSize) throw StateError('LZ4: превышен лимит');
-  }
-
-  return dst.toBytes();
-}

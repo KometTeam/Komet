@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import '../../core/storage/app_database.dart';
+import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../models/digital_id.dart';
 import 'webapp.dart';
@@ -33,6 +34,7 @@ class DigitalIdModule {
 
   String? _webAppData;
   String? _deviceId;
+  String? _realUserAgent;
 
   DigitalIdModule(this._webApp);
 
@@ -94,6 +96,33 @@ class DigitalIdModule {
     return hex;
   }
 
+  Future<String> _resolveUserAgent() async {
+    final spoofed = await SpoofingService.getWebViewUserAgent();
+    if (spoofed != null && spoofed.isNotEmpty) return spoofed;
+    return _realUserAgent ??= await _buildRealUserAgent();
+  }
+
+  Future<String> _buildRealUserAgent() async {
+    try {
+      final info = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final android = await info.androidInfo;
+        return 'Mozilla/5.0 (Linux; Android ${android.version.release}; '
+            '${android.model}) AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/124.0.0.0 Mobile Safari/537.36';
+      }
+      if (Platform.isIOS) {
+        final ios = await info.iosInfo;
+        final version = ios.systemVersion.replaceAll('.', '_');
+        return 'Mozilla/5.0 (iPhone; CPU iPhone OS $version like Mac OS X) '
+            'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
+            'Mobile/15E148 Safari/604.1';
+      }
+    } catch (_) {}
+    return 'Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+  }
+
   Future<dynamic> _send(
     String method,
     String path, {
@@ -108,11 +137,7 @@ class DigitalIdModule {
     request.headers.set('Referer', 'https://digital-id.max.ru/');
     request.headers.set('x-requested-with', 'ru.oneme.app');
     request.headers.set('Accept', 'application/json');
-    request.headers.set(
-      'User-Agent',
-      'Mozilla/5.0 (Linux; Android 16; Pixel 7 Pro) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Version/4.0 Chrome/148.0.0.0 Mobile Safari/537.36',
-    );
+    request.headers.set('User-Agent', await _resolveUserAgent());
     if (body != null) {
       request.headers.contentType = ContentType.json;
       request.add(utf8.encode(jsonEncode(body)));
@@ -286,6 +311,7 @@ class DigitalIdModule {
     await _send('DELETE', '/v3/digital-id/delete-profile');
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
+      await TokenStorage.deleteSecure('${_tokenKey}_$accountId');
       await AppDatabase.setSyncValue(accountId, _tokenKey, '');
     }
   }
@@ -293,14 +319,23 @@ class DigitalIdModule {
   Future<String?> _storedToken() async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return null;
-    final value = await AppDatabase.getSyncValue(accountId, _tokenKey);
-    return (value != null && value.isNotEmpty) ? value : null;
+    final secureKey = '${_tokenKey}_$accountId';
+    final secured = await TokenStorage.readSecure(secureKey);
+    if (secured != null && secured.isNotEmpty) return secured;
+
+    final legacy = await AppDatabase.getSyncValue(accountId, _tokenKey);
+    if (legacy != null && legacy.isNotEmpty) {
+      await TokenStorage.writeSecure(secureKey, legacy);
+      await AppDatabase.setSyncValue(accountId, _tokenKey, '');
+      return legacy;
+    }
+    return null;
   }
 
   Future<void> _saveToken(String token) async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
-      await AppDatabase.setSyncValue(accountId, _tokenKey, token);
+      await TokenStorage.writeSecure('${_tokenKey}_$accountId', token);
     }
   }
 

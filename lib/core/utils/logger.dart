@@ -41,6 +41,7 @@ final logger = Logger(
   filter: _logFilter(),
   level: _minimumLogLevel(),
   printer: KometLogPrinter(),
+  output: ConsoleOutput(),
 );
 
 int _importanceSortKey(Level level) {

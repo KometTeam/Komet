@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
+import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
+import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -12,29 +16,62 @@ const List<PillNavItem> _navItems = [
   PillNavItem(icon: Symbols.image, label: 'Галерея'),
   PillNavItem(icon: Symbols.description, label: 'Файл'),
   PillNavItem(icon: Symbols.location_on, label: 'Геопозиция'),
+  PillNavItem(icon: Symbols.bar_chart, label: 'Опрос'),
   PillNavItem(icon: Symbols.person, label: 'Контакт'),
 ];
 
-Future<void> showAttachmentSheet(BuildContext context) {
+Future<void> showAttachmentSheet(
+  BuildContext context, {
+  String? title,
+  void Function(List<PickedPhoto> photos, String caption)? onSend,
+  VoidCallback? onPickFile,
+  VoidCallback? onShareLocation,
+  VoidCallback? onCreatePoll,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    requestFocus: false,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    builder: (_) => const AttachmentSheet(),
+    builder: (_) => AttachmentSheet(
+      title: title,
+      onSend: onSend,
+      onPickFile: onPickFile,
+      onShareLocation: onShareLocation,
+      onCreatePoll: onCreatePoll,
+    ),
   );
 }
 
 class AttachmentSheet extends StatefulWidget {
-  const AttachmentSheet({super.key});
+  final String? title;
+  final void Function(List<PickedPhoto> photos, String caption)? onSend;
+  final VoidCallback? onPickFile;
+  final VoidCallback? onShareLocation;
+  final VoidCallback? onCreatePoll;
+
+  const AttachmentSheet({
+    super.key,
+    this.title,
+    this.onSend,
+    this.onPickFile,
+    this.onShareLocation,
+    this.onCreatePoll,
+  });
 
   @override
   State<AttachmentSheet> createState() => _AttachmentSheetState();
 }
 
 class _AttachmentSheetState extends State<AttachmentSheet> {
+  static List<GalleryItem>? _cachedItems;
+  static GalleryPermission _cachedPermission = GalleryPermission.granted;
+
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
+  final Map<String, PhotoEditState> _edits = {};
+  final TextEditingController _captionCtrl = TextEditingController();
   final PageController _pageController = PageController();
 
   bool _navDragging = false;
@@ -48,21 +85,31 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   @override
   void initState() {
     super.initState();
-    _loadGallery();
+    final cached = _cachedItems;
+    if (cached != null) {
+      _items = cached;
+      _permission = _cachedPermission;
+      _loading = false;
+      _loadGallery(silent: true);
+    } else {
+      _loadGallery();
+    }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     _selected.dispose();
+    _captionCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadGallery() async {
-    setState(() => _loading = true);
+  Future<void> _loadGallery({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     final permission = await _source.ensurePermission();
     if (!mounted) return;
     if (permission == GalleryPermission.denied) {
+      _cachedItems = null;
       setState(() {
         _permission = permission;
         _items = const [];
@@ -72,6 +119,8 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     }
     final items = await _source.load(limit: 120);
     if (!mounted) return;
+    _cachedItems = items;
+    _cachedPermission = permission;
     setState(() {
       _permission = permission;
       _items = items;
@@ -83,6 +132,26 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     final next = Set<String>.from(_selected.value);
     if (!next.remove(item.id)) next.add(item.id);
     _selected.value = next;
+  }
+
+  void _openPreview(GalleryItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MediaPreviewScreen(
+          item: item,
+          title: widget.title,
+          selectedIds: _selected,
+          onToggleSelection: () => _toggleSelection(item),
+          onSend: () => _sendSelection(fallback: item),
+          editState: _edits[item.id],
+          onEditChanged: (state) {
+            if (mounted) setState(() => _edits[item.id] = state);
+          },
+          initialCaption: _captionCtrl.text,
+          onCaptionChanged: (text) => _captionCtrl.text = text,
+        ),
+      ),
+    );
   }
 
   void _onSectionTap(int index) {
@@ -97,14 +166,18 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     showCustomNotification(context, 'Камера скоро появится');
   }
 
-  void _onSend() {
-    final count = _selected.value.length;
-    final overlay = Overlay.of(context, rootOverlay: true);
+  void _sendSelection({GalleryItem? fallback}) {
+    final ids = _selected.value;
+    var chosen = _items.where((it) => ids.contains(it.id)).toList();
+    if (chosen.isEmpty && fallback != null) chosen = [fallback];
+    if (chosen.isEmpty) return;
+    final picked = chosen
+        .map((it) => PickedPhoto(item: it, editedFile: _edits[it.id]?.working))
+        .toList();
+    final callback = widget.onSend;
+    final caption = _captionCtrl.text.trim();
     Navigator.of(context).pop();
-    showCustomNotificationOnOverlay(
-      overlay,
-      'Отправка $count выбранных скоро появится',
-    );
+    callback?.call(picked, caption);
   }
 
   @override
@@ -141,7 +214,8 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     ),
                     Positioned(
                       right: 16,
-                      bottom: barReserve + 8,
+                      bottom:
+                          barReserve + 8 + MediaQuery.viewInsetsOf(context).bottom,
                       child: AnimatedBuilder(
                         animation: Listenable.merge([
                           _selected,
@@ -160,7 +234,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                             opacity: galleryT,
                             child: IgnorePointer(
                               ignoring: galleryT < 0.5,
-                              child: _buildSendButton(cs, count),
+                              child: _buildSendButton(cs),
                             ),
                           );
                         },
@@ -180,6 +254,14 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   static const double _barHeight = SlidingPillNav.height + _pillMargin;
   static const Duration _navAnim = Duration(milliseconds: 300);
 
+  Color _composerColor(ColorScheme cs) => Color.alphaBlend(
+    cs.surfaceContainerHighest.withValues(alpha: 0.92),
+    cs.surface,
+  );
+
+  Color _composerBorderColor(ColorScheme cs) =>
+      cs.outlineVariant.withValues(alpha: 0.5);
+
   Widget _buildPages(
     ScrollController scrollController,
     ColorScheme cs,
@@ -191,10 +273,94 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         _KeepAlivePage(
           child: _buildGalleryPage(scrollController, cs, bottomReserve),
         ),
-        _buildPlaceholderPage(cs, bottomReserve),
-        _buildPlaceholderPage(cs, bottomReserve),
+        _buildActionPage(
+          cs,
+          bottomReserve,
+          icon: Symbols.description,
+          title: 'Отправить файл',
+          subtitle: 'Документ, архив или любой другой файл',
+          buttonLabel: 'Выбрать файл',
+          onTap: widget.onPickFile,
+        ),
+        _buildActionPage(
+          cs,
+          bottomReserve,
+          icon: Symbols.location_on,
+          title: 'Поделиться геопозицией',
+          subtitle: 'Отправить ваше текущее местоположение',
+          buttonLabel: 'Отправить геопозицию',
+          onTap: widget.onShareLocation,
+        ),
+        _buildActionPage(
+          cs,
+          bottomReserve,
+          icon: Symbols.bar_chart,
+          title: 'Создать опрос',
+          subtitle: 'Вопрос с вариантами ответа',
+          buttonLabel: 'Создать опрос',
+          onTap: widget.onCreatePoll,
+        ),
         _buildPlaceholderPage(cs, bottomReserve),
       ],
+    );
+  }
+
+  Widget _buildActionPage(
+    ColorScheme cs,
+    double bottomReserve, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String buttonLabel,
+    required VoidCallback? onTap,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomReserve),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 34, color: cs.onPrimaryContainer),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: onTap == null
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        onTap();
+                      },
+                child: Text(buttonLabel),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -218,30 +384,104 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       );
     }
 
-    return CustomScrollView(
-      controller: scrollController,
-      slivers: [
-        if (_permission == GalleryPermission.limited)
-          SliverToBoxAdapter(child: _buildLimitedBanner(cs)),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(2, 2, 2, bottomReserve + 6),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 2,
-              crossAxisSpacing: 2,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 2.0;
+        const hpad = 2.0;
+        final cell = (constraints.maxWidth - hpad * 2 - spacing * 2) / 3;
+        final headerHeight = cell * 2 + spacing;
+        final headerPhotos = _items.take(4).toList();
+        final gridPhotos = _items.length > 4
+            ? _items.sublist(4)
+            : const <GalleryItem>[];
+
+        return CustomScrollView(
+          controller: scrollController,
+          slivers: [
+            if (_permission == GalleryPermission.limited)
+              SliverToBoxAdapter(child: _buildLimitedBanner(cs)),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(hpad, hpad, hpad, 0),
+              sliver: SliverToBoxAdapter(
+                child: SizedBox(
+                  height: headerHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: cell,
+                        child: _CameraTile(onTap: _onCameraTap, cs: cs),
+                      ),
+                      const SizedBox(width: spacing),
+                      Expanded(child: _buildHeaderPhotos(headerPhotos, cs)),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            delegate: SliverChildBuilderDelegate((context, index) {
-              if (index == 0) return _CameraTile(onTap: _onCameraTap, cs: cs);
-              final item = _items[index - 1];
-              return _GalleryTile(
-                key: ValueKey(item.id),
-                item: item,
-                selectedIds: _selected,
-                onTap: () => _toggleSelection(item),
-                cs: cs,
-              );
-            }, childCount: _items.length + 1),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(hpad, spacing, hpad, bottomReserve + 6),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: spacing,
+                  crossAxisSpacing: spacing,
+                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final item = gridPhotos[index];
+                  return _GalleryTile(
+                    key: ValueKey(item.id),
+                    item: item,
+                    selectedIds: _selected,
+                    onOpen: () => _openPreview(item),
+                    onToggle: () => _toggleSelection(item),
+                    editedFile: _edits[item.id]?.working,
+                    cs: cs,
+                  );
+                }, childCount: gridPhotos.length),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeaderPhotos(List<GalleryItem> photos, ColorScheme cs) {
+    const spacing = 2.0;
+    Widget tile(int i) {
+      if (i >= photos.length) return const SizedBox.expand();
+      final item = photos[i];
+      return _GalleryTile(
+        key: ValueKey(item.id),
+        item: item,
+        selectedIds: _selected,
+        onOpen: () => _openPreview(item),
+        onToggle: () => _toggleSelection(item),
+        editedFile: _edits[item.id]?.working,
+        cs: cs,
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: tile(0)),
+              const SizedBox(width: spacing),
+              Expanded(child: tile(1)),
+            ],
+          ),
+        ),
+        const SizedBox(height: spacing),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: tile(2)),
+              const SizedBox(width: spacing),
+              Expanded(child: tile(3)),
+            ],
           ),
         ),
       ],
@@ -376,31 +616,17 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
-  Widget _buildSendButton(ColorScheme cs, int count) {
+  Widget _buildSendButton(ColorScheme cs) {
     return Material(
       color: cs.primary,
       shape: const StadiumBorder(),
       elevation: 3,
       child: InkWell(
         customBorder: const StadiumBorder(),
-        onTap: _onSend,
+        onTap: () => _sendSelection(),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.send, color: cs.onPrimary, size: 22, weight: 500),
-              const SizedBox(width: 8),
-              Text(
-                '$count',
-                style: TextStyle(
-                  color: cs.onPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.all(14),
+          child: Icon(Symbols.send, color: cs.onPrimary, size: 24, weight: 500),
         ),
       ),
     );
@@ -422,7 +648,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     _navDragAccumDx += dx;
     final pageT = (_navDragBasePageT + _navDragAccumDx / inactiveWidth).clamp(
       0.0,
-      3.0,
+      (_navItems.length - 1).toDouble(),
     );
     _pageController.jumpTo(pageT * _pageController.position.viewportDimension);
   }
@@ -430,7 +656,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   void _onPillDragEnd() {
     if (!_navDragging) return;
     _navDragging = false;
-    final target = _currentPageT().round().clamp(0, 3);
+    final target = _currentPageT().round().clamp(0, _navItems.length - 1);
     _pageController.animateToPage(
       target,
       duration: _navAnim,
@@ -439,36 +665,98 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildBottomBar() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, _pillMargin),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final geometry = PillNavGeometry.fromInnerWidth(
-              constraints.maxWidth - 4,
-              _navItems.length,
-            );
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (_) => _onPillDragStart(),
-              onHorizontalDragUpdate: (d) =>
-                  _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
-              onHorizontalDragEnd: (_) => _onPillDragEnd(),
-              onHorizontalDragCancel: _onPillDragEnd,
-              child: AnimatedBuilder(
-                animation: _pageController,
-                builder: (context, _) {
-                  return SlidingPillNav(
-                    items: _navItems,
-                    position: _currentPageT(),
-                    geometry: geometry,
-                    onTap: _onSectionTap,
-                  );
-                },
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: inset),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, _pillMargin),
+          child: ValueListenableBuilder<Set<String>>(
+            valueListenable: _selected,
+            builder: (context, selected, _) {
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: selected.isEmpty
+                    ? _buildPillNav()
+                    : _buildCaptionBar(Theme.of(context).colorScheme),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillNav() {
+    return LayoutBuilder(
+      key: const ValueKey('nav'),
+      builder: (context, constraints) {
+        final geometry = PillNavGeometry.fromInnerWidth(
+          constraints.maxWidth - 4,
+          _navItems.length,
+        );
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) => _onPillDragStart(),
+          onHorizontalDragUpdate: (d) =>
+              _onPillDragUpdate(d.delta.dx, geometry.inactiveWidth),
+          onHorizontalDragEnd: (_) => _onPillDragEnd(),
+          onHorizontalDragCancel: _onPillDragEnd,
+          child: AnimatedBuilder(
+            animation: _pageController,
+            builder: (context, _) {
+              final cs = Theme.of(context).colorScheme;
+              return SlidingPillNav(
+                items: _navItems,
+                position: _currentPageT(),
+                geometry: geometry,
+                onTap: _onSectionTap,
+                backgroundColor: _composerColor(cs),
+                borderColor: _composerBorderColor(cs),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCaptionBar(ColorScheme cs) {
+    return SizedBox(
+      key: const ValueKey('caption'),
+      height: SlidingPillNav.height,
+      child: Center(
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: _composerColor(cs),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: _composerBorderColor(cs), width: 0.5),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _captionCtrl,
+                  style: TextStyle(color: cs.onSurface, fontSize: 15),
+                  cursorColor: cs.primary,
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    hintText: 'Добавить подпись...',
+                    hintStyle: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ),
     );
@@ -509,11 +797,21 @@ class _CameraTile extends StatelessWidget {
       child: Container(
         color: cs.surfaceContainerHighest,
         alignment: Alignment.center,
-        child: Icon(
-          Symbols.photo_camera,
-          size: 34,
-          color: cs.onSurface,
-          weight: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Symbols.photo_camera,
+              size: 34,
+              color: cs.onSurface,
+              weight: 400,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Камера',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+            ),
+          ],
         ),
       ),
     );
@@ -523,14 +821,18 @@ class _CameraTile extends StatelessWidget {
 class _GalleryTile extends StatefulWidget {
   final GalleryItem item;
   final ValueListenable<Set<String>> selectedIds;
-  final VoidCallback onTap;
+  final VoidCallback onOpen;
+  final VoidCallback onToggle;
+  final File? editedFile;
   final ColorScheme cs;
 
   const _GalleryTile({
     super.key,
     required this.item,
     required this.selectedIds,
-    required this.onTap,
+    required this.onOpen,
+    required this.onToggle,
+    this.editedFile,
     required this.cs,
   });
 
@@ -563,7 +865,7 @@ class _GalleryTileState extends State<_GalleryTile> {
   Widget build(BuildContext context) {
     final item = widget.item;
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: widget.onOpen,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -571,7 +873,11 @@ class _GalleryTileState extends State<_GalleryTile> {
             scale: _selected ? 0.86 : 1.0,
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            child: _Thumbnail(item: item, cs: widget.cs),
+            child: _Thumbnail(
+              item: item,
+              editedFile: widget.editedFile,
+              cs: widget.cs,
+            ),
           ),
           if (item.isVideo)
             Positioned(
@@ -599,9 +905,25 @@ class _GalleryTileState extends State<_GalleryTile> {
               ),
             ),
           Positioned(
-            top: 6,
-            right: 6,
-            child: _SelectionCheck(selected: _selected, cs: widget.cs),
+            top: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: widget.onToggle,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: ValueListenableBuilder<Set<String>>(
+                  valueListenable: widget.selectedIds,
+                  builder: (context, ids, _) {
+                    final index = ids.toList().indexOf(widget.item.id);
+                    return _SelectionCheck(
+                      number: index >= 0 ? index + 1 : null,
+                      cs: widget.cs,
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -610,23 +932,33 @@ class _GalleryTileState extends State<_GalleryTile> {
 }
 
 class _SelectionCheck extends StatelessWidget {
-  final bool selected;
+  final int? number;
   final ColorScheme cs;
 
-  const _SelectionCheck({required this.selected, required this.cs});
+  const _SelectionCheck({required this.number, required this.cs});
 
   @override
   Widget build(BuildContext context) {
+    final selected = number != null;
     return Container(
       width: 24,
       height: 24,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: selected ? cs.primary : Colors.black.withValues(alpha: 0.25),
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: selected
-          ? Icon(Symbols.check, size: 16, color: cs.onPrimary, weight: 700)
+          ? Text(
+              '$number',
+              style: TextStyle(
+                color: cs.onPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+              ),
+            )
           : null,
     );
   }
@@ -634,9 +966,10 @@ class _SelectionCheck extends StatelessWidget {
 
 class _Thumbnail extends StatefulWidget {
   final GalleryItem item;
+  final File? editedFile;
   final ColorScheme cs;
 
-  const _Thumbnail({required this.item, required this.cs});
+  const _Thumbnail({required this.item, this.editedFile, required this.cs});
 
   @override
   State<_Thumbnail> createState() => _ThumbnailState();
@@ -656,6 +989,16 @@ class _ThumbnailState extends State<_Thumbnail> {
 
   @override
   Widget build(BuildContext context) {
+    final edited = widget.editedFile;
+    if (edited != null) {
+      return Image.file(
+        edited,
+        fit: BoxFit.cover,
+        cacheWidth: _pixelSize,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => _placeholder(),
+      );
+    }
     final file = widget.item.localFile;
     if (file != null) {
       return Image.file(

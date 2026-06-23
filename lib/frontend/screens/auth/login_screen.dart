@@ -9,11 +9,13 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/l10n/terms_of_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
+import 'token_login_screen.dart';
 import 'select_country_screen.dart';
 import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
 import '../profile/spoof_screen.dart';
 import '../profile/debug_menu_screen.dart';
+import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -53,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _onBackPressed() async {
     final returnId = widget.returnToAccountId;
     if (returnId != null) {
+      await resetDigitalIdSession();
       try {
         await accountModule.switchAccount(returnId);
       } catch (_) {}
@@ -333,23 +336,33 @@ class _LoginScreenState extends State<LoginScreen> {
                           duration: const Duration(milliseconds: 300),
                           opacity: progress == 1.0 ? 1.0 : 0.0,
                           curve: Curves.easeIn,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            transform: Matrix4.translationValues(
-                              progress == 1.0 ? 0 : 20,
-                              0,
-                              0,
-                            ),
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: cs.primaryContainer,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Symbols.check,
-                              color: cs.onPrimaryContainer,
-                              size: 24,
+                          child: IgnorePointer(
+                            ignoring: progress < 1.0,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              transform: Matrix4.translationValues(
+                                progress == 1.0 ? 0 : 20,
+                                0,
+                                0,
+                              ),
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: cs.primaryContainer,
+                                shape: BoxShape.circle,
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => Navigator.pop(context),
+                                  child: Icon(
+                                    Symbols.check,
+                                    color: cs.onPrimaryContainer,
+                                    size: 24,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -642,6 +655,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TokenLoginScreen(
+                          returnToAccountId: widget.returnToAccountId,
+                        ),
+                      ),
+                    );
                   },
                 ),
                 ListTile(

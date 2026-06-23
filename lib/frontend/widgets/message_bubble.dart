@@ -1,18 +1,24 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
 import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
+import '../../core/config/komet_settings.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/file_download.dart';
-import '../../core/utils/media_cache.dart';
 import '../../core/utils/download_progress.dart';
+import '../../core/utils/link_opener.dart';
+import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
+import 'link_text.dart';
 import '../../models/attachment.dart';
 import 'poll_view.dart';
 import 'photo_viewer.dart';
@@ -43,6 +49,25 @@ class _BubbleCtx {
     required this.hasMultiplePhotosNoCaption,
     this.reactionInfo,
   }) : dim = text.withValues(alpha: 0.7);
+}
+
+final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
+final Expando<({bool full, String text})> _clockTextCache = Expando();
+
+class _ZeroIntrinsicWidth extends SingleChildRenderObjectWidget {
+  const _ZeroIntrinsicWidth({required Widget super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderZeroIntrinsicWidth();
+}
+
+class _RenderZeroIntrinsicWidth extends RenderProxyBox {
+  @override
+  double computeMinIntrinsicWidth(double height) => 0;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) => 0;
 }
 
 class MessageBubble extends StatelessWidget {
@@ -76,6 +101,8 @@ class MessageBubble extends StatelessWidget {
   final String chatType;
   final String? overrideStatus;
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
+  final ValueListenable<List<double>>? uploadProgress;
+  final void Function(String messageId)? onReplyTap;
 
   const MessageBubble({
     super.key,
@@ -87,6 +114,8 @@ class MessageBubble extends StatelessWidget {
     required this.chatType,
     this.overrideStatus,
     this.reactionsListenable,
+    this.uploadProgress,
+    this.onReplyTap,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -129,6 +158,28 @@ class MessageBubble extends StatelessWidget {
     return BubbleShape.groupedMiddle;
   }
 
+  bool get _hasShareAttachment {
+    final a = message.attachments;
+    return a != null && a.isNotEmpty && a.first is ShareAttachment;
+  }
+
+  MessageType get _contentType {
+    if (_hasShareAttachment) return _computeContentType();
+    return _contentTypeCache[message] ??= _computeContentType();
+  }
+
+  String get _clockText {
+    final full = KometSettings.fullTimestamp.value;
+    final cached = _clockTextCache[message];
+    if (cached != null && cached.full == full) return cached.text;
+    final text = formatClock(
+      DateTime.fromMillisecondsSinceEpoch(message.time),
+      withSeconds: full,
+    );
+    _clockTextCache[message] = (full: full, text: text);
+    return text;
+  }
+
   MessageType _computeContentType() {
     if (message.isControl) return MessageType.control;
     final attachments = message.attachments;
@@ -149,6 +200,11 @@ class MessageBubble extends StatelessWidget {
       if (first is ContactAttachment) return MessageType.attachment;
       if (first is UnknownAttachment) return MessageType.text;
       if (first.type == AttachmentType.audio) return MessageType.voice;
+      if (first is ShareAttachment) {
+        return AppLinkPreview.current.value
+            ? MessageType.attachment
+            : MessageType.text;
+      }
       return MessageType.attachment;
     }
 
@@ -268,8 +324,18 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_hasShareAttachment) {
+      return ValueListenableBuilder<bool>(
+        valueListenable: AppLinkPreview.current,
+        builder: (context, _, _) => _buildBubble(context),
+      );
+    }
+    return _buildBubble(context);
+  }
+
+  Widget _buildBubble(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final contentType = _computeContentType();
+    final contentType = _contentType;
 
     if (message.isControl) {
       const controlShape = BubbleShape.singleMiddle;
@@ -322,9 +388,31 @@ class MessageBubble extends StatelessWidget {
     final reactionsUnder = _reactionsUnderBubble(contentType);
     final reactionsInside = contentType != MessageType.text && !reactionsUnder;
 
-    return GestureDetector(
-      onTap: Haptics.tap,
-      child: Padding(
+    final reply = message.replyInfo;
+    Widget withReply(Widget content) {
+      if (reply == null) return content;
+      final quote = _buildReplyQuote(context, cs, textColor, reply);
+      if (contentType != MessageType.text) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [quote, const SizedBox(height: 4), content],
+        );
+      }
+      return IntrinsicWidth(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ZeroIntrinsicWidth(child: quote),
+            const SizedBox(height: 4),
+            content,
+          ],
+        ),
+      );
+    }
+
+    return Padding(
         padding: EdgeInsets.only(
           left: 12,
           right: 12,
@@ -373,13 +461,15 @@ class MessageBubble extends StatelessWidget {
                       padding: padding,
                       child: child,
                     ),
-                    child: reactionsInside
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [bubbleContent, _reactionsBar(cs)],
-                          )
-                        : bubbleContent,
+                    child: withReply(
+                      reactionsInside
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [bubbleContent, _reactionsBar(cs)],
+                            )
+                          : bubbleContent,
+                    ),
                   ),
                   if (reactionsUnder) _reactionsBar(cs),
                 ],
@@ -387,8 +477,7 @@ class MessageBubble extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Map? _resolveReactionInfo() {
@@ -568,17 +657,15 @@ class MessageBubble extends StatelessWidget {
     final reactionChips = _buildReactionChipsFor(ctx.cs, ctx.reactionInfo);
     final hasReactions = reactionChips.isNotEmpty;
 
+    final textStyle = TextStyle(color: ctx.text, fontSize: 16, height: 1.3);
     final textWidget = isForwarded
         ? _buildForwardedInlineText(ctx, forwarded)
-        : Text(
-            message.text ?? '',
-            style: TextStyle(color: ctx.text, fontSize: 16, height: 1.3),
-          );
+        : (LinkText.hasLinks(message.text)
+              ? LinkText(text: message.text!, style: textStyle)
+              : Text(message.text ?? '', style: textStyle));
 
     final metaWidget = Text(
-      message.status == 'EDITED'
-          ? '${formatClock(DateTime.fromMillisecondsSinceEpoch(message.time))} ред.'
-          : formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
+      message.status == 'EDITED' ? '$_clockText ред.' : _clockText,
       style: TextStyle(color: ctx.dim, fontSize: 10),
     );
 
@@ -616,6 +703,10 @@ class MessageBubble extends StatelessWidget {
                   child: metaWidget,
                 ),
                 if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
+                if (message.deleted) ...[
+                  const SizedBox(width: 4),
+                  _buildDeletedIcon(ctx),
+                ],
               ],
             ),
           ],
@@ -643,10 +734,73 @@ class MessageBubble extends StatelessWidget {
               child: metaWidget,
             ),
             if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
+            if (message.deleted) ...[
+              const SizedBox(width: 4),
+              _buildDeletedIcon(ctx),
+            ],
           ],
         ),
       ],
     );
+  }
+
+  Widget _buildReplyQuote(
+    BuildContext context,
+    ColorScheme cs,
+    Color textColor,
+    ReplyInfo reply,
+  ) {
+    final accent = isMe ? cs.onPrimaryContainer : cs.primary;
+    final name = reply.senderId == myId
+        ? 'Вы'
+        : (ContactCache.get(reply.senderId) ?? 'Сообщение');
+    final preview = reply.previewText();
+
+    final quote = Container(
+      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        color: accent.withValues(alpha: 0.10),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: accent,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (preview.isNotEmpty)
+            Text(
+              preview,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.85),
+                fontSize: 13,
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final mid = reply.messageId;
+    final cb = onReplyTap;
+    if (mid != null && mid != '0' && cb != null) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => cb(mid),
+        child: quote,
+      );
+    }
+    return quote;
   }
 
   Widget _buildForwardedInlineText(
@@ -654,9 +808,13 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
   ) {
     final headerColor = ctx.dim;
-    final senderName = forwarded.originalSenderName;
-    final displaySender = senderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
+    final displaySender =
+        forwarded.originalSenderName ??
+        ContactCache.get(forwarded.originalSenderId) ??
+        forwarded.originalSenderId.toString();
+    final senderAvatar =
+        forwarded.originalSenderAvatar ??
+        ContactCache.getAvatar(forwarded.originalSenderId);
     final origText = forwarded.originalText;
     final hasOrigText = origText != null && origText.isNotEmpty;
 
@@ -723,6 +881,62 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _buildForwardedHeader(
+    _BubbleCtx ctx,
+    ForwardedMessageAttachment forwarded,
+  ) {
+    final headerColor = ctx.dim;
+    final displaySender =
+        forwarded.originalSenderName ??
+        ContactCache.get(forwarded.originalSenderId) ??
+        forwarded.originalSenderId.toString();
+    final senderAvatar =
+        forwarded.originalSenderAvatar ??
+        ContactCache.getAvatar(forwarded.originalSenderId);
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 8, right: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Symbols.forward, size: 14, color: headerColor),
+          const SizedBox(width: 4),
+          if (senderAvatar != null && senderAvatar.isNotEmpty)
+            CircleAvatar(
+              radius: 10,
+              backgroundImage: CachedNetworkImageProvider(
+                senderAvatar,
+                maxWidth: 96,
+                maxHeight: 96,
+              ),
+              backgroundColor: ctx.cs.primaryContainer,
+            )
+          else
+            CircleAvatar(
+              radius: 10,
+              backgroundColor: ctx.cs.primaryContainer,
+              child: Text(
+                displaySender.isNotEmpty ? displaySender[0].toUpperCase() : '?',
+                style: TextStyle(fontSize: 9, color: ctx.cs.onPrimaryContainer),
+              ),
+            ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              displaySender,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: headerColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   ForwardedMessageAttachment? _getForwardedAttachment() {
     final attachments = message.attachments;
     if (attachments == null || attachments.isEmpty) return null;
@@ -767,6 +981,11 @@ class MessageBubble extends StatelessWidget {
       return _buildPollAttachment(ctx, polls.first);
     }
 
+    final shares = attachments.whereType<ShareAttachment>().toList();
+    if (shares.isNotEmpty) {
+      return _buildShareContent(ctx, shares.first);
+    }
+
     final photos = attachments.whereType<PhotoAttachment>().toList();
     if (photos.isEmpty) {
       return _buildGenericAttachment(ctx, attachments.first);
@@ -778,14 +997,150 @@ class MessageBubble extends StatelessWidget {
   Widget _buildPollAttachment(_BubbleCtx ctx, PollAttachment poll) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: PollView(
-        chatId: message.chatId,
-        messageId: message.id,
-        pollId: poll.pollId,
-        fallbackTitle: poll.title ?? message.text,
-        textColor: ctx.text,
-        dimColor: ctx.dim,
-        accentColor: ctx.text,
+      child: IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PollView(
+              chatId: message.chatId,
+              messageId: message.id,
+              pollId: poll.pollId,
+              myId: myId,
+              fallbackTitle: poll.title ?? message.text,
+              textColor: ctx.text,
+              dimColor: ctx.dim,
+              accentColor: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+            ),
+            _buildMeta(ctx),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareContent(_BubbleCtx ctx, ShareAttachment share) {
+    final hasText = message.text != null && message.text!.isNotEmpty;
+    final image = share.image;
+    final imageUrl = image?.baseUrl ?? image?.previewData ?? '';
+    final cardColor = isMe
+        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.08)
+        : ctx.cs.surfaceContainerHigh;
+    final host =
+        share.host ??
+        (share.url != null ? Uri.tryParse(share.url!)?.host : null);
+
+    final card = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: share.url == null
+          ? null
+          : () {
+              Haptics.tap();
+              openExternalUrl(ctx.context, share.url!);
+            },
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (imageUrl.isNotEmpty)
+              CachedNetworkImage(
+                imageUrl: imageUrl,
+                width: 280,
+                height: 140,
+                fit: BoxFit.cover,
+                memCacheWidth: 560,
+                fadeInDuration: const Duration(milliseconds: 120),
+                errorWidget: (_, _, _) => const SizedBox.shrink(),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (host != null && host.isNotEmpty) ...[
+                    Text(
+                      host,
+                      style: TextStyle(
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer
+                            : ctx.cs.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  if (share.title != null && share.title!.isNotEmpty)
+                    Text(
+                      share.title!,
+                      style: TextStyle(
+                        color: ctx.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (share.description != null &&
+                      share.description!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      share.description!,
+                      style: TextStyle(
+                        color: ctx.dim,
+                        fontSize: 13,
+                        height: 1.25,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: IntrinsicWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasText) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: LinkText(
+                    text: message.text!,
+                    style: TextStyle(
+                      color: ctx.text,
+                      fontSize: 16,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+              card,
+              _buildMeta(ctx),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -837,7 +1192,7 @@ class MessageBubble extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Flexible(child: _buildCaption(ctx)),
+                  Expanded(child: _buildCaption(ctx)),
                   _buildMeta(ctx),
                 ],
               ),
@@ -875,59 +1230,13 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
     List<PhotoAttachment> photos,
   ) {
-    final headerColor = ctx.dim;
-    final displaySender =
-        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
     final hasCaption = message.text != null && message.text!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              if (senderAvatar != null && senderAvatar.isNotEmpty)
-                CircleAvatar(
-                  radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(
-                    senderAvatar,
-                    maxWidth: 96,
-                    maxHeight: 96,
-                  ),
-                  backgroundColor: ctx.cs.primaryContainer,
-                )
-              else
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: ctx.cs.primaryContainer,
-                  child: Text(
-                    displaySender.isNotEmpty
-                        ? displaySender[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: ctx.cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 6),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+        _buildForwardedHeader(ctx, forwarded),
         const SizedBox(height: 4),
         if (hasCaption) ...[
           Padding(
@@ -949,71 +1258,25 @@ class MessageBubble extends StatelessWidget {
     ForwardedMessageAttachment forwarded,
     List<MessageAttachment> attachments,
   ) {
-    final headerColor = ctx.dim;
-    final displaySender =
-        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              if (senderAvatar != null && senderAvatar.isNotEmpty)
-                CircleAvatar(
-                  radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(
-                    senderAvatar,
-                    maxWidth: 96,
-                    maxHeight: 96,
-                  ),
-                  backgroundColor: ctx.cs.primaryContainer,
-                )
-              else
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: ctx.cs.primaryContainer,
-                  child: Text(
-                    displaySender.isNotEmpty
-                        ? displaySender[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: ctx.cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 6),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        ...attachments.map((a) {
-          if (a is FileAttachment) {
-            return _buildFileAttachment(ctx, a);
-          }
-          return const SizedBox.shrink();
-        }),
-      ],
+    return IntrinsicWidth(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildForwardedHeader(ctx, forwarded),
+          const SizedBox(height: 4),
+          ...attachments.map((a) {
+            if (a is FileAttachment) {
+              return _buildFileAttachment(ctx, a, fill: true);
+            }
+            return const SizedBox.shrink();
+          }),
+        ],
+      ),
     );
   }
 
   Widget _buildSinglePhoto(_BubbleCtx ctx, PhotoAttachment photo) {
-    final imageUrl = photo.baseUrl ?? '';
     final width = photo.width?.toDouble() ?? 200;
     final height = photo.height?.toDouble() ?? 200;
 
@@ -1041,30 +1304,89 @@ class MessageBubble extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              width: constrainedWidth,
-              height: constrainedHeight,
-              fit: BoxFit.cover,
-              memCacheWidth: (constrainedWidth * dpr).round(),
-              memCacheHeight: (constrainedHeight * dpr).round(),
-              fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, _, _) => _buildPhotoPlaceholder(
-                ctx.cs,
-                constrainedWidth,
-                constrainedHeight,
-              ),
-            )
-          else
-            _buildPhotoPlaceholder(ctx.cs, constrainedWidth, constrainedHeight),
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _openPhotoViewer(ctx.context, photo),
-            ),
+          _buildPhotoImage(
+            ctx,
+            photo,
+            constrainedWidth,
+            constrainedHeight,
+            memWidth: (constrainedWidth * dpr).round(),
+            memHeight: (constrainedHeight * dpr).round(),
           ),
+          if (uploadProgress != null) _buildUploadOverlay(uploadProgress!, 0),
+          if (uploadProgress == null)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openPhotoViewer(ctx.context, photo),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoImage(
+    _BubbleCtx ctx,
+    PhotoAttachment photo,
+    double width,
+    double height, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final localPath = photo.localPath;
+    if (localPath != null) {
+      return Image.file(
+        File(localPath),
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        cacheWidth: memWidth,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) =>
+            _buildPhotoPlaceholder(ctx.cs, width, height),
+      );
+    }
+    final imageUrl = photo.baseUrl ?? '';
+    if (imageUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        memCacheWidth: memWidth,
+        memCacheHeight: memHeight,
+        fadeInDuration: Duration.zero,
+        placeholderFadeInDuration: Duration.zero,
+        errorWidget: (_, _, _) => _buildPhotoPlaceholder(ctx.cs, width, height),
+      );
+    }
+    return _buildPhotoPlaceholder(ctx.cs, width, height);
+  }
+
+  Widget _buildUploadOverlay(
+    ValueListenable<List<double>> progress,
+    int index,
+  ) {
+    return Positioned.fill(
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: progress,
+        builder: (context, values, _) {
+          final value = index < values.length ? values[index] : 1.0;
+          final indeterminate = value <= 0 || value >= 1.0;
+          return Container(
+            color: Colors.black.withValues(alpha: 0.4),
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                value: indeterminate ? null : value,
+                color: Colors.white,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1095,9 +1417,9 @@ class MessageBubble extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(child: _buildPhotoTile(ctx, p1)),
+          Expanded(child: _buildPhotoTile(ctx, p1, 0)),
           const SizedBox(width: 2),
-          Expanded(child: _buildPhotoTile(ctx, p2)),
+          Expanded(child: _buildPhotoTile(ctx, p2, 1)),
         ],
       ),
     );
@@ -1133,42 +1455,39 @@ class MessageBubble extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         children: List.generate(displayCount, (i) {
           if (i == 3 && remaining > 0) {
-            return _buildPhotoTileWithOverlay(ctx, photos[i], '+$remaining');
+            return _buildPhotoTileWithOverlay(ctx, photos[i], '+$remaining', i);
           }
-          return _buildPhotoTile(ctx, photos[i]);
+          return _buildPhotoTile(ctx, photos[i], i);
         }),
       ),
     );
   }
 
-  Widget _buildPhotoTile(_BubbleCtx ctx, PhotoAttachment photo) {
-    final imageUrl = photo.baseUrl ?? '';
-    final cachePx = (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio)
-        .round();
+  Widget _buildPhotoTile(_BubbleCtx ctx, PhotoAttachment photo, int index) {
+    final cachePx =
+        (photoMaxSize / 2 * MediaQuery.of(ctx.context).devicePixelRatio)
+            .round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
         children: [
-          if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              memCacheWidth: cachePx,
-              memCacheHeight: cachePx,
-              fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, _, _) =>
-                  _buildPhotoPlaceholder(ctx.cs, 100, 100),
-            )
-          else
-            _buildPhotoPlaceholder(ctx.cs, 100, 100),
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _openPhotoViewer(ctx.context, photo),
-            ),
+          _buildPhotoImage(
+            ctx,
+            photo,
+            double.infinity,
+            double.infinity,
+            memWidth: cachePx,
+            memHeight: cachePx,
           ),
+          if (uploadProgress != null)
+            _buildUploadOverlay(uploadProgress!, index),
+          if (uploadProgress == null)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openPhotoViewer(ctx.context, photo),
+              ),
+            ),
         ],
       ),
     );
@@ -1178,28 +1497,23 @@ class MessageBubble extends StatelessWidget {
     _BubbleCtx ctx,
     PhotoAttachment photo,
     String overlay,
+    int index,
   ) {
-    final imageUrl = photo.baseUrl ?? '';
-    final cachePx = (photoMaxSize * MediaQuery.of(ctx.context).devicePixelRatio)
-        .round();
+    final cachePx =
+        (photoMaxSize / 2 * MediaQuery.of(ctx.context).devicePixelRatio)
+            .round();
     return AspectRatio(
       aspectRatio: 1,
       child: Stack(
         children: [
-          if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              memCacheWidth: cachePx,
-              memCacheHeight: cachePx,
-              fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, _, _) =>
-                  _buildPhotoPlaceholder(ctx.cs, 100, 100),
-            )
-          else
-            _buildPhotoPlaceholder(ctx.cs, 100, 100),
+          _buildPhotoImage(
+            ctx,
+            photo,
+            double.infinity,
+            double.infinity,
+            memWidth: cachePx,
+            memHeight: cachePx,
+          ),
           Positioned.fill(
             child: Container(
               color: Colors.black45,
@@ -1215,6 +1529,8 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
           ),
+          if (uploadProgress != null)
+            _buildUploadOverlay(uploadProgress!, index),
         ],
       ),
     );
@@ -1245,10 +1561,11 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildCaption(_BubbleCtx ctx) {
-    return Text(
-      message.text ?? '',
-      style: TextStyle(color: ctx.text, fontSize: 16, height: 1.3),
-    );
+    final style = TextStyle(color: ctx.text, fontSize: 16, height: 1.3);
+    if (LinkText.hasLinks(message.text)) {
+      return LinkText(text: message.text!, style: style);
+    }
+    return Text(message.text ?? '', style: style);
   }
 
   Widget _buildGenericAttachment(_BubbleCtx ctx, MessageAttachment attachment) {
@@ -1259,217 +1576,493 @@ class MessageBubble extends StatelessWidget {
         return _buildFileAttachment(ctx, attachment);
       case AttachmentType.sticker:
         return _buildStickerAttachment(ctx, attachment);
+      case AttachmentType.location:
+        return _buildLocationAttachment(ctx, attachment as LocationAttachment);
+      case AttachmentType.call:
+        return _buildCallAttachment(ctx, attachment as CallAttachment);
       default:
         return _buildTextContent(ctx);
     }
   }
 
-  Widget _buildVideoAttachment(_BubbleCtx ctx, MessageAttachment video) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(photoBorderRadius),
-          child: Stack(
-            children: [
-              Container(
-                width: 200,
-                height: 150,
-                color: ctx.cs.surfaceContainerHighest,
-                child: Icon(
-                  Symbols.videocam,
-                  size: 48,
-                  color: ctx.cs.onSurfaceVariant,
-                ),
-              ),
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: Colors.black54,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Symbols.play_arrow,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _playVideo(ctx.context, video),
-                ),
-              ),
-            ],
+  Widget _buildCallAttachment(_BubbleCtx ctx, CallAttachment call) {
+    final missed = call.isMissedOrFailed;
+    final accent = isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary;
+    final iconColor = missed ? ctx.cs.error : accent;
+
+    final IconData icon;
+    final String label;
+    if (call.isGroup) {
+      icon = call.isVideo ? Symbols.videocam : Symbols.groups;
+      label = call.isVideo ? 'Групповой видеозвонок' : 'Групповой звонок';
+    } else if (call.isVideo) {
+      icon = Symbols.videocam;
+      label = missed
+          ? (isMe ? 'Отменённый видеозвонок' : 'Пропущенный видеозвонок')
+          : (isMe ? 'Исходящий видеозвонок' : 'Входящий видеозвонок');
+    } else {
+      icon = Symbols.call;
+      label = missed
+          ? (isMe ? 'Отменённый звонок' : 'Пропущенный звонок')
+          : (isMe ? 'Исходящий звонок' : 'Входящий звонок');
+    }
+
+    final directionIcon = isMe ? Symbols.call_made : Symbols.call_received;
+
+    final subtitle = missed
+        ? _clockText
+        : '$_clockText · ${formatSecondsMmSs((call.durationMs / 1000).round())}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: missed
+                  ? ctx.cs.error.withValues(alpha: 0.12)
+                  : (isMe
+                        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                        : ctx.cs.primaryContainer),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
           ),
-        ),
-        const SizedBox(height: 6),
-        _buildMeta(ctx),
-      ],
-    );
-  }
-
-  Future<void> _playVideo(BuildContext context, MessageAttachment video) async {
-    final videoId = (video as dynamic).videoId as int?;
-    final token = (video as dynamic).videoToken as String?;
-    if (videoId == null) {
-      showCustomNotification(context, 'Не удалось открыть видео');
-      return;
-    }
-    Haptics.tap();
-
-    final cacheName = 'video_$videoId.mp4';
-    final cached = await MediaCache.existing(cacheName) != null;
-    if (!context.mounted) return;
-
-    String? url;
-    if (!cached) {
-      if (token == null) {
-        showCustomNotification(context, 'Не удалось открыть видео');
-        return;
-      }
-      url = await messagesModule.getVideoUrl(
-        messageId: message.id,
-        chatId: message.chatId,
-        token: token,
-        videoId: videoId,
-      );
-      if (!context.mounted) return;
-      if (url == null) {
-        showCustomNotification(context, 'Не удалось получить видео');
-        return;
-      }
-    }
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => VideoPlayerScreen(cacheName: cacheName, url: url),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: ctx.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      directionIcon,
+                      size: 13,
+                      color: missed ? ctx.cs.error : ctx.dim,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: ctx.dim,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildFileAttachment(_BubbleCtx ctx, MessageAttachment file) {
-    final name = (file as dynamic).name as String? ?? 'File';
-    final size = (file as dynamic).size as int? ?? 0;
-    final sizeStr = formatBytes(size);
-    final fileId = (file as dynamic).fileId as int?;
-    final cacheName = '${fileId}_$name';
+  Widget _buildLocationAttachment(_BubbleCtx ctx, LocationAttachment location) {
+    final lat = location.latitude;
+    final lon = location.longitude;
+    final coords = lat != null && lon != null
+        ? '${lat.toStringAsFixed(6)}, ${lon.toStringAsFixed(6)}'
+        : null;
 
-    return IntrinsicWidth(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+      child: IntrinsicWidth(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: isMe
-                        ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                        : ctx.cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Symbols.description,
-                    color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-                    size: 20,
-                  ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: lat == null || lon == null
+                  ? null
+                  : () {
+                      Haptics.tap();
+                      openLocationOnMap(
+                        ctx.context,
+                        lat,
+                        lon,
+                        zoom: location.zoom,
+                      );
+                    },
+              child: Container(
+                width: 240,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.08)
+                      : ctx.cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          color: ctx.text,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          height: 1.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                            : ctx.cs.primaryContainer,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(height: 2),
-                      ValueListenableBuilder<double?>(
-                        valueListenable: MediaDownloadProgress.notifier(
-                          cacheName,
-                        ),
-                        builder: (context, progress, _) => Text(
-                          progress != null
-                              ? '${(progress * 100).round()}% · $sizeStr'
-                              : sizeStr,
-                          style: TextStyle(
-                            color: ctx.dim,
-                            fontSize: 12,
-                            height: 1.2,
+                      child: Icon(
+                        Symbols.location_on,
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer
+                            : ctx.cs.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            location.title ?? 'Геопозиция',
+                            style: TextStyle(
+                              color: ctx.text,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                          const SizedBox(height: 2),
+                          Text(
+                            location.address ?? coords ?? 'Открыть на карте',
+                            style: TextStyle(color: ctx.dim, fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                ValueListenableBuilder<double?>(
-                  valueListenable: MediaDownloadProgress.notifier(cacheName),
-                  builder: (context, progress, _) {
-                    final downloading = progress != null;
-                    return GestureDetector(
-                      onTap: downloading
-                          ? null
-                          : () => _downloadFile(ctx.context, file, name),
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? ctx.cs.onPrimaryContainer.withValues(
-                                  alpha: 0.12,
-                                )
-                              : ctx.cs.surfaceContainerHighest,
-                          shape: BoxShape.circle,
-                        ),
-                        child: downloading
-                            ? Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  value: progress > 0 ? progress : null,
-                                  color: isMe
-                                      ? ctx.cs.onPrimaryContainer
-                                      : ctx.cs.primary,
-                                ),
-                              )
-                            : Icon(
-                                Symbols.download,
-                                color: isMe
-                                    ? ctx.cs.onPrimaryContainer
-                                    : ctx.cs.primary,
-                                size: 18,
-                              ),
-                      ),
-                    );
-                  },
-                ),
-              ],
+              ),
             ),
             _buildMeta(ctx),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildVideoAttachment(_BubbleCtx ctx, MessageAttachment video) {
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final thumb = (video as dynamic).thumbnail as String?;
+    final durationMs = (video as dynamic).duration as int?;
+    final previewUrl = (thumb != null && thumb.isNotEmpty)
+        ? thumb
+        : (video.baseUrl != null && video.baseUrl!.isNotEmpty)
+            ? video.baseUrl!
+            : (video.previewData ?? '');
+
+    final w = (video as dynamic).width as int?;
+    final h = (video as dynamic).height as int?;
+    final width = (w?.toDouble() ?? 200.0).clamp(photoMinSize, photoMaxSize);
+    final height = (h?.toDouble() ?? 150.0).clamp(photoMinSize, photoMaxSize);
+    final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
+
+    Widget placeholder() => Container(
+          width: width,
+          height: height,
+          color: ctx.cs.surfaceContainerHighest,
+          child: Icon(
+            Symbols.videocam,
+            size: 48,
+            color: ctx.cs.onSurfaceVariant,
+          ),
+        );
+
+    final preview = ClipRRect(
+      borderRadius: BorderRadius.circular(photoBorderRadius),
+      child: Stack(
+        children: [
+          previewUrl.isEmpty
+              ? placeholder()
+              : CachedNetworkImage(
+                  imageUrl: previewUrl,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                  memCacheWidth: (width * dpr).round(),
+                  fadeInDuration: Duration.zero,
+                  placeholderFadeInDuration: Duration.zero,
+                  errorWidget: (_, _, _) => placeholder(),
+                ),
+          Positioned.fill(
+            child: Center(
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Symbols.play_arrow,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+            ),
+          ),
+          if (durationMs != null && durationMs > 0)
+            Positioned(
+              left: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  formatSecondsMmSs((durationMs / 1000).round()),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _playVideo(ctx.context, video),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!hasCaption) {
+      return Stack(
+        children: [
+          preview,
+          Positioned(
+            bottom: compactTimePadding,
+            right: compactTimePadding,
+            child: _buildCompactTime(),
+          ),
+        ],
+      );
+    }
+
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          preview,
+          Padding(
+            padding: const EdgeInsets.only(
+              left: captionPaddingHorizontal,
+              right: captionPaddingRight,
+              bottom: 6,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: _buildCaption(ctx)),
+                _buildMeta(ctx),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _playVideo(BuildContext context, MessageAttachment video) async {
+    final videoId = (video as dynamic).videoId as int?;
+    final token = (video as dynamic).videoToken as String?;
+    if (videoId == null || token == null) {
+      showCustomNotification(context, 'Не удалось открыть видео');
+      return;
+    }
+    Haptics.tap();
+
+    final sources = await messagesModule.getVideoSources(
+      messageId: message.id,
+      chatId: message.chatId,
+      token: token,
+      videoId: videoId,
+    );
+    if (!context.mounted) return;
+    if (sources.isEmpty) {
+      showCustomNotification(context, 'Не удалось получить видео');
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => VideoPlayerScreen(sources: sources),
+      ),
+    );
+  }
+
+  Widget _buildFileAttachment(
+    _BubbleCtx ctx,
+    MessageAttachment file, {
+    bool fill = false,
+  }) {
+    final name = (file as dynamic).name as String? ?? 'File';
+    final size = (file as dynamic).size as int? ?? 0;
+    final sizeStr = formatBytes(size);
+    final fileId = (file as dynamic).fileId as int?;
+    final cacheName = '${fileId}_$name';
+
+    final preview = file is FileAttachment ? file.preview : null;
+    final previewUrl = preview?.baseUrl ?? preview?.previewData ?? '';
+
+    final inner = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (previewUrl.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: CachedNetworkImage(
+                imageUrl: previewUrl,
+                width: 240,
+                height: 160,
+                fit: BoxFit.cover,
+                memCacheWidth: 480,
+                fadeInDuration: const Duration(milliseconds: 120),
+                errorWidget: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                      : ctx.cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Symbols.description,
+                  color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        color: ctx.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    ValueListenableBuilder<double?>(
+                      valueListenable: MediaDownloadProgress.notifier(
+                        cacheName,
+                      ),
+                      builder: (context, progress, _) => Text(
+                        progress != null
+                            ? '${(progress * 100).round()}% · $sizeStr'
+                            : sizeStr,
+                        style: TextStyle(
+                          color: ctx.dim,
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              ValueListenableBuilder<double?>(
+                valueListenable: MediaDownloadProgress.notifier(cacheName),
+                builder: (context, progress, _) {
+                  final downloading = progress != null;
+                  return GestureDetector(
+                    onTap: downloading
+                        ? null
+                        : () => _downloadFile(ctx.context, file, name),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
+                            : ctx.cs.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: downloading
+                          ? Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                value: progress > 0 ? progress : null,
+                                color: isMe
+                                    ? ctx.cs.onPrimaryContainer
+                                    : ctx.cs.primary,
+                              ),
+                            )
+                          : Icon(
+                              Symbols.download,
+                              color: isMe
+                                  ? ctx.cs.onPrimaryContainer
+                                  : ctx.cs.primary,
+                              size: 18,
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          _buildMeta(ctx),
+        ],
+      ),
+    );
+    return fill ? inner : IntrinsicWidth(child: inner);
   }
 
   Widget _buildStickerAttachment(_BubbleCtx ctx, MessageAttachment sticker) {
@@ -1607,59 +2200,12 @@ class MessageBubble extends StatelessWidget {
     final bgColor = isMe
         ? ctx.cs.onPrimaryContainer.withValues(alpha: 0.12)
         : ctx.cs.surfaceContainerHighest;
-    final headerColor = ctx.dim;
-
-    final displaySender =
-        forwarded.originalSenderName ?? forwarded.originalSenderId.toString();
-    final senderAvatar = forwarded.originalSenderAvatar;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Symbols.forward, size: 14, color: headerColor),
-              const SizedBox(width: 4),
-              if (senderAvatar != null && senderAvatar.isNotEmpty)
-                CircleAvatar(
-                  radius: 10,
-                  backgroundImage: CachedNetworkImageProvider(
-                    senderAvatar,
-                    maxWidth: 96,
-                    maxHeight: 96,
-                  ),
-                  backgroundColor: ctx.cs.primaryContainer,
-                )
-              else
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: ctx.cs.primaryContainer,
-                  child: Text(
-                    displaySender.isNotEmpty
-                        ? displaySender[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: ctx.cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 6),
-              Text(
-                displaySender,
-                style: TextStyle(
-                  color: headerColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+        _buildForwardedHeader(ctx, forwarded),
         const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1814,6 +2360,7 @@ class MessageBubble extends StatelessWidget {
       url: url,
       textColor: ctx.text,
       isMe: isMe,
+      deleted: message.deleted,
       status: overrideStatus ?? message.status,
       time: message.time,
       cs: ctx.cs,
@@ -1832,11 +2379,12 @@ class MessageBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(
-            formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
-            style: TextStyle(color: ctx.dim, fontSize: 11),
-          ),
+          Text(_clockText, style: TextStyle(color: ctx.dim, fontSize: 11)),
           if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(ctx)],
+          if (message.deleted) ...[
+            const SizedBox(width: 4),
+            _buildDeletedIcon(ctx),
+          ],
         ],
       ),
     );
@@ -1853,15 +2401,28 @@ class MessageBubble extends StatelessWidget {
         color: bgColor,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        formatClock(DateTime.fromMillisecondsSinceEpoch(message.time)),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _clockText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (message.deleted) ...[
+            const SizedBox(width: 3),
+            const Icon(Symbols.delete, size: 11, color: Colors.white),
+          ],
+        ],
       ),
     );
+  }
+
+  Widget _buildDeletedIcon(_BubbleCtx ctx) {
+    return Icon(Symbols.delete, size: 13, color: ctx.dim);
   }
 
   Widget _buildStatusIcon(_BubbleCtx ctx) {
@@ -1901,6 +2462,7 @@ class _VoiceMessageBubble extends StatefulWidget {
   final String url;
   final Color textColor;
   final bool isMe;
+  final bool deleted;
   final String? status;
   final int time;
   final ColorScheme cs;
@@ -1915,6 +2477,7 @@ class _VoiceMessageBubble extends StatefulWidget {
     required this.url,
     required this.textColor,
     required this.isMe,
+    this.deleted = false,
     this.status,
     required this.time,
     required this.cs,
@@ -2128,7 +2691,10 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
               ),
               if (!_transcriptionVisible) ...[
                 Text(
-                  formatClock(DateTime.fromMillisecondsSinceEpoch(widget.time)),
+                  formatClock(
+                    DateTime.fromMillisecondsSinceEpoch(widget.time),
+                    withSeconds: KometSettings.fullTimestamp.value,
+                  ),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),
                     fontSize: 10,
@@ -2138,6 +2704,14 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                   const SizedBox(width: 2),
                   _buildStatusIcon(),
                 ],
+                if (widget.deleted) ...[
+                  const SizedBox(width: 2),
+                  Icon(
+                    Symbols.delete,
+                    size: 13,
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
+                ],
               ],
             ],
           ),
@@ -2146,7 +2720,10 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  formatClock(DateTime.fromMillisecondsSinceEpoch(widget.time)),
+                  formatClock(
+                    DateTime.fromMillisecondsSinceEpoch(widget.time),
+                    withSeconds: KometSettings.fullTimestamp.value,
+                  ),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),
                     fontSize: 10,
@@ -2155,6 +2732,14 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                 if (widget.isMe) ...[
                   const SizedBox(width: 2),
                   _buildStatusIcon(),
+                ],
+                if (widget.deleted) ...[
+                  const SizedBox(width: 2),
+                  Icon(
+                    Symbols.delete,
+                    size: 13,
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
                 ],
               ],
             ),
@@ -2202,6 +2787,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
 
       TranscriptionCache.put(widget.messageId, result);
 
+      if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
         if (result.status == 1) {
@@ -2215,6 +2801,7 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
         _transcriptionText = 'ошибка транскрибации';

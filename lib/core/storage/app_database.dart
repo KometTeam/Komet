@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:komet/core/storage/app_instance.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class ProfileData {
@@ -155,17 +157,41 @@ class AppDatabase {
     return _db!;
   }
 
+  static Future<String> _databasesDir() async {
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      final dir = await getApplicationSupportDirectory();
+      return dir.path;
+    }
+    return getDatabasesPath();
+  }
+
+  static Future<void> _migrateLegacyDb(String target) async {
+    if (AppInstance.isNamed) return;
+    if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) return;
+    try {
+      if (await File(target).exists()) return;
+      final legacy = File(join(await getDatabasesPath(), 'komet.db'));
+      if (legacy.path == target) return;
+      if (await legacy.exists()) {
+        await legacy.copy(target);
+        logger.i('[db] перенёс komet.db -> $target');
+      }
+    } catch (_) {}
+  }
+
   static Future<Database> _open() async {
-    final dbPath = await getDatabasesPath();
+    final dbPath = await _databasesDir();
+    final target = join(dbPath, 'komet${AppInstance.suffix}.db');
+    await _migrateLegacyDb(target);
     return openDatabase(
-      join(dbPath, 'komet.db'),
-      version: 10,
+      target,
+      version: 14,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          await db.execute(
-            'ALTER TABLE profile ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0',
+          await _addColumnIfMissing(
+            db, 'profile', 'is_active', 'INTEGER NOT NULL DEFAULT 0',
           );
           await db.execute('DROP TABLE IF EXISTS sync_state');
           await db.execute(_syncStateSchema);
@@ -184,29 +210,33 @@ class AppDatabase {
           await db.execute(_messagesSchema);
         }
         if (oldVersion < 7) {
-          await db.execute(
-            'ALTER TABLE profile ADD COLUMN profile_options TEXT',
-          );
+          await _addColumnIfMissing(db, 'profile', 'profile_options', 'TEXT');
         }
         if (oldVersion < 8) {
-            await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN participants TEXT',
-          );
+          await _addColumnIfMissing(db, 'chats_cache', 'participants', 'TEXT');
         }
         if (oldVersion < 9) {
-          await db.execute(
-            'ALTER TABLE contacts ADD COLUMN options TEXT',
-          );
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN options TEXT',
-          );
+          await _addColumnIfMissing(db, 'contacts', 'options', 'TEXT');
+          await _addColumnIfMissing(db, 'chats_cache', 'options', 'TEXT');
         }
         if (oldVersion < 10) {
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN owner INTEGER',
+          await _addColumnIfMissing(db, 'chats_cache', 'owner', 'INTEGER');
+          await _addColumnIfMissing(db, 'chats_cache', 'admins', 'TEXT');
+        }
+        if (oldVersion < 11) {
+          await _createIndexes(db);
+        }
+        if (oldVersion < 12) {
+          await _addColumnIfMissing(db, 'chats_cache', 'last_msg_status', 'TEXT');
+        }
+        if (oldVersion < 13) {
+          await _addColumnIfMissing(
+            db, 'messages', 'deleted', 'INTEGER NOT NULL DEFAULT 0',
           );
-          await db.execute(
-            'ALTER TABLE chats_cache ADD COLUMN admins TEXT',
+        }
+        if (oldVersion < 14) {
+          await _addColumnIfMissing(
+            db, 'chats_cache', 'in_list', 'INTEGER NOT NULL DEFAULT 1',
           );
         }
       },
@@ -234,6 +264,31 @@ class AppDatabase {
     await db.execute(_chatsCacheSchema);
     await db.execute(_contactsSchema);
     await db.execute(_messagesSchema);
+    await _createIndexes(db);
+  }
+
+  static Future<void> _addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final info = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = info.any((row) => row['name'] == column);
+    if (exists) return;
+    await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+  }
+
+  static Future<void> _createIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(account_id, chat_id, time DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_chats_account ON chats_cache(account_id, last_event_time DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_contacts_account ON contacts(account_id)',
+    );
   }
 
   static const _contactsSchema = '''
@@ -271,6 +326,7 @@ class AppDatabase {
       last_msg_time   INTEGER,
       last_msg_text   TEXT,
       last_msg_sender INTEGER,
+      last_msg_status TEXT,
       unread_count    INTEGER NOT NULL DEFAULT 0,
       last_event_time INTEGER NOT NULL DEFAULT 0,
       cached_at       INTEGER NOT NULL,
@@ -282,6 +338,7 @@ class AppDatabase {
       options         TEXT,
       owner           INTEGER,
       admins          TEXT,
+      in_list         INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -296,6 +353,7 @@ class AppDatabase {
       time       INTEGER NOT NULL,
       status     TEXT,
       payload    TEXT,
+      deleted    INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, account_id),
       FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
     )
@@ -303,10 +361,17 @@ class AppDatabase {
 
   static Future<void> saveProfile(ProfileData profile, {bool isActive = true}) async {
     final db = await _instance;
-    await db.insert(
-      'profile',
-      profile.toDbRow(isActive: isActive),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    final row = profile.toDbRow(isActive: isActive);
+    final cols = row.keys.toList();
+    final placeholders = List.filled(cols.length, '?').join(', ');
+    final updates = cols
+        .where((c) => c != 'id')
+        .map((c) => '$c = excluded.$c')
+        .join(', ');
+    await db.rawInsert(
+      'INSERT INTO profile (${cols.join(', ')}) VALUES ($placeholders) '
+      'ON CONFLICT(id) DO UPDATE SET $updates',
+      cols.map((c) => row[c]).toList(),
     );
   }
 
@@ -438,14 +503,19 @@ class AppDatabase {
     if (rows.isEmpty) return;
     try {
       final db = await _instance;
+      final cols = rows.first.keys.toList();
+      final placeholders = List.filled(cols.length, '?').join(', ');
+      final updates = cols
+          .where((c) => c != 'id' && c != 'account_id')
+          .map((c) => '$c = excluded.$c')
+          .join(', ');
+      final sql = 'INSERT INTO chats_cache (${cols.join(', ')}) '
+          'VALUES ($placeholders) '
+          'ON CONFLICT(id, account_id) DO UPDATE SET $updates';
       await db.transaction((txn) async {
         final batch = txn.batch();
         for (final row in rows) {
-          batch.insert(
-            'chats_cache',
-            row,
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          batch.rawInsert(sql, cols.map((c) => row[c]).toList());
         }
         await batch.commit(noResult: true);
       });
@@ -468,10 +538,26 @@ class AppDatabase {
     final db = await _instance;
     return db.query(
       'chats_cache',
-      where: 'account_id = ?',
+      where: 'account_id = ? AND in_list = 1',
       whereArgs: [accountId],
       orderBy: 'last_event_time DESC',
     );
+  }
+
+  static Future<int> sumUnread(int accountId, {int? excludeChatId}) async {
+    final db = await _instance;
+    final where = excludeChatId != null
+        ? 'account_id = ? AND in_list = 1 AND id != ?'
+        : 'account_id = ? AND in_list = 1';
+    final args = excludeChatId != null
+        ? [accountId, excludeChatId]
+        : [accountId];
+    final result = await db.rawQuery(
+      'SELECT COALESCE(SUM(unread_count), 0) AS total '
+      'FROM chats_cache WHERE $where',
+      args,
+    );
+    return (result.first['total'] as int?) ?? 0;
   }
 
   static Future<int?> findDialogChatByParticipant(int accountId, int contactId) async {
@@ -493,6 +579,47 @@ class AppDatabase {
       'chats_cache',
       where: "account_id = ? AND type = 'DIALOG'",
       whereArgs: [accountId],
+    );
+  }
+
+  static String _escapeLike(String value) =>
+      value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+
+  static Future<List<Map<String, dynamic>>> searchContacts(
+    int accountId,
+    String query, {
+    int limit = 30,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final db = await _instance;
+    final like = '%${_escapeLike(term)}%';
+    return db.query(
+      'contacts',
+      where: 'account_id = ? AND '
+          "(first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
+          "OR CAST(phone AS TEXT) LIKE ? ESCAPE '\\')",
+      whereArgs: [accountId, like, like, like],
+      orderBy: 'first_name ASC, last_name ASC',
+      limit: limit,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> searchChatsByTitle(
+    int accountId,
+    String query, {
+    int limit = 30,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final db = await _instance;
+    final like = '%${_escapeLike(term)}%';
+    return db.query(
+      'chats_cache',
+      where: "account_id = ? AND title LIKE ? ESCAPE '\\'",
+      whereArgs: [accountId, like],
+      orderBy: 'last_event_time DESC',
+      limit: limit,
     );
   }
 
@@ -570,16 +697,73 @@ class AppDatabase {
     int chatId, {
     int? limit,
     int? offset,
+    bool onlyVisible = false,
   }) async {
     final db = await _instance;
     return db.query(
       'messages',
-      where: 'account_id = ? AND chat_id = ?',
+      where: onlyVisible
+          ? 'account_id = ? AND chat_id = ? AND deleted = 0'
+          : 'account_id = ? AND chat_id = ?',
       whereArgs: [accountId, chatId],
       orderBy: 'time DESC',
       limit: limit,
       offset: offset,
     );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessagesBefore(
+    int accountId,
+    int chatId, {
+    required int beforeTime,
+    int limit = 30,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: onlyVisible
+          ? 'account_id = ? AND chat_id = ? AND deleted = 0 AND time < ?'
+          : 'account_id = ? AND chat_id = ? AND time < ?',
+      whereArgs: [accountId, chatId, beforeTime],
+      orderBy: 'time DESC',
+      limit: limit,
+    );
+  }
+
+  static Future<void> markMessageDeleted(
+    int accountId,
+    int chatId,
+    String messageId,
+  ) async {
+    final db = await _instance;
+    await db.update(
+      'messages',
+      {'deleted': 1},
+      where: 'account_id = ? AND chat_id = ? AND id = ?',
+      whereArgs: [accountId, chatId, messageId],
+    );
+  }
+
+  static Future<void> markMessagesDeleted(
+    int accountId,
+    int chatId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return;
+    final db = await _instance;
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      for (final id in messageIds) {
+        batch.update(
+          'messages',
+          {'deleted': 1},
+          where: 'account_id = ? AND chat_id = ? AND id = ?',
+          whereArgs: [accountId, chatId, id],
+        );
+      }
+      await batch.commit(noResult: true);
+    });
   }
 
   static Future<void> clearMessages(int accountId, int chatId) async {
@@ -617,6 +801,18 @@ class AppDatabase {
       'messages',
       where: 'account_id = ? AND chat_id = ? AND id = ?',
       whereArgs: [accountId, chatId, messageId],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadPendingMessages(
+    int accountId,
+  ) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: 'account_id = ? AND status = ?',
+      whereArgs: [accountId, 'pending'],
+      orderBy: 'time ASC',
     );
   }
 }

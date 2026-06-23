@@ -9,6 +9,22 @@ const int kMaxAvatarBytes = 8 * 1024 * 1024;
 
 Future<Uint8List?> compressAvatar(Uint8List input) => compute(_encodeAvatar, input);
 
+Future<Uint8List?> encodeRgbaToJpeg(Uint8List rgba, int width, int height) =>
+    compute(_encodeRgba, (rgba, width, height));
+
+Uint8List? _encodeRgba((Uint8List, int, int) args) {
+  final (rgba, width, height) = args;
+  if (width <= 0 || height <= 0) return null;
+  final image = img.Image.fromBytes(
+    width: width,
+    height: height,
+    bytes: rgba.buffer,
+    numChannels: 4,
+    order: img.ChannelOrder.rgba,
+  );
+  return img.encodeJpg(image, quality: 90);
+}
+
 Uint8List? _encodeAvatar(Uint8List input) {
   final decoded = img.decodeImage(input);
   if (decoded == null) return null;

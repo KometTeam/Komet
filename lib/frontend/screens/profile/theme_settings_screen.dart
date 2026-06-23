@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_amoled.dart';
 import '../../../core/config/app_theme_mode.dart';
 import '../../../core/config/app_theme_schedule.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
+import '../../widgets/glossy_pill.dart';
 
 class ThemeSettingsScreen extends StatelessWidget {
   const ThemeSettingsScreen({super.key});
@@ -17,7 +19,7 @@ class ThemeSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBarM3E(titleText: 'Тема', backgroundColor: cs.surface),
+      appBar: ConnectionTitleBar(titleText: 'Тема', backgroundColor: cs.surface),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -49,16 +51,16 @@ class _ThemeModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Режим темы',
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Режим темы',
               style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 16,
@@ -94,7 +96,6 @@ class _ThemeModeCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }
@@ -176,15 +177,15 @@ class _AmoledCardState extends State<_AmoledCard> {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (e) => _lastPointerPosition = e.position,
-      child: Material(
+      child: GlossyPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(28),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-          child: Row(
-            children: [
-              Icon(
-                Symbols.contrast,
+        padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+        depth: 6,
+        child: Row(
+          children: [
+            Icon(
+              Symbols.contrast,
                 color: cs.onSurface,
                 size: 24,
                 weight: 500,
@@ -231,7 +232,6 @@ class _AmoledCardState extends State<_AmoledCard> {
             ],
           ),
         ),
-      ),
     );
   }
 }
@@ -249,16 +249,16 @@ class _ScheduleCard extends StatelessWidget {
         return AnimatedOpacity(
           opacity: enabled ? 1 : 0.5,
           duration: const Duration(milliseconds: 200),
-          child: Material(
+          child: GlossyPill(
             color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(28),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Расписание',
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            depth: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Расписание',
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -313,7 +313,6 @@ class _ScheduleCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
           ),
         );
       },
@@ -339,17 +338,15 @@ class _TimeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
+    return GlossyPill(
       color: cs.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: enabled ? () => _pick(context) : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, color: cs.onSurface, size: 22, weight: 500),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      depth: 6,
+      onTap: enabled ? () => _pick(context) : null,
+      child: Row(
+        children: [
+          Icon(icon, color: cs.onSurface, size: 22, weight: 500),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -372,8 +369,6 @@ class _TimeRow extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 

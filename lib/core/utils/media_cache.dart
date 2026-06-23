@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../config/app_media_cache.dart';
+import '../storage/app_instance.dart';
 
 /// Постоянный дисковый кэш скачанных медиа (файлы, видео).
 ///
@@ -21,7 +22,7 @@ class MediaCache {
     final cached = _dir;
     if (cached != null) return cached;
     final base = await getApplicationSupportDirectory();
-    final dir = Directory(p.join(base.path, 'media_cache'));
+    final dir = Directory(p.join(base.path, 'media_cache${AppInstance.suffix}'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

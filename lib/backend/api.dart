@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
 import '../core/config/countries.dart';
+import '../core/config/komet_settings.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
@@ -55,6 +57,7 @@ class Api {
       _sessionExpiredController.stream;
   Stream<String> get handshakeSuccessStream =>
       _handshakeSuccessController.stream;
+  Stream<String> get errorStream => _dispatcher.errorStream;
   SessionState get state => _sessionState;
 
   StreamSubscription<Uint8List>? _dataSubscription;
@@ -119,14 +122,21 @@ class Api {
       if (response.isOk) {
         _callsSeed = response.payload['callsSeed'] as int?;
         _registrationCountries = _parseRegistrationCountries(response.payload);
-        _setSessionState(SessionState.online);
+        _sessionState = SessionState.online;
         _startPinging();
         logger.i('Сессия онлайн, хэндшейк ок');
-        _handshakeSuccessController.add(
-          response.payload['device_name'] as String? ?? 'Unknown',
-        );
         if (_onReconnectCallback != null) {
-          _onReconnectCallback!();
+          try {
+            await _onReconnectCallback!();
+          } catch (e) {
+            logger.w('Авто-логин при хэндшейке не удался: $e');
+          }
+        }
+        if (_sessionState == SessionState.online) {
+          _stateController.add(SessionState.online);
+          _handshakeSuccessController.add(
+            response.payload['device_name'] as String? ?? 'Unknown',
+          );
         }
       } else {
         logger.e('Хэндшейк отклонён: ${response.payload}');
@@ -210,7 +220,8 @@ class Api {
 
     final spoofed = await SpoofingService.getSpoofedSessionData();
     if (spoofed != null) {
-      deviceType = (spoofed['device_type'] as String?) ?? deviceType;
+      final sDeviceType = spoofed['device_type'] as String?;
+      if (sDeviceType != null && sDeviceType != 'IOS') deviceType = sDeviceType;
       final sDeviceName = spoofed['device_name'] as String?;
       if (sDeviceName != null && sDeviceName.isNotEmpty) {
         deviceName = sDeviceName;
@@ -301,15 +312,15 @@ class Api {
   /// Стрим всех входящих пушей от сервера.
   Stream<Packet> get pushStream => _dispatcher.pushStream;
 
-  void dispose() {
+  Future<void> dispose() async {
     _autoReconnect = false;
     _reconnectTimer?.cancel();
     _cleanup();
     _dispatcher.dispose();
-    _connection.dispose();
-    _stateController.close();
-    _sessionExpiredController.close();
-    _handshakeSuccessController.close();
+    await _connection.dispose();
+    await _stateController.close();
+    await _sessionExpiredController.close();
+    await _handshakeSuccessController.close();
   }
 
   // Внутрянка
@@ -364,19 +375,28 @@ class Api {
     await connect();
   }
 
-  void Function()? _onReconnectCallback;
+  Future<void> Function()? _onReconnectCallback;
 
-  void setReconnectCallback(void Function() callback) {
+  void setReconnectCallback(Future<void> Function() callback) {
     _onReconnectCallback = callback;
   }
 
   void _startPinging() {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(ServerConfig.pingInterval, (_) {
-      if (_connection.isConnected) {
-        _sender.send(_connection, Opcode.ping, {});
-      }
+      sendPing(interactive: !KometSettings.ghostMode.value);
     });
+  }
+
+  void sendPing({required bool interactive}) {
+    if (_connection.isConnected) {
+      _sender.send(_connection, Opcode.ping, {'interactive': interactive});
+      if (interactive) {
+        SelfPresence.markOnline();
+      } else {
+        SelfPresence.markOfflineFromPing();
+      }
+    }
   }
 
   static List<CountryName>? _parseRegistrationCountries(dynamic payload) {

@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
+import 'search_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
@@ -19,6 +23,7 @@ import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
 import '../profile/settings_tab.dart';
 import '../auth/login_screen.dart';
+import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
 import '../../../backend/api.dart';
 import '../../../core/utils/haptics.dart';
@@ -29,6 +34,7 @@ import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../main.dart'
     show accountModule, api, messagesModule, appRouteObserver;
@@ -121,6 +127,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   Timer? _contactRebuildTimer;
   bool _deferReloads = false;
   bool _reloadQueued = false;
+  bool _reloadInFlight = false;
   Timer? _settleTimer;
   bool get _isSelectionMode => _selectedChats.isNotEmpty;
   bool? _foldersListKnown;
@@ -140,6 +147,11 @@ class _ChatListScreenState extends State<ChatListScreen>
   ProfileData? _profile;
 
   List<CachedChat> _chats = [];
+
+  int _chatListRevision = 0;
+  final Set<String> _knownChatIds = {};
+  bool _didInitialChatLoad = false;
+  Set<String> _enteringChatIds = {};
 
   SessionState _sessionState = SessionState.disconnected;
 
@@ -486,8 +498,13 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
     });
     ChatsModule.chatsChanged.addListener(_onChatsChanged);
+    DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
-    _reloadChatsAndFolders();
+    unawaited(_runReload());
+  }
+
+  void _onDraftsChanged() {
+    if (mounted) _requestReload();
   }
 
   void _onStoriesEnabledChanged() {
@@ -524,18 +541,31 @@ class _ChatListScreenState extends State<ChatListScreen>
       _deferReloads = false;
       if (_reloadQueued) {
         _reloadQueued = false;
-        _reloadChatsAndFolders();
+        unawaited(_runReload());
       }
     });
   }
 
   void _requestReload() {
     if (!mounted) return;
-    if (_deferReloads) {
+    if (_deferReloads || _reloadInFlight) {
       _reloadQueued = true;
       return;
     }
-    _reloadChatsAndFolders();
+    unawaited(_runReload());
+  }
+
+  Future<void> _runReload() async {
+    _reloadInFlight = true;
+    try {
+      await _reloadChatsAndFolders();
+    } finally {
+      _reloadInFlight = false;
+      if (_reloadQueued && mounted && !_deferReloads) {
+        _reloadQueued = false;
+        unawaited(_runReload());
+      }
+    }
   }
 
   void _onChatsChanged() {
@@ -576,12 +606,25 @@ class _ChatListScreenState extends State<ChatListScreen>
 
       final pageCount = folders.isEmpty ? 1 : folders.length;
       _syncFolderChatScrollControllersForCount(pageCount);
+
+      final filteredChats = chats
+          .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
+          .toList();
+      final newIds = filteredChats.map((c) => c.id.toString()).toSet();
+      final entering = _didInitialChatLoad
+          ? newIds.difference(_knownChatIds)
+          : <String>{};
+      _knownChatIds
+        ..clear()
+        ..addAll(newIds);
+      _didInitialChatLoad = true;
+
       if (mounted) {
         setState(() {
           _profile = p;
-          _chats = chats
-              .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
-              .toList();
+          _chats = filteredChats;
+          _enteringChatIds = entering;
+          _chatListRevision++;
           _folders = folders;
           _foldersListKnown = foldersKnown;
           if (_selectedFolderId != null &&
@@ -603,6 +646,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _jumpFolderPageToSelection();
+          if (_enteringChatIds.isNotEmpty) _enteringChatIds = <String>{};
         });
       }
     } catch (_) {
@@ -1017,6 +1061,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     ChatsModule.chatsChanged.removeListener(_onChatsChanged);
+    DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
@@ -1227,43 +1272,40 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
-                            child: Container(
-                              height: 44,
-                              decoration: BoxDecoration(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => pushSwipeable(
+                                context,
+                                (_) => const SearchScreen(),
+                              ),
+                              child: GlossyPill(
                                 color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(50),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Symbols.search,
-                                    color: cs.outline,
-                                    size: 20,
-                                    weight: 400,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: TextField(
-                                      style: TextStyle(
-                                        color: cs.onSurface,
-                                        fontSize: 15,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                depth: 6,
+                                child: SizedBox(
+                                  height: 44,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Symbols.search,
+                                        color: cs.outline,
+                                        size: 20,
+                                        weight: 400,
                                       ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Поиск',
-                                        hintStyle: TextStyle(
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Поиск',
+                                        style: TextStyle(
                                           color: cs.outline,
                                           fontSize: 15,
                                         ),
-                                        border: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero,
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
@@ -1357,6 +1399,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     final totalItems = _isInitialLoading
         ? 10
         : chats.length + (hasSeparator ? 1 : 0);
+    final idToIndex = <String, int>{
+      for (var i = 0; i < chats.length; i++) chats[i].id.toString(): i,
+    };
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification n) {
         if (_currentNavIndex != 0) return false;
@@ -1442,19 +1487,25 @@ class _ChatListScreenState extends State<ChatListScreen>
                   final previewText = isPlaceholder
                       ? 'зайдите в чат для подгрузки'
                       : (chat.lastMsgTextOneLine ?? '');
-                  return _buildChatItem(
+                  return _animateChatTile(
+                    chat.id.toString(),
+                    _buildChatItem(
                     chat.id.toString(),
                     name ?? "Пользователь",
                     previewText,
                     _formatTime(chat.lastMsgTime),
                     avatar ?? "",
-                    isOnline: chat.isOnline,
+                    presenceUserId: secondId,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.isMuted,
                     isVerified: isVerified,
                     isPinned: isPinned,
                     chatType: "DIALOG",
                     messageItalic: isPlaceholder,
+                    draft: _draftFor(chat.id),
+                    ownStatus: _ownStatusFor(chat, isPlaceholder),
+                    ownRead: chat.lastMsgReadByOthers,
+                  ),
                   );
                 } else {
                   final isPlaceholder =
@@ -1475,7 +1526,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     }
                   }
 
-                  return _buildChatItem(
+                  return _animateChatTile(
+                    chat.id.toString(),
+                    _buildChatItem(
                     chat.id.toString(),
                     chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
                     fullMsg,
@@ -1483,16 +1536,26 @@ class _ChatListScreenState extends State<ChatListScreen>
                     (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
                         ? chat.iconUrl!
                         : '',
-                    isOnline: chat.isOnline,
                     unreadCount: chat.unreadCount,
                     isMuted: chat.isMuted,
                     isVerified: chat.isOfficial,
                     isPinned: isPinned,
                     chatType: chat.type,
                     messageItalic: isPlaceholder,
+                    draft: chat.id == 0 ? null : _draftFor(chat.id),
+                    ownStatus: _ownStatusFor(chat, isPlaceholder),
+                    ownRead: chat.lastMsgReadByOthers,
+                  ),
                   );
                 }
-              }, childCount: totalItems),
+              }, childCount: totalItems, findChildIndexCallback: (Key key) {
+                if (key is! ValueKey<String>) return null;
+                final v = key.value;
+                if (!v.startsWith('chat_')) return null;
+                final idx = idToIndex[v.substring(5)];
+                if (idx == null) return null;
+                return hasSeparator && idx >= pinnedCount ? idx + 1 : idx;
+              }),
             ),
           SliverPadding(
             padding: EdgeInsets.only(
@@ -1804,18 +1867,25 @@ class _ChatListScreenState extends State<ChatListScreen>
                           Positioned(
                             right: 20,
                             bottom: bottomInset + 90,
-                            child: FloatingActionButton(
-                              onPressed: _toggleFab,
-                              backgroundColor: cs.primaryContainer,
-                              elevation: 4,
-                              shape: const CircleBorder(),
-                              child: Transform.rotate(
-                                angle: val * (pi / 4),
-                                child: Icon(
-                                  Symbols.add,
-                                  color: cs.onPrimaryContainer,
-                                  size: 28,
-                                  weight: 400,
+                            child: GlossyPill(
+                              onTap: _toggleFab,
+                              color: cs.primaryContainer,
+                              borderRadius: BorderRadius.circular(28),
+                              elevated: true,
+                              depth: 12,
+                              child: SizedBox(
+                                width: 56,
+                                height: 56,
+                                child: Center(
+                                  child: Transform.rotate(
+                                    angle: val * (pi / 4),
+                                    child: Icon(
+                                      Symbols.add,
+                                      color: cs.onPrimaryContainer,
+                                      size: 28,
+                                      weight: 400,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -2024,23 +2094,73 @@ class _ChatListScreenState extends State<ChatListScreen>
           );
         }
       },
-      child: Container(
-        alignment: Alignment.center,
+      child: GlossyPill(
+        color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(50),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(50),
-        ),
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: isSelected ? cs.onPrimaryContainer : cs.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
+        depth: 4,
+        child: Center(
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? cs.onPrimaryContainer : cs.primary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  String? _draftFor(int chatId) {
+    final raw = DraftStore.instance.get(_profile?.id ?? 0, chatId);
+    if (raw == null) return null;
+    final oneLine = raw.replaceAll('\n', ' ').trim();
+    return oneLine.isEmpty ? null : oneLine;
+  }
+
+  String? _ownStatusFor(CachedChat chat, bool isPlaceholder) {
+    if (isPlaceholder || chat.id == 0) return null;
+    final me = _profile?.id;
+    if (me == null || chat.lastMsgSenderId != me) return null;
+    return chat.lastMsgStatus ?? 'sent';
+  }
+
+  Widget _ownStatusIcon(ColorScheme cs, String status, bool read) {
+    IconData icon;
+    Color color;
+    switch (status) {
+      case 'sending':
+      case 'pending':
+        icon = Symbols.schedule;
+        color = cs.outline;
+      case 'error':
+        icon = Symbols.error;
+        color = Colors.redAccent;
+      default:
+        if (read) {
+          icon = Symbols.done_all;
+          color = const Color(0xFF4FC3F7);
+        } else {
+          icon = Symbols.check;
+          color = cs.outline;
+        }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Icon(icon, size: 16, color: color, fill: 1),
+    );
+  }
+
+  Widget _animateChatTile(String id, Widget child) {
+    return _AnimatedChatTile(
+      key: ValueKey('chat_$id'),
+      id: id,
+      revision: _chatListRevision,
+      isNew: _enteringChatIds.contains(id),
+      child: child,
     );
   }
 
@@ -2050,7 +2170,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     String message,
     String time,
     String imageUrl, {
-    bool isOnline = false,
+    int presenceUserId = 0,
     bool isTyping = false,
     bool isRead = false,
     int unreadCount = 0,
@@ -2059,9 +2179,15 @@ class _ChatListScreenState extends State<ChatListScreen>
     bool isPinned = false,
     String chatType = "CHAT",
     bool messageItalic = false,
+    String? draft,
+    String? ownStatus,
+    bool ownRead = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
+    final Widget? statusIcon = (ownStatus != null && draft == null)
+        ? _ownStatusIcon(cs, ownStatus, ownRead)
+        : null;
 
     return InkWell(
       key: ValueKey('chat_$id'),
@@ -2155,18 +2281,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ),
                     )
-                  else if (isOnline)
+                  else if (presenceUserId != 0)
                     Positioned(
                       right: 0,
                       bottom: 0,
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: cs.surface, width: 2),
-                        ),
+                      child: OnlineDot(
+                        userId: presenceUserId,
+                        borderColor: cs.surface,
                       ),
                     ),
                 ],
@@ -2245,23 +2366,47 @@ class _ChatListScreenState extends State<ChatListScreen>
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Expanded(
-                              child: Text(
-                                message,
-                                style: TextStyle(
-                                  color: isTyping ? cs.primary : cs.outline,
-                                  fontSize: 14,
-                                  fontWeight: isTyping
-                                      ? FontWeight.w500
-                                      : FontWeight.w400,
-                                  fontStyle: messageItalic
-                                      ? FontStyle.italic
-                                      : FontStyle.normal,
-                                  height: 1.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: draft != null
+                                  ? Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text: 'Черновик: ',
+                                            style: TextStyle(color: cs.error),
+                                          ),
+                                          TextSpan(
+                                            text: draft,
+                                            style: TextStyle(color: cs.outline),
+                                          ),
+                                        ],
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w400,
+                                          fontStyle: FontStyle.italic,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  : Text(
+                                      message,
+                                      style: TextStyle(
+                                        color: isTyping ? cs.primary : cs.outline,
+                                        fontSize: 14,
+                                        fontWeight: isTyping
+                                            ? FontWeight.w500
+                                            : FontWeight.w400,
+                                        fontStyle: messageItalic
+                                            ? FontStyle.italic
+                                            : FontStyle.normal,
+                                        height: 1.2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                             ),
+                            ?statusIcon,
                             const SizedBox(width: 8),
                             if (unreadCount > 0)
                               Container(
@@ -2272,13 +2417,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 decoration: BoxDecoration(
                                   color: isMuted
                                       ? cs.surfaceContainerHighest
-                                      : cs.surfaceContainerHigh,
+                                      : cs.primary,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   unreadCount.toString(),
                                   style: TextStyle(
-                                    color: isMuted ? cs.outline : cs.onSurface,
+                                    color: isMuted ? cs.outline : cs.onPrimary,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     height: 1.1,
@@ -2318,6 +2463,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         if (!mounted) return;
         if (accountId == null) {
           final previousId = await TokenStorage.getActiveAccountId();
+          await resetDigitalIdSession();
           try {
             await accountModule.beginAddAccount();
           } catch (_) {}
@@ -2330,6 +2476,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           );
           return;
         }
+        await resetDigitalIdSession();
         try {
           await accountModule.switchAccount(accountId);
         } catch (e) {
@@ -2369,38 +2516,27 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   Widget _buildFabMenuItem(IconData icon, String title, {VoidCallback? onTap}) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    return SizedBox(
       width: 220,
-      decoration: BoxDecoration(
+      child: GlossyPill(
+        onTap: onTap,
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(100),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Icon(icon, color: cs.onSurface, size: 22),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+        elevated: true,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: cs.onSurface, size: 22),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2459,4 +2595,122 @@ class _StoriesUi extends ChangeNotifier {
   bool shouldCollapseSearch = false;
 
   void notify() => notifyListeners();
+}
+
+class _AnimatedChatTile extends StatefulWidget {
+  final Widget child;
+  final String id;
+  final int revision;
+  final bool isNew;
+
+  const _AnimatedChatTile({
+    required Key key,
+    required this.child,
+    required this.id,
+    required this.revision,
+    required this.isNew,
+  }) : super(key: key);
+
+  @override
+  State<_AnimatedChatTile> createState() => _AnimatedChatTileState();
+}
+
+class _AnimatedChatTileState extends State<_AnimatedChatTile>
+    with SingleTickerProviderStateMixin {
+  static const Duration _moveDuration = Duration(milliseconds: 300);
+  static const Duration _enterDuration = Duration(milliseconds: 260);
+
+  AnimationController? _controller;
+  double? _lastContentY;
+  late int _lastRevision;
+  double _moveDy = 0;
+  bool _entering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastRevision = widget.revision;
+    if (widget.isNew) {
+      _entering = true;
+      final c = _controller = AnimationController(
+        vsync: this,
+        duration: _enterDuration,
+      );
+      c.forward(from: 0).whenComplete(() {
+        if (mounted) setState(() => _entering = false);
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _lastContentY = _measureContentY();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedChatTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.revision == _lastRevision) return;
+    _lastRevision = widget.revision;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _runMove();
+    });
+  }
+
+  double? _measureContentY() {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached) return null;
+    try {
+      return RenderAbstractViewport.of(box).getOffsetToReveal(box, 0.0).offset;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _runMove() {
+    final newY = _measureContentY();
+    final oldY = _lastContentY;
+    if (newY != null) _lastContentY = newY;
+    debugPrint('[FLIP] move id=${widget.id} oldY=$oldY newY=$newY');
+    if (_entering || oldY == null || newY == null) return;
+    final dy = oldY - newY;
+    if (dy.abs() < 1.0 || dy.abs() > 2000) return;
+    final c = _controller ??= AnimationController(vsync: this);
+    c.duration = _moveDuration;
+    setState(() => _moveDy = dy);
+    c.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    if (c == null) return SizedBox(child: widget.child);
+    return SizedBox(
+      child: AnimatedBuilder(
+        animation: c,
+        builder: (context, child) {
+          if (_entering) {
+            final t = Curves.easeOut.transform(c.value);
+            return Opacity(
+              opacity: t,
+              child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
+            );
+          }
+          if (_moveDy != 0) {
+            final t = 1 - Curves.easeOutCubic.transform(c.value);
+            return Transform.translate(
+              offset: Offset(0, _moveDy * t),
+              child: child,
+            );
+          }
+          return child!;
+        },
+        child: widget.child,
+      ),
+    );
+  }
 }

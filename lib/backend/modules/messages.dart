@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,13 +15,48 @@ class ContactCache {
   static final Map<int, String> _avatarCache = {};
   static final Map<int, Set<String>> _optionsCache = {};
 
-  static void put(int id, String name) => _nameCache[id] = name;
+  static const _prefsKey = 'contact_cache_v1';
+  static Timer? _saveTimer;
+  static bool _loaded = false;
 
-  static void putAvatar(int id, String? baseUrl) {
-    if (baseUrl != null) _avatarCache[id] = baseUrl;
+  static Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsKey);
+    if (raw == null) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      decoded.forEach((key, value) {
+        final id = int.tryParse(key.toString());
+        if (id == null || value is! Map) return;
+        final name = value['n'];
+        final avatar = value['a'];
+        final opts = value['o'];
+        if (name is String) _nameCache[id] = name;
+        if (avatar is String) _avatarCache[id] = avatar;
+        if (opts is List) _optionsCache[id] = opts.whereType<String>().toSet();
+      });
+    } catch (_) {}
   }
 
-  static void putOptions(int id, Set<String> opts) => _optionsCache[id] = opts;
+  static void put(int id, String name) {
+    _nameCache[id] = name;
+    _scheduleSave();
+  }
+
+  static void putAvatar(int id, String? baseUrl) {
+    if (baseUrl != null) {
+      _avatarCache[id] = baseUrl;
+      _scheduleSave();
+    }
+  }
+
+  static void putOptions(int id, Set<String> opts) {
+    _optionsCache[id] = opts;
+    _scheduleSave();
+  }
 
   static String? get(int id) => _nameCache[id];
   static String? getAvatar(int id) => _avatarCache[id];
@@ -32,6 +68,40 @@ class ContactCache {
     _nameCache.clear();
     _avatarCache.clear();
     _optionsCache.clear();
+    _saveTimer?.cancel();
+    _saveTimer = null;
+    unawaited(_wipePersisted());
+  }
+
+  static void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 3), () => unawaited(_save()));
+  }
+
+  static Future<void> _save() async {
+    final ids = <int>{
+      ..._nameCache.keys,
+      ..._avatarCache.keys,
+      ..._optionsCache.keys,
+    };
+    final map = <String, dynamic>{};
+    for (final id in ids) {
+      final entry = <String, dynamic>{};
+      final name = _nameCache[id];
+      final avatar = _avatarCache[id];
+      final opts = _optionsCache[id];
+      if (name != null) entry['n'] = name;
+      if (avatar != null) entry['a'] = avatar;
+      if (opts != null && opts.isNotEmpty) entry['o'] = opts.toList();
+      if (entry.isNotEmpty) map['$id'] = entry;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, jsonEncode(map));
+  }
+
+  static Future<void> _wipePersisted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
   }
 }
 
@@ -174,6 +244,101 @@ class FileUploadInfo {
   });
 }
 
+class VideoUploadInfo {
+  final String url;
+  final int videoId;
+  final String token;
+
+  VideoUploadInfo({
+    required this.url,
+    required this.videoId,
+    required this.token,
+  });
+}
+
+class ReplyInfo {
+  final String? messageId;
+  final int senderId;
+  final String? text;
+  final int? time;
+  final List<MessageAttachment>? attachments;
+
+  const ReplyInfo({
+    this.messageId,
+    required this.senderId,
+    this.text,
+    this.time,
+    this.attachments,
+  });
+
+  static ReplyInfo? fromPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+    final link = payload['link'];
+    if (link is! Map) return null;
+    if ((link['type'] as String?)?.toUpperCase() != 'REPLY') return null;
+
+    final msg = link['message'];
+    if (msg is! Map) {
+      final mid = link['messageId'];
+      if (mid == null) return null;
+      return ReplyInfo(messageId: mid.toString(), senderId: 0);
+    }
+
+    List<MessageAttachment>? attaches;
+    final raw = msg['attaches'];
+    if (raw is List && raw.isNotEmpty) {
+      attaches = raw
+          .whereType<Map>()
+          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+          .toList();
+    }
+
+    final sender = msg['sender'];
+    return ReplyInfo(
+      messageId: msg['id']?.toString(),
+      senderId: sender is int
+          ? sender
+          : int.tryParse(sender?.toString() ?? '') ?? 0,
+      text: msg['text']?.toString(),
+      time: msg['time'] is int ? msg['time'] as int : null,
+      attachments: attaches,
+    );
+  }
+
+  String previewText() {
+    final t = text;
+    if (t != null && t.trim().isNotEmpty) return t;
+    final a = attachments;
+    if (a != null && a.isNotEmpty) {
+      switch (a.first.type) {
+        case AttachmentType.photo:
+          return 'Фото';
+        case AttachmentType.video:
+          return 'Видео';
+        case AttachmentType.audio:
+          return 'Голосовое сообщение';
+        case AttachmentType.file:
+          return 'Файл';
+        case AttachmentType.sticker:
+          return 'Стикер';
+        case AttachmentType.contact:
+          return 'Контакт';
+        case AttachmentType.location:
+          return 'Геолокация';
+        case AttachmentType.poll:
+          return 'Опрос';
+        case AttachmentType.call:
+          return 'Звонок';
+        case AttachmentType.share:
+          return 'Ссылка';
+        case AttachmentType.control:
+          return '';
+      }
+    }
+    return '';
+  }
+}
+
 class CachedMessage {
   final String id;
   final int accountId;
@@ -185,6 +350,7 @@ class CachedMessage {
   final Map<String, dynamic>? payload;
   final List<MessageAttachment>? attachments;
   final bool isControl;
+  final bool deleted;
 
   const CachedMessage({
     required this.id,
@@ -197,7 +363,26 @@ class CachedMessage {
     this.payload,
     this.attachments,
     this.isControl = false,
+    this.deleted = false,
   });
+
+  CachedMessage copyWith({
+    String? status,
+    bool? deleted,
+    List<MessageAttachment>? attachments,
+  }) => CachedMessage(
+    id: id,
+    accountId: accountId,
+    chatId: chatId,
+    senderId: senderId,
+    text: text,
+    time: time,
+    status: status ?? this.status,
+    payload: payload,
+    attachments: attachments ?? this.attachments,
+    isControl: isControl,
+    deleted: deleted ?? this.deleted,
+  );
 
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
     Map<String, dynamic>? payload;
@@ -247,7 +432,36 @@ class CachedMessage {
       attachments: attachments,
       isControl:
           attachments?.any((a) => a.type == AttachmentType.control) ?? false,
+      deleted: row['deleted'] is int
+          ? row['deleted'] == 1
+          : row['deleted']?.toString() == '1',
     );
+  }
+
+  int? get delayedTimeToFire {
+    final attrs = payload?['delayedAttributes'];
+    if (attrs is Map) {
+      final t = attrs['timeToFire'];
+      if (t is int) return t;
+      if (t is String) return int.tryParse(t);
+    }
+    return null;
+  }
+
+  bool get isDelayed => delayedTimeToFire != null;
+
+  ReplyInfo? get replyInfo => ReplyInfo.fromPayload(payload);
+
+  static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
+      rows.map(CachedMessage.fromDbRow).toList();
+
+  static Future<List<CachedMessage>> fromDbRowsAsync(
+    List<Map<String, dynamic>> rows,
+  ) {
+    if (rows.length < 20) {
+      return Future.value(_decodeRows(rows));
+    }
+    return compute(_decodeRows, rows);
   }
 
   Map<String, dynamic> toDbRow() => {
@@ -259,6 +473,7 @@ class CachedMessage {
     'time': time,
     'status': status,
     'payload': payload != null ? jsonEncode(payload) : null,
+    'deleted': deleted ? 1 : 0,
   };
 
   static CachedMessage fromPushPayload(int accountId, int chatId, Map msg) {
@@ -340,9 +555,11 @@ class MessagesModule {
     }
 
     if (rows.isNotEmpty) {
-      AppDatabase.saveMessages(rows).catchError((e) {
+      try {
+        await AppDatabase.saveMessages(rows);
+      } catch (e) {
         logger.e('saveMessages error: $e');
-      });
+      }
     }
 
     return results;
@@ -361,7 +578,7 @@ class MessagesModule {
       limit: limit,
       offset: offset,
     );
-    return rows.map(CachedMessage.fromDbRow).toList();
+    return CachedMessage.fromDbRowsAsync(rows);
   }
 
   CachedMessage? _parseMessage(
@@ -423,15 +640,31 @@ class MessagesModule {
     int chatId,
     String text, {
     bool notify = true,
+    int? scheduledTime,
+    int? replyToMessageId,
   }) async {
+    final message = <String, dynamic>{
+      'text': text,
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'elements': [],
+      'attaches': [],
+    };
+    if (replyToMessageId != null) {
+      message['link'] = {
+        'type': 'REPLY',
+        'chatId': chatId,
+        'messageId': replyToMessageId,
+      };
+    }
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
     final payload = {
       'chatId': chatId,
-      'message': {
-        'text': text,
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
-        'elements': [],
-        'attaches': [],
-      },
+      'message': message,
       'notify': notify,
     };
 
@@ -453,6 +686,177 @@ class MessagesModule {
       }
     }
     return '';
+  }
+
+  /// Пересылает сообщение [messageId] из чата [sourceChatId] в [targetChatId].
+  ///
+  /// Пересылка — это отдельное сообщение без текста и вложений, со ссылкой
+  /// `link.type = FORWARD`, указывающей на оригинал. Сервер сам подставит
+  /// тело оригинала в ответе.
+  Future<String> forwardMessage(
+    int targetChatId,
+    int sourceChatId,
+    int messageId, {
+    bool notify = true,
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': [],
+      'attaches': [],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'link': {
+        'type': 'FORWARD',
+        'chatId': sourceChatId,
+        'messageId': messageId,
+      },
+    };
+    final payload = {
+      'chatId': targetChatId,
+      'message': message,
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) {
+      final msg = (response.payload is Map)
+          ? (response.payload['localizedMessage'] ??
+                response.payload['message'] ??
+                'Ошибка пересылки')
+          : 'Ошибка пересылки';
+      throw Exception(msg.toString());
+    }
+    final data = response.payload;
+    if (data is Map) {
+      final msgMap = data['message'];
+      if (msgMap is Map) {
+        final id = msgMap['id'];
+        if (id != null) return id.toString();
+      }
+    }
+    return '';
+  }
+
+  /// Загружает отложенные (запланированные) сообщения чата.
+  ///
+  /// В отличие от обычной истории, отложенные сообщения не сохраняются
+  /// в локальную БД — они живут только до момента отправки.
+  Future<List<CachedMessage>> fetchDelayedMessages(
+    int accountId,
+    int chatId,
+  ) async {
+    final payload = {
+      'chatId': chatId,
+      'forward': 0,
+      'backwardTime': 0,
+      'getChat': false,
+      'from': 1,
+      'itemType': 'DELAYED',
+      'getMessages': true,
+      'forwardTime': 0,
+      'interactive': true,
+      'backward': 150,
+    };
+
+    final response = await _api.sendRequest(Opcode.chatHistory, payload);
+    if (!response.isOk) return [];
+
+    final data = response.payload;
+    if (data is! Map) return [];
+
+    final messagesData = data['messages'];
+    if (messagesData is! List) return [];
+
+    final results = <CachedMessage>[];
+    for (final m in messagesData) {
+      if (m is! Map) continue;
+      final msg = _parseMessage(m.cast<dynamic, dynamic>(), accountId, chatId);
+      if (msg != null) results.add(msg);
+    }
+
+    results.sort(
+      (a, b) => (a.delayedTimeToFire ?? a.time).compareTo(
+        b.delayedTimeToFire ?? b.time,
+      ),
+    );
+
+    return results;
+  }
+
+  /// Редактирует текст (подпись) обычного сообщения.
+  ///
+  /// Поле `attachments` не передаётся — сервер сохраняет существующие
+  /// вложения.
+  Future<bool> editMessage(
+    int chatId,
+    String messageId, {
+    required String text,
+    List<Map<String, dynamic>> elements = const [],
+    bool sendAttachments = false,
+  }) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return false;
+
+    final payload = <String, dynamic>{
+      'messageId': id,
+      'chatId': chatId,
+      'elements': elements,
+      'text': text,
+    };
+    if (sendAttachments) payload['attachments'] = const <dynamic>[];
+
+    final response = await _api.sendRequest(Opcode.msgEdit, payload);
+    return response.isOk;
+  }
+
+  /// Редактирует отложенное сообщение: меняет текст и/или время отправки.
+  ///
+  /// Вложения сервер сохраняет сам — в payload они не передаются.
+  Future<bool> editScheduledMessage(
+    int chatId,
+    String messageId, {
+    required String text,
+    required int timeToFire,
+  }) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return false;
+
+    final payload = {
+      'messageId': id,
+      'chatId': chatId,
+      'elements': <dynamic>[],
+      'text': text,
+      'delayedAttributes': {
+        'timeToFire': timeToFire,
+        'notifySender': true,
+      },
+    };
+
+    final response = await _api.sendRequest(Opcode.msgEdit, payload);
+    return response.isOk;
+  }
+
+  Future<bool> deleteMessages(
+    int chatId,
+    List<String> messageIds, {
+    bool forEveryone = false,
+    String itemType = 'REGULAR',
+  }) async {
+    final ids = messageIds
+        .map((id) => int.tryParse(id))
+        .whereType<int>()
+        .toList();
+    if (ids.isEmpty) return false;
+
+    final payload = {
+      'messageIds': ids,
+      'chatId': chatId,
+      'forMe': !forEveryone,
+      'itemType': itemType,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgDelete, payload);
+    return response.isOk;
   }
 
   Future<TranscriptionResult> requestTranscription(
@@ -513,24 +917,32 @@ class MessagesModule {
     int fileId, {
     String? token,
     bool notify = true,
+    int? scheduledTime,
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
     Duration initialDelay = const Duration(seconds: 3),
   }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch,
+      'attaches': [
+        if (token != null)
+          {'_type': 'FILE', 'token': token}
+        else
+          {'_type': 'FILE', 'fileId': fileId},
+      ],
+    };
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
     final payload = {
       'chatId': chatId,
-      'message': {
-        'isLive': false,
-        'detectShare': false,
-        'elements': <dynamic>[],
-        'cid': DateTime.now().millisecondsSinceEpoch,
-        'attaches': [
-          if (token != null)
-            {'_type': 'FILE', 'token': token}
-          else
-            {'_type': 'FILE', 'fileId': fileId},
-        ],
-      },
+      'message': message,
       'notify': notify,
     };
 
@@ -548,6 +960,202 @@ class MessagesModule {
       }
     }
     return false;
+  }
+
+  Future<String?> requestPhotoUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.photoUpload, {'count': 1});
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is! Map) return null;
+    return data['url'] as String?;
+  }
+
+  Future<Map<String, dynamic>?> sendPhotoMessage(
+    int chatId,
+    List<String> photoTokens, {
+    String? caption,
+    bool notify = true,
+    int? scheduledTime,
+    int maxAttempts = 20,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        for (final token in photoTokens)
+          {'_type': 'PHOTO', 'photoToken': token},
+      ],
+    };
+    if (caption != null && caption.isNotEmpty) message['text'] = caption;
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        if (!response.isOk) return null;
+        final data = response.payload;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is Map) return Map<String, dynamic>.from(msg);
+        }
+        return null;
+      } on PacketError catch (e) {
+        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (attempt == maxAttempts - 1) return null;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return null;
+  }
+
+  /// Запрашивает URL для загрузки видео (опкод 82).
+  Future<VideoUploadInfo?> requestVideoUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.videoUpload, {
+      'uploaderType': 0,
+      'type': 0,
+      'count': 1,
+    });
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return VideoUploadInfo(
+      url: info['url'] as String? ?? '',
+      videoId: info['videoId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  /// Отправляет сообщение с видео по [token], полученному из
+  /// [requestVideoUploadUrl]. Сервер может ответить `attachment.not.ready`,
+  /// пока обрабатывает загруженное видео — в этом случае запрос повторяется.
+  Future<Map<String, dynamic>?> sendVideoMessage(
+    int chatId,
+    String token, {
+    String? caption,
+    bool notify = true,
+    int? scheduledTime,
+    int maxAttempts = 30,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        {'videoType': 0, '_type': 'VIDEO', 'token': token},
+      ],
+    };
+    if (caption != null && caption.isNotEmpty) message['text'] = caption;
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        if (!response.isOk) return null;
+        final data = response.payload;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is Map) return Map<String, dynamic>.from(msg);
+        }
+        return null;
+      } on PacketError catch (e) {
+        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (attempt == maxAttempts - 1) return null;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> sendLocationMessage(
+    int chatId,
+    double latitude,
+    double longitude, {
+    double zoom = 15,
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {
+            '_type': 'LOCATION',
+            'latitude': latitude,
+            'longitude': longitude,
+            'zoom': zoom,
+          },
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is Map) return Map<String, dynamic>.from(msg);
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> sendPollMessage(
+    int chatId,
+    String title,
+    List<String> answers, {
+    bool multiple = false,
+    bool anonymous = true,
+    bool notify = true,
+  }) async {
+    final settings = (anonymous ? 4 : 0) | (multiple ? 1 : 0);
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {
+            '_type': 'POLL',
+            'title': title,
+            'settings': settings,
+            'answers': [
+              for (final a in answers) {'text': a},
+            ],
+          },
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is Map) return Map<String, dynamic>.from(msg);
+    }
+    return null;
   }
 
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
@@ -587,12 +1195,14 @@ class MessagesModule {
     }
   }
 
-  /// Запрашивает у сервера ссылку на воспроизведение видео (opcode 83).
+  /// Запрашивает у сервера ссылки на воспроизведение видео (opcode 83).
   ///
   /// Формат подтверждён дампом: запрос `{messageId, chatId, token, videoId}`,
   /// ответ содержит `MP4_1080/MP4_720/...`, `HLS`, `DASH`, `EXTERNAL`.
-  /// Возвращает лучший доступный progressive-MP4 (или HLS как запасной).
-  Future<String?> getVideoUrl({
+  /// Возвращает все доступные progressive-MP4 качества (label → URL),
+  /// отсортированные по убыванию. URL'ы — готовые подписанные ссылки на CDN,
+  /// поддерживающие HTTP range, поэтому пригодны для стриминга.
+  Future<Map<String, String>> getVideoSources({
     required String messageId,
     required int chatId,
     required String token,
@@ -605,23 +1215,51 @@ class MessagesModule {
         'token': token,
         'videoId': videoId,
       });
-      if (!response.isOk) return null;
+      if (!response.isOk) return const {};
       final data = response.payload;
-      if (data is! Map) return null;
+      if (data is! Map) return const {};
 
-      const mp4Keys = ['MP4_1080', 'MP4_720', 'MP4_480', 'MP4_360', 'MP4_240'];
-      for (final key in mp4Keys) {
-        final url = data[key];
-        if (url is String && url.isNotEmpty) return url;
+      const mp4Keys = {
+        'MP4_1080': '1080p',
+        'MP4_720': '720p',
+        'MP4_480': '480p',
+        'MP4_360': '360p',
+        'MP4_240': '240p',
+        'MP4_144': '144p',
+      };
+      final sources = <String, String>{};
+      for (final entry in mp4Keys.entries) {
+        final url = data[entry.key];
+        if (url is String && url.isNotEmpty) sources[entry.value] = url;
       }
-      final hls = data['HLS'];
-      if (hls is String && hls.isNotEmpty) return hls;
-      final external = data['EXTERNAL'];
-      if (external is String && external.isNotEmpty) return external;
-      return null;
+      if (sources.isEmpty) {
+        final hls = data['HLS'];
+        if (hls is String && hls.isNotEmpty) sources['Авто'] = hls;
+        final external = data['EXTERNAL'];
+        if (external is String && external.isNotEmpty) {
+          sources['Источник'] = external;
+        }
+      }
+      return sources;
     } catch (_) {
-      return null;
+      return const {};
     }
+  }
+
+  /// Возвращает один лучший progressive-MP4 (или HLS как запасной).
+  Future<String?> getVideoUrl({
+    required String messageId,
+    required int chatId,
+    required String token,
+    required int videoId,
+  }) async {
+    final sources = await getVideoSources(
+      messageId: messageId,
+      chatId: chatId,
+      token: token,
+      videoId: videoId,
+    );
+    return sources.values.isEmpty ? null : sources.values.first;
   }
 
   Future<Uint8List?> downloadVideo(String baseUrl, String videoToken) async {

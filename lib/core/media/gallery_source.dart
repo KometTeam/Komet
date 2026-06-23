@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:photo_manager/photo_manager.dart';
 
@@ -12,6 +13,30 @@ abstract class GalleryItem {
   File? get localFile;
   Future<Uint8List?> thumbnail(int size);
   Future<File?> originFile();
+  Future<(int, int)?> dimensions();
+}
+
+class PickedPhoto {
+  final GalleryItem item;
+  final File? editedFile;
+
+  const PickedPhoto({required this.item, this.editedFile});
+}
+
+Future<(int, int)?> imageFileDimensions(File file) async {
+  ui.ImmutableBuffer? buffer;
+  ui.ImageDescriptor? descriptor;
+  try {
+    final bytes = await file.readAsBytes();
+    buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+    return (descriptor.width, descriptor.height);
+  } catch (_) {
+    return null;
+  } finally {
+    descriptor?.dispose();
+    buffer?.dispose();
+  }
 }
 
 abstract class GallerySource {
@@ -83,6 +108,14 @@ class _AssetGalleryItem implements GalleryItem {
 
   @override
   Future<File?> originFile() => asset.file;
+
+  @override
+  Future<(int, int)?> dimensions() async {
+    if (asset.width > 0 && asset.height > 0) {
+      return (asset.width, asset.height);
+    }
+    return null;
+  }
 }
 
 class _DesktopGallerySource implements GallerySource {
@@ -159,4 +192,7 @@ class _FileGalleryItem implements GalleryItem {
 
   @override
   Future<File?> originFile() async => file;
+
+  @override
+  Future<(int, int)?> dimensions() => imageFileDimensions(file);
 }

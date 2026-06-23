@@ -7,6 +7,7 @@ import '../api.dart';
 import '../../core/config/proxy_config.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/transport/proxy_connector.dart';
+import '../../core/transport/tls_config.dart';
 import '../../core/utils/logger.dart';
 import 'messages.dart';
 
@@ -51,6 +52,7 @@ class FileUploader {
     required File file,
     required String filename,
     required int totalSize,
+    int? scheduledTime,
     Duration autoForceAfter = const Duration(seconds: 1),
     Duration overallTimeout = const Duration(minutes: 5),
     Duration progressThrottle = const Duration(milliseconds: 16),
@@ -124,6 +126,7 @@ class FileUploader {
           chatId,
           info.fileId,
           token: info.token,
+          scheduledTime: scheduledTime,
         );
         if (cancelled) return;
         if (!ok) {
@@ -158,11 +161,12 @@ class FileUploader {
         ? await ProxyConnector(proxySettings).connect(uri.host, uri.port)
         : await Socket.connect(uri.host, uri.port);
     if (uri.scheme != 'https') return base;
-    return SecureSocket.secure(
-      base,
-      host: uri.host,
-      onBadCertificate: (_) => true,
-    );
+    final allowInsecure = await TlsConfig.isInsecureAllowed();
+    if (allowInsecure) {
+      logger.w('TLS: проверка сертификата отключена (дебаг) — загрузка уязвима к MitM');
+      return SecureSocket.secure(base, host: uri.host, onBadCertificate: (_) => true);
+    }
+    return SecureSocket.secure(base, host: uri.host);
   }
 
   void _writeHeaders(
@@ -232,6 +236,202 @@ class FileUploader {
       return token;
     } catch (e) {
       logger.w('uploadImage: $e');
+      try {
+        socket?.destroy();
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  Future<String?> uploadPhoto(
+    Uri uri,
+    File file, {
+    String filename = 'photo.jpg',
+    void Function(int sent, int total)? onProgress,
+    Duration progressThrottle = const Duration(milliseconds: 16),
+  }) async {
+    Socket? socket;
+    try {
+      final fileLength = await file.length();
+      socket = await _openSocket(uri);
+      final boundary =
+          '----KometBoundary${DateTime.now().microsecondsSinceEpoch}';
+      final preamble = utf8.encode(
+        '--$boundary\r\n'
+        'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
+        'Content-Type: ${_contentTypeForFilename(filename)}\r\n'
+        '\r\n',
+      );
+      final epilogue = utf8.encode('\r\n--$boundary--\r\n');
+      _writeImageHeaders(
+        socket,
+        uri,
+        preamble.length + fileLength + epilogue.length,
+        boundary: boundary,
+      );
+      socket.add(preamble);
+
+      final stopwatch = Stopwatch()..start();
+      var sent = 0;
+      final body = file.openRead().map((chunk) {
+        sent += chunk.length;
+        if (onProgress != null && stopwatch.elapsed >= progressThrottle) {
+          onProgress(sent, fileLength);
+          stopwatch.reset();
+        }
+        return chunk;
+      });
+      await socket.addStream(body);
+      socket.add(epilogue);
+      await socket.flush();
+      onProgress?.call(fileLength, fileLength);
+
+      final response = await _readFullResponse(
+        socket,
+        timeout: const Duration(minutes: 2),
+      );
+      try {
+        socket.destroy();
+      } catch (_) {}
+
+      if (response == null) return null;
+      final (status, responseBody) = response;
+      if (status != 200) {
+        logger.w('uploadPhoto: status=$status');
+        return null;
+      }
+      return _parsePhotoToken(responseBody);
+    } catch (e) {
+      logger.w('uploadPhoto: $e');
+      try {
+        socket?.destroy();
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  /// Загружает видео на CDN-URL (vu.okcdn.ru/upload.do), полученный из
+  /// [MessagesModule.requestVideoUploadUrl], по протоколу OK с докачкой:
+  /// сначала GET-хендшейк (возвращает уже загруженный оффсет), затем
+  /// параллельная отправка чанков по [chunkSize] байт через `Content-Range`
+  /// ([concurrency] одновременных соединений, режим `X-Uploading-Mode:
+  /// parallel`). Токен уже известен, поэтому возвращается только признак
+  /// успеха.
+  Future<bool> uploadVideoFile(
+    Uri uri,
+    File file, {
+    void Function(int sent, int total)? onProgress,
+    int chunkSize = 2 * 1024 * 1024,
+    int concurrency = 4,
+    Duration overallTimeout = const Duration(minutes: 30),
+  }) async {
+    final total = await file.length();
+    if (total <= 0) return false;
+
+    final fileName =
+        (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
+
+    final handshake = await _okCdnRequest(
+      uri,
+      method: 'GET',
+      fileName: fileName,
+      timeout: const Duration(seconds: 30),
+    );
+    if (handshake == null || handshake.$1 != 200) return false;
+
+    var startOffset = 0;
+    final resumed = int.tryParse(handshake.$2.trim());
+    if (resumed != null && resumed > 0 && resumed <= total) {
+      startOffset = resumed;
+    }
+
+    final ranges = <(int, int)>[];
+    for (var o = startOffset; o < total; o += chunkSize) {
+      ranges.add((o, o + chunkSize < total ? o + chunkSize : total));
+    }
+    if (ranges.isEmpty) return true;
+
+    var nextIndex = 0;
+    var sent = startOffset;
+    var failed = false;
+
+    Future<void> worker() async {
+      while (!failed) {
+        final i = nextIndex++;
+        if (i >= ranges.length) return;
+        final (start, end) = ranges[i];
+        final bytes = await _readRange(file, start, end);
+
+        final resp = await _okCdnRequest(
+          uri,
+          method: 'POST',
+          fileName: fileName,
+          body: bytes,
+          contentRange: 'bytes $start-${end - 1}/$total',
+          timeout: overallTimeout,
+        );
+        if (resp == null || (resp.$1 != 200 && resp.$1 != 201)) {
+          logger.w('uploadVideoFile: chunk status=${resp?.$1}');
+          failed = true;
+          return;
+        }
+
+        sent += end - start;
+        onProgress?.call(sent, total);
+      }
+    }
+
+    final workerCount = concurrency < ranges.length
+        ? concurrency
+        : ranges.length;
+    await Future.wait(List.generate(workerCount, (_) => worker()));
+    return !failed;
+  }
+
+  Future<Uint8List> _readRange(File file, int start, int end) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in file.openRead(start, end)) {
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
+  }
+
+  Future<(int, String)?> _okCdnRequest(
+    Uri uri, {
+    required String method,
+    required String fileName,
+    Uint8List? body,
+    String? contentRange,
+    required Duration timeout,
+  }) async {
+    Socket? socket;
+    try {
+      socket = await _openSocket(uri);
+      final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
+      final headers = StringBuffer()
+        ..write('$method $path HTTP/1.1\r\n')
+        ..write('Host: ${uri.host}\r\n')
+        ..write('Content-Type: application/x-binary; charset=x-user-defined\r\n')
+        ..write('Content-Disposition: attachment; fileName="$fileName"\r\n');
+      if (contentRange != null) {
+        headers.write('Content-Range: $contentRange\r\n');
+      }
+      headers
+        ..write('Content-Length: ${body?.length ?? 0}\r\n')
+        ..write('X-Uploading-Mode: parallel\r\n')
+        ..write('Connection: close\r\n')
+        ..write('\r\n');
+      socket.add(utf8.encode(headers.toString()));
+      if (body != null && body.isNotEmpty) socket.add(body);
+      await socket.flush();
+
+      final response = await _readFullResponse(socket, timeout: timeout);
+      try {
+        socket.destroy();
+      } catch (_) {}
+      return response;
+    } catch (e) {
+      logger.w('_okCdnRequest($method): $e');
       try {
         socket?.destroy();
       } catch (_) {}

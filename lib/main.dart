@@ -11,9 +11,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
+import 'core/cache/self_presence.dart';
+import 'core/storage/app_instance.dart';
+import 'core/storage/draft_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_bubble_behavior.dart';
+import 'core/config/komet_settings.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
@@ -21,7 +25,11 @@ import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
+import 'core/config/app_commands.dart';
+import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
+import 'core/config/app_pill_gradient.dart';
+import 'core/config/app_visual_style.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
@@ -30,9 +38,14 @@ import 'backend/modules/chats.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
+import 'backend/modules/outbox.dart';
 import 'backend/modules/polls.dart';
+import 'backend/modules/self_check.dart';
 import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
+import 'core/calls/call_controller.dart';
+import 'core/links/deep_link_service.dart';
+import 'frontend/screens/calls/call_screen.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
@@ -56,6 +69,8 @@ final fileUploader = FileUploader(api: api, messages: messagesModule);
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
+bool isOnemeFlavor = false;
+
 Future<Locale> _loadInitialLocale() async {
   final prefs = await SharedPreferences.getInstance();
   final code = prefs.getString('app_locale');
@@ -71,6 +86,9 @@ Future<Locale> _loadInitialLocale() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (AppInstance.isNamed) {
+    SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
+  }
   await AppDatabase.init();
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {
@@ -78,6 +96,7 @@ void main() async {
   }
   attachInfoCacheApi(api);
   ChatsModule.attachGlobalPushHandlers(api);
+  unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
   final localeFuture = _loadInitialLocale();
@@ -89,18 +108,20 @@ void main() async {
   final cacheExtentFuture = AppCacheExtent.load();
   final themeModeFuture = AppThemeModeConfig.load();
   final amoledFuture = AppAmoled.load();
+  final pillGradientFuture = AppPillGradient.load();
+  final visualStyleFuture = AppVisualStyle.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
+  final commandsFuture = AppCommands.load();
+  final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
 
   final packageInfo = await packageInfoFuture;
-  if (packageInfo.packageName == 'ru.oneme.app') {
-    await PushService.instance.init(api: api, account: accountModule);
-  }
+  isOnemeFlavor = packageInfo.packageName == 'ru.oneme.app';
 
   final initialLocale = await localeFuture;
 
@@ -108,6 +129,10 @@ void main() async {
 
   final prefs = await prefsFuture;
   await FileHistoryCache.load(prefs);
+  await DraftStore.instance.load();
+  await KometSettings.load();
+  if (KometSettings.ghostMode.value) SelfPresence.markOffline();
+  await ContactCache.load();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
   final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
   final initialTlsInsecure = prefs.getBool(TlsConfig.prefKey) ?? false;
@@ -122,11 +147,15 @@ void main() async {
   AppCacheExtent.current.value = await cacheExtentFuture;
   AppThemeModeConfig.current.value = await themeModeFuture;
   AppAmoled.current.value = await amoledFuture;
+  AppPillGradient.current.value = await pillGradientFuture;
+  AppVisualStyle.current.value = await visualStyleFuture;
   AppThemeSchedule.current.value = await themeScheduleFuture;
   AppMessageActionsStyle.current.value = await messageActionsFuture;
   AppSwipeBackDesktop.current.value = await swipeBackFuture;
   AppPranks.current.value = await pranksFuture;
   AppStories.current.value = await storiesFuture;
+  AppCommands.current.value = await commandsFuture;
+  AppLinkPreview.current.value = await linkPreviewFuture;
   AppMediaCacheLimit.current.value = await cacheLimitFuture;
   AppDigitalIdNative.current.value = await digitalIdNativeFuture;
   runApp(
@@ -189,9 +218,13 @@ class KometAppState extends State<KometApp>
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
+  StreamSubscription<IncomingCall>? _callIncomingSub;
+  StreamSubscription<String>? _serverErrorSub;
   Timer? _scheduleTimer;
   String? _lastVpnNotice;
   DateTime _lastVpnNoticeAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _lastServerError;
+  DateTime _lastServerErrorAt = DateTime.fromMillisecondsSinceEpoch(0);
   late final ValueNotifier<bool> fpsOverlayEnabled = ValueNotifier(
     widget.initialFpsOverlay,
   );
@@ -232,13 +265,27 @@ class KometAppState extends State<KometApp>
       } catch (_) {}
     });
 
-    _loginStatusSub = accountModule.loginStatusStream.listen((status) {
+    _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
       if (status == LoginStatus.success) {
-        PushService.instance.onLoginSuccess();
+        DeepLinkService.instance.markReady();
+        CallController.instance.init(api);
+        OutboxService.instance.init(api, messagesModule);
+        SelfCheckService.instance.init(api);
+        SelfCheckService.instance.checkNow();
+        if (isOnemeFlavor) {
+          await PushService.instance.init(api: api, account: accountModule);
+          await PushService.instance.onLoginSuccess();
+        }
       }
     });
 
-    _sessionExpiredSub = api.sessionExpiredStream.listen((SessionExpiredException e) async {
+    _callIncomingSub = CallController.instance.incomingCalls.listen(
+      _onIncomingCall,
+    );
+
+    _sessionExpiredSub = api.sessionExpiredStream.listen((
+      SessionExpiredException e,
+    ) async {
       if (_isLoggingOut) return;
       _isLoggingOut = true;
 
@@ -284,6 +331,35 @@ class KometAppState extends State<KometApp>
         showCustomNotificationOnOverlay(overlay, msg);
       }
     });
+
+    _serverErrorSub = api.errorStream.listen((msg) {
+      final now = DateTime.now();
+      if (msg == _lastServerError &&
+          now.difference(_lastServerErrorAt).inSeconds < 3) {
+        return;
+      }
+      _lastServerError = msg;
+      _lastServerErrorAt = now;
+
+      final overlay = KometApp.navigatorKey.currentState?.overlay;
+      if (overlay != null) {
+        showCustomNotificationOnOverlay(overlay, msg);
+      }
+    });
+  }
+
+  Future<void> _onIncomingCall(IncomingCall call) async {
+    final navState = KometApp.navigatorKey.currentState;
+    if (navState == null) return;
+    navState.push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          name: ContactCache.get(call.callerId) ?? '',
+          avatarUrl: ContactCache.getAvatar(call.callerId),
+          incoming: call,
+        ),
+      ),
+    );
   }
 
   @override
@@ -292,6 +368,8 @@ class KometAppState extends State<KometApp>
     _sessionExpiredSub?.cancel();
     _loginStatusSub?.cancel();
     _vpnBypassSub?.cancel();
+    _callIncomingSub?.cancel();
+    _serverErrorSub?.cancel();
     _scheduleTimer?.cancel();
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);
@@ -432,13 +510,10 @@ class KometAppState extends State<KometApp>
 
     WidgetsBinding.instance.endOfFrame.then((_) {
       if (_revealController != controller) return;
-      controller.forward().then(
-        (_) {
-          if (_revealController != controller) return;
-          _finishReveal();
-        },
-        onError: (_) {},
-      );
+      controller.forward().then((_) {
+        if (_revealController != controller) return;
+        _finishReveal();
+      }, onError: (_) {});
     });
   }
 

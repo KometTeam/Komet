@@ -6,6 +6,8 @@ import '../../../backend/modules/chats.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
 import '../../../core/config/app_stories.dart';
+import '../../../core/config/app_commands.dart';
+import '../../../core/config/app_link_preview.dart';
 import '../../../core/config/app_digital_id_mode.dart';
 import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
@@ -16,9 +18,12 @@ import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_cache.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/login_success_screen.dart';
 import '../calls/call_screen.dart';
+import '../../../core/calls/call_controller.dart';
+import '../../widgets/connection_status.dart';
 import '../digital_id/digital_id_web_screen.dart';
 
 class DebugMenuScreen extends StatefulWidget {
@@ -36,11 +41,24 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   final Map<String, String> _errors = {};
   int _cacheSize = 0;
   bool _clearingCache = false;
+  bool _micSignalOn = true;
 
   @override
   void initState() {
     super.initState();
     _loadCacheSize();
+  }
+
+  Future<void> _sendMicSignal(bool enabled) async {
+    setState(() => _micSignalOn = enabled);
+    final sent = await CallController.instance.sendMicSignal(enabled);
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      sent
+          ? 'Сигнал микрофона: ${enabled ? 'ВКЛ' : 'ВЫКЛ'} отправлен'
+          : 'Нет активного звонка',
+    );
   }
 
   Future<void> _loadCacheSize() async {
@@ -189,6 +207,8 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
 
     return Scaffold(
       backgroundColor: cs.surface,
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: const ConnectionSpinner(),
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
@@ -234,57 +254,54 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                     : ValueListenableBuilder<bool>(
                         valueListenable: appState.fpsOverlayEnabled,
                         builder: (context, fpsOn, _) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: cs.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(20),
+                          return GlossyPill(
+                            color: cs.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(20),
+                            depth: 6,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 17,
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 17,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Symbols.speed,
-                                    color: cs.onSurfaceVariant,
-                                    size: 22,
-                                    weight: 400,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Оверлей FPS',
-                                          style: TextStyle(
-                                            color: cs.onSurface,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                          ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Symbols.speed,
+                                  color: cs.onSurfaceVariant,
+                                  size: 22,
+                                  weight: 400,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Оверлей FPS',
+                                        style: TextStyle(
+                                          color: cs.onSurface,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Показ текущего фреймрейта поверх интерфейса',
-                                          style: TextStyle(
-                                            color: cs.onSurfaceVariant,
-                                            fontSize: 13,
-                                          ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Показ текущего фреймрейта поверх интерфейса',
+                                        style: TextStyle(
+                                          color: cs.onSurfaceVariant,
+                                          fontSize: 13,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                  Switch(
-                                    value: fpsOn,
-                                    onChanged: (v) {
-                                      appState.setFpsOverlayEnabled(v);
-                                    },
-                                  ),
-                                ],
-                              ),
+                                ),
+                                Switch(
+                                  value: fpsOn,
+                                  onChanged: (v) {
+                                    appState.setFpsOverlayEnabled(v);
+                                  },
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -299,63 +316,118 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                     : ValueListenableBuilder<bool>(
                         valueListenable: appState.vpnBypassEnabled,
                         builder: (context, bypassOn, _) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: cs.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(20),
+                          return GlossyPill(
+                            color: cs.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(20),
+                            depth: 6,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 17,
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 17,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Symbols.vpn_key_off,
-                                    color: cs.onSurfaceVariant,
-                                    size: 22,
-                                    weight: 400,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Обход VPN',
-                                          style: TextStyle(
-                                            color: cs.onSurface,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                          ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Symbols.vpn_key_off,
+                                  color: cs.onSurfaceVariant,
+                                  size: 22,
+                                  weight: 400,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Обход VPN',
+                                        style: TextStyle(
+                                          color: cs.onSurface,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Если обнаружен VPN (tun-интерфейс), '
-                                          'подключаться напрямую через Wi-Fi или '
-                                          'моб. сеть в обход туннеля. Только Android',
-                                          style: TextStyle(
-                                            color: cs.onSurfaceVariant,
-                                            fontSize: 13,
-                                          ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Если обнаружен VPN (tun-интерфейс), '
+                                        'подключаться напрямую через Wi-Fi или '
+                                        'моб. сеть в обход туннеля. Только Android',
+                                        style: TextStyle(
+                                          color: cs.onSurfaceVariant,
+                                          fontSize: 13,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                  Switch(
-                                    value: bypassOn,
-                                    onChanged: (v) {
-                                      appState.setVpnBypassEnabled(v);
-                                    },
-                                  ),
-                                ],
-                              ),
+                                ),
+                                Switch(
+                                  value: bypassOn,
+                                  onChanged: (v) {
+                                    appState.setVpnBypassEnabled(v);
+                                  },
+                                ),
+                              ],
                             ),
                           );
                         },
                       ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: debugForceOffline,
+                  builder: (context, offline, _) {
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.wifi_off,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Офлайн (тест)',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Показать индикаторы соединения во всех '
+                                  'экранах, не разрывая реальную сессию',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: offline,
+                            onChanged: (v) => debugForceOffline.value = v,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
             SliverToBoxAdapter(
@@ -366,60 +438,57 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                     : ValueListenableBuilder<bool>(
                         valueListenable: appState.tlsInsecureEnabled,
                         builder: (context, insecureOn, _) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: cs.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(20),
+                          return GlossyPill(
+                            color: cs.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(20),
+                            depth: 6,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 17,
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 17,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Symbols.gpp_bad,
-                                    color: cs.onSurfaceVariant,
-                                    size: 22,
-                                    weight: 400,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Отключить проверку TLS',
-                                          style: TextStyle(
-                                            color: cs.onSurface,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                          ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Symbols.gpp_bad,
+                                  color: cs.onSurfaceVariant,
+                                  size: 22,
+                                  weight: 400,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Отключить проверку TLS',
+                                        style: TextStyle(
+                                          color: cs.onSurface,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Принимать любой сертификат сервера. '
-                                          'Только для отладки через MitM-прокси — '
-                                          'соединение становится уязвимым к '
-                                          'перехвату трафика',
-                                          style: TextStyle(
-                                            color: cs.onSurfaceVariant,
-                                            fontSize: 13,
-                                          ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Принимать любой сертификат сервера. '
+                                        'Только для отладки через MitM-прокси — '
+                                        'соединение становится уязвимым к '
+                                        'перехвату трафика',
+                                        style: TextStyle(
+                                          color: cs.onSurfaceVariant,
+                                          fontSize: 13,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                  Switch(
-                                    value: insecureOn,
-                                    onChanged: (v) {
-                                      appState.setTlsInsecureEnabled(v);
-                                    },
-                                  ),
-                                ],
-                              ),
+                                ),
+                                Switch(
+                                  value: insecureOn,
+                                  onChanged: (v) {
+                                    appState.setTlsInsecureEnabled(v);
+                                  },
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -432,58 +501,55 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                 child: ValueListenableBuilder<bool>(
                   valueListenable: AppSwipeBackDesktop.current,
                   builder: (context, swipeOn, _) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(20),
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 17,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Symbols.swipe_right,
-                              color: cs.onSurfaceVariant,
-                              size: 22,
-                              weight: 400,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Свайп-назад в десктоп-режиме',
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.swipe_right,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Свайп-назад в десктоп-режиме',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Включает жест «провести от левого края, чтобы '
-                                    'закрыть» внутри встроенной панели чата на '
-                                    'десктопе — для тестирования курсором',
-                                    style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontSize: 13,
-                                    ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Включает жест «провести от левого края, чтобы '
+                                  'закрыть» внутри встроенной панели чата на '
+                                  'десктопе — для тестирования курсором',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            Switch(
-                              value: swipeOn,
-                              onChanged: (v) {
-                                AppSwipeBackDesktop.save(v);
-                              },
-                            ),
-                          ],
-                        ),
+                          ),
+                          Switch(
+                            value: swipeOn,
+                            onChanged: (v) {
+                              AppSwipeBackDesktop.save(v);
+                            },
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -496,48 +562,45 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                 child: ValueListenableBuilder<bool>(
                   valueListenable: AppPranks.current,
                   builder: (context, pranksOn, _) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(20),
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 17,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Symbols.auto_awesome,
-                              color: cs.onSurfaceVariant,
-                              size: 22,
-                              weight: 400,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Приколь4ики',
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.auto_awesome,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Приколь4ики',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            Switch(
-                              value: pranksOn,
-                              onChanged: (v) {
-                                AppPranks.save(v);
-                              },
-                            ),
-                          ],
-                        ),
+                          ),
+                          Switch(
+                            value: pranksOn,
+                            onChanged: (v) {
+                              AppPranks.save(v);
+                            },
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -550,58 +613,55 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                 child: ValueListenableBuilder<bool>(
                   valueListenable: AppDigitalIdNative.current,
                   builder: (context, native, _) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(20),
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 17,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Symbols.badge,
-                              color: cs.onSurfaceVariant,
-                              size: 22,
-                              weight: 400,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Нативный Цифровой ID',
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.badge,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Нативный Цифровой ID',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    native
-                                        ? 'Нативный экран (REST ext-api.max.ru)'
-                                        : 'Оригинальная страница в WebView',
-                                    style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontSize: 13,
-                                    ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  native
+                                      ? 'Нативный экран (REST ext-api.max.ru)'
+                                      : 'Оригинальная страница в WebView',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            Switch(
-                              value: native,
-                              onChanged: (v) {
-                                AppDigitalIdNative.save(v);
-                              },
-                            ),
-                          ],
-                        ),
+                          ),
+                          Switch(
+                            value: native,
+                            onChanged: (v) {
+                              AppDigitalIdNative.save(v);
+                            },
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -674,56 +734,171 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                 child: ValueListenableBuilder<bool>(
                   valueListenable: AppStories.current,
                   builder: (context, storiesOn, _) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(20),
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 17,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Symbols.amp_stories,
-                              color: cs.onSurfaceVariant,
-                              size: 22,
-                              weight: 400,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Истории',
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.amp_stories,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Истории',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Отображение ленты историй в списке чатов',
-                                    style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontSize: 13,
-                                    ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Отображение ленты историй в списке чатов',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            Switch(
-                              value: storiesOn,
-                              onChanged: (v) {
-                                AppStories.save(v);
-                              },
+                          ),
+                          Switch(
+                            value: storiesOn,
+                            onChanged: (v) {
+                              AppStories.save(v);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppCommands.current,
+                  builder: (context, commandsOn, _) {
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.terminal,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Команды',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Панель команд по вводу «/» в строке сообщения',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          Switch(
+                            value: commandsOn,
+                            onChanged: (v) {
+                              AppCommands.save(v);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppLinkPreview.current,
+                  builder: (context, linkPreviewOn, _) {
+                    return GlossyPill(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      depth: 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.link,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Предпросмотр ссылок',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Карточки с превью для ссылок в сообщениях',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: linkPreviewOn,
+                            onChanged: (v) {
+                              AppLinkPreview.save(v);
+                            },
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -930,11 +1105,10 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                child: GlossyPill(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                  depth: 6,
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -956,54 +1130,46 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      _DebugCallButton(
+                        label: 'Экран звонка (превью)',
+                        icon: Symbols.phone,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CallScreen(name: 'Кирил Г.'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
-                            child: _DebugCallButton(
-                              label: 'Входящий',
-                              icon: Symbols.call_received,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CallScreen(
-                                    name: 'Кирил Г.',
-                                    initialState: CallScreenState.incoming,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Сигнал микрофона (тест)',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                              ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Шлёт change-media-settings в активный звонок, '
+                                  'не меняя реальный микрофон',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _DebugCallButton(
-                              label: 'Исходящий',
-                              icon: Symbols.call_made,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CallScreen(
-                                    name: 'Кирил Г.',
-                                    initialState: CallScreenState.outgoing,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _DebugCallButton(
-                              label: 'Активный',
-                              icon: Symbols.phone_in_talk,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CallScreen(
-                                    name: 'Кирил Г.',
-                                    initialState: CallScreenState.active,
-                                  ),
-                                ),
-                              ),
-                            ),
+                          Switch(
+                            value: _micSignalOn,
+                            onChanged: _sendMicSignal,
                           ),
                         ],
                       ),
@@ -1015,11 +1181,10 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                child: GlossyPill(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                  depth: 6,
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
