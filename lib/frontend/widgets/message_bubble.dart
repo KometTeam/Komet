@@ -14,7 +14,6 @@ import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/file_download.dart';
-import '../../core/utils/media_cache.dart';
 import '../../core/utils/download_progress.dart';
 import '../../core/utils/link_opener.dart';
 import '../../core/config/app_link_preview.dart';
@@ -1774,89 +1773,155 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildVideoAttachment(_BubbleCtx ctx, MessageAttachment video) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(photoBorderRadius),
-          child: Stack(
-            children: [
-              Container(
-                width: 200,
-                height: 150,
-                color: ctx.cs.surfaceContainerHighest,
-                child: Icon(
-                  Symbols.videocam,
-                  size: 48,
-                  color: ctx.cs.onSurfaceVariant,
-                ),
-              ),
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: Colors.black54,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Symbols.play_arrow,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _playVideo(ctx.context, video),
-                ),
-              ),
-            ],
+    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final thumb = (video as dynamic).thumbnail as String?;
+    final durationMs = (video as dynamic).duration as int?;
+    final previewUrl = (thumb != null && thumb.isNotEmpty)
+        ? thumb
+        : (video.baseUrl != null && video.baseUrl!.isNotEmpty)
+            ? video.baseUrl!
+            : (video.previewData ?? '');
+
+    final w = (video as dynamic).width as int?;
+    final h = (video as dynamic).height as int?;
+    final width = (w?.toDouble() ?? 200.0).clamp(photoMinSize, photoMaxSize);
+    final height = (h?.toDouble() ?? 150.0).clamp(photoMinSize, photoMaxSize);
+    final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
+
+    Widget placeholder() => Container(
+          width: width,
+          height: height,
+          color: ctx.cs.surfaceContainerHighest,
+          child: Icon(
+            Symbols.videocam,
+            size: 48,
+            color: ctx.cs.onSurfaceVariant,
           ),
-        ),
-        const SizedBox(height: 6),
-        _buildMeta(ctx),
-      ],
+        );
+
+    final preview = ClipRRect(
+      borderRadius: BorderRadius.circular(photoBorderRadius),
+      child: Stack(
+        children: [
+          previewUrl.isEmpty
+              ? placeholder()
+              : CachedNetworkImage(
+                  imageUrl: previewUrl,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                  memCacheWidth: (width * dpr).round(),
+                  fadeInDuration: Duration.zero,
+                  placeholderFadeInDuration: Duration.zero,
+                  errorWidget: (_, _, _) => placeholder(),
+                ),
+          Positioned.fill(
+            child: Center(
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Symbols.play_arrow,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+            ),
+          ),
+          if (durationMs != null && durationMs > 0)
+            Positioned(
+              left: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  formatSecondsMmSs((durationMs / 1000).round()),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _playVideo(ctx.context, video),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!hasCaption) {
+      return Stack(
+        children: [
+          preview,
+          Positioned(
+            bottom: compactTimePadding,
+            right: compactTimePadding,
+            child: _buildCompactTime(),
+          ),
+        ],
+      );
+    }
+
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          preview,
+          Padding(
+            padding: const EdgeInsets.only(
+              left: captionPaddingHorizontal,
+              right: captionPaddingRight,
+              bottom: 6,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: _buildCaption(ctx)),
+                _buildMeta(ctx),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Future<void> _playVideo(BuildContext context, MessageAttachment video) async {
     final videoId = (video as dynamic).videoId as int?;
     final token = (video as dynamic).videoToken as String?;
-    if (videoId == null) {
+    if (videoId == null || token == null) {
       showCustomNotification(context, 'Не удалось открыть видео');
       return;
     }
     Haptics.tap();
 
-    final cacheName = 'video_$videoId.mp4';
-    final cached = await MediaCache.existing(cacheName) != null;
+    final sources = await messagesModule.getVideoSources(
+      messageId: message.id,
+      chatId: message.chatId,
+      token: token,
+      videoId: videoId,
+    );
     if (!context.mounted) return;
-
-    String? url;
-    if (!cached) {
-      if (token == null) {
-        showCustomNotification(context, 'Не удалось открыть видео');
-        return;
-      }
-      url = await messagesModule.getVideoUrl(
-        messageId: message.id,
-        chatId: message.chatId,
-        token: token,
-        videoId: videoId,
-      );
-      if (!context.mounted) return;
-      if (url == null) {
-        showCustomNotification(context, 'Не удалось получить видео');
-        return;
-      }
+    if (sources.isEmpty) {
+      showCustomNotification(context, 'Не удалось получить видео');
+      return;
     }
 
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => VideoPlayerScreen(cacheName: cacheName, url: url),
+        builder: (_) => VideoPlayerScreen(sources: sources),
       ),
     );
   }

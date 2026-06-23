@@ -1195,12 +1195,14 @@ class MessagesModule {
     }
   }
 
-  /// Запрашивает у сервера ссылку на воспроизведение видео (opcode 83).
+  /// Запрашивает у сервера ссылки на воспроизведение видео (opcode 83).
   ///
   /// Формат подтверждён дампом: запрос `{messageId, chatId, token, videoId}`,
   /// ответ содержит `MP4_1080/MP4_720/...`, `HLS`, `DASH`, `EXTERNAL`.
-  /// Возвращает лучший доступный progressive-MP4 (или HLS как запасной).
-  Future<String?> getVideoUrl({
+  /// Возвращает все доступные progressive-MP4 качества (label → URL),
+  /// отсортированные по убыванию. URL'ы — готовые подписанные ссылки на CDN,
+  /// поддерживающие HTTP range, поэтому пригодны для стриминга.
+  Future<Map<String, String>> getVideoSources({
     required String messageId,
     required int chatId,
     required String token,
@@ -1213,23 +1215,51 @@ class MessagesModule {
         'token': token,
         'videoId': videoId,
       });
-      if (!response.isOk) return null;
+      if (!response.isOk) return const {};
       final data = response.payload;
-      if (data is! Map) return null;
+      if (data is! Map) return const {};
 
-      const mp4Keys = ['MP4_1080', 'MP4_720', 'MP4_480', 'MP4_360', 'MP4_240'];
-      for (final key in mp4Keys) {
-        final url = data[key];
-        if (url is String && url.isNotEmpty) return url;
+      const mp4Keys = {
+        'MP4_1080': '1080p',
+        'MP4_720': '720p',
+        'MP4_480': '480p',
+        'MP4_360': '360p',
+        'MP4_240': '240p',
+        'MP4_144': '144p',
+      };
+      final sources = <String, String>{};
+      for (final entry in mp4Keys.entries) {
+        final url = data[entry.key];
+        if (url is String && url.isNotEmpty) sources[entry.value] = url;
       }
-      final hls = data['HLS'];
-      if (hls is String && hls.isNotEmpty) return hls;
-      final external = data['EXTERNAL'];
-      if (external is String && external.isNotEmpty) return external;
-      return null;
+      if (sources.isEmpty) {
+        final hls = data['HLS'];
+        if (hls is String && hls.isNotEmpty) sources['Авто'] = hls;
+        final external = data['EXTERNAL'];
+        if (external is String && external.isNotEmpty) {
+          sources['Источник'] = external;
+        }
+      }
+      return sources;
     } catch (_) {
-      return null;
+      return const {};
     }
+  }
+
+  /// Возвращает один лучший progressive-MP4 (или HLS как запасной).
+  Future<String?> getVideoUrl({
+    required String messageId,
+    required int chatId,
+    required String token,
+    required int videoId,
+  }) async {
+    final sources = await getVideoSources(
+      messageId: messageId,
+      chatId: chatId,
+      token: token,
+      videoId: videoId,
+    );
+    return sources.values.isEmpty ? null : sources.values.first;
   }
 
   Future<Uint8List?> downloadVideo(String baseUrl, String videoToken) async {

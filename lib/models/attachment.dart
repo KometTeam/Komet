@@ -121,6 +121,7 @@ class PhotoAttachment extends MessageAttachment {
 class VideoAttachment extends MessageAttachment {
   final int? videoId;
   final String? videoToken;
+  final String? thumbnail;
   final int? width;
   final int? height;
   final int? duration;
@@ -132,6 +133,7 @@ class VideoAttachment extends MessageAttachment {
     super.fileUrl,
     this.videoId,
     this.videoToken,
+    this.thumbnail,
     this.width,
     this.height,
     this.duration,
@@ -143,7 +145,8 @@ class VideoAttachment extends MessageAttachment {
       previewData: decodeAttachPreview(map['previewData']),
       baseUrl: map['baseUrl'] as String?,
       videoId: map['videoId'] as int?,
-      videoToken: map['videoToken'] as String?,
+      videoToken: (map['token'] ?? map['videoToken'])?.toString(),
+      thumbnail: map['thumbnail'] as String?,
       width: map['width'] as int?,
       height: map['height'] as int?,
       duration: map['duration'] as int?,
@@ -158,6 +161,7 @@ class VideoAttachment extends MessageAttachment {
     'baseUrl': baseUrl,
     'videoId': videoId,
     'videoToken': videoToken,
+    'thumbnail': thumbnail,
     'width': width,
     'height': height,
     'duration': duration,
