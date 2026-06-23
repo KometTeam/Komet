@@ -80,6 +80,10 @@ if(TARGET flutter_secure_storage_linux_plugin)
     -Wno-error=deprecated-literal-operator)
 endif()
 
+if(TARGET flutter_webrtc_plugin)
+  target_compile_options(flutter_webrtc_plugin PRIVATE -include cstdint)
+endif()
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
