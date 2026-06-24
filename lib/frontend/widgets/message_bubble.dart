@@ -103,6 +103,7 @@ class MessageBubble extends StatelessWidget {
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(String messageId)? onReplyTap;
+  final void Function(int senderId)? onAvatarTap;
 
   const MessageBubble({
     super.key,
@@ -116,6 +117,7 @@ class MessageBubble extends StatelessWidget {
     this.reactionsListenable,
     this.uploadProgress,
     this.onReplyTap,
+    this.onAvatarTap,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -296,11 +298,53 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  static const List<Color> _senderPalette = [
+    Color(0xFFE57373),
+    Color(0xFF64B5F6),
+    Color(0xFF81C784),
+    Color(0xFFFFB74D),
+    Color(0xFFBA68C8),
+    Color(0xFF4DD0E1),
+    Color(0xFFF06292),
+    Color(0xFFA1887F),
+  ];
+
+  Color _senderColor(int id) => _senderPalette[id.abs() % _senderPalette.length];
+
+  Widget _buildSenderHeader(ColorScheme cs, bool needsInset) {
+    final name = ContactCache.get(message.senderId);
+    if (name == null || name.isEmpty) return const SizedBox.shrink();
+    final header = Padding(
+      padding: needsInset
+          ? const EdgeInsets.fromLTRB(12, 6, 12, 2)
+          : const EdgeInsets.only(bottom: 2),
+      child: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: _senderColor(message.senderId),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+
+    final cb = onAvatarTap;
+    if (cb == null) return header;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => cb(message.senderId),
+      child: header,
+    );
+  }
+
   Widget _buildLeadingAvatar(ColorScheme cs) {
     final senderAvatar = ContactCache.getAvatar(message.senderId);
     final displaySender = ContactCache.get(message.senderId);
+    final Widget avatar;
     if (senderAvatar != null && senderAvatar.isNotEmpty) {
-      return CircleAvatar(
+      avatar = CircleAvatar(
         radius: 15,
         backgroundImage: CachedNetworkImageProvider(
           senderAvatar,
@@ -309,16 +353,25 @@ class MessageBubble extends StatelessWidget {
         ),
         backgroundColor: cs.primaryContainer,
       );
+    } else {
+      avatar = CircleAvatar(
+        radius: 15,
+        backgroundColor: cs.primaryContainer,
+        child: Text(
+          displaySender != null && displaySender.isNotEmpty
+              ? displaySender[0].toUpperCase()
+              : '?',
+          style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+        ),
+      );
     }
-    return CircleAvatar(
-      radius: 15,
-      backgroundColor: cs.primaryContainer,
-      child: Text(
-        displaySender != null && displaySender.isNotEmpty
-            ? displaySender[0].toUpperCase()
-            : '?',
-        style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
-      ),
+
+    final cb = onAvatarTap;
+    if (cb == null) return avatar;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => cb(message.senderId),
+      child: avatar,
     );
   }
 
@@ -362,6 +415,10 @@ class MessageBubble extends StatelessWidget {
         showAvatarSlot &&
         chatType == "CHAT" &&
         nextMessage?.senderId != message.senderId;
+    final showSenderName =
+        showAvatarSlot &&
+        chatType == "CHAT" &&
+        prevMessage?.senderId != message.senderId;
 
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.75;
     final bubbleColor = isMe ? cs.primaryContainer : cs.surfaceContainerHighest;
@@ -461,14 +518,22 @@ class MessageBubble extends StatelessWidget {
                       padding: padding,
                       child: child,
                     ),
-                    child: withReply(
-                      reactionsInside
-                          ? Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [bubbleContent, _reactionsBar(cs)],
-                            )
-                          : bubbleContent,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (showSenderName)
+                          _buildSenderHeader(cs, padding == EdgeInsets.zero),
+                        withReply(
+                          reactionsInside
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [bubbleContent, _reactionsBar(cs)],
+                                )
+                              : bubbleContent,
+                        ),
+                      ],
                     ),
                   ),
                   if (reactionsUnder) _reactionsBar(cs),
@@ -652,8 +717,6 @@ class MessageBubble extends StatelessWidget {
     final forwarded = _getForwardedAttachment();
     final isForwarded = forwarded != null && !isForwardedContact;
 
-    final displaySender = ContactCache.get(message.senderId);
-
     final reactionChips = _buildReactionChipsFor(ctx.cs, ctx.reactionInfo);
     final hasReactions = reactionChips.isNotEmpty;
 
@@ -669,22 +732,11 @@ class MessageBubble extends StatelessWidget {
       style: TextStyle(color: ctx.dim, fontSize: 10),
     );
 
-    final showSender =
-        message.senderId != message.accountId &&
-        prevMessage?.senderId != message.senderId &&
-        chatType == "CHAT";
-
     if (hasReactions) {
       return IntrinsicWidth(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (showSender)
-              Text(
-                displaySender ?? "",
-                textAlign: TextAlign.left,
-                style: TextStyle(color: ctx.text),
-              ),
             textWidget,
             const SizedBox(height: 6),
             Row(
@@ -717,12 +769,6 @@ class MessageBubble extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showSender)
-          Text(
-            displaySender ?? "",
-            textAlign: TextAlign.left,
-            style: TextStyle(color: ctx.text),
-          ),
         Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,

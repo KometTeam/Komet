@@ -16,6 +16,7 @@ import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
+import 'package:komet/frontend/screens/contacts/contact_profile_screen.dart';
 import 'package:komet/frontend/screens/chats/forward_picker_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
@@ -456,6 +457,7 @@ class _ChatScreenState extends State<ChatScreen>
         });
       }
       _loadForwardedSenderNames();
+      _loadGroupSenderNames();
       return;
     }
 
@@ -492,6 +494,7 @@ class _ChatScreenState extends State<ChatScreen>
         ChatsModule.reconcileLastMessageIfPlaceholder(_myId, widget.chatId),
       );
       _loadForwardedSenderNames();
+      _loadGroupSenderNames();
     } catch (e) {
       logger.e('Error fetching history: $e');
       if (mounted) {
@@ -551,6 +554,8 @@ class _ChatScreenState extends State<ChatScreen>
         if (added == 0) _hasMoreHistory = false;
       });
       _persistSessionCache();
+      _loadForwardedSenderNames();
+      _loadGroupSenderNames();
     } catch (e) {
       logger.e('Error loading more history: $e');
       if (mounted) setState(() => _isLoadingMore = false);
@@ -2681,6 +2686,22 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (_) {}
   }
 
+  Future<void> _loadGroupSenderNames() async {
+    if (widget.chatType != 'CHAT' && widget.chatType != 'CHANNEL') return;
+
+    final unknownIds = <int>{};
+    for (final msg in _messages) {
+      if (msg.isControl) continue;
+      final id = msg.senderId;
+      if (id == 0 || id == _myId) continue;
+      if (ContactCache.get(id) == null) unknownIds.add(id);
+    }
+    if (unknownIds.isEmpty) return;
+
+    final resolved = await messagesModule.ensureContactNames(unknownIds);
+    if (resolved && mounted) _bumpMessages();
+  }
+
   Future<void> _loadForwardedSenderNames() async {
     final forwardIds = <int>{};
     for (final msg in _messages) {
@@ -2773,6 +2794,20 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _cancelReply() {
     _replyTo.value = null;
+  }
+
+  void _openSenderProfile(int senderId) {
+    if (senderId == 0 || senderId == _myId) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContactProfileScreen(
+          contactId: senderId,
+          initialName: ContactCache.get(senderId),
+          initialAvatarUrl: ContactCache.getAvatar(senderId),
+        ),
+      ),
+    );
   }
 
   void _jumpToMessage(String messageId) {
@@ -3121,6 +3156,7 @@ class _ChatScreenState extends State<ChatScreen>
                   reactionsListenable: _reactionNotifierFor(message),
                   uploadProgress: _photoProgressFor(message),
                   onReplyTap: _jumpToMessage,
+                  onAvatarTap: _openSenderProfile,
                 );
 
                 final pressable = _SelectableMessageRow(

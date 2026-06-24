@@ -1380,4 +1380,65 @@ class MessagesModule {
     }
     return null;
   }
+
+  Future<bool> ensureContactNames(Iterable<int> ids) async {
+    final missing = ids
+        .where((id) => id != 0 && ContactCache.get(id) == null)
+        .toSet();
+    if (missing.isEmpty) return false;
+    if (_api.state != SessionState.online) return false;
+
+    try {
+      final response = await _api.sendRequest(Opcode.contactInfo, {
+        'contactIds': missing.toList(),
+      });
+
+      if (!response.isOk) return false;
+      final data = response.payload;
+      if (data is! Map) return false;
+
+      final contacts = data['contacts'];
+      if (contacts is! List) return false;
+
+      var resolvedAny = false;
+      for (final raw in contacts.whereType<Map>()) {
+        final id = raw['id'];
+        if (id is! int) continue;
+
+        final names = raw['names'];
+        if (names is List && names.isNotEmpty) {
+          final nameRaw = names.firstWhere(
+            (n) => n is Map && n['type'] == 'ONEME',
+            orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+          );
+          if (nameRaw is Map) {
+            final firstName = (nameRaw['firstName'] as String?) ?? '';
+            final lastName = nameRaw['lastName'] as String?;
+            final fullName = (lastName != null && lastName.isNotEmpty)
+                ? '$firstName $lastName'
+                : firstName;
+            if (fullName.isNotEmpty) ContactCache.put(id, fullName);
+          }
+        }
+
+        final baseUrl = raw['baseUrl'] as String?;
+        if (baseUrl != null && baseUrl.isNotEmpty) {
+          ContactCache.putAvatar(id, baseUrl);
+        }
+
+        final rawOpts = raw['options'];
+        if (rawOpts is List) {
+          ContactCache.putOptions(id, rawOpts.whereType<String>().toSet());
+        }
+
+        ChatsModule.applyContactUpdate(id);
+        resolvedAny = true;
+      }
+
+      return resolvedAny;
+    } catch (e) {
+      logger.e('ensureContactNames error: $e');
+      return false;
+    }
+  }
 }
