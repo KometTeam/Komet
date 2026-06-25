@@ -5,6 +5,7 @@ import 'package:komet/core/storage/app_instance.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart' show databaseFactorySqflitePlugin;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class ProfileData {
@@ -133,11 +134,14 @@ abstract class SyncKey {
 class AppDatabase {
   static Database? _db;
 
+  static String? _mobileDbDir;
+
   static Future<void> init() async {
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
+    if (Platform.isAndroid || Platform.isIOS) {
+      _mobileDbDir = await databaseFactorySqflitePlugin.getDatabasesPath();
     }
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
   }
 
   static Completer<Database>? _initCompleter;
@@ -162,7 +166,7 @@ class AppDatabase {
       final dir = await getApplicationSupportDirectory();
       return dir.path;
     }
-    return getDatabasesPath();
+    return _mobileDbDir ??= await databaseFactorySqflitePlugin.getDatabasesPath();
   }
 
   static Future<void> _migrateLegacyDb(String target) async {
@@ -181,6 +185,7 @@ class AppDatabase {
 
   static Future<Database> _open() async {
     final dbPath = await _databasesDir();
+    await Directory(dbPath).create(recursive: true);
     final target = join(dbPath, 'komet${AppInstance.suffix}.db');
     await _migrateLegacyDb(target);
     return openDatabase(
