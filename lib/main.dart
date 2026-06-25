@@ -4,8 +4,8 @@ import 'dart:ui' as ui;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
-import 'package:fvp/fvp.dart' as fvp;
 import 'package:flutter/rendering.dart';
+import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -87,9 +87,11 @@ Future<Locale> _loadInitialLocale() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  fvp.registerWith(options: {
-    'platforms': ['windows', 'linux', 'macos'],
-  });
+  VideoPlayerMediaKit.ensureInitialized(
+    windows: true,
+    linux: true,
+    macOS: true,
+  );
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }

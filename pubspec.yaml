@@ -74,8 +74,9 @@ dependencies:
   opus_dart: ^3.0.1
   opus_flutter_android: ^3.0.1
   ogg_opus_player: ^0.8.0
-  fvp: ^0.37.2
   camera: ^0.11.0
+  video_player_media_kit: ^2.0.0
+  media_kit_libs_video: ^1.0.7
 
 dev_dependencies:
   flutter_test:
