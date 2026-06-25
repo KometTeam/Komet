@@ -339,6 +339,18 @@ class ReplyInfo {
   }
 }
 
+class AudioUploadInfo {
+  final String url;
+  final int audioId;
+  final String token;
+
+  AudioUploadInfo({
+    required this.url,
+    required this.audioId,
+    required this.token,
+  });
+}
+
 class CachedMessage {
   final String id;
   final int accountId;
@@ -954,7 +966,10 @@ class MessagesModule {
         if (response.isOk) return true;
         return false;
       } on PacketError catch (e) {
-        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (!(e.errorKey?.contains('not.ready') ?? false)) {
+          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
+          rethrow;
+        }
         if (attempt == maxAttempts - 1) return false;
         await Future.delayed(retryDelay);
       }
@@ -1006,7 +1021,10 @@ class MessagesModule {
         }
         return null;
       } on PacketError catch (e) {
-        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (!(e.errorKey?.contains('not.ready') ?? false)) {
+          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
+          rethrow;
+        }
         if (attempt == maxAttempts - 1) return null;
         await Future.delayed(retryDelay);
       }
@@ -1080,7 +1098,183 @@ class MessagesModule {
         }
         return null;
       } on PacketError catch (e) {
-        if (e.errorKey != 'attachment.not.ready') rethrow;
+        if (!(e.errorKey?.contains('not.ready') ?? false)) {
+          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
+          rethrow;
+        }
+        if (attempt == maxAttempts - 1) return null;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return null;
+  }
+
+  /// Запрашивает URL для загрузки голосового сообщения (опкод 82).
+  ///
+  /// Тот же опкод, что и у видео, но `uploaderType: 1, type: 2`. В ответе
+  /// `videoId` — это идентификатор аудио (`audioId`), а `token` уже выдан и
+  /// используется в [sendAudioMessage] после загрузки байтов.
+  Future<AudioUploadInfo?> requestAudioUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.videoUpload, {
+      'uploaderType': 1,
+      'type': 2,
+      'count': 1,
+    });
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return AudioUploadInfo(
+      url: info['url'] as String? ?? '',
+      audioId: info['videoId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  /// Отправляет голосовое сообщение по [token], полученному из
+  /// [requestAudioUploadUrl], после загрузки Ogg/Opus-байтов на CDN.
+  ///
+  /// [duration] — длительность в миллисекундах. [wave] — hex-строка амплитуд
+  /// для дорожки; если пусто, отправляется плоская (нулевая) волна, которую
+  /// сервер принимает. Сервер может ответить `attachment.not.ready`, пока
+  /// обрабатывает загрузку — запрос повторяется.
+  Future<Map<String, dynamic>?> sendAudioMessage(
+    int chatId,
+    String token, {
+    required int duration,
+    Uint8List? wave,
+    bool notify = true,
+    int? scheduledTime,
+    int maxAttempts = 30,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        {
+          'duration': duration,
+          '_type': 'AUDIO',
+          'wave': (wave != null && wave.isNotEmpty) ? wave : Uint8List(80),
+          'token': token,
+        },
+      ],
+    };
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
+    }
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        if (!response.isOk) return null;
+        final data = response.payload;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is Map) return Map<String, dynamic>.from(msg);
+        }
+        return null;
+      } on PacketError catch (e) {
+        if (!(e.errorKey?.contains('not.ready') ?? false)) {
+          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
+          rethrow;
+        }
+        if (attempt == maxAttempts - 1) return null;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return null;
+  }
+
+  /// Запрашивает URL для загрузки видеосообщения-кружка (опкод 82,
+  /// `uploaderType: 1, type: 1`). Ответ — `vu.oneme.ru/uploadVideo` + token.
+  Future<VideoUploadInfo?> requestVideoNoteUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.videoUpload, {
+      'uploaderType': 1,
+      'type': 1,
+      'count': 1,
+    });
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return VideoUploadInfo(
+      url: info['url'] as String? ?? '',
+      videoId: info['videoId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  /// Отправляет видеосообщение-кружок (`videoType: 1`) по [token], полученному
+  /// из [requestVideoNoteUploadUrl], после загрузки MP4-байтов на CDN.
+  ///
+  /// [duration] — длительность в мс. [wave] — амплитуды аудиодорожки (бинарь,
+  /// 80 байт; нули допустимы). [thumbhash] — компактный хеш превью (опционально,
+  /// сервер всё равно отдаёт собственный `previewData`). Повторяет запрос на
+  /// `attachment.not.ready`, пока CDN обрабатывает загрузку.
+  Future<Map<String, dynamic>?> sendVideoNoteMessage(
+    int chatId,
+    String token, {
+    required int duration,
+    Uint8List? wave,
+    String? thumbhash,
+    bool notify = true,
+    int maxAttempts = 30,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        {
+          'duration': duration,
+          'videoType': 1,
+          '_type': 'VIDEO',
+          'wave': (wave != null && wave.isNotEmpty) ? wave : Uint8List(80),
+          'token': token,
+          if (thumbhash != null && thumbhash.isNotEmpty) 'thumbhash': thumbhash,
+        },
+      ],
+    };
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        if (!response.isOk) return null;
+        final data = response.payload;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is Map) return Map<String, dynamic>.from(msg);
+        }
+        return null;
+      } on PacketError catch (e) {
+        if (!(e.errorKey?.contains('not.ready') ?? false)) {
+          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
+          rethrow;
+        }
         if (attempt == maxAttempts - 1) return null;
         await Future.delayed(retryDelay);
       }

@@ -127,6 +127,11 @@ class VideoAttachment extends MessageAttachment {
   final int? duration;
   final int? size;
 
+  /// 0 — обычное видео, 1 — видеосообщение-кружок.
+  final int? videoType;
+
+  bool get isNote => videoType == 1;
+
   const VideoAttachment({
     super.previewData,
     super.baseUrl,
@@ -138,6 +143,7 @@ class VideoAttachment extends MessageAttachment {
     this.height,
     this.duration,
     this.size,
+    this.videoType,
   }) : super(type: AttachmentType.video);
 
   factory VideoAttachment.fromMap(Map<String, dynamic> map) {
@@ -151,6 +157,7 @@ class VideoAttachment extends MessageAttachment {
       height: map['height'] as int?,
       duration: map['duration'] as int?,
       size: map['size'] as int?,
+      videoType: map['videoType'] as int?,
     );
   }
 
@@ -166,6 +173,7 @@ class VideoAttachment extends MessageAttachment {
     'height': height,
     'duration': duration,
     'size': size,
+    'videoType': videoType,
   };
 }
 

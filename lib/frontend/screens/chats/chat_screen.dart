@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -13,6 +15,8 @@ import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/backend/modules/upload_notification_service.dart';
 import 'package:komet/core/media/gallery_source.dart';
+import 'package:komet/core/media/opus_ogg_encoder.dart';
+import 'package:komet/core/media/native_video_note_recorder.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -81,6 +85,92 @@ class _MessageItem {
   const _MessageItem(this.message, this.index);
 }
 
+class _RecordingDot extends StatefulWidget {
+  final Color color;
+  const _RecordingDot({required this.color});
+
+  @override
+  State<_RecordingDot> createState() => _RecordingDotState();
+}
+
+class _RecordingDotState extends State<_RecordingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 1.0, end: 0.25).animate(_c),
+      child: Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+class _LiveWavePainter extends CustomPainter {
+  final List<double> amps;
+  final Color color;
+
+  const _LiveWavePainter({required this.amps, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const slot = 5.0;
+    const barW = 3.0;
+    final count = (size.width / slot).floor();
+    if (count <= 0 || amps.isEmpty) return;
+
+    final start = amps.length > count ? amps.length - count : 0;
+    final visible = amps.sublist(start);
+    final center = size.height / 2;
+    final paint = Paint()..color = color;
+    final offset = size.width - visible.length * slot;
+
+    for (var i = 0; i < visible.length; i++) {
+      final h = (visible[i] * size.height).clamp(2.0, size.height);
+      final x = offset + i * slot + (slot - barW) / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, center - h / 2, barW, h),
+          const Radius.circular(barW / 2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LiveWavePainter old) => true;
+}
+
+class _ButtonClipper extends CustomClipper<Rect> {
+  final double t;
+  const _ButtonClipper(this.t);
+
+  @override
+  Rect getClip(Size size) {
+    if (t <= 0.001) {
+      return Rect.fromLTRB(-120, -260, size.width + 120, size.height + 40);
+    }
+    return Rect.fromLTRB(0, 0, size.width, size.height);
+  }
+
+  @override
+  bool shouldReclip(_ButtonClipper old) => old.t != t;
+}
+
 class ChatScreen extends StatefulWidget {
   final int chatId;
   final String name;
@@ -124,6 +214,35 @@ class _ChatScreenState extends State<ChatScreen>
       {};
   final Map<String, ValueNotifier<List<double>>> _photoUploadProgress = {};
   final ValueNotifier<int> _scheduledCount = ValueNotifier(0);
+
+  AudioRecorder? _voiceRecorder;
+  final ValueNotifier<bool> _isRecordingVoice = ValueNotifier(false);
+  final ValueNotifier<int> _voiceElapsedMs = ValueNotifier(0);
+  final ValueNotifier<double> _voiceCancelDrag = ValueNotifier(0);
+  final ValueNotifier<double> _voiceAmplitude = ValueNotifier(0);
+  final ValueNotifier<int> _voiceWaveRev = ValueNotifier(0);
+  final ValueNotifier<bool> _voiceLocked = ValueNotifier(false);
+  final ValueNotifier<double> _voiceLockDrag = ValueNotifier(0);
+  final Stopwatch _voiceStopwatch = Stopwatch();
+  final List<double> _voiceAmps = [];
+  Timer? _voiceTimer;
+  StreamSubscription<Amplitude>? _voiceAmpSub;
+  String? _voicePath;
+  bool _voiceCancelled = false;
+  bool _voiceStopRequested = false;
+  bool _voiceTranscode = false;
+
+  final ValueNotifier<bool> _videoNoteMode = ValueNotifier(false);
+  final NativeVideoNoteRecorder _noteRec = NativeVideoNoteRecorder();
+  final ValueNotifier<int?> _noteTextureId = ValueNotifier(null);
+  final ValueNotifier<bool> _noteCamReady = ValueNotifier(false);
+  final ValueNotifier<bool> _isRecordingNote = ValueNotifier(false);
+  final ValueNotifier<int> _noteElapsedMs = ValueNotifier(0);
+  final ValueNotifier<double> _noteCancelDrag = ValueNotifier(0);
+  final Stopwatch _noteStopwatch = Stopwatch();
+  Timer? _noteTimer;
+  bool _noteCancelled = false;
+  bool _noteStopRequested = false;
 
   ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
       _photoUploadProgress[m.id];
@@ -715,6 +834,25 @@ class _ChatScreenState extends State<ChatScreen>
     _pushSub?.cancel();
     _messageEventSub?.cancel();
     _connSub?.cancel();
+    _voiceTimer?.cancel();
+    _voiceAmpSub?.cancel();
+    _voiceRecorder?.dispose();
+    _noteTimer?.cancel();
+    _noteOverlay?.remove();
+    _noteRec.dispose();
+    _noteTextureId.dispose();
+    _videoNoteMode.dispose();
+    _noteCamReady.dispose();
+    _isRecordingNote.dispose();
+    _noteElapsedMs.dispose();
+    _noteCancelDrag.dispose();
+    _isRecordingVoice.dispose();
+    _voiceElapsedMs.dispose();
+    _voiceCancelDrag.dispose();
+    _voiceAmplitude.dispose();
+    _voiceWaveRev.dispose();
+    _voiceLocked.dispose();
+    _voiceLockDrag.dispose();
     debugForceOffline.removeListener(_recomputeHeaderStatus);
     for (final n in _reactionNotifiers.values) {
       n.dispose();
@@ -3370,6 +3508,762 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  static const int _voiceMinMs = 800;
+  static const double _voiceCancelThreshold = 110;
+  static const double _voiceLockThreshold = 90;
+
+  Future<void> _startVoiceRecording() async {
+    if (_isRecordingVoice.value || _myId == 0) return;
+    _voiceStopRequested = false;
+    final rec = _voiceRecorder ??= AudioRecorder();
+    try {
+      final AudioEncoder encoder;
+      final String ext;
+      // Предпочитаем собственный кодер (libopus → Ogg/Opus): его формат сервер
+      // гарантированно принимает. Нативный Opus от record (напр. на Android)
+      // CDN не дообрабатывает — остаётся attachment.not.ready.
+      if (await OpusOggEncoder.ensureAvailable() &&
+          await rec.isEncoderSupported(AudioEncoder.wav)) {
+        encoder = AudioEncoder.wav;
+        ext = 'wav';
+        _voiceTranscode = true;
+      } else if (await rec.isEncoderSupported(AudioEncoder.opus)) {
+        encoder = AudioEncoder.opus;
+        ext = 'ogg';
+        _voiceTranscode = false;
+      } else {
+        if (mounted) {
+          showCustomNotification(
+            context,
+            'Голосовые сообщения недоступны на этой платформе',
+          );
+        }
+        return;
+      }
+      if (!await rec.hasPermission()) {
+        if (mounted) showCustomNotification(context, 'Нет доступа к микрофону');
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      _voiceAmps.clear();
+      _voiceCancelled = false;
+      _voicePath = path;
+      await rec.start(
+        RecordConfig(
+          encoder: encoder,
+          numChannels: 1,
+          sampleRate: 48000,
+        ),
+        path: path,
+      );
+      if (!mounted) {
+        try {
+          await rec.stop();
+        } catch (_) {}
+        return;
+      }
+      _voiceStopwatch
+        ..reset()
+        ..start();
+      _voiceElapsedMs.value = 0;
+      _voiceCancelDrag.value = 0;
+      _voiceLocked.value = false;
+      _voiceLockDrag.value = 0;
+      _isRecordingVoice.value = true;
+      FocusManager.instance.primaryFocus?.unfocus();
+      Haptics.send();
+      _voiceTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        _voiceElapsedMs.value = _voiceStopwatch.elapsedMilliseconds;
+      });
+      _voiceAmpSub = rec
+          .onAmplitudeChanged(const Duration(milliseconds: 70))
+          .listen((amp) {
+            final norm = ((amp.current + 45) / 45).clamp(0.0, 1.0);
+            _voiceAmps.add(norm);
+            _voiceAmplitude.value = norm;
+            _voiceWaveRev.value++;
+          });
+      if (_voiceStopRequested) {
+        _voiceStopRequested = false;
+        await _stopVoiceRecording(cancel: false);
+      }
+    } catch (_) {
+      _isRecordingVoice.value = false;
+      if (mounted) showCustomNotification(context, 'Не удалось начать запись');
+    }
+  }
+
+  void _handleVoiceDrag(Offset offsetFromOrigin) {
+    if (!_isRecordingVoice.value || _voiceLocked.value) return;
+
+    final lock = (-offsetFromOrigin.dy / _voiceLockThreshold).clamp(0.0, 1.0);
+    _voiceLockDrag.value = lock;
+    if (lock >= 1.0) {
+      _voiceLocked.value = true;
+      _voiceLockDrag.value = 0;
+      _voiceCancelDrag.value = 0;
+      Haptics.send();
+      return;
+    }
+
+    final drag = (-offsetFromOrigin.dx / _voiceCancelThreshold).clamp(0.0, 1.0);
+    _voiceCancelDrag.value = drag;
+    if (drag >= 1.0 && !_voiceCancelled) {
+      _voiceCancelled = true;
+      Haptics.error();
+      _stopVoiceRecording(cancel: true);
+    }
+  }
+
+  void _handleVoiceEnd() {
+    if (_voiceLocked.value) return;
+    _stopVoiceRecording(cancel: false);
+  }
+
+  Future<void> _stopVoiceRecording({required bool cancel}) async {
+    if (!_isRecordingVoice.value) {
+      _voiceStopRequested = true;
+      return;
+    }
+    final rec = _voiceRecorder;
+    if (rec == null) {
+      _isRecordingVoice.value = false;
+      return;
+    }
+
+    _voiceTimer?.cancel();
+    _voiceTimer = null;
+    await _voiceAmpSub?.cancel();
+    _voiceAmpSub = null;
+    _voiceStopwatch.stop();
+    final elapsed = _voiceStopwatch.elapsedMilliseconds;
+    _isRecordingVoice.value = false;
+    _voiceCancelDrag.value = 0;
+    _voiceAmplitude.value = 0;
+    _voiceLocked.value = false;
+    _voiceLockDrag.value = 0;
+
+    String? path;
+    try {
+      path = await rec.stop();
+    } catch (_) {}
+    path ??= _voicePath;
+    final amps = List<double>.from(_voiceAmps);
+    _voiceAmps.clear();
+
+    final shouldCancel = cancel || _voiceCancelled || elapsed < _voiceMinMs;
+    if (shouldCancel || path == null) {
+      if (path != null) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
+      return;
+    }
+
+    var file = File(path);
+    if (_voiceTranscode) {
+      final ogg = await _transcodeWavToOgg(file);
+      if (ogg == null) {
+        if (mounted) {
+          showCustomNotification(context, 'Не удалось закодировать запись');
+        }
+        return;
+      }
+      file = ogg;
+    }
+    await _sendVoice(file, elapsed, amps);
+  }
+
+  Future<File?> _transcodeWavToOgg(File wav) async {
+    try {
+      final bytes = await wav.readAsBytes();
+      final ogg = await OpusOggEncoder.wavToOggOpus(bytes);
+      try {
+        await wav.delete();
+      } catch (_) {}
+      if (ogg == null) return null;
+      final oggPath = '${wav.path.substring(0, wav.path.length - 3)}ogg';
+      final out = File(oggPath);
+      await out.writeAsBytes(ogg, flush: true);
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Uint8List _buildWave(List<double> amps, {int bars = 80}) {
+    final out = Uint8List(bars);
+    if (amps.isEmpty) return out;
+    for (var i = 0; i < bars; i++) {
+      final start = (i * amps.length / bars).floor();
+      final end = (((i + 1) * amps.length / bars).ceil()).clamp(
+        start + 1,
+        amps.length,
+      );
+      var peak = 0.0;
+      for (var j = start; j < end; j++) {
+        if (amps[j] > peak) peak = amps[j];
+      }
+      out[i] = (peak * 120).round().clamp(0, 120);
+    }
+    return out;
+  }
+
+  Future<void> _sendVoice(File file, int durationMs, List<double> amps) async {
+    if (_myId == 0) {
+      try {
+        await file.delete();
+      } catch (_) {}
+      return;
+    }
+    final wave = _buildWave(amps);
+    final tempId = _nextTempId();
+    final progress = ValueNotifier<List<double>>(const [0]);
+    _photoUploadProgress[tempId] = progress;
+    _messages.add(
+      CachedMessage(
+        id: tempId,
+        accountId: _myId,
+        chatId: widget.chatId,
+        senderId: _myId,
+        time: DateTime.now().millisecondsSinceEpoch,
+        status: 'sending',
+        attachments: [AudioAttachment(duration: durationMs)],
+      ),
+    );
+    _lastSentId = tempId;
+    _bumpMessages();
+    Haptics.send();
+    _scrollToBottom();
+
+    try {
+      try {
+        final len = await file.length();
+        final head = await file
+            .openRead(0, 80)
+            .fold<List<int>>([], (a, b) => a..addAll(b));
+        final hex = head.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+        final ascii = String.fromCharCodes(
+          head.map((b) => (b >= 32 && b < 127) ? b : 46),
+        );
+        logger.w('VOICE size=$len hex=$hex ascii=$ascii');
+      } catch (_) {}
+      final info = await messagesModule.requestAudioUploadUrl();
+      if (info == null || info.url.isEmpty) throw Exception('no_url');
+
+      final ok = await fileUploader.uploadMediaFile(
+        Uri.parse(info.url),
+        file,
+        onProgress: (sent, total) {
+          if (total > 0) progress.value = [(sent / total).clamp(0.0, 1.0)];
+        },
+      );
+      if (!ok) throw Exception('upload_failed');
+      if (!mounted) {
+        _disposePhotoProgress(tempId);
+        return;
+      }
+
+      final serverMsg = await messagesModule.sendAudioMessage(
+        widget.chatId,
+        info.token,
+        duration: durationMs,
+        wave: wave,
+      );
+      if (!mounted) {
+        _disposePhotoProgress(tempId);
+        return;
+      }
+      if (serverMsg == null) throw Exception('send_failed');
+
+      final real = CachedMessage.fromPushPayload(_myId, widget.chatId, serverMsg);
+      final idx = _messages.indexWhere((m) => m.id == tempId);
+      if (idx != -1) {
+        _messages[idx] = real;
+        _bumpMessages();
+        unawaited(_persistOutgoing(real, removeId: tempId));
+      }
+      _disposePhotoProgress(tempId);
+    } catch (_) {
+      if (mounted) {
+        _failPhotoMessage(tempId);
+      } else {
+        _disposePhotoProgress(tempId);
+      }
+    } finally {
+      try {
+        await file.delete();
+      } catch (_) {}
+    }
+  }
+
+  // ── Видеосообщения-кружки ──────────────────────────────────────────
+  Future<void> _toggleComposerMode() async {
+    final toVideo = !_videoNoteMode.value;
+    _videoNoteMode.value = toVideo;
+    Haptics.tap();
+    if (toVideo) {
+      await _initNoteCamera();
+    } else {
+      await _disposeNoteCamera();
+    }
+  }
+
+  Future<void> _initNoteCamera() async {
+    if (_noteRec.textureId != null) return;
+    if (!_noteRec.isAvailable) {
+      if (mounted) showCustomNotification(context, 'Камера недоступна');
+      return;
+    }
+    try {
+      final ok = await _noteRec.init();
+      if (!ok) {
+        if (mounted) showCustomNotification(context, 'Камера недоступна');
+        return;
+      }
+      if (!mounted || !_videoNoteMode.value) {
+        await _disposeNoteCamera();
+        return;
+      }
+      _noteTextureId.value = _noteRec.textureId;
+      _noteCamReady.value = true;
+    } catch (e) {
+      logger.w('initNoteCamera: $e');
+      if (mounted) showCustomNotification(context, 'Камера недоступна');
+    }
+  }
+
+  Future<void> _disposeNoteCamera() async {
+    _noteCamReady.value = false;
+    _noteTextureId.value = null;
+    await _noteRec.dispose();
+  }
+
+  Future<void> _startNoteRecording() async {
+    if (_isRecordingNote.value) return;
+    _noteStopRequested = false;
+    if (_noteRec.textureId == null) {
+      await _initNoteCamera();
+      return;
+    }
+    try {
+      final ok = await _noteRec.start();
+      if (!ok) {
+        _isRecordingNote.value = false;
+        return;
+      }
+      if (!mounted) {
+        await _noteRec.stop();
+        return;
+      }
+      _noteStopwatch
+        ..reset()
+        ..start();
+      _noteElapsedMs.value = 0;
+      _noteCancelDrag.value = 0;
+      _noteCancelled = false;
+      _isRecordingNote.value = true;
+      FocusManager.instance.primaryFocus?.unfocus();
+      Haptics.send();
+      _noteTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        _noteElapsedMs.value = _noteStopwatch.elapsedMilliseconds;
+      });
+      _showNoteOverlay();
+      if (_noteStopRequested) {
+        _noteStopRequested = false;
+        await _stopNoteRecording(cancel: false);
+      }
+    } catch (e) {
+      logger.w('startNoteRecording: $e');
+      _isRecordingNote.value = false;
+    }
+  }
+
+  void _handleNoteDrag(Offset offsetFromOrigin) {
+    if (!_isRecordingNote.value) return;
+    final drag = (-offsetFromOrigin.dx / _voiceCancelThreshold).clamp(0.0, 1.0);
+    _noteCancelDrag.value = drag;
+    if (drag >= 1.0 && !_noteCancelled) {
+      _noteCancelled = true;
+      Haptics.error();
+      _stopNoteRecording(cancel: true);
+    }
+  }
+
+  void _handleNoteEnd() => _stopNoteRecording(cancel: false);
+
+  Future<void> _stopNoteRecording({required bool cancel}) async {
+    if (!_isRecordingNote.value) {
+      _noteStopRequested = true;
+      return;
+    }
+    _noteTimer?.cancel();
+    _noteTimer = null;
+    _noteStopwatch.stop();
+    final elapsed = _noteStopwatch.elapsedMilliseconds;
+    _isRecordingNote.value = false;
+    _noteCancelDrag.value = 0;
+    _hideNoteOverlay();
+
+    final path = await _noteRec.stop();
+
+    final shouldCancel = cancel || _noteCancelled || elapsed < _voiceMinMs;
+    if (shouldCancel || path == null) {
+      if (path != null) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
+      return;
+    }
+
+    // Файл уже квадратный 480×480 (нативная запись) — шлём как есть.
+    await _sendVideoNote(File(path), elapsed);
+  }
+
+  Future<void> _sendVideoNote(File file, int durationMs) async {
+    if (_myId == 0) {
+      try {
+        await file.delete();
+      } catch (_) {}
+      return;
+    }
+    final tempId = _nextTempId();
+    final progress = ValueNotifier<List<double>>(const [0]);
+    _photoUploadProgress[tempId] = progress;
+    _messages.add(
+      CachedMessage(
+        id: tempId,
+        accountId: _myId,
+        chatId: widget.chatId,
+        senderId: _myId,
+        time: DateTime.now().millisecondsSinceEpoch,
+        status: 'sending',
+        attachments: [VideoAttachment(duration: durationMs, videoType: 1)],
+      ),
+    );
+    _lastSentId = tempId;
+    _bumpMessages();
+    Haptics.send();
+    _scrollToBottom();
+
+    try {
+      final info = await messagesModule.requestVideoNoteUploadUrl();
+      if (info == null || info.url.isEmpty) throw Exception('no_url');
+      final ok = await fileUploader.uploadMediaFile(
+        Uri.parse(info.url),
+        file,
+        onProgress: (sent, total) {
+          if (total > 0) progress.value = [(sent / total).clamp(0.0, 1.0)];
+        },
+      );
+      if (!ok) throw Exception('upload_failed');
+      if (!mounted) {
+        _disposePhotoProgress(tempId);
+        return;
+      }
+      final serverMsg = await messagesModule.sendVideoNoteMessage(
+        widget.chatId,
+        info.token,
+        duration: durationMs,
+      );
+      if (!mounted) {
+        _disposePhotoProgress(tempId);
+        return;
+      }
+      if (serverMsg == null) throw Exception('send_failed');
+      final real = CachedMessage.fromPushPayload(_myId, widget.chatId, serverMsg);
+      final idx = _messages.indexWhere((m) => m.id == tempId);
+      if (idx != -1) {
+        _messages[idx] = real;
+        _bumpMessages();
+        unawaited(_persistOutgoing(real, removeId: tempId));
+      }
+      _disposePhotoProgress(tempId);
+    } catch (_) {
+      if (mounted) {
+        _failPhotoMessage(tempId);
+      } else {
+        _disposePhotoProgress(tempId);
+      }
+    } finally {
+      try {
+        await file.delete();
+      } catch (_) {}
+    }
+  }
+
+  OverlayEntry? _noteOverlay;
+
+  void _showNoteOverlay() {
+    _noteOverlay?.remove();
+    _noteOverlay = OverlayEntry(
+      builder: (context) {
+        final texId = _noteTextureId.value;
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.55),
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipOval(
+                    child: SizedBox(
+                      width: 260,
+                      height: 260,
+                      child: texId != null
+                          ? Texture(textureId: texId)
+                          : Container(color: Colors.black),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ValueListenableBuilder<int>(
+                    valueListenable: _noteElapsedMs,
+                    builder: (context, ms, _) => Text(
+                      _formatVoiceElapsed(ms),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontFeatures: [ui.FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ValueListenableBuilder<double>(
+                    valueListenable: _noteCancelDrag,
+                    builder: (context, drag, _) => Opacity(
+                      opacity: (0.5 + drag * 0.5).clamp(0.0, 1.0),
+                      child: const Text(
+                        '‹ влево — отмена',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    final overlay = Overlay.of(context, rootOverlay: true);
+    overlay.insert(_noteOverlay!);
+  }
+
+  void _hideNoteOverlay() {
+    _noteOverlay?.remove();
+    _noteOverlay = null;
+  }
+
+  String _formatVoiceElapsed(int ms) {
+    final totalSec = ms ~/ 1000;
+    final m = (totalSec ~/ 60).toString();
+    final s = (totalSec % 60).toString().padLeft(2, '0');
+    final ds = ((ms % 1000) ~/ 100).toString();
+    return '$m:$s,$ds';
+  }
+
+  Widget _recordingButtonVisual({
+    required Widget pill,
+    required ColorScheme cs,
+    required bool active,
+  }) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: active ? 1.0 : 0.0),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      builder: (context, a, _) {
+        if (a <= 0.001) return pill;
+        return ValueListenableBuilder<double>(
+          valueListenable: _voiceAmplitude,
+          builder: (context, amp, _) => TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: amp),
+            duration: const Duration(milliseconds: 110),
+            builder: (context, v, _) {
+              final glow = a * (88.0 + v * 76.0);
+              return Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Positioned(
+                    left: 27 - glow / 2,
+                    top: 27 - glow / 2,
+                    child: Container(
+                      width: glow,
+                      height: glow,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: cs.error.withValues(alpha: a * (0.16 + v * 0.12)),
+                      ),
+                    ),
+                  ),
+                  _voiceLockChip(cs),
+                  Transform.scale(
+                    scale: 1.0 + a * 0.14 + a * v * 0.24,
+                    child: pill,
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _voiceLockChip(ColorScheme cs) {
+    return Positioned(
+      bottom: 62,
+      child: ValueListenableBuilder<double>(
+        valueListenable: _voiceLockDrag,
+        builder: (context, lock, _) => Opacity(
+          opacity: (0.5 + lock * 0.5).clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, lock * 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  cs.surfaceContainerHighest.withValues(alpha: 0.96),
+                  cs.surface,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Symbols.lock,
+                    size: 16,
+                    color: lock > 0.6 ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                  Icon(
+                    Symbols.keyboard_arrow_up,
+                    size: 14,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVoiceRecordingIndicator(ColorScheme cs) {
+    return Container(
+      color: Color.alphaBlend(
+        cs.surfaceContainerHighest.withValues(alpha: 0.92),
+        cs.surface,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          ValueListenableBuilder<double>(
+            valueListenable: _voiceAmplitude,
+            builder: (context, amp, child) => TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: amp),
+              duration: const Duration(milliseconds: 120),
+              builder: (context, v, child) => Transform.scale(
+                scale: 1.0 + v * 0.7,
+                child: child,
+              ),
+              child: child,
+            ),
+            child: _RecordingDot(color: cs.error),
+          ),
+          const SizedBox(width: 12),
+          ValueListenableBuilder<int>(
+            valueListenable: _voiceElapsedMs,
+            builder: (context, ms, _) => Text(
+              _formatVoiceElapsed(ms),
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 16,
+                fontFeatures: const [ui.FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: ValueListenableBuilder<double>(
+              valueListenable: _voiceCancelDrag,
+              builder: (context, drag, _) {
+                if (drag > 0.01) {
+                  return Opacity(
+                    opacity: (0.45 + drag * 0.55).clamp(0.0, 1.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Icon(
+                          Symbols.arrow_back,
+                          size: 16,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Отмена',
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return SizedBox(
+                  height: 26,
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _voiceWaveRev,
+                    builder: (context, _, _) => CustomPaint(
+                      size: Size.infinite,
+                      painter: _LiveWavePainter(
+                        amps: _voiceAmps,
+                        color: cs.primary.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          ValueListenableBuilder<bool>(
+            valueListenable: _voiceLocked,
+            builder: (context, locked, _) => locked
+                ? GestureDetector(
+                    onTap: () => _stopVoiceRecording(cancel: true),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(Symbols.delete, size: 22, color: cs.error),
+                    ),
+                  )
+                : Text(
+                    '‹ влево — отмена',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                      fontSize: 11,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInputArea(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
@@ -3544,6 +4438,27 @@ class _ChatScreenState extends State<ChatScreen>
                         ),
                       ),
                     ),
+                    Positioned.fill(
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: _isRecordingVoice,
+                        builder: (context, recording, _) => IgnorePointer(
+                          ignoring: !recording,
+                          child: AnimatedSlide(
+                            offset: recording
+                                ? Offset.zero
+                                : const Offset(0.06, 0),
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            child: AnimatedOpacity(
+                              opacity: recording ? 1 : 0,
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOut,
+                              child: _buildVoiceRecordingIndicator(cs),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 ),
@@ -3554,6 +4469,7 @@ class _ChatScreenState extends State<ChatScreen>
               builder: (context, child) {
                 final t = _attachAnim.value;
                 return ClipRect(
+                  clipper: _ButtonClipper(t),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     widthFactor: (1 - t).clamp(0.0, 1.0),
@@ -3579,27 +4495,91 @@ class _ChatScreenState extends State<ChatScreen>
                     },
                     child: ValueListenableBuilder<bool>(
                       valueListenable: _hasText,
-                      builder: (context, hasText, _) => GlossyPill(
-                        color: hasText
-                            ? cs.primary
-                            : cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(27),
-                        onTap: hasText ? _sendMessage : null,
-                        onLongPress: hasText ? _scheduleMessage : null,
-                        depth: 8,
-                        child: SizedBox(
-                          width: 54,
-                          height: 54,
-                          child: Center(
-                            child: Icon(
-                              hasText ? Symbols.send : Symbols.mic,
-                              color: hasText ? cs.onPrimary : cs.onSurface,
-                              size: 24,
-                              weight: 400,
-                            ),
+                      builder: (context, hasText, _) =>
+                          ValueListenableBuilder<bool>(
+                            valueListenable: _voiceLocked,
+                            builder: (context, locked, _) =>
+                                ValueListenableBuilder<bool>(
+                                  valueListenable: _isRecordingVoice,
+                                  builder: (context, recording, _) =>
+                                      ValueListenableBuilder<bool>(
+                                        valueListenable: _videoNoteMode,
+                                        builder: (context, videoMode, _) {
+                                          final sendMode = hasText || locked;
+                                          final pill = GlossyPill(
+                                            color: sendMode
+                                                ? cs.primary
+                                                : recording
+                                                ? cs.error
+                                                : cs.surfaceContainerHighest,
+                                            borderRadius:
+                                                BorderRadius.circular(27),
+                                            onTap: hasText
+                                                ? _sendMessage
+                                                : locked
+                                                ? () => _stopVoiceRecording(
+                                                    cancel: false,
+                                                  )
+                                                : null,
+                                            onLongPress: hasText
+                                                ? _scheduleMessage
+                                                : null,
+                                            depth: 8,
+                                            child: SizedBox(
+                                              width: 54,
+                                              height: 54,
+                                              child: Center(
+                                                child: Icon(
+                                                  sendMode
+                                                      ? Symbols.send
+                                                      : videoMode
+                                                      ? Symbols.videocam
+                                                      : Symbols.mic,
+                                                  color: sendMode
+                                                      ? cs.onPrimary
+                                                      : recording
+                                                      ? cs.onError
+                                                      : cs.onSurface,
+                                                  size: 24,
+                                                  weight: 400,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                          final visual = _recordingButtonVisual(
+                                            pill: pill,
+                                            cs: cs,
+                                            active: recording && !locked,
+                                          );
+                                          return GestureDetector(
+                                            onTap: sendMode
+                                                ? null
+                                                : _toggleComposerMode,
+                                            onLongPressStart: sendMode
+                                                ? null
+                                                : (_) => videoMode
+                                                      ? _startNoteRecording()
+                                                      : _startVoiceRecording(),
+                                            onLongPressMoveUpdate: sendMode
+                                                ? null
+                                                : (d) => videoMode
+                                                      ? _handleNoteDrag(
+                                                          d.offsetFromOrigin,
+                                                        )
+                                                      : _handleVoiceDrag(
+                                                          d.offsetFromOrigin,
+                                                        ),
+                                            onLongPressEnd: sendMode
+                                                ? null
+                                                : (_) => videoMode
+                                                      ? _handleNoteEnd()
+                                                      : _handleVoiceEnd(),
+                                            child: visual,
+                                          );
+                                        },
+                                      ),
+                                ),
                           ),
-                        ),
-                      ),
                     ),
                   ),
                 ],

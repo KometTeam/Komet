@@ -22,6 +22,22 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import android.media.MediaCodecInfo
+import android.net.Uri
+import androidx.media3.common.Effect
+import androidx.media3.common.MediaItem
+import androidx.media3.common.audio.ChannelMixingAudioProcessor
+import androidx.media3.common.audio.ChannelMixingMatrix
+import androidx.media3.effect.Presentation
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.Effects
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.VideoEncoderSettings
+import java.io.File
 import java.net.NetworkInterface
 import java.util.Collections
 import java.util.Random
@@ -40,6 +56,7 @@ class MainActivity : FlutterActivity() {
     @Volatile private var nfcCycling = false
     private val nfcReaderCallback = NfcAdapter.ReaderCallback { tag -> onNfcTagDiscovered(tag) }
 
+    private var noteRecorder: VideoNoteRecorder? = null
     private var ble: BleContactExchange? = null
     private var pendingSelfId = 0L
     private var pendingSelfPhone = 0L
@@ -194,6 +211,115 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/video_note",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "init" -> {
+                    val front = call.argument<Boolean>("front") ?: true
+                    val rec = VideoNoteRecorder(applicationContext, flutterEngine.renderer)
+                    noteRecorder?.dispose()
+                    noteRecorder = rec
+                    rec.init(front, result)
+                }
+                "start" -> noteRecorder?.start(result)
+                    ?: result.error("NOT_READY", "recorder not initialized", null)
+                "stop" -> noteRecorder?.stop(result)
+                    ?: result.error("NOT_READY", "recorder not initialized", null)
+                "dispose" -> {
+                    noteRecorder?.dispose()
+                    noteRecorder = null
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/video",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "cropSquare" -> {
+                    val input = call.argument<String>("input")
+                    val output = call.argument<String>("output")
+                    val size = call.argument<Int>("size") ?: 480
+                    if (input == null || output == null) {
+                        result.error("BAD_ARGS", "input/output required", null)
+                    } else {
+                        cropSquare(input, output, size, result)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    // Центр-кроп видео в квадрат size×size (без искажений) через media3
+    // Transformer: LAYOUT_SCALE_TO_FIT_WITH_CROP заполняет квадрат и обрезает
+    // лишнее по бокам.
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun cropSquare(
+        input: String,
+        output: String,
+        size: Int,
+        result: MethodChannel.Result,
+    ) {
+        try {
+            // Параметры энкодера как у официального клиента: H.264 ~1 Мбит/с CBR.
+            val videoSettings = VideoEncoderSettings.Builder()
+                .setBitrate(1_024_000)
+                .setBitrateMode(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+                .build()
+            val encoderFactory = DefaultEncoderFactory.Builder(this)
+                .setRequestedVideoEncoderSettings(videoSettings)
+                .build()
+            val transformer = Transformer.Builder(this)
+                .setEncoderFactory(encoderFactory)
+                .addListener(object : Transformer.Listener {
+                    override fun onCompleted(
+                        composition: Composition,
+                        exportResult: ExportResult,
+                    ) {
+                        result.success(output)
+                    }
+
+                    override fun onError(
+                        composition: Composition,
+                        exportResult: ExportResult,
+                        exportException: ExportException,
+                    ) {
+                        result.error(
+                            "TRANSCODE_FAILED",
+                            exportException.message,
+                            null,
+                        )
+                    }
+                })
+                .build()
+            // Аудио в моно (как у клиента).
+            val mono = ChannelMixingAudioProcessor()
+            mono.putChannelMixingMatrix(ChannelMixingMatrix.create(1, 1))
+            mono.putChannelMixingMatrix(ChannelMixingMatrix.create(2, 1))
+            val effects = Effects(
+                listOf(mono),
+                listOf<Effect>(
+                    Presentation.createForWidthAndHeight(
+                        size,
+                        size,
+                        Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP,
+                    ),
+                ),
+            )
+            val edited = EditedMediaItem.Builder(
+                MediaItem.fromUri(Uri.fromFile(File(input))),
+            ).setEffects(effects).build()
+            transformer.start(edited, output)
+        } catch (e: Exception) {
+            result.error("TRANSCODE_FAILED", e.message, null)
         }
     }
 
