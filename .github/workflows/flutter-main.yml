@@ -121,5 +121,8 @@ jobs:
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
+      - name: Fix ogg_opus_player macOS libs
+        run: ./scripts/fix_opus_macos.sh
+
       - name: Build macOS
         run: flutter build macos --release

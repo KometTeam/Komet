@@ -35,22 +35,16 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: Get dependencies
-        run: flutter pub get
+      - name: Install create-dmg
+        run: brew install create-dmg
 
-      - name: Build macOS
-        run: flutter build macos --release
+      - name: Build signed DMG
+        run: ./scripts/build_dmg.sh
 
-      - name: Package macOS
-        run: |
-          mkdir -p dist
-          APP=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
-          ditto -c -k --keepParent "$APP" dist/Komet-macos.zip
-
-      - name: Upload macOS artifact
+      - name: Upload macOS DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: komet-macos
-          path: dist/Komet-macos.zip
+          path: dist/*.dmg
           if-no-files-found: error
           retention-days: 30
