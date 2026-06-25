@@ -67,10 +67,10 @@ jobs:
           echo "Release signing configured."
 
       - name: Build Universal APK
-        run: flutter build apk --release --flavor komet
+        run: flutter build apk --release --flavor komet --obfuscate --split-debug-info=build/symbols
 
       - name: Build Split APKs
-        run: flutter build apk --release --split-per-abi --flavor komet
+        run: flutter build apk --release --split-per-abi --flavor komet --obfuscate --split-debug-info=build/symbols
 
       - name: Upload Universal APK
         uses: actions/upload-artifact@v4
@@ -105,7 +105,7 @@ jobs:
           retention-days: 30
 
       - name: Build App Bundle
-        run: flutter build appbundle --release --flavor komet
+        run: flutter build appbundle --release --flavor komet --obfuscate --split-debug-info=build/symbols
 
       - name: Upload App Bundle artifact
         uses: actions/upload-artifact@v4
@@ -114,3 +114,11 @@ jobs:
           path: build/app/outputs/bundle/kometRelease/app-komet-release.aab
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-android-symbols
+          path: build/symbols
+          if-no-files-found: error
+          retention-days: 90

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -172,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   padding: const EdgeInsets.only(left: 8, bottom: 8),
                   child: Text(
                     l10n.loginLanguage,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -182,7 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   title: Text(
                     l10n.languageNameRu,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -198,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   title: Text(
                     l10n.languageNameEn,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -249,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Text(
                           AppLocalizations.of(context)!.loginTermsOfUse,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 20,
                             fontWeight: FontWeight.w500,
@@ -420,7 +419,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Text(
                       l10n.loginConfirmPhoneTitle,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -429,7 +428,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 12),
                     Text(
                       '${_selectedCountry.phoneCode} $formattedPhone',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
@@ -445,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: () => Navigator.pop(context),
                         child: Text(
                           l10n.loginEdit,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
@@ -482,7 +481,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                         child: Text(
                           l10n.loginDone,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -558,7 +557,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.security, color: cs.onSurface),
                   title: Text(
                     l10n.loginSpoofRedacted,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -578,7 +577,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.vpn_lock, color: cs.onSurface),
                   title: Text(
                     l10n.loginProxy,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -593,7 +592,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.dns, color: cs.onSurface),
                   title: Text(
                     l10n.loginChangeServer,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -633,7 +632,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.qr_code_2, color: cs.onSurface),
                   title: Text(
                     l10n.loginSignInWithQr,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -647,7 +646,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.key, color: cs.onSurface),
                   title: Text(
                     l10n.loginSignInWithToken,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -669,7 +668,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.description, color: cs.onSurface),
                   title: Text(
                     l10n.loginSignInWithSessionFile,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -771,7 +770,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(height: 16),
                                 Text(
                                   l10n.loginTitle,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontSize: 32,
                                     fontWeight: FontWeight.w500,
@@ -801,7 +800,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 children: [
                                   Text(
                                     _countryDisplayName(_selectedCountry),
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface,
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,
@@ -823,7 +822,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 Text(
                                   _selectedCountry.phoneCode,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w400,
@@ -905,7 +904,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () => _showOtherLoginMethods(context),
                             child: Text(
                               l10n.loginOtherSignInMethods,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.primary,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w400,
@@ -922,7 +921,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   padding: const EdgeInsets.only(bottom: 24.0),
                                   child: RichText(
                                     text: TextSpan(
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: cs.onSurface,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
@@ -931,7 +930,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       children: [
                                         TextSpan(
                                           text: l10n.loginTermsIntro,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface,
                                             fontSize: 14,
                                             height: 1.4,
@@ -940,7 +939,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                         TextSpan(
                                           text: l10n.loginTermsLink,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.primary,
                                             fontSize: 14,
                                             height: 1.4,
@@ -1016,7 +1015,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   label,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.primary,
                     fontSize: 14,
                     fontWeight: FontWeight.w400,

@@ -22,6 +22,7 @@ import 'core/config/komet_settings.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
+import 'core/config/custom_font_service.dart';
 import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
@@ -147,6 +148,11 @@ void main() async {
   final initialFontScale = AppFonts.clampScale(
     prefs.getDouble(AppFonts.scalePrefKey) ?? AppFonts.defaultScale,
   );
+  if (AppFonts.resolve(initialFontId).isCustom) {
+    await CustomFontService.preloadCached();
+  } else {
+    unawaited(CustomFontService.preloadCached());
+  }
   final initialAccentSeed = await accentFuture;
   AppBubbleShape.current.value = await bubbleShapeFuture;
   AppBubbleBehavior.current.value = await bubbleBehaviorFuture;

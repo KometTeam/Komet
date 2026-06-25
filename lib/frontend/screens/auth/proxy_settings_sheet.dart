@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:komet/backend/api.dart';
 import 'package:komet/core/config/proxy_config.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -128,7 +127,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
               ),
               Text(
                 l10n.proxySettingsTitle,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -230,7 +229,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
                 alignment: Alignment.center,
                 child: Text(
                   labels[type]!,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: selected ? cs.onPrimary : cs.onSurfaceVariant,
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
@@ -258,7 +257,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w500,
             fontSize: 14,
@@ -271,10 +270,10 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
           inputFormatters: inputFormatters,
           enabled: !_busy,
           obscureText: obscureText,
-          style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15),
+          style: TextStyle(color: cs.onSurface, fontSize: 15),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: GoogleFonts.inter(
+            hintStyle: TextStyle(
               color: cs.onSurfaceVariant.withValues(alpha: 0.6),
               fontSize: 15,
             ),

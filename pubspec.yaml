@@ -51,7 +51,6 @@ dependencies:
   sqflite: ^2.4.2
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
-  google_fonts: ^8.1.0
   m3e_collection: ^0.3.7
   material_symbols_icons: ^4.2906.0
   dynamic_color: ^1.8.1
@@ -74,9 +73,10 @@ dependencies:
   opus_dart: ^3.0.1
   opus_flutter_android: ^3.0.1
   ogg_opus_player: ^0.8.0
-  camera: ^0.11.0
   video_player_media_kit: ^2.0.0
-  media_kit_libs_video: ^1.0.7
+  media_kit_libs_windows_video: ^1.0.11
+  media_kit_libs_linux: ^1.2.1
+  media_kit_libs_macos_video: ^1.1.4
 
 dev_dependencies:
   flutter_test:
@@ -121,6 +121,17 @@ flutter:
     - assets/komet.png
     - assets/komet_icon.png
     - assets/meteor_icon.png
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit.ttf
+    - family: Unbounded
+      fonts:
+        - asset: assets/fonts/Unbounded.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

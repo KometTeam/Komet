@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/format.dart';
 import '../../../main.dart' show accountModule;
@@ -75,7 +74,7 @@ class _DevicesScreenState extends State<DevicesScreen>
             backgroundColor: cs.surfaceContainerHigh,
             title: Text(
               'Ссылка из QR',
-              style: GoogleFonts.outfit(
+              style: TextStyle(fontFamily: 'Outfit', 
                 fontWeight: FontWeight.w600,
                 fontSize: 18,
                 color: cs.onSurface,
@@ -230,7 +229,7 @@ class _DevicesScreenState extends State<DevicesScreen>
         ),
         title: ConnectionTitleText(
           'Устройства',
-          style: GoogleFonts.outfit(
+          style: TextStyle(fontFamily: 'Outfit', 
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: cs.onSurface,
@@ -280,7 +279,7 @@ class _DevicesScreenState extends State<DevicesScreen>
             const SizedBox(height: 16),
             Text(
               'Устройства в KOMET',
-              style: GoogleFonts.outfit(
+              style: TextStyle(fontFamily: 'Outfit', 
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: cs.onSurface,
@@ -302,7 +301,7 @@ class _DevicesScreenState extends State<DevicesScreen>
               icon: const Icon(Symbols.qr_code_scanner, size: 22),
               label: Text(
                 'Сканировать QR',
-                style: GoogleFonts.outfit(
+                style: TextStyle(fontFamily: 'Outfit', 
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -473,7 +472,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.outfit(
+                      style: TextStyle(fontFamily: 'Outfit', 
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: cs.onSurface,

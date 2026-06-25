@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -72,7 +71,7 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
         ),
         title: Text(
           'QR для веба и ПК',
-          style: GoogleFonts.outfit(
+          style: TextStyle(fontFamily: 'Outfit', 
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -134,7 +133,7 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
                   child: Text(
                     'Наведите камеру на QR-код на экране компьютера',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(fontFamily: 'Outfit', 
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: Colors.white,

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 const Duration _defaultNotificationDuration = Duration(milliseconds: 2600);
 
@@ -90,7 +89,7 @@ class _CustomNotificationState extends State<CustomNotification>
               ),
               child: Text(
                 widget.message,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,

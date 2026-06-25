@@ -3,6 +3,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_fonts.dart';
+import '../../../core/config/custom_font_service.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
@@ -18,6 +19,7 @@ class FontSettingsScreen extends StatefulWidget {
 
 class _FontSettingsScreenState extends State<FontSettingsScreen> {
   List<String> _custom = const [];
+  bool _adding = false;
 
   @override
   void initState() {
@@ -26,7 +28,7 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
   }
 
   Future<void> _reloadCustom() async {
-    final list = await AppFonts.loadCustomFamilies();
+    final list = await CustomFontService.families();
     if (mounted) setState(() => _custom = list);
   }
 
@@ -45,26 +47,26 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
       }
       return;
     }
-    final canonical = AppFonts.matchGoogleFamily(parsed);
-    if (canonical == null) {
-      if (mounted) {
-        showCustomNotification(
-          context,
-          'Шрифт «$parsed» не найден в Google Fonts',
-        );
-      }
+    setState(() => _adding = true);
+    final family = await CustomFontService.addFamily(parsed);
+    if (!mounted) return;
+    setState(() => _adding = false);
+    if (family == null) {
+      showCustomNotification(
+        context,
+        'Шрифт «$parsed» не найден или нет сети',
+      );
       return;
     }
-    await AppFonts.addCustomFamily(canonical);
     await _reloadCustom();
     if (!mounted) return;
-    KometApp.stateOf(context)?.applyAppFont(AppFonts.customId(canonical));
+    KometApp.stateOf(context)?.applyAppFont(AppFonts.customId(family));
     Haptics.success();
-    showCustomNotification(context, 'Шрифт «$canonical» добавлен');
+    showCustomNotification(context, 'Шрифт «$family» добавлен');
   }
 
   Future<void> _removeFont(String family) async {
-    await AppFonts.removeCustomFamily(family);
+    await CustomFontService.removeFamily(family);
     await _reloadCustom();
     if (!mounted) return;
     final app = KometApp.stateOf(context);
@@ -175,11 +177,11 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
             SizedBox(
               width: double.infinity,
               child: ButtonM3E(
-                onPressed: _showAddFontDialog,
+                onPressed: _adding ? null : _showAddFontDialog,
                 style: ButtonM3EStyle.outlined,
                 size: ButtonM3ESize.md,
-                icon: const Icon(Symbols.add),
-                label: const Text('Добавить шрифт'),
+                icon: Icon(_adding ? Symbols.hourglass_top : Symbols.add),
+                label: Text(_adding ? 'Загрузка…' : 'Добавить шрифт'),
               ),
             ),
             const SizedBox(height: 30),

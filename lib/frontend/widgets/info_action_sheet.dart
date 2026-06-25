@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class InfoActionSheetItem {
@@ -150,7 +149,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
                     Text(
                       widget.title,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -161,7 +160,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
                       Text(
                         widget.subtitle!,
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 13,
                           fontWeight: FontWeight.w400,
@@ -195,7 +194,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
               ),
               child: Text(
                 buttonText,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -248,7 +247,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
             children: [
               Text(
                 item.title,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: titleColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -258,7 +257,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
               const SizedBox(height: 4),
               Text(
                 item.body,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurfaceVariant,
                   fontSize: 14,
                   fontWeight: FontWeight.w400,

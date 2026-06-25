@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -69,14 +68,14 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w400,
                 ),
                 decoration: InputDecoration(
                   hintText: l10n.selectCountrySearchHint,
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 18,
                     fontWeight: FontWeight.w400,
@@ -87,7 +86,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
               )
             : Text(
                 l10n.selectCountryTitle,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 20,
                   fontWeight: FontWeight.w500,
@@ -121,7 +120,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
           return ListTile(
             leading: Text(
               country.phoneCode,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurfaceVariant,
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
@@ -129,7 +128,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
             ),
             title: Text(
               lang == 'ru' ? country.ru : country.en,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 16,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,

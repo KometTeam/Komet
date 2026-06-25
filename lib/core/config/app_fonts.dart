@@ -1,26 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AppFont {
   final String id;
   final String label;
-  final String? googleFamily;
+  final String? fontFamily;
 
   const AppFont({
     required this.id,
     required this.label,
-    this.googleFamily,
+    this.fontFamily,
   });
 
-  bool get isSystem => googleFamily == null;
+  bool get isSystem => fontFamily == null;
   bool get isCustom => id.startsWith(AppFonts.customPrefix);
 }
 
 class AppFonts {
   static const String prefKey = 'app_font';
   static const String scalePrefKey = 'app_font_scale';
-  static const String customPrefKey = 'app_custom_fonts';
   static const String customPrefix = 'g:';
 
   static const double minScale = 0.60;
@@ -29,8 +26,8 @@ class AppFonts {
 
   static const List<AppFont> builtIn = [
     AppFont(id: 'system', label: 'Системный'),
-    AppFont(id: 'inter', label: 'Inter', googleFamily: 'Inter'),
-    AppFont(id: 'unbounded', label: 'Unbounded', googleFamily: 'Unbounded'),
+    AppFont(id: 'inter', label: 'Inter', fontFamily: 'Inter'),
+    AppFont(id: 'unbounded', label: 'Unbounded', fontFamily: 'Unbounded'),
   ];
 
   static AppFont get fallback => builtIn.first;
@@ -40,29 +37,20 @@ class AppFonts {
   static AppFont resolve(String id) {
     if (id.startsWith(customPrefix)) {
       final family = id.substring(customPrefix.length);
-      return AppFont(id: id, label: family, googleFamily: family);
+      return AppFont(id: id, label: family, fontFamily: family);
     }
     return builtIn.firstWhere((f) => f.id == id, orElse: () => fallback);
   }
 
   static TextTheme textTheme(String id, TextTheme base) {
-    final family = resolve(id).googleFamily;
+    final family = resolve(id).fontFamily;
     if (family == null) return base;
-    try {
-      return GoogleFonts.getTextTheme(family, base);
-    } catch (_) {
-      return base;
-    }
+    return base.apply(fontFamily: family);
   }
 
   static TextStyle sample(String id, {required double fontSize}) {
-    final family = resolve(id).googleFamily;
-    if (family == null) return TextStyle(fontSize: fontSize);
-    try {
-      return GoogleFonts.getFont(family, fontSize: fontSize);
-    } catch (_) {
-      return TextStyle(fontSize: fontSize);
-    }
+    final family = resolve(id).fontFamily;
+    return TextStyle(fontFamily: family, fontSize: fontSize);
   }
 
   static double clampScale(double scale) =>
@@ -85,36 +73,5 @@ class AppFonts {
     } catch (_) {}
     value = value.replaceAll('+', ' ').trim();
     return value.isEmpty ? null : value;
-  }
-
-  static String? matchGoogleFamily(String family) {
-    final map = GoogleFonts.asMap();
-    if (map.containsKey(family)) return family;
-    final lower = family.toLowerCase();
-    for (final key in map.keys) {
-      if (key.toLowerCase() == lower) return key;
-    }
-    return null;
-  }
-
-  static Future<List<String>> loadCustomFamilies() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(customPrefKey) ?? const <String>[];
-  }
-
-  static Future<void> addCustomFamily(String family) async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(customPrefKey) ?? <String>[];
-    if (!list.contains(family)) {
-      list.add(family);
-      await prefs.setStringList(customPrefKey, list);
-    }
-  }
-
-  static Future<void> removeCustomFamily(String family) async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(customPrefKey) ?? <String>[];
-    list.remove(family);
-    await prefs.setStringList(customPrefKey, list);
   }
 }

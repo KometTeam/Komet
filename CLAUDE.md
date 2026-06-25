@@ -14,10 +14,10 @@ flutter analyze          # lint / static analysis
 flutter run              # run on connected device (default: komet flavor)
 flutter run --flavor oneme -t lib/main.dart  # run oneme flavor (FCM)
 
-# Android builds
-flutter build apk --release --flavor komet
-flutter build apk --release --split-per-abi --flavor komet
-flutter build appbundle --release --flavor komet
+# Android builds (release builds use obfuscation; keep symbols to de-obfuscate crashes)
+flutter build apk --release --flavor komet --obfuscate --split-debug-info=build/symbols
+flutter build apk --release --split-per-abi --flavor komet --obfuscate --split-debug-info=build/symbols
+flutter build appbundle --release --flavor komet --obfuscate --split-debug-info=build/symbols
 
 # Other platforms
 flutter build ios --release --no-codesign

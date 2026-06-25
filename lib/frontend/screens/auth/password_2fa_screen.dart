@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
@@ -94,7 +93,7 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
               const SizedBox(height: 16),
               Text(
                 'Двухфакторная аутентификация',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 22,
                   fontWeight: FontWeight.w500,

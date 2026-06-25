@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:komet/backend/api.dart';
 import 'package:komet/core/config/config.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -131,7 +130,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
               ),
               Text(
                 l10n.serverSettingsTitle,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -184,7 +183,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w500,
             fontSize: 14,
@@ -196,10 +195,10 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           enabled: !_busy,
-          style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15),
+          style: TextStyle(color: cs.onSurface, fontSize: 15),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: GoogleFonts.inter(
+            hintStyle: TextStyle(
               color: cs.onSurfaceVariant.withValues(alpha: 0.6),
               fontSize: 15,
             ),

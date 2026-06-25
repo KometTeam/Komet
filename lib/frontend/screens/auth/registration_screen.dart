@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
 import '../../../backend/modules/account.dart';
@@ -134,7 +133,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           children: [
             Text(
               l10n.registrationTitle,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 26,
                 fontWeight: FontWeight.w600,
@@ -203,7 +202,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const SizedBox(height: 28),
               Text(
                 l10n.registrationChooseAvatar,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
