@@ -208,7 +208,9 @@ class FileUploader {
         'uploadMediaFile: status=$statusCode total=$total '
         'host=${uri.host} body=${respBody.length > 200 ? respBody.substring(0, 200) : respBody}',
       );
-      return statusCode == 200;
+      final hasError =
+          respBody.contains('error_msg') || respBody.contains('error_code');
+      return statusCode == 200 && !hasError;
     } catch (e) {
       logger.w('uploadMediaFile: $e');
       try {

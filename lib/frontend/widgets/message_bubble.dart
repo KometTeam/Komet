@@ -168,6 +168,13 @@ class MessageBubble extends StatelessWidget {
     return a != null && a.isNotEmpty && a.first is ShareAttachment;
   }
 
+  bool get _isVideoNote {
+    final a = message.attachments;
+    if (a == null || a.isEmpty) return false;
+    final first = a.first;
+    return first is VideoAttachment && first.isNote;
+  }
+
   MessageType get _contentType {
     if (_hasShareAttachment) return _computeContentType();
     return _contentTypeCache[message] ??= _computeContentType();
@@ -369,7 +376,10 @@ class MessageBubble extends StatelessWidget {
         nextMessage?.senderId != message.senderId;
 
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.75;
-    final bubbleColor = isMe ? cs.primaryContainer : cs.surfaceContainerHighest;
+    final isVideoNote = _isVideoNote;
+    final bubbleColor = isVideoNote
+        ? Colors.transparent
+        : (isMe ? cs.primaryContainer : cs.surfaceContainerHighest);
 
     _BubbleCtx makeCtx() => _BubbleCtx(
       context: context,
@@ -455,13 +465,15 @@ class MessageBubble extends StatelessWidget {
                       constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                       decoration: BoxDecoration(
                         color: bubbleColor,
-                        borderRadius: _borderRadiusFor(
-                          AppBubbleShape.current.value,
-                          AppBubbleBehavior.current.value,
-                          shape,
-                          hasPhotoCap,
-                          hasMultiPhotos,
-                        ),
+                        borderRadius: isVideoNote
+                            ? null
+                            : _borderRadiusFor(
+                                AppBubbleShape.current.value,
+                                AppBubbleBehavior.current.value,
+                                shape,
+                                hasPhotoCap,
+                                hasMultiPhotos,
+                              ),
                       ),
                       padding: padding,
                       child: child,

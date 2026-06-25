@@ -120,7 +120,8 @@ class VideoNoteRecorder(
         return best
     }
 
-    fun init(facingFront: Boolean, result: MethodChannel.Result) {
+    fun init(facingFront: Boolean, rawResult: MethodChannel.Result) {
+        val result = OnceResult(rawResult)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -197,7 +198,7 @@ class VideoNoteRecorder(
         }
         run {
             GLES20.glViewport(0, 0, edge, edge)
-            prog.draw(oesTexId, stMatrix, camSize, lensFacing, sensorOrientation, true)
+            prog.draw(oesTexId, stMatrix, camSize, lensFacing, true)
             w.swap()
         }
         if (frameCount == 0) {
@@ -212,8 +213,8 @@ class VideoNoteRecorder(
             recordWindow?.let { w ->
                 w.makeCurrent()
                 GLES20.glViewport(0, 0, edge, edge)
-                prog.draw(oesTexId, stMatrix, camSize, lensFacing, sensorOrientation, false)
-                w.setPresentationTime(st.timestamp)
+                prog.draw(oesTexId, stMatrix, camSize, lensFacing, false)
+                w.setPresentationTime(System.nanoTime())
                 w.swap()
             }
         }
@@ -414,6 +415,19 @@ class VideoNoteRecorder(
     }
 }
 
+private class OnceResult(private val inner: MethodChannel.Result) : MethodChannel.Result {
+    private val done = java.util.concurrent.atomic.AtomicBoolean(false)
+    override fun success(result: Any?) {
+        if (done.compareAndSet(false, true)) inner.success(result)
+    }
+    override fun error(code: String, message: String?, details: Any?) {
+        if (done.compareAndSet(false, true)) inner.error(code, message, details)
+    }
+    override fun notImplemented() {
+        if (done.compareAndSet(false, true)) inner.notImplemented()
+    }
+}
+
 // ── Минимальный EGL/GL под рендер OES-текстуры в квадратные surface ──
 
 private class EglCore {
@@ -513,12 +527,11 @@ private class OesProgram {
     private val vertexShader = """
         attribute vec4 aPosition;
         attribute vec4 aTexCoord;
-        uniform mat4 uStMatrix;
-        uniform mat4 uTexCrop;
+        uniform mat4 uTexMatrix;
         varying vec2 vTex;
         void main() {
             gl_Position = aPosition;
-            vTex = (uTexCrop * uStMatrix * aTexCoord).xy;
+            vTex = (uTexMatrix * aTexCoord).xy;
         }
     """
     private val fragmentShader = """
@@ -534,19 +547,20 @@ private class OesProgram {
     private val program: Int
     private val aPosition: Int
     private val aTexCoord: Int
-    private val uStMatrix: Int
-    private val uTexCrop: Int
+    private val uTexMatrix: Int
     private val uTexture: Int
     private val quad: FloatBuffer
     private val tex: FloatBuffer
-    private val crop = FloatArray(16)
+    private val mirrorM = FloatArray(16)
+    private val cropM = FloatArray(16)
+    private val stMirrorM = FloatArray(16)
+    private val fullM = FloatArray(16)
 
     init {
         program = buildProgram(vertexShader, fragmentShader)
         aPosition = GLES20.glGetAttribLocation(program, "aPosition")
         aTexCoord = GLES20.glGetAttribLocation(program, "aTexCoord")
-        uStMatrix = GLES20.glGetUniformLocation(program, "uStMatrix")
-        uTexCrop = GLES20.glGetUniformLocation(program, "uTexCrop")
+        uTexMatrix = GLES20.glGetUniformLocation(program, "uTexMatrix")
         uTexture = GLES20.glGetUniformLocation(program, "sTexture")
         quad = floatBuf(floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f))
         tex = floatBuf(floatArrayOf(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f))
@@ -581,27 +595,26 @@ private class OesProgram {
         st: FloatArray,
         camSize: Size,
         lensFacing: Int,
-        sensorOrientation: Int,
         mirror: Boolean,
     ) {
-        // Кроп выполняется ПОСЛЕ stMatrix (в отображаемом пространстве), т.к.
-        // stMatrix уже поворачивает кадр. Считаем отображаемые размеры с учётом
-        // поворота сенсора (90/180 свопает оси) и режем длинную ось в квадрат.
-        Matrix.setIdentityM(crop, 0)
-        Matrix.translateM(crop, 0, 0.5f, 0.5f, 0f)
-        val swap = (sensorOrientation % 180) != 0
-        val dispW = (if (swap) camSize.height else camSize.width).toFloat()
-        val dispH = (if (swap) camSize.width else camSize.height).toFloat()
-        if (dispW >= dispH) {
-            Matrix.scaleM(crop, 0, dispH / dispW, 1f, 1f)
-        } else {
-            Matrix.scaleM(crop, 0, 1f, dispW / dispH, 1f)
-        }
-        // Зеркало фронталки по горизонтали (естественное селфи) — только превью.
+        Matrix.setIdentityM(mirrorM, 0)
         if (mirror && lensFacing == CameraCharacteristics.LENS_FACING_FRONT) {
-            Matrix.scaleM(crop, 0, -1f, 1f, 1f)
+            Matrix.translateM(mirrorM, 0, 0.5f, 0.5f, 0f)
+            Matrix.scaleM(mirrorM, 0, -1f, 1f, 1f)
+            Matrix.translateM(mirrorM, 0, -0.5f, -0.5f, 0f)
         }
-        Matrix.translateM(crop, 0, -0.5f, -0.5f, 0f)
+        val w = camSize.width.toFloat()
+        val h = camSize.height.toFloat()
+        Matrix.setIdentityM(cropM, 0)
+        Matrix.translateM(cropM, 0, 0.5f, 0.5f, 0f)
+        if (w >= h) {
+            Matrix.scaleM(cropM, 0, h / w, 1f, 1f)
+        } else {
+            Matrix.scaleM(cropM, 0, 1f, w / h, 1f)
+        }
+        Matrix.translateM(cropM, 0, -0.5f, -0.5f, 0f)
+        Matrix.multiplyMM(stMirrorM, 0, st, 0, mirrorM, 0)
+        Matrix.multiplyMM(fullM, 0, cropM, 0, stMirrorM, 0)
 
         GLES20.glClearColor(0f, 0f, 0f, 1f)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
@@ -609,8 +622,7 @@ private class OesProgram {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texId)
         GLES20.glUniform1i(uTexture, 0)
-        GLES20.glUniformMatrix4fv(uStMatrix, 1, false, st, 0)
-        GLES20.glUniformMatrix4fv(uTexCrop, 1, false, crop, 0)
+        GLES20.glUniformMatrix4fv(uTexMatrix, 1, false, fullM, 0)
         GLES20.glEnableVertexAttribArray(aPosition)
         GLES20.glVertexAttribPointer(aPosition, 2, GLES20.GL_FLOAT, false, 0, quad)
         GLES20.glEnableVertexAttribArray(aTexCoord)
