@@ -44,7 +44,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux
-        run: flutter build linux --release
+        run: flutter build linux --release --verbose
 
       - name: Package Linux
         run: |
