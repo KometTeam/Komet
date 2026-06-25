@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:ogg_opus_player/ogg_opus_player.dart';
+import 'package:video_player/video_player.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -14,6 +18,7 @@ import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/file_download.dart';
+import '../../core/utils/media_cache.dart';
 import '../../core/utils/download_progress.dart';
 import '../../core/utils/link_opener.dart';
 import '../../core/config/app_link_preview.dart';
@@ -1773,6 +1778,21 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildVideoAttachment(_BubbleCtx ctx, MessageAttachment video) {
+    if (video is VideoAttachment && video.isNote) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _VideoNoteBubble(
+            attachment: video,
+            messageId: message.id,
+            chatId: message.chatId,
+            cs: ctx.cs,
+          ),
+          const SizedBox(height: 6),
+          _buildMeta(ctx),
+        ],
+      );
+    }
     final hasCaption = message.text != null && message.text!.isNotEmpty;
     final thumb = (video as dynamic).thumbnail as String?;
     final durationMs = (video as dynamic).duration as int?;
@@ -2499,6 +2519,16 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
   String? _transcriptionText;
   bool _transcriptionLoading = false;
 
+  OggOpusPlayer? _player;
+  bool _loadingAudio = false;
+  Timer? _ticker;
+  late final List<int> _amps = _parseWave(widget.waveData);
+
+  static List<int> _parseWave(String? data) {
+    if (data == null || data.isEmpty) return const [];
+    return data.codeUnits;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2507,8 +2537,71 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
 
   @override
   void dispose() {
+    _ticker?.cancel();
+    _player?.state.removeListener(_onPlayerState);
+    _player?.dispose();
     _progress.dispose();
     super.dispose();
+  }
+
+  Future<void> _togglePlay() async {
+    if (_loadingAudio) return;
+
+    if (_player != null) {
+      if (_isPlaying) {
+        _player!.pause();
+      } else {
+        if (widget.duration > 0 &&
+            _player!.currentPosition >= widget.duration - 0.05) {
+          _progress.value = 0;
+        }
+        _player!.play();
+      }
+      return;
+    }
+
+    final url = widget.url;
+    if (url.isEmpty) return;
+
+    setState(() => _loadingAudio = true);
+    try {
+      final name = '${widget.audioId ?? widget.messageId}.ogg';
+      final file = await MediaCache.getOrDownload(name, url);
+      if (!mounted) return;
+      if (file == null) {
+        showCustomNotification(context, 'Не удалось загрузить аудио');
+        return;
+      }
+      final player = OggOpusPlayer(file.path);
+      _player = player;
+      player.state.addListener(_onPlayerState);
+      _ticker = Timer.periodic(
+        const Duration(milliseconds: 60),
+        (_) => _onTick(),
+      );
+      player.play();
+    } catch (e) {
+      if (mounted) showCustomNotification(context, 'Ошибка воспроизведения');
+    } finally {
+      if (mounted) setState(() => _loadingAudio = false);
+    }
+  }
+
+  void _onTick() {
+    final player = _player;
+    if (player == null || widget.duration <= 0) return;
+    final pos = player.currentPosition;
+    _progress.value = (pos / widget.duration).clamp(0.0, 1.0);
+  }
+
+  void _onPlayerState() {
+    final state = _player?.state.value;
+    if (!mounted) return;
+    final playing = state == PlayerState.playing;
+    if (playing != _isPlaying) setState(() => _isPlaying = playing);
+    if (state == PlayerState.ended) {
+      _progress.value = 1.0;
+    }
   }
 
   Widget _buildStatusIcon() {
@@ -2575,53 +2668,41 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
                         : widget.cs.primaryContainer,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _isPlaying ? Symbols.pause : Symbols.play_arrow,
-                    color: widget.isMe
-                        ? widget.cs.onPrimaryContainer
-                        : widget.cs.primary,
-                    size: 18,
-                  ),
+                  child: _loadingAudio
+                      ? Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: widget.isMe
+                                ? widget.cs.onPrimaryContainer
+                                : widget.cs.primary,
+                          ),
+                        )
+                      : Icon(
+                          _isPlaying ? Symbols.pause : Symbols.play_arrow,
+                          color: widget.isMe
+                              ? widget.cs.onPrimaryContainer
+                              : widget.cs.primary,
+                          size: 18,
+                        ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return GestureDetector(
-                      onTapDown: (details) {
-                        _progress.value =
-                            (details.localPosition.dx / constraints.maxWidth)
-                                .clamp(0.0, 1.0);
-                      },
-                      onHorizontalDragUpdate: (details) {
-                        _progress.value =
-                            (details.localPosition.dx / constraints.maxWidth)
-                                .clamp(0.0, 1.0);
-                      },
-                      child: Container(
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: waveInactiveColor,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: ValueListenableBuilder<double>(
-                          valueListenable: _progress,
-                          builder: (context, progress, _) =>
-                              FractionallySizedBox(
-                                alignment: Alignment.centerLeft,
-                                widthFactor: progress.clamp(0.0, 1.0),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: waveActiveColor,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-                        ),
+                child: SizedBox(
+                  height: 26,
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _progress,
+                    builder: (context, progress, _) => CustomPaint(
+                      size: Size.infinite,
+                      painter: _WaveformPainter(
+                        amps: _amps,
+                        progress: progress,
+                        active: waveActiveColor,
+                        inactive: waveInactiveColor,
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2749,11 +2830,6 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
     );
   }
 
-  void _togglePlay() {
-    setState(() {
-      _isPlaying = !_isPlaying;
-    });
-  }
 
   Future<void> _requestTranscription() async {
     if (widget.audioId == null) return;
@@ -2808,5 +2884,259 @@ class _VoiceMessageBubbleState extends State<_VoiceMessageBubble> {
         _transcriptionVisible = true;
       });
     }
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  final List<int> amps;
+  final double progress;
+  final Color active;
+  final Color inactive;
+
+  const _WaveformPainter({
+    required this.amps,
+    required this.progress,
+    required this.active,
+    required this.inactive,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.height / 2;
+
+    if (amps.isEmpty) {
+      final track = Paint()
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        Offset(0, center),
+        Offset(size.width, center),
+        track..color = inactive,
+      );
+      if (progress > 0) {
+        canvas.drawLine(
+          Offset(0, center),
+          Offset(size.width * progress.clamp(0.0, 1.0), center),
+          track..color = active,
+        );
+      }
+      return;
+    }
+
+    final n = amps.length;
+    var maxAmp = 1;
+    for (final a in amps) {
+      if (a > maxAmp) maxAmp = a;
+    }
+    final slot = size.width / n;
+    final barW = (slot * 0.55).clamp(1.0, 3.0);
+    final paint = Paint();
+
+    for (var i = 0; i < n; i++) {
+      final h = ((amps[i] / maxAmp) * size.height).clamp(2.0, size.height);
+      final x = i * slot + (slot - barW) / 2;
+      paint.color = ((i + 0.5) / n) <= progress ? active : inactive;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, center - h / 2, barW, h),
+          Radius.circular(barW / 2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter old) =>
+      old.progress != progress ||
+      old.active != active ||
+      old.inactive != inactive ||
+      !identical(old.amps, amps);
+}
+
+class _VideoNoteBubble extends StatefulWidget {
+  final VideoAttachment attachment;
+  final String messageId;
+  final int chatId;
+  final ColorScheme cs;
+
+  const _VideoNoteBubble({
+    required this.attachment,
+    required this.messageId,
+    required this.chatId,
+    required this.cs,
+  });
+
+  @override
+  State<_VideoNoteBubble> createState() => _VideoNoteBubbleState();
+}
+
+class _VideoNoteBubbleState extends State<_VideoNoteBubble> {
+  static const double _size = 210;
+  VideoPlayerController? _controller;
+  bool _loading = false;
+  bool _error = false;
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_onTick);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _onTick() {
+    if (mounted) setState(() {});
+  }
+
+  static Uint8List? _previewBytes(String? data) {
+    if (data == null) return null;
+    const marker = 'base64,';
+    final idx = data.indexOf(marker);
+    if (idx < 0) return null;
+    try {
+      return base64Decode(data.substring(idx + marker.length));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _toggle() async {
+    final existing = _controller;
+    if (existing != null) {
+      setState(
+        () => existing.value.isPlaying ? existing.pause() : existing.play(),
+      );
+      return;
+    }
+    if (_loading) return;
+
+    final a = widget.attachment;
+    final videoId = a.videoId;
+    final token = a.videoToken;
+    if (videoId == null || token == null) {
+      setState(() => _error = true);
+      return;
+    }
+
+    setState(() => _loading = true);
+    Haptics.tap();
+    try {
+      final cacheName = 'videonote_$videoId.mp4';
+      var file = await MediaCache.existing(cacheName);
+      if (file == null) {
+        final url = await messagesModule.getVideoUrl(
+          messageId: widget.messageId,
+          chatId: widget.chatId,
+          token: token,
+          videoId: videoId,
+        );
+        if (url == null) throw Exception('no_url');
+        file = await MediaCache.getOrDownload(cacheName, url);
+        if (file == null) throw Exception('download');
+      }
+      if (!mounted) return;
+      final c = VideoPlayerController.file(file);
+      _controller = c;
+      await c.initialize();
+      if (!mounted) {
+        c.dispose();
+        return;
+      }
+      await c.setLooping(true);
+      c.addListener(_onTick);
+      c.play();
+      setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.attachment;
+    final c = _controller;
+    final ready = c != null && c.value.isInitialized;
+    final playing = ready && c.value.isPlaying;
+    final preview = _previewBytes(a.previewData);
+
+    double progress = 0;
+    if (ready && c.value.duration.inMilliseconds > 0) {
+      progress =
+          c.value.position.inMilliseconds / c.value.duration.inMilliseconds;
+    }
+
+    return GestureDetector(
+      onTap: _toggle,
+      child: SizedBox(
+        width: _size,
+        height: _size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            ClipOval(
+              child: SizedBox(
+                width: _size,
+                height: _size,
+                child: ready
+                    ? FittedBox(
+                        fit: BoxFit.cover,
+                        clipBehavior: Clip.hardEdge,
+                        child: SizedBox(
+                          width: c.value.size.width,
+                          height: c.value.size.height,
+                          child: VideoPlayer(c),
+                        ),
+                      )
+                    : preview != null
+                    ? Image.memory(
+                        preview,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      )
+                    : Container(color: widget.cs.surfaceContainerHighest),
+              ),
+            ),
+            if (ready)
+              SizedBox(
+                width: _size - 2,
+                height: _size - 2,
+                child: CircularProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  strokeWidth: 3,
+                  color: widget.cs.primary,
+                  backgroundColor: Colors.white24,
+                ),
+              ),
+            if (!playing)
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(
+                  color: Colors.black45,
+                  shape: BoxShape.circle,
+                ),
+                child: _loading
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        _error ? Symbols.error : Symbols.play_arrow,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

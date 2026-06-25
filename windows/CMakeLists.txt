@@ -92,6 +92,13 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+# Vendored libopus, used only on Windows to encode voice messages to Ogg/Opus
+# (Windows has no system Opus encoder). Copied next to the executable so it can
+# be loaded via DynamicLibrary.open('opus.dll').
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/opus/opus.dll"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

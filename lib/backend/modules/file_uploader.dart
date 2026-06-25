@@ -155,6 +155,69 @@ class FileUploader {
     return ctrl.stream;
   }
 
+  /// Загружает медиа (Ogg/Opus аудио или MP4 видеосообщение) на CDN-URL,
+  /// полученный из [MessagesModule.requestAudioUploadUrl] /
+  /// [MessagesModule.requestVideoNoteUploadUrl]. Одиночный POST всего файла
+  /// (`octet-stream`, `Content-Range` на весь объём, `filename=<число>`).
+  /// Токен уже известен, поэтому возвращается только признак успеха.
+  Future<bool> uploadMediaFile(
+    Uri uri,
+    File file, {
+    void Function(int sent, int total)? onProgress,
+    Duration overallTimeout = const Duration(minutes: 5),
+    Duration progressThrottle = const Duration(milliseconds: 16),
+  }) async {
+    Socket? socket;
+    try {
+      final total = await file.length();
+      if (total <= 0) return false;
+      final filename =
+          (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
+
+      socket = await _openSocket(uri);
+      _writeHeaders(
+        socket,
+        uri,
+        filename,
+        total,
+        contentType: 'application/octet-stream',
+        connection: 'close',
+      );
+
+      final stopwatch = Stopwatch()..start();
+      var sent = 0;
+      final body = file.openRead().map((chunk) {
+        sent += chunk.length;
+        if (onProgress != null && stopwatch.elapsed >= progressThrottle) {
+          onProgress(sent, total);
+          stopwatch.reset();
+        }
+        return chunk;
+      });
+      await socket.addStream(body);
+      await socket.flush();
+      onProgress?.call(total, total);
+
+      final response = await _readFullResponse(socket, timeout: overallTimeout);
+      try {
+        socket.destroy();
+      } catch (_) {}
+      final statusCode = response?.$1 ?? 0;
+      final respBody = response?.$2 ?? '';
+      logger.w(
+        'uploadMediaFile: status=$statusCode total=$total '
+        'host=${uri.host} body=${respBody.length > 200 ? respBody.substring(0, 200) : respBody}',
+      );
+      return statusCode == 200;
+    } catch (e) {
+      logger.w('uploadMediaFile: $e');
+      try {
+        socket?.destroy();
+      } catch (_) {}
+      return false;
+    }
+  }
+
   Future<Socket> _openSocket(Uri uri) async {
     final proxySettings = await ProxyConfig.load();
     final base = proxySettings.isEnabled
@@ -175,6 +238,7 @@ class FileUploader {
     String filename,
     int total, {
     String contentType = 'application/x-binary; charset=x-user-defined',
+    String connection = 'keep-alive',
   }) {
     final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
     final headers = StringBuffer()
@@ -182,7 +246,7 @@ class FileUploader {
       ..write('Host: ${uri.host}\r\n')
       ..write('Content-Type: $contentType\r\n')
       ..write('Content-Disposition: attachment; filename=$filename\r\n')
-      ..write('Connection: keep-alive\r\n')
+      ..write('Connection: $connection\r\n')
       ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
       ..write('Content-Range: bytes 0-${total - 1}/$total\r\n')
       ..write('Content-Length: $total\r\n')
