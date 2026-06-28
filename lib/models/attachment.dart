@@ -12,6 +12,7 @@ enum AttachmentType {
   poll,
   share,
   call,
+  inlineKeyboard,
 }
 
 String? decodeAttachPreview(dynamic raw) {
@@ -64,7 +65,7 @@ abstract class MessageAttachment {
       case 'SHARE':
         return ShareAttachment.fromMap(map);
       case 'INLINE_KEYBOARD':
-        return UnknownAttachment(map);
+        return InlineKeyboardAttachment.fromMap(map);
       default:
         return UnknownAttachment(map);
     }
@@ -577,6 +578,93 @@ class ShareAttachment extends MessageAttachment {
     'url': url,
     'host': host,
     if (image != null) 'image': image!.toMap(),
+  };
+}
+
+class InlineKeyboardButton {
+  final String type;
+  final String text;
+  final String? url;
+  final String? webApp;
+  final int? contactId;
+  final String? payload;
+
+  const InlineKeyboardButton({
+    required this.type,
+    required this.text,
+    this.url,
+    this.webApp,
+    this.contactId,
+    this.payload,
+  });
+
+  factory InlineKeyboardButton.fromMap(Map<String, dynamic> map) {
+    return InlineKeyboardButton(
+      type: (map['type'] as String? ?? '').toUpperCase(),
+      text: map['text']?.toString() ?? '',
+      url: map['url']?.toString(),
+      webApp: map['webApp']?.toString(),
+      contactId: map['contactId'] is int
+          ? map['contactId'] as int
+          : int.tryParse(map['contactId']?.toString() ?? ''),
+      payload: map['payload']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'type': type,
+    'text': text,
+    if (url != null) 'url': url,
+    if (webApp != null) 'webApp': webApp,
+    if (contactId != null) 'contactId': contactId,
+    if (payload != null) 'payload': payload,
+  };
+}
+
+class InlineKeyboardAttachment extends MessageAttachment {
+  final String? callbackId;
+  final List<List<InlineKeyboardButton>> rows;
+
+  const InlineKeyboardAttachment({
+    this.callbackId,
+    required this.rows,
+  }) : super(type: AttachmentType.inlineKeyboard);
+
+  bool get isEmpty => rows.every((row) => row.isEmpty);
+
+  factory InlineKeyboardAttachment.fromMap(Map<String, dynamic> map) {
+    final keyboard = map['keyboard'];
+    final rawRows = keyboard is Map ? keyboard['buttons'] as List? : null;
+    final rows = <List<InlineKeyboardButton>>[];
+    if (rawRows != null) {
+      for (final row in rawRows) {
+        if (row is! List) continue;
+        rows.add(
+          row
+              .whereType<Map>()
+              .map(
+                (b) =>
+                    InlineKeyboardButton.fromMap(Map<String, dynamic>.from(b)),
+              )
+              .toList(),
+        );
+      }
+    }
+    return InlineKeyboardAttachment(
+      callbackId: map['callbackId']?.toString(),
+      rows: rows,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toMap() => {
+    '_type': 'INLINE_KEYBOARD',
+    if (callbackId != null) 'callbackId': callbackId,
+    'keyboard': {
+      'buttons': rows
+          .map((row) => row.map((b) => b.toMap()).toList())
+          .toList(),
+    },
   };
 }
 

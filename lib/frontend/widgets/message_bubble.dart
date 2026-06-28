@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
+import '../screens/webapp/web_app_screen.dart';
 import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
 import '../../core/config/komet_settings.dart';
@@ -194,9 +195,20 @@ class MessageBubble extends StatelessWidget {
     return text;
   }
 
+  InlineKeyboardAttachment? get _inlineKeyboard {
+    final attachments = message.attachments;
+    if (attachments == null) return null;
+    for (final a in attachments) {
+      if (a is InlineKeyboardAttachment && !a.isEmpty) return a;
+    }
+    return null;
+  }
+
   MessageType _computeContentType() {
     if (message.isControl) return MessageType.control;
-    final attachments = message.attachments;
+    final attachments = message.attachments
+        ?.where((a) => a is! InlineKeyboardAttachment)
+        .toList();
     if (attachments != null && attachments.isNotEmpty) {
       final first = attachments.first;
       if (first is ForwardedMessageAttachment) {
@@ -433,6 +445,7 @@ class MessageBubble extends StatelessWidget {
         prevMessage?.senderId != message.senderId;
 
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.75;
+    final keyboard = _inlineKeyboard;
     final isVideoNote = _isVideoNote;
     final bubbleColor = isVideoNote
         ? Colors.transparent
@@ -553,6 +566,11 @@ class MessageBubble extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (keyboard != null)
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                      child: _buildInlineKeyboard(context, cs, keyboard),
+                    ),
                   if (reactionsUnder) _reactionsBar(cs),
                 ],
               ),
@@ -560,6 +578,169 @@ class MessageBubble extends StatelessWidget {
           ),
         ),
       );
+  }
+
+  Widget _buildInlineKeyboard(
+    BuildContext context,
+    ColorScheme cs,
+    InlineKeyboardAttachment keyboard,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final row in keyboard.rows)
+            if (row.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < row.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 4),
+                      Expanded(
+                        child: _buildInlineKeyboardButton(
+                          context,
+                          cs,
+                          keyboard,
+                          row[i],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineKeyboardButton(
+    BuildContext context,
+    ColorScheme cs,
+    InlineKeyboardAttachment keyboard,
+    InlineKeyboardButton button,
+  ) {
+    final trailingIcon = switch (button.type) {
+      'LINK' => Symbols.open_in_new,
+      'OPEN_APP' => Symbols.chevron_right,
+      _ => null,
+    };
+    return Material(
+      color: cs.primary.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _onInlineButtonTap(context, keyboard, button),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  button.text,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (trailingIcon != null) ...[
+                const SizedBox(width: 4),
+                Icon(trailingIcon, size: 16, color: cs.primary),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onInlineButtonTap(
+    BuildContext context,
+    InlineKeyboardAttachment keyboard,
+    InlineKeyboardButton button,
+  ) async {
+    switch (button.type) {
+      case 'LINK':
+        final url = button.url;
+        if (url != null && url.isNotEmpty) {
+          await openExternalUrl(context, url);
+        }
+        return;
+      case 'OPEN_APP':
+        await _openMiniApp(context, button);
+        return;
+      default:
+        final callbackId = keyboard.callbackId;
+        if (callbackId == null || callbackId.isEmpty) {
+          showCustomNotification(context, 'Кнопка не поддерживается');
+          return;
+        }
+        final answer = await messagesModule.sendButtonCallback(
+          chatId: message.chatId,
+          messageId: message.id,
+          callbackId: callbackId,
+          payload: button.payload,
+        );
+        if (!context.mounted) return;
+        final url = answer?['url']?.toString();
+        if (url != null && url.isNotEmpty) {
+          await openExternalUrl(context, url);
+          return;
+        }
+        final text = answer?['text']?.toString();
+        if (text != null && text.isNotEmpty) {
+          showCustomNotification(context, text);
+        }
+    }
+  }
+
+  Future<void> _openMiniApp(
+    BuildContext context,
+    InlineKeyboardButton button,
+  ) async {
+    final deeplink = button.webApp != null
+        ? Uri.tryParse(button.webApp!)
+        : null;
+    final startParam =
+        button.payload ??
+        deeplink?.queryParameters['startapp'] ??
+        deeplink?.queryParameters['startApp'];
+    final chatId =
+        int.tryParse(deeplink?.queryParameters['chat_id'] ?? '') ??
+        message.chatId;
+    final botId = button.contactId;
+
+    if (botId == null) {
+      showCustomNotification(context, 'Не удалось открыть приложение');
+      return;
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '[inline-kb] OPEN_APP botId=$botId chatId=$chatId startParam=$startParam',
+      );
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WebAppScreen(
+          title: button.text,
+          loader: () => webAppModule.fetchLaunch(
+            botId,
+            startParam: startParam,
+            chatId: chatId,
+          ),
+        ),
+      ),
+    );
   }
 
   Map? _resolveReactionInfo() {

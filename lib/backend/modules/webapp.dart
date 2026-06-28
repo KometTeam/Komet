@@ -24,12 +24,18 @@ class WebAppModule {
 
   WebAppModule(this._api);
 
-  Future<WebAppLaunch> fetchLaunch(int botId) async {
+  Future<WebAppLaunch> fetchLaunch(
+    int botId, {
+    String? startParam,
+    int? chatId,
+  }) async {
     if (_api.state != SessionState.online) {
       throw const WebAppUnavailable('Нет соединения с сервером');
     }
     final packet = await _api.sendRequest(Opcode.webAppInitData, {
       'botId': botId,
+      'startParam': ?startParam,
+      'chatId': ?chatId,
     });
     if (!packet.isOk) {
       throw const WebAppUnavailable('Не удалось открыть мини-приложение');

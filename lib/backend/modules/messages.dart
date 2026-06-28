@@ -333,6 +333,8 @@ class ReplyInfo {
           return 'Ссылка';
         case AttachmentType.control:
           return '';
+        case AttachmentType.inlineKeyboard:
+          return '';
       }
     }
     return '';
@@ -869,6 +871,28 @@ class MessagesModule {
 
     final response = await _api.sendRequest(Opcode.msgDelete, payload);
     return response.isOk;
+  }
+
+  Future<Map<String, dynamic>?> sendButtonCallback({
+    required int chatId,
+    required String messageId,
+    required String callbackId,
+    String? payload,
+  }) async {
+    final mid = int.tryParse(messageId);
+    if (mid == null) return null;
+
+    final request = {
+      'chatId': chatId,
+      'messageId': mid,
+      'callbackId': callbackId,
+      'payload': ?payload,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSendCallback, request);
+    if (!response.isOk) return null;
+    final data = response.payload;
+    return data is Map ? Map<String, dynamic>.from(data) : null;
   }
 
   Future<TranscriptionResult> requestTranscription(
