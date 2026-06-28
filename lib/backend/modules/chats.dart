@@ -7,6 +7,7 @@ import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/cache/info_cache.dart';
+import '../../core/cache/message_session_cache.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -1517,6 +1518,35 @@ class ChatsModule {
     } catch (e) {
       logger.w('deleteChat $chatId: $e');
       return 'Не удалось удалить чат';
+    }
+  }
+
+  static Future<String?> clearHistory(
+    Api api, {
+    required int chatId,
+    required int lastEventTime,
+    bool forAll = false,
+  }) async {
+    try {
+      await api.sendRequest(Opcode.chatClear, {
+        'chatId': chatId,
+        'lastEventTime': lastEventTime,
+        'forAll': forAll,
+      });
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        await AppDatabase.clearMessages(accountId, chatId);
+        MessageSessionCache.remove(accountId, chatId);
+        _historyFetched.remove(chatId);
+        await reconcileLastMessage(accountId, chatId);
+      }
+      return null;
+    } on PacketError catch (e) {
+      logger.w('clearHistory $chatId: ${e.message}');
+      return e.message;
+    } catch (e) {
+      logger.w('clearHistory $chatId: $e');
+      return 'Не удалось очистить историю';
     }
   }
 

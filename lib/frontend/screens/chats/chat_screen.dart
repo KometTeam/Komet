@@ -2349,15 +2349,91 @@ class _ChatScreenState extends State<ChatScreen>
         ChatMenuItem(
           icon: Symbols.mop,
           label: 'Очистить историю',
-          onTap: () {},
+          onTap: _clearHistory,
         ),
         ChatMenuItem(
           icon: Symbols.delete,
           label: 'Удалить чат',
-          onTap: () {},
+          onTap: _deleteChat,
         ),
       ],
     );
+  }
+
+  Future<bool?> _showConfirmDialog({
+    required String title,
+    required String body,
+    required String confirmLabel,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cs.surfaceContainerHigh,
+        title: Text(title),
+        content: Text(
+          body,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmLabel, style: TextStyle(color: cs.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearHistory() async {
+    final confirmed = await _showConfirmDialog(
+      title: 'Очистить историю',
+      body: 'Все сообщения в этом чате будут удалены без возможности '
+          'восстановления.',
+      confirmLabel: 'Очистить',
+    );
+    if (!mounted || confirmed != true) return;
+    final err = await ChatsModule.clearHistory(
+      api,
+      chatId: widget.chatId,
+      lastEventTime: chat?.lastEventTime ?? 0,
+    );
+    if (!mounted) return;
+    if (err != null) {
+      showCustomNotification(context, err);
+      return;
+    }
+    setState(() {
+      _messages = [];
+      _hasMoreHistory = false;
+      _combinedItemsCache = null;
+    });
+    _messagesRev.value++;
+  }
+
+  Future<void> _deleteChat() async {
+    final confirmed = await _showConfirmDialog(
+      title: 'Удалить чат',
+      body: 'Чат будет удалён вместе со всей перепиской.',
+      confirmLabel: 'Удалить',
+    );
+    if (!mounted || confirmed != true) return;
+    final err = await ChatsModule.deleteChat(
+      api,
+      chatId: widget.chatId,
+      lastEventTime: chat?.lastEventTime ?? 0,
+      forAll: false,
+    );
+    if (!mounted) return;
+    if (err != null) {
+      showCustomNotification(context, err);
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   Future<void> _startCall() async {
