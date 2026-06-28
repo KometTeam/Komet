@@ -22,6 +22,7 @@ import '../../core/utils/file_download.dart';
 import '../../core/utils/media_cache.dart';
 import '../../core/utils/download_progress.dart';
 import '../../core/utils/link_opener.dart';
+import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'link_text.dart';
@@ -706,6 +707,11 @@ class MessageBubble extends StatelessWidget {
     BuildContext context,
     InlineKeyboardButton button,
   ) async {
+    if (!webViewSupported) {
+      showCustomNotification(context, 'На вашей платформе это недоступно');
+      return;
+    }
+
     final deeplink = button.webApp != null
         ? Uri.tryParse(button.webApp!)
         : null;

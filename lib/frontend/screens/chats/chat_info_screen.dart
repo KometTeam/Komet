@@ -108,11 +108,24 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           'Ссылки',
         ];
       case 'CHAT':
-        return ['Участники', 'Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+        return [
+          'Участники',
+          if (showInfo) 'Info',
+          'Медиа',
+          'Файлы',
+          'Голосовые',
+          'Ссылки',
+        ];
       case 'CHANNEL':
-        return ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+        return [
+          if (showInfo) 'Info',
+          'Медиа',
+          'Файлы',
+          'Голосовые',
+          'Ссылки',
+        ];
       default:
-        return ['Info'];
+        return [if (showInfo) 'Info'];
     }
   }
 
@@ -199,7 +212,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     if (mounted) {
       setState(() {
         _isLoading = false;
-        if (_selectedTab.isEmpty) _selectedTab = _tabs.first;
+        if (_selectedTab.isEmpty && _tabs.isNotEmpty) _selectedTab = _tabs.first;
       });
     }
   }
