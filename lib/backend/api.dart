@@ -13,6 +13,7 @@ import '../core/transport/connection.dart';
 import '../core/transport/dispatcher.dart';
 import '../core/transport/receiver.dart';
 import '../core/transport/sender.dart';
+import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
 import '../core/utils/logger.dart';
 
@@ -342,6 +343,7 @@ class Api {
         logger.e('PacketReceiver: ошибка распаковки: $e');
         continue;
       }
+      TrafficMonitor.instance.recordIncoming(packet, raw.length);
       if (packet.isError &&
           packet.payload is Map &&
           (packet.payload['message'] == 'FAIL_LOGIN_TOKEN' ||

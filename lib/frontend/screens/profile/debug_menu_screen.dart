@@ -26,6 +26,7 @@ import '../calls/call_screen.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../widgets/connection_status.dart';
 import '../digital_id/digital_id_web_screen.dart';
+import 'traffic_monitor_screen.dart';
 
 class DebugMenuScreen extends StatefulWidget {
   const DebugMenuScreen({super.key});
@@ -494,6 +495,71 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                           );
                         },
                       ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Material(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TrafficMonitorScreen(),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.lan,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Монитор трафика',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Реалтайм: домены, опкоды и payload внутри '
+                                  'сокет-соединения',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Symbols.chevron_right,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             SliverToBoxAdapter(

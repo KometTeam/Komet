@@ -52,6 +52,7 @@ import 'frontend/screens/calls/call_screen.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
+import 'core/transport/traffic_monitor.dart';
 import 'core/transport/vpn_bypass.dart';
 import 'core/storage/token_storage.dart';
 import 'core/utils/haptics.dart';
@@ -128,6 +129,7 @@ void main() async {
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
   final showExtraInfoFuture = AppShowExtraInfo.load();
+  final trafficCaptureFuture = TrafficMonitor.instance.load();
 
   final packageInfo = await packageInfoFuture;
   isOnemeFlavor = packageInfo.packageName == 'ru.oneme.app';
@@ -173,6 +175,7 @@ void main() async {
   AppMediaCacheLimit.current.value = await cacheLimitFuture;
   AppDigitalIdNative.current.value = await digitalIdNativeFuture;
   AppShowExtraInfo.current.value = await showExtraInfoFuture;
+  await trafficCaptureFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,
