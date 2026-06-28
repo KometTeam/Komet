@@ -53,6 +53,7 @@ class CallLogEntry {
   final CallStatus status;
   final int time;
   final int count;
+  final bool isGroup;
 
   const CallLogEntry({
     required this.id,
@@ -63,6 +64,7 @@ class CallLogEntry {
     required this.status,
     required this.time,
     this.count = 1,
+    this.isGroup = false,
   });
 }
 
@@ -197,22 +199,58 @@ class CallsModule {
     if (!response.isOk || response.payload is! Map) return [];
 
     final payload = response.payload as Map<dynamic, dynamic>;
-    return parseHistoryPayload(payload, accountId, currentUserId);
+    return parseHistoryPayload(
+      payload,
+      accountId,
+      currentUserId,
+      resolver: resolveContacts,
+    );
+  }
+
+  Future<Map<int, Map<String, dynamic>>> resolveContacts(List<int> ids) async {
+    if (ids.isEmpty) return const {};
+    final out = <int, Map<String, dynamic>>{};
+    try {
+      final resp = await _api.sendRequest(Opcode.contactInfo, {
+        'contactIds': ids,
+      });
+      final data = resp.payload;
+      final contacts = data is Map ? data['contacts'] : null;
+      if (contacts is List) {
+        for (final c in contacts) {
+          if (c is Map) {
+            final id = c['id'];
+            if (id is int) out[id] = Map<String, dynamic>.from(c);
+          }
+        }
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  Future<bool> deleteHistory(List<int> historyIds) async {
+    if (historyIds.isEmpty) return true;
+    final response = await _api.sendRequest(Opcode.videoChatDeleteHistory, {
+      'historyIds': historyIds,
+    });
+    return response.isOk;
   }
 
   /// Парсинг истории звонков (opcode 79: videoChatHistory)
   static Future<List<CallLogEntry>> parseHistoryPayload(
     Map<dynamic, dynamic> payload,
     int accountId,
-    int currentUserId,
-  ) async {
+    int currentUserId, {
+    Future<Map<int, Map<String, dynamic>>> Function(List<int> ids)? resolver,
+  }) async {
     final history = payload['history'];
     if (history is! List || history.isEmpty) return [];
 
     final recentContacts = await ContactsModule.getContacts(accountId);
     final contactsMap = {for (final c in recentContacts) c.id: c};
 
-    final List<CallLogEntry> extractedCalls = [];
+    final parsed =
+        <({int peerId, CallStatus status, int time, String id})>[];
 
     for (final item in history.whereType<Map>()) {
       final msg = item['message'];
@@ -241,31 +279,85 @@ class CallsModule {
         peerId = senderId;
       }
 
-      final contact = contactsMap[peerId];
-      final status = _parseCallStatus(callAttach, isOutgoing);
-      final time = (msg['time'] as int?) ?? 0;
-      final msgId =
-          msg['id']?.toString() ??
-          DateTime.now().millisecondsSinceEpoch.toString();
+      parsed.add((
+        peerId: peerId,
+        status: _parseCallStatus(callAttach, isOutgoing),
+        time: (msg['time'] as int?) ?? 0,
+        id:
+            msg['id']?.toString() ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+      ));
+    }
 
-      final name = (contact != null && contact.firstName.isNotEmpty)
-          ? '${contact.firstName} ${contact.lastName ?? ''}'.trim()
-          : 'Неизвестный';
+    bool localResolved(int id) {
+      final c = contactsMap[id];
+      return c != null && c.firstName.isNotEmpty;
+    }
+
+    final unresolvedIds = parsed
+        .map((e) => e.peerId)
+        .where((id) => id != 0 && !localResolved(id))
+        .toSet()
+        .toList();
+
+    var fetched = const <int, Map<String, dynamic>>{};
+    if (unresolvedIds.isNotEmpty && resolver != null) {
+      fetched = await resolver(unresolvedIds);
+    }
+
+    final List<CallLogEntry> extractedCalls = [];
+    for (final e in parsed) {
+      final contact = contactsMap[e.peerId];
+      String name;
+      String? avatarUrl;
+      bool isGroup = false;
+      if (contact != null && contact.firstName.isNotEmpty) {
+        name = '${contact.firstName} ${contact.lastName ?? ''}'.trim();
+        avatarUrl = contact.baseUrl;
+      } else {
+        final info = fetched[e.peerId];
+        final resolved = _nameFromInfo(info);
+        if (resolved != null) {
+          name = resolved;
+          avatarUrl = (info?['baseUrl'] as String?) ?? contact?.baseUrl;
+        } else {
+          name = 'Групповой звонок';
+          isGroup = true;
+        }
+      }
 
       extractedCalls.add(
         CallLogEntry(
-          id: msgId,
+          id: e.id,
           accountId: accountId,
-          peerId: peerId,
+          peerId: e.peerId,
           name: name,
-          avatarUrl: contact?.baseUrl,
-          status: status,
-          time: time,
+          avatarUrl: avatarUrl,
+          status: e.status,
+          time: e.time,
+          isGroup: isGroup,
         ),
       );
     }
 
     return extractedCalls;
+  }
+
+  static String? _nameFromInfo(Map<String, dynamic>? info) {
+    if (info == null) return null;
+    final names = info['names'];
+    if (names is List && names.isNotEmpty) {
+      final n = names.first;
+      if (n is Map) {
+        final full = n['name']?.toString();
+        if (full != null && full.isNotEmpty) return full;
+        final first = n['firstName']?.toString() ?? '';
+        final last = n['lastName']?.toString() ?? '';
+        final combined = '$first $last'.trim();
+        if (combined.isNotEmpty) return combined;
+      }
+    }
+    return null;
   }
 
   static CallStatus _parseCallStatus(

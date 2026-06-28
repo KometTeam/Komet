@@ -154,8 +154,15 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
     final totalItems = _accounts.length;
     final height = _vPad * 2 + totalItems * _itemHeight + _addItemHeight;
 
-    double menuX = widget.tapPoint.dx - _menuWidth / 2;
-    menuX = menuX.clamp(_hMargin, screen.width - _menuWidth - _hMargin);
+    final maxWidth = screen.width - 2 * _hMargin;
+    final menuWidth = maxWidth <= 0
+        ? screen.width
+        : (_menuWidth > maxWidth ? maxWidth : _menuWidth);
+
+    double menuX = widget.tapPoint.dx - menuWidth / 2;
+    final maxX = screen.width - menuWidth - _hMargin;
+    if (menuX > maxX) menuX = maxX;
+    if (menuX < _hMargin) menuX = _hMargin;
 
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final maxBottom = screen.height - bottomInset - 88;
@@ -166,19 +173,19 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
     double menuY = menuBottom - height;
     if (menuY < 24) menuY = 24;
 
-    _menuRect = Rect.fromLTWH(menuX, menuY, _menuWidth, height);
+    _menuRect = Rect.fromLTWH(menuX, menuY, menuWidth, height);
     _itemHitRects = [
       for (int i = 0; i < totalItems; i++)
         Rect.fromLTWH(
           menuX,
           menuY + _vPad + i * _itemHeight,
-          _menuWidth,
+          menuWidth,
           _itemHeight,
         ),
       Rect.fromLTWH(
         menuX,
         menuY + _vPad + totalItems * _itemHeight,
-        _menuWidth,
+        menuWidth,
         _addItemHeight,
       ),
     ];

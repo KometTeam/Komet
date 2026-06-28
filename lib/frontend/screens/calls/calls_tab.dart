@@ -6,10 +6,13 @@ import '../../../main.dart' show api, accountModule;
 import '../../../backend/modules/account.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/calls/call_controller.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/chat_menu_overlay.dart';
+import 'call_screen.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -20,6 +23,7 @@ class CallsTab extends StatefulWidget {
 
 class _CallsTabState extends State<CallsTab> {
   List<CallLogEntry> _calls = [];
+  final Set<String> _removing = {};
   bool _isLoading = true;
   int _selectedTabIndex = 0; // 0 for 'Все', 1 for 'Пропущенные'
   StreamSubscription<LoginStatus>? _loginSub;
@@ -79,6 +83,7 @@ class _CallsTabState extends State<CallsTab> {
             status: last.status,
             time: last.time,
             count: last.count + 1,
+            isGroup: last.isGroup,
           ),
         );
       } else {
@@ -154,16 +159,23 @@ class _CallsTabState extends State<CallsTab> {
                 height: 48,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
+                  color: call.isGroup ? cs.primaryContainer : null,
                   border: Border.all(
                     color: cs.primary.withValues(alpha: 0.1),
                     width: 1,
                   ),
                 ),
-                child: KometAvatar(
-                  name: call.name,
-                  imageUrl: call.avatarUrl,
-                  size: 48,
-                ),
+                child: call.isGroup
+                    ? Icon(
+                        Symbols.groups,
+                        color: cs.onPrimaryContainer,
+                        size: 26,
+                      )
+                    : KometAvatar(
+                        name: call.name,
+                        imageUrl: call.avatarUrl,
+                        size: 48,
+                      ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -244,15 +256,67 @@ class _CallsTabState extends State<CallsTab> {
           icon: Symbols.delete,
           label: 'Удалить',
           destructive: true,
-          onTap: () {},
+          onTap: () => _deleteCall(call),
         ),
-        ChatMenuItem(
-          icon: Symbols.call,
-          label: 'Перезвонить',
-          onTap: () {},
-        ),
+        if (!call.isGroup)
+          ChatMenuItem(
+            icon: Symbols.call,
+            label: 'Перезвонить',
+            onTap: () => _callBack(call),
+          ),
       ],
     );
+  }
+
+  Future<void> _deleteCall(CallLogEntry call) async {
+    setState(() => _removing.add(call.id));
+    final historyId = int.tryParse(call.id);
+    if (historyId != null) {
+      unawaited(CallsModule(api).deleteHistory([historyId]));
+    }
+    await Future.delayed(const Duration(milliseconds: 260));
+    if (!mounted) return;
+    setState(() {
+      _calls.removeWhere((c) => c.id == call.id);
+      _removing.remove(call.id);
+    });
+  }
+
+  Future<void> _callBack(CallLogEntry call) async {
+    if (call.peerId <= 0) {
+      showCustomNotification(context, 'Не удалось определить собеседника');
+      return;
+    }
+    final navigator = Navigator.of(context);
+    final avatarUrl = (call.avatarUrl?.isNotEmpty ?? false)
+        ? call.avatarUrl
+        : null;
+    final active = CallController.instance.activeSession;
+    if (active != null) {
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              CallScreen(name: call.name, avatarUrl: avatarUrl, session: active),
+        ),
+      );
+      return;
+    }
+    try {
+      final session = await CallController.instance.startOutgoing(call.peerId);
+      if (!mounted) return;
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            name: call.name,
+            avatarUrl: avatarUrl,
+            session: session,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Не удалось начать звонок');
+    }
   }
 
   Widget _buildTabItem(String label, int index, ColorScheme cs) {
@@ -369,10 +433,11 @@ class _CallsTabState extends State<CallsTab> {
                       padding: const EdgeInsets.only(bottom: 120),
                       itemCount: filteredCalls.length,
                       itemBuilder: (context, index) {
-                        return _buildCallItem(
-                          context,
-                          cs,
-                          filteredCalls[index],
+                        final call = filteredCalls[index];
+                        return _RemovableCallEntry(
+                          key: ValueKey(call.id),
+                          removing: _removing.contains(call.id),
+                          child: _buildCallItem(context, cs, call),
                         );
                       },
                     ),
@@ -380,6 +445,54 @@ class _CallsTabState extends State<CallsTab> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RemovableCallEntry extends StatefulWidget {
+  final bool removing;
+  final Widget child;
+
+  const _RemovableCallEntry({
+    required Key key,
+    required this.removing,
+    required this.child,
+  }) : super(key: key);
+
+  @override
+  State<_RemovableCallEntry> createState() => _RemovableCallEntryState();
+}
+
+class _RemovableCallEntryState extends State<_RemovableCallEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1.0,
+  );
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+
+  @override
+  void didUpdateWidget(covariant _RemovableCallEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.removing && !oldWidget.removing) _controller.reverse();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizeTransition(
+      sizeFactor: _animation,
+      alignment: Alignment.topCenter,
+      child: FadeTransition(opacity: _animation, child: widget.child),
     );
   }
 }
