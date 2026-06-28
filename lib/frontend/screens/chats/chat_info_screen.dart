@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
+import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/swipe_route.dart';
+import 'chat_screen.dart';
 
 class _MemberInfo {
   final int id;
@@ -34,12 +37,15 @@ class ChatInfoScreen extends StatefulWidget {
   final String imageUrl;
   final String chatType;
 
+  final int? dialogPeerId;
+
   const ChatInfoScreen({
     super.key,
     required this.chatId,
     required this.name,
     required this.imageUrl,
     required this.chatType,
+    this.dialogPeerId,
   });
 
   @override
@@ -81,11 +87,26 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   List<String> get _tabs {
+    final showInfo = AppShowExtraInfo.current.value;
     switch (widget.chatType) {
       case 'DIALOG':
-        return _isBot
-            ? ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки']
-            : ['Общие чаты', 'Медиа', 'Info', 'Файлы', 'Голосовые', 'Ссылки'];
+        if (_isBot) {
+          return [
+            if (showInfo) 'Info',
+            'Медиа',
+            'Файлы',
+            'Голосовые',
+            'Ссылки',
+          ];
+        }
+        return [
+          'Общие чаты',
+          'Медиа',
+          if (showInfo) 'Info',
+          'Файлы',
+          'Голосовые',
+          'Ссылки',
+        ];
       case 'CHAT':
         return ['Участники', 'Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
       case 'CHANNEL':
@@ -101,19 +122,18 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
     final info = await ChatInfoFetch.get(widget.chatId);
     if (!mounted) return;
-    if (info == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
     _chatData = info;
 
     if (widget.chatType == 'DIALOG') {
-      final parts = _chatData!['participants'] as Map? ?? {};
-      for (final key in parts.keys) {
-        final id = key is int ? key : int.tryParse(key.toString());
-        if (id != null && id != _myId) {
-          _otherId = id;
-          break;
+      _otherId = widget.dialogPeerId;
+      if (_otherId == null && info != null) {
+        final parts = info['participants'] as Map? ?? {};
+        for (final key in parts.keys) {
+          final id = key is int ? key : int.tryParse(key.toString());
+          if (id != null && id != _myId) {
+            _otherId = id;
+            break;
+          }
         }
       }
 
@@ -133,6 +153,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           _isOnline = st == 1;
         }
       }
+    } else if (info == null) {
+      setState(() => _isLoading = false);
+      return;
     } else if (widget.chatType == 'CHAT') {
       final parts = _chatData!['participants'] as Map? ?? {};
       final admins = _chatData!['adminParticipants'] as Map? ?? {};
@@ -186,11 +209,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
-    final bg = isDark ? Colors.black : cs.surface;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: cs.surface,
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: const ConnectionSpinner(),
       body: SafeArea(
@@ -292,31 +313,31 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   // ─── ACTION BUTTONS ──────────────────────────────────────────────────────
 
   Widget _buildActions(ColorScheme cs) {
-    final List<({IconData icon, String label})> btns;
+    final List<({IconData icon, String label, VoidCallback? onTap})> btns;
 
     if (widget.chatType == 'DIALOG') {
       if (_isBot) {
         btns = [
-          (icon: Icons.chat_bubble, label: 'Чат'),
-          (icon: Icons.notifications, label: 'Звук'),
+          (icon: Icons.chat_bubble, label: 'Чат', onTap: _openChat),
+          (icon: Icons.notifications, label: 'Звук', onTap: null),
         ];
       } else {
         btns = [
-          (icon: Icons.chat_bubble, label: 'Чат'),
-          (icon: Icons.notifications, label: 'Звук'),
-          (icon: Icons.call, label: 'Звонок'),
+          (icon: Icons.chat_bubble, label: 'Чат', onTap: _openChat),
+          (icon: Icons.notifications, label: 'Звук', onTap: null),
+          (icon: Icons.call, label: 'Звонок', onTap: null),
         ];
       }
     } else if (widget.chatType == 'CHANNEL') {
       btns = [
-        (icon: Icons.notifications, label: 'Звук'),
-        (icon: Icons.exit_to_app, label: 'Покинуть'),
+        (icon: Icons.notifications, label: 'Звук', onTap: null),
+        (icon: Icons.exit_to_app, label: 'Покинуть', onTap: null),
       ];
     } else {
       btns = [
-        (icon: Icons.chat_bubble, label: 'Чат'),
-        (icon: Icons.notifications, label: 'Звук'),
-        (icon: Icons.exit_to_app, label: 'Покинуть'),
+        (icon: Icons.chat_bubble, label: 'Чат', onTap: null),
+        (icon: Icons.notifications, label: 'Звук', onTap: null),
+        (icon: Icons.exit_to_app, label: 'Покинуть', onTap: null),
       ];
     }
 
@@ -325,7 +346,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Row(
         children: [
           for (int i = 0; i < btns.length; i++) ...[
-            _actionBtn(cs, btns[i].icon, btns[i].label),
+            _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
             if (i < btns.length - 1) const SizedBox(width: 8),
           ],
         ],
@@ -333,9 +354,27 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  Widget _actionBtn(ColorScheme cs, IconData icon, String label) {
+  void _openChat() {
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: widget.chatId,
+        name: widget.name,
+        imageUrl: widget.imageUrl,
+        chatType: 'DIALOG',
+      ),
+    );
+  }
+
+  Widget _actionBtn(
+    ColorScheme cs,
+    IconData icon,
+    String label, [
+    VoidCallback? onTap,
+  ]) {
     return Expanded(
       child: GlossyPill(
+        onTap: onTap,
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -376,6 +415,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           items.add(
             _simpleInfoCard(cs, 'Номер телефона', formatPhone(phoneInt)!),
           );
+        }
+        final bio =
+            (_contactData?['description'] as String?) ??
+            (_contactData?['about'] as String?);
+        if (bio != null && bio.isNotEmpty) {
+          if (items.isNotEmpty) items.add(const SizedBox(height: 8));
+          items.add(_simpleInfoCard(cs, 'О себе', bio));
         }
       }
     } else if (widget.chatType == 'CHANNEL') {
@@ -644,17 +690,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildInfoTabContent(ColorScheme cs) {
     final items = <Widget>[];
-
-    if (widget.chatType == 'DIALOG' && !_isBot) {
-      final bio =
-          (_contactData?['description'] as String?) ??
-          (_contactData?['about'] as String?);
-      if (bio != null && bio.isNotEmpty) {
-        items
-          ..add(_infoCard(cs, 'О себе', bio))
-          ..add(const SizedBox(height: 8));
-      }
-    }
 
     if (widget.chatType == 'CHAT') {
       final desc = _chatData?['description'] as String?;

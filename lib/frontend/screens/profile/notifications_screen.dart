@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/utils/haptics.dart';
 import '../../widgets/connection_status.dart';
 
 import '../../widgets/glossy_pill.dart';
@@ -19,7 +20,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _personalChatsEnabled = true;
   bool _groupsEnabled = true;
   bool _channelsEnabled = true;
+  bool _hapticsEnabled = Haptics.enabled;
   String _selectedSound = 'По умолчанию';
+
+  Future<void> _setHaptics(bool value) async {
+    await Haptics.setEnabled(value);
+    if (value) Haptics.success();
+    if (mounted) setState(() => _hapticsEnabled = value);
+  }
 
   static const List<String> _sounds = [
     'По умолчанию',
@@ -160,6 +168,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 label: 'Звук уведомления',
                 trailingText: _selectedSound,
                 onTap: _pickSound,
+              ),
+            ]),
+            const SizedBox(height: 20),
+            const SectionHeader(
+              'Тактильная отдача',
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
+            _card(cs, [
+              _toggleRow(
+                cs,
+                icon: Symbols.vibration,
+                label: 'Тактильная отдача',
+                subtitle: 'Виброотклик при действиях в приложении',
+                value: _hapticsEnabled,
+                onChanged: _setHaptics,
               ),
             ]),
           ],

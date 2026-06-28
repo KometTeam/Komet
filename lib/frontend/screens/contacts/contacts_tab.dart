@@ -3,13 +3,40 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../main.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
-import 'contact_profile_screen.dart';
+import '../chats/chat_info_screen.dart';
 import 'nfc_exchange_sheet.dart';
+
+Future<void> openContactDialogProfile(
+  BuildContext context, {
+  required int contactId,
+  required String name,
+  String? avatarUrl,
+}) async {
+  final accountId = await TokenStorage.getActiveAccountId();
+  final existing = accountId == null
+      ? null
+      : await AppDatabase.findDialogChatByParticipant(accountId, contactId);
+  final chatId = existing ?? ((accountId ?? 0) ^ contactId);
+  if (!context.mounted) return;
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ChatInfoScreen(
+        chatId: chatId,
+        name: name,
+        imageUrl: avatarUrl ?? '',
+        chatType: 'DIALOG',
+        dialogPeerId: contactId,
+      ),
+    ),
+  );
+}
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key});
@@ -100,18 +127,12 @@ class _ContactsTabState extends State<ContactsTab> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ContactProfileScreen(
-                contactId: contact.id,
-                initialName: nameToDisplay,
-                initialAvatarUrl: contact.baseUrl,
-              ),
-            ),
-          );
-        },
+        onTap: () => openContactDialogProfile(
+          context,
+          contactId: contact.id,
+          name: nameToDisplay,
+          avatarUrl: contact.baseUrl,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
@@ -311,13 +332,21 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
       }
       if (!mounted) return;
       final navigator = Navigator.of(context);
+      final accountId = await TokenStorage.getActiveAccountId();
+      final existing = accountId == null
+          ? null
+          : await AppDatabase.findDialogChatByParticipant(accountId, id);
+      final chatId = existing ?? ((accountId ?? 0) ^ id);
+      if (!mounted) return;
       navigator.pop();
       navigator.push(
         MaterialPageRoute(
-          builder: (_) => ContactProfileScreen(
-            contactId: id,
-            initialName: name,
-            initialAvatarUrl: raw['baseUrl'] as String?,
+          builder: (_) => ChatInfoScreen(
+            chatId: chatId,
+            name: name ?? 'User #$id',
+            imageUrl: raw['baseUrl'] as String? ?? '',
+            chatType: 'DIALOG',
+            dialogPeerId: id,
           ),
         ),
       );

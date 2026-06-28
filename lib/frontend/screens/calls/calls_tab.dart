@@ -9,6 +9,7 @@ import '../../../core/utils/format.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/chat_menu_overlay.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -206,10 +207,51 @@ class _CallsTabState extends State<CallsTab> {
                   fontSize: 12,
                 ),
               ),
+              const SizedBox(width: 4),
+              Builder(
+                builder: (btnContext) => IconButton(
+                  icon: Icon(
+                    Symbols.more_vert,
+                    color: cs.onSurfaceVariant,
+                    size: 20,
+                    weight: 400,
+                  ),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  onPressed: () => _showCallMenu(btnContext, call),
+                ),
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _showCallMenu(BuildContext anchorContext, CallLogEntry call) {
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final anchorRect = box.localToGlobal(Offset.zero) & box.size;
+    showChatMenu(
+      context: context,
+      anchorRect: anchorRect,
+      items: [
+        ChatMenuItem(
+          icon: Symbols.delete,
+          label: 'Удалить',
+          destructive: true,
+          onTap: () {},
+        ),
+        ChatMenuItem(
+          icon: Symbols.call,
+          label: 'Перезвонить',
+          onTap: () {},
+        ),
+      ],
     );
   }
 

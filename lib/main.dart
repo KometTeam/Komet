@@ -17,6 +17,7 @@ import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
+import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/komet_settings.dart';
 import 'core/config/app_bubble_shape.dart';
@@ -126,6 +127,7 @@ void main() async {
   final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
+  final showExtraInfoFuture = AppShowExtraInfo.load();
 
   final packageInfo = await packageInfoFuture;
   isOnemeFlavor = packageInfo.packageName == 'ru.oneme.app';
@@ -170,6 +172,7 @@ void main() async {
   AppLinkPreview.current.value = await linkPreviewFuture;
   AppMediaCacheLimit.current.value = await cacheLimitFuture;
   AppDigitalIdNative.current.value = await digitalIdNativeFuture;
+  AppShowExtraInfo.current.value = await showExtraInfoFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,

@@ -7,10 +7,10 @@ import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../core/cache/self_presence.dart';
 import '../../../core/config/komet_settings.dart';
+import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/format.dart';
-import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
@@ -27,7 +27,6 @@ import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_screen.dart';
-import 'performance_screen.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
@@ -52,7 +51,6 @@ class _SettingsTabState extends State<SettingsTab> {
   int _versionSecretTapCount = 0;
   Timer? _versionSecretTapResetTimer;
   StreamSubscription? _profileUpdateSub;
-  bool _hapticsEnabled = Haptics.enabled;
 
   @override
   void initState() {
@@ -104,13 +102,6 @@ class _SettingsTabState extends State<SettingsTab> {
     setState(() {
       _appVersionLabel = 'Версия ${info.version} (${info.buildNumber})';
     });
-  }
-
-  Future<void> _setHaptics(bool value) async {
-    await Haptics.setEnabled(value);
-    // Let the user *feel* the confirmation the instant they switch it on.
-    if (value) Haptics.success();
-    if (mounted) setState(() => _hapticsEnabled = value);
   }
 
   Future<void> _openCloudStorage(BuildContext context) async {
@@ -256,67 +247,60 @@ class _SettingsTabState extends State<SettingsTab> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: _buildSection(
-                  context,
-                  cs,
-                  items: [
-                    _SettingsItem(
-                      icon: Symbols.badge,
-                      label: 'Цифровой ID',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                AppDigitalIdNative.current.value ||
-                                    !webViewSupported
-                                ? const DigitalIdScreen()
-                                : const DigitalIdWebScreen(),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: AppShowExtraInfo.current,
+                  builder: (context, showExtraInfo, _) {
+                    return _buildSection(
+                      context,
+                      cs,
+                      items: [
+                        _SettingsItem(
+                          icon: Symbols.badge,
+                          label: 'Цифровой ID',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    AppDigitalIdNative.current.value ||
+                                        !webViewSupported
+                                    ? const DigitalIdScreen()
+                                    : const DigitalIdWebScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.language,
+                          label: 'Войти в Сферум',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => WebAppScreen(
+                                  title: 'Сферум',
+                                  loader: () => webAppModule.fetchSferum(),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        if (showExtraInfo)
+                          _SettingsItem(
+                            icon: Symbols.info,
+                            label: 'Info',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const InfoScreen(),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.language,
-                      label: 'Войти в Сферум',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => WebAppScreen(
-                              title: 'Сферум',
-                              loader: () => webAppModule.fetchSferum(),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      // Иконку кометы блять дайте!!!!!!!1
-                      icon: Symbols.auto_awesome,
-                      label: 'Komet',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const KometSettingsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.info,
-                      label: 'Info',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const InfoScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -335,18 +319,6 @@ class _SettingsTabState extends State<SettingsTab> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => const CustomizationScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.speed,
-                      label: 'Производительность',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const PerformanceScreen(),
                           ),
                         );
                       },
@@ -373,12 +345,6 @@ class _SettingsTabState extends State<SettingsTab> {
                           ),
                         );
                       },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.vibration,
-                      label: 'Тактильная отдача',
-                      toggleValue: _hapticsEnabled,
-                      onToggle: _setHaptics,
                     ),
                     _SettingsItem(
                       icon: Symbols.cloud,
@@ -505,6 +471,18 @@ class _SettingsTabState extends State<SettingsTab> {
                       label: 'Выйти из аккаунта',
                       tintColor: cs.error,
                       onTap: _confirmLogout,
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.auto_awesome,
+                      label: 'Komet',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const KometSettingsScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -737,9 +715,7 @@ class _SettingsTabState extends State<SettingsTab> {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: item.isToggle
-                ? () => item.onToggle!(!(item.toggleValue ?? false))
-                : (item.onTap ?? () {}),
+            onTap: item.onTap ?? () {},
             borderRadius: isLast
                 ? const BorderRadius.vertical(bottom: Radius.circular(20))
                 : null,
@@ -764,18 +740,12 @@ class _SettingsTabState extends State<SettingsTab> {
                       ),
                     ),
                   ),
-                  if (item.isToggle)
-                    Switch.adaptive(
-                      value: item.toggleValue ?? false,
-                      onChanged: item.onToggle,
-                    )
-                  else
-                    Icon(
-                      Symbols.chevron_right,
-                      color: cs.outline,
-                      size: 20,
-                      weight: 400,
-                    ),
+                  Icon(
+                    Symbols.chevron_right,
+                    color: cs.outline,
+                    size: 20,
+                    weight: 400,
+                  ),
                 ],
               ),
             ),
@@ -801,21 +771,12 @@ class _SettingsItem {
   final VoidCallback? onTap;
   final Color? tintColor;
 
-  /// When [onToggle] is set the row renders a trailing switch instead of a
-  /// chevron, and [toggleValue] reflects its current state.
-  final bool? toggleValue;
-  final ValueChanged<bool>? onToggle;
-
   const _SettingsItem({
     required this.icon,
     required this.label,
     this.onTap,
     this.tintColor,
-    this.toggleValue,
-    this.onToggle,
   });
-
-  bool get isToggle => onToggle != null;
 }
 
 class _PhoneSpoiler extends StatefulWidget {
