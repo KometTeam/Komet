@@ -56,6 +56,7 @@ import 'core/transport/traffic_monitor.dart';
 import 'core/transport/vpn_bypass.dart';
 import 'core/storage/token_storage.dart';
 import 'core/utils/haptics.dart';
+import 'core/utils/debug_session_log.dart';
 import 'core/protocol/packet.dart';
 import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/screens/auth/login_screen.dart';
@@ -130,6 +131,7 @@ void main() async {
   final digitalIdNativeFuture = AppDigitalIdNative.load();
   final showExtraInfoFuture = AppShowExtraInfo.load();
   final trafficCaptureFuture = TrafficMonitor.instance.load();
+  final debugLogFuture = DebugSessionLog.instance.init();
 
   final packageInfo = await packageInfoFuture;
   isOnemeFlavor = packageInfo.packageName == 'ru.oneme.app';
@@ -176,6 +178,7 @@ void main() async {
   AppDigitalIdNative.current.value = await digitalIdNativeFuture;
   AppShowExtraInfo.current.value = await showExtraInfoFuture;
   await trafficCaptureFuture;
+  await debugLogFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,
@@ -404,6 +407,11 @@ class KometAppState extends State<KometApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      DebugSessionLog.instance.flushNow();
+    }
     if (state != AppLifecycleState.resumed) return;
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
     _rescheduleSwitch();

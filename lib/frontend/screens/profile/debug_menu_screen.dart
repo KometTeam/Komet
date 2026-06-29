@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -16,6 +18,8 @@ import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/transport/traffic_monitor.dart';
+import '../../../core/utils/debug_session_log.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_cache.dart';
@@ -68,6 +72,44 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   Future<void> _loadCacheSize() async {
     final size = await MediaCache.currentSize();
     if (mounted) setState(() => _cacheSize = size);
+  }
+
+  Future<void> _exportDebugLog() async {
+    final content = await DebugSessionLog.instance.buildExport(
+      endpoint: TrafficMonitor.instance.activeEndpoint,
+    );
+    if (content == null) {
+      if (mounted) showCustomNotification(context, 'Нет запросов для лога');
+      return;
+    }
+    final bytes = Uint8List.fromList(utf8.encode(content));
+    final fileName = 'komet_debug_${_fileStamp(DateTime.now())}.txt';
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    try {
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Сохранить отладочный лог',
+        fileName: fileName,
+        type: FileType.any,
+        bytes: isMobile ? bytes : null,
+      );
+      if (path == null) return;
+      if (!isMobile) {
+        await File(path).writeAsBytes(bytes);
+      }
+      if (mounted) {
+        showCustomNotification(context, 'Лог сохранён: $path');
+      }
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(context, 'Не удалось сохранить лог: $e');
+      }
+    }
+  }
+
+  String _fileStamp(DateTime t) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${t.year}${two(t.month)}${two(t.day)}_'
+        '${two(t.hour)}${two(t.minute)}${two(t.second)}';
   }
 
   Future<void> _clearCache() async {
@@ -253,6 +295,65 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Material(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _exportDebugLog,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.bug_report,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Отладочный лог',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Все запросы за последние 3 захода в приложение',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Symbols.save_alt,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: appState == null
                     ? const SizedBox.shrink()
                     : ValueListenableBuilder<bool>(

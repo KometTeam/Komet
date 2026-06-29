@@ -15,6 +15,7 @@ import '../core/transport/receiver.dart';
 import '../core/transport/sender.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
+import '../core/utils/debug_session_log.dart';
 import '../core/utils/logger.dart';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -291,12 +292,27 @@ class Api {
   /// Отправляет запрос и ждёт ответ от сервера.
   Future<Packet> sendRequest(int opcode, Map<dynamic, dynamic> payload) {
     final seq = _sender.send(_connection, opcode, payload);
+    DebugSessionLog.instance.recordRequest(opcode, seq, payload);
     return _dispatcher
         .registerPending(seq)
         .timeout(
           ServerConfig.requestTimeout,
           onTimeout: () =>
               throw TimeoutException('${Opcode.name(opcode)} таймаут'),
+        )
+        .then(
+          (packet) {
+            DebugSessionLog.instance.recordResponse(
+              seq,
+              packet.cmd,
+              packet.payload,
+            );
+            return packet;
+          },
+          onError: (Object e, StackTrace st) {
+            DebugSessionLog.instance.recordError(seq, e);
+            Error.throwWithStackTrace(e, st);
+          },
         );
   }
 
