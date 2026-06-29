@@ -467,13 +467,12 @@ class _SettingsTabState extends State<SettingsTab> {
                   cs,
                   items: [
                     _SettingsItem(
-                      icon: Symbols.logout,
-                      label: 'Выйти из аккаунта',
-                      tintColor: cs.error,
-                      onTap: _confirmLogout,
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.auto_awesome,
+                      leading: Image.asset(
+                        'assets/komet.png',
+                        width: 22,
+                        height: 22,
+                        color: cs.onSurfaceVariant,
+                      ),
                       label: 'Komet',
                       onTap: () {
                         Navigator.push(
@@ -483,6 +482,12 @@ class _SettingsTabState extends State<SettingsTab> {
                           ),
                         );
                       },
+                    ),
+                    _SettingsItem(
+                      icon: Symbols.logout,
+                      label: 'Выйти из аккаунта',
+                      tintColor: cs.error,
+                      onTap: _confirmLogout,
                     ),
                   ],
                 ),
@@ -723,12 +728,13 @@ class _SettingsTabState extends State<SettingsTab> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
               child: Row(
                 children: [
-                  Icon(
-                    item.icon,
-                    color: item.tintColor ?? cs.onSurfaceVariant,
-                    size: 22,
-                    weight: 400,
-                  ),
+                  item.leading ??
+                      Icon(
+                        item.icon,
+                        color: item.tintColor ?? cs.onSurfaceVariant,
+                        size: 22,
+                        weight: 400,
+                      ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
@@ -766,13 +772,15 @@ class _SettingsTabState extends State<SettingsTab> {
 }
 
 class _SettingsItem {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? leading;
   final String label;
   final VoidCallback? onTap;
   final Color? tintColor;
 
   const _SettingsItem({
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.label,
     this.onTap,
     this.tintColor,

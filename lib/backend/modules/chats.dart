@@ -312,7 +312,7 @@ class ChatsModule {
     if ((row['unread_count'] as int? ?? 0) == 0) return;
 
     final msgIdNum = int.tryParse(messageId);
-    if (msgIdNum != null) {
+    if (msgIdNum != null && !KometSettings.antiRead.value) {
       try {
         await api.sendRequest(Opcode.chatMark, {
           'type': 'READ_MESSAGE',
