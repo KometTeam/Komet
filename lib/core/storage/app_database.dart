@@ -190,7 +190,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 14,
+      version: 15,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -243,6 +243,9 @@ class AppDatabase {
           await _addColumnIfMissing(
             db, 'chats_cache', 'in_list', 'INTEGER NOT NULL DEFAULT 1',
           );
+        }
+        if (oldVersion < 15) {
+          await _addColumnIfMissing(db, 'messages', 'edit_history', 'TEXT');
         }
       },
     );
@@ -359,6 +362,7 @@ class AppDatabase {
       status     TEXT,
       payload    TEXT,
       deleted    INTEGER NOT NULL DEFAULT 0,
+      edit_history TEXT,
       PRIMARY KEY (id, account_id),
       FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
     )
@@ -777,6 +781,21 @@ class AppDatabase {
       'messages',
       where: 'account_id = ? AND chat_id = ?',
       whereArgs: [accountId, chatId],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessagesByIds(
+    int accountId,
+    int chatId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return const [];
+    final db = await _instance;
+    final placeholders = List.filled(messageIds.length, '?').join(',');
+    return db.query(
+      'messages',
+      where: 'account_id = ? AND chat_id = ? AND id IN ($placeholders)',
+      whereArgs: [accountId, chatId, ...messageIds],
     );
   }
 

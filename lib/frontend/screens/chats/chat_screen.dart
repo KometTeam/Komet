@@ -29,6 +29,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
+import '../../../backend/modules/complaints.dart';
 import '../../../core/calls/call_controller.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
@@ -1561,6 +1562,13 @@ class _ChatScreenState extends State<ChatScreen>
     final idx = _messages.indexWhere((m) => m.id == message.id);
     if (idx != -1) {
       final old = _messages[idx];
+      final newHistory = KometSettings.viewRedacted.value
+          ? CachedMessage.appendEditHistory(
+              old.editHistory,
+              old.text,
+              DateTime.now().millisecondsSinceEpoch,
+            )
+          : old.editHistory;
       final edited = CachedMessage(
         id: old.id,
         accountId: old.accountId,
@@ -1572,6 +1580,7 @@ class _ChatScreenState extends State<ChatScreen>
         payload: old.payload,
         attachments: old.attachments,
         isControl: old.isControl,
+        editHistory: newHistory,
       );
       _messages[idx] = edited;
       _bumpMessages();
@@ -2743,6 +2752,49 @@ class _ChatScreenState extends State<ChatScreen>
     return id > 0 ? id : null;
   }
 
+  int _complaintTypeId(String type) {
+    switch (type) {
+      case 'CHANNEL':
+        return 5;
+      case 'CHAT':
+        return 4;
+      default:
+        return 3;
+    }
+  }
+
+  Future<List<({int id, String title})>> _loadReportReasons(int typeId) async {
+    final reasons = await ComplaintsModule.reasonsFor(api, typeId);
+    return reasons.map((r) => (id: r.reasonId, title: r.reasonTitle)).toList();
+  }
+
+  Future<bool> _reportMessage(
+    CachedMessage message,
+    int typeId,
+    int reasonId,
+  ) async {
+    final messageIdNum = int.tryParse(message.id);
+    if (messageIdNum == null) {
+      if (mounted) {
+        showCustomNotification(context, 'Не удалось отправить жалобу');
+      }
+      return false;
+    }
+    final ok = await ComplaintsModule.sendComplaint(
+      api,
+      reasonId: reasonId,
+      typeId: typeId,
+      ids: [messageIdNum],
+      parentId: widget.chatId,
+    );
+    if (!mounted) return ok;
+    showCustomNotification(
+      context,
+      ok ? 'Жалоба отправлена' : 'Не удалось отправить жалобу',
+    );
+    return ok;
+  }
+
   CachedMessage _replaceMessage(
     int index, {
     String? id,
@@ -2761,6 +2813,7 @@ class _ChatScreenState extends State<ChatScreen>
       payload: old.payload,
       attachments: old.attachments,
       isControl: old.isControl,
+      editHistory: old.editHistory,
     );
     _messages[index] = updated;
     _bumpMessages();
@@ -3373,6 +3426,11 @@ class _ChatScreenState extends State<ChatScreen>
                   onAvatarTap: _openSenderProfile,
                 );
 
+                final canReport = !isMe && !message.isControl;
+                final reportTypeId = _complaintTypeId(
+                  chat?.type ?? widget.chatType,
+                );
+
                 final pressable = _SelectableMessageRow(
                   message: message,
                   isMe: isMe,
@@ -3391,6 +3449,13 @@ class _ChatScreenState extends State<ChatScreen>
                   onForward: message.isControl
                       ? null
                       : () => _forwardMessages([message]),
+                  loadReportReasons: canReport
+                      ? () => _loadReportReasons(reportTypeId)
+                      : null,
+                  onReport: canReport
+                      ? (reasonId) =>
+                            _reportMessage(message, reportTypeId, reasonId)
+                      : null,
                   child: bubble,
                 );
 
@@ -5825,6 +5890,8 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
+  final Future<List<({int id, String title})>> Function()? loadReportReasons;
+  final Future<bool> Function(int reasonId)? onReport;
 
   const _SelectableMessageRow({
     required this.child,
@@ -5839,6 +5906,8 @@ class _SelectableMessageRow extends StatefulWidget {
     this.onEdit,
     this.onReply,
     this.onForward,
+    this.loadReportReasons,
+    this.onReport,
   });
 
   @override
@@ -5882,6 +5951,9 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       controller: controller,
       style: AppMessageActionsStyle.current.value,
       interaction: MessageActionsInteraction.tap,
+      editHistory: widget.message.editHistory,
+      loadReportReasons: widget.loadReportReasons,
+      onReport: widget.onReport,
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
       onReply: widget.onReply,
@@ -5909,6 +5981,9 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       controller: controller,
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
+      editHistory: widget.message.editHistory,
+      loadReportReasons: widget.loadReportReasons,
+      onReport: widget.onReport,
       onDelete: widget.onDelete,
       onEdit: widget.onEdit,
       onReply: widget.onReply,

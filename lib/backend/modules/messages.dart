@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
+import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -365,6 +366,7 @@ class CachedMessage {
   final List<MessageAttachment>? attachments;
   final bool isControl;
   final bool deleted;
+  final List<Map<String, dynamic>>? editHistory;
 
   const CachedMessage({
     required this.id,
@@ -378,12 +380,14 @@ class CachedMessage {
     this.attachments,
     this.isControl = false,
     this.deleted = false,
+    this.editHistory,
   });
 
   CachedMessage copyWith({
     String? status,
     bool? deleted,
     List<MessageAttachment>? attachments,
+    List<Map<String, dynamic>>? editHistory,
   }) => CachedMessage(
     id: id,
     accountId: accountId,
@@ -396,7 +400,38 @@ class CachedMessage {
     attachments: attachments ?? this.attachments,
     isControl: isControl,
     deleted: deleted ?? this.deleted,
+    editHistory: editHistory ?? this.editHistory,
   );
+
+  static List<Map<String, dynamic>>? parseEditHistory(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        final list = decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        return list.isEmpty ? null : list;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static List<Map<String, dynamic>> appendEditHistory(
+    List<Map<String, dynamic>>? current,
+    String? oldText,
+    int time,
+  ) {
+    final list = current != null
+        ? List<Map<String, dynamic>>.from(current)
+        : <Map<String, dynamic>>[];
+    if (list.isNotEmpty && (list.last['text'] as String?) == oldText) {
+      return list;
+    }
+    list.add({'text': oldText, 'time': time});
+    return list;
+  }
 
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
     Map<String, dynamic>? payload;
@@ -449,6 +484,7 @@ class CachedMessage {
       deleted: row['deleted'] is int
           ? row['deleted'] == 1
           : row['deleted']?.toString() == '1',
+      editHistory: parseEditHistory(row['edit_history']),
     );
   }
 
@@ -488,6 +524,7 @@ class CachedMessage {
     'status': status,
     'payload': payload != null ? jsonEncode(payload) : null,
     'deleted': deleted ? 1 : 0,
+    'edit_history': editHistory != null ? jsonEncode(editHistory) : null,
   };
 
   static CachedMessage fromPushPayload(int accountId, int chatId, Map msg) {
@@ -551,7 +588,6 @@ class MessagesModule {
     if (messagesData is! List) return [];
 
     final List<CachedMessage> results = [];
-    final List<Map<String, dynamic>> rows = [];
 
     for (var i = 0; i < messagesData.length; i++) {
       final m = messagesData[i];
@@ -560,7 +596,6 @@ class MessagesModule {
       final msg = _parseMessage(m.cast<dynamic, dynamic>(), accountId, chatId);
       if (msg != null) {
         results.add(msg);
-        rows.add(msg.toDbRow());
       }
 
       if (i > 0 && i % 20 == 0) {
@@ -568,15 +603,57 @@ class MessagesModule {
       }
     }
 
-    if (rows.isNotEmpty) {
+    final toSave = KometSettings.viewRedacted.value && results.isNotEmpty
+        ? await _mergeEditHistory(accountId, chatId, results)
+        : results;
+
+    if (toSave.isNotEmpty) {
       try {
-        await AppDatabase.saveMessages(rows);
+        await AppDatabase.saveMessages(
+          toSave.map((m) => m.toDbRow()).toList(),
+        );
       } catch (e) {
         logger.e('saveMessages error: $e');
       }
     }
 
-    return results;
+    return toSave;
+  }
+
+  Future<List<CachedMessage>> _mergeEditHistory(
+    int accountId,
+    int chatId,
+    List<CachedMessage> serverMessages,
+  ) async {
+    final cachedRows = await AppDatabase.loadMessagesByIds(
+      accountId,
+      chatId,
+      serverMessages.map((m) => m.id).toList(),
+    );
+    final byId = <String, Map<String, dynamic>>{};
+    for (final row in cachedRows) {
+      final id = row['id']?.toString();
+      if (id != null) byId[id] = row;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final out = <CachedMessage>[];
+    for (final msg in serverMessages) {
+      final existing = byId[msg.id];
+      if (existing == null) {
+        out.add(msg);
+        continue;
+      }
+      var history = CachedMessage.parseEditHistory(existing['edit_history']);
+      final oldText = existing['text']?.toString();
+      if ((oldText ?? '') != (msg.text ?? '') &&
+          oldText != null &&
+          oldText.isNotEmpty) {
+        history = CachedMessage.appendEditHistory(history, oldText, now);
+      }
+      out.add(history == null ? msg : msg.copyWith(editHistory: history));
+    }
+    return out;
   }
 
   /// Загружает сообщения из локальной базы данных.

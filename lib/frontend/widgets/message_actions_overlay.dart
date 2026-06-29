@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/config/app_message_actions_style.dart';
+import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import 'custom_notification.dart';
 
@@ -73,6 +74,9 @@ void showMessageActions({
   required MessageActionsController controller,
   required MessageActionsStyle style,
   required VoidCallback onDispose,
+  List<Map<String, dynamic>>? editHistory,
+  Future<List<({int id, String title})>> Function()? loadReportReasons,
+  Future<bool> Function(int reasonId)? onReport,
   VoidCallback? onDelete,
   VoidCallback? onEdit,
   VoidCallback? onReply,
@@ -91,6 +95,9 @@ void showMessageActions({
       controller: controller,
       style: style,
       interaction: interaction,
+      editHistory: editHistory,
+      loadReportReasons: loadReportReasons,
+      onReport: onReport,
       onDelete: onDelete,
       onEdit: onEdit,
       onReply: onReply,
@@ -114,6 +121,9 @@ class _MessageActionsLayer extends StatefulWidget {
   final MessageActionsStyle style;
   final MessageActionsInteraction interaction;
   final VoidCallback onDismiss;
+  final List<Map<String, dynamic>>? editHistory;
+  final Future<List<({int id, String title})>> Function()? loadReportReasons;
+  final Future<bool> Function(int reasonId)? onReport;
   final VoidCallback? onDelete;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
@@ -129,6 +139,9 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.style,
     required this.interaction,
     required this.onDismiss,
+    this.editHistory,
+    this.loadReportReasons,
+    this.onReport,
     this.onDelete,
     this.onEdit,
     this.onReply,
@@ -161,6 +174,11 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
 
   int _hoveredIndex = -1;
   bool _committedFired = false;
+  bool _showHistory = false;
+  bool _showReport = false;
+  bool _reportLoading = false;
+  bool _reportSending = false;
+  List<({int id, String title})>? _reasons;
 
   @override
   void initState() {
@@ -303,6 +321,15 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         _Action(Symbols.reply, 'Ответить', _reply),
       if (widget.onForward != null)
         _Action(Symbols.forward, 'Переслать', _forward),
+      if (widget.editHistory != null && widget.editHistory!.isNotEmpty)
+        _Action(Symbols.history, 'История изменений', _showHistoryView),
+      if (widget.onReport != null && widget.loadReportReasons != null)
+        _Action(
+          Symbols.flag,
+          'Пожаловаться',
+          _showReportView,
+          destructive: true,
+        ),
       _Action(
         Symbols.delete,
         'Удалить',
@@ -310,6 +337,47 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         destructive: true,
       ),
     ];
+  }
+
+  void _showHistoryView() {
+    if (!mounted) return;
+    setState(() => _showHistory = true);
+  }
+
+  Future<void> _showReportView() async {
+    if (!mounted) return;
+    setState(() {
+      _showReport = true;
+      _reportLoading = _reasons == null;
+    });
+    if (_reasons != null) return;
+    final loaded = await widget.loadReportReasons?.call();
+    if (!mounted) return;
+    setState(() {
+      _reasons = loaded ?? const [];
+      _reportLoading = false;
+    });
+  }
+
+  Future<void> _submitReport(int reasonId) async {
+    if (_reportSending) return;
+    setState(() => _reportSending = true);
+    final report = widget.onReport;
+    final ok = report == null ? false : await report(reasonId);
+    if (!mounted) return;
+    if (ok) {
+      await _close();
+    } else {
+      setState(() => _reportSending = false);
+    }
+  }
+
+  void _backToMenu() {
+    if (!mounted) return;
+    setState(() {
+      _showHistory = false;
+      _showReport = false;
+    });
   }
 
   void _onControllerUpdate() {
@@ -435,15 +503,257 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                     ),
                   ),
               ],
-              if (_effectiveStyle == MessageActionsStyle.radial) ...[
-                ..._buildButtons(t),
-                _buildLabelBanner(size, t),
-              ] else
-                _buildListMenu(t),
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: _showHistory || _showReport,
+                  child: AnimatedOpacity(
+                    opacity: (_showHistory || _showReport) ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOut,
+                    child: Stack(
+                      children: [
+                        if (_effectiveStyle == MessageActionsStyle.radial) ...[
+                          ..._buildButtons(t),
+                          _buildLabelBanner(size, t),
+                        ] else
+                          _buildListMenu(t),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: !(_showHistory || _showReport),
+                  child: AnimatedOpacity(
+                    opacity: (_showHistory || _showReport) ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: Stack(
+                      children: [
+                        if (_showReport)
+                          _buildReportMenu()
+                        else if (_showHistory)
+                          _buildHistoryMenu(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAnchoredPanel({required String title, required Widget body}) {
+    final cs = Theme.of(context).colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    const menuWidth = 220.0;
+
+    double left;
+    double top;
+    if (_menuRect != Rect.zero) {
+      left = _menuRect.left;
+      top = _menuRect.top;
+    } else {
+      left = widget.isMe
+          ? widget.originRect.right - menuWidth
+          : widget.originRect.left;
+      top = _showBelow
+          ? widget.originRect.bottom + 10
+          : widget.originRect.top - 10;
+    }
+    left = left.clamp(8.0, size.width - menuWidth - 8.0);
+    top = top.clamp(8.0, size.height - 160.0);
+    final maxHeight = math.min(size.height * 0.6, size.height - top - 8.0);
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: menuWidth,
+      child: GestureDetector(
+        onTap: () {},
+        child: Material(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          elevation: 8,
+          shadowColor: Colors.black.withValues(alpha: 0.4),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 44,
+                  child: Row(
+                    children: [
+                      _panelBackButton(cs),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                  ),
+                ),
+                Divider(
+                  height: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.4),
+                ),
+                Flexible(child: body),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _panelBackButton(ColorScheme cs) => Material(
+    color: Colors.transparent,
+    shape: const CircleBorder(),
+    child: InkWell(
+      customBorder: const CircleBorder(),
+      onTap: () {
+        Haptics.tap();
+        _backToMenu();
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Icon(Symbols.arrow_back, color: cs.onSurface, size: 20),
+      ),
+    ),
+  );
+
+  Widget _buildHistoryMenu() {
+    final cs = Theme.of(context).colorScheme;
+    final history = widget.editHistory ?? const <Map<String, dynamic>>[];
+
+    final rows = <Widget>[];
+    for (var i = 0; i < history.length; i++) {
+      if (i > 0) rows.add(_historyDivider(cs));
+      rows.add(
+        _historyRow(
+          cs,
+          history[i]['text'] as String?,
+          history[i]['time'],
+          current: false,
+        ),
+      );
+    }
+    final currentTime = history.isNotEmpty ? history.last['time'] : null;
+    if (rows.isNotEmpty) rows.add(_historyDivider(cs));
+    rows.add(_historyRow(cs, widget.messageText, currentTime, current: true));
+
+    return _buildAnchoredPanel(
+      title: 'История изменений',
+      body: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: rows),
+      ),
+    );
+  }
+
+  Widget _buildReportMenu() {
+    final cs = Theme.of(context).colorScheme;
+    final Widget body;
+    if (_reportLoading) {
+      body = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28),
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
+      );
+    } else {
+      final reasons = _reasons ?? const <({int id, String title})>[];
+      if (reasons.isEmpty) {
+        body = Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: Text(
+            'Не удалось загрузить причины',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+        );
+      } else {
+        final rows = <Widget>[];
+        for (var i = 0; i < reasons.length; i++) {
+          if (i > 0) rows.add(_historyDivider(cs));
+          rows.add(_reasonRow(cs, reasons[i]));
+        }
+        body = SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: rows),
+        );
+      }
+    }
+    return _buildAnchoredPanel(title: 'Пожаловаться', body: body);
+  }
+
+  Widget _reasonRow(ColorScheme cs, ({int id, String title}) reason) =>
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _reportSending ? null : () => _submitReport(reason.id),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Text(
+              reason.title,
+              style: TextStyle(color: cs.onSurface, fontSize: 14),
+            ),
+          ),
+        ),
+      );
+
+  Widget _historyDivider(ColorScheme cs) => Divider(
+    height: 1,
+    color: cs.outlineVariant.withValues(alpha: 0.25),
+  );
+
+  Widget _historyRow(
+    ColorScheme cs,
+    String? text,
+    dynamic time, {
+    required bool current,
+  }) {
+    final ms = time is int ? time : int.tryParse(time?.toString() ?? '');
+    final dateStr = ms != null
+        ? formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(ms))
+        : '';
+    final label = current
+        ? (dateStr.isEmpty ? 'текущая версия' : 'текущая версия · $dateStr')
+        : dateStr;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text == null || text.isEmpty ? '(без текста)' : text,
+            style: TextStyle(
+              color: current ? cs.primary : cs.onSurface,
+              fontSize: 15,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+          ),
+        ],
+      ),
     );
   }
 

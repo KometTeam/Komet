@@ -538,6 +538,19 @@ class ChatsModule {
           mergedPayload[entry.key.toString()] = entry.value;
         }
         final newRow = Map<String, dynamic>.from(existing);
+        if (KometSettings.viewRedacted.value) {
+          final oldText = existing['text']?.toString();
+          if ((oldText ?? '') != (msgText ?? '') &&
+              oldText != null &&
+              oldText.isNotEmpty) {
+            final history = CachedMessage.appendEditHistory(
+              CachedMessage.parseEditHistory(existing['edit_history']),
+              oldText,
+              DateTime.now().millisecondsSinceEpoch,
+            );
+            newRow['edit_history'] = jsonEncode(history);
+          }
+        }
         newRow['text'] = msgText;
         newRow['status'] = status;
         newRow['payload'] = jsonEncode(mergedPayload);
