@@ -13,6 +13,8 @@ import 'custom_notification.dart';
 
 enum MessageActionsInteraction { dragAndRelease, click, tap }
 
+enum _RadialSide { below, above, left, right }
+
 class MessageActionsController extends ChangeNotifier {
   Offset? pointer;
   Offset? initialPointer;
@@ -220,19 +222,71 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   }
 
   void _computeRadialGeometry(Size screenSize) {
-    _showBelow = widget.tapPoint.dy < screenSize.height * 0.55;
-    final anchorY = _showBelow
-        ? widget.originRect.bottom + 16
-        : widget.originRect.top - 16;
-
     final n = _actions.length;
-    final base = _showBelow ? math.pi * 0.5 : -math.pi * 0.5;
+    const reach = _radius + _btnSize / 2;
+    final padding = MediaQuery.paddingOf(context);
+    final topMargin = padding.top + _hMargin;
+    final bottomMargin = padding.bottom + _hMargin;
+    final rect = widget.originRect;
+
+    final spaceBelow = screenSize.height - bottomMargin - (rect.bottom + 16);
+    final spaceAbove = (rect.top - 16) - topMargin;
+    final belowFits = spaceBelow >= reach;
+    final aboveFits = spaceAbove >= reach;
+    final preferBelow = widget.tapPoint.dy < screenSize.height * 0.55;
+
+    final _RadialSide side;
+    if (belowFits && aboveFits) {
+      side = preferBelow ? _RadialSide.below : _RadialSide.above;
+    } else if (belowFits) {
+      side = _RadialSide.below;
+    } else if (aboveFits) {
+      side = _RadialSide.above;
+    } else {
+      final spaceRight = screenSize.width - _hMargin - (rect.right + 16);
+      final spaceLeft = (rect.left - 16) - _hMargin;
+      final rightFits = spaceRight >= reach;
+      final leftFits = spaceLeft >= reach;
+      if (widget.isMe) {
+        side = (leftFits || !rightFits) ? _RadialSide.left : _RadialSide.right;
+      } else {
+        side = (rightFits || !leftFits) ? _RadialSide.right : _RadialSide.left;
+      }
+    }
+
+    final double base;
+    double anchorX;
+    double anchorY;
+    switch (side) {
+      case _RadialSide.below:
+        base = math.pi * 0.5;
+        anchorX = widget.tapPoint.dx;
+        anchorY = rect.bottom + 16;
+      case _RadialSide.above:
+        base = -math.pi * 0.5;
+        anchorX = widget.tapPoint.dx;
+        anchorY = rect.top - 16;
+      case _RadialSide.right:
+        base = 0;
+        anchorX = rect.right + 16;
+        anchorY = widget.tapPoint.dy.clamp(rect.top, rect.bottom).toDouble();
+      case _RadialSide.left:
+        base = math.pi;
+        anchorX = rect.left - 16;
+        anchorY = widget.tapPoint.dy.clamp(rect.top, rect.bottom).toDouble();
+    }
+
+    _showBelow = side == _RadialSide.below ||
+        (side != _RadialSide.above && spaceBelow >= spaceAbove);
+
     final start = base - _arcSpan / 2;
     final step = n <= 1 ? 0.0 : _arcSpan / (n - 1);
 
     final offsets = <Offset>[];
     double minDx = 0;
     double maxDx = 0;
+    double minDy = 0;
+    double maxDy = 0;
     for (int i = 0; i < n; i++) {
       final angle = start + step * i;
       final dx = math.cos(angle) * _radius;
@@ -240,14 +294,19 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       offsets.add(Offset(dx, dy));
       if (dx < minDx) minDx = dx;
       if (dx > maxDx) maxDx = dx;
+      if (dy < minDy) minDy = dy;
+      if (dy > maxDy) maxDy = dy;
     }
 
     final minX = _hMargin + _btnSize / 2;
     final maxX = screenSize.width - _hMargin - _btnSize / 2;
+    final minY = topMargin + _btnSize / 2;
+    final maxY = screenSize.height - bottomMargin - _btnSize / 2;
 
-    double anchorX = widget.tapPoint.dx;
     if (anchorX + maxDx > maxX) anchorX = maxX - maxDx;
     if (anchorX + minDx < minX) anchorX = minX - minDx;
+    if (anchorY + maxDy > maxY) anchorY = maxY - maxDy;
+    if (anchorY + minDy < minY) anchorY = minY - minDy;
 
     _anchor = Offset(anchorX, anchorY);
     _buttonCenters = [for (final o in offsets) _anchor + o];
