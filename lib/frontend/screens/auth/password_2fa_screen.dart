@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../backend/api.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
@@ -18,24 +21,69 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
+  late int _epoch;
+  StreamSubscription<SessionState>? _stateSub;
+  bool _recovering = false;
+  bool _dropNotified = false;
+
+  bool get _sessionStale =>
+      api.sessionEpoch != _epoch || api.state != SessionState.online;
+
+  @override
+  void initState() {
+    super.initState();
+    _epoch = api.sessionEpoch;
+    _stateSub = api.stateStream.listen(_onSessionState);
+  }
+
   @override
   void dispose() {
+    _stateSub?.cancel();
     _passwordController.dispose();
     super.dispose();
   }
 
+  void _onSessionState(SessionState state) {
+    if (!mounted) return;
+    if (state != SessionState.online) {
+      if (!_dropNotified) {
+        _dropNotified = true;
+        showCustomNotification(context, 'Соединение прервалось…');
+      }
+      return;
+    }
+    if (api.sessionEpoch != _epoch) _recoverStaleSession();
+  }
+
+  void _recoverStaleSession() {
+    if (_recovering || !mounted) return;
+    _recovering = true;
+    showCustomNotification(
+      context,
+      'Соединение прервалось — войдите заново',
+    );
+    Navigator.of(context).pop();
+  }
+
   Future<void> _checkPassword() async {
-    if (_passwordController.text.isEmpty) return;
+    if (_passwordController.text.isEmpty || _isLoading || _recovering) return;
+
+    if (_sessionStale) {
+      _recoverStaleSession();
+      return;
+    }
 
     setState(() {
       _isLoading = true;
     });
 
+    var passed = false;
     try {
       final result = await accountModule.checkPassword(
         password: _passwordController.text,
         trackId: widget.trackId,
       );
+      passed = true;
 
       if (!mounted) return;
 
@@ -54,8 +102,8 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) =>
+          pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, _, child) =>
               FadeTransition(opacity: animation, child: child),
         ),
         (route) => false,
@@ -67,7 +115,11 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
         _isLoading = false;
       });
 
-      showCustomNotification(context, 'Неверный пароль: $e');
+      if (!passed && (isSessionStateError(e) || _sessionStale)) {
+        _recoverStaleSession();
+      } else {
+        showCustomNotification(context, 'Неверный пароль: $e');
+      }
     }
   }
 

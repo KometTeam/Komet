@@ -4,17 +4,21 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
+import '../../../backend/api.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
+  final String rawPhone;
   final String token;
 
   const CodeConfirmationScreen({
     super.key,
     required this.phoneNumber,
+    required this.rawPhone,
     required this.token,
   });
 
@@ -38,9 +42,22 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   Animation<double>? _routeAnimation;
   AnimationStatusListener? _routeAnimationListener;
 
+  late String _token;
+  late int _epoch;
+  StreamSubscription<SessionState>? _stateSub;
+  bool _recovering = false;
+  bool _verifying = false;
+  bool _dropNotified = false;
+
+  bool get _sessionStale =>
+      api.sessionEpoch != _epoch || api.state != SessionState.online;
+
   @override
   void initState() {
     super.initState();
+    _token = widget.token;
+    _epoch = api.sessionEpoch;
+    _stateSub = api.stateStream.listen(_onSessionState);
     _startTimer();
 
     _shakeController = AnimationController(
@@ -68,12 +85,69 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     if (_routeAnimationListener != null) {
       _routeAnimation?.removeStatusListener(_routeAnimationListener!);
     }
+    _stateSub?.cancel();
     _timer?.cancel();
     _errorTimer?.cancel();
     _shakeController.dispose();
     _codeController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _onSessionState(SessionState state) {
+    if (!mounted) return;
+    if (state != SessionState.online) {
+      if (!_dropNotified) {
+        _dropNotified = true;
+        showCustomNotification(
+          context,
+          'Соединение прервалось, восстанавливаем…',
+        );
+      }
+      return;
+    }
+    if (api.sessionEpoch != _epoch) _recoverStaleSession();
+  }
+
+  Future<void> _recoverStaleSession() async {
+    if (_recovering) return;
+    setState(() => _recovering = true);
+    try {
+      if (api.state != SessionState.online) {
+        final back = await api.stateStream
+            .firstWhere((s) => s == SessionState.online)
+            .timeout(
+              const Duration(seconds: 12),
+              onTimeout: () => SessionState.disconnected,
+            );
+        if (back != SessionState.online) {
+          if (mounted) {
+            showCustomNotification(context, 'Нет соединения с сервером');
+          }
+          return;
+        }
+      }
+      final fresh = await accountModule.requestCode(widget.rawPhone);
+      if (!mounted) return;
+      setState(() {
+        _token = fresh.token;
+        _epoch = api.sessionEpoch;
+        _dropNotified = false;
+        _codeController.clear();
+        _errorMessage = null;
+      });
+      _startTimer();
+      showCustomNotification(
+        context,
+        'Соединение восстановлено — выслали новый код',
+      );
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(context, 'Не удалось обновить код: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _recovering = false);
+    }
   }
 
   void _scheduleKeyboardOpen() {
@@ -136,13 +210,21 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   }
 
   Future<void> _verifyCode() async {
-    if (_codeController.text.length != 6) return;
+    if (_codeController.text.length != 6 || _recovering || _verifying) return;
 
+    if (_sessionStale) {
+      _recoverStaleSession();
+      return;
+    }
+
+    setState(() => _verifying = true);
+    var verified = false;
     try {
       final result = await accountModule.verifyCode(
         _codeController.text,
-        widget.token,
+        _token,
       );
+      verified = true;
 
       if (!mounted) return;
 
@@ -196,15 +278,21 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) =>
+          pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, _, child) =>
               FadeTransition(opacity: animation, child: child),
         ),
         (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
-      _showError(e.toString());
+      if (!verified && (isSessionStateError(e) || _sessionStale)) {
+        _recoverStaleSession();
+      } else {
+        _showError(e.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _verifying = false);
     }
   }
 
@@ -419,9 +507,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                   ),
                   const SizedBox(width: 16),
                   FloatingActionButton(
-                    onPressed: () {
-                      if (_codeController.text.length == 6) _verifyCode();
-                    },
+                    onPressed: (_recovering || _verifying)
+                        ? null
+                        : () {
+                            if (_codeController.text.length == 6) _verifyCode();
+                          },
                     backgroundColor: _codeController.text.length == 6
                         ? cs.primaryContainer
                         : cs.surfaceContainerHighest,
@@ -429,12 +519,21 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(50),
                     ),
-                    child: Icon(
-                      Icons.arrow_forward,
-                      color: _codeController.text.length == 6
-                          ? cs.onPrimaryContainer
-                          : cs.onSurfaceVariant,
-                    ),
+                    child: _recovering
+                        ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.onPrimaryContainer,
+                            ),
+                          )
+                        : Icon(
+                            Icons.arrow_forward,
+                            color: _codeController.text.length == 6
+                                ? cs.onPrimaryContainer
+                                : cs.onSurfaceVariant,
+                          ),
                   ),
                 ],
               ),

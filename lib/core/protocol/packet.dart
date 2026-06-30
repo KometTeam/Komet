@@ -83,6 +83,15 @@ String messageFromErrorPayload(dynamic payload) {
   return s.isNotEmpty ? s : 'Неизвестная ошибка';
 }
 
+bool isSessionStateError(Object error) {
+  if (error is SessionExpiredException) return true;
+  final text = error.toString().toLowerCase();
+  return text.contains('состояние сессии') ||
+      text.contains('сессия не найдена') ||
+      text.contains('авторизационная сессия') ||
+      text.contains('сессия не онлайн');
+}
+
 /// Payload меньше этого размера отправляется без сжатия (как в оригинале).
 const int _compressionThreshold = 32;
 

@@ -83,6 +83,7 @@ void showMessageActions({
   VoidCallback? onEdit,
   VoidCallback? onReply,
   VoidCallback? onForward,
+  VoidCallback? onMarkUnread,
   MessageActionsInteraction interaction = MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
@@ -104,6 +105,7 @@ void showMessageActions({
       onEdit: onEdit,
       onReply: onReply,
       onForward: onForward,
+      onMarkUnread: onMarkUnread,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -130,6 +132,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
+  final VoidCallback? onMarkUnread;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -148,6 +151,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onEdit,
     this.onReply,
     this.onForward,
+    this.onMarkUnread,
   });
 
   @override
@@ -380,6 +384,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         _Action(Symbols.reply, 'Ответить', _reply),
       if (widget.onForward != null)
         _Action(Symbols.forward, 'Переслать', _forward),
+      if (widget.onMarkUnread != null)
+        _Action(Symbols.mark_chat_unread, 'Непрочитанное', _markUnread),
       if (widget.editHistory != null && widget.editHistory!.isNotEmpty)
         _Action(Symbols.history, 'История изменений', _showHistoryView),
       if (widget.onReport != null && widget.loadReportReasons != null)
@@ -515,6 +521,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final onForward = widget.onForward;
     await _close();
     onForward?.call();
+  }
+
+  Future<void> _markUnread() async {
+    final onMarkUnread = widget.onMarkUnread;
+    await _close();
+    onMarkUnread?.call();
   }
 
   @override

@@ -68,6 +68,9 @@ class Api {
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   bool _autoReconnect = false;
+  int _sessionEpoch = 0;
+
+  int get sessionEpoch => _sessionEpoch;
 
   /// Залипает на время сессии: VPN-путь не сработал — идём мимо туннеля.
   bool _bypassActive = false;
@@ -125,6 +128,7 @@ class Api {
         _callsSeed = response.payload['callsSeed'] as int?;
         _registrationCountries = _parseRegistrationCountries(response.payload);
         _sessionState = SessionState.online;
+        _sessionEpoch++;
         _startPinging();
         logger.i('Сессия онлайн, хэндшейк ок');
         if (_onReconnectCallback != null) {

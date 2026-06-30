@@ -19,6 +19,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../../backend/api.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -39,13 +40,21 @@ class _LoginScreenState extends State<LoginScreen> {
   Timer? _phoneErrorTimer;
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
+  late SessionState _sessionState;
+  StreamSubscription<SessionState>? _stateSub;
+
+  bool get _isOnline => _sessionState == SessionState.online;
 
   @override
   void initState() {
     super.initState();
+    _sessionState = api.state;
     if (api.state == SessionState.disconnected) {
       unawaited(api.connect());
     }
+    _stateSub = api.stateStream.listen((state) {
+      if (mounted) setState(() => _sessionState = state);
+    });
     _selectedCountry = countriesByCode['RU'] ?? allCountries.first;
     _clampCountryToAllowed();
     _checkTOS();
@@ -79,6 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _stateSub?.cancel();
     _phoneErrorTimer?.cancel();
     _logoTapTimer?.cancel();
     _phoneController.dispose();
@@ -458,6 +468,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           final fullPhone =
                               '${_selectedCountry.phoneCode}${_phoneController.text}';
 
+                          if (!_isOnline) {
+                            _showPhoneError(
+                              'Нет соединения с сервером. Подождите подключения.',
+                            );
+                            return;
+                          }
+
                           try {
                             final result = await accountModule.requestCode(
                               fullPhone,
@@ -470,13 +487,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                 builder: (context) => CodeConfirmationScreen(
                                   phoneNumber:
                                       '${_selectedCountry.phoneCode} $formattedPhone',
+                                  rawPhone: fullPhone,
                                   token: result.token,
                                 ),
                               ),
                             );
                           } catch (e) {
                             if (!screenContext.mounted) return;
-                            _showPhoneError(e.toString());
+                            _showPhoneError(
+                              isSessionStateError(e)
+                                  ? 'Нет соединения с сервером. Попробуйте ещё раз.'
+                                  : e.toString(),
+                            );
                           }
                         },
                         child: Text(
@@ -508,6 +530,10 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     _showPhoneConfirmationDialog(_phoneController.text);
+  }
+
+  void _notifyConnecting() {
+    showCustomNotification(context, 'Подключаемся к серверу, секунду…');
   }
 
   void _showServerSettingsSheet(BuildContext context) {
@@ -956,21 +982,32 @@ class _LoginScreenState extends State<LoginScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 16.0),
                                 child: FloatingActionButton(
-                                  onPressed: _isPhoneValid
-                                      ? _validateAndSubmit
-                                      : null,
+                                  onPressed: !_isPhoneValid
+                                      ? null
+                                      : (_isOnline
+                                            ? _validateAndSubmit
+                                            : _notifyConnecting),
                                   backgroundColor: _isPhoneValid
                                       ? cs.primaryContainer
                                       : cs.surfaceContainerHighest,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
                                   ),
-                                  child: Icon(
-                                    Icons.arrow_forward,
-                                    color: _isPhoneValid
-                                        ? cs.onPrimaryContainer
-                                        : cs.onSurfaceVariant,
-                                  ),
+                                  child: _isPhoneValid && !_isOnline
+                                      ? SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.onPrimaryContainer,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.arrow_forward,
+                                          color: _isPhoneValid
+                                              ? cs.onPrimaryContainer
+                                              : cs.onSurfaceVariant,
+                                        ),
                                 ),
                               ),
                             ],

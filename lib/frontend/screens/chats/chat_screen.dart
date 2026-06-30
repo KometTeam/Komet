@@ -503,12 +503,26 @@ class _ChatScreenState extends State<ChatScreen>
   void _markRead() {
     if (_myId == 0 || _messages.isEmpty) return;
     final newest = _messages.last;
-    if (newest.senderId == _myId) return;
     if (newest.id == _lastMarkedId) return;
     _lastMarkedId = newest.id;
     unawaited(
       ChatsModule.markRead(api, _myId, widget.chatId, newest.id, newest.time),
     );
+  }
+
+  Future<void> _markMessageUnread(CachedMessage message) async {
+    final unread = await ChatsModule.markUnread(
+      api,
+      _myId,
+      widget.chatId,
+      message.time,
+    );
+    if (!mounted) return;
+    if (unread == null) {
+      showCustomNotification(context, 'Не удалось пометить непрочитанным');
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   bool _badgeRefreshing = false;
@@ -3449,6 +3463,9 @@ class _ChatScreenState extends State<ChatScreen>
                   onForward: message.isControl
                       ? null
                       : () => _forwardMessages([message]),
+                  onMarkUnread: message.isControl
+                      ? null
+                      : () => _markMessageUnread(message),
                   loadReportReasons: canReport
                       ? () => _loadReportReasons(reportTypeId)
                       : null,
@@ -5890,6 +5907,7 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
+  final VoidCallback? onMarkUnread;
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
 
@@ -5906,6 +5924,7 @@ class _SelectableMessageRow extends StatefulWidget {
     this.onEdit,
     this.onReply,
     this.onForward,
+    this.onMarkUnread,
     this.loadReportReasons,
     this.onReport,
   });
@@ -5958,6 +5977,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onEdit: widget.onEdit,
       onReply: widget.onReply,
       onForward: widget.onForward,
+      onMarkUnread: widget.onMarkUnread,
       onDispose: controller.dispose,
     );
   }
@@ -5988,6 +6008,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onEdit: widget.onEdit,
       onReply: widget.onReply,
       onForward: widget.onForward,
+      onMarkUnread: widget.onMarkUnread,
       onDispose: controller.dispose,
     );
   }

@@ -28,6 +28,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/login_success_screen.dart';
+import '../auth/login_screen.dart';
 import '../calls/call_screen.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../widgets/connection_status.dart';
@@ -340,6 +341,68 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                           ),
                           Icon(
                             Symbols.save_alt,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Material(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 17,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.dialpad,
+                            color: cs.onSurfaceVariant,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Экран ввода номера',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Открыть без выхода из аккаунта и обрыва сессии',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Symbols.chevron_right,
                             color: cs.onSurfaceVariant,
                             size: 22,
                             weight: 400,

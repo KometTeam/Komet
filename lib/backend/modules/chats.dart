@@ -328,6 +328,36 @@ class ChatsModule {
     _bump();
   }
 
+  static Future<int?> markUnread(
+    Api api,
+    int accountId,
+    int chatId,
+    int mark,
+  ) async {
+    int? unread;
+    try {
+      final resp = await api.sendRequest(Opcode.chatMark, {
+        'type': 'SET_AS_UNREAD',
+        'chatId': chatId,
+        'mark': mark,
+      });
+      final payload = resp.payload;
+      if (payload is Map) unread = payload['unread'] as int?;
+    } catch (_) {
+      return null;
+    }
+    if (unread == null) return null;
+
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isNotEmpty) {
+      final row = Map<String, dynamic>.from(rows.first);
+      row['unread_count'] = unread;
+      await AppDatabase.saveChats([row]);
+      _bump();
+    }
+    return unread;
+  }
+
   static Future<void> applyOutgoing(
     int accountId,
     int chatId, {
