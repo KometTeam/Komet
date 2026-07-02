@@ -1453,6 +1453,43 @@ class MessagesModule {
     return null;
   }
 
+  void sendTyping(int chatId, String type) {
+    unawaited(() async {
+      try {
+        await _api.sendRequest(Opcode.msgTyping, {
+          'chatId': chatId,
+          'type': type,
+        });
+      } catch (_) {}
+    }());
+  }
+
+  Future<Map<String, dynamic>?> sendStickerMessage(
+    int chatId,
+    int stickerId, {
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {'_type': 'STICKER', 'stickerId': stickerId},
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is Map) return Map<String, dynamic>.from(msg);
+    }
+    return null;
+  }
+
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {

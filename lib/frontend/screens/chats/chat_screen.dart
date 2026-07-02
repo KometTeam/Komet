@@ -49,6 +49,7 @@ import '../../../core/config/app_commands.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
+import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
 import '../../commands/slash_command.dart';
 import '../../widgets/glossy_pill.dart';
@@ -60,6 +61,7 @@ import '../../widgets/theme_reveal.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
+import '../../widgets/sticker_panel.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/schedule_time_picker.dart';
 import 'scheduled_messages_screen.dart';
@@ -206,6 +208,10 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
+  final ValueNotifier<bool> _showStickerPanel = ValueNotifier(false);
+  double _stickerPanelHeight = 300;
+  Timer? _stickerTypingTimer;
+  late final AnimationController _stickerAnim;
   final ValueNotifier<_UploadStatus> _uploadStatus = ValueNotifier(
     const _UploadStatus(),
   );
@@ -337,6 +343,8 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.addObserver(this);
     ChatsModule.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
+    _messageFocusNode.addListener(_onComposerFocusChanged);
+    _showStickerPanel.addListener(_onStickerPanelToggle);
     _scrollController.addListener(_onScrollForDate);
     _scrollController.addListener(_maybeLoadMoreHistory);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
@@ -348,6 +356,11 @@ class _ChatScreenState extends State<ChatScreen>
       vsync: this,
       duration: const Duration(milliseconds: 320),
       reverseDuration: const Duration(milliseconds: 240),
+    );
+    _stickerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      reverseDuration: const Duration(milliseconds: 200),
     );
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _commandAnim = AnimationController(
@@ -897,7 +910,12 @@ class _ChatScreenState extends State<ChatScreen>
     _selectedIds.dispose();
     _commandMatches.dispose();
     _messageController.dispose();
+    _messageFocusNode.removeListener(_onComposerFocusChanged);
     _messageFocusNode.dispose();
+    _stickerTypingTimer?.cancel();
+    _stickerAnim.dispose();
+    _showStickerPanel.removeListener(_onStickerPanelToggle);
+    _showStickerPanel.dispose();
     _scrollController.dispose();
     _shimmerStartTimer?.cancel();
     _shimmerController.dispose();
@@ -1383,6 +1401,7 @@ class _ChatScreenState extends State<ChatScreen>
                 },
               ),
               _buildInputArea(context),
+              _buildStickerPanel(context),
             ],
           ),
         ),
@@ -4507,11 +4526,15 @@ class _ChatScreenState extends State<ChatScreen>
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Icon(
-                              Symbols.face,
-                              color: mutedIcon,
-                              size: 24,
-                              weight: 400,
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _toggleStickerPanel,
+                              child: Icon(
+                                Symbols.face,
+                                color: mutedIcon,
+                                size: 24,
+                                weight: 400,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -5257,6 +5280,83 @@ class _ChatScreenState extends State<ChatScreen>
       _updateFileMessageStatus(tempId, 'error');
       showCustomNotification(context, 'Ошибка: $e');
     }
+  }
+
+  void _toggleStickerPanel() {
+    if (_showStickerPanel.value) {
+      _showStickerPanel.value = false;
+      _messageFocusNode.requestFocus();
+      return;
+    }
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    if (keyboard > 120) _stickerPanelHeight = keyboard;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _showStickerPanel.value = true;
+  }
+
+  void _onComposerFocusChanged() {
+    if (_messageFocusNode.hasFocus && _showStickerPanel.value) {
+      _showStickerPanel.value = false;
+    }
+  }
+
+  void _onStickerPanelToggle() {
+    if (_showStickerPanel.value) {
+      _stickerAnim.forward();
+      _sendStickerTyping();
+      _stickerTypingTimer?.cancel();
+      _stickerTypingTimer = Timer.periodic(
+        const Duration(seconds: 4),
+        (_) => _sendStickerTyping(),
+      );
+    } else {
+      _stickerAnim.reverse();
+      _stickerTypingTimer?.cancel();
+      _stickerTypingTimer = null;
+    }
+  }
+
+  void _sendStickerTyping() {
+    if (KometSettings.ghostMode.value) return;
+    messagesModule.sendTyping(widget.chatId, 'STICKER');
+  }
+
+  Future<void> _sendSticker(StickerItem sticker) async {
+    _showStickerPanel.value = false;
+    await _sendAttachMessage(
+      [
+        StickerAttachment(
+          stickerId: sticker.id.toString(),
+          baseUrl: sticker.url,
+          width: sticker.width,
+          height: sticker.height,
+        ),
+      ],
+      () => messagesModule.sendStickerMessage(widget.chatId, sticker.id),
+    );
+  }
+
+  Widget _buildStickerPanel(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _stickerAnim,
+      child: StickerPanel(
+        height: _stickerPanelHeight,
+        onStickerTap: _sendSticker,
+      ),
+      builder: (context, child) {
+        final t = Curves.easeOutCubic.transform(
+          _stickerAnim.value.clamp(0.0, 1.0),
+        );
+        if (t == 0) return const SizedBox.shrink();
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: t,
+            child: child,
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _shareLocation() async {
