@@ -36,6 +36,7 @@ import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/chat_activity_store.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/cache/message_session_cache.dart';
@@ -270,8 +271,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  final Set<int> _typingUserIds = {};
-  final Map<int, Timer> _typingTimers = {};
   int _otherStatus = 0;
   int? _otherSeenTime;
   int? _participantsCount;
@@ -372,6 +371,9 @@ class _ChatScreenState extends State<ChatScreen>
     _messageEventSub = ChatsModule.messageEvents
         .where((e) => e.chatId == widget.chatId)
         .listen(_onMessageEvent);
+    ChatActivityStore.instance
+        .listenable(widget.chatId)
+        .addListener(_recomputeHeaderStatus);
     _connSub = api.stateStream.listen((_) {
       if (mounted) _recomputeHeaderStatus();
     });
@@ -879,10 +881,9 @@ class _ChatScreenState extends State<ChatScreen>
       n.dispose();
     }
     _photoUploadProgress.clear();
-    for (final t in _typingTimers.values) {
-      t.cancel();
-    }
-    _typingTimers.clear();
+    ChatActivityStore.instance
+        .listenable(widget.chatId)
+        .removeListener(_recomputeHeaderStatus);
     PresenceFetch.revision.removeListener(_onPresenceChanged);
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
@@ -2551,7 +2552,8 @@ class _ChatScreenState extends State<ChatScreen>
   String _headerStatus() {
     final conn = connectionStatusLabel(api.state);
     if (conn != null) return conn;
-    if (_typingUserIds.isNotEmpty) return 'Печатает...';
+    final activity = ChatActivityStore.instance.activity(widget.chatId);
+    if (activity != null) return activity.label;
     if (widget.chatType == 'CHAT') {
       final count = _participantsCount ?? chat?.participants.length ?? 0;
       return '$count участников';
@@ -2573,24 +2575,15 @@ class _ChatScreenState extends State<ChatScreen>
     if (payload['chatId'] != widget.chatId) return;
     final userId = payload['userId'];
     if (userId is! int || userId == _myId) return;
-
-    _typingTimers[userId]?.cancel();
-    _typingTimers[userId] = Timer(const Duration(seconds: 10), () {
-      if (!mounted) return;
-      _typingUserIds.remove(userId);
-      _typingTimers.remove(userId);
-      _recomputeHeaderStatus();
-    });
-    if (_typingUserIds.add(userId)) {
-      _recomputeHeaderStatus();
-    }
+    ChatActivityStore.instance.mark(
+      widget.chatId,
+      userId,
+      chatActivityFromType(payload['type']),
+    );
   }
 
   void _clearTyping(int userId) {
-    _typingTimers.remove(userId)?.cancel();
-    if (_typingUserIds.remove(userId)) {
-      _recomputeHeaderStatus();
-    }
+    ChatActivityStore.instance.clearUser(widget.chatId, userId);
   }
 
   void _onMessageRead(Packet packet) {

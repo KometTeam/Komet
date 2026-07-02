@@ -26,6 +26,7 @@ import '../auth/login_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
 import '../../widgets/animated_text_swap.dart';
+import '../../widgets/connection_status.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
@@ -39,7 +40,7 @@ import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/token_storage.dart';
-import '../../../core/storage/typing_store.dart';
+import '../../../core/storage/chat_activity_store.dart';
 import '../../../main.dart'
     show accountModule, api, messagesModule, appRouteObserver;
 
@@ -520,12 +521,19 @@ class _ChatListScreenState extends State<ChatListScreen>
     final userId = payload['userId'];
     if (chatId is! int || userId is! int) return;
     if (userId == (_profile?.id ?? 0)) return;
-    TypingStore.instance.markTyping(chatId, userId);
+    ChatActivityStore.instance.mark(
+      chatId,
+      userId,
+      chatActivityFromType(payload['type']),
+    );
   }
 
   void _onTypingMessageEvent(MessageEvent event) {
     if (event is MessageAddedEvent) {
-      TypingStore.instance.clearUser(event.chatId, event.message.senderId);
+      ChatActivityStore.instance.clearUser(
+        event.chatId,
+        event.message.senderId,
+      );
     }
   }
 
@@ -1223,9 +1231,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         ),
                                       ),
                                     Text(
-                                      _sessionState == SessionState.online
-                                          ? (_profile?.firstName ?? 'Чат')
-                                          : 'Подключение...',
+                                      connectionStatusLabel(_sessionState) ??
+                                          (_profile?.firstName ?? 'Чат'),
                                       style: TextStyle(
                                         color: cs.onSurface,
                                         fontSize: 20,
@@ -2393,9 +2400,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Expanded(
-                              child: ValueListenableBuilder<bool>(
-                                valueListenable: TypingStore.instance
-                                    .listenable(int.tryParse(id) ?? 0),
+                              child: _ActivitySubtitle(
+                                chatId: int.tryParse(id) ?? 0,
                                 child: draft != null
                                     ? Text.rich(
                                         TextSpan(
@@ -2435,23 +2441,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                builder: (context, typing, base) {
-                                  return AnimatedTextSwap(
-                                    showAlternate: typing,
-                                    alternate: Text(
-                                      'печатает...',
-                                      style: TextStyle(
-                                        color: cs.primary,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        height: 1.2,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    child: base!,
-                                  );
-                                },
                               ),
                             ),
                             ?statusIcon,
@@ -2759,6 +2748,47 @@ class _AnimatedChatTileState extends State<_AnimatedChatTile>
         },
         child: widget.child,
       ),
+    );
+  }
+}
+
+class _ActivitySubtitle extends StatefulWidget {
+  const _ActivitySubtitle({required this.chatId, required this.child});
+
+  final int chatId;
+  final Widget child;
+
+  @override
+  State<_ActivitySubtitle> createState() => _ActivitySubtitleState();
+}
+
+class _ActivitySubtitleState extends State<_ActivitySubtitle> {
+  ChatActivity _lastActivity = ChatActivity.typing;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<ChatActivity?>(
+      valueListenable: ChatActivityStore.instance.listenable(widget.chatId),
+      child: widget.child,
+      builder: (context, activity, base) {
+        if (activity != null) _lastActivity = activity;
+        return AnimatedTextSwap(
+          showAlternate: activity != null,
+          alternate: Text(
+            _lastActivity.label.toLowerCase(),
+            style: TextStyle(
+              color: cs.primary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              height: 1.2,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          child: base!,
+        );
+      },
     );
   }
 }

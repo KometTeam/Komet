@@ -180,6 +180,21 @@ class Api {
     _setSessionState(SessionState.disconnected);
   }
 
+  void wakeUp() {
+    if (!_autoReconnect) return;
+    switch (_sessionState) {
+      case SessionState.disconnected:
+        _reconnectAttempts = 0;
+        _reconnectTimer?.cancel();
+        unawaited(connect());
+      case SessionState.connecting:
+      case SessionState.connected:
+        _reconnectAttempts = 0;
+      case SessionState.online:
+        unawaited(_probeLiveness());
+    }
+  }
+
   Future<Packet> sendHandshake() async {
     final deviceInfo = DeviceInfoPlugin();
 
@@ -386,6 +401,31 @@ class Api {
     if (_autoReconnect) _scheduleReconnect();
   }
 
+  Future<void> _probeLiveness() async {
+    if (_sessionState != SessionState.online) return;
+    final epoch = _sessionEpoch;
+    try {
+      await sendRequest(Opcode.ping, {
+        'interactive': !KometSettings.ghostMode.value,
+      }).timeout(const Duration(seconds: 6));
+    } catch (_) {
+      if (_sessionEpoch != epoch || _sessionState != SessionState.online) {
+        return;
+      }
+      logger.w('Пробный пинг не прошёл — принудительный реконнект');
+      await _forceReconnect();
+    }
+  }
+
+  Future<void> _forceReconnect() async {
+    _cleanup();
+    await _connection.disconnect();
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _setSessionState(SessionState.disconnected);
+    if (_autoReconnect) unawaited(connect());
+  }
+
   void _cleanup() {
     _pingTimer?.cancel();
     _dataSubscription?.cancel();
@@ -448,12 +488,7 @@ class Api {
   }
 
   void _scheduleReconnect() {
-    if (_reconnectAttempts >= ServerConfig.maxReconnectAttempts) {
-      logger.e('Лимит попыток реконнекта');
-      return;
-    }
-
-    final delaySec = (2 * (1 << _reconnectAttempts)).clamp(2, 30);
+    final delaySec = (2 * (1 << _reconnectAttempts.clamp(0, 3))).clamp(2, 15);
     _reconnectAttempts++;
     logger.i('Реконнект через $delaySecс (попытка $_reconnectAttempts)');
 

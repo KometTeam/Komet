@@ -455,6 +455,7 @@ class KometAppState extends State<KometApp>
       DebugSessionLog.instance.flushNow();
     }
     if (state != AppLifecycleState.resumed) return;
+    api.wakeUp();
     CallBridge.instance.checkInitialCall();
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
     _rescheduleSwitch();
