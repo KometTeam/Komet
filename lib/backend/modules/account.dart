@@ -1454,6 +1454,12 @@ class AccountModule {
       'language': language,
     };
 
+    final callsSeed = _api.callsSeed;
+    final deviceId = _api.deviceId;
+    if (callsSeed != null && deviceId != null) {
+      payload['mode'] = ChatCacheFingerprint.compute(callsSeed, deviceId);
+    }
+
     logger.i('Запрос OTP-кода: phone=${_maskPhone(normalizedPhone)} type=${type.value}');
 
     final packet = await _api.sendRequest(Opcode.authRequest, payload);

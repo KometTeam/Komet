@@ -8,8 +8,8 @@ import '../../models/spoof_profile.dart';
 import 'token_storage.dart';
 
 class SpoofingService {
-  static const String hardcodedAppVersion = '26.19.2';
-  static const int hardcodedBuildNumber = 6732;
+  static const String hardcodedAppVersion = '26.20.2';
+  static const int hardcodedBuildNumber = 6758;
   static const String pendingScope = 'pending';
 
   static const String _legacyEnabledKey = 'spoofing_enabled';
