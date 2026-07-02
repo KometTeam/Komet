@@ -34,6 +34,7 @@ import '../../../core/calls/call_controller.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/cache/info_cache.dart';
@@ -333,6 +334,7 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(PushService.clearChatNotification(widget.chatId));
     WidgetsBinding.instance.addObserver(this);
     ChatsModule.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);

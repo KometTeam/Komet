@@ -504,7 +504,7 @@ class AccountModule {
     _ensureOnline();
     final packet = await _api.sendRequest(Opcode.config, <dynamic, dynamic>{
       'pushToken': pushToken,
-      'pushOptions': 131072,
+      'pushOptions': 0,
     });
     if (packet.isError) {
       final msg = messageFromErrorPayload(packet.payload).toUpperCase();

@@ -4,21 +4,23 @@ import '../../backend/api.dart';
 import '../../backend/modules/calls.dart';
 import '../protocol/opcode_map.dart';
 import '../protocol/packet.dart';
+import 'call_bridge.dart';
 import 'call_session.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
 
-/// Данные входящего звонка (из пуша opcode 137).
 class IncomingCall {
   final String conversationId;
 
-  /// ONE_ME id звонящего.
   final int callerId;
   final bool isVideo;
   final ConversationParams params;
 
   final String? country;
   final bool? isContact;
+  final String? callerName;
+
+  final bool autoAccept;
 
   const IncomingCall({
     required this.conversationId,
@@ -27,11 +29,11 @@ class IncomingCall {
     required this.params,
     this.country,
     this.isContact,
+    this.callerName,
+    this.autoAccept = false,
   });
 }
 
-/// Глобальный оркестратор звонков: слушает входящие (opcode 137),
-/// инициирует исходящие (opcode 78) и держит активный [CallSession].
 class CallController {
   CallController._();
   static final CallController instance = CallController._();
@@ -42,12 +44,15 @@ class CallController {
 
   final _incoming = StreamController<IncomingCall>.broadcast();
   final _ended = StreamController<void>.broadcast();
+  final _canceled = StreamController<void>.broadcast();
 
-  /// Новый входящий звонок — UI показывает экран/оверлей.
+  bool appResumed = false;
+
   Stream<IncomingCall> get incomingCalls => _incoming.stream;
 
-  /// Активный звонок завершился (любой стороной).
   Stream<void> get callEnded => _ended.stream;
+
+  Stream<void> get incomingCanceled => _canceled.stream;
 
   CallSession? _active;
   CallSession? get activeSession => _active;
@@ -66,6 +71,7 @@ class CallController {
 
   void _onPush(Packet packet) {
     if (packet.opcode != Opcode.notifCallStart) return;
+    if (!appResumed) return;
     final payload = packet.payload;
     if (payload is! Map) return;
 
@@ -77,22 +83,69 @@ class CallController {
     final params = ConversationParams.decode(vcp);
     if (params == null) return;
 
-    // Уже идёт звонок — новый игнорируем (сервер сам отметит как пропущенный).
-    if (_active != null) return;
-
-    final incoming = IncomingCall(
+    _emitIncoming(IncomingCall(
       conversationId: conversationId,
       callerId: callerId,
-      isVideo: payload['type'] == 'VIDEO',
+      isVideo: payload['type'] == 'VIDEO' || params.isVideo,
       params: params,
       country: payload['country'] as String?,
       isContact: payload['isContact'] as bool?,
+    ));
+  }
+
+  void injectFromNative(Map<dynamic, dynamic> data, {bool autoAccept = false}) {
+    final vcp = data['vcp']?.toString();
+    if (vcp == null || vcp.isEmpty) return;
+
+    final params = ConversationParams.decode(vcp);
+    if (params == null) return;
+
+    final conversationId =
+        (data['conversationId'] ?? data['vcId'])?.toString();
+    if (conversationId == null || conversationId.isEmpty) return;
+
+    final callerId = _asInt(data['callerId'] ?? data['suid']);
+    if (callerId == null) return;
+
+    final type = (data['type'] ?? data['callType'])?.toString();
+    final iv = data['iv'];
+    final isVideo =
+        params.isVideo || type == 'VIDEO' || iv == true || iv == 'true';
+
+    _emitIncoming(
+      IncomingCall(
+        conversationId: conversationId,
+        callerId: callerId,
+        isVideo: isVideo,
+        params: params,
+        country: data['country']?.toString(),
+        isContact: data['isContact'] is bool ? data['isContact'] as bool : null,
+        callerName: data['userName']?.toString(),
+        autoAccept: autoAccept,
+      ),
     );
+  }
+
+  void _emitIncoming(IncomingCall incoming) {
+    if (_active != null) return;
+    if (_pending?.conversationId == incoming.conversationId) return;
     _pending = incoming;
     _incoming.add(incoming);
   }
 
-  /// Начать исходящий 1:1 звонок.
+  void dismissIncoming() {
+    if (_pending == null) return;
+    _pending = null;
+    _canceled.add(null);
+  }
+
+  static int? _asInt(Object? v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
   Future<CallSession> startOutgoing(int calleeId, {bool isVideo = false}) async {
     if (_active != null) throw StateError('уже идёт звонок');
     final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
@@ -100,6 +153,7 @@ class CallController {
     final session = CallSession(ws2Config: config, role: CallRole.caller);
     _bind(session);
     await session.start();
+    CallBridge.instance.notifyAccepted();
     return session;
   }
 
@@ -114,12 +168,13 @@ class CallController {
     final session = CallSession(ws2Config: config, role: CallRole.joiner);
     _bind(session);
     await session.start();
+    CallBridge.instance.notifyAccepted();
     return session;
   }
 
-  /// Принять входящий звонок.
   Future<CallSession> acceptIncoming(IncomingCall call) async {
     _pending = null;
+    CallBridge.instance.cancelIncoming();
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
@@ -132,13 +187,13 @@ class CallController {
     _bind(session);
     await session.start();
     await session.accept();
+    CallBridge.instance.notifyAccepted(caller: call.callerName);
     return session;
   }
 
-  /// Отклонить входящий звонок (подключаемся к ws2 только чтобы отправить
-  /// `hangup reason=REJECTED`, без медиа).
   Future<void> rejectIncoming(IncomingCall call) async {
     _pending = null;
+    CallBridge.instance.notifyEnded();
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
@@ -153,12 +208,8 @@ class CallController {
     }
   }
 
-  /// Завершить активный звонок.
   Future<void> endActive() => _active?.hangup() ?? Future.value();
 
-  /// DEBUG: послать в активный звонок сигнал состояния микрофона
-  /// (`change-media-settings`), не трогая реальный микрофон.
-  /// Возвращает `false`, если активного звонка нет.
   Future<bool> sendMicSignal(bool enabled) async {
     final session = _active;
     if (session == null) return false;
@@ -171,6 +222,7 @@ class CallController {
     session.stateStream.listen((state) {
       if (state == CallSessionState.ended && _active == session) {
         _active = null;
+        CallBridge.instance.notifyEnded();
         _ended.add(null);
       }
     });
@@ -180,5 +232,6 @@ class CallController {
     _pushSub?.cancel();
     _incoming.close();
     _ended.close();
+    _canceled.close();
   }
 }

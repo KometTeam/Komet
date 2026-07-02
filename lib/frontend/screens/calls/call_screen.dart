@@ -33,6 +33,7 @@ class CallScreen extends StatefulWidget {
   final CallSession? session;
   final IncomingCall? incoming;
   final bool isGroup;
+  final bool autoAccept;
 
   const CallScreen({
     super.key,
@@ -41,6 +42,7 @@ class CallScreen extends StatefulWidget {
     this.session,
     this.incoming,
     this.isGroup = false,
+    this.autoAccept = false,
   });
 
   @override
@@ -51,6 +53,7 @@ class _CallScreenState extends State<CallScreen>
     with TickerProviderStateMixin {
   CallSession? _session;
   StreamSubscription<CallSessionState>? _stateSub;
+  StreamSubscription<void>? _canceledSub;
   StreamSubscription<void>? _infoSub;
   StreamSubscription<void>? _kometSub;
   StreamSubscription<CallChatMessage>? _chatSub;
@@ -111,6 +114,16 @@ class _CallScreenState extends State<CallScreen>
     final incoming = widget.incoming;
     if (incoming != null && (_name.isEmpty || _avatarUrl == null)) {
       _resolvePeerInfo(incoming.callerId);
+    }
+    if (incoming != null) {
+      _canceledSub = CallController.instance.incomingCanceled.listen((_) {
+        if (mounted && _incomingPending) _close();
+      });
+    }
+    if (widget.autoAccept && incoming != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _incomingPending) _accept();
+      });
     }
   }
 
@@ -364,6 +377,7 @@ class _CallScreenState extends State<CallScreen>
   @override
   void dispose() {
     _stateSub?.cancel();
+    _canceledSub?.cancel();
     _infoSub?.cancel();
     _kometSub?.cancel();
     _chatSub?.cancel();

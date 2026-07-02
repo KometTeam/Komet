@@ -25,7 +25,10 @@ import '../profile/settings_tab.dart';
 import '../auth/login_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
+import '../../widgets/animated_text_swap.dart';
 import '../../../backend/api.dart';
+import '../../../core/protocol/opcode_map.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../backend/models/chat_folder.dart';
@@ -36,6 +39,7 @@ import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/storage/typing_store.dart';
 import '../../../main.dart'
     show accountModule, api, messagesModule, appRouteObserver;
 
@@ -157,6 +161,8 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   StreamSubscription? _stateSub;
   StreamSubscription<LoginStatus>? _loginSub;
+  StreamSubscription<Packet>? _typingSub;
+  StreamSubscription<MessageEvent>? _typingMsgSub;
 
   Widget? _cachedChatsBody;
   Object? _chatsBodyCacheKey;
@@ -500,7 +506,27 @@ class _ChatListScreenState extends State<ChatListScreen>
     ChatsModule.chatsChanged.addListener(_onChatsChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
+    _typingSub = api.pushStream
+        .where((p) => p.opcode == Opcode.notifTyping)
+        .listen(_onTypingPush);
+    _typingMsgSub = ChatsModule.messageEvents.listen(_onTypingMessageEvent);
     unawaited(_runReload());
+  }
+
+  void _onTypingPush(Packet packet) {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final chatId = payload['chatId'];
+    final userId = payload['userId'];
+    if (chatId is! int || userId is! int) return;
+    if (userId == (_profile?.id ?? 0)) return;
+    TypingStore.instance.markTyping(chatId, userId);
+  }
+
+  void _onTypingMessageEvent(MessageEvent event) {
+    if (event is MessageAddedEvent) {
+      TypingStore.instance.clearUser(event.chatId, event.message.senderId);
+    }
   }
 
   void _onDraftsChanged() {
@@ -1065,6 +1091,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
+    _typingSub?.cancel();
+    _typingMsgSub?.cancel();
     _fabController.dispose();
     _navPageAnimController.dispose();
     _storiesRevealController
@@ -2171,7 +2199,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     String time,
     String imageUrl, {
     int presenceUserId = 0,
-    bool isTyping = false,
     bool isRead = false,
     int unreadCount = 0,
     bool isMuted = false,
@@ -2366,45 +2393,66 @@ class _ChatListScreenState extends State<ChatListScreen>
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Expanded(
-                              child: draft != null
-                                  ? Text.rich(
-                                      TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: 'Черновик: ',
-                                            style: TextStyle(color: cs.error),
+                              child: ValueListenableBuilder<bool>(
+                                valueListenable: TypingStore.instance
+                                    .listenable(int.tryParse(id) ?? 0),
+                                child: draft != null
+                                    ? Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: 'Черновик: ',
+                                              style: TextStyle(color: cs.error),
+                                            ),
+                                            TextSpan(
+                                              text: draft,
+                                              style: TextStyle(
+                                                color: cs.outline,
+                                              ),
+                                            ),
+                                          ],
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                            fontStyle: FontStyle.italic,
+                                            height: 1.2,
                                           ),
-                                          TextSpan(
-                                            text: draft,
-                                            style: TextStyle(color: cs.outline),
-                                          ),
-                                        ],
-                                        style: const TextStyle(
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )
+                                    : Text(
+                                        message,
+                                        style: TextStyle(
+                                          color: cs.outline,
                                           fontSize: 14,
                                           fontWeight: FontWeight.w400,
-                                          fontStyle: FontStyle.italic,
+                                          fontStyle: messageItalic
+                                              ? FontStyle.italic
+                                              : FontStyle.normal,
                                           height: 1.2,
                                         ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    )
-                                  : Text(
-                                      message,
+                                builder: (context, typing, base) {
+                                  return AnimatedTextSwap(
+                                    showAlternate: typing,
+                                    alternate: Text(
+                                      'печатает...',
                                       style: TextStyle(
-                                        color: isTyping ? cs.primary : cs.outline,
+                                        color: cs.primary,
                                         fontSize: 14,
-                                        fontWeight: isTyping
-                                            ? FontWeight.w500
-                                            : FontWeight.w400,
-                                        fontStyle: messageItalic
-                                            ? FontStyle.italic
-                                            : FontStyle.normal,
+                                        fontWeight: FontWeight.w500,
                                         height: 1.2,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
+                                    child: base!,
+                                  );
+                                },
+                              ),
                             ),
                             ?statusIcon,
                             const SizedBox(width: 8),

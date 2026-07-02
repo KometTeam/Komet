@@ -115,9 +115,11 @@ class SpoofingService {
     return profile;
   }
 
-  static Future<Map<String, dynamic>?> getSpoofedSessionData() async {
+  static Future<Map<String, dynamic>?> getSpoofedSessionData({
+    String? scope,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    final profile = await _read(prefs, await activeScope());
+    final profile = await _read(prefs, scope ?? await activeScope());
     if (profile == null || !profile.enabled) return null;
 
     return {

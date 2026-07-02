@@ -49,6 +49,8 @@ class Api {
   int? get callsSeed => _callsSeed;
   String? get deviceId => _deviceId;
 
+  String? spoofScope;
+
   List<CountryName>? _registrationCountries;
 
   List<CountryName> get registrationCountries =>
@@ -224,7 +226,9 @@ class Api {
       );
     }
 
-    final spoofed = await SpoofingService.getSpoofedSessionData();
+    final spoofed = await SpoofingService.getSpoofedSessionData(
+      scope: spoofScope,
+    );
     if (spoofed != null) {
       final sDeviceType = spoofed['device_type'] as String?;
       if (sDeviceType != null && sDeviceType != 'IOS') deviceType = sDeviceType;

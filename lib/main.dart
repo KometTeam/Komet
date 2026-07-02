@@ -46,6 +46,7 @@ import 'backend/modules/polls.dart';
 import 'backend/modules/self_check.dart';
 import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
+import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
@@ -233,6 +234,9 @@ class KometAppState extends State<KometApp>
   late Locale _locale;
   late String _fontId;
   bool _isLoggingOut = false;
+  bool _shellReady = false;
+  bool _incomingRouteActive = false;
+  IncomingCall? _pendingIncoming;
   late final ValueNotifier<Color?> accentSeed = ValueNotifier(
     widget.initialAccentSeed,
   );
@@ -296,6 +300,7 @@ class KometAppState extends State<KometApp>
         if (isOnemeFlavor) {
           await PushService.instance.init(api: api, account: accountModule);
           await PushService.instance.onLoginSuccess();
+          await _ensureFullScreenIntentPermission();
         }
       }
     });
@@ -303,6 +308,11 @@ class KometAppState extends State<KometApp>
     _callIncomingSub = CallController.instance.incomingCalls.listen(
       _onIncomingCall,
     );
+    CallController.instance.appResumed = true;
+    CallBridge.instance.init();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      CallBridge.instance.checkInitialCall();
+    });
 
     _sessionExpiredSub = api.sessionExpiredStream.listen((
       SessionExpiredException e,
@@ -369,18 +379,49 @@ class KometAppState extends State<KometApp>
     });
   }
 
-  Future<void> _onIncomingCall(IncomingCall call) async {
+  Future<void> _ensureFullScreenIntentPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('fsi_prompted') ?? false) return;
+    if (await CallBridge.instance.canUseFullScreenIntent()) return;
+    await prefs.setBool('fsi_prompted', true);
+    await CallBridge.instance.openFullScreenIntentSettings();
+  }
+
+  void _onIncomingCall(IncomingCall call) {
+    _pendingIncoming = call;
+    _presentIncomingCall();
+  }
+
+  void markShellReady() {
+    if (_shellReady) return;
+    _shellReady = true;
+    _presentIncomingCall();
+  }
+
+  void _presentIncomingCall() {
+    final call = _pendingIncoming;
+    if (call == null || _incomingRouteActive || !_shellReady) return;
     final navState = KometApp.navigatorKey.currentState;
-    if (navState == null) return;
-    navState.push(
-      MaterialPageRoute(
-        builder: (_) => CallScreen(
-          name: ContactCache.get(call.callerId) ?? '',
-          avatarUrl: ContactCache.getAvatar(call.callerId),
-          incoming: call,
-        ),
-      ),
-    );
+    if (navState == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _presentIncomingCall());
+      return;
+    }
+    _incomingRouteActive = true;
+    navState
+        .push(
+          MaterialPageRoute(
+            builder: (_) => CallScreen(
+              name: ContactCache.get(call.callerId) ?? call.callerName ?? '',
+              avatarUrl: ContactCache.getAvatar(call.callerId),
+              incoming: call,
+              autoAccept: call.autoAccept,
+            ),
+          ),
+        )
+        .whenComplete(() {
+      _incomingRouteActive = false;
+      if (identical(_pendingIncoming, call)) _pendingIncoming = null;
+    });
   }
 
   @override
@@ -407,12 +448,14 @@ class KometAppState extends State<KometApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    CallController.instance.appResumed = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       DebugSessionLog.instance.flushNow();
     }
     if (state != AppLifecycleState.resumed) return;
+    CallBridge.instance.checkInitialCall();
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
     _rescheduleSwitch();
     final next = _effectiveThemeMode;
@@ -839,6 +882,7 @@ class _StartupScreenState extends State<_StartupScreen> {
       context,
       MaterialPageRoute(builder: (_) => const AdaptiveShell()),
     );
+    KometApp.stateOf(context)?.markShellReady();
   }
 
   Future<int?> _recoverActiveAccount() async {
@@ -860,6 +904,7 @@ class _StartupScreenState extends State<_StartupScreen> {
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
+      KometApp.stateOf(context)?.markShellReady();
     }
   }
 
