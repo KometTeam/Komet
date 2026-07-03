@@ -46,6 +46,10 @@ class PrivacyConfig {
   final String stickersSuggest;
   final bool safeMode;
   final bool audioTranscriptionEnabled;
+  final String chatsPushNotification;
+  final String mCallPushNotification;
+  final String pushSound;
+  final String chatsPushSound;
   final String hash;
 
   const PrivacyConfig({
@@ -68,6 +72,10 @@ class PrivacyConfig {
     required this.stickersSuggest,
     required this.safeMode,
     required this.audioTranscriptionEnabled,
+    required this.chatsPushNotification,
+    required this.mCallPushNotification,
+    required this.pushSound,
+    required this.chatsPushSound,
     required this.hash,
   });
 
@@ -92,6 +100,10 @@ class PrivacyConfig {
       stickersSuggest: map['STICKERS_SUGGEST']?.toString() ?? 'ON',
       safeMode: map['SAFE_MODE'] ?? false,
       audioTranscriptionEnabled: map['AUDIO_TRANSCRIPTION_ENABLED'] ?? true,
+      chatsPushNotification: map['CHATS_PUSH_NOTIFICATION']?.toString() ?? 'ON',
+      mCallPushNotification: map['M_CALL_PUSH_NOTIFICATION']?.toString() ?? 'ON',
+      pushSound: map['PUSH_SOUND']?.toString() ?? 'oki.aiff',
+      chatsPushSound: map['CHATS_PUSH_SOUND']?.toString() ?? 'oki.aiff',
       hash: map['hash']?.toString() ?? '',
     );
   }
@@ -116,6 +128,10 @@ class PrivacyConfig {
     'STICKERS_SUGGEST': stickersSuggest,
     'SAFE_MODE': safeMode,
     'AUDIO_TRANSCRIPTION_ENABLED': audioTranscriptionEnabled,
+    'CHATS_PUSH_NOTIFICATION': chatsPushNotification,
+    'M_CALL_PUSH_NOTIFICATION': mCallPushNotification,
+    'PUSH_SOUND': pushSound,
+    'CHATS_PUSH_SOUND': chatsPushSound,
     'hash': hash,
   });
 
@@ -148,6 +164,10 @@ class PrivacyConfig {
       stickersSuggest: 'ON',
       safeMode: false,
       audioTranscriptionEnabled: true,
+      chatsPushNotification: 'ON',
+      mCallPushNotification: 'ON',
+      pushSound: 'oki.aiff',
+      chatsPushSound: 'oki.aiff',
       hash: '',
     );
   }
