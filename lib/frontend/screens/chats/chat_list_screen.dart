@@ -17,7 +17,9 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
+import '../../widgets/formatted_message_text.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/text_format.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -1540,6 +1542,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     draft: _draftFor(chat.id),
                     ownStatus: _ownStatusFor(chat, isPlaceholder),
                     ownRead: chat.lastMsgReadByOthers,
+                    messageRanges: isPlaceholder
+                        ? const []
+                        : chat.lastMsgFormatRanges,
                   ),
                   );
                 } else {
@@ -1550,14 +1555,30 @@ class _ChatListScreenState extends State<ChatListScreen>
                       : null;
 
                   String fullMsg = "";
+                  List<FormatRange> messageRanges = const [];
                   if (isPlaceholder) {
                     fullMsg = 'зайдите в чат для подгрузки';
                   } else {
+                    var prefixLen = 0;
                     if (sender?.isNotEmpty == true && chat.id != 0) {
-                      fullMsg += "$sender: ";
+                      final prefix = "$sender: ";
+                      fullMsg += prefix;
+                      prefixLen = prefix.length;
                     }
                     if (chat.lastMsgText?.isNotEmpty == true) {
                       fullMsg += chat.lastMsgText ?? "";
+                      final ranges = chat.lastMsgFormatRanges;
+                      messageRanges = prefixLen == 0
+                          ? ranges
+                          : [
+                              for (final r in ranges)
+                                FormatRange(
+                                  format: r.format,
+                                  start: r.start + prefixLen,
+                                  length: r.length,
+                                  attributes: r.attributes,
+                                ),
+                            ];
                     }
                   }
 
@@ -1580,6 +1601,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     draft: chat.id == 0 ? null : _draftFor(chat.id),
                     ownStatus: _ownStatusFor(chat, isPlaceholder),
                     ownRead: chat.lastMsgReadByOthers,
+                    messageRanges: messageRanges,
                   ),
                   );
                 }
@@ -2216,6 +2238,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     String? draft,
     String? ownStatus,
     bool ownRead = false,
+    List<FormatRange> messageRanges = const [],
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -2427,19 +2450,35 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       )
-                                    : Text(
-                                        message,
-                                        style: TextStyle(
-                                          color: cs.outline,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w400,
-                                          fontStyle: messageItalic
-                                              ? FontStyle.italic
-                                              : FontStyle.normal,
-                                          height: 1.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                    : Builder(
+                                        builder: (_) {
+                                          final previewStyle = TextStyle(
+                                            color: cs.outline,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                            fontStyle: messageItalic
+                                                ? FontStyle.italic
+                                                : FontStyle.normal,
+                                            height: 1.2,
+                                          );
+                                          if (messageRanges.isEmpty) {
+                                            return Text(
+                                              message,
+                                              style: previewStyle,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            );
+                                          }
+                                          return Text.rich(
+                                            FormattedMessageText.buildInlineSpan(
+                                              message,
+                                              messageRanges,
+                                              previewStyle,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          );
+                                        },
                                       ),
                               ),
                             ),

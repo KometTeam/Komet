@@ -190,7 +190,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 15,
+      version: 16,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -246,6 +246,11 @@ class AppDatabase {
         }
         if (oldVersion < 15) {
           await _addColumnIfMissing(db, 'messages', 'edit_history', 'TEXT');
+        }
+        if (oldVersion < 16) {
+          await _addColumnIfMissing(
+            db, 'chats_cache', 'last_msg_elements', 'TEXT',
+          );
         }
       },
     );
@@ -333,6 +338,7 @@ class AppDatabase {
       last_msg_id     INTEGER,
       last_msg_time   INTEGER,
       last_msg_text   TEXT,
+      last_msg_elements TEXT,
       last_msg_sender INTEGER,
       last_msg_status TEXT,
       unread_count    INTEGER NOT NULL DEFAULT 0,

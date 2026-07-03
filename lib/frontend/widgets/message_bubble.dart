@@ -25,7 +25,7 @@ import '../../core/utils/link_opener.dart';
 import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
-import 'link_text.dart';
+import 'formatted_message_text.dart';
 import 'sticker_image.dart';
 import '../../models/attachment.dart';
 import 'poll_view.dart';
@@ -935,10 +935,15 @@ class MessageBubble extends StatelessWidget {
     final hasReactions = reactionChips.isNotEmpty;
 
     final textStyle = TextStyle(color: ctx.text, fontSize: 16, height: 1.3);
+    final ranges = message.formatRanges;
     final textWidget = isForwarded
         ? _buildForwardedInlineText(ctx, forwarded)
-        : (LinkText.hasLinks(message.text)
-              ? LinkText(text: message.text!, style: textStyle)
+        : (FormattedMessageText.isFormatted(message.text, ranges)
+              ? FormattedMessageText(
+                  text: message.text!,
+                  ranges: ranges,
+                  style: textStyle,
+                )
               : Text(message.text ?? '', style: textStyle));
 
     final metaWidget = Text(
@@ -1385,8 +1390,9 @@ class MessageBubble extends StatelessWidget {
               if (hasText) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: LinkText(
+                  child: FormattedMessageText(
                     text: message.text!,
+                    ranges: message.formatRanges,
                     style: TextStyle(
                       color: ctx.text,
                       fontSize: 16,
@@ -1822,8 +1828,13 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildCaption(_BubbleCtx ctx) {
     final style = TextStyle(color: ctx.text, fontSize: 16, height: 1.3);
-    if (LinkText.hasLinks(message.text)) {
-      return LinkText(text: message.text!, style: style);
+    final ranges = message.formatRanges;
+    if (FormattedMessageText.isFormatted(message.text, ranges)) {
+      return FormattedMessageText(
+        text: message.text!,
+        ranges: ranges,
+        style: style,
+      );
     }
     return Text(message.text ?? '', style: style);
   }

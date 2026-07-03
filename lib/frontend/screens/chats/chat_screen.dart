@@ -53,6 +53,8 @@ import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
 import '../../commands/slash_command.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/rich_message_controller.dart';
+import '../../../core/utils/text_format.dart';
 import '../../widgets/command_suggestions_panel.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/connection_status.dart';
@@ -201,7 +203,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  final TextEditingController _messageController = TextEditingController();
+  final RichMessageController _messageController = RichMessageController();
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
   bool _keyboardWasOpen = false;
@@ -1531,7 +1533,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _startEditMessage(CachedMessage message) async {
     final cs = Theme.of(context).colorScheme;
-    final controller = TextEditingController(text: message.text ?? '');
+    final controller = RichMessageController(text: message.text ?? '')
+      ..setFormatRanges(message.formatRanges);
 
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -1567,6 +1570,8 @@ class _ChatScreenState extends State<ChatScreen>
               minLines: 1,
               maxLines: 6,
               style: TextStyle(color: cs.onSurface),
+              contextMenuBuilder: (ctx, state) =>
+                  _formatContextMenu(controller, ctx, state),
               decoration: InputDecoration(
                 hintText: 'Текст сообщения',
                 filled: true,
@@ -1592,14 +1597,24 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    final newText = controller.text.trim();
+    final rawText = controller.text;
+    final newText = rawText.trim();
+    final elements = _trimmedElements(controller, rawText, newText);
     controller.dispose();
-    if (newText == (message.text ?? '')) return;
+
+    final oldElements = serializeFormatElements(
+      message.formatRanges.where((r) => composerFormats.contains(r.format)),
+    );
+    if (newText == (message.text ?? '') &&
+        _sameElements(elements, oldElements)) {
+      return;
+    }
 
     final ok = await messagesModule.editMessage(
       widget.chatId,
       message.id,
       text: newText,
+      elements: elements,
     );
     if (!mounted) return;
     if (!ok) {
@@ -1626,7 +1641,7 @@ class _ChatScreenState extends State<ChatScreen>
         text: newText.isEmpty ? null : newText,
         time: old.time,
         status: 'EDITED',
-        payload: old.payload,
+        payload: {...?old.payload, 'elements': elements},
         attachments: old.attachments,
         isControl: old.isControl,
         editHistory: newHistory,
@@ -2634,8 +2649,98 @@ class _ChatScreenState extends State<ChatScreen>
     _syncOtherReadTime();
   }
 
+  static String _formatLabel(TextFormat format) {
+    switch (format) {
+      case TextFormat.strong:
+        return 'Жирный';
+      case TextFormat.emphasized:
+        return 'Курсив';
+      case TextFormat.underline:
+        return 'Подчёркнутый';
+      case TextFormat.strikethrough:
+        return 'Зачёркнутый';
+      case TextFormat.monospaced:
+        return 'Моноширинный';
+      case TextFormat.quote:
+        return 'Цитата';
+      case TextFormat.link:
+        return 'Ссылка';
+    }
+  }
+
+  Widget _formatContextMenu(
+    RichMessageController controller,
+    BuildContext context,
+    EditableTextState editableState,
+  ) {
+    final selection = controller.selection;
+    final buttonItems = <ContextMenuButtonItem>[];
+    if (selection.isValid && !selection.isCollapsed) {
+      for (final format in composerFormats) {
+        final active = controller.isFormatActive(format);
+        buttonItems.add(
+          ContextMenuButtonItem(
+            label: '${active ? '✓ ' : ''}${_formatLabel(format)}',
+            onPressed: () {
+              controller.toggleFormat(format);
+              editableState.hideToolbar();
+            },
+          ),
+        );
+      }
+    }
+    buttonItems.addAll(editableState.contextMenuButtonItems);
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableState.contextMenuAnchors,
+      buttonItems: buttonItems,
+    );
+  }
+
+  static bool _sameElements(
+    List<Map<String, dynamic>> a,
+    List<Map<String, dynamic>> b,
+  ) {
+    if (a.length != b.length) return false;
+    String canon(List<Map<String, dynamic>> els) {
+      final copy = [...els]..sort((x, y) {
+        final t = (x['type'] as String).compareTo(y['type'] as String);
+        return t != 0 ? t : (x['from'] as int).compareTo(y['from'] as int);
+      });
+      return copy
+          .map((e) => '${e['type']}:${e['from']}:${e['length']}')
+          .join(',');
+    }
+
+    return canon(a) == canon(b);
+  }
+
+  List<Map<String, dynamic>> _trimmedElements(
+    RichMessageController controller,
+    String rawText,
+    String text,
+  ) {
+    final raw = controller.elementsForSend();
+    if (raw.isEmpty) return const [];
+    final leading = rawText.length - rawText.trimLeft().length;
+    final result = <Map<String, dynamic>>[];
+    for (final element in raw) {
+      var from = (element['from'] as int) - leading;
+      var length = element['length'] as int;
+      if (from < 0) {
+        length += from;
+        from = 0;
+      }
+      if (from >= text.length || length <= 0) continue;
+      if (from + length > text.length) length = text.length - from;
+      if (length <= 0) continue;
+      result.add({...element, 'from': from, 'length': length});
+    }
+    return result;
+  }
+
   Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
+    final rawText = _messageController.text;
+    final text = rawText.trim();
     if (text.isEmpty || _myId == 0) return;
 
     if (AppCommands.current.value && text.startsWith('/')) {
@@ -2679,6 +2784,15 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _replyTo.value = null;
 
+    final elements = _trimmedElements(_messageController, rawText, text);
+    final Map<String, dynamic>? composedPayload =
+        (replyPayload == null && elements.isEmpty)
+        ? null
+        : {
+            ...?replyPayload,
+            if (elements.isNotEmpty) 'elements': elements,
+          };
+
     final composed = CachedMessage(
       id: tempId,
       accountId: _myId,
@@ -2687,7 +2801,7 @@ class _ChatScreenState extends State<ChatScreen>
       text: text,
       time: now,
       status: online ? 'sending' : 'pending',
-      payload: replyPayload,
+      payload: composedPayload,
     );
 
     _hasText.value = false;
@@ -2706,6 +2820,7 @@ class _ChatScreenState extends State<ChatScreen>
       time: now,
       text: text,
       status: composed.status ?? 'sending',
+      elements: elements,
     ));
 
     // Instant tactile "whoosh" the moment the message leaves the composer,
@@ -2723,6 +2838,7 @@ class _ChatScreenState extends State<ChatScreen>
         widget.chatId,
         text,
         replyToMessageId: replyId,
+        elements: elements,
       );
 
       final index = _messages.indexWhere((m) => m.id == tempId);
@@ -2735,7 +2851,7 @@ class _ChatScreenState extends State<ChatScreen>
           text: text,
           time: now,
           status: 'sent',
-          payload: replyPayload,
+          payload: composedPayload,
         );
         _messages[index] = sent;
         _bumpMessages();
@@ -2747,6 +2863,7 @@ class _ChatScreenState extends State<ChatScreen>
           time: now,
           text: text,
           status: 'sent',
+          elements: elements,
         ));
       }
 
@@ -2770,7 +2887,7 @@ class _ChatScreenState extends State<ChatScreen>
           text: text,
           time: now,
           status: 'pending',
-          payload: replyPayload,
+          payload: composedPayload,
         );
         _messages[index] = queued;
         _bumpMessages();
@@ -2782,6 +2899,7 @@ class _ChatScreenState extends State<ChatScreen>
           time: now,
           text: text,
           status: 'pending',
+          elements: elements,
         ));
       }
     }
@@ -4588,6 +4706,12 @@ class _ChatScreenState extends State<ChatScreen>
                                   maxLines: null,
                                   keyboardType: TextInputType.multiline,
                                   textAlignVertical: TextAlignVertical.center,
+                                  contextMenuBuilder: (ctx, state) =>
+                                      _formatContextMenu(
+                                        _messageController,
+                                        ctx,
+                                        state,
+                                      ),
                                   decoration: InputDecoration(
                                     hintText: 'Message',
                                     hintStyle: TextStyle(

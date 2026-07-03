@@ -11,6 +11,7 @@ import '../../core/cache/message_session_cache.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
+import '../../core/utils/text_format.dart';
 import '../api.dart';
 import 'folders.dart';
 import 'messages.dart' show ContactCache, CachedMessage;
@@ -40,6 +41,7 @@ class CachedChat {
   final int? lastMsgTime;
   final String? lastMsgText;
   final String? lastMsgTextOneLine;
+  final String? lastMsgElements;
   final int? lastMsgSenderId;
   final String? lastMsgStatus;
   final int unreadCount;
@@ -63,6 +65,7 @@ class CachedChat {
     this.lastMsgId,
     this.lastMsgTime,
     this.lastMsgText,
+    this.lastMsgElements,
     this.lastMsgSenderId,
     this.lastMsgStatus,
     required this.unreadCount,
@@ -81,6 +84,16 @@ class CachedChat {
             : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
+
+  List<FormatRange> get lastMsgFormatRanges {
+    final raw = lastMsgElements;
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      return parseFormatElements(jsonDecode(raw));
+    } catch (_) {
+      return const [];
+    }
+  }
 
   bool get lastMsgReadByOthers {
     final t = lastMsgTime;
@@ -108,6 +121,7 @@ class CachedChat {
     lastMsgId: row['last_msg_id'] as int?,
     lastMsgTime: row['last_msg_time'] as int?,
     lastMsgText: row['last_msg_text'] as String?,
+    lastMsgElements: row['last_msg_elements'] as String?,
     lastMsgSenderId: row['last_msg_sender'] as int?,
     lastMsgStatus: row['last_msg_status'] as String?,
     unreadCount: row['unread_count'] as int,
@@ -146,6 +160,7 @@ class CachedChat {
     'last_msg_id': lastMsgId,
     'last_msg_time': lastMsgTime,
     'last_msg_text': lastMsgText,
+    'last_msg_elements': lastMsgElements,
     'last_msg_sender': lastMsgSenderId,
     'last_msg_status': lastMsgStatus,
     'unread_count': unreadCount,
@@ -290,6 +305,14 @@ class ChatsModule {
     return attachPreviewLabel(msg['attaches']);
   }
 
+  static String? messagePreviewElements(Map msg) {
+    final text = msg['text'];
+    if (text is! String || text.isEmpty) return null;
+    final elements = msg['elements'];
+    if (elements is List && elements.isNotEmpty) return jsonEncode(elements);
+    return null;
+  }
+
   static final _messageEventsController =
       StreamController<MessageEvent>.broadcast();
   static Stream<MessageEvent> get messageEvents =>
@@ -365,6 +388,7 @@ class ChatsModule {
     required int time,
     required String text,
     required String status,
+    List<Map<String, dynamic>>? elements,
   }) async {
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
@@ -375,6 +399,9 @@ class ChatsModule {
     if (time < existingTime && existingId != thisId) return;
     row['last_msg_id'] = thisId;
     row['last_msg_text'] = text;
+    row['last_msg_elements'] = (elements != null && elements.isNotEmpty)
+        ? jsonEncode(elements)
+        : null;
     row['last_msg_time'] = time;
     row['last_event_time'] = time;
     row['last_msg_sender'] = accountId;
@@ -618,6 +645,7 @@ class ChatsModule {
         }
       }
       newRow['last_msg_text'] = messagePreviewText(msg);
+      newRow['last_msg_elements'] = messagePreviewElements(msg);
       if (senderId != null) newRow['last_msg_sender'] = senderId;
       newRow['last_msg_status'] = 'sent';
     }
@@ -642,8 +670,10 @@ class ChatsModule {
     final newRow = Map<String, dynamic>.from(chatRow);
     if (latest.isNotEmpty) {
       final m = latest.first;
-      String? previewText = m['text']?.toString();
-      if (previewText == null || previewText.isEmpty) {
+      final rawText = m['text']?.toString();
+      String? previewText = rawText;
+      String? elementsJson;
+      if (rawText == null || rawText.isEmpty) {
         final payloadRaw = m['payload'];
         if (payloadRaw is String && payloadRaw.isNotEmpty) {
           try {
@@ -653,15 +683,28 @@ class ChatsModule {
             }
           } catch (_) {}
         }
+      } else {
+        final payloadRaw = m['payload'];
+        if (payloadRaw is String && payloadRaw.isNotEmpty) {
+          try {
+            final payload = jsonDecode(payloadRaw);
+            if (payload is Map) {
+              final els = payload['elements'];
+              if (els is List && els.isNotEmpty) elementsJson = jsonEncode(els);
+            }
+          } catch (_) {}
+        }
       }
       newRow['last_msg_id'] = int.tryParse(m['id']?.toString() ?? '');
       newRow['last_msg_text'] = previewText ?? m['text'];
+      newRow['last_msg_elements'] = elementsJson;
       newRow['last_msg_time'] = m['time'];
       newRow['last_msg_sender'] = m['sender_id'];
       newRow['last_msg_status'] = m['status'];
     } else {
       newRow['last_msg_id'] = null;
       newRow['last_msg_text'] = lastMsgPlaceholder;
+      newRow['last_msg_elements'] = null;
       newRow['last_msg_sender'] = null;
       newRow['last_msg_status'] = null;
     }
@@ -937,6 +980,7 @@ class ChatsModule {
     if (a.lastMsgId != b.lastMsgId) return false;
     if (a.lastMsgTime != b.lastMsgTime) return false;
     if (a.lastMsgText != b.lastMsgText) return false;
+    if (a.lastMsgElements != b.lastMsgElements) return false;
     if (a.lastMsgSenderId != b.lastMsgSenderId) return false;
     if (a.unreadCount != b.unreadCount) return false;
     if (a.lastEventTime != b.lastEventTime) return false;
@@ -1100,12 +1144,14 @@ class ChatsModule {
         int? lastMsgId;
         int? lastMsgTime;
         String? lastMsgText;
+        String? lastMsgElements;
         int? lastMsgSenderId;
 
         if (lastMsg is Map) {
           lastMsgId = lastMsg['id'] as int?;
           lastMsgTime = lastMsg['time'] as int?;
           lastMsgText = messagePreviewText(lastMsg);
+          lastMsgElements = messagePreviewElements(lastMsg);
           lastMsgSenderId = lastMsg['sender'] as int?;
         }
 
@@ -1169,6 +1215,7 @@ class ChatsModule {
           lastMsgId: lastMsgId,
           lastMsgTime: lastMsgTime,
           lastMsgText: lastMsgText,
+          lastMsgElements: lastMsgElements,
           lastMsgSenderId: lastMsgSenderId,
           unreadCount: (chat['newMessages'] as int?) ?? 0,
           lastEventTime: (chat['lastEventTime'] as int?) ?? 0,

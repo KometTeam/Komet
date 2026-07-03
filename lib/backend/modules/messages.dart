@@ -8,6 +8,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
+import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
 import 'chats.dart' show ChatsModule;
 
@@ -502,6 +503,8 @@ class CachedMessage {
 
   ReplyInfo? get replyInfo => ReplyInfo.fromPayload(payload);
 
+  List<FormatRange> get formatRanges => parseFormatElements(payload?['elements']);
+
   static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
       rows.map(CachedMessage.fromDbRow).toList();
 
@@ -733,11 +736,12 @@ class MessagesModule {
     bool notify = true,
     int? scheduledTime,
     int? replyToMessageId,
+    List<Map<String, dynamic>> elements = const [],
   }) async {
     final message = <String, dynamic>{
       'text': text,
       'cid': DateTime.now().millisecondsSinceEpoch * -1,
-      'elements': [],
+      'elements': elements,
       'attaches': [],
     };
     if (replyToMessageId != null) {
