@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -500,7 +501,10 @@ class _ColorPickerCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _HueStripPicker(color: col, onChanged: onColorChanged),
+                        _ColorWheelPicker(
+                          color: col,
+                          onChanged: onColorChanged,
+                        ),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
@@ -660,83 +664,113 @@ class _BubbleBehaviorCard extends StatelessWidget {
   }
 }
 
-class _HueStripPicker extends StatelessWidget {
+class _ColorWheelPicker extends StatefulWidget {
   final Color color;
   final ValueChanged<Color> onChanged;
 
-  const _HueStripPicker({required this.color, required this.onChanged});
+  const _ColorWheelPicker({required this.color, required this.onChanged});
 
-  static const _gradient = LinearGradient(
-    colors: [
-      Color(0xFFFF0000),
-      Color(0xFFFFFF00),
-      Color(0xFF00FF00),
-      Color(0xFF00FFFF),
-      Color(0xFF0000FF),
-      Color(0xFFFF00FF),
-      Color(0xFFFF0000),
-    ],
-  );
+  @override
+  State<_ColorWheelPicker> createState() => _ColorWheelPickerState();
+}
+
+class _ColorWheelPickerState extends State<_ColorWheelPicker> {
+  late HSVColor _hsv;
+  late Color _lastEmitted;
+
+  @override
+  void initState() {
+    super.initState();
+    _hsv = HSVColor.fromColor(widget.color).withValue(1);
+    _lastEmitted = widget.color;
+  }
+
+  @override
+  void didUpdateWidget(covariant _ColorWheelPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.color != _lastEmitted) {
+      _hsv = HSVColor.fromColor(widget.color).withValue(1);
+      _lastEmitted = widget.color;
+    }
+  }
+
+  void _handleWheel(Offset local, double size) {
+    final radius = size / 2;
+    final dx = local.dx - radius;
+    final dy = local.dy - radius;
+    final sat = (math.sqrt(dx * dx + dy * dy) / radius).clamp(0.0, 1.0);
+    var hue = math.atan2(dy, dx) * 180 / math.pi;
+    if (hue < 0) hue += 360;
+    final hsv = _hsv.withHue(hue).withSaturation(sat);
+    setState(() => _hsv = hsv);
+    final color = hsv.toColor();
+    _lastEmitted = color;
+    widget.onChanged(color);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hue = HSVColor.fromColor(color).hue;
-    const trackHeight = 26.0;
-    const thumbDiameter = 30.0;
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        void emit(double dx) {
-          final clamped = dx.clamp(0.0, width);
-          final newHue = (clamped / width) * 360;
-          onChanged(HSVColor.fromAHSV(1, newHue, 1, 1).toColor());
-        }
+        final wheelSize = math.min(260.0, constraints.maxWidth);
 
-        final thumbLeft = (hue / 360) * width - thumbDiameter / 2;
-
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanDown: (d) => emit(d.localPosition.dx),
-          onPanUpdate: (d) => emit(d.localPosition.dx),
-          child: SizedBox(
-            height: thumbDiameter + 4,
-            child: Stack(
-              children: [
-                Center(
-                  child: Container(
-                    height: trackHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(trackHeight / 2),
-                      gradient: _gradient,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: thumbLeft.clamp(0, width - thumbDiameter),
-                  top: (thumbDiameter + 4 - thumbDiameter) / 2,
-                  child: Container(
-                    width: thumbDiameter,
-                    height: thumbDiameter,
-                    decoration: BoxDecoration(
-                      color: HSVColor.fromAHSV(1, hue, 1, 1).toColor(),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.18),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+        return Center(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanDown: (d) => _handleWheel(d.localPosition, wheelSize),
+            onPanUpdate: (d) => _handleWheel(d.localPosition, wheelSize),
+            child: SizedBox(
+              width: wheelSize,
+              height: wheelSize,
+              child: CustomPaint(painter: _WheelPainter(hsv: _hsv)),
             ),
           ),
         );
       },
     );
   }
+}
+
+class _WheelPainter extends CustomPainter {
+  final HSVColor hsv;
+
+  const _WheelPainter({required this.hsv});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final hueShader = SweepGradient(
+      colors: [
+        for (var i = 0; i <= 360; i += 30)
+          HSVColor.fromAHSV(1, (i % 360).toDouble(), 1, 1).toColor(),
+      ],
+      stops: [for (var i = 0; i <= 360; i += 30) i / 360],
+    ).createShader(rect);
+    canvas.drawCircle(center, radius, Paint()..shader = hueShader);
+
+    final satShader = RadialGradient(
+      colors: [Colors.white, Colors.white.withValues(alpha: 0)],
+    ).createShader(rect);
+    canvas.drawCircle(center, radius, Paint()..shader = satShader);
+
+    final angle = hsv.hue * math.pi / 180;
+    final thumb = Offset(
+      center.dx + hsv.saturation * radius * math.cos(angle),
+      center.dy + hsv.saturation * radius * math.sin(angle),
+    );
+    canvas.drawShadow(
+      Path()..addOval(Rect.fromCircle(center: thumb, radius: 13)),
+      Colors.black,
+      2,
+      false,
+    );
+    canvas.drawCircle(thumb, 13, Paint()..color = Colors.white);
+    canvas.drawCircle(thumb, 10, Paint()..color = hsv.toColor());
+  }
+
+  @override
+  bool shouldRepaint(_WheelPainter oldDelegate) => oldDelegate.hsv != hsv;
 }

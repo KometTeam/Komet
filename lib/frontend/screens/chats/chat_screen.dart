@@ -37,6 +37,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
+import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/cache/message_session_cache.dart';
@@ -67,7 +68,10 @@ import '../../widgets/sticker_panel.dart';
 import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/schedule_time_picker.dart';
+import '../../widgets/chat_wallpaper_sheet.dart';
+import '../../widgets/chat_wallpaper_view.dart';
 import 'scheduled_messages_screen.dart';
+import 'chat_wallpaper_preview_screen.dart';
 
 class _UploadStatus {
   final bool active;
@@ -325,6 +329,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _floatingDateScheduled = false;
   int _myId = 0;
   CachedChat? chat;
+  ChatWallpaper? _wallpaper;
 
   final ValueNotifier<DateTime?> _floatingDate = ValueNotifier(null);
   Timer? _floatingDateTimer;
@@ -428,6 +433,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     _myId = p?.id ?? 0;
     _restoreDraft();
+    unawaited(_loadWallpaper());
     unawaited(_refreshBadge());
 
     ChatsModule.getChat(_myId, widget.chatId)
@@ -2417,7 +2423,7 @@ class _ChatScreenState extends State<ChatScreen>
         ChatMenuItem(
           icon: Symbols.wallpaper,
           label: 'Изменить обои',
-          onTap: () {},
+          onTap: _openWallpaperSheet,
         ),
         ChatMenuItem(
           icon: Symbols.mop,
@@ -2431,6 +2437,67 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       ],
     );
+  }
+
+  Future<void> _loadWallpaper() async {
+    await ChatWallpaperStore.instance.load();
+    if (!mounted) return;
+    final wp = ChatWallpaperStore.instance.get(_myId, widget.chatId);
+    if (wp != _wallpaper) setState(() => _wallpaper = wp);
+  }
+
+  Future<void> _openWallpaperSheet() async {
+    if (_myId == 0) return;
+    final pick = await showChatWallpaperSheet(context, current: _wallpaper);
+    if (pick == null || !mounted) return;
+    final store = ChatWallpaperStore.instance;
+    switch (pick.type) {
+      case WallpaperPickType.none:
+        await store.clear(_myId, widget.chatId);
+        if (mounted) setState(() => _wallpaper = null);
+        break;
+      case WallpaperPickType.theme:
+        final theme = pick.theme;
+        if (theme == null) break;
+        final wp = await store.setTheme(_myId, widget.chatId, theme.id);
+        if (mounted) setState(() => _wallpaper = wp);
+        break;
+      case WallpaperPickType.gallery:
+        await _pickWallpaperFromGallery();
+        break;
+    }
+  }
+
+  Future<void> _pickWallpaperFromGallery() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final bytes = result.files.first.bytes;
+    if (bytes == null) {
+      if (mounted) showCustomNotification(context, 'Не удалось прочитать файл');
+      return;
+    }
+    if (!mounted) return;
+    final settings = await Navigator.of(context).push<WallpaperImageSettings>(
+      MaterialPageRoute(
+        builder: (_) => ChatWallpaperPreviewScreen(imageBytes: bytes),
+      ),
+    );
+    if (settings == null || !mounted) return;
+    final wp = await ChatWallpaperStore.instance.setImage(
+      _myId,
+      widget.chatId,
+      bytes,
+      settings: settings,
+    );
+    if (!mounted) return;
+    if (wp == null) {
+      showCustomNotification(context, 'Не удалось сохранить обои');
+      return;
+    }
+    setState(() => _wallpaper = wp);
   }
 
   Future<bool?> _showConfirmDialog({
@@ -3483,6 +3550,10 @@ class _ChatScreenState extends State<ChatScreen>
                   Expanded(
                     child: Stack(
                       children: [
+                        if (_wallpaper != null)
+                          Positioned.fill(
+                            child: ChatWallpaperView(wallpaper: _wallpaper!),
+                          ),
                         Positioned.fill(
                           child: _isLoading && _messages.isEmpty
                               ? _buildShimmerLoading()
