@@ -11,6 +11,7 @@ import 'chat_screen.dart';
 import 'search_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../widgets/avatar_hero.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
@@ -2300,6 +2301,28 @@ class _ChatListScreenState extends State<ChatListScreen>
       messageItalic,
     );
 
+    Widget avatarCircle = CircleAvatar(
+      radius: 24,
+      backgroundColor: cs.surfaceContainerHighest,
+      backgroundImage: imageUrl.isNotEmpty
+          ? CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144)
+          : null,
+      child: imageUrl.isEmpty
+          ? Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 20),
+            )
+          : null,
+    );
+    if (widget.onChatSelected == null) {
+      avatarCircle = AvatarHero(
+        tag: 'chatAvatar_$id',
+        name: name,
+        imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
+        child: avatarCircle,
+      );
+    }
+
     return InkWell(
       key: ValueKey('chat_$id'),
       onTap: () {
@@ -2353,26 +2376,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             children: [
               Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: cs.surfaceContainerHighest,
-                    backgroundImage: imageUrl.isNotEmpty
-                        ? CachedNetworkImageProvider(
-                            imageUrl,
-                            maxWidth: 144,
-                            maxHeight: 144,
-                          )
-                        : null,
-                    child: imageUrl.isEmpty
-                        ? Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : '?',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 20,
-                            ),
-                          )
-                        : null,
-                  ),
+                  avatarCircle,
                   if (isSelected)
                     Positioned(
                       right: -2,

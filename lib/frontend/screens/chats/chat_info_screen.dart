@@ -7,6 +7,7 @@ import '../../../core/cache/info_cache.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../widgets/avatar_hero.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
@@ -263,12 +264,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 4),
-          KometAvatar(
-            name: widget.name,
-            imageUrl: widget.imageUrl,
-            size: 96,
-            fontSize: 36,
-          ),
+          _heroAvatar(),
           const SizedBox(height: 14),
           Text(
             widget.name,
@@ -1104,6 +1100,20 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   // ─── SHIMMER ─────────────────────────────────────────────────────────────
 
+  Widget _heroAvatar() {
+    return AvatarHero(
+      tag: 'chatAvatar_${widget.chatId}',
+      name: widget.name,
+      imageUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
+      child: KometAvatar(
+        name: widget.name,
+        imageUrl: widget.imageUrl,
+        size: 96,
+        fontSize: 36,
+      ),
+    );
+  }
+
   Widget _buildShimmer(ColorScheme cs) {
     Widget block(double w, double h, {double r = 8}) => Container(
       width: w,
@@ -1117,7 +1127,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
       children: [
-        Center(child: block(96, 96, r: 48)),
+        Center(
+          child: AvatarHero(
+            tag: 'chatAvatar_${widget.chatId}',
+            name: widget.name,
+            imageUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
+            child: block(96, 96, r: 48),
+          ),
+        ),
         const SizedBox(height: 14),
         Center(child: block(160, 22, r: 8)),
         const SizedBox(height: 8),

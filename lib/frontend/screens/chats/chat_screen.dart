@@ -54,6 +54,7 @@ import '../../../models/attachment.dart';
 import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
 import '../../commands/slash_command.dart';
+import '../../widgets/avatar_hero.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/rich_message_controller.dart';
 import '../../../core/utils/text_format.dart';
@@ -2116,30 +2117,37 @@ class _ChatScreenState extends State<ChatScreen>
                 children: [
                   _withOnlineDot(
                     cs,
-                    widget.imageUrl.isNotEmpty
-                        ? CircleAvatar(
-                            radius: 22,
-                            backgroundImage: CachedNetworkImageProvider(
-                              widget.imageUrl,
-                              maxWidth: 144,
-                              maxHeight: 144,
-                            ),
-                          )
-                        : CircleAvatar(
-                            radius: 22,
-                            backgroundColor: cs.primaryContainer,
-                            child: Text(
-                              widget.name.isNotEmpty
-                                  ? widget.name[0].toUpperCase()
-                                  : '?',
-                              style: TextStyle(
-                                color: cs.onPrimaryContainer,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Outfit',
+                    AvatarHero(
+                      tag: 'chatAvatar_${widget.chatId}',
+                      name: widget.name,
+                      imageUrl: widget.imageUrl.isNotEmpty
+                          ? widget.imageUrl
+                          : null,
+                      child: widget.imageUrl.isNotEmpty
+                          ? CircleAvatar(
+                              radius: 22,
+                              backgroundImage: CachedNetworkImageProvider(
+                                widget.imageUrl,
+                                maxWidth: 144,
+                                maxHeight: 144,
+                              ),
+                            )
+                          : CircleAvatar(
+                              radius: 22,
+                              backgroundColor: cs.primaryContainer,
+                              child: Text(
+                                widget.name.isNotEmpty
+                                    ? widget.name[0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  color: cs.onPrimaryContainer,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Outfit',
+                                ),
                               ),
                             ),
-                          ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -2276,28 +2284,35 @@ class _ChatScreenState extends State<ChatScreen>
               children: [
                 _withOnlineDot(
                   cs,
-                  widget.imageUrl.isNotEmpty
-                      ? CircleAvatar(
-                          radius: 18,
-                          backgroundImage: CachedNetworkImageProvider(
-                            widget.imageUrl,
-                            maxWidth: 144,
-                            maxHeight: 144,
-                          ),
-                        )
-                      : CircleAvatar(
-                          radius: 18,
-                          backgroundColor: cs.primaryContainer,
-                          child: Text(
-                            widget.name.isNotEmpty
-                                ? widget.name[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              color: cs.onPrimaryContainer,
-                              fontSize: 12,
+                  AvatarHero(
+                    tag: 'chatAvatar_${widget.chatId}',
+                    name: widget.name,
+                    imageUrl: widget.imageUrl.isNotEmpty
+                        ? widget.imageUrl
+                        : null,
+                    child: widget.imageUrl.isNotEmpty
+                        ? CircleAvatar(
+                            radius: 18,
+                            backgroundImage: CachedNetworkImageProvider(
+                              widget.imageUrl,
+                              maxWidth: 144,
+                              maxHeight: 144,
+                            ),
+                          )
+                        : CircleAvatar(
+                            radius: 18,
+                            backgroundColor: cs.primaryContainer,
+                            child: Text(
+                              widget.name.isNotEmpty
+                                  ? widget.name[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                color: cs.onPrimaryContainer,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                        ),
+                  ),
                   dotSize: 11,
                 ),
                 const SizedBox(width: 12),
