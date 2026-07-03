@@ -2221,6 +2221,53 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Widget _buildPreviewLine(
+    ColorScheme cs,
+    String message,
+    List<FormatRange> messageRanges,
+    String? draft,
+    bool messageItalic,
+  ) {
+    if (draft != null) {
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: 'Черновик: ', style: TextStyle(color: cs.error)),
+            TextSpan(text: draft, style: TextStyle(color: cs.outline)),
+          ],
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            fontStyle: FontStyle.italic,
+            height: 1.2,
+          ),
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    final previewStyle = TextStyle(
+      color: cs.outline,
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
+      fontStyle: messageItalic ? FontStyle.italic : FontStyle.normal,
+      height: 1.2,
+    );
+    if (messageRanges.isEmpty) {
+      return Text(
+        message,
+        style: previewStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    return Text.rich(
+      FormattedMessageText.buildInlineSpan(message, messageRanges, previewStyle),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
   Widget _buildChatItem(
     String id,
     String name,
@@ -2245,6 +2292,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
+    final Widget messageLine = _buildPreviewLine(
+      cs,
+      message,
+      messageRanges,
+      draft,
+      messageItalic,
+    );
 
     return InkWell(
       key: ValueKey('chat_$id'),
@@ -2425,61 +2479,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             Expanded(
                               child: _ActivitySubtitle(
                                 chatId: int.tryParse(id) ?? 0,
-                                child: draft != null
-                                    ? Text.rich(
-                                        TextSpan(
-                                          children: [
-                                            TextSpan(
-                                              text: 'Черновик: ',
-                                              style: TextStyle(color: cs.error),
-                                            ),
-                                            TextSpan(
-                                              text: draft,
-                                              style: TextStyle(
-                                                color: cs.outline,
-                                              ),
-                                            ),
-                                          ],
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w400,
-                                            fontStyle: FontStyle.italic,
-                                            height: 1.2,
-                                          ),
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      )
-                                    : Builder(
-                                        builder: (_) {
-                                          final previewStyle = TextStyle(
-                                            color: cs.outline,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w400,
-                                            fontStyle: messageItalic
-                                                ? FontStyle.italic
-                                                : FontStyle.normal,
-                                            height: 1.2,
-                                          );
-                                          if (messageRanges.isEmpty) {
-                                            return Text(
-                                              message,
-                                              style: previewStyle,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            );
-                                          }
-                                          return Text.rich(
-                                            FormattedMessageText.buildInlineSpan(
-                                              message,
-                                              messageRanges,
-                                              previewStyle,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          );
-                                        },
-                                      ),
+                                child: messageLine,
                               ),
                             ),
                             ?statusIcon,

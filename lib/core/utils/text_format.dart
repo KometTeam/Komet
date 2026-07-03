@@ -158,47 +158,29 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
 TextStyle applyTextFormats(
   TextStyle base,
   Set<TextFormat> formats, {
-  Color? linkColor,
   Color? quoteColor,
-  Color? monoColor,
 }) {
   if (formats.isEmpty) return base;
-  var style = base;
-  final decorations = <TextDecoration>[];
 
-  if (formats.contains(TextFormat.strong)) {
-    style = style.merge(const TextStyle(fontWeight: FontWeight.w700));
-  }
-  if (formats.contains(TextFormat.emphasized) ||
-      formats.contains(TextFormat.quote)) {
-    style = style.merge(const TextStyle(fontStyle: FontStyle.italic));
-  }
-  if (formats.contains(TextFormat.monospaced)) {
-    style = style.merge(
-      TextStyle(
-        fontFamily: 'monospace',
-        color: monoColor ?? style.color,
-      ),
-    );
-  }
-  if (formats.contains(TextFormat.quote) && quoteColor != null) {
-    style = style.merge(TextStyle(color: quoteColor));
-  }
-  if (formats.contains(TextFormat.underline)) {
+  final decorations = <TextDecoration>[];
+  if (formats.contains(TextFormat.underline) ||
+      formats.contains(TextFormat.link)) {
     decorations.add(TextDecoration.underline);
   }
   if (formats.contains(TextFormat.strikethrough)) {
     decorations.add(TextDecoration.lineThrough);
   }
-  if (formats.contains(TextFormat.link)) {
-    decorations.add(TextDecoration.underline);
-    if (linkColor != null) style = style.merge(TextStyle(color: linkColor));
-  }
 
-  if (decorations.isNotEmpty) {
-    style = style.merge(
-      TextStyle(decoration: TextDecoration.combine(decorations)),
-    );
-  }
-  return style;
+  final isItalic = formats.contains(TextFormat.emphasized) ||
+      formats.contains(TextFormat.quote);
+
+  return base.copyWith(
+    fontWeight: formats.contains(TextFormat.strong) ? FontWeight.w700 : null,
+    fontStyle: isItalic ? FontStyle.italic : null,
+    fontFamily: formats.contains(TextFormat.monospaced) ? 'monospace' : null,
+    color: formats.contains(TextFormat.quote) ? quoteColor : null,
+    decoration: decorations.isEmpty
+        ? null
+        : TextDecoration.combine(decorations),
+  );
 }
