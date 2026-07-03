@@ -828,6 +828,28 @@ class MessagesModule {
     return '';
   }
 
+  Future<bool> sendLinkMessage(int chatId, String url) async {
+    final message = <String, dynamic>{
+      'text': url,
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'elements': [
+        {
+          'type': 'LINK',
+          'from': 0,
+          'length': url.length,
+          'attributes': {'url': url},
+        },
+      ],
+      'attaches': [],
+    };
+    final response = await _api.sendRequest(Opcode.msgSend, {
+      'chatId': chatId,
+      'message': message,
+      'notify': true,
+    });
+    return response.isOk;
+  }
+
   /// Загружает отложенные (запланированные) сообщения чата.
   ///
   /// В отличие от обычной истории, отложенные сообщения не сохраняются

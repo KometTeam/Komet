@@ -1,12 +1,17 @@
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/protocol/packet.dart';
 import '../../core/utils/logger.dart';
 import '../../models/sticker.dart';
 
 class StickersModule {
   final Api _api;
 
-  StickersModule(this._api);
+  StickersModule(this._api) {
+    _api.pushStream
+        .where((p) => p.opcode == Opcode.notifAssetsUpdate)
+        .listen(_handleAssetsPush);
+  }
 
   final Map<int, StickerSet> _sets = {};
   final Map<int, StickerItem> _stickers = {};
@@ -15,6 +20,7 @@ class StickersModule {
   List<int> _recentStickerIds = [];
 
   Future<void>? _loading;
+  Future<void>? _favoritesLoading;
 
   List<StickerSet> get sets =>
       _orderedSetIds.map((id) => _sets[id]).whereType<StickerSet>().toList();
@@ -22,12 +28,40 @@ class StickersModule {
   List<int> get favoriteSetIds => _favoriteSetIds;
   List<int> get recentStickerIds => _recentStickerIds;
   StickerItem? cachedSticker(int id) => _stickers[id];
+  StickerSet? cachedSet(int id) => _sets[id];
+  bool isFavorite(int setId) => _favoriteSetIds.contains(setId);
 
   Future<void> ensureLoaded() {
     return _loading ??= _loadSections().catchError((Object e) {
       _loading = null;
       throw e;
     });
+  }
+
+  Future<void> ensureFavoritesLoaded() {
+    return _favoritesLoading ??= _loadFavorites().catchError((Object e) {
+      _favoritesLoading = null;
+      throw e;
+    });
+  }
+
+  Future<void> _loadFavorites() async {
+    final favIds = <int>[];
+    final favResp = await _api.sendRequest(Opcode.assetsUpdate, {
+      'type': 'FAVORITE_STICKER',
+      'sync': 0,
+    });
+    if (favResp.isOk && favResp.payload is Map) {
+      final sections = favResp.payload['sections'];
+      if (sections is List) {
+        for (final s in sections) {
+          if (s is Map && s['id'] == 'FAVORITE_STICKER_SETS') {
+            _appendIntList(favIds, s['stickerSets']);
+          }
+        }
+      }
+    }
+    _favoriteSetIds = favIds;
   }
 
   Future<void> _loadSections() async {
@@ -70,26 +104,11 @@ class StickersModule {
       marker = m is int ? m : 0;
     }
 
-    final favIds = <int>[];
-    final favResp = await _api.sendRequest(Opcode.assetsUpdate, {
-      'type': 'FAVORITE_STICKER',
-      'sync': 0,
-    });
-    if (favResp.isOk && favResp.payload is Map) {
-      final sections = favResp.payload['sections'];
-      if (sections is List) {
-        for (final s in sections) {
-          if (s is Map && s['id'] == 'FAVORITE_STICKER_SETS') {
-            _appendIntList(favIds, s['stickerSets']);
-          }
-        }
-      }
-    }
-    _favoriteSetIds = favIds;
+    await ensureFavoritesLoaded();
 
     final ordered = <int>[];
     final seen = <int>{};
-    for (final id in [...favIds, ...newSetIds]) {
+    for (final id in [..._favoriteSetIds, ...newSetIds]) {
       if (seen.add(id)) ordered.add(id);
     }
     _orderedSetIds = ordered;
@@ -138,6 +157,74 @@ class StickersModule {
         .map((id) => _stickers[id])
         .whereType<StickerItem>()
         .toList();
+  }
+
+  Future<StickerSet?> ensureSet(int setId) async {
+    await _ensureSetMetas([setId]);
+    return _sets[setId];
+  }
+
+  void cacheSet(StickerSet set) => _sets[set.id] = set;
+
+  Future<StickerSet?> resolveSetByLink(String link) async {
+    final resp = await _api.sendRequest(Opcode.linkInfo, {'link': link});
+    if (!resp.isOk || resp.payload is! Map) return null;
+    final raw = resp.payload['stickerSet'];
+    if (raw is! Map || raw['id'] is! int) return null;
+    final set = StickerSet.fromMap(raw);
+    _sets[set.id] = set;
+    return set;
+  }
+
+  Future<int?> resolveSetId(int stickerId) async {
+    await ensureStickers([stickerId]);
+    return _stickers[stickerId]?.setId;
+  }
+
+  Future<bool> favoriteSet(int setId) async {
+    final resp = await _api.sendRequest(Opcode.assetsAdd, {
+      'type': 'FAVORITE_STICKER_SET',
+      'id': setId,
+    });
+    final ok = resp.isOk && resp.payload is Map && resp.payload['success'] == true;
+    if (ok) _markFavorite(setId, true);
+    return ok;
+  }
+
+  Future<bool> unfavoriteSet(int setId) async {
+    final resp = await _api.sendRequest(Opcode.assetsRemove, {
+      'type': 'FAVORITE_STICKER_SET',
+      'ids': [setId],
+    });
+    final ok = resp.isOk && resp.payload is Map && resp.payload['success'] == true;
+    if (ok) _markFavorite(setId, false);
+    return ok;
+  }
+
+  void _handleAssetsPush(Packet push) {
+    final payload = push.payload;
+    if (payload is! Map) return;
+    if (payload['type'] != 'FAVORITE_STICKER_SET') return;
+    final id = payload['id'];
+    if (id is! int) return;
+    switch (payload['updateType']) {
+      case 'ADDED':
+        _markFavorite(id, true);
+      case 'REMOVED':
+        _markFavorite(id, false);
+    }
+  }
+
+  void _markFavorite(int setId, bool favorite) {
+    if (favorite) {
+      if (!_favoriteSetIds.contains(setId)) {
+        _favoriteSetIds = [setId, ..._favoriteSetIds];
+      }
+    } else {
+      if (_favoriteSetIds.contains(setId)) {
+        _favoriteSetIds = _favoriteSetIds.where((id) => id != setId).toList();
+      }
+    }
   }
 
   void _parseRecents(dynamic list) {

@@ -62,6 +62,7 @@ import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/sticker_panel.dart';
+import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/schedule_time_picker.dart';
 import 'scheduled_messages_screen.dart';
@@ -3105,6 +3106,19 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  void _openStickerPack(StickerAttachment sticker) {
+    final stickerId = int.tryParse(sticker.stickerId ?? '');
+    if (stickerId == null) {
+      showCustomNotification(context, 'Стикерпак недоступен');
+      return;
+    }
+    showStickerPackSheet(
+      context,
+      stickerId: stickerId,
+      knownSetId: int.tryParse(sticker.stickerPackId ?? ''),
+    );
+  }
+
   void _jumpToMessage(String messageId) {
     final index = _messages.indexWhere((m) => m.id == messageId);
     if (index == -1) {
@@ -3452,6 +3466,7 @@ class _ChatScreenState extends State<ChatScreen>
                   uploadProgress: _photoProgressFor(message),
                   onReplyTap: _jumpToMessage,
                   onAvatarTap: _openSenderProfile,
+                  onStickerTap: _openStickerPack,
                 );
 
                 final canReport = !isMe && !message.isControl;

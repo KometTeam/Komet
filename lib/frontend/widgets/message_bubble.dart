@@ -111,6 +111,7 @@ class MessageBubble extends StatelessWidget {
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
+  final void Function(StickerAttachment sticker)? onStickerTap;
 
   const MessageBubble({
     super.key,
@@ -125,6 +126,7 @@ class MessageBubble extends StatelessWidget {
     this.uploadProgress,
     this.onReplyTap,
     this.onAvatarTap,
+    this.onStickerTap,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -2335,7 +2337,7 @@ class MessageBubble extends StatelessWidget {
     final preview = sticker.previewData ?? '';
     final imageUrl = url.isNotEmpty ? url : preview;
 
-    return ClipRRect(
+    final Widget image = ClipRRect(
       borderRadius: BorderRadius.circular(photoBorderRadius),
       child: Stack(
         children: [
@@ -2355,6 +2357,14 @@ class MessageBubble extends StatelessWidget {
             _buildPhotoPlaceholder(ctx.cs, 150, 150),
         ],
       ),
+    );
+
+    final onTap = onStickerTap;
+    if (onTap == null || sticker is! StickerAttachment) return image;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onTap(sticker),
+      child: image,
     );
   }
 

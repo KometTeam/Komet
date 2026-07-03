@@ -1,4 +1,4 @@
-enum MaxLinkKind { call, invite, user, content, public, auth }
+enum MaxLinkKind { call, invite, user, content, public, auth, stickerSet }
 
 class MaxLink {
   final MaxLinkKind kind;
@@ -49,6 +49,10 @@ class MaxLink {
         return segments.length >= 2 ? MaxLink(MaxLinkKind.user, url) : null;
       case 'c':
         return segments.length >= 3 ? MaxLink(MaxLinkKind.content, url) : null;
+      case 'stickerset':
+        return segments.length >= 2
+            ? MaxLink(MaxLinkKind.stickerSet, url)
+            : null;
     }
 
     if (_reserved.contains(segments.first.toLowerCase())) return null;
