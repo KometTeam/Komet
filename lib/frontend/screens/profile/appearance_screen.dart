@@ -10,6 +10,7 @@ import '../../../core/config/app_bubble_behavior.dart';
 import '../../../core/config/app_bubble_shape.dart';
 import '../../../core/config/app_pill_gradient.dart';
 import '../../../core/config/app_visual_style.dart';
+import '../../../core/config/app_chat_chrome.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart';
@@ -115,6 +116,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             const SizedBox(height: 12),
             const _VisualStyleCard(),
             const SizedBox(height: 12),
+            const _ChatChromeCard(),
+            const SizedBox(height: 12),
             const _GradientToggleCard(),
           ],
         ),
@@ -170,6 +173,69 @@ class _VisualStyleCard extends StatelessWidget {
                   if (set.isNotEmpty) {
                     Haptics.selection();
                     AppVisualStyle.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatChromeCard extends StatelessWidget {
+  const _ChatChromeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Элементы экрана чата',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Фон панелей сверху и снизу: цвет, размытие или прозрачно. '
+            'При размытии и прозрачности сообщения заходят под панели',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<ChatChromeStyle>(
+            valueListenable: AppChatChrome.current,
+            builder: (context, current, _) {
+              return SegmentedButton<ChatChromeStyle>(
+                segments: const [
+                  ButtonSegment(
+                    value: ChatChromeStyle.color,
+                    label: Text('Цвет'),
+                  ),
+                  ButtonSegment(
+                    value: ChatChromeStyle.blur,
+                    label: Text('Блюр'),
+                  ),
+                  ButtonSegment(
+                    value: ChatChromeStyle.none,
+                    label: Text('Нет'),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppChatChrome.save(set.first);
                   }
                 },
               );

@@ -48,6 +48,7 @@ import '../../../core/config/app_swipe_back_desktop.dart';
 import '../../../core/config/app_pranks.dart';
 import '../../../core/config/app_commands.dart';
 import '../../../core/config/app_visual_style.dart';
+import '../../../core/config/app_chat_chrome.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
 import '../../../models/sticker.dart';
@@ -181,6 +182,70 @@ class _ButtonClipper extends CustomClipper<Rect> {
 
   @override
   bool shouldReclip(_ButtonClipper old) => old.t != t;
+}
+
+class _FrostedPanel extends StatelessWidget {
+  final Color tint;
+  final Border? border;
+  final Widget child;
+
+  const _FrostedPanel({required this.tint, this.border, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: tint, border: border),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _MeasureSize extends StatefulWidget {
+  final Widget child;
+  final ValueChanged<double> onHeight;
+
+  const _MeasureSize({required this.onHeight, required this.child});
+
+  @override
+  State<_MeasureSize> createState() => _MeasureSizeState();
+}
+
+class _MeasureSizeState extends State<_MeasureSize> {
+  final GlobalKey _key = GlobalKey();
+  double _last = -1;
+
+  void _report() {
+    if (!mounted) return;
+    final height = _key.currentContext?.size?.height;
+    if (height == null) return;
+    if ((height - _last).abs() > 0.5) {
+      _last = height;
+      widget.onHeight(height);
+    }
+  }
+
+  void _scheduleReport() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _report());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _scheduleReport();
+    return NotificationListener<SizeChangedLayoutNotification>(
+      onNotification: (_) {
+        _scheduleReport();
+        return true;
+      },
+      child: SizeChangedLayoutNotifier(
+        child: SizedBox(key: _key, child: widget.child),
+      ),
+    );
+  }
 }
 
 class ChatScreen extends StatefulWidget {
@@ -330,6 +395,7 @@ class _ChatScreenState extends State<ChatScreen>
   int _myId = 0;
   CachedChat? chat;
   ChatWallpaper? _wallpaper;
+  final ValueNotifier<double> _composerHeight = ValueNotifier(96);
 
   final ValueNotifier<DateTime?> _floatingDate = ValueNotifier(null);
   Timer? _floatingDateTimer;
@@ -357,6 +423,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_onScrollForDate);
     _scrollController.addListener(_maybeLoadMoreHistory);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
+    AppChatChrome.current.addListener(_onVisualStyleChanged);
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -875,6 +942,8 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_onScrollForDate);
     _scrollController.removeListener(_maybeLoadMoreHistory);
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
+    AppChatChrome.current.removeListener(_onVisualStyleChanged);
+    _composerHeight.dispose();
     _floatingDateTimer?.cancel();
     _floatingDateCurved.dispose();
     _floatingDateAnimController.dispose();
@@ -1367,7 +1436,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildComposerArea(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(
+    final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         AnimatedBuilder(
@@ -1448,6 +1517,17 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       ],
+    );
+    if (AppChatChrome.current.value != ChatChromeStyle.blur) return content;
+    return _FrostedPanel(
+      tint: cs.surfaceContainerHigh.withValues(alpha: 0.55),
+      border: Border(
+        top: BorderSide(
+          color: cs.outlineVariant.withValues(alpha: 0.4),
+          width: 0.5,
+        ),
+      ),
+      child: content,
     );
   }
 
@@ -1917,8 +1997,23 @@ class _ChatScreenState extends State<ChatScreen>
   PreferredSizeWidget _buildAppBar(ColorScheme cs) {
     final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
     final height = glossy ? 76.0 : kToolbarHeight;
+    final chrome = AppChatChrome.current.value;
     return AppBar(
-      backgroundColor: glossy ? Colors.transparent : cs.surfaceContainerHigh,
+      backgroundColor: chrome == ChatChromeStyle.color
+          ? (glossy ? Colors.transparent : cs.surfaceContainerHigh)
+          : Colors.transparent,
+      flexibleSpace: chrome == ChatChromeStyle.blur
+          ? _FrostedPanel(
+              tint: cs.surfaceContainerHigh.withValues(alpha: 0.55),
+              border: Border(
+                bottom: BorderSide(
+                  color: cs.outlineVariant.withValues(alpha: 0.4),
+                  width: 0.5,
+                ),
+              ),
+              child: const SizedBox.expand(),
+            )
+          : null,
       foregroundColor: cs.onSurface,
       surfaceTintColor: Colors.transparent,
       iconTheme: IconThemeData(color: cs.onSurface),
@@ -3511,6 +3606,7 @@ class _ChatScreenState extends State<ChatScreen>
         ? _prankPinkTheme(Theme.of(context))
         : Theme.of(context);
     final cs = theme.colorScheme;
+    final underlap = AppChatChrome.current.value != ChatChromeStyle.color;
 
     // TODO: Локализация
     // TODO: Cклонения
@@ -3544,33 +3640,9 @@ class _ChatScreenState extends State<ChatScreen>
             ),
             child: Scaffold(
               backgroundColor: cs.surface,
+              extendBodyBehindAppBar: underlap,
               appBar: _buildAppBar(cs),
-              body: Column(
-                children: [
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        if (_wallpaper != null)
-                          Positioned.fill(
-                            child: ChatWallpaperView(wallpaper: _wallpaper!),
-                          ),
-                        Positioned.fill(
-                          child: _isLoading && _messages.isEmpty
-                              ? _buildShimmerLoading()
-                              : _buildMessagesList(),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _buildCommandPanel(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildComposerArea(context),
-                ],
-              ),
+              body: underlap ? _buildUnderlapBody() : _buildColorBody(),
             ),
           ),
         ),
@@ -3579,11 +3651,97 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Widget _buildColorBody() {
+    return Column(
+      children: [
+        Expanded(
+          child: Stack(
+            children: [
+              if (_wallpaper != null)
+                Positioned.fill(
+                  child: ChatWallpaperView(wallpaper: _wallpaper!),
+                ),
+              Positioned.fill(
+                child: _isLoading && _messages.isEmpty
+                    ? _buildShimmerLoading()
+                    : _buildMessagesList(),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildCommandPanel(),
+              ),
+            ],
+          ),
+        ),
+        _buildComposerArea(context),
+      ],
+    );
+  }
+
+  Widget _buildUnderlapBody() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_wallpaper != null)
+          Positioned.fill(
+            child: ChatWallpaperView(wallpaper: _wallpaper!),
+          ),
+        Positioned.fill(
+          child: _isLoading && _messages.isEmpty
+              ? _buildShimmerLoading()
+              : _buildMessagesList(),
+        ),
+        ValueListenableBuilder<double>(
+          valueListenable: _composerHeight,
+          builder: (context, height, _) => Positioned(
+            left: 0,
+            right: 0,
+            bottom: height,
+            child: _buildCommandPanel(),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Builder(
+            builder: (context) => MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              child: _MeasureSize(
+                onHeight: (value) => _composerHeight.value = value,
+                child: _buildComposerArea(context),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildMessagesList() {
     return ValueListenableBuilder<int>(
       valueListenable: _messagesRev,
       builder: (context, _, _) => _buildMessagesListContent(),
     );
+  }
+
+  EdgeInsets _messagesListPadding(BuildContext context) {
+    if (AppChatChrome.current.value == ChatChromeStyle.color) {
+      return const EdgeInsets.symmetric(vertical: 8);
+    }
+    final topInset = MediaQuery.paddingOf(context).top;
+    return EdgeInsets.only(
+      top: topInset + 8,
+      bottom: _composerHeight.value + 8,
+    );
+  }
+
+  double _floatingDateTop(BuildContext context) {
+    if (AppChatChrome.current.value == ChatChromeStyle.color) return 8;
+    return MediaQuery.paddingOf(context).top + 8;
   }
 
   Widget _buildLoadMoreIndicator() {
@@ -3620,14 +3778,14 @@ class _ChatScreenState extends State<ChatScreen>
     return Stack(
       key: _listKey,
       children: [
-        ValueListenableBuilder<int>(
-          valueListenable: _otherReadTime,
-          builder: (context, _, _) => ValueListenableBuilder<double>(
+        ListenableBuilder(
+          listenable: Listenable.merge([_otherReadTime, _composerHeight]),
+          builder: (context, _) => ValueListenableBuilder<double>(
             valueListenable: AppCacheExtent.current,
             builder: (context, cacheExtent, _) => ListView.builder(
               controller: _scrollController,
               reverse: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: _messagesListPadding(context),
               cacheExtent: cacheExtent,
               itemCount: items.length + (_isLoadingMore ? 1 : 0),
               itemBuilder: (context, index) {
@@ -3767,7 +3925,7 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
         Positioned(
-          top: 8,
+          top: _floatingDateTop(context),
           left: 0,
           right: 0,
           child: IgnorePointer(
