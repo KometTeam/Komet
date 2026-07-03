@@ -55,6 +55,7 @@ import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
 import '../../commands/slash_command.dart';
 import '../../widgets/avatar_hero.dart';
+import '../../widgets/komet_avatar.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/rich_message_controller.dart';
 import '../../../core/utils/text_format.dart';
@@ -97,6 +98,42 @@ class _MessageItem {
   final CachedMessage message;
   final int index;
   const _MessageItem(this.message, this.index);
+}
+
+class _MessageSearchResult {
+  final String id;
+  final int time;
+  final int senderId;
+  final String text;
+  final List<String> highlights;
+
+  const _MessageSearchResult({
+    required this.id,
+    required this.time,
+    required this.senderId,
+    required this.text,
+    required this.highlights,
+  });
+
+  static _MessageSearchResult? fromRaw(Map<dynamic, dynamic> raw) {
+    final message = raw['message'];
+    if (message is! Map) return null;
+    final id = message['id']?.toString();
+    if (id == null) return null;
+    final rawHighlights = raw['highlights'];
+    final highlights = rawHighlights is List
+        ? rawHighlights.whereType<String>().toList()
+        : const <String>[];
+    final time = message['time'];
+    final sender = message['sender'];
+    return _MessageSearchResult(
+      id: id,
+      time: time is int ? time : int.tryParse('${time ?? 0}') ?? 0,
+      senderId: sender is int ? sender : int.tryParse('${sender ?? 0}') ?? 0,
+      text: message['text']?.toString() ?? '',
+      highlights: highlights,
+    );
+  }
 }
 
 class _RecordingDot extends StatefulWidget {
@@ -358,6 +395,17 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
   final ValueNotifier<String?> _highlightMessageId = ValueNotifier(null);
 
+  final ValueNotifier<bool> _searchMode = ValueNotifier(false);
+  late final AnimationController _searchAnim;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ValueNotifier<List<_MessageSearchResult>> _searchResults =
+      ValueNotifier(const []);
+  final ValueNotifier<bool> _searchLoading = ValueNotifier(false);
+  final ValueNotifier<bool> _searchPerformed = ValueNotifier(false);
+  Timer? _searchDebounce;
+  int _searchSeq = 0;
+
   bool _prankActive = false;
   String? _prankBubbleId;
   final GlobalKey _prankBubbleKey = GlobalKey();
@@ -388,6 +436,8 @@ class _ChatScreenState extends State<ChatScreen>
   static const int _historyInitialLimit = 50;
   static const double _avgMessageHeight = 72.0;
   static const double _historyPrefetchExtent = _avgMessageHeight * 8;
+  static const double _glossyHeaderHeight = 76.0;
+  static const double _glossySearchHeight = 58.0;
   bool _isLoadingMore = false;
   bool _hasMoreHistory = true;
   List<Object>? _combinedItemsCache;
@@ -449,6 +499,12 @@ class _ChatScreenState extends State<ChatScreen>
       duration: const Duration(milliseconds: 260),
       reverseDuration: const Duration(milliseconds: 200),
     );
+    _searchAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+      reverseDuration: const Duration(milliseconds: 220),
+    );
+    _searchController.addListener(_onSearchTextChanged);
     AppCommands.current.addListener(_updateCommandPanel);
     _pushSub = api.pushStream
         .where(
@@ -998,6 +1054,15 @@ class _ChatScreenState extends State<ChatScreen>
     AppCommands.current.removeListener(_updateCommandPanel);
     _commandAnim.dispose();
     _selectionAnim.dispose();
+    _searchDebounce?.cancel();
+    _searchAnim.dispose();
+    _searchController.removeListener(_onSearchTextChanged);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _searchMode.dispose();
+    _searchResults.dispose();
+    _searchLoading.dispose();
+    _searchPerformed.dispose();
     _selectedIds.dispose();
     _commandMatches.dispose();
     _messageController.dispose();
@@ -1519,16 +1584,38 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       ],
     );
-    if (AppChatChrome.current.value != ChatChromeStyle.blur) return content;
-    return _FrostedPanel(
-      tint: cs.surfaceContainerHigh.withValues(alpha: 0.55),
-      border: Border(
-        top: BorderSide(
-          color: cs.outlineVariant.withValues(alpha: 0.4),
-          width: 0.5,
+    Widget wrapChrome(Widget child) {
+      if (AppChatChrome.current.value != ChatChromeStyle.blur) return child;
+      return _FrostedPanel(
+        tint: cs.surfaceContainerHigh.withValues(alpha: 0.55),
+        border: Border(
+          top: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.4),
+            width: 0.5,
+          ),
         ),
-      ),
-      child: content,
+        child: child,
+      );
+    }
+
+    final base = wrapChrome(content);
+    return AnimatedBuilder(
+      animation: _searchAnim,
+      builder: (context, _) {
+        final s = Curves.easeOut.transform(_searchAnim.value.clamp(0.0, 1.0));
+        if (s == 0) return base;
+        if (s >= 1) return const SizedBox.shrink();
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: 1 - s,
+            child: Opacity(
+              opacity: 1 - s,
+              child: IgnorePointer(child: base),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1924,21 +2011,21 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _withOnlineDot(ColorScheme cs, Widget avatar, {double dotSize = 12}) {
-    if (widget.chatType != 'DIALOG' || _myId == 0) return avatar;
     final otherId = widget.chatId ^ _myId;
-    if (otherId <= 0) return avatar;
+    final showDot = widget.chatType == 'DIALOG' && _myId != 0 && otherId > 0;
     return Stack(
       children: [
         avatar,
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: OnlineDot(
-            userId: otherId,
-            borderColor: cs.surface,
-            size: dotSize,
+        if (showDot)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: OnlineDot(
+              userId: otherId,
+              borderColor: cs.surface,
+              size: dotSize,
+            ),
           ),
-        ),
       ],
     );
   }
@@ -1997,7 +2084,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   PreferredSizeWidget _buildAppBar(ColorScheme cs) {
     final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
-    final height = glossy ? 76.0 : kToolbarHeight;
+    final searchT = Curves.easeOut.transform(_searchAnim.value.clamp(0.0, 1.0));
+    final height = glossy
+        ? ui.lerpDouble(_glossyHeaderHeight, _glossySearchHeight, searchT)!
+        : kToolbarHeight;
     final chrome = AppChatChrome.current.value;
     return AppBar(
       backgroundColor: chrome == ChatChromeStyle.color
@@ -2026,21 +2116,24 @@ class _ChatScreenState extends State<ChatScreen>
       title: SizedBox(
         height: height,
         child: AnimatedBuilder(
-          animation: _selectionAnim,
+          animation: Listenable.merge([_selectionAnim, _searchAnim]),
           builder: (context, _) {
             final t = Curves.easeOut.transform(
               _selectionAnim.value.clamp(0.0, 1.0),
+            );
+            final s = Curves.easeOut.transform(
+              _searchAnim.value.clamp(0.0, 1.0),
             );
             return ValueListenableBuilder<Set<String>>(
               valueListenable: _selectedIds,
               builder: (context, selected, _) => Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (t < 1)
+                  if (t < 1 && s < 1)
                     IgnorePointer(
-                      ignoring: t > 0.5,
+                      ignoring: t > 0.5 || s > 0.5,
                       child: Opacity(
-                        opacity: 1 - t,
+                        opacity: (1 - t) * (1 - s),
                         child: Transform.translate(
                           offset: Offset(0, -height * 0.4 * t),
                           child: glossy
@@ -2060,10 +2153,83 @@ class _ChatScreenState extends State<ChatScreen>
                         ),
                       ),
                     ),
+                  if (s > 0)
+                    IgnorePointer(
+                      ignoring: s < 0.5,
+                      child: Opacity(
+                        opacity: s,
+                        child: _searchTopBar(cs, glossy),
+                      ),
+                    ),
                 ],
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _searchTopBar(ColorScheme cs, bool glossy) {
+    final field = TextField(
+      controller: _searchController,
+      focusNode: _searchFocusNode,
+      textInputAction: TextInputAction.search,
+      onSubmitted: (value) {
+        _searchDebounce?.cancel();
+        _runSearch(value);
+      },
+      cursorColor: cs.primary,
+      style: TextStyle(
+        color: cs.onSurface,
+        fontSize: 16,
+        fontFamily: 'Outfit',
+      ),
+      decoration: InputDecoration(
+        hintText: 'Поиск...',
+        hintStyle: TextStyle(
+          color: cs.onSurfaceVariant,
+          fontSize: 16,
+          fontFamily: 'Outfit',
+        ),
+        border: InputBorder.none,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      ),
+    );
+
+    final backBtn = IconButton(
+      icon: Icon(Symbols.arrow_back, weight: glossy ? 500 : 400,
+          color: cs.onSurface),
+      onPressed: _closeSearch,
+    );
+    final searchBtn = IconButton(
+      icon: Icon(Symbols.search, weight: glossy ? 500 : 400,
+          color: cs.onSurface),
+      onPressed: () {
+        _searchDebounce?.cancel();
+        _runSearch(_searchController.text);
+      },
+    );
+
+    if (!glossy) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [backBtn, Expanded(child: field), searchBtn],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+      child: GlossyPill(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: SizedBox(
+          height: 44,
+          child: Row(
+            children: [backBtn, Expanded(child: field), searchBtn],
+          ),
         ),
       ),
     );
@@ -2529,7 +2695,7 @@ class _ChatScreenState extends State<ChatScreen>
           label: 'Видеозвонок',
           onTap: () {},
         ),
-        ChatMenuItem(icon: Symbols.search, label: 'Поиск', onTap: () {}),
+        ChatMenuItem(icon: Symbols.search, label: 'Поиск', onTap: _openSearch),
         ChatMenuItem(
           icon: Symbols.wallpaper,
           label: 'Изменить обои',
@@ -3457,6 +3623,375 @@ class _ChatScreenState extends State<ChatScreen>
   GlobalKey _keyForMessage(String messageId) =>
       _messageKeys.putIfAbsent(messageId, () => GlobalKey());
 
+  void _openSearch() {
+    if (_searchMode.value || _selectionMode) return;
+    _searchMode.value = true;
+    _searchAnim.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _searchMode.value) _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _closeSearch() {
+    if (!_searchMode.value) return;
+    _searchDebounce?.cancel();
+    _searchSeq++;
+    _searchFocusNode.unfocus();
+    _searchMode.value = false;
+    _searchAnim.reverse();
+    _searchController.clear();
+    _searchResults.value = const [];
+    _searchLoading.value = false;
+    _searchPerformed.value = false;
+  }
+
+  void _onSearchTextChanged() {
+    final query = _searchController.text.trim();
+    _searchDebounce?.cancel();
+    if (query.isEmpty) {
+      _searchSeq++;
+      _searchResults.value = const [];
+      _searchLoading.value = false;
+      _searchPerformed.value = false;
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      _runSearch(query);
+    });
+  }
+
+  Future<void> _runSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    final seq = ++_searchSeq;
+    _searchLoading.value = true;
+    List<Map<String, dynamic>> raw;
+    try {
+      raw = await messagesModule.searchMessages(widget.chatId, trimmed);
+    } catch (e) {
+      logger.e('Search error: $e');
+      raw = const [];
+    }
+    if (!mounted || seq != _searchSeq) return;
+    final results = raw
+        .map(_MessageSearchResult.fromRaw)
+        .whereType<_MessageSearchResult>()
+        .toList();
+    _searchResults.value = results;
+    _searchLoading.value = false;
+    _searchPerformed.value = true;
+  }
+
+  Future<void> _openSearchResult(_MessageSearchResult result) async {
+    _closeSearch();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+
+    if (!_messages.any((m) => m.id == result.id)) {
+      var guard = 0;
+      while (mounted &&
+          guard < 60 &&
+          _hasMoreHistory &&
+          !_messages.any((m) => m.id == result.id) &&
+          (_messages.isEmpty || _messages.first.time > result.time)) {
+        guard++;
+        final before = _messages.isEmpty ? 0 : _messages.first.time;
+        await _loadMoreHistory();
+        if (!mounted) return;
+        final after = _messages.isEmpty ? 0 : _messages.first.time;
+        if (after == before) break;
+      }
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+
+    _scrollToLoadedMessage(result.id);
+  }
+
+  void _scrollToLoadedMessage(String messageId) {
+    if (!_scrollController.hasClients) return;
+    final items = _buildCombinedItems();
+    final pos = items.indexWhere(
+      (it) => it is _MessageItem && it.message.id == messageId,
+    );
+    if (pos == -1) {
+      showCustomNotification(context, 'Сообщение не загружено');
+      return;
+    }
+
+    var below = 0.0;
+    for (var i = pos + 1; i < items.length; i++) {
+      below += items[i] is _DateSeparatorItem ? 44.0 : _avgMessageHeight;
+    }
+    final maxExtent = _scrollController.position.maxScrollExtent;
+    final estimate = below.clamp(0.0, maxExtent).toDouble();
+    _scrollController.jumpTo(estimate);
+
+    _highlightMessageId.value = messageId;
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (_highlightMessageId.value == messageId) {
+        _highlightMessageId.value = null;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _ensureVisibleRetry(messageId, 0),
+    );
+  }
+
+  void _ensureVisibleRetry(String messageId, int attempt) {
+    if (!mounted) return;
+    final ctx = _keyForMessage(messageId).currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOut,
+        alignment: 0.4,
+      );
+      return;
+    }
+    if (attempt >= 6) return;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _ensureVisibleRetry(messageId, attempt + 1),
+    );
+  }
+
+  String _searchSenderName(int senderId) {
+    if (senderId == _myId) return 'Вы';
+    final cached = ContactCache.get(senderId);
+    if (cached != null && cached.isNotEmpty) return cached;
+    if (widget.chatType == 'DIALOG') return widget.name;
+    return 'Пользователь';
+  }
+
+  String? _searchSenderAvatar(int senderId) {
+    final cached = ContactCache.getAvatar(senderId);
+    if (cached != null && cached.isNotEmpty) return cached;
+    if (senderId != _myId &&
+        widget.chatType == 'DIALOG' &&
+        widget.imageUrl.isNotEmpty) {
+      return widget.imageUrl;
+    }
+    return null;
+  }
+
+  Widget _buildHighlightedText(
+    String text,
+    List<String> highlights,
+    ColorScheme cs,
+  ) {
+    final baseStyle = TextStyle(color: cs.onSurface, fontSize: 15);
+    final terms = highlights
+        .where((h) => h.trim().isNotEmpty)
+        .map((h) => h.toLowerCase())
+        .toSet();
+    if (text.isEmpty || terms.isEmpty) {
+      return Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: baseStyle,
+      );
+    }
+
+    final lower = text.toLowerCase();
+    final ranges = <List<int>>[];
+    for (final term in terms) {
+      var start = 0;
+      while (true) {
+        final idx = lower.indexOf(term, start);
+        if (idx < 0) break;
+        ranges.add([idx, idx + term.length]);
+        start = idx + term.length;
+      }
+    }
+    if (ranges.isEmpty) {
+      return Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: baseStyle,
+      );
+    }
+
+    ranges.sort((a, b) => a[0].compareTo(b[0]));
+    final merged = <List<int>>[];
+    for (final r in ranges) {
+      if (merged.isNotEmpty && r[0] <= merged.last[1]) {
+        merged.last[1] = math.max(merged.last[1], r[1]);
+      } else {
+        merged.add([r[0], r[1]]);
+      }
+    }
+
+    final highlightStyle = baseStyle.copyWith(
+      color: cs.primary,
+      fontWeight: FontWeight.w600,
+      backgroundColor: cs.primary.withValues(alpha: 0.18),
+    );
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final r in merged) {
+      if (r[0] > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, r[0])));
+      }
+      spans.add(
+        TextSpan(text: text.substring(r[0], r[1]), style: highlightStyle),
+      );
+      cursor = r[1];
+    }
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
+    }
+
+    return Text.rich(
+      TextSpan(style: baseStyle, children: spans),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildSearchResultTile(_MessageSearchResult r, ColorScheme cs) {
+    final name = _searchSenderName(r.senderId);
+    final date = formatDateWords(DateTime.fromMillisecondsSinceEpoch(r.time));
+    return InkWell(
+      onTap: () => _openSearchResult(r),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            KometAvatar(
+              name: name,
+              imageUrl: _searchSenderAvatar(r.senderId),
+              size: 44,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: cs.primary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Outfit',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        date,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  _buildHighlightedText(r.text, r.highlights, cs),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchOverlay(ColorScheme cs) {
+    return AnimatedBuilder(
+      animation: _searchAnim,
+      builder: (context, _) {
+        final s = Curves.easeOut.transform(_searchAnim.value.clamp(0.0, 1.0));
+        if (s == 0) return const SizedBox.shrink();
+        final chrome = AppChatChrome.current.value;
+        final topPad = chrome == ChatChromeStyle.color
+            ? 0.0
+            : MediaQuery.paddingOf(context).top;
+        return Positioned.fill(
+          child: IgnorePointer(
+            ignoring: s < 0.5,
+            child: Opacity(
+              opacity: s,
+              child: Container(
+                color: cs.surface,
+                padding: EdgeInsets.only(top: topPad),
+                child: _buildSearchResultsContent(cs),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchResultsContent(ColorScheme cs) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _searchLoading,
+      builder: (context, loading, _) =>
+          ValueListenableBuilder<List<_MessageSearchResult>>(
+            valueListenable: _searchResults,
+            builder: (context, results, _) {
+              if (results.isNotEmpty) {
+                return ListView.builder(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(
+                    top: 4,
+                    bottom: MediaQuery.paddingOf(context).bottom + 16,
+                  ),
+                  itemCount: results.length,
+                  itemBuilder: (context, index) =>
+                      _buildSearchResultTile(results[index], cs),
+                );
+              }
+              if (loading) {
+                return Center(
+                  child: SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }
+              return ValueListenableBuilder<bool>(
+                valueListenable: _searchPerformed,
+                builder: (context, performed, _) {
+                  if (!performed) return const SizedBox.shrink();
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Поиск ничего не вернул...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+    );
+  }
+
   List<Object> _buildCombinedItems() {
     final key = Object.hash(_messagesRev.value, _messages.length);
     final cached = _combinedItemsCache;
@@ -3629,12 +4164,17 @@ class _ChatScreenState extends State<ChatScreen>
     final bottomInset = _keyboardReserve > 0
         ? math.max(mq.viewInsets.bottom, _keyboardReserve)
         : mq.viewInsets.bottom;
-    return ValueListenableBuilder<Set<String>>(
-      valueListenable: _selectedIds,
-      builder: (context, selected, child) => PopScope(
-        canPop: selected.isEmpty,
+    return ListenableBuilder(
+      listenable: Listenable.merge([_selectedIds, _searchMode]),
+      builder: (context, child) => PopScope(
+        canPop: _selectedIds.value.isEmpty && !_searchMode.value,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _clearSelection();
+          if (didPop) return;
+          if (_searchMode.value) {
+            _closeSearch();
+          } else {
+            _clearSelection();
+          }
         },
         child: child!,
       ),
@@ -3653,11 +4193,15 @@ class _ChatScreenState extends State<ChatScreen>
               onPop: widget.onClose,
               child: child!,
             ),
-            child: Scaffold(
-              backgroundColor: cs.surface,
-              extendBodyBehindAppBar: underlap,
-              appBar: _buildAppBar(cs),
-              body: underlap ? _buildUnderlapBody() : _buildColorBody(),
+            child: AnimatedBuilder(
+              animation: _searchAnim,
+              child: underlap ? _buildUnderlapBody() : _buildColorBody(),
+              builder: (context, body) => Scaffold(
+                backgroundColor: cs.surface,
+                extendBodyBehindAppBar: underlap,
+                appBar: _buildAppBar(cs),
+                body: body,
+              ),
             ),
           ),
         ),
@@ -3667,6 +4211,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildColorBody() {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
         Expanded(
@@ -3687,6 +4232,7 @@ class _ChatScreenState extends State<ChatScreen>
                 bottom: 0,
                 child: _buildCommandPanel(),
               ),
+              _buildSearchOverlay(cs),
             ],
           ),
         ),
@@ -3696,6 +4242,8 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildUnderlapBody() {
+    final cs = Theme.of(context).colorScheme;
+    final vignette = AppChatChrome.current.value == ChatChromeStyle.none;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -3708,6 +4256,24 @@ class _ChatScreenState extends State<ChatScreen>
               ? _buildShimmerLoading()
               : _buildMessagesList(),
         ),
+        _buildSearchOverlay(cs),
+        if (vignette) ...[
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildEdgeVignette(cs, top: true),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: _composerHeight,
+            builder: (context, height, _) => Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildEdgeVignette(cs, top: false, height: height),
+            ),
+          ),
+        ],
         ValueListenableBuilder<double>(
           valueListenable: _composerHeight,
           builder: (context, height, _) => Positioned(
@@ -3733,6 +4299,29 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildEdgeVignette(ColorScheme cs, {required bool top, double? height}) {
+    final double resolved;
+    if (height != null) {
+      resolved = height;
+    } else {
+      final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+      resolved = MediaQuery.paddingOf(context).top +
+          (glossy ? _glossyHeaderHeight : kToolbarHeight);
+    }
+    return IgnorePointer(
+      child: Container(
+        height: resolved,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: top ? Alignment.topCenter : Alignment.bottomCenter,
+            end: top ? Alignment.bottomCenter : Alignment.topCenter,
+            colors: [cs.surface, cs.surface.withValues(alpha: 0.0)],
+          ),
+        ),
+      ),
     );
   }
 

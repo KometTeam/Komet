@@ -6,16 +6,16 @@ enum ChatChromeStyle { color, blur, none }
 class AppChatChrome {
   static const prefKey = 'app_chat_chrome';
   static final ValueNotifier<ChatChromeStyle> current =
-      ValueNotifier(ChatChromeStyle.blur);
+      ValueNotifier(ChatChromeStyle.none);
 
   static ChatChromeStyle _parse(String? value) {
     switch (value) {
       case 'color':
         return ChatChromeStyle.color;
-      case 'none':
-        return ChatChromeStyle.none;
-      default:
+      case 'blur':
         return ChatChromeStyle.blur;
+      default:
+        return ChatChromeStyle.none;
     }
   }
 

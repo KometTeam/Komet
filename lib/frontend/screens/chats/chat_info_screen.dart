@@ -55,6 +55,7 @@ class ChatInfoScreen extends StatefulWidget {
 
 class _ChatInfoScreenState extends State<ChatInfoScreen> {
   final _tabScrollController = ScrollController();
+  final _avatarHeroKey = GlobalKey();
 
   int _myId = 0;
   bool _isLoading = true;
@@ -1102,6 +1103,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _heroAvatar() {
     return AvatarHero(
+      key: _avatarHeroKey,
       tag: 'chatAvatar_${widget.chatId}',
       name: widget.name,
       imageUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
@@ -1129,6 +1131,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       children: [
         Center(
           child: AvatarHero(
+            key: _avatarHeroKey,
             tag: 'chatAvatar_${widget.chatId}',
             name: widget.name,
             imageUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,

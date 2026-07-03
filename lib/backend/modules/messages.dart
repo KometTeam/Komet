@@ -568,6 +568,8 @@ class MessagesModule {
     int chatId, {
     int? fromTime,
     int count = 50,
+    int forward = 0,
+    int? backward,
   }) async {
     final payload = {
       'chatId': chatId,
@@ -575,8 +577,8 @@ class MessagesModule {
           fromTime ??
           (DateTime.now().millisecondsSinceEpoch +
               86400000), // +1 день для запаса
-      'forward': 0,
-      'backward': count,
+      'forward': forward,
+      'backward': backward ?? count,
       'getMessages': true,
     };
 
@@ -621,6 +623,36 @@ class MessagesModule {
     }
 
     return toSave;
+  }
+
+  /// Поиск сообщений в чате по строке [query] (opcode 73).
+  ///
+  /// Возвращает сырые записи результата вида
+  /// `{'message': {...}, 'highlights': [...]}`, отсортированные сервером
+  /// от новых к старым.
+  Future<List<Map<String, dynamic>>> searchMessages(
+    int chatId,
+    String query, {
+    int count = 30,
+  }) async {
+    final response = await _api.sendRequest(Opcode.msgSearch, {
+      'chatId': chatId,
+      'query': query,
+      'count': count,
+    });
+
+    if (!response.isOk) return const [];
+
+    final data = response.payload;
+    if (data is! Map) return const [];
+
+    final result = data['result'];
+    if (result is! List) return const [];
+
+    return result
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e.cast()))
+        .toList();
   }
 
   Future<List<CachedMessage>> _mergeEditHistory(
