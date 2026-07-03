@@ -204,6 +204,7 @@ class _ChatScreenState extends State<ChatScreen>
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
+  bool _keyboardWasOpen = false;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _listKey = GlobalKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
@@ -839,6 +840,17 @@ class _ChatScreenState extends State<ChatScreen>
       _saveDraft();
     }
     super.didChangeAppLifecycleState(state);
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    final view = View.of(context);
+    final keyboardOpen = view.viewInsets.bottom / view.devicePixelRatio > 100;
+    if (_keyboardWasOpen && !keyboardOpen && _messageFocusNode.hasFocus) {
+      _messageFocusNode.unfocus();
+    }
+    _keyboardWasOpen = keyboardOpen;
   }
 
   @override
@@ -4945,8 +4957,8 @@ class _ChatScreenState extends State<ChatScreen>
     final hadKeyboard = keyboard > 0;
     if (hadKeyboard) {
       setState(() => _keyboardReserve = keyboard);
-      FocusManager.instance.primaryFocus?.unfocus();
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     await showAttachmentSheet(
       context,
       title: widget.name,

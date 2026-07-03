@@ -229,8 +229,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final n = _actions.length;
     const reach = _radius + _btnSize / 2;
     final padding = MediaQuery.paddingOf(context);
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final topMargin = padding.top + _hMargin;
-    final bottomMargin = padding.bottom + _hMargin;
+    final bottomMargin = math.max(padding.bottom, keyboardInset) + _hMargin;
     final rect = widget.originRect;
 
     final spaceBelow = screenSize.height - bottomMargin - (rect.bottom + 16);
@@ -330,25 +331,29 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     const itemHeight = 42.0;
     const vPad = 6.0;
     final menuHeight = n * itemHeight + vPad * 2;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomLimit = screenSize.height - keyboardInset;
+    final maxMenuY = math.max(8.0, bottomLimit - menuHeight - 8.0);
     late double menuX;
     late double menuY;
     if (widget.interaction != MessageActionsInteraction.dragAndRelease) {
-      final spaceBelow = screenSize.height - widget.tapPoint.dy - 8;
+      final spaceBelow = bottomLimit - widget.tapPoint.dy - 8;
       _showBelow = spaceBelow >= menuHeight || widget.tapPoint.dy < menuHeight;
       final rawY = _showBelow
           ? widget.tapPoint.dy
           : widget.tapPoint.dy - menuHeight;
-      menuY = rawY.clamp(8.0, screenSize.height - menuHeight - 8.0).toDouble();
+      menuY = rawY.clamp(8.0, maxMenuY).toDouble();
       menuX = widget.tapPoint.dx
           .clamp(8.0, screenSize.width - menuWidth - 8.0)
           .toDouble();
     } else {
-      final spaceBelow = screenSize.height - widget.originRect.bottom - 24;
+      final spaceBelow = bottomLimit - widget.originRect.bottom - 24;
       final spaceAbove = widget.originRect.top - 24;
       _showBelow = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
-      menuY = _showBelow
+      final rawY = _showBelow
           ? widget.originRect.bottom + 10
           : widget.originRect.top - 10 - menuHeight;
+      menuY = rawY.clamp(8.0, maxMenuY).toDouble();
       final rawX = widget.isMe
           ? widget.originRect.right - menuWidth
           : widget.originRect.left;
@@ -636,9 +641,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           ? widget.originRect.bottom + 10
           : widget.originRect.top - 10;
     }
+    final bottomLimit = size.height - MediaQuery.viewInsetsOf(context).bottom;
     left = left.clamp(8.0, size.width - menuWidth - 8.0);
-    top = top.clamp(8.0, size.height - 160.0);
-    final maxHeight = math.min(size.height * 0.6, size.height - top - 8.0);
+    top = top.clamp(8.0, math.max(8.0, bottomLimit - 160.0));
+    final maxHeight = math.min(size.height * 0.6, bottomLimit - top - 8.0);
 
     return Positioned(
       left: left,
@@ -929,7 +935,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   Widget _buildLabelBanner(Size size, double t) {
     final label =
         _hoveredIndex == -1 ? null : _actions[_hoveredIndex].label;
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = math.max(
+      MediaQuery.paddingOf(context).bottom,
+      MediaQuery.viewInsetsOf(context).bottom,
+    );
     return Positioned(
       left: 0,
       right: 0,
