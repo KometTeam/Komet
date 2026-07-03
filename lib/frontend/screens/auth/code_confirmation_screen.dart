@@ -6,6 +6,7 @@ import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
@@ -30,6 +31,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     with TickerProviderStateMixin {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final SmsCodeListener _smsListener = SmsCodeListener();
   int _timerSeconds = 30;
   Timer? _timer;
   Timer? _errorTimer;
@@ -59,6 +61,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     _epoch = api.sessionEpoch;
     _stateSub = api.stateStream.listen(_onSessionState);
     _startTimer();
+    _listenForSmsCode();
 
     _shakeController = AnimationController(
       vsync: this,
@@ -85,6 +88,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     if (_routeAnimationListener != null) {
       _routeAnimation?.removeStatusListener(_routeAnimationListener!);
     }
+    _smsListener.dispose();
     _stateSub?.cancel();
     _timer?.cancel();
     _errorTimer?.cancel();
@@ -137,6 +141,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         _errorMessage = null;
       });
       _startTimer();
+      _listenForSmsCode();
       showCustomNotification(
         context,
         'Соединение восстановлено — выслали новый код',
@@ -192,6 +197,23 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         }
       });
     });
+  }
+
+  Future<void> _listenForSmsCode() async {
+    await _smsListener.start((code) {
+      if (!mounted) return;
+      _applyAutoCode(code);
+    });
+  }
+
+  void _applyAutoCode(String code) {
+    if (_verifying || _recovering) return;
+    if (_codeController.text == code) return;
+    _codeController.text = code;
+    _codeController.selection = TextSelection.collapsed(offset: code.length);
+    if (_errorMessage != null) _errorMessage = null;
+    setState(() {});
+    if (code.length == 6) _verifyCode();
   }
 
   void _showError(String message) {
