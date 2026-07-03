@@ -21,7 +21,7 @@ import 'package:komet/core/utils/format.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/screens/contacts/contact_profile_screen.dart';
-import 'package:komet/frontend/screens/chats/forward_picker_screen.dart';
+import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
@@ -70,6 +70,7 @@ import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/sticker_panel.dart';
 import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
+import '../../widgets/swipe_route.dart';
 import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
 import '../../widgets/chat_wallpaper_view.dart';
@@ -286,6 +287,16 @@ class _MeasureSizeState extends State<_MeasureSize> {
   }
 }
 
+class ForwardRequest {
+  final int sourceChatId;
+  final List<CachedMessage> optimistic;
+
+  const ForwardRequest({
+    required this.sourceChatId,
+    required this.optimistic,
+  });
+}
+
 class ChatScreen extends StatefulWidget {
   final int chatId;
   final String name;
@@ -293,6 +304,7 @@ class ChatScreen extends StatefulWidget {
   final String chatType;
   final bool embedded;
   final VoidCallback? onClose;
+  final ForwardRequest? forwardRequest;
 
   const ChatScreen({
     super.key,
@@ -302,6 +314,7 @@ class ChatScreen extends StatefulWidget {
     required this.chatType,
     this.embedded = false,
     this.onClose,
+    this.forwardRequest,
   });
 
   @override
@@ -428,6 +441,7 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _shimmerStartTimer;
   bool _historyKickedOff = false;
   bool _previewChat = false;
+  bool _forwardRequestDone = false;
   List<CachedMessage> _messages = [];
   final ValueNotifier<int> _messagesRev = ValueNotifier(0);
   final Set<String> _deletingIds = {};
@@ -536,7 +550,11 @@ class _ChatScreenState extends State<ChatScreen>
       reverseCurve: Curves.easeIn,
     );
 
-    unawaited(_fastPreloadCache());
+    unawaited(
+      _fastPreloadCache().then((_) {
+        if (mounted) unawaited(_runForwardRequest());
+      }),
+    );
     unawaited(_loadParticipantsCount());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
   }
@@ -1461,43 +1479,189 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _forwardMessages(List<CachedMessage> msgs) async {
-    final forwardable =
-        msgs.where((m) => !m.id.startsWith('temp_')).toList();
+    final forwardable = msgs.where((m) => !m.id.startsWith('temp_')).toList();
     if (forwardable.isEmpty) {
       showCustomNotification(context, 'Нечего пересылать');
       return;
     }
 
-    final target = await showForwardPicker(
+    final target = await openForwardScreen(
       context: context,
-      accountId: _myId,
       messageCount: forwardable.length,
     );
     if (target == null || !mounted) return;
 
-    final ordered = [...forwardable]..sort((a, b) => a.time.compareTo(b.time));
-    var ok = 0;
-    for (final m in ordered) {
-      final mid = int.tryParse(m.id);
-      if (mid == null) continue;
-      try {
-        await messagesModule.forwardMessage(target.chatId, widget.chatId, mid);
-        ok++;
-      } catch (_) {}
-    }
-    if (!mounted) return;
-    if (ok == 0) {
-      Haptics.error();
-      showCustomNotification(context, 'Не удалось переслать');
+    if (api.state != SessionState.online) {
+      showCustomNotification(context, 'Нет соединения');
       return;
     }
+
+    final ordered = [...forwardable]..sort((a, b) => a.time.compareTo(b.time));
+
+    if (target.chatId == widget.chatId) {
+      await _forwardIntoCurrentChat(ordered);
+      return;
+    }
+
+    final optimistic = await _seedForwardsToChat(target, ordered);
+    if (!mounted) return;
     Haptics.send();
-    showCustomNotification(
+    pushSwipeable(
       context,
-      target.chatId == widget.chatId
-          ? 'Переслано'
-          : 'Переслано в «${target.name}»',
+      (_) => ChatScreen(
+        chatId: target.chatId,
+        name: target.name,
+        imageUrl: target.imageUrl,
+        chatType: target.chatType,
+        forwardRequest: ForwardRequest(
+          sourceChatId: widget.chatId,
+          optimistic: optimistic,
+        ),
+      ),
     );
+  }
+
+  Future<void> _forwardIntoCurrentChat(List<CachedMessage> sources) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final optimistic = <CachedMessage>[];
+    var i = 0;
+    for (final src in sources) {
+      final msg = MessagesModule.buildForwardMessage(
+        myId: _myId,
+        targetChatId: widget.chatId,
+        sourceChatId: widget.chatId,
+        source: src,
+        tempId: _nextTempId(),
+        time: now + i,
+        status: 'sending',
+      );
+      optimistic.add(msg);
+      _messages.add(msg);
+      unawaited(_persistOutgoing(msg));
+      i++;
+    }
+    _bumpMessages();
+    Haptics.send();
+    _scrollToBottom();
+    if (optimistic.isNotEmpty) {
+      final last = optimistic.last;
+      unawaited(
+        ChatsModule.applyOutgoing(
+          _myId,
+          widget.chatId,
+          messageId: last.id,
+          time: last.time,
+          text: MessagesModule.forwardPreviewText(last),
+          status: 'sending',
+        ),
+      );
+    }
+    for (final opt in optimistic) {
+      await _sendOneForward(opt, widget.chatId);
+    }
+  }
+
+  Future<List<CachedMessage>> _seedForwardsToChat(
+    ForwardTarget target,
+    List<CachedMessage> sources,
+  ) async {
+    await ChatsModule.ensureChatCached(api, _myId, target.chatId);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final optimistic = <CachedMessage>[];
+    var i = 0;
+    for (final src in sources) {
+      final msg = MessagesModule.buildForwardMessage(
+        myId: _myId,
+        targetChatId: target.chatId,
+        sourceChatId: widget.chatId,
+        source: src,
+        tempId: _nextTempId(),
+        time: now + i,
+        status: 'sending',
+      );
+      optimistic.add(msg);
+      await AppDatabase.saveMessages([msg.toDbRow()]);
+      i++;
+    }
+    final cached = MessageSessionCache.get(_myId, target.chatId);
+    if (cached != null) {
+      MessageSessionCache.save(
+        _myId,
+        target.chatId,
+        [...cached.messages, ...optimistic],
+        reachedStart: cached.reachedStart,
+      );
+    }
+    if (optimistic.isNotEmpty) {
+      final last = optimistic.last;
+      unawaited(
+        ChatsModule.applyOutgoing(
+          _myId,
+          target.chatId,
+          messageId: last.id,
+          time: last.time,
+          text: MessagesModule.forwardPreviewText(last),
+          status: 'sending',
+        ),
+      );
+    }
+    return optimistic;
+  }
+
+  Future<void> _runForwardRequest() async {
+    final req = widget.forwardRequest;
+    if (req == null || _forwardRequestDone) return;
+    _forwardRequestDone = true;
+    for (final opt in req.optimistic) {
+      await _sendOneForward(opt, req.sourceChatId);
+    }
+  }
+
+  Future<void> _sendOneForward(CachedMessage optimistic, int sourceChatId) async {
+    final link = optimistic.payload?['link'];
+    final rawWireId = link is Map ? link['messageId'] : null;
+    final wireId = rawWireId is int ? rawWireId : null;
+    if (wireId == null) return;
+    try {
+      final realId = await messagesModule.forwardMessage(
+        widget.chatId,
+        sourceChatId,
+        wireId,
+      );
+      if (!mounted) return;
+      final sent = MessagesModule.reidentifyMessage(
+        optimistic,
+        realId.isNotEmpty ? realId : optimistic.id,
+        status: 'sent',
+      );
+      final index = _messages.indexWhere((m) => m.id == optimistic.id);
+      if (index != -1) {
+        _messages[index] = sent;
+        _bumpMessages();
+      }
+      unawaited(_persistOutgoing(sent, removeId: optimistic.id));
+      unawaited(
+        ChatsModule.applyOutgoing(
+          _myId,
+          widget.chatId,
+          messageId: sent.id,
+          time: sent.time,
+          text: MessagesModule.forwardPreviewText(sent),
+          status: 'sent',
+        ),
+      );
+    } catch (_) {
+      final index = _messages.indexWhere((m) => m.id == optimistic.id);
+      if (index != -1 && mounted) {
+        _messages.removeAt(index);
+        _bumpMessages();
+      }
+      unawaited(AppDatabase.deleteMessage(_myId, widget.chatId, optimistic.id));
+      if (mounted) {
+        Haptics.error();
+        showCustomNotification(context, 'Не удалось переслать');
+      }
+    }
   }
 
   Widget _buildComposerArea(BuildContext context) {

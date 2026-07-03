@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../core/storage/app_database.dart';
 import '../../main.dart' show stickersModule, messagesModule;
 import '../../models/sticker.dart';
-import '../screens/chats/forward_picker_screen.dart';
+import '../screens/chats/chat_list_screen.dart';
 import 'custom_notification.dart';
 import 'sticker_image.dart';
 import 'sticker_peek.dart';
@@ -123,12 +122,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
       showCustomNotification(context, 'Ссылка недоступна');
       return;
     }
-    final profile = await AppDatabase.loadActiveProfile();
-    if (!mounted) return;
-    final target = await showForwardPicker(
-      context: context,
-      accountId: profile?.id ?? 0,
-    );
+    final target = await openForwardScreen(context: context);
     if (target == null || !mounted) return;
     final ok = await messagesModule.sendLinkMessage(target.chatId, link);
     if (!mounted) return;

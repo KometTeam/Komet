@@ -864,6 +864,83 @@ class MessagesModule {
     return '';
   }
 
+  static CachedMessage buildForwardMessage({
+    required int myId,
+    required int targetChatId,
+    required int sourceChatId,
+    required CachedMessage source,
+    required String tempId,
+    required int time,
+    required String status,
+  }) {
+    final srcPayload = source.payload;
+    final srcLink = srcPayload?['link'];
+    Map<String, dynamic> originalMsg;
+    if (srcLink is Map &&
+        srcLink['type'] == 'FORWARD' &&
+        srcLink['message'] is Map) {
+      originalMsg = Map<String, dynamic>.from(srcLink['message'] as Map);
+    } else {
+      originalMsg = {
+        'id': int.tryParse(source.id) ?? source.id,
+        'sender': source.senderId,
+        'time': source.time,
+        'text': source.text,
+        'attaches': (srcPayload?['attaches'] as List?) ?? const [],
+      };
+    }
+    final payload = <String, dynamic>{
+      'elements': const [],
+      'attaches': const [],
+      'link': {
+        'type': 'FORWARD',
+        'chatId': sourceChatId,
+        'messageId': int.tryParse(source.id) ?? source.id,
+        'message': originalMsg,
+      },
+    };
+    return CachedMessage(
+      id: tempId,
+      accountId: myId,
+      chatId: targetChatId,
+      senderId: myId,
+      text: null,
+      time: time,
+      status: status,
+      payload: payload,
+      attachments: [ForwardedMessageAttachment.fromMap(payload)],
+    );
+  }
+
+  static CachedMessage reidentifyMessage(
+    CachedMessage message,
+    String newId, {
+    String? status,
+  }) => CachedMessage(
+    id: newId,
+    accountId: message.accountId,
+    chatId: message.chatId,
+    senderId: message.senderId,
+    text: message.text,
+    time: message.time,
+    status: status ?? message.status,
+    payload: message.payload,
+    attachments: message.attachments,
+    isControl: message.isControl,
+    deleted: message.deleted,
+    editHistory: message.editHistory,
+  );
+
+  static String forwardPreviewText(CachedMessage message) {
+    final link = message.payload?['link'];
+    if (link is Map && link['message'] is Map) {
+      final original = link['message'] as Map;
+      final text = original['text'];
+      if (text is String && text.trim().isNotEmpty) return text;
+    }
+    return 'Пересланное сообщение';
+  }
+
   Future<bool> sendLinkMessage(int chatId, String url) async {
     final message = <String, dynamic>{
       'text': url,

@@ -80,10 +80,41 @@ class _StoriesScrollPhysics extends BouncingScrollPhysics {
   }
 }
 
+class ForwardTarget {
+  final int chatId;
+  final String name;
+  final String imageUrl;
+  final String chatType;
+
+  const ForwardTarget({
+    required this.chatId,
+    required this.name,
+    required this.imageUrl,
+    required this.chatType,
+  });
+}
+
+Future<ForwardTarget?> openForwardScreen({
+  required BuildContext context,
+  int messageCount = 1,
+}) {
+  return pushSwipeable<ForwardTarget>(
+    context,
+    (_) => ChatListScreen(forwardMode: true, forwardMessageCount: messageCount),
+  );
+}
+
 class ChatListScreen extends StatefulWidget {
   final ValueChanged<DesktopChatSelection>? onChatSelected;
+  final bool forwardMode;
+  final int forwardMessageCount;
 
-  const ChatListScreen({super.key, this.onChatSelected});
+  const ChatListScreen({
+    super.key,
+    this.onChatSelected,
+    this.forwardMode = false,
+    this.forwardMessageCount = 1,
+  });
 
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
@@ -1312,10 +1343,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                             padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: () => pushSwipeable(
-                                context,
-                                (_) => const SearchScreen(),
-                              ),
+                              onTap: widget.forwardMode
+                                  ? null
+                                  : () => pushSwipeable(
+                                      context,
+                                      (_) => const SearchScreen(),
+                                    ),
                               child: GlossyPill(
                                 color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(50),
@@ -1335,7 +1368,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                       ),
                                       const SizedBox(width: 10),
                                       Text(
-                                        'Поиск',
+                                        widget.forwardMode
+                                            ? 'Пересылка...'
+                                            : 'Поиск',
                                         style: TextStyle(
                                           color: cs.outline,
                                           fontSize: 15,
@@ -1791,6 +1826,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
+            if (widget.forwardMode) {
+              return _getChatsBody();
+            }
             final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
@@ -2326,6 +2364,17 @@ class _ChatListScreenState extends State<ChatListScreen>
     return InkWell(
       key: ValueKey('chat_$id'),
       onTap: () {
+        if (widget.forwardMode) {
+          Navigator.of(context).pop(
+            ForwardTarget(
+              chatId: int.parse(id),
+              name: name,
+              imageUrl: imageUrl,
+              chatType: chatType,
+            ),
+          );
+          return;
+        }
         if (_isSelectionMode) {
           _toggleSelection(id);
           return;
@@ -2363,7 +2412,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           );
         }
       },
-      onLongPress: () => _toggleSelection(id),
+      onLongPress: widget.forwardMode ? null : () => _toggleSelection(id),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         color: isSelected
