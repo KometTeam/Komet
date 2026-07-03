@@ -26,6 +26,7 @@ import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'link_text.dart';
+import 'sticker_image.dart';
 import '../../models/attachment.dart';
 import 'poll_view.dart';
 import 'photo_viewer.dart';
@@ -179,6 +180,12 @@ class MessageBubble extends StatelessWidget {
     if (a == null || a.isEmpty) return false;
     final first = a.first;
     return first is VideoAttachment && first.isNote;
+  }
+
+  bool get _isSticker {
+    final a = message.attachments;
+    if (a == null || a.isEmpty) return false;
+    return a.first is StickerAttachment;
   }
 
   MessageType get _contentType {
@@ -450,7 +457,8 @@ class MessageBubble extends StatelessWidget {
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.75;
     final keyboard = _inlineKeyboard;
     final isVideoNote = _isVideoNote;
-    final bubbleColor = isVideoNote
+    final noBubbleBackground = isVideoNote || _isSticker;
+    final bubbleColor = noBubbleBackground
         ? Colors.transparent
         : (isMe ? cs.primaryContainer : cs.surfaceContainerHighest);
 
@@ -538,7 +546,7 @@ class MessageBubble extends StatelessWidget {
                       constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                       decoration: BoxDecoration(
                         color: bubbleColor,
-                        borderRadius: isVideoNote
+                        borderRadius: noBubbleBackground
                             ? null
                             : _borderRadiusFor(
                                 AppBubbleShape.current.value,
@@ -2335,37 +2343,97 @@ class MessageBubble extends StatelessWidget {
   Widget _buildStickerAttachment(_BubbleCtx ctx, MessageAttachment sticker) {
     final url = sticker.baseUrl ?? '';
     final preview = sticker.previewData ?? '';
-    final imageUrl = url.isNotEmpty ? url : preview;
+    final staticUrl = url.isNotEmpty ? url : preview;
+    final lottieUrl = sticker is StickerAttachment ? sticker.lottieUrl : null;
 
-    final Widget image = ClipRRect(
-      borderRadius: BorderRadius.circular(photoBorderRadius),
-      child: Stack(
-        children: [
-          if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              width: 150,
-              height: 150,
-              fit: BoxFit.contain,
-              memCacheWidth: 300,
-              memCacheHeight: 300,
-              fadeInDuration: const Duration(milliseconds: 120),
-              errorWidget: (_, _, _) =>
-                  _buildPhotoPlaceholder(ctx.cs, 150, 150),
-            )
-          else
-            _buildPhotoPlaceholder(ctx.cs, 150, 150),
-        ],
-      ),
+    Widget content = Stack(
+      children: [
+        SizedBox(
+          width: 150,
+          height: 150,
+          child: StickerImage(
+            url: staticUrl,
+            lottieUrl: lottieUrl,
+            size: 150,
+            memCacheWidth: 300,
+          ),
+        ),
+        Positioned(
+          bottom: compactTimePadding,
+          right: compactTimePadding,
+          child: _buildStickerMeta(ctx),
+        ),
+      ],
     );
 
     final onTap = onStickerTap;
-    if (onTap == null || sticker is! StickerAttachment) return image;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onTap(sticker),
-      child: image,
+    if (onTap != null && sticker is StickerAttachment) {
+      content = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onTap(sticker),
+        child: content,
+      );
+    }
+    return content;
+  }
+
+  Widget _buildStickerMeta(_BubbleCtx ctx) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _clockText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (isMe) ...[const SizedBox(width: 3), _buildStickerStatusIcon()],
+          if (message.deleted) ...[
+            const SizedBox(width: 3),
+            const Icon(Symbols.delete, size: 12, color: Colors.white),
+          ],
+        ],
+      ),
     );
+  }
+
+  Widget _buildStickerStatusIcon() {
+    final status = overrideStatus ?? message.status;
+    IconData icon;
+    Color color;
+
+    switch (status) {
+      case 'sending':
+      case 'pending':
+        icon = Symbols.schedule;
+        color = Colors.white;
+      case null:
+      case 'sent':
+        icon = Symbols.check;
+        color = Colors.white;
+      case 'delivered':
+        icon = Symbols.done_all;
+        color = Colors.white;
+      case 'read':
+        icon = Symbols.done_all;
+        color = const Color(0xFF4FC3F7);
+      case 'error':
+        icon = Symbols.error;
+        color = Colors.redAccent;
+      default:
+        icon = Symbols.check;
+        color = Colors.white;
+    }
+
+    return Icon(icon, size: 13, color: color);
   }
 
   Widget _buildContactAttachment(_BubbleCtx ctx, MessageAttachment contact) {

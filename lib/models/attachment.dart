@@ -285,6 +285,7 @@ class FileAttachment extends MessageAttachment {
 class StickerAttachment extends MessageAttachment {
   final String? stickerId;
   final String? stickerPackId;
+  final String? lottieUrl;
   final int? width;
   final int? height;
 
@@ -294,9 +295,12 @@ class StickerAttachment extends MessageAttachment {
     super.fileUrl,
     this.stickerId,
     this.stickerPackId,
+    this.lottieUrl,
     this.width,
     this.height,
   }) : super(type: AttachmentType.sticker);
+
+  bool get isAnimated => lottieUrl != null && lottieUrl!.isNotEmpty;
 
   factory StickerAttachment.fromMap(Map<String, dynamic> map) {
     return StickerAttachment(
@@ -304,6 +308,7 @@ class StickerAttachment extends MessageAttachment {
       baseUrl: (map['url'] ?? map['baseUrl'])?.toString(),
       stickerId: map['stickerId']?.toString(),
       stickerPackId: map['setId']?.toString() ?? map['stickerPackId']?.toString(),
+      lottieUrl: map['lottieUrl']?.toString(),
       width: map['width'] as int?,
       height: map['height'] as int?,
     );
@@ -316,6 +321,7 @@ class StickerAttachment extends MessageAttachment {
     'baseUrl': baseUrl,
     'stickerId': stickerId,
     'stickerPackId': stickerPackId,
+    'lottieUrl': lottieUrl,
     'width': width,
     'height': height,
   };

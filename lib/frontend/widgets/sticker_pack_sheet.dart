@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -8,6 +7,8 @@ import '../../main.dart' show stickersModule, messagesModule;
 import '../../models/sticker.dart';
 import '../screens/chats/forward_picker_screen.dart';
 import 'custom_notification.dart';
+import 'sticker_image.dart';
+import 'sticker_peek.dart';
 
 enum _PackAction { forward, copyLink }
 
@@ -187,7 +188,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
     return Column(
       children: [
         _buildHeader(cs, set),
-        Expanded(child: _buildGrid(cs, set)),
+        Expanded(child: _buildGrid(set)),
         _buildActionButton(cs),
       ],
     );
@@ -265,37 +266,36 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
     );
   }
 
-  Widget _buildGrid(ColorScheme cs, StickerSet set) {
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
-      ),
-      itemCount: set.stickerIds.length,
-      itemBuilder: (context, i) {
-        final item = stickersModule.cachedSticker(set.stickerIds[i]);
-        if (item == null || item.url.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        return Padding(
-          padding: const EdgeInsets.all(6),
-          child: CachedNetworkImage(
-            imageUrl: item.url,
-            fit: BoxFit.contain,
-            memCacheWidth: 220,
-            fadeInDuration: const Duration(milliseconds: 120),
-            placeholder: (_, _) => DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(12),
+  Widget _buildGrid(StickerSet set) {
+    return StickerPeekScope(
+      child: GridView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 4,
+        ),
+        itemCount: set.stickerIds.length,
+        itemBuilder: (context, i) {
+          final item = stickersModule.cachedSticker(set.stickerIds[i]);
+          if (item == null || item.url.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return StickerPeekable(
+            peekId: item.id,
+            url: item.url,
+            lottieUrl: item.lottieUrl,
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: StickerImage(
+                url: item.url,
+                lottieUrl: item.lottieUrl,
+                memCacheWidth: 220,
               ),
             ),
-            errorWidget: (_, _, _) => const SizedBox.shrink(),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

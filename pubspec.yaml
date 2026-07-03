@@ -59,6 +59,7 @@ dependencies:
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
   cached_network_image: ^3.4.1
+  lottie: ^3.3.1
   path_provider: ^2.1.4
   share_plus: ^10.1.4
   open_filex: ^4.5.0

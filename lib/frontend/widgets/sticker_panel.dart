@@ -5,6 +5,9 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../main.dart' show stickersModule;
 import '../../models/sticker.dart';
+import 'sticker_image.dart';
+import 'sticker_lottie.dart';
+import 'sticker_peek.dart';
 
 class _DragScrollBehavior extends MaterialScrollBehavior {
   const _DragScrollBehavior();
@@ -53,6 +56,7 @@ class _StickerPanelState extends State<StickerPanel>
   static const double _headerHeight = 34;
 
   final ScrollController _scroll = ScrollController();
+  final ValueNotifier<bool> _scrolling = ValueNotifier(false);
   late final AnimationController _shimmer;
   bool _loading = true;
   Object? _error;
@@ -76,6 +80,7 @@ class _StickerPanelState extends State<StickerPanel>
   void dispose() {
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
+    _scrolling.dispose();
     _shimmer.dispose();
     super.dispose();
   }
@@ -128,6 +133,15 @@ class _StickerPanelState extends State<StickerPanel>
       if (pixels + 1 >= _offsets[i]) index = i;
     }
     if (index != _selectedTab) setState(() => _selectedTab = index);
+  }
+
+  bool _onScrollNotification(ScrollNotification n) {
+    if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
+      if (!_scrolling.value) _scrolling.value = true;
+    } else if (n is ScrollEndNotification) {
+      if (_scrolling.value) _scrolling.value = false;
+    }
+    return false;
   }
 
   void _jumpTo(int index) {
@@ -192,20 +206,30 @@ class _StickerPanelState extends State<StickerPanel>
                         color: cs.outlineVariant.withValues(alpha: 0.3),
                       ),
                       Expanded(
-                        child: ListView.builder(
-                          controller: _scroll,
-                          padding: EdgeInsets.zero,
-                          itemCount: _sections.length,
-                          itemExtentBuilder: (i, _) => _heights[i],
-                          itemBuilder: (context, i) => _StickerSection(
-                            key: ValueKey(_sections[i].title + i.toString()),
-                            title: _sections[i].title,
-                            stickerIds: _sections[i].stickerIds,
-                            columns: columns,
-                            cell: cell,
-                            headerHeight: _headerHeight,
-                            shimmer: _shimmer,
-                            onTap: widget.onStickerTap,
+                        child: StickerScrollScope(
+                          isScrolling: _scrolling,
+                          child: StickerPeekScope(
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: _onScrollNotification,
+                              child: ListView.builder(
+                                controller: _scroll,
+                                padding: EdgeInsets.zero,
+                                itemCount: _sections.length,
+                                itemExtentBuilder: (i, _) => _heights[i],
+                                itemBuilder: (context, i) => _StickerSection(
+                                  key: ValueKey(
+                                    _sections[i].title + i.toString(),
+                                  ),
+                                  title: _sections[i].title,
+                                  stickerIds: _sections[i].stickerIds,
+                                  columns: columns,
+                                  cell: cell,
+                                  headerHeight: _headerHeight,
+                                  shimmer: _shimmer,
+                                  onTap: widget.onStickerTap,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -350,18 +374,20 @@ class _StickerSectionState extends State<_StickerSection> {
     }
     final item = stickersModule.cachedSticker(id);
     if (item == null || item.url.isEmpty) return const SizedBox.shrink();
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => widget.onTap(item),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: CachedNetworkImage(
-          imageUrl: item.url,
-          fit: BoxFit.contain,
-          memCacheWidth: 220,
-          fadeInDuration: const Duration(milliseconds: 120),
-          placeholder: (_, _) => _ShimmerBox(shimmer: widget.shimmer),
-          errorWidget: (_, _, _) => const SizedBox.shrink(),
+    return StickerPeekable(
+      peekId: item.id,
+      url: item.url,
+      lottieUrl: item.lottieUrl,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => widget.onTap(item),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: StickerImage(
+            url: item.url,
+            lottieUrl: item.lottieUrl,
+            memCacheWidth: 220,
+          ),
         ),
       ),
     );

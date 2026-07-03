@@ -5343,6 +5343,7 @@ class _ChatScreenState extends State<ChatScreen>
         StickerAttachment(
           stickerId: sticker.id.toString(),
           baseUrl: sticker.url,
+          lottieUrl: sticker.lottieUrl,
           width: sticker.width,
           height: sticker.height,
         ),
