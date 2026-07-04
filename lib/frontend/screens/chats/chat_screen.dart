@@ -25,6 +25,7 @@ import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
+import 'package:komet/frontend/widgets/animated_lottie_icon.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/api.dart';
@@ -42,6 +43,7 @@ import '../../../core/storage/draft_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
@@ -2268,7 +2270,25 @@ class _ChatScreenState extends State<ChatScreen>
               ),
               child: const SizedBox.expand(),
             )
-          : null,
+          : (chrome == ChatChromeStyle.none && !glossy)
+              ? IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          cs.surface,
+                          cs.surface,
+                          cs.surface.withValues(alpha: 0.0),
+                        ],
+                        stops: const [0.0, 0.72, 1.0],
+                      ),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                )
+              : null,
       foregroundColor: cs.onSurface,
       surfaceTintColor: Colors.transparent,
       iconTheme: IconThemeData(color: cs.onSurface),
@@ -2368,8 +2388,13 @@ class _ChatScreenState extends State<ChatScreen>
       onPressed: _closeSearch,
     );
     final searchBtn = IconButton(
-      icon: Icon(Symbols.search, weight: glossy ? 500 : 400,
-          color: cs.onSurface),
+      icon: AnimatedLottieIcon(
+        asset: AppAnimations.search,
+        color: cs.onSurface,
+        size: 24,
+        active: true,
+        animateOnMount: true,
+      ),
       onPressed: () {
         _searchDebounce?.cancel();
         _runSearch(_searchController.text);
@@ -4380,6 +4405,7 @@ class _ChatScreenState extends State<ChatScreen>
       children: [
         Expanded(
           child: Stack(
+            fit: StackFit.expand,
             children: [
               if (_wallpaper != null)
                 Positioned.fill(
@@ -4509,7 +4535,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   double _floatingDateTop(BuildContext context) {
     if (AppChatChrome.current.value == ChatChromeStyle.color) return 8;
-    return MediaQuery.paddingOf(context).top + 8;
+    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    return MediaQuery.paddingOf(context).top +
+        (glossy ? _glossyHeaderHeight : kToolbarHeight) +
+        8;
   }
 
   Widget _buildLoadMoreIndicator() {

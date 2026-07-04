@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../../core/config/app_pill_gradient.dart';
 import '../../core/config/app_visual_style.dart';
+import 'animated_lottie_icon.dart';
 import 'glossy_pill.dart';
 
 class PillNavItem {
   final IconData icon;
   final String label;
   final bool longPressable;
+  final String? animationAsset;
 
   const PillNavItem({
     required this.icon,
     required this.label,
     this.longPressable = false,
+    this.animationAsset,
   });
 }
 
@@ -210,6 +213,20 @@ class _PillNavCell extends StatelessWidget {
     required this.onLongPress,
   });
 
+  Widget _buildIcon() {
+    final color = selected ? cs.onPrimary : cs.onSurface;
+    final asset = item.animationAsset;
+    if (asset != null) {
+      return AnimatedLottieIcon(
+        asset: asset,
+        color: color,
+        size: iconSize,
+        active: selected,
+      );
+    }
+    return Icon(item.icon, color: color, size: iconSize, fill: 1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final opacityDuration = animationDuration == Duration.zero
@@ -223,24 +240,14 @@ class _PillNavCell extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Center(
         child: iconsOnly
-            ? Icon(
-                item.icon,
-                color: selected ? cs.onPrimary : cs.onSurface,
-                size: iconSize,
-                fill: 1,
-              )
+            ? _buildIcon()
             : FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      item.icon,
-                      color: selected ? cs.onPrimary : cs.onSurface,
-                      size: iconSize,
-                      fill: 1,
-                    ),
+                    _buildIcon(),
                     AnimatedContainer(
                       duration: animationDuration,
                       curve: Curves.easeOutCubic,

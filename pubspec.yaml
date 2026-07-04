@@ -125,6 +125,7 @@ flutter:
     - assets/komet.png
     - assets/komet_icon.png
     - assets/meteor_icon.png
+    - assets/lottie/
 
   fonts:
     - family: Inter

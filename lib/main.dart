@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:video_player_media_kit/video_player_media_kit.dart';
@@ -79,6 +80,16 @@ final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
 bool isOnemeFlavor = false;
+
+const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+    TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+  },
+);
 
 Future<Locale> _loadInitialLocale() async {
   final prefs = await SharedPreferences.getInstance();
@@ -711,6 +722,7 @@ class KometAppState extends State<KometApp>
       ThemeData(
         useMaterial3: true,
         colorScheme: light,
+        pageTransitionsTheme: _appPageTransitions,
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.light).textTheme,
@@ -721,6 +733,7 @@ class KometAppState extends State<KometApp>
       ThemeData(
         useMaterial3: true,
         colorScheme: dark,
+        pageTransitionsTheme: _appPageTransitions,
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.dark).textTheme,

@@ -34,6 +34,7 @@ import '../../../backend/api.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
@@ -138,6 +139,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       icon: Symbols.settings,
       label: 'Настройки',
       longPressable: true,
+      animationAsset: AppAnimations.settings,
     ),
   ];
 
