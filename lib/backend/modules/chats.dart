@@ -281,6 +281,10 @@ class ChatsModule {
         return 'Геопозиция';
       case 'CONTACT':
         return 'Контакт';
+      case 'CONTROL':
+        return _controlPreviewLabel(first);
+      case 'INLINE_KEYBOARD':
+        return null;
       case 'CALL':
         final video = first['callType']?.toString().toUpperCase() == 'VIDEO';
         final dur = (first['duration'] as num?)?.toInt() ?? 0;
@@ -295,11 +299,49 @@ class ChatsModule {
         if (failed) return video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок';
         return video ? 'Видеозвонок' : 'Звонок';
       default:
-        return null;
+        return 'Вложение';
+    }
+  }
+
+  static String? _controlPreviewLabel(Map c) {
+    final title = c['title']?.toString();
+    if (title != null && title.isNotEmpty) return title;
+    final short = c['shortMessage']?.toString();
+    if (short != null && short.isNotEmpty) return short;
+    switch (c['event']?.toString()) {
+      case 'new':
+        return 'Чат создан';
+      case 'add':
+      case 'joinByLink':
+        return 'Новый участник';
+      case 'leave':
+        return 'Участник вышел';
+      case 'remove':
+        return 'Участник удалён';
+      case 'pin':
+        return 'Закреплённое сообщение';
+      case 'changeTitle':
+        return 'Название чата изменено';
+      case 'changeIcon':
+        return 'Фото чата обновлено';
+      default:
+        return 'Системное сообщение';
     }
   }
 
   static String? messagePreviewText(Map msg) {
+    final link = msg['link'];
+    if (link is Map && link['type']?.toString().toUpperCase() == 'FORWARD') {
+      final original = link['message'];
+      final inner = original is Map ? _bodyPreviewText(original) : null;
+      return inner != null && inner.isNotEmpty
+          ? '↪ $inner'
+          : '↪ Пересланное сообщение';
+    }
+    return _bodyPreviewText(msg);
+  }
+
+  static String? _bodyPreviewText(Map msg) {
     final text = msg['text']?.toString();
     if (text != null && text.isNotEmpty) return text;
     return attachPreviewLabel(msg['attaches']);
@@ -679,7 +721,7 @@ class ChatsModule {
           try {
             final payload = jsonDecode(payloadRaw);
             if (payload is Map) {
-              previewText = attachPreviewLabel(payload['attaches']);
+              previewText = messagePreviewText(payload);
             }
           } catch (_) {}
         }
