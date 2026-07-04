@@ -4534,11 +4534,13 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   double _floatingDateTop(BuildContext context) {
-    if (AppChatChrome.current.value == ChatChromeStyle.color) return 8;
     final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    if (AppChatChrome.current.value == ChatChromeStyle.color) {
+      return glossy ? 2 : 4;
+    }
     return MediaQuery.paddingOf(context).top +
-        (glossy ? _glossyHeaderHeight : kToolbarHeight) +
-        8;
+        (glossy ? _glossyHeaderHeight - 16 : kToolbarHeight) +
+        4;
   }
 
   Widget _buildLoadMoreIndicator() {
