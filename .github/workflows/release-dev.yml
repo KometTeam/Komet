@@ -268,8 +268,4 @@ jobs:
           prerelease: true
           generate_release_notes: true
           fail_on_unmatched_files: true
-          body: |
-            Automated pre-release built from `${{ github.ref_name }}` @ `${{ github.sha }}`.
-
-            ⚠️ The iOS build is **pseudo-signed via ldid** — install on a jailbroken device (Filza / TrollStore / rootless) or sideload via AltStore / Sideloadly.
           files: dist/*
