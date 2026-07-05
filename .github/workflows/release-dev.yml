@@ -185,7 +185,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
       - name: Build iOS (no codesign)
-        run: flutter build ios --release --no-codesign
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter build ios --release --no-codesign
       - name: Package unsigned IPA
         run: |
           mkdir -p dist build/ios/Payload

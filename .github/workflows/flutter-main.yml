@@ -124,7 +124,9 @@ jobs:
         run: flutter pub get
 
       - name: Build iOS
-        run: flutter build ios --release --no-codesign
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter build ios --release --no-codesign
 
       - name: Fix ogg_opus_player macOS libs
         run: ./scripts/fix_opus_macos.sh
