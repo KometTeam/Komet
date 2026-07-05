@@ -36,7 +36,21 @@ class ProfileData {
     this.profileOptions,
   });
 
-  factory ProfileData.fromServerMap(Map<dynamic, dynamic> contact) {
+  factory ProfileData.fromServerProfile(Map<dynamic, dynamic> profile) {
+    final contact = profile['contact'];
+    if (contact is! Map) {
+      throw const FormatException('No contact in profile');
+    }
+    return ProfileData.fromServerMap(
+      contact.cast<dynamic, dynamic>(),
+      profileOptions: _parseProfileOptions(profile['profileOptions']),
+    );
+  }
+
+  factory ProfileData.fromServerMap(
+    Map<dynamic, dynamic> contact, {
+    List<int>? profileOptions,
+  }) {
     final names = contact['names'];
     String firstName = '';
     String? lastName;
@@ -52,12 +66,6 @@ class ProfileData {
       lastName = name['lastName'] as String?;
     }
 
-    final profileOptionsRaw = contact['profileOptions'];
-    List<int>? profileOptions;
-    if (profileOptionsRaw is List) {
-      profileOptions = profileOptionsRaw.map((e) => e as int).toList();
-    }
-
     return ProfileData(
       id: contact['id'] as int,
       firstName: firstName,
@@ -69,8 +77,18 @@ class ProfileData {
       country: (contact['country'] as String?) ?? '',
       accountStatus: (contact['accountStatus'] as int?) ?? 0,
       updateTime: (contact['updateTime'] as int?) ?? 0,
-      profileOptions: profileOptions,
+      profileOptions:
+          profileOptions ?? _parseProfileOptions(contact['profileOptions']),
     );
+  }
+
+  static List<int>? _parseProfileOptions(dynamic raw) {
+    if (raw is! List) return null;
+    final options = raw
+        .map((e) => e is int ? e : int.tryParse(e.toString()))
+        .whereType<int>()
+        .toList();
+    return options.isEmpty ? null : options;
   }
 
   factory ProfileData.fromDbRow(Map<String, dynamic> row) {

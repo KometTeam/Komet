@@ -372,8 +372,9 @@ class VerifyCodeResult {
 
 class TwoFactorResult {
   final String loginToken;
+  final int accountId;
 
-  const TwoFactorResult({required this.loginToken});
+  const TwoFactorResult({required this.loginToken, required this.accountId});
 }
 
 class LoginSyncParams {

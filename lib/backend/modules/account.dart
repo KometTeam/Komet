@@ -228,7 +228,9 @@ class AccountModule {
       throw Exception('completeRegistration: отсутствует id аккаунта');
     }
 
-    final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
+    final profile = ProfileData.fromServerProfile(
+      profileMap.cast<dynamic, dynamic>(),
+    );
     await AppDatabase.saveProfile(profile, isActive: true);
     await TokenStorage.setActiveAccount(accountId);
     await SpoofingService.commitPendingSpoof(accountId);
@@ -446,8 +448,25 @@ class AccountModule {
       throw Exception('checkPassword: отсутствует токен в ответе');
     }
 
+    final accountId = extractAccountId(data);
+    if (accountId == null) {
+      throw Exception('checkPassword: отсутствует accountId в ответе');
+    }
+
+    final profileMap = data['profile'];
+    if (profileMap is Map) {
+      final profile = ProfileData.fromServerProfile(
+        profileMap.cast<dynamic, dynamic>(),
+      );
+      await AppDatabase.saveProfile(profile, isActive: true);
+    }
+
+    await TokenStorage.saveToken(loginToken, accountId);
+    await TokenStorage.setActiveAccount(accountId);
+    await SpoofingService.commitPendingSpoof(accountId);
+
     logger.i('2FA пройдена, получен login-токен');
-    return TwoFactorResult(loginToken: loginToken);
+    return TwoFactorResult(loginToken: loginToken, accountId: accountId);
   }
 
   Map<dynamic, dynamic> buildLoginPayload(
@@ -500,16 +519,24 @@ class AccountModule {
       await TokenStorage.saveToken(updatedToken, accountId);
     }
 
+    ProfileData profile;
     final profileMap = data['profile'];
-    if (profileMap is! Map) {
-      throw Exception('login: отсутствует profile в ответе');
+    if (profileMap is Map) {
+      final contact = profileMap['contact'];
+      if (contact is! Map) {
+        throw Exception('login: отсутствует profile.contact в ответе');
+      }
+      profile = ProfileData.fromServerProfile(
+        profileMap.cast<dynamic, dynamic>(),
+      );
+      await AppDatabase.saveProfile(profile, isActive: true);
+    } else {
+      final cachedProfile = await AppDatabase.loadProfile(accountId);
+      if (cachedProfile == null) {
+        throw Exception('login: отсутствует profile в ответе');
+      }
+      profile = cachedProfile;
     }
-    final contact = profileMap['contact'];
-    if (contact is! Map) {
-      throw Exception('login: отсутствует profile.contact в ответе');
-    }
-    final profile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-    await AppDatabase.saveProfile(profile, isActive: true);
     await AppDatabase.setActiveAccount(profile.id);
 
     await _saveSyncState(data, serverTime, profile.id);

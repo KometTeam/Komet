@@ -18,8 +18,8 @@ class ProfileModule extends AccountApiBase {
     if (profile == null) throw Exception('No profile in response');
     final contact = profile['contact'] as Map?;
     if (contact == null) throw Exception('No contact in response');
-    final newProfile = ProfileData.fromServerMap(
-      contact.cast<dynamic, dynamic>(),
+    final newProfile = ProfileData.fromServerProfile(
+      profile.cast<dynamic, dynamic>(),
     );
     await AppDatabase.saveProfile(newProfile, isActive: true);
     return newProfile;
@@ -88,7 +88,7 @@ class ProfileModule extends AccountApiBase {
           final contact = profile['contact'];
           if (contact is! Map) return;
           completer.complete(
-            ProfileData.fromServerMap(contact.cast<dynamic, dynamic>()),
+            ProfileData.fromServerProfile(profile.cast<dynamic, dynamic>()),
           );
         });
     final timer = Timer(const Duration(seconds: 15), () {
