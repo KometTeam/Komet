@@ -70,9 +70,15 @@ class Api {
   StreamSubscription<SocketState>? _socketStateSubscription;
   Timer? _pingTimer;
   Timer? _reconnectTimer;
+  Timer? _connectWatchdog;
+  int _connectGen = 0;
   int _reconnectAttempts = 0;
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
+
+  static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
+  static const Duration _shouldArmTimeout = Duration(seconds: 5);
+  static const Duration _endpointTimeout = Duration(seconds: 5);
 
   int get sessionEpoch => _sessionEpoch;
 
@@ -83,85 +89,166 @@ class Api {
 
   /// Подключается к серверу, шлёт хэндшейк, запускает пинг.
   Future<void> connect() async {
-    if (_sessionState != SessionState.disconnected) return;
-    // Ставим автоматический реконнект и статус подключения
-    _autoReconnect = true;
-    _setSessionState(SessionState.connecting);
-
-    _dataSubscription = _connection.dataStream.listen(_onDataReceived);
-    _socketStateSubscription = _connection.stateStream.listen((socketState) {
-      if (socketState == SocketState.disconnected &&
-          _sessionState != SessionState.disconnected) {
-        _onDisconnected();
-      }
-    });
-
-    final bypassArmed = await VpnBypassService.instance.shouldArm();
-    if (!bypassArmed) _bypassActive = false;
-    final useBypass = _bypassActive && bypassArmed;
-    // Попытку через VPN ограничиваем по времени, чтобы быстро понять,
-    // что туннель не пропускает, и переключиться на обход.
-    final attemptTimeout = bypassArmed && !useBypass
-        ? const Duration(seconds: 8)
-        : null;
-
-    try {
-      final endpoint = await ServerConfig.loadEndpoint();
-      await _connection.connect(
-        endpoint.host,
-        endpoint.port,
-        bypassVpn: useBypass,
-        timeout: attemptTimeout,
-      );
-    } catch (e) {
-      await _handleConnectFailure(
-        e,
-        phase: 'Не удалось подключиться',
-        bypassArmed: bypassArmed,
-        useBypass: useBypass,
-        bypassWhy: 'подключение не удалось',
-      );
+    if (_sessionState != SessionState.disconnected) {
+      logger.i('connect пропущен: состояние ${_sessionState.name}');
       return;
     }
-
-    _setSessionState(SessionState.connected);
-    _reconnectAttempts = 0;
+    _autoReconnect = true;
+    final gen = ++_connectGen;
+    _setSessionState(SessionState.connecting);
+    logger.i('connect: старт (поколение $gen)');
+    _armConnectWatchdog(gen);
 
     try {
-      final response = await sendHandshake();
-      if (response.isOk) {
-        _callsSeed = response.payload['callsSeed'] as int?;
-        _registrationCountries = _parseRegistrationCountries(response.payload);
-        _sessionState = SessionState.online;
-        _sessionEpoch++;
-        _startPinging();
-        logger.i('Сессия онлайн, хэндшейк ок');
-        if (_onReconnectCallback != null) {
-          try {
-            await _onReconnectCallback!();
-          } catch (e) {
-            logger.w('Авто-логин при хэндшейке не удался: $e');
-          }
+      _dataSubscription = _connection.dataStream.listen(_onDataReceived);
+      _socketStateSubscription = _connection.stateStream.listen((socketState) {
+        if (socketState == SocketState.disconnected &&
+            _sessionState != SessionState.disconnected) {
+          _onDisconnected();
         }
-        if (_sessionState == SessionState.online) {
-          _stateController.add(SessionState.online);
-          _handshakeSuccessController.add(
-            response.payload['device_name'] as String? ?? 'Unknown',
+      });
+
+      bool bypassArmed;
+      try {
+        bypassArmed = await VpnBypassService.instance.shouldArm().timeout(
+          _shouldArmTimeout,
+        );
+      } catch (e) {
+        logger.w('connect: shouldArm завис/упал ($e) — без обхода VPN');
+        bypassArmed = false;
+      }
+      if (gen != _connectGen) return;
+
+      if (!bypassArmed) _bypassActive = false;
+      final useBypass = _bypassActive && bypassArmed;
+      final attemptTimeout = bypassArmed && !useBypass
+          ? const Duration(seconds: 8)
+          : null;
+
+      ({String host, int port}) endpoint;
+      try {
+        endpoint = await ServerConfig.loadEndpoint().timeout(_endpointTimeout);
+      } catch (e) {
+        logger.w('connect: loadEndpoint завис/упал ($e) — дефолтный endpoint');
+        endpoint = (
+          host: ServerConfig.defaultHost,
+          port: ServerConfig.defaultPort,
+        );
+      }
+      if (gen != _connectGen) return;
+
+      logger.i(
+        'connect: endpoint ${endpoint.host}:${endpoint.port}, bypass=$useBypass',
+      );
+      try {
+        await _connection.connect(
+          endpoint.host,
+          endpoint.port,
+          bypassVpn: useBypass,
+          timeout: attemptTimeout,
+        );
+      } catch (e) {
+        if (gen != _connectGen) return;
+        await _handleConnectFailure(
+          e,
+          phase: 'Не удалось подключиться',
+          bypassArmed: bypassArmed,
+          useBypass: useBypass,
+          bypassWhy: 'подключение не удалось',
+        );
+        return;
+      }
+      if (gen != _connectGen) return;
+
+      _setSessionState(SessionState.connected);
+      _reconnectAttempts = 0;
+
+      try {
+        logger.i('connect: сокет готов, отправляю хэндшейк');
+        final response = await sendHandshake();
+        if (gen != _connectGen) return;
+        if (response.isOk) {
+          _callsSeed = response.payload['callsSeed'] as int?;
+          _registrationCountries = _parseRegistrationCountries(
+            response.payload,
+          );
+          _sessionState = SessionState.online;
+          _sessionEpoch++;
+          _cancelConnectWatchdog();
+          _startPinging();
+          logger.i('Сессия онлайн, хэндшейк ок');
+          if (_onReconnectCallback != null) {
+            try {
+              await _onReconnectCallback!();
+            } catch (e) {
+              logger.w('Авто-логин при хэндшейке не удался: $e');
+            }
+          }
+          if (_sessionState == SessionState.online) {
+            _stateController.add(SessionState.online);
+            _handshakeSuccessController.add(
+              response.payload['device_name'] as String? ?? 'Unknown',
+            );
+          }
+        } else {
+          logger.e('Хэндшейк отклонён: ${response.payload}');
+          await _handleConnectFailure(
+            StateError('хэндшейк отклонён сервером'),
+            phase: 'Хэндшейк отклонён',
+            bypassArmed: bypassArmed,
+            useBypass: useBypass,
+            bypassWhy: 'хэндшейк отклонён',
+            disconnectSocket: true,
           );
         }
-      } else {
-        logger.e('Хэндшейк отклонён: ${response.payload}');
+      } catch (e) {
+        if (gen != _connectGen) return;
+        await _handleConnectFailure(
+          e,
+          phase: 'Ошибка хэндшейка',
+          bypassArmed: bypassArmed,
+          useBypass: useBypass,
+          bypassWhy: 'хэндшейк не прошёл',
+          disconnectSocket: true,
+        );
       }
-    } catch (e) {
-      await _handleConnectFailure(
-        e,
-        phase: 'Ошибка хэндшейка',
-        bypassArmed: bypassArmed,
-        useBypass: useBypass,
-        bypassWhy: 'хэндшейк не прошёл',
-        disconnectSocket: true,
-      );
+    } catch (e, st) {
+      logger.e('connect: непредвиденная ошибка: $e\n$st');
+      if (gen == _connectGen) await _resetStuckConnect(gen);
     }
+  }
+
+  void _armConnectWatchdog(int gen) {
+    _connectWatchdog?.cancel();
+    _connectWatchdog = Timer(_connectWatchdogTimeout, () {
+      if (gen != _connectGen) return;
+      if (_sessionState == SessionState.online ||
+          _sessionState == SessionState.disconnected) {
+        return;
+      }
+      logger.e(
+        'connect: watchdog ${_connectWatchdogTimeout.inSeconds}с — застряли в '
+        '${_sessionState.name}, принудительный сброс',
+      );
+      unawaited(_resetStuckConnect(gen));
+    });
+  }
+
+  void _cancelConnectWatchdog() {
+    _connectWatchdog?.cancel();
+    _connectWatchdog = null;
+  }
+
+  Future<void> _resetStuckConnect(int gen) async {
+    if (gen != _connectGen) return;
+    _connectGen++;
+    _cancelConnectWatchdog();
+    _cleanup();
+    try {
+      await _connection.disconnect();
+    } catch (_) {}
+    _setSessionState(SessionState.disconnected);
+    if (_autoReconnect) _scheduleReconnect();
   }
 
   Future<void> _handleConnectFailure(
@@ -173,6 +260,7 @@ class Api {
     bool disconnectSocket = false,
   }) async {
     logger.e('$phase: $error');
+    _cancelConnectWatchdog();
     if (_sessionState != SessionState.disconnected) {
       _cleanup();
       if (disconnectSocket) await _connection.disconnect();
@@ -193,6 +281,7 @@ class Api {
   Future<void> disconnect() async {
     _autoReconnect = false;
     _bypassActive = false;
+    _connectGen++;
     _reconnectTimer?.cancel();
     _cleanup();
     await _connection.disconnect();
@@ -441,6 +530,7 @@ class Api {
   }
 
   void _onDisconnected() {
+    _connectGen++;
     _cleanup();
     _setSessionState(SessionState.disconnected);
     if (_autoReconnect) _scheduleReconnect();
@@ -463,6 +553,7 @@ class Api {
   }
 
   Future<void> _forceReconnect() async {
+    _connectGen++;
     _cleanup();
     await _connection.disconnect();
     _reconnectAttempts = 0;
@@ -472,6 +563,7 @@ class Api {
   }
 
   void _cleanup() {
+    _cancelConnectWatchdog();
     _pingTimer?.cancel();
     _dataSubscription?.cancel();
     _socketStateSubscription?.cancel();

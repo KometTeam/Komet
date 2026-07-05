@@ -73,7 +73,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
       endpoint: TrafficMonitor.instance.activeEndpoint,
     );
     if (content == null) {
-      if (mounted) showCustomNotification(context, 'Нет запросов для лога');
+      if (mounted) showCustomNotification(context, 'Лог пуст');
       return;
     }
     final bytes = Uint8List.fromList(utf8.encode(content));

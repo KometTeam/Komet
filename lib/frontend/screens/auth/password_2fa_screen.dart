@@ -67,7 +67,10 @@ class _Password2FAScreenState extends State<Password2FAScreen>
 
       if (!mounted) return;
 
-      final loginResult = await accountModule.login(token: result.loginToken);
+      final loginResult = await accountModule.login(
+        accountId: result.accountId,
+        token: result.loginToken,
+      );
 
       if (!mounted) return;
 
