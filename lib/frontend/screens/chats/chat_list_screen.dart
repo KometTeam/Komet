@@ -10,7 +10,6 @@ import 'chat_screen.dart';
 import 'search_screen.dart';
 import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
-import '../../widgets/avatar_hero.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
@@ -2252,7 +2251,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       messageItalic,
     );
 
-    Widget avatarCircle = CircleAvatar(
+    final Widget avatarCircle = CircleAvatar(
       radius: 24,
       backgroundColor: cs.surfaceContainerHighest,
       backgroundImage: imageUrl.isNotEmpty
@@ -2269,15 +2268,6 @@ class _ChatListScreenState extends State<ChatListScreen>
             )
           : null,
     );
-    if (widget.onChatSelected == null) {
-      avatarCircle = AvatarHero(
-        tag: 'chatAvatar_$id',
-        name: name,
-        imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
-        child: avatarCircle,
-      );
-    }
-
     return InkWell(
       key: ValueKey('chat_$id'),
       onTap: () {

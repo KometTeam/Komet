@@ -38,6 +38,7 @@ class StickerItem {
   final int? setId;
   final int? width;
   final int? height;
+  final List<String> tags;
 
   const StickerItem({
     required this.id,
@@ -46,6 +47,7 @@ class StickerItem {
     this.setId,
     this.width,
     this.height,
+    this.tags = const [],
   });
 
   bool get isAnimated => lottieUrl != null && lottieUrl!.isNotEmpty;
@@ -57,5 +59,16 @@ class StickerItem {
     setId: map['setId'] as int?,
     width: map['width'] as int?,
     height: map['height'] as int?,
+    tags: _parseTags(map['tags']),
   );
+
+  static List<String> _parseTags(dynamic raw) {
+    if (raw is! List) return const [];
+    final result = <String>[];
+    for (final e in raw) {
+      final s = e?.toString();
+      if (s != null && s.isNotEmpty) result.add(s);
+    }
+    return result;
+  }
 }

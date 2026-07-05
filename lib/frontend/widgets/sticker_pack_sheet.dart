@@ -275,6 +275,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
             peekId: item.id,
             url: item.url,
             lottieUrl: item.lottieUrl,
+            tags: item.tags,
             child: Padding(
               padding: const EdgeInsets.all(6),
               child: StickerImage(

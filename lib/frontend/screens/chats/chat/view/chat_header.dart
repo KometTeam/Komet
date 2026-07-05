@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:komet/frontend/widgets/avatar_hero.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/online_dot.dart';
 
@@ -90,33 +89,28 @@ class ChatHeaderRow extends StatelessWidget {
                 children: [
                   _withOnlineDot(
                     cs,
-                    AvatarHero(
-                      tag: 'chatAvatar_$chatId',
-                      name: name,
-                      imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
-                      child: imageUrl.isNotEmpty
-                          ? CircleAvatar(
-                              radius: 22,
-                              backgroundImage: CachedNetworkImageProvider(
-                                imageUrl,
-                                maxWidth: 144,
-                                maxHeight: 144,
-                              ),
-                            )
-                          : CircleAvatar(
-                              radius: 22,
-                              backgroundColor: cs.primaryContainer,
-                              child: Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                style: TextStyle(
-                                  color: cs.onPrimaryContainer,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Outfit',
-                                ),
+                    imageUrl.isNotEmpty
+                        ? CircleAvatar(
+                            radius: 22,
+                            backgroundImage: CachedNetworkImageProvider(
+                              imageUrl,
+                              maxWidth: 144,
+                              maxHeight: 144,
+                            ),
+                          )
+                        : CircleAvatar(
+                            radius: 22,
+                            backgroundColor: cs.primaryContainer,
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                              style: TextStyle(
+                                color: cs.onPrimaryContainer,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Outfit',
                               ),
                             ),
-                    ),
+                          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -195,7 +189,11 @@ class ChatHeaderRow extends StatelessWidget {
                   ),
                   if (showCall)
                     IconButton(
-                      icon: Icon(Symbols.call, weight: 500, color: cs.onSurface),
+                      icon: Icon(
+                        Symbols.call,
+                        weight: 500,
+                        color: cs.onSurface,
+                      ),
                       onPressed: onCall,
                     ),
                   Builder(
@@ -244,31 +242,26 @@ class ChatHeaderRow extends StatelessWidget {
               children: [
                 _withOnlineDot(
                   cs,
-                  AvatarHero(
-                    tag: 'chatAvatar_$chatId',
-                    name: name,
-                    imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
-                    child: imageUrl.isNotEmpty
-                        ? CircleAvatar(
-                            radius: 18,
-                            backgroundImage: CachedNetworkImageProvider(
-                              imageUrl,
-                              maxWidth: 144,
-                              maxHeight: 144,
-                            ),
-                          )
-                        : CircleAvatar(
-                            radius: 18,
-                            backgroundColor: cs.primaryContainer,
-                            child: Text(
-                              name.isNotEmpty ? name[0].toUpperCase() : '?',
-                              style: TextStyle(
-                                color: cs.onPrimaryContainer,
-                                fontSize: 12,
-                              ),
+                  imageUrl.isNotEmpty
+                      ? CircleAvatar(
+                          radius: 18,
+                          backgroundImage: CachedNetworkImageProvider(
+                            imageUrl,
+                            maxWidth: 144,
+                            maxHeight: 144,
+                          ),
+                        )
+                      : CircleAvatar(
+                          radius: 18,
+                          backgroundColor: cs.primaryContainer,
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              color: cs.onPrimaryContainer,
+                              fontSize: 12,
                             ),
                           ),
-                  ),
+                        ),
                   dotSize: 11,
                 ),
                 const SizedBox(width: 12),

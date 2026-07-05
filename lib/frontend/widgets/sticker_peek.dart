@@ -9,8 +9,9 @@ import 'sticker_image.dart';
 class _PeekData {
   final String? url;
   final String? lottieUrl;
+  final List<String> tags;
 
-  const _PeekData(this.url, this.lottieUrl);
+  const _PeekData(this.url, this.lottieUrl, this.tags);
 }
 
 class StickerPeekScope extends StatefulWidget {
@@ -71,7 +72,11 @@ class StickerPeekScopeState extends State<StickerPeekScope>
     final cell = _hitTest(globalPos);
     if (cell == null) return;
     _currentId = cell.widget.peekId;
-    _current.value = _PeekData(cell.widget.url, cell.widget.lottieUrl);
+    _current.value = _PeekData(
+      cell.widget.url,
+      cell.widget.lottieUrl,
+      cell.widget.tags,
+    );
     _showEntry();
     _anim.forward(from: 0);
     Haptics.medium();
@@ -82,7 +87,11 @@ class StickerPeekScopeState extends State<StickerPeekScope>
     final cell = _hitTest(globalPos);
     if (cell == null || cell.widget.peekId == _currentId) return;
     _currentId = cell.widget.peekId;
-    _current.value = _PeekData(cell.widget.url, cell.widget.lottieUrl);
+    _current.value = _PeekData(
+      cell.widget.url,
+      cell.widget.lottieUrl,
+      cell.widget.tags,
+    );
     Haptics.selection();
   }
 
@@ -137,6 +146,7 @@ class StickerPeekable extends StatefulWidget {
   final Object peekId;
   final String? url;
   final String? lottieUrl;
+  final List<String> tags;
   final Widget child;
 
   const StickerPeekable({
@@ -144,6 +154,7 @@ class StickerPeekable extends StatefulWidget {
     required this.peekId,
     this.url,
     this.lottieUrl,
+    this.tags = const [],
     required this.child,
   });
 
@@ -214,14 +225,23 @@ class _PeekOverlay extends StatelessWidget {
                       valueListenable: data,
                       builder: (context, d, _) {
                         if (d == null) return const SizedBox.shrink();
-                        return SizedBox(
-                          width: previewSize,
-                          height: previewSize,
-                          child: StickerImage(
-                            url: d.url,
-                            lottieUrl: d.lottieUrl,
-                            size: previewSize,
-                          ),
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (d.tags.isNotEmpty) ...[
+                              _PeekTags(tags: d.tags),
+                              const SizedBox(height: 18),
+                            ],
+                            SizedBox(
+                              width: previewSize,
+                              height: previewSize,
+                              child: StickerImage(
+                                url: d.url,
+                                lottieUrl: d.lottieUrl,
+                                size: previewSize,
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
@@ -232,6 +252,26 @@ class _PeekOverlay extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _PeekTags extends StatelessWidget {
+  final List<String> tags;
+
+  const _PeekTags({required this.tags});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final tag in tags)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(tag, style: const TextStyle(fontSize: 28)),
+          ),
+      ],
     );
   }
 }
