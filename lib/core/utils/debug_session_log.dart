@@ -57,11 +57,15 @@ class _SessionData {
   final DateTime startedAt;
   final List<_LogEntry> entries;
   final bool truncated;
+  final List<String> logLines;
+  final bool logsTruncated;
 
   _SessionData({
     required this.startedAt,
     required this.entries,
     this.truncated = false,
+    this.logLines = const [],
+    this.logsTruncated = false,
   });
 
   static _SessionData fromJson(Map data) {
@@ -72,37 +76,43 @@ class _SessionData {
         if (e is Map) entries.add(_LogEntry.fromJson(e));
       }
     }
+    final rawLogs = data['logs'];
+    final logLines = <String>[];
+    if (rawLogs is List) {
+      for (final l in rawLogs) {
+        logLines.add(l.toString());
+      }
+    }
     return _SessionData(
       startedAt:
           DateTime.tryParse(data['startedAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       entries: entries,
       truncated: data['truncated'] == true,
+      logLines: logLines,
+      logsTruncated: data['logsTruncated'] == true,
     );
   }
 }
 
-/// Персистентный лог запросов для кнопки «Отладочный лог».
-///
-/// Хранит ВСЕ запросы (с payload) за последние [_maxSessions] заходов в
-/// приложение: каждый запуск — отдельная сессия-файл, старые ротируются.
-/// Пинги идут мимо [Api.sendRequest], поэтому в лог не попадают.
-///
-/// Payload сохраняется уже отредактированным — токен скрыт целиком, от номера
-/// остаются первые 3 символа, остальное видно. Поэтому секреты не лежат на диске.
 class DebugSessionLog {
   DebugSessionLog._();
   static final DebugSessionLog instance = DebugSessionLog._();
 
   static const int _maxSessions = 3;
   static const int _maxEntriesPerSession = 2000;
+  static const int _maxLogLinesPerSession = 5000;
   static const Duration _flushDebounce = Duration(seconds: 3);
+
+  static final RegExp _ansiEscape = RegExp(r'\x1B\[[0-9;]*m');
 
   Directory? _dir;
   File? _currentFile;
   DateTime? _currentStart;
   final List<_LogEntry> _entries = [];
+  final List<String> _logLines = [];
   bool _truncated = false;
+  bool _logsTruncated = false;
   bool _initialized = false;
   bool _dirty = false;
   Timer? _flushTimer;
@@ -120,10 +130,21 @@ class DebugSessionLog {
       _currentFile = File(
         '${dir.path}/session_${_currentStart!.millisecondsSinceEpoch}.json',
       );
+      if (_dirty) _scheduleFlush();
     } catch (_) {
       _dir = null;
       _currentFile = null;
     }
+  }
+
+  void recordLogLine(String line) {
+    final clean = line.replaceAll(_ansiEscape, '');
+    _logLines.add(clean);
+    if (_logLines.length > _maxLogLinesPerSession) {
+      _logLines.removeRange(0, _logLines.length - _maxLogLinesPerSession);
+      _logsTruncated = true;
+    }
+    _scheduleFlush();
   }
 
   void recordRequest(int opcode, int seq, dynamic payload) {
@@ -189,6 +210,8 @@ class DebugSessionLog {
         'startedAt': _currentStart?.toIso8601String(),
         'truncated': _truncated,
         'entries': _entries.map((e) => e.toJson()).toList(),
+        'logsTruncated': _logsTruncated,
+        'logs': List.of(_logLines),
       });
       await file.writeAsString(data);
     } catch (_) {}
@@ -249,6 +272,8 @@ class DebugSessionLog {
         startedAt: _currentStart ?? DateTime.now(),
         entries: List.of(_entries),
         truncated: _truncated,
+        logLines: List.of(_logLines),
+        logsTruncated: _logsTruncated,
       ),
     );
     sessions.sort((a, b) => a.startedAt.compareTo(b.startedAt));
@@ -256,7 +281,8 @@ class DebugSessionLog {
         ? sessions.sublist(sessions.length - _maxSessions)
         : sessions;
     final totalEntries = lastN.fold<int>(0, (sum, s) => sum + s.entries.length);
-    if (totalEntries == 0) return null;
+    final totalLogs = lastN.fold<int>(0, (sum, s) => sum + s.logLines.length);
+    if (totalEntries == 0 && totalLogs == 0) return null;
 
     final buffer = StringBuffer();
     buffer.writeln('Komet — отладочный лог');
@@ -264,6 +290,7 @@ class DebugSessionLog {
     buffer.writeln('Экспортирован: ${DateTime.now().toIso8601String()}');
     buffer.writeln('Заходов в приложение: ${lastN.length}');
     buffer.writeln('Всего запросов: $totalEntries');
+    buffer.writeln('Всего строк лога: $totalLogs');
     buffer.writeln('Скрыто: токен полностью, номер кроме первых 3 символов');
     buffer.writeln();
 
@@ -275,12 +302,31 @@ class DebugSessionLog {
       );
       buffer.writeln(
         'запросов: ${session.entries.length}'
-        '${session.truncated ? ' (обрезано до $_maxEntriesPerSession)' : ''}',
+        '${session.truncated ? ' (обрезано до $_maxEntriesPerSession)' : ''}'
+        ' · строк лога: ${session.logLines.length}'
+        '${session.logsTruncated ? ' (обрезано до $_maxLogLinesPerSession)' : ''}',
       );
       buffer.writeln('==================================================');
       buffer.writeln();
-      for (var i = 0; i < session.entries.length; i++) {
-        _writeEntry(buffer, i + 1, session.entries[i]);
+
+      buffer.writeln('----- ЛОГИ ПРИЛОЖЕНИЯ -----');
+      if (session.logLines.isEmpty) {
+        buffer.writeln('(пусто)');
+      } else {
+        for (final line in session.logLines) {
+          buffer.writeln(line);
+        }
+      }
+      buffer.writeln();
+
+      buffer.writeln('----- ЗАПРОСЫ -----');
+      if (session.entries.isEmpty) {
+        buffer.writeln('(пусто)');
+        buffer.writeln();
+      } else {
+        for (var i = 0; i < session.entries.length; i++) {
+          _writeEntry(buffer, i + 1, session.entries[i]);
+        }
       }
     }
     return buffer.toString();

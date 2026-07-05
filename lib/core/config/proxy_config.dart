@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../storage/token_storage.dart';
+import '../utils/logger.dart';
 
 enum ProxyType { none, socks5, httpConnect }
 
@@ -35,26 +38,52 @@ abstract class ProxyConfig {
   static const String _prefUsername = 'proxy_username';
   static const String _prefPassword = 'proxy_password';
 
+  static const Duration _secureReadTimeout = Duration(seconds: 5);
+
+  static Future<String?> _readSecureSafe(String key) async {
+    try {
+      return await TokenStorage.readSecure(key).timeout(_secureReadTimeout);
+    } catch (e) {
+      logger.w('ProxyConfig: чтение secure "$key" не удалось/зависло: $e');
+      return null;
+    }
+  }
+
+  static Future<void> _migrateLegacySecure(String key, String value) async {
+    try {
+      await TokenStorage.writeSecure(key, value).timeout(_secureReadTimeout);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+    } catch (e) {
+      logger.w('ProxyConfig: миграция legacy "$key" не удалась: $e');
+    }
+  }
+
   static Future<ProxySettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final typeIndex = prefs.getInt(_prefType) ?? 0;
     final host = prefs.getString(_prefHost) ?? '';
     final port = prefs.getInt(_prefPort) ?? 1080;
-    var username = await TokenStorage.readSecure(_prefUsername);
-    var password = await TokenStorage.readSecure(_prefPassword);
+    if (ProxyType.values[typeIndex.clamp(0, ProxyType.values.length - 1)] ==
+            ProxyType.none ||
+        host.isEmpty) {
+      return ProxySettings(
+        type: ProxyType.values[typeIndex.clamp(0, ProxyType.values.length - 1)],
+        host: host,
+        port: port,
+      );
+    }
+    var username = await _readSecureSafe(_prefUsername);
+    var password = await _readSecureSafe(_prefPassword);
     final legacyUsername = prefs.getString(_prefUsername);
     final legacyPassword = prefs.getString(_prefPassword);
     if (username == null && legacyUsername != null) {
       username = legacyUsername;
-      await TokenStorage.writeSecure(_prefUsername, legacyUsername);
+      unawaited(_migrateLegacySecure(_prefUsername, legacyUsername));
     }
     if (password == null && legacyPassword != null) {
       password = legacyPassword;
-      await TokenStorage.writeSecure(_prefPassword, legacyPassword);
-    }
-    if (legacyUsername != null || legacyPassword != null) {
-      await prefs.remove(_prefUsername);
-      await prefs.remove(_prefPassword);
+      unawaited(_migrateLegacySecure(_prefPassword, legacyPassword));
     }
     return ProxySettings(
       type: ProxyType.values[typeIndex.clamp(0, ProxyType.values.length - 1)],

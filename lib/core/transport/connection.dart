@@ -15,6 +15,8 @@ enum SocketState { disconnected, connecting, connected }
 /// Отдаёт сырые байты через [dataStream], сборкой пакетов занимается [PacketReceiver].
 class Connection {
   static const Duration _defaultConnectTimeout = Duration(seconds: 15);
+  static const Duration _proxyLoadTimeout = Duration(seconds: 8);
+  static const Duration _vpnCallTimeout = Duration(seconds: 5);
 
   SecureSocket? _socket;
   StreamSubscription<Uint8List>? _subscription;
@@ -40,20 +42,41 @@ class Connection {
     bool bypassVpn = false,
     Duration? timeout,
   }) async {
-    if (_state != SocketState.disconnected) return;
+    if (_state != SocketState.disconnected) {
+      logger.w('Connection.connect пропущен: state=$_state (уже $_state)');
+      return;
+    }
     _setState(SocketState.connecting);
 
     try {
-      final proxySettings = await ProxyConfig.load();
-
-      // Решение «обходить VPN или нет» принимает вызывающий (Api):
-      // первая попытка идёт через VPN, при её провале — мимо туннеля.
-      if (bypassVpn) {
-        await VpnBypassService.instance.bind();
-      } else {
-        await VpnBypassService.instance.restoreDefault();
+      logger.i('Connection: загрузка прокси-конфига');
+      ProxySettings proxySettings;
+      try {
+        proxySettings = await ProxyConfig.load().timeout(_proxyLoadTimeout);
+      } catch (e) {
+        logger.w('Connection: ProxyConfig.load завис/упал ($e) — без прокси');
+        proxySettings = const ProxySettings();
       }
 
+      logger.i(
+        'Connection: VPN ${bypassVpn ? 'bind (обход)' : 'restoreDefault'}',
+      );
+      try {
+        if (bypassVpn) {
+          await VpnBypassService.instance.bind().timeout(_vpnCallTimeout);
+        } else {
+          await VpnBypassService.instance
+              .restoreDefault()
+              .timeout(_vpnCallTimeout);
+        }
+      } catch (e) {
+        logger.w('Connection: VPN-вызов завис/упал ($e) — продолжаю');
+      }
+
+      logger.i(
+        'Connection: открываю сокет $host:$port '
+        '(прокси: ${proxySettings.isEnabled ? proxySettings.type.name : 'нет'})',
+      );
       final socket = await _openSecureSocket(
         host,
         port,
@@ -109,7 +132,9 @@ class Connection {
       socket = await connector.connect(host, port).timeout(connectTimeout);
       logger.i('Подключено через прокси ${proxySettings.type.name}');
     } else {
+      logger.i('Connection: TCP connect $host:$port (лимит ${connectTimeout.inSeconds}с)');
       socket = await Socket.connect(host, port, timeout: connectTimeout);
+      logger.i('Connection: TCP установлен, начинаю TLS');
     }
     final allowInsecure = await TlsConfig.isInsecureAllowed();
     if (allowInsecure) {
@@ -121,8 +146,11 @@ class Connection {
         ? SecureSocket.secure(socket, host: host, onBadCertificate: (_) => true)
         : SecureSocket.secure(socket, host: host);
     try {
-      return await secured.timeout(connectTimeout);
+      final result = await secured.timeout(connectTimeout);
+      logger.i('Connection: TLS-handshake завершён');
+      return result;
     } on TimeoutException {
+      logger.w('Connection: TLS-handshake таймаут ${connectTimeout.inSeconds}с');
       socket.destroy();
       rethrow;
     }

@@ -105,8 +105,47 @@ Future<Locale> _loadInitialLocale() async {
   return const Locale('ru');
 }
 
+void _installLogCapture() {
+  final previousDebugPrint = debugPrint;
+  debugPrint = (String? message, {int? wrapWidth}) {
+    if (message != null) {
+      final t = DateTime.now();
+      final stamp =
+          '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}.${t.millisecond.toString().padLeft(3, '0')}';
+      DebugSessionLog.instance.recordLogLine('  |$stamp P $message');
+    }
+    previousDebugPrint(message, wrapWidth: wrapWidth);
+  };
+
+  final previousFlutterOnError = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    DebugSessionLog.instance.recordLogLine(
+      '  |         FlutterError: ${details.exceptionAsString()}',
+    );
+    if (details.stack != null) {
+      DebugSessionLog.instance.recordLogLine(details.stack.toString());
+    }
+    if (previousFlutterOnError != null) {
+      previousFlutterOnError(details);
+    } else {
+      FlutterError.presentError(details);
+    }
+  };
+
+  final previousPlatformOnError = ui.PlatformDispatcher.instance.onError;
+  ui.PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    DebugSessionLog.instance.recordLogLine('  |         Uncaught: $error');
+    DebugSessionLog.instance.recordLogLine(stack.toString());
+    if (previousPlatformOnError != null) {
+      return previousPlatformOnError(error, stack);
+    }
+    return false;
+  };
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(
     windows: true,
     linux: true,

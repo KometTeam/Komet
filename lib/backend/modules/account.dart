@@ -269,16 +269,15 @@ class AccountModule {
       final dataMap = data.cast<dynamic, dynamic>();
 
       if (resolvedAccountId == null) {
-        final profileMap = dataMap['profile'];
-        if (profileMap is Map) {
-          final contact = profileMap['contact'];
-          if (contact is Map) {
-            resolvedAccountId = contact['id'] as int?;
-          }
-        }
+        resolvedAccountId = extractAccountId(dataMap);
         if (resolvedAccountId == null) {
+          logger.e(
+            'login: accountId не найден в ответе; '
+            '${describeResponseShape(dataMap)}',
+          );
           throw Exception('login: не удалось определить accountId из ответа');
         }
+        logger.i('login: accountId=$resolvedAccountId определён из ответа');
         await TokenStorage.saveToken(authToken, resolvedAccountId);
         await TokenStorage.setActiveAccount(resolvedAccountId);
         await SpoofingService.commitPendingSpoof(resolvedAccountId);

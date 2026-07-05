@@ -2,6 +2,70 @@ import 'dart:convert';
 
 import '../../../core/storage/app_database.dart';
 
+int? _coerceAccountId(dynamic value) {
+  if (value is int) return value;
+  if (value is double) return value.toInt();
+  if (value is String) return int.tryParse(value.trim());
+  return null;
+}
+
+int? extractAccountId(dynamic response) {
+  if (response is! Map) return null;
+
+  final profile = response['profile'];
+  if (profile is Map) {
+    final contact = profile['contact'];
+    if (contact is Map) {
+      final cid =
+          _coerceAccountId(contact['id']) ??
+          _coerceAccountId(contact['contactId']) ??
+          _coerceAccountId(contact['accountId']);
+      if (cid != null) return cid;
+    }
+    final pid =
+        _coerceAccountId(profile['id']) ??
+        _coerceAccountId(profile['accountId']);
+    if (pid != null) return pid;
+  }
+
+  final contact = response['contact'];
+  if (contact is Map) {
+    final cid =
+        _coerceAccountId(contact['id']) ??
+        _coerceAccountId(contact['contactId']);
+    if (cid != null) return cid;
+  }
+
+  final account = response['account'];
+  if (account is Map) {
+    final aid =
+        _coerceAccountId(account['id']) ??
+        _coerceAccountId(account['accountId']);
+    if (aid != null) return aid;
+  }
+
+  return _coerceAccountId(response['accountId']) ??
+      _coerceAccountId(response['account_id']);
+}
+
+String describeResponseShape(dynamic response) {
+  if (response is! Map) return 'не-Map (${response.runtimeType})';
+  final sb = StringBuffer('keys=${response.keys.toList()}');
+  final profile = response['profile'];
+  if (profile is Map) {
+    sb.write(' profile.keys=${profile.keys.toList()}');
+    final contact = profile['contact'];
+    if (contact is Map) {
+      sb.write(' contact.keys=${contact.keys.toList()}');
+    } else {
+      sb.write(' profile.contact=${contact.runtimeType}');
+    }
+  } else {
+    sb.write(' profile=${profile.runtimeType}');
+  }
+  return sb.toString();
+}
+
 class PrivacyConfig {
   final String searchByPhone;
   final String incomingCall;
@@ -295,13 +359,7 @@ class VerifyCodeResult {
 
   String? get challengeHint => passwordChallenge?['hint'] as String?;
 
-  int? get accountId {
-    final profileData = payload['profile'];
-    if (profileData is! Map) return null;
-    final contact = profileData['contact'];
-    if (contact is! Map) return null;
-    return contact['id'] as int?;
-  }
+  int? get accountId => extractAccountId(payload);
 
   String? _nestedToken(String key) {
     final attrs = payload['tokenAttrs'];
