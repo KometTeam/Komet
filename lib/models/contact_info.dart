@@ -67,5 +67,7 @@ class ContactInfo {
     return o is List ? o.whereType<String>().toList() : const [];
   }
 
+  bool get isBot => options.contains('BOT');
+
   int? get id => raw['id'] as int?;
 }

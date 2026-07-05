@@ -311,6 +311,7 @@ class _ChatScreenState extends State<ChatScreen>
   int get _myId => _chatController.myId;
   set _myId(int v) => _chatController.myId = v;
   CachedChat? chat;
+  bool _peerIsBot = false;
   ChatWallpaper? _wallpaper;
   final ValueNotifier<double> _composerHeight = ValueNotifier(96);
 
@@ -425,11 +426,27 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  Future<void> _loadPeerKind() async {
+    if (widget.chatType != 'DIALOG' || _myId == 0) return;
+    final peerId = widget.chatId ^ _myId;
+    if (peerId <= 0) return;
+    final cached = ContactInfoFetch.peek(peerId);
+    if (cached != null) _applyPeerKind(cached.isBot);
+    final info = await ContactInfoFetch.get(peerId);
+    if (info != null) _applyPeerKind(info.isBot);
+  }
+
+  void _applyPeerKind(bool isBot) {
+    if (!mounted || _peerIsBot == isBot) return;
+    setState(() => _peerIsBot = isBot);
+  }
+
   Future<void> _fastPreloadCache() async {
     final p = await AppDatabase.loadActiveProfile();
     if (!mounted) return;
     _myId = p?.id ?? 0;
     _restoreDraft();
+    unawaited(_loadPeerKind());
     unawaited(_loadWallpaper());
     unawaited(_refreshBadge());
 
@@ -1744,6 +1761,8 @@ class _ChatScreenState extends State<ChatScreen>
                             headerStatus: _headerStatusNotifier,
                             scheduledCount: _scheduledCount,
                             otherUnread: _otherUnread,
+                            showCall:
+                                widget.chatType == 'DIALOG' && !_peerIsBot,
                             onClose: widget.onClose,
                             onOpenInfo: () => Navigator.push(
                               context,
@@ -1981,7 +2000,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _startCall() async {
-    if (widget.chatType != 'DIALOG') {
+    if (widget.chatType != 'DIALOG' || _peerIsBot) {
       showCustomNotification(context, 'Звонки доступны только в диалогах');
       return;
     }
