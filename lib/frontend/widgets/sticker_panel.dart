@@ -3,6 +3,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/utils/debouncer.dart';
+import '../../core/utils/emoji_keyword_index.dart';
 import '../../main.dart' show stickersModule;
 import '../../models/sticker.dart';
 import 'small_spinner.dart';
@@ -55,9 +57,15 @@ class _StickerPanelState extends State<StickerPanel>
     with SingleTickerProviderStateMixin {
   static const double _tabBarHeight = 52;
   static const double _headerHeight = 34;
+  static const double _searchFieldHeight = 50;
 
   final ScrollController _scroll = ScrollController();
   final ValueNotifier<bool> _scrolling = ValueNotifier(false);
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  final Debouncer _searchDebouncer = Debouncer(
+    const Duration(milliseconds: 220),
+  );
   late final AnimationController _shimmer;
   bool _loading = true;
   Object? _error;
@@ -65,6 +73,9 @@ class _StickerPanelState extends State<StickerPanel>
   List<_Section> _sections = const [];
   List<double> _heights = const [];
   List<double> _offsets = const [];
+  String _query = '';
+  bool _searchLoading = false;
+  List<StickerItem> _results = const [];
 
   @override
   void initState() {
@@ -74,6 +85,7 @@ class _StickerPanelState extends State<StickerPanel>
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
     _scroll.addListener(_onScroll);
+    EmojiKeywordIndex.instance.ensureLoaded();
     _load();
   }
 
@@ -82,8 +94,53 @@ class _StickerPanelState extends State<StickerPanel>
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _scrolling.dispose();
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    _searchDebouncer.dispose();
     _shimmer.dispose();
     super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    final query = value.trim();
+    if (query == _query) return;
+    setState(() {
+      _query = query;
+      if (query.isEmpty) {
+        _results = const [];
+        _searchLoading = false;
+      } else {
+        _searchLoading = true;
+      }
+    });
+    if (query.isEmpty) {
+      _searchDebouncer.cancel();
+      return;
+    }
+    _searchDebouncer.run(() => _runSearch(query));
+  }
+
+  Future<void> _runSearch(String query) async {
+    await EmojiKeywordIndex.instance.ensureLoaded();
+    await stickersModule.ensureAllStickersLoaded();
+    if (!mounted || _query != query) return;
+    final targets = EmojiKeywordIndex.instance.resolve(query);
+    final results = stickersModule.searchByTags(targets);
+    setState(() {
+      _results = results;
+      _searchLoading = false;
+    });
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    _searchFocus.unfocus();
+    _searchDebouncer.cancel();
+    setState(() {
+      _query = '';
+      _results = const [];
+      _searchLoading = false;
+    });
   }
 
   Future<void> _load() async {
@@ -127,7 +184,7 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   void _onScroll() {
-    if (_offsets.isEmpty) return;
+    if (_offsets.isEmpty || _query.isNotEmpty) return;
     final pixels = _scroll.position.pixels;
     var index = 0;
     for (var i = 0; i < _offsets.length; i++) {
@@ -146,7 +203,19 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   void _jumpTo(int index) {
-    if (index < 0 || index >= _offsets.length) return;
+    if (index < 0 || index >= _sections.length) return;
+    if (_query.isEmpty) {
+      _scrollToSection(index);
+    } else {
+      _clearSearch();
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToSection(index),
+      );
+    }
+  }
+
+  void _scrollToSection(int index) {
+    if (!mounted || index >= _offsets.length || !_scroll.hasClients) return;
     setState(() => _selectedTab = index);
     final max = _scroll.position.maxScrollExtent;
     _scroll.animateTo(
@@ -183,7 +252,7 @@ class _StickerPanelState extends State<StickerPanel>
 
                   final heights = <double>[];
                   final offsets = <double>[];
-                  var acc = 0.0;
+                  var acc = _searchFieldHeight;
                   for (final s in _sections) {
                     final rows = (s.stickerIds.length / columns).ceil();
                     final h = _headerHeight + rows * cell;
@@ -202,34 +271,7 @@ class _StickerPanelState extends State<StickerPanel>
                         thickness: 1,
                         color: cs.outlineVariant.withValues(alpha: 0.3),
                       ),
-                      Expanded(
-                        child: StickerScrollScope(
-                          isScrolling: _scrolling,
-                          child: StickerPeekScope(
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: _onScrollNotification,
-                              child: ListView.builder(
-                                controller: _scroll,
-                                padding: EdgeInsets.zero,
-                                itemCount: _sections.length,
-                                itemExtentBuilder: (i, _) => _heights[i],
-                                itemBuilder: (context, i) => _StickerSection(
-                                  key: ValueKey(
-                                    _sections[i].title + i.toString(),
-                                  ),
-                                  title: _sections[i].title,
-                                  stickerIds: _sections[i].stickerIds,
-                                  columns: columns,
-                                  cell: cell,
-                                  headerHeight: _headerHeight,
-                                  shimmer: _shimmer,
-                                  onTap: widget.onStickerTap,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      Expanded(child: _buildContent(cs, columns, cell)),
                     ],
                   );
                 },
@@ -280,6 +322,146 @@ class _StickerPanelState extends State<StickerPanel>
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildContent(ColorScheme cs, int columns, double cell) {
+    return StickerScrollScope(
+      isScrolling: _scrolling,
+      child: StickerPeekScope(
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _onScrollNotification,
+          child: CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              SliverToBoxAdapter(child: _buildSearchField(cs)),
+              if (_query.isEmpty)
+                SliverVariedExtentList(
+                  itemExtentBuilder: (i, _) => _heights[i],
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => _StickerSection(
+                      key: ValueKey(_sections[i].title + i.toString()),
+                      title: _sections[i].title,
+                      stickerIds: _sections[i].stickerIds,
+                      columns: columns,
+                      cell: cell,
+                      headerHeight: _headerHeight,
+                      shimmer: _shimmer,
+                      onTap: widget.onStickerTap,
+                    ),
+                    childCount: _sections.length,
+                  ),
+                )
+              else if (_searchLoading)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: SmallSpinner()),
+                )
+              else if (_results.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      'Ничего не найдено',
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => _resultCell(_results[i]),
+                      childCount: _results.length,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
+      child: Container(
+        height: 42,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(21),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            Icon(Symbols.search, size: 22, color: cs.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                focusNode: _searchFocus,
+                onChanged: _onQueryChanged,
+                textInputAction: TextInputAction.search,
+                cursorColor: cs.primary,
+                style: TextStyle(color: cs.onSurface, fontSize: 15),
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: 'Поиск',
+                  hintStyle: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            if (_query.isEmpty)
+              const SizedBox(width: 12)
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _clearSearch,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Icon(
+                    Symbols.close,
+                    size: 20,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _resultCell(StickerItem item) {
+    return StickerPeekable(
+      peekId: item.id,
+      url: item.url,
+      lottieUrl: item.lottieUrl,
+      tags: item.tags,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => widget.onStickerTap(item),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: StickerImage(
+            url: item.url,
+            lottieUrl: item.lottieUrl,
+            memCacheWidth: 220,
+          ),
+        ),
       ),
     );
   }
@@ -384,6 +566,7 @@ class _StickerSectionState extends State<_StickerSection> {
       peekId: item.id,
       url: item.url,
       lottieUrl: item.lottieUrl,
+      tags: item.tags,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => widget.onTap(item),

@@ -170,6 +170,30 @@ class StickersModule {
     return _sets[setId];
   }
 
+  Future<void> ensureAllStickersLoaded() {
+    final ids = <int>{..._recentStickerIds};
+    for (final set in _sets.values) {
+      ids.addAll(set.stickerIds);
+    }
+    return ensureStickers(ids.toList());
+  }
+
+  List<StickerItem> searchByTags(Set<String> emojiTargets) {
+    if (emojiTargets.isEmpty) return const [];
+    final result = <StickerItem>[];
+    for (final sticker in _stickers.values) {
+      for (final tag in sticker.tags) {
+        if (emojiTargets.contains(_stripVariation(tag))) {
+          result.add(sticker);
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
+  static String _stripVariation(String s) => s.replaceAll('️', '');
+
   void cacheSet(StickerSet set) => _sets[set.id] = set;
 
   Future<StickerSet?> resolveSetByLink(String link) async {
