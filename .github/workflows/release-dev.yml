@@ -163,6 +163,8 @@ jobs:
           channel: 'stable'
       - name: Get dependencies
         run: flutter pub get
+      - name: Fix opus/ogg libs for macOS
+        run: ./scripts/fix_opus_macos.sh
       - name: Build macOS
         run: flutter build macos --release
       - name: Package macOS
