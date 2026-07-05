@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
+import 'session_stale_recovery.dart';
 
 class Password2FAScreen extends StatefulWidget {
   final String trackId;
@@ -14,29 +15,55 @@ class Password2FAScreen extends StatefulWidget {
   State<Password2FAScreen> createState() => _Password2FAScreenState();
 }
 
-class _Password2FAScreenState extends State<Password2FAScreen> {
+class _Password2FAScreenState extends State<Password2FAScreen>
+    with SessionStaleRecovery {
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
   @override
+  String get connectionDroppedMessage => 'Соединение прервалось…';
+
+  @override
+  void initState() {
+    super.initState();
+    startSessionRecovery();
+  }
+
+  @override
   void dispose() {
+    stopSessionRecovery();
     _passwordController.dispose();
     super.dispose();
   }
 
+  @override
+  void recoverStaleSession() {
+    if (recovering || !mounted) return;
+    recovering = true;
+    showCustomNotification(context, 'Соединение прервалось — войдите заново');
+    Navigator.of(context).pop();
+  }
+
   Future<void> _checkPassword() async {
-    if (_passwordController.text.isEmpty) return;
+    if (_passwordController.text.isEmpty || _isLoading || recovering) return;
+
+    if (sessionStale) {
+      recoverStaleSession();
+      return;
+    }
 
     setState(() {
       _isLoading = true;
     });
 
+    var passed = false;
     try {
       final result = await accountModule.checkPassword(
         password: _passwordController.text,
         trackId: widget.trackId,
       );
+      passed = true;
 
       if (!mounted) return;
 
@@ -55,8 +82,8 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) =>
+          pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, _, child) =>
               FadeTransition(opacity: animation, child: child),
         ),
         (route) => false,
@@ -68,7 +95,11 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
         _isLoading = false;
       });
 
-      showCustomNotification(context, 'Неверный пароль: $e');
+      if (!passed && (isSessionStateError(e) || sessionStale)) {
+        recoverStaleSession();
+      } else {
+        showCustomNotification(context, 'Неверный пароль: $e');
+      }
     }
   }
 
@@ -94,7 +125,7 @@ class _Password2FAScreenState extends State<Password2FAScreen> {
               const SizedBox(height: 16),
               Text(
                 'Двухфакторная аутентификация',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 22,
                   fontWeight: FontWeight.w500,

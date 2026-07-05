@@ -7,13 +7,19 @@ import '../utils/logger.dart';
 
 typedef PacketHandler = void Function(Packet packet);
 
+class _PendingRequest {
+  _PendingRequest(this.completer, this.sentAt);
+
+  final Completer<Packet> completer;
+  final DateTime sentAt;
+}
+
 /// Роутер входящих пакетов.
 ///
 /// Ответы на запросы матчатся по seq (через [registerPending]),
 /// пуши — по opcode (через [registerHandler]).
 class PacketDispatcher {
-  final Map<int, Completer<Packet>> _pendingRequests = {};
-  final Map<int, DateTime> _requestTimestamps = {};
+  final Map<int, _PendingRequest> _pendingRequests = {};
   final Map<int, PacketHandler> _pushHandlers = {};
 
   final _pushController = StreamController<Packet>.broadcast();
@@ -46,14 +52,13 @@ class PacketDispatcher {
   /// придёт пакет с совпадающим seq.
   Future<Packet> registerPending(int seq) {
     final existing = _pendingRequests[seq];
-    if (existing != null && !existing.isCompleted) {
-      existing.completeError(
+    if (existing != null && !existing.completer.isCompleted) {
+      existing.completer.completeError(
         StateError('seq=$seq переиспользован до получения ответа'),
       );
     }
     final completer = Completer<Packet>();
-    _pendingRequests[seq] = completer;
-    _requestTimestamps[seq] = DateTime.now();
+    _pendingRequests[seq] = _PendingRequest(completer, DateTime.now());
     return completer.future;
   }
 
@@ -80,7 +85,8 @@ class PacketDispatcher {
       );
 
       if (packet.isError) {
-        final isSessionExpired = packet.payload is Map &&
+        final isSessionExpired =
+            packet.payload is Map &&
             packet.payload['message'] == 'FAIL_LOGIN_TOKEN';
         final serverText = _serverErrorText(packet.payload);
         if (serverText != null && !isSessionExpired) {
@@ -88,8 +94,8 @@ class PacketDispatcher {
         }
       }
 
-      final completer = _pendingRequests.remove(packet.seq);
-      _requestTimestamps.remove(packet.seq);
+      final pending = _pendingRequests.remove(packet.seq);
+      final completer = pending?.completer;
 
       if (completer == null) {
         if (packet.opcode != Opcode.ping) {
@@ -116,7 +122,14 @@ class PacketDispatcher {
       logger.i(
         '<= push {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${payloadForLog(packet.payload)}}',
       );
-      _pushHandlers[packet.opcode]?.call(packet);
+      final handler = _pushHandlers[packet.opcode];
+      if (handler != null) {
+        try {
+          handler(packet);
+        } catch (e) {
+          logger.w('$tag handler failed: $e');
+        }
+      }
       _pushController.add(packet);
     }
   }
@@ -126,13 +139,13 @@ class PacketDispatcher {
     final now = DateTime.now();
     final staleKeys = <int>[];
 
-    _requestTimestamps.forEach((seq, ts) {
-      if (now.difference(ts).inSeconds > 30) staleKeys.add(seq);
+    _pendingRequests.forEach((seq, pending) {
+      if (now.difference(pending.sentAt).inSeconds > 30) staleKeys.add(seq);
     });
 
     for (final seq in staleKeys) {
-      final completer = _pendingRequests.remove(seq);
-      _requestTimestamps.remove(seq);
+      final pending = _pendingRequests.remove(seq);
+      final completer = pending?.completer;
       if (completer != null && !completer.isCompleted) {
         completer.completeError(TimeoutException('Таймаут запроса seq=$seq'));
       }
@@ -142,12 +155,11 @@ class PacketDispatcher {
   /// Обрывает все ожидающие запросы (при дисконнекте)
   void clearPending() {
     for (final entry in _pendingRequests.entries) {
-      if (!entry.value.isCompleted) {
-        entry.value.completeError(StateError('Соединение закрыто'));
+      if (!entry.value.completer.isCompleted) {
+        entry.value.completer.completeError(StateError('Соединение закрыто'));
       }
     }
     _pendingRequests.clear();
-    _requestTimestamps.clear();
   }
 
   void dispose() {

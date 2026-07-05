@@ -7,6 +7,7 @@ class TokenStorage {
 
   static const _secure = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
   );
 
   static Future<void> writeSecure(String key, String value) async {

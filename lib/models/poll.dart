@@ -56,22 +56,50 @@ class Poll {
   }
 
   Poll withStateMap(Map<dynamic, dynamic> stateMap) {
-    return Poll.fromServerMap({
-      'pollId': pollId,
-      'title': title,
-      'settings': settings,
-      'version': version,
-      'answers': [
-        for (final a in answers) {'answerId': a.answerId, 'text': a.text},
-      ],
-      'state': stateMap,
-    });
+    return _buildFromState(
+      pollId: pollId,
+      title: title,
+      settings: settings,
+      version: version,
+      answerIdsAndTexts: [for (final a in answers) (a.answerId, a.text)],
+      stateMap: stateMap,
+    );
   }
 
   factory Poll.fromServerMap(Map<dynamic, dynamic> map) {
     final state = map['state'];
     final stateMap = state is Map ? state : const {};
 
+    final answerIdsAndTexts = <(int, String)>[];
+    final rawAnswers = map['answers'];
+    if (rawAnswers is List) {
+      for (final a in rawAnswers) {
+        if (a is! Map) continue;
+        answerIdsAndTexts.add((
+          a['answerId'] as int? ?? 0,
+          a['text']?.toString() ?? '',
+        ));
+      }
+    }
+
+    return _buildFromState(
+      pollId: map['pollId'] as int? ?? 0,
+      title: map['title']?.toString() ?? '',
+      settings: map['settings'] as int? ?? 0,
+      version: map['version'] as int? ?? 0,
+      answerIdsAndTexts: answerIdsAndTexts,
+      stateMap: stateMap,
+    );
+  }
+
+  static Poll _buildFromState({
+    required int pollId,
+    required String title,
+    required int settings,
+    required int version,
+    required List<(int, String)> answerIdsAndTexts,
+    required Map<dynamic, dynamic> stateMap,
+  }) {
     final resultsById = <int, Map>{};
     final result = stateMap['result'];
     if (result is List) {
@@ -83,33 +111,30 @@ class Poll {
     }
 
     final answers = <PollAnswer>[];
-    final rawAnswers = map['answers'];
-    if (rawAnswers is List) {
-      for (final a in rawAnswers) {
-        if (a is! Map) continue;
-        final id = a['answerId'] as int? ?? 0;
-        final res = resultsById[id];
-        answers.add(PollAnswer(
+    for (final (id, text) in answerIdsAndTexts) {
+      final res = resultsById[id];
+      answers.add(
+        PollAnswer(
           answerId: id,
-          text: a['text']?.toString() ?? '',
+          text: text,
           voteCount: (res?['voteCount'] as num?)?.toInt() ?? 0,
           rate: (res?['rate'] as num?)?.toDouble() ?? 0,
           votes: _parseVoterIds(res?['votes']),
           mine: ((res?['options'] as num?)?.toInt() ?? 0) & 0x1 != 0,
-        ));
-      }
+        ),
+      );
     }
 
     return Poll(
-      pollId: map['pollId'] as int? ?? 0,
-      title: map['title']?.toString() ?? '',
-      settings: map['settings'] as int? ?? 0,
-      version: map['version'] as int? ?? 0,
+      pollId: pollId,
+      title: title,
+      settings: settings,
+      version: version,
       total: (stateMap['total'] as num?)?.toInt() ?? 0,
       answers: answers,
       voterPreviewIds:
           (stateMap['voterPreviewIds'] as List?)?.whereType<int>().toList() ??
-              const [],
+          const [],
     );
   }
 }

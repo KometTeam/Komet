@@ -3,8 +3,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show TwoFactorDetails;
 import '../../../core/storage/app_database.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/primary_loading_button.dart';
 
 class PasswordEntryScreen extends StatefulWidget {
   const PasswordEntryScreen({super.key});
@@ -51,34 +53,43 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
       });
       _passwordController.clear();
     } catch (_) {
-      if (mounted) setState(() => _errorMessage = 'Неверный пароль');
+      if (mounted) {
+        setState(
+          () => _errorMessage = AppLocalizations.of(
+            context,
+          )!.passwordEntryWrongPassword,
+        );
+      }
     } finally {
       if (mounted) _isVerifying.value = false;
     }
   }
 
   Future<String?> _promptPassword() async {
+    final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController();
     try {
       return await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Подтвердите пароль'),
+          title: Text(l10n.passwordEntryConfirmTitle),
           content: TextField(
             controller: controller,
             obscureText: true,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Текущий пароль'),
+            decoration: InputDecoration(
+              hintText: l10n.passwordEntryCurrentPasswordHint,
+            ),
             onSubmitted: (v) => Navigator.of(ctx).pop(v),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Отмена'),
+              child: Text(l10n.spoofDialogCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(controller.text),
-              child: const Text('Продолжить'),
+              child: Text(l10n.passwordEntryContinue),
             ),
           ],
         ),
@@ -88,12 +99,14 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
     }
   }
 
-  Future<void> _openWithPassword(Widget Function(String password) builder) async {
+  Future<void> _openWithPassword(
+    Widget Function(String password) builder,
+  ) async {
     final password = await _promptPassword();
     if (password == null || password.isEmpty || !mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => builder(password)),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => builder(password)));
   }
 
   Future<void> _check2faStatus() async {
@@ -113,7 +126,10 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Ошибка: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.contactProfileLoadError(e.toString()),
+        );
         setState(() => _isLoading = false);
       }
     }
@@ -166,7 +182,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           ),
           const SizedBox(width: 4),
           Text(
-            'Пароль для входа',
+            AppLocalizations.of(context)!.securityPasswordTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 20,
@@ -186,6 +202,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   }
 
   Widget _buildSetupSection(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
@@ -195,14 +212,14 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           _buildHeaderTile(
             cs,
             icon: Symbols.lock_open,
-            title: 'Пароль не установлен',
-            subtitle: 'Двухфакторная аутентификация',
+            title: l10n.passwordEntryNotSetTitle,
+            subtitle: l10n.passwordEntry2faSubtitle,
           ),
           Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
           _buildActionRow(
             cs,
             icon: Symbols.settings,
-            label: 'Установить пароль',
+            label: l10n.passwordEntrySetupAction,
             isLast: true,
             onTap: () => Navigator.push(
               context,
@@ -217,6 +234,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
   }
 
   Widget _buildPasswordGate(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
@@ -225,82 +243,67 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
       child: SizedBox(
         width: double.infinity,
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Symbols.lock, color: cs.primary, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'Введите пароль для входа, чтобы управлять защитой',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (_errorMessage != null)
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: cs.errorContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                _errorMessage!,
-                style: TextStyle(color: cs.onErrorContainer),
-              ),
-            ),
-          _PasswordField(controller: _passwordController, hintText: 'Пароль'),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: _isVerifying,
-              builder: (context, loading, _) => FilledButton(
-                onPressed: loading ? null : _authenticate,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Icon(Symbols.lock, color: cs.primary, size: 24),
                 ),
-                child: loading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onPrimary,
-                        ),
-                      )
-                    : const Text('Продолжить'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    l10n.passwordEntryGateMessage,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (_errorMessage != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(color: cs.onErrorContainer),
+                ),
+              ),
+            _PasswordField(
+              controller: _passwordController,
+              hintText: l10n.passwordEntryGenericPasswordHint,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: PrimaryLoadingButton(
+                loading: _isVerifying,
+                onPressed: _authenticate,
+                child: Text(l10n.passwordEntryContinue),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildManageSection(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         GlossyPill(
@@ -311,56 +314,56 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           child: SizedBox(
             width: double.infinity,
             child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Symbols.lock, color: cs.primary, size: 24),
                 ),
-                child: Icon(Symbols.lock, color: cs.primary, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Пароль установлен',
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (_details?.email != null &&
-                        _details!.email!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        _details!.email!,
+                        l10n.passwordEntrySetTitle,
                         style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 13,
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                    if (_details?.hint != null &&
-                        _details!.hint!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Подсказка: ${_details!.hint}',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 13,
+                      if (_details?.email != null &&
+                          _details!.email!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _details!.email!,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
+                      ],
+                      if (_details?.hint != null &&
+                          _details!.hint!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.passwordEntryHintPrefix(_details!.hint!),
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -373,7 +376,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               _buildActionRow(
                 cs,
                 icon: Symbols.password,
-                label: 'Изменить пароль',
+                label: l10n.passwordEntryChangePasswordAction,
                 isLast: false,
                 onTap: () => _openWithPassword(
                   (pwd) => TwoFactorPasswordChangeScreen(currentPassword: pwd),
@@ -386,7 +389,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               _buildActionRow(
                 cs,
                 icon: Icons.email_outlined,
-                label: 'Изменить почту',
+                label: l10n.passwordEntryChangeEmailAction,
                 isLast: false,
                 onTap: () => _openWithPassword(
                   (pwd) => TwoFactorEmailChangeScreen(currentPassword: pwd),
@@ -399,7 +402,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               _buildActionRow(
                 cs,
                 icon: Icons.delete_outline,
-                label: 'Удалить пароль',
+                label: l10n.passwordEntryDeleteAction,
                 isLast: true,
                 textColor: cs.error,
                 onTap: () => _openWithPassword(
@@ -518,7 +521,6 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
       ],
     );
   }
-
 }
 
 class TwoFactorSetupScreen extends StatefulWidget {
@@ -552,6 +554,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Future<void> _nextStep() async {
+    final l10n = AppLocalizations.of(context)!;
     _isLoading.value = true;
     setState(() => _errorMessage = null);
 
@@ -559,9 +562,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
       switch (_step) {
         case 0:
           if (_passwordController.text.length < 6) {
-            setState(
-              () => _errorMessage = 'Пароль должен быть минимум 6 символов',
-            );
+            setState(() => _errorMessage = l10n.passwordEntryMinPasswordError);
             break;
           }
           final trackId = await accountModule.create2faTrack();
@@ -573,7 +574,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           break;
         case 1:
           if (_confirmController.text != _passwordController.text) {
-            setState(() => _errorMessage = 'Пароли не совпадают');
+            setState(() => _errorMessage = l10n.passwordEntryMismatchError);
             break;
           }
           await accountModule.set2faPassword(
@@ -596,7 +597,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
             break;
           }
           if (!_emailController.text.contains('@')) {
-            setState(() => _errorMessage = 'Введите корректный email');
+            setState(() => _errorMessage = l10n.passwordEntryInvalidEmailError);
             break;
           }
           await accountModule.verify2faEmail(_trackId!, _emailController.text);
@@ -605,7 +606,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           break;
         case 4:
           if (_codeController.text.length != 6) {
-            setState(() => _errorMessage = 'Введите 6-значный код');
+            setState(() => _errorMessage = l10n.passwordEntryInvalidCodeError);
             break;
           }
           await accountModule.verify2faCode(_trackId!, _codeController.text);
@@ -629,11 +630,11 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
       withEmail: withEmail,
     );
     if (mounted) {
-      showCustomNotification(context, 'Пароль установлен');
-      Navigator.popUntil(
+      showCustomNotification(
         context,
-        (route) => route.isFirst || route.settings.name == 'SecurityScreen',
+        AppLocalizations.of(context)!.passwordEntrySetTitle,
       );
+      Navigator.popUntil(context, ModalRoute.withName('SecurityScreen'));
     }
   }
 
@@ -650,7 +651,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Установка пароля',
+          AppLocalizations.of(context)!.passwordEntrySetupTitle,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 20,
@@ -663,6 +664,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Widget _buildStepContent(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -698,28 +700,13 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: _isLoading,
-              builder: (context, loading, _) => FilledButton(
-                onPressed: loading ? null : _nextStep,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: loading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onPrimary,
-                        ),
-                      )
-                    : Text(_step == 4 ? 'Установить пароль' : 'Продолжить'),
+            child: PrimaryLoadingButton(
+              loading: _isLoading,
+              onPressed: _nextStep,
+              child: Text(
+                _step == 4
+                    ? l10n.passwordEntrySetupAction
+                    : l10n.passwordEntryContinue,
               ),
             ),
           ),
@@ -729,7 +716,14 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Widget _buildStepIndicator(ColorScheme cs) {
-    final steps = ['Пароль', 'Подсказка', 'Почта', 'Код', 'Готово'];
+    final l10n = AppLocalizations.of(context)!;
+    final steps = [
+      l10n.passwordEntryStepPassword,
+      l10n.passwordEntryStepHint,
+      l10n.passwordEntryStepEmail,
+      l10n.passwordEntryStepCode,
+      l10n.loginDone,
+    ];
     return Row(
       children: List.generate(steps.length, (index) {
         final isActive = index <= _step;
@@ -790,11 +784,12 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Widget _buildPasswordField(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Придумайте пароль',
+          l10n.passwordEntryChoosePassword,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 17,
@@ -803,24 +798,25 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Минимум 6 символов',
+          l10n.passwordEntryMinCharsHint,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 16),
         _PasswordField(
           controller: _passwordController,
-          hintText: 'Введите пароль',
+          hintText: l10n.passwordEntryEnterPasswordHint,
         ),
       ],
     );
   }
 
   Widget _buildPasswordConfirmField(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Подтвердите пароль',
+          l10n.passwordEntryConfirmTitle,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 17,
@@ -829,24 +825,25 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Введите пароль ещё раз',
+          l10n.passwordEntryEnterAgain,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 16),
         _PasswordField(
           controller: _confirmController,
-          hintText: 'Повторите пароль',
+          hintText: l10n.passwordEntryRepeatHint,
         ),
       ],
     );
   }
 
   Widget _buildHintField(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Подсказка для пароля',
+          l10n.passwordEntryHintForPassword,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 17,
@@ -855,14 +852,14 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Необязательно',
+          l10n.passwordEntryOptional,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _hintController,
           decoration: InputDecoration(
-            hintText: 'Введите подсказку (необязательно)',
+            hintText: l10n.passwordEntryHintFieldHint,
             filled: true,
             fillColor: cs.surfaceContainerHighest,
             border: OutlineInputBorder(
@@ -876,11 +873,12 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Widget _buildEmailField(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Привяжите email',
+          l10n.passwordEntryLinkEmail,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 17,
@@ -889,7 +887,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Для восстановления пароля. Необязательно',
+          l10n.passwordEntryEmailPurpose,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 16),
@@ -897,7 +895,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
           decoration: InputDecoration(
-            hintText: 'example@mail.ru (необязательно)',
+            hintText: l10n.passwordEntryEmailHintOptional,
             filled: true,
             fillColor: cs.surfaceContainerHighest,
             border: OutlineInputBorder(
@@ -911,11 +909,12 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Widget _buildCodeField(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Введите код',
+          l10n.passwordEntryEnterCode,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 17,
@@ -924,7 +923,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Код отправлен на ${_emailController.text}',
+          l10n.passwordEntryCodeSentTo(_emailController.text),
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 16),
@@ -951,7 +950,10 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
 class TwoFactorPasswordChangeScreen extends StatefulWidget {
   final String currentPassword;
 
-  const TwoFactorPasswordChangeScreen({super.key, required this.currentPassword});
+  const TwoFactorPasswordChangeScreen({
+    super.key,
+    required this.currentPassword,
+  });
 
   @override
   State<TwoFactorPasswordChangeScreen> createState() =>
@@ -976,12 +978,13 @@ class _TwoFactorPasswordChangeScreenState
   }
 
   Future<void> _changePassword() async {
+    final l10n = AppLocalizations.of(context)!;
     if (_newPasswordController.text.length < 6) {
-      setState(() => _errorMessage = 'Пароль должен быть минимум 6 символов');
+      setState(() => _errorMessage = l10n.passwordEntryMinPasswordError);
       return;
     }
     if (_confirmController.text != _newPasswordController.text) {
-      setState(() => _errorMessage = 'Пароли не совпадают');
+      setState(() => _errorMessage = l10n.passwordEntryMismatchError);
       return;
     }
 
@@ -997,11 +1000,8 @@ class _TwoFactorPasswordChangeScreenState
         hint: _hintController.text.isEmpty ? null : _hintController.text,
       );
       if (mounted) {
-        showCustomNotification(context, 'Пароль изменён');
-        Navigator.popUntil(
-          context,
-          (route) => route.isFirst || route.settings.name == 'SecurityScreen',
-        );
+        showCustomNotification(context, l10n.passwordEntryChangedNotif);
+        Navigator.popUntil(context, ModalRoute.withName('SecurityScreen'));
       }
     } catch (e) {
       if (mounted) setState(() => _errorMessage = e.toString());
@@ -1013,6 +1013,7 @@ class _TwoFactorPasswordChangeScreenState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -1023,7 +1024,7 @@ class _TwoFactorPasswordChangeScreenState
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Изменить пароль',
+          l10n.passwordEntryChangePasswordAction,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 20,
@@ -1050,7 +1051,7 @@ class _TwoFactorPasswordChangeScreenState
                 ),
               ),
             Text(
-              'Новый пароль',
+              l10n.passwordEntryNewPassword,
               style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 17,
@@ -1060,16 +1061,16 @@ class _TwoFactorPasswordChangeScreenState
             const SizedBox(height: 16),
             _PasswordField(
               controller: _newPasswordController,
-              hintText: 'Введите новый пароль',
+              hintText: l10n.passwordEntryNewPasswordHint,
             ),
             const SizedBox(height: 16),
             _PasswordField(
               controller: _confirmController,
-              hintText: 'Повторите новый пароль',
+              hintText: l10n.passwordEntryRepeatNewPasswordHint,
             ),
             const SizedBox(height: 24),
             Text(
-              'Подсказка',
+              l10n.passwordEntryStepHint,
               style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 17,
@@ -1080,7 +1081,7 @@ class _TwoFactorPasswordChangeScreenState
             TextField(
               controller: _hintController,
               decoration: InputDecoration(
-                hintText: 'Введите подсказку (необязательно)',
+                hintText: l10n.passwordEntryHintFieldHint,
                 filled: true,
                 fillColor: cs.surfaceContainerHighest,
                 border: OutlineInputBorder(
@@ -1092,29 +1093,10 @@ class _TwoFactorPasswordChangeScreenState
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _isLoading,
-                builder: (context, loading, _) => FilledButton(
-                  onPressed: loading ? null : _changePassword,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: loading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: cs.onPrimary,
-                          ),
-                        )
-                      : const Text('Сохранить'),
-                ),
+              child: PrimaryLoadingButton(
+                loading: _isLoading,
+                onPressed: _changePassword,
+                child: Text(l10n.editProfileSave),
               ),
             ),
           ],
@@ -1160,6 +1142,7 @@ class _TwoFactorEmailChangeScreenState
   }
 
   Future<void> _nextStep() async {
+    final l10n = AppLocalizations.of(context)!;
     _isLoading.value = true;
     setState(() => _errorMessage = null);
 
@@ -1167,7 +1150,7 @@ class _TwoFactorEmailChangeScreenState
       switch (_step) {
         case 0:
           if (!_emailController.text.contains('@')) {
-            setState(() => _errorMessage = 'Введите корректный email');
+            setState(() => _errorMessage = l10n.passwordEntryInvalidEmailError);
             break;
           }
           final trackId = await _ensureTrack();
@@ -1177,18 +1160,17 @@ class _TwoFactorEmailChangeScreenState
           break;
         case 1:
           if (_codeController.text.length != 6) {
-            setState(() => _errorMessage = 'Введите 6-значный код');
+            setState(() => _errorMessage = l10n.passwordEntryInvalidCodeError);
             break;
           }
           await accountModule.verify2faCode(_trackId!, _codeController.text);
           await accountModule.commit2faEmailChange(_trackId!);
           if (mounted) {
-            showCustomNotification(context, 'Почта изменена');
-            Navigator.popUntil(
+            showCustomNotification(
               context,
-              (route) =>
-                  route.isFirst || route.settings.name == 'SecurityScreen',
+              l10n.passwordEntryEmailChangedNotif,
             );
+            Navigator.popUntil(context, ModalRoute.withName('SecurityScreen'));
           }
           break;
       }
@@ -1202,6 +1184,7 @@ class _TwoFactorEmailChangeScreenState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -1212,7 +1195,7 @@ class _TwoFactorEmailChangeScreenState
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Изменить почту',
+          l10n.passwordEntryChangeEmailAction,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 20,
@@ -1240,7 +1223,7 @@ class _TwoFactorEmailChangeScreenState
               ),
             if (_step == 0) ...[
               Text(
-                'Новая почта',
+                l10n.passwordEntryNewEmail,
                 style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 17,
@@ -1252,7 +1235,7 @@ class _TwoFactorEmailChangeScreenState
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
-                  hintText: 'example@mail.ru',
+                  hintText: l10n.passwordEntryEmailHint,
                   filled: true,
                   fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(
@@ -1263,7 +1246,7 @@ class _TwoFactorEmailChangeScreenState
               ),
             ] else ...[
               Text(
-                'Введите код',
+                l10n.passwordEntryEnterCode,
                 style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 17,
@@ -1272,7 +1255,7 @@ class _TwoFactorEmailChangeScreenState
               ),
               const SizedBox(height: 8),
               Text(
-                'Код отправлен на ${_emailController.text}',
+                l10n.passwordEntryCodeSentTo(_emailController.text),
                 style: TextStyle(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 16),
@@ -1295,28 +1278,13 @@ class _TwoFactorEmailChangeScreenState
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _isLoading,
-                builder: (context, loading, _) => FilledButton(
-                  onPressed: loading ? null : _nextStep,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: loading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: cs.onPrimary,
-                          ),
-                        )
-                      : Text(_step == 1 ? 'Сохранить' : 'Продолжить'),
+              child: PrimaryLoadingButton(
+                loading: _isLoading,
+                onPressed: _nextStep,
+                child: Text(
+                  _step == 1
+                      ? l10n.editProfileSave
+                      : l10n.passwordEntryContinue,
                 ),
               ),
             ),
@@ -1347,6 +1315,7 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
   }
 
   Future<void> _remove2fa() async {
+    final l10n = AppLocalizations.of(context)!;
     _isLoading.value = true;
     setState(() => _errorMessage = null);
 
@@ -1355,11 +1324,8 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
       await accountModule.check2faPassword(trackId, widget.currentPassword);
       await accountModule.remove2fa(trackId);
       if (mounted) {
-        showCustomNotification(context, 'Пароль удалён');
-        Navigator.popUntil(
-          context,
-          (route) => route.isFirst || route.settings.name == 'SecurityScreen',
-        );
+        showCustomNotification(context, l10n.passwordEntryRemovedNotif);
+        Navigator.popUntil(context, ModalRoute.withName('SecurityScreen'));
       }
     } catch (e) {
       if (mounted) setState(() => _errorMessage = e.toString());
@@ -1371,6 +1337,7 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -1381,7 +1348,7 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Удаление пароля',
+          l10n.passwordEntryRemoveTitle,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 20,
@@ -1406,7 +1373,7 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Внимание! После удаления пароля защита вашего аккаунта ослабнет.',
+                      l10n.passwordEntryRemoveWarning,
                       style: TextStyle(color: cs.onSurface),
                     ),
                   ),
@@ -1429,29 +1396,12 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
               ),
             SizedBox(
               width: double.infinity,
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _isLoading,
-                builder: (context, loading, _) => FilledButton(
-                  onPressed: loading ? null : _remove2fa,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: cs.error,
-                    foregroundColor: cs.onError,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: loading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: cs.onError,
-                          ),
-                        )
-                      : const Text('Удалить пароль'),
-                ),
+              child: PrimaryLoadingButton(
+                loading: _isLoading,
+                onPressed: _remove2fa,
+                background: cs.error,
+                foreground: cs.onError,
+                child: Text(l10n.passwordEntryDeleteAction),
               ),
             ),
           ],

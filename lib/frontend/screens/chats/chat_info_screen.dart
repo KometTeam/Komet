@@ -4,11 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
+import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../models/chat_info.dart';
+import '../../../models/contact_info.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/swipe_route.dart';
+import 'chat_screen.dart';
 
 class _MemberInfo {
   final int id;
@@ -34,12 +40,15 @@ class ChatInfoScreen extends StatefulWidget {
   final String imageUrl;
   final String chatType;
 
+  final int? dialogPeerId;
+
   const ChatInfoScreen({
     super.key,
     required this.chatId,
     required this.name,
     required this.imageUrl,
     required this.chatType,
+    this.dialogPeerId,
   });
 
   @override
@@ -52,19 +61,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   int _myId = 0;
   bool _isLoading = true;
   bool _extraContactExpanded = false;
-  Map<String, dynamic>? _chatData;
+  ChatInfo? _chatInfo;
   String _selectedTab = '';
   bool _descExpanded = false;
 
-  // DIALOG
   int? _otherId;
-  Map<String, dynamic>? _contactData;
+  ContactInfo? _contactData;
   int? _seenTime;
   bool _isOnline = false;
   int _presenceStatus = 0;
   bool _isBot = false;
 
-  // CHAT
   List<_MemberInfo> _members = [];
   int _onlineCount = 0;
 
@@ -81,17 +88,46 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   List<String> get _tabs {
+    final l10n = AppLocalizations.of(context)!;
+    final showInfo = AppShowExtraInfo.current.value;
     switch (widget.chatType) {
       case 'DIALOG':
-        return _isBot
-            ? ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки']
-            : ['Общие чаты', 'Медиа', 'Info', 'Файлы', 'Голосовые', 'Ссылки'];
+        if (_isBot) {
+          return [
+            if (showInfo) 'Info',
+            l10n.chatInfoTabMedia,
+            l10n.chatInfoTabFiles,
+            l10n.chatInfoTabVoice,
+            l10n.chatInfoTabLinks,
+          ];
+        }
+        return [
+          l10n.chatInfoTabGeneralChats,
+          l10n.chatInfoTabMedia,
+          if (showInfo) 'Info',
+          l10n.chatInfoTabFiles,
+          l10n.chatInfoTabVoice,
+          l10n.chatInfoTabLinks,
+        ];
       case 'CHAT':
-        return ['Участники', 'Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+        return [
+          l10n.chatInfoTabMembers,
+          if (showInfo) 'Info',
+          l10n.chatInfoTabMedia,
+          l10n.chatInfoTabFiles,
+          l10n.chatInfoTabVoice,
+          l10n.chatInfoTabLinks,
+        ];
       case 'CHANNEL':
-        return ['Info', 'Медиа', 'Файлы', 'Голосовые', 'Ссылки'];
+        return [
+          if (showInfo) 'Info',
+          l10n.chatInfoTabMedia,
+          l10n.chatInfoTabFiles,
+          l10n.chatInfoTabVoice,
+          l10n.chatInfoTabLinks,
+        ];
       default:
-        return ['Info'];
+        return [if (showInfo) 'Info'];
     }
   }
 
@@ -101,19 +137,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
     final info = await ChatInfoFetch.get(widget.chatId);
     if (!mounted) return;
-    if (info == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-    _chatData = info;
+    _chatInfo = info;
 
     if (widget.chatType == 'DIALOG') {
-      final parts = _chatData!['participants'] as Map? ?? {};
-      for (final key in parts.keys) {
-        final id = key is int ? key : int.tryParse(key.toString());
-        if (id != null && id != _myId) {
-          _otherId = id;
-          break;
+      _otherId = widget.dialogPeerId;
+      if (_otherId == null && info != null) {
+        for (final id in info.participantIds) {
+          if (id != _myId) {
+            _otherId = id;
+            break;
+          }
         }
       }
 
@@ -121,8 +154,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         final contact = await ContactInfoFetch.get(_otherId!);
         if (contact != null) {
           _contactData = contact;
-          final opts = _contactData!['options'];
-          _isBot = (opts is List) && opts.contains('BOT');
+          _isBot = _contactData!.options.contains('BOT');
         }
 
         final presence = await PresenceFetch.get(_otherId!);
@@ -133,16 +165,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           _isOnline = st == 1;
         }
       }
+    } else if (info == null) {
+      setState(() => _isLoading = false);
+      return;
     } else if (widget.chatType == 'CHAT') {
-      final parts = _chatData!['participants'] as Map? ?? {};
-      final admins = _chatData!['adminParticipants'] as Map? ?? {};
-      final owner = _chatData!['owner'] as int?;
-
-      final memberIds = <int>[];
-      for (final k in parts.keys) {
-        final id = k is int ? k : int.tryParse(k.toString());
-        if (id != null) memberIds.add(id);
-      }
+      final chatInfo = _chatInfo!;
+      final memberIds = chatInfo.participantIds;
 
       Map<int, Map<String, dynamic>> presenceMap = {};
       if (memberIds.isNotEmpty) {
@@ -154,12 +182,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         final pres = presenceMap[id];
         final online = (pres?['status'] as int?) == 1;
         if (online) _onlineCount++;
-        final isAdmin =
-            admins.containsKey(id.toString()) || admins.containsKey(id);
         return _MemberInfo(
           id: id,
-          isAdmin: isAdmin,
-          isOwner: id == owner,
+          isAdmin: chatInfo.isAdmin(id),
+          isOwner: chatInfo.isOwner(id),
           isMe: id == _myId,
           seenTime: pres?['seen'] as int?,
           isOnline: online,
@@ -176,21 +202,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     if (mounted) {
       setState(() {
         _isLoading = false;
-        if (_selectedTab.isEmpty) _selectedTab = _tabs.first;
+        if (_selectedTab.isEmpty && _tabs.isNotEmpty) {
+          _selectedTab = _tabs.first;
+        }
       });
     }
   }
 
-  // ─── BUILD ───────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
-    final bg = isDark ? Colors.black : cs.surface;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: cs.surface,
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: const ConnectionSpinner(),
       body: SafeArea(
@@ -229,12 +253,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 4),
-          KometAvatar(
-            name: widget.name,
-            imageUrl: widget.imageUrl,
-            size: 96,
-            fontSize: 36,
-          ),
+          _avatar(),
           const SizedBox(height: 14),
           Text(
             widget.name,
@@ -264,59 +283,86 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── SUBTITLE ────────────────────────────────────────────────────────────
-
   String _subtitle() {
+    final l10n = AppLocalizations.of(context)!;
     switch (widget.chatType) {
       case 'DIALOG':
-        if (_isBot) return 'Бот';
-        if (_isOnline) return 'В сети';
-        if (_presenceStatus == 3) return 'был(-а) недавно';
+        if (_isBot) return l10n.contactProfileBot;
+        if (_isOnline) return l10n.contactProfileOnline;
+        if (_presenceStatus == 3) return l10n.contactProfileRecentlyActive;
         if (_seenTime != null && _seenTime! > 0) {
-          return 'был(-а) ${_formatLastSeen(_seenTime!)}';
+          return formatLastSeen(_seenTime!);
         }
         return '';
       case 'CHAT':
-        final total =
-            (_chatData?['participantsCount'] as int?) ?? _members.length;
-        if (_onlineCount > 0) return '$_onlineCount из $total в сети';
-        return _pluralCount(total, 'участник', 'участника', 'участников');
+        final total = _chatInfo?.participantsCount ?? _members.length;
+        if (_onlineCount > 0) {
+          return l10n.chatInfoOnlineOfTotal('$_onlineCount', '$total');
+        }
+        return '$total ${pluralRu(total, 'участник', 'участника', 'участников')}';
       case 'CHANNEL':
-        final count = (_chatData?['participantsCount'] as int?) ?? 0;
-        return _pluralCount(count, 'подписчик', 'подписчика', 'подписчиков');
+        final count = _chatInfo?.participantsCount ?? 0;
+        return '$count ${pluralRu(count, 'подписчик', 'подписчика', 'подписчиков')}';
       default:
         return '';
     }
   }
 
-  // ─── ACTION BUTTONS ──────────────────────────────────────────────────────
-
   Widget _buildActions(ColorScheme cs) {
-    final List<({IconData icon, String label})> btns;
+    final l10n = AppLocalizations.of(context)!;
+    final List<({IconData icon, String label, VoidCallback? onTap})> btns;
 
     if (widget.chatType == 'DIALOG') {
       if (_isBot) {
         btns = [
-          (icon: Icons.chat_bubble, label: 'Чат'),
-          (icon: Icons.notifications, label: 'Звук'),
+          (
+            icon: Icons.chat_bubble,
+            label: l10n.contactProfileActionChat,
+            onTap: _openChat,
+          ),
+          (
+            icon: Icons.notifications,
+            label: l10n.contactProfileActionSound,
+            onTap: null,
+          ),
         ];
       } else {
         btns = [
-          (icon: Icons.chat_bubble, label: 'Чат'),
-          (icon: Icons.notifications, label: 'Звук'),
-          (icon: Icons.call, label: 'Звонок'),
+          (
+            icon: Icons.chat_bubble,
+            label: l10n.contactProfileActionChat,
+            onTap: _openChat,
+          ),
+          (
+            icon: Icons.notifications,
+            label: l10n.contactProfileActionSound,
+            onTap: null,
+          ),
+          (icon: Icons.call, label: l10n.contactProfileActionCall, onTap: null),
         ];
       }
     } else if (widget.chatType == 'CHANNEL') {
       btns = [
-        (icon: Icons.notifications, label: 'Звук'),
-        (icon: Icons.exit_to_app, label: 'Покинуть'),
+        (
+          icon: Icons.notifications,
+          label: l10n.contactProfileActionSound,
+          onTap: null,
+        ),
+        (icon: Icons.exit_to_app, label: l10n.chatInfoActionLeave, onTap: null),
       ];
     } else {
       btns = [
-        (icon: Icons.chat_bubble, label: 'Чат'),
-        (icon: Icons.notifications, label: 'Звук'),
-        (icon: Icons.exit_to_app, label: 'Покинуть'),
+        (
+          icon: Icons.chat_bubble,
+          label: l10n.contactProfileActionChat,
+          onTap: null,
+        ),
+        (
+          icon: Icons.notifications,
+          label: l10n.contactProfileActionSound,
+          onTap: null,
+        ),
+        (icon: Icons.exit_to_app, label: l10n.chatInfoActionLeave, onTap: null),
       ];
     }
 
@@ -325,7 +371,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Row(
         children: [
           for (int i = 0; i < btns.length; i++) ...[
-            _actionBtn(cs, btns[i].icon, btns[i].label),
+            _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
             if (i < btns.length - 1) const SizedBox(width: 8),
           ],
         ],
@@ -333,9 +379,27 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  Widget _actionBtn(ColorScheme cs, IconData icon, String label) {
+  void _openChat() {
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: widget.chatId,
+        name: widget.name,
+        imageUrl: widget.imageUrl,
+        chatType: 'DIALOG',
+      ),
+    );
+  }
+
+  Widget _actionBtn(
+    ColorScheme cs,
+    IconData icon,
+    String label, [
+    VoidCallback? onTap,
+  ]) {
     return Expanded(
       child: GlossyPill(
+        onTap: onTap,
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -356,34 +420,47 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── PERSISTENT INFO (shown above tabs for all types) ────────────────────
-
   Widget _buildPersistentInfo(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final items = <Widget>[];
 
     if (widget.chatType == 'DIALOG') {
       if (_isBot) {
-        final link = _contactData?['link'] as String?;
+        final link = _contactData?.raw['link'] as String?;
         if (link != null && link.isNotEmpty) {
-          items.add(_simpleInfoCard(cs, 'Ссылка', link, isLink: true));
+          items.add(
+            _simpleInfoCard(
+              cs,
+              l10n.contactProfileInfoLink,
+              link,
+              isLink: true,
+            ),
+          );
         }
       } else {
-        final phone = _contactData?['phone'];
+        final phone = _contactData?.raw['phone'];
         final phoneInt = phone is int
             ? phone
             : int.tryParse(phone?.toString() ?? '');
         if (phoneInt != null && phoneInt > 0) {
           items.add(
-            _simpleInfoCard(cs, 'Номер телефона', formatPhone(phoneInt)!),
+            _simpleInfoCard(cs, l10n.loginPhoneNumber, formatPhone(phoneInt)!),
           );
+        }
+        final bio =
+            (_contactData?.raw['description'] as String?) ??
+            (_contactData?.raw['about'] as String?);
+        if (bio != null && bio.isNotEmpty) {
+          if (items.isNotEmpty) items.add(const SizedBox(height: 8));
+          items.add(_simpleInfoCard(cs, l10n.chatInfoBio, bio));
         }
       }
     } else if (widget.chatType == 'CHANNEL') {
-      final link = _chatData?['link'] as String?;
+      final link = _chatInfo?.link;
       if (link != null && link.isNotEmpty) {
         items.add(_linkCard(cs, link));
       }
-      final desc = _chatData?['description'] as String?;
+      final desc = _chatInfo?.description;
       if (desc != null && desc.isNotEmpty) {
         if (items.isNotEmpty) items.add(const SizedBox(height: 8));
         items.add(_collapsibleDescCard(cs, desc));
@@ -421,7 +498,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             Text(
               value,
               style: TextStyle(
-                color: isLink ? const Color(0xFF007AFF) : cs.onSurface,
+                color: isLink ? cs.primary : cs.onSurface,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
@@ -433,6 +510,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _linkCard(ColorScheme cs, String link) {
+    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
@@ -445,26 +523,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Ссылка-приглашение',
+                  l10n.chatInfoInviteLink,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  link,
-                  style: const TextStyle(
-                    color: Color(0xFF007AFF),
-                    fontSize: 15,
-                  ),
-                ),
+                Text(link, style: TextStyle(color: cs.primary, fontSize: 15)),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(
-              Icons.qr_code_2,
-              color: Color(0xFF007AFF),
-              size: 22,
-            ),
+            icon: Icon(Icons.qr_code_2, color: cs.primary, size: 22),
             onPressed: () {},
           ),
         ],
@@ -473,6 +541,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _collapsibleDescCard(ColorScheme cs, String desc) {
+    final l10n = AppLocalizations.of(context)!;
     const int collapsedLines = 3;
     final isLong = desc.length > 120;
 
@@ -487,7 +556,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Описание',
+              l10n.contactProfileInfoDescription,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 4),
@@ -495,17 +564,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               desc,
               style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
               maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
-              overflow:
-                  (_descExpanded || !isLong) ? null : TextOverflow.ellipsis,
+              overflow: (_descExpanded || !isLong)
+                  ? null
+                  : TextOverflow.ellipsis,
             ),
             if (isLong) ...[
               const SizedBox(height: 6),
               GestureDetector(
                 onTap: () => setState(() => _descExpanded = !_descExpanded),
                 child: Text(
-                  _descExpanded ? 'Свернуть' : 'Ещё',
-                  style:
-                      const TextStyle(color: Color(0xFF007AFF), fontSize: 13),
+                  _descExpanded ? l10n.chatInfoCollapse : l10n.chatInfoShowMore,
+                  style: TextStyle(color: cs.primary, fontSize: 13),
                 ),
               ),
             ],
@@ -514,8 +583,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       ),
     );
   }
-
-  // ─── TAB BAR ─────────────────────────────────────────────────────────────
 
   Widget _buildTabBar(ColorScheme cs) {
     return LayoutBuilder(
@@ -588,8 +655,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── TAB CONTENT ─────────────────────────────────────────────────────────
-
   Widget _buildTabContent(ColorScheme cs) {
     if (_selectedTab.isEmpty) return const SizedBox.shrink();
     return AnimatedSwitcher(
@@ -599,24 +664,31 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _tabBody(ColorScheme cs) {
-    switch (_selectedTab) {
-      case 'Info':
-        return _buildInfoTabContent(cs);
-      case 'Участники':
-        return _buildMembersTabContent(cs);
-      case 'Общие чаты':
-        return _buildPlaceholder(cs, 'Нет общих чатов', Icons.group);
-      case 'Медиа':
-        return _buildPlaceholder(cs, 'Нет медиа', Icons.photo_library);
-      case 'Файлы':
-        return _buildPlaceholder(cs, 'Нет файлов', Icons.description);
-      case 'Голосовые':
-        return _buildPlaceholder(cs, 'Нет голосовых', Icons.mic);
-      case 'Ссылки':
-        return _buildPlaceholder(cs, 'Нет ссылок', Icons.link);
-      default:
-        return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
+    if (_selectedTab == 'Info') return _buildInfoTabContent(cs);
+    if (_selectedTab == l10n.chatInfoTabMembers) {
+      return _buildMembersTabContent(cs);
     }
+    if (_selectedTab == l10n.chatInfoTabGeneralChats) {
+      return _buildPlaceholder(cs, l10n.chatInfoEmptyGeneralChats, Icons.group);
+    }
+    if (_selectedTab == l10n.chatInfoTabMedia) {
+      return _buildPlaceholder(
+        cs,
+        l10n.chatInfoEmptyMedia,
+        Icons.photo_library,
+      );
+    }
+    if (_selectedTab == l10n.chatInfoTabFiles) {
+      return _buildPlaceholder(cs, l10n.chatInfoEmptyFiles, Icons.description);
+    }
+    if (_selectedTab == l10n.chatInfoTabVoice) {
+      return _buildPlaceholder(cs, l10n.chatInfoEmptyVoice, Icons.mic);
+    }
+    if (_selectedTab == l10n.chatInfoTabLinks) {
+      return _buildPlaceholder(cs, l10n.chatInfoEmptyLinks, Icons.link);
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildPlaceholder(ColorScheme cs, String label, IconData icon) {
@@ -640,27 +712,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── INFO TAB ────────────────────────────────────────────────────────────
-
   Widget _buildInfoTabContent(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final items = <Widget>[];
 
-    if (widget.chatType == 'DIALOG' && !_isBot) {
-      final bio =
-          (_contactData?['description'] as String?) ??
-          (_contactData?['about'] as String?);
-      if (bio != null && bio.isNotEmpty) {
-        items
-          ..add(_infoCard(cs, 'О себе', bio))
-          ..add(const SizedBox(height: 8));
-      }
-    }
-
     if (widget.chatType == 'CHAT') {
-      final desc = _chatData?['description'] as String?;
+      final desc = _chatInfo?.description;
       if (desc != null && desc.isNotEmpty) {
         items
-          ..add(_infoCard(cs, 'Описание', desc))
+          ..add(_infoCard(cs, l10n.contactProfileInfoDescription, desc))
           ..add(const SizedBox(height: 8));
       }
     }
@@ -713,9 +773,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── MEMBERS TAB ─────────────────────────────────────────────────────────
-
   Widget _buildMembersTabContent(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
@@ -723,7 +782,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       ),
       child: Column(
         children: [
-          _memberAction(cs, Icons.person_add, 'Добавить участника', () {}),
+          _memberAction(cs, Icons.person_add, l10n.chatInfoAddMember, () {}),
           ..._members.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
         ],
       ),
@@ -743,7 +802,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, color: const Color(0xFF007AFF), size: 26),
+            Icon(icon, color: cs.primary, size: 26),
             const SizedBox(width: 14),
             Text(label, style: TextStyle(color: cs.onSurface, fontSize: 16)),
           ],
@@ -760,24 +819,26 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   );
 
   Widget _memberTile(ColorScheme cs, _MemberInfo member) {
+    final l10n = AppLocalizations.of(context)!;
     final name =
-        ContactCache.get(member.id) ?? (member.isMe ? 'Вы' : '${member.id}');
+        ContactCache.get(member.id) ??
+        (member.isMe ? l10n.callParticipantYou : '${member.id}');
     final avatar = ContactCache.getAvatar(member.id);
 
     final String sublabel;
     if (member.isMe) {
-      sublabel = 'Вы';
+      sublabel = l10n.callParticipantYou;
     } else if (member.isOnline) {
-      sublabel = 'В сети';
+      sublabel = l10n.contactProfileOnline;
     } else if (member.seenTime != null) {
-      sublabel = _formatLastSeen(member.seenTime!);
+      sublabel = formatLastSeen(member.seenTime!);
     } else {
-      sublabel = 'Был(-а) недавно';
+      sublabel = l10n.contactProfileRecentlyActive;
     }
 
     final String? roleLabel = member.isOwner
-        ? 'владелец'
-        : (member.isAdmin ? 'Адмін' : null);
+        ? l10n.chatInfoRoleOwner
+        : (member.isAdmin ? l10n.chatInfoRoleAdmin : null);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -834,14 +895,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── INFO ROWS ────────────────────────────────────────────────────────────
-
   Widget _buildAllInfoRows(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final rows = <({String label, String value})>[];
-    final chat = _chatData;
+    final chat = _chatInfo?.raw;
     if (chat == null) {
       return Text(
-        'Нет данных',
+        l10n.chatInfoNoData,
         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
       );
     }
@@ -853,7 +913,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       if (tsFormat && val is int && val > 1) {
         str = formatDateTimeNumeric(DateTime.fromMillisecondsSinceEpoch(val));
       } else if (val is bool) {
-        str = 'да';
+        str = l10n.callValueYes;
       } else {
         str = val.toString();
       }
@@ -862,54 +922,59 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     }
 
     final type = widget.chatType;
-    add('ID чата', chat['id']);
+    add(l10n.chatInfoRowId, chat['id']);
 
     if (type == 'DIALOG') {
-      add('Создан', chat['created'], tsFormat: true);
-      add('Изменён', chat['modified'], tsFormat: true);
-      add('Статус', chat['status']);
+      add(l10n.chatInfoRowCreated, chat['created'], tsFormat: true);
+      add(l10n.chatInfoRowModified, chat['modified'], tsFormat: true);
+      add(l10n.callInfoStatus, chat['status']);
     }
 
     if (type == 'CHAT') {
-      add('Участников', chat['participantsCount']);
+      add(l10n.chatInfoRowMembersCount, chat['participantsCount']);
       final owner = chat['owner'] as int?;
       if (owner != null && owner != 0) {
-        add('Владелец', ContactCache.get(owner) ?? '$owner');
+        add(l10n.chatInfoRowOwner, ContactCache.get(owner) ?? '$owner');
       }
-      add('Создана', chat['created'], tsFormat: true);
+      add(l10n.chatInfoRowCreatedGroup, chat['created'], tsFormat: true);
       add(
-        'Вступил',
+        l10n.chatInfoRowJoined,
         (chat['joinTime'] as int?) != null && (chat['joinTime'] as int) > 1
             ? chat['joinTime']
             : null,
         tsFormat: true,
       );
-      add('Изменена', chat['modified'], tsFormat: true);
-      add('Есть боты', chat['hasBots'] as bool?);
+      add(l10n.chatInfoRowModifiedGroup, chat['modified'], tsFormat: true);
+      add(l10n.chatInfoRowHasBots, chat['hasBots'] as bool?);
       final blocked = chat['blockedParticipantsCount'] as int?;
-      if (blocked != null && blocked > 0) add('Заблокировано', blocked);
+      if (blocked != null && blocked > 0) {
+        add(l10n.chatInfoRowBlockedCount, blocked);
+      }
       final opts = chat['options'] as Map?;
-      add('Официальная', opts?['OFFICIAL'] as bool?);
-      add('Подпись адм.', opts?['SIGN_ADMIN'] as bool?);
-      add('Статус', chat['status']);
+      add(l10n.chatInfoRowOfficialGroup, opts?['OFFICIAL'] as bool?);
+      add(l10n.chatInfoRowSignAdmin, opts?['SIGN_ADMIN'] as bool?);
+      add(l10n.callInfoStatus, chat['status']);
     }
 
     if (type == 'CHANNEL') {
-      add('Подписчиков', chat['participantsCount']);
-      add('Создан', chat['created'], tsFormat: true);
-      add('Изменён', chat['modified'], tsFormat: true);
+      add(l10n.chatInfoRowSubscribersCount, chat['participantsCount']);
+      add(l10n.chatInfoRowCreated, chat['created'], tsFormat: true);
+      add(l10n.chatInfoRowModified, chat['modified'], tsFormat: true);
       final opts = chat['options'] as Map?;
-      add('Официальный', opts?['OFFICIAL'] as bool?);
-      add('Комментарии', opts?['COMMENTS'] as bool?);
-      add('РКН', opts?['A_PLUS_CHANNEL'] as bool?);
-      add('Подпись адм.', opts?['SIGN_ADMIN'] as bool?);
-      add('Только адм.', opts?['ONLY_ADMIN_CAN_ADD_MEMBER'] as bool?);
-      add('Статус', chat['status']);
+      add(l10n.chatInfoRowOfficialChannel, opts?['OFFICIAL'] as bool?);
+      add(l10n.chatInfoRowComments, opts?['COMMENTS'] as bool?);
+      add(l10n.chatInfoRowRkn, opts?['A_PLUS_CHANNEL'] as bool?);
+      add(l10n.chatInfoRowSignAdmin, opts?['SIGN_ADMIN'] as bool?);
+      add(
+        l10n.chatInfoRowOnlyAdmin,
+        opts?['ONLY_ADMIN_CAN_ADD_MEMBER'] as bool?,
+      );
+      add(l10n.callInfoStatus, chat['status']);
     }
 
     if (rows.isEmpty) {
       return Text(
-        'Нет данных',
+        l10n.chatInfoNoData,
         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
       );
     }
@@ -953,59 +1018,69 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   List<({String label, String value})> _buildExtraContactRows() {
+    final l10n = AppLocalizations.of(context)!;
     final c = _contactData;
     if (c == null) return const [];
     final rows = <({String label, String value})>[];
-    final reg = c['registrationTime'];
+    final reg = c.raw['registrationTime'];
     if (reg is int && reg > 0) {
       rows.add((
-        label: 'Регистрация',
+        label: l10n.contactProfileInfoRegistration,
         value: formatDateTimeNumeric(DateTime.fromMillisecondsSinceEpoch(reg)),
       ));
     }
-    final upd = c['updateTime'];
+    final upd = c.raw['updateTime'];
     if (upd is int && upd > 0) {
       rows.add((
-        label: 'Обновлён',
+        label: l10n.contactProfileInfoUpdated,
         value: formatDateTimeNumeric(DateTime.fromMillisecondsSinceEpoch(upd)),
       ));
     }
-    final country = c['country'];
+    final country = c.raw['country'];
     if (country is String && country.isNotEmpty) {
-      rows.add((label: 'Страна', value: country));
+      rows.add((label: l10n.contactProfileInfoCountry, value: country));
     }
-    final gender = c['gender'];
+    final gender = c.raw['gender'];
     if (gender is int) {
       final g = formatGender(gender);
-      if (g != null) rows.add((label: 'Пол', value: g));
+      if (g != null) rows.add((label: l10n.contactProfileInfoGender, value: g));
     }
-    final phone = c['phone'];
+    final phone = c.raw['phone'];
     if (phone is int && phone > 0) {
-      rows.add((label: 'Телефон', value: '+$phone'));
+      rows.add((label: l10n.contactProfileInfoPhone, value: '+$phone'));
     } else if (phone is String && phone.isNotEmpty && phone != '***') {
-      rows.add((label: 'Телефон', value: phone));
+      rows.add((label: l10n.contactProfileInfoPhone, value: phone));
     }
-    final accStatus = c['accountStatus'];
+    final accStatus = c.raw['accountStatus'];
     if (accStatus is int && accStatus != 0) {
-      rows.add((label: 'Статус аккаунта', value: accStatus.toString()));
+      rows.add((
+        label: l10n.contactProfileInfoAccountStatus,
+        value: accStatus.toString(),
+      ));
     }
-    final opts = c['options'];
+    final opts = c.raw['options'];
     if (opts is List && opts.isNotEmpty) {
-      rows.add((label: 'Флаги', value: opts.whereType<String>().join(', ')));
+      rows.add((
+        label: l10n.contactProfileInfoFlags,
+        value: opts.whereType<String>().join(', '),
+      ));
     }
-    final link = c['link'];
+    final link = c.raw['link'];
     if (link is String && link.isNotEmpty) {
-      rows.add((label: 'Ссылка', value: link));
+      rows.add((label: l10n.contactProfileInfoLink, value: link));
     }
     return rows;
   }
 
   Widget? _trailingFor(String label, ColorScheme cs) {
-    if (label != 'ID чата') return null;
+    final l10n = AppLocalizations.of(context)!;
+    if (label != l10n.chatInfoRowId) return null;
     if (widget.chatType != 'DIALOG') return null;
     if (_contactData == null) return null;
     return IconButton(
-      tooltip: _extraContactExpanded ? 'Скрыть' : 'Подробнее',
+      tooltip: _extraContactExpanded
+          ? l10n.chatInfoHideExtra
+          : l10n.chatInfoShowMoreExtra,
       icon: AnimatedRotation(
         turns: _extraContactExpanded ? 0.125 : 0,
         duration: const Duration(milliseconds: 220),
@@ -1054,7 +1129,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  // ─── SHIMMER ─────────────────────────────────────────────────────────────
+  Widget _avatar() {
+    return KometAvatar(
+      name: widget.name,
+      imageUrl: widget.imageUrl,
+      size: 96,
+      fontSize: 36,
+    );
+  }
 
   Widget _buildShimmer(ColorScheme cs) {
     Widget block(double w, double h, {double r = 8}) => Container(
@@ -1082,26 +1164,5 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         block(double.infinity, 120, r: 14),
       ],
     );
-  }
-
-  // ─── HELPERS ─────────────────────────────────────────────────────────────
-
-  String _formatLastSeen(int secondsSinceEpoch) {
-    final diff =
-        DateTime.now().millisecondsSinceEpoch - secondsSinceEpoch * 1000;
-    if (diff < 60000) return 'только что';
-    if (diff < 3600000) return '${diff ~/ 60000} мин назад';
-    if (diff < 86400000) return '${diff ~/ 3600000} ч назад';
-    if (diff < 604800000) return '${diff ~/ 86400000} д назад';
-    return 'давно';
-  }
-
-  String _pluralCount(int n, String one, String few, String many) {
-    final mod100 = n % 100;
-    final mod10 = n % 10;
-    if (mod100 >= 11 && mod100 <= 14) return '$n $many';
-    if (mod10 == 1) return '$n $one';
-    if (mod10 >= 2 && mod10 <= 4) return '$n $few';
-    return '$n $many';
   }
 }

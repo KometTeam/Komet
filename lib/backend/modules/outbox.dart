@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
+import '../../core/utils/logger.dart';
 import '../api.dart';
 import 'chats.dart';
 import 'messages.dart';
@@ -42,11 +43,20 @@ class OutboxService {
         if (api.state != SessionState.online) break;
         final pending = CachedMessage.fromDbRow(row);
         final text = pending.text;
-        if (text == null || text.isEmpty || pending.payload != null) continue;
+        if (text == null || text.isEmpty) continue;
+
+        final payload = pending.payload;
+        final replyToMessageId = _replyIdFromPayload(payload);
+        final elements = _elementsFromPayload(payload);
 
         try {
-          final actualId =
-              await messages.sendMessage(accountId, pending.chatId, text);
+          final actualId = await messages.sendMessage(
+            accountId,
+            pending.chatId,
+            text,
+            replyToMessageId: replyToMessageId,
+            elements: elements,
+          );
           final sent = CachedMessage(
             id: actualId.isNotEmpty ? actualId : pending.id,
             accountId: accountId,
@@ -55,28 +65,63 @@ class OutboxService {
             text: text,
             time: pending.time,
             status: 'sent',
+            payload: payload,
           );
           await AppDatabase.saveMessages([sent.toDbRow()]);
           if (sent.id != pending.id) {
             await AppDatabase.deleteMessage(
-                accountId, pending.chatId, pending.id);
+              accountId,
+              pending.chatId,
+              pending.id,
+            );
           }
-          ChatsModule.emitMessageSent(pending.chatId, pending.id, sent);
-          await ChatsModule.applyOutgoing(
+          chats.emitMessageSent(pending.chatId, pending.id, sent);
+          await chats.applyOutgoing(
             accountId,
             pending.chatId,
             messageId: sent.id,
             time: sent.time,
             text: text,
             status: 'sent',
+            elements: elements.isEmpty ? null : elements,
           );
-        } catch (_) {
-          break;
+        } catch (e) {
+          logger.w('Outbox: отправка ${pending.id} не удалась: $e');
+          continue;
         }
       }
-    } catch (_) {
+    } catch (e) {
+      logger.e('Outbox flush: $e');
     } finally {
       _flushing = false;
     }
+  }
+
+  int? _replyIdFromPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+    final link = payload['link'];
+    if (link is! Map) return null;
+    if ((link['type'] as String?)?.toUpperCase() != 'REPLY') return null;
+    final msg = link['message'];
+    if (msg is Map) {
+      final id = msg['id'];
+      if (id is int) return id;
+      if (id != null) return int.tryParse(id.toString());
+    }
+    final mid = link['messageId'];
+    if (mid is int) return mid;
+    if (mid != null) return int.tryParse(mid.toString());
+    return null;
+  }
+
+  List<Map<String, dynamic>> _elementsFromPayload(
+    Map<String, dynamic>? payload,
+  ) {
+    final raw = payload?['elements'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 }

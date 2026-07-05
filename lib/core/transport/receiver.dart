@@ -1,33 +1,28 @@
 import 'dart:typed_data';
 
 import '../protocol/packet.dart';
-import '../utils/logger.dart';
 
-/// Буфер входящих данных.
-/// Копит сырые байты из сокета, нарезает их на байтовые срезы целых пакетов.
+class ReceiverOverflowException implements Exception {
+  final int size;
+  const ReceiverOverflowException(this.size);
+  @override
+  String toString() => 'PacketReceiver: переполнение буфера ($size B)';
+}
+
 class PacketReceiver {
   Uint8List _buffer = Uint8List(0);
   int _start = 0;
   int _end = 0;
 
-  static const int _maxBufferSize = 2 * 1024 * 1024; // 2 мегабуйта
+  static const int _maxBufferSize = 2 * 1024 * 1024;
 
-  /// Добавляет байты в буфер и возвращает все собранные пакеты как сырые срезы.
-  /// Полностью синхронный — нарезка не блокируется на распаковке, поэтому
-  /// конкурентные вызовы из stream-листенера не могут пересечься на `_buffer`.
-  ///
-  /// Накопление идёт без перекопирования всего буфера на каждый чанк: целые
-  /// пакеты отдаются как `sublistView`, а потреблённый префикс отбрасывается
-  /// сдвигом указателя `_start`, а не пересборкой буфера.
   List<Uint8List> feed(Uint8List data) {
     _append(data);
 
     if (_end - _start > _maxBufferSize) {
-      logger.e(
-        'PacketReceiver: переполнение буфера (${_end - _start} B), сброс',
-      );
+      final overflow = _end - _start;
       reset();
-      return const [];
+      throw ReceiverOverflowException(overflow);
     }
 
     final packets = <Uint8List>[];

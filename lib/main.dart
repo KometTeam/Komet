@@ -3,24 +3,29 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
+import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
+import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/komet_settings.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
+import 'core/config/custom_font_service.dart';
 import 'core/config/app_message_actions_style.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
@@ -30,6 +35,7 @@ import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
+import 'core/config/app_chat_chrome.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
@@ -40,18 +46,22 @@ import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
 import 'backend/modules/outbox.dart';
 import 'backend/modules/polls.dart';
+import 'backend/modules/stickers.dart';
 import 'backend/modules/self_check.dart';
 import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
+import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
+import 'core/transport/traffic_monitor.dart';
 import 'core/transport/vpn_bypass.dart';
 import 'core/storage/token_storage.dart';
 import 'core/utils/haptics.dart';
+import 'core/utils/debug_session_log.dart';
 import 'core/protocol/packet.dart';
 import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/screens/auth/login_screen.dart';
@@ -63,6 +73,7 @@ final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
 final pollsModule = PollsModule(api);
+final stickersModule = StickersModule(api);
 final webAppModule = WebAppModule(api);
 final digitalIdModule = DigitalIdModule(webAppModule);
 final fileUploader = FileUploader(api: api, messages: messagesModule);
@@ -70,6 +81,16 @@ final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
 bool isOnemeFlavor = false;
+
+const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+    TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+  },
+);
 
 Future<Locale> _loadInitialLocale() async {
   final prefs = await SharedPreferences.getInstance();
@@ -86,6 +107,11 @@ Future<Locale> _loadInitialLocale() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  VideoPlayerMediaKit.ensureInitialized(
+    windows: true,
+    linux: true,
+    macOS: true,
+  );
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
@@ -95,7 +121,7 @@ void main() async {
     await ContactsModule.primeCacheFromDb(activeAccountId);
   }
   attachInfoCacheApi(api);
-  ChatsModule.attachGlobalPushHandlers(api);
+  chats.attachGlobalPushHandlers(api);
   unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
@@ -110,6 +136,7 @@ void main() async {
   final amoledFuture = AppAmoled.load();
   final pillGradientFuture = AppPillGradient.load();
   final visualStyleFuture = AppVisualStyle.load();
+  final chatChromeFuture = AppChatChrome.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
@@ -119,6 +146,9 @@ void main() async {
   final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
+  final showExtraInfoFuture = AppShowExtraInfo.load();
+  final trafficCaptureFuture = TrafficMonitor.instance.load();
+  final debugLogFuture = DebugSessionLog.instance.init();
 
   final packageInfo = await packageInfoFuture;
   isOnemeFlavor = packageInfo.packageName == 'ru.oneme.app';
@@ -141,23 +171,34 @@ void main() async {
   final initialFontScale = AppFonts.clampScale(
     prefs.getDouble(AppFonts.scalePrefKey) ?? AppFonts.defaultScale,
   );
+  if (AppFonts.resolve(initialFontId).isCustom) {
+    await CustomFontService.preloadCached();
+  } else {
+    unawaited(CustomFontService.preloadCached());
+  }
   final initialAccentSeed = await accentFuture;
-  AppBubbleShape.current.value = await bubbleShapeFuture;
-  AppBubbleBehavior.current.value = await bubbleBehaviorFuture;
-  AppCacheExtent.current.value = await cacheExtentFuture;
-  AppThemeModeConfig.current.value = await themeModeFuture;
-  AppAmoled.current.value = await amoledFuture;
-  AppPillGradient.current.value = await pillGradientFuture;
-  AppVisualStyle.current.value = await visualStyleFuture;
-  AppThemeSchedule.current.value = await themeScheduleFuture;
-  AppMessageActionsStyle.current.value = await messageActionsFuture;
-  AppSwipeBackDesktop.current.value = await swipeBackFuture;
-  AppPranks.current.value = await pranksFuture;
-  AppStories.current.value = await storiesFuture;
-  AppCommands.current.value = await commandsFuture;
-  AppLinkPreview.current.value = await linkPreviewFuture;
-  AppMediaCacheLimit.current.value = await cacheLimitFuture;
-  AppDigitalIdNative.current.value = await digitalIdNativeFuture;
+  await Future.wait<dynamic>([
+    bubbleShapeFuture,
+    bubbleBehaviorFuture,
+    cacheExtentFuture,
+    themeModeFuture,
+    amoledFuture,
+    pillGradientFuture,
+    visualStyleFuture,
+    chatChromeFuture,
+    themeScheduleFuture,
+    messageActionsFuture,
+    swipeBackFuture,
+    pranksFuture,
+    storiesFuture,
+    commandsFuture,
+    linkPreviewFuture,
+    cacheLimitFuture,
+    digitalIdNativeFuture,
+    showExtraInfoFuture,
+  ]);
+  await trafficCaptureFuture;
+  await debugLogFuture;
   runApp(
     KometApp(
       initialLocale: initialLocale,
@@ -212,6 +253,9 @@ class KometAppState extends State<KometApp>
   late Locale _locale;
   late String _fontId;
   bool _isLoggingOut = false;
+  bool _shellReady = false;
+  bool _incomingRouteActive = false;
+  IncomingCall? _pendingIncoming;
   late final ValueNotifier<Color?> accentSeed = ValueNotifier(
     widget.initialAccentSeed,
   );
@@ -262,7 +306,9 @@ class KometAppState extends State<KometApp>
             await accountModule.login(accountId: accountId, token: token);
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        logger.w('reconnect login failed: $e');
+      }
     });
 
     _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
@@ -275,6 +321,7 @@ class KometAppState extends State<KometApp>
         if (isOnemeFlavor) {
           await PushService.instance.init(api: api, account: accountModule);
           await PushService.instance.onLoginSuccess();
+          await _ensureFullScreenIntentPermission();
         }
       }
     });
@@ -282,6 +329,11 @@ class KometAppState extends State<KometApp>
     _callIncomingSub = CallController.instance.incomingCalls.listen(
       _onIncomingCall,
     );
+    CallController.instance.appResumed = true;
+    CallBridge.instance.init();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      CallBridge.instance.checkInitialCall();
+    });
 
     _sessionExpiredSub = api.sessionExpiredStream.listen((
       SessionExpiredException e,
@@ -348,18 +400,51 @@ class KometAppState extends State<KometApp>
     });
   }
 
-  Future<void> _onIncomingCall(IncomingCall call) async {
+  Future<void> _ensureFullScreenIntentPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('fsi_prompted') ?? false) return;
+    if (await CallBridge.instance.canUseFullScreenIntent()) return;
+    await prefs.setBool('fsi_prompted', true);
+    await CallBridge.instance.openFullScreenIntentSettings();
+  }
+
+  void _onIncomingCall(IncomingCall call) {
+    _pendingIncoming = call;
+    _presentIncomingCall();
+  }
+
+  void markShellReady() {
+    if (_shellReady) return;
+    _shellReady = true;
+    _presentIncomingCall();
+  }
+
+  void _presentIncomingCall() {
+    final call = _pendingIncoming;
+    if (call == null || _incomingRouteActive || !_shellReady) return;
     final navState = KometApp.navigatorKey.currentState;
-    if (navState == null) return;
-    navState.push(
-      MaterialPageRoute(
-        builder: (_) => CallScreen(
-          name: ContactCache.get(call.callerId) ?? '',
-          avatarUrl: ContactCache.getAvatar(call.callerId),
-          incoming: call,
-        ),
-      ),
-    );
+    if (navState == null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _presentIncomingCall(),
+      );
+      return;
+    }
+    _incomingRouteActive = true;
+    navState
+        .push(
+          MaterialPageRoute(
+            builder: (_) => CallScreen(
+              name: ContactCache.get(call.callerId) ?? call.callerName ?? '',
+              avatarUrl: ContactCache.getAvatar(call.callerId),
+              incoming: call,
+              autoAccept: call.autoAccept,
+            ),
+          ),
+        )
+        .whenComplete(() {
+          _incomingRouteActive = false;
+          if (identical(_pendingIncoming, call)) _pendingIncoming = null;
+        });
   }
 
   @override
@@ -386,7 +471,17 @@ class KometAppState extends State<KometApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    CallController.instance.appResumed = state == AppLifecycleState.resumed;
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      DebugSessionLog.instance.flushNow();
+      SelfCheckService.instance.pause();
+    }
     if (state != AppLifecycleState.resumed) return;
+    api.wakeUp();
+    SelfCheckService.instance.resume();
+    CallBridge.instance.checkInitialCall();
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
     _rescheduleSwitch();
     final next = _effectiveThemeMode;
@@ -636,6 +731,7 @@ class KometAppState extends State<KometApp>
       ThemeData(
         useMaterial3: true,
         colorScheme: light,
+        pageTransitionsTheme: _appPageTransitions,
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.light).textTheme,
@@ -646,6 +742,7 @@ class KometAppState extends State<KometApp>
       ThemeData(
         useMaterial3: true,
         colorScheme: dark,
+        pageTransitionsTheme: _appPageTransitions,
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.dark).textTheme,
@@ -813,6 +910,7 @@ class _StartupScreenState extends State<_StartupScreen> {
       context,
       MaterialPageRoute(builder: (_) => const AdaptiveShell()),
     );
+    KometApp.stateOf(context)?.markShellReady();
   }
 
   Future<int?> _recoverActiveAccount() async {
@@ -834,6 +932,7 @@ class _StartupScreenState extends State<_StartupScreen> {
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
+      KometApp.stateOf(context)?.markShellReady();
     }
   }
 

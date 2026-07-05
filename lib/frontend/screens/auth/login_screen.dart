@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -20,6 +19,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../../backend/api.dart';
+import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -40,13 +40,21 @@ class _LoginScreenState extends State<LoginScreen> {
   Timer? _phoneErrorTimer;
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
+  late SessionState _sessionState;
+  StreamSubscription<SessionState>? _stateSub;
+
+  bool get _isOnline => _sessionState == SessionState.online;
 
   @override
   void initState() {
     super.initState();
+    _sessionState = api.state;
     if (api.state == SessionState.disconnected) {
       unawaited(api.connect());
     }
+    _stateSub = api.stateStream.listen((state) {
+      if (mounted) setState(() => _sessionState = state);
+    });
     _selectedCountry = countriesByCode['RU'] ?? allCountries.first;
     _clampCountryToAllowed();
     _checkTOS();
@@ -58,7 +66,11 @@ class _LoginScreenState extends State<LoginScreen> {
       await resetDigitalIdSession();
       try {
         await accountModule.switchAccount(returnId);
-      } catch (_) {}
+      } catch (_) {
+        if (!mounted) return;
+        showCustomNotification(context, 'Не удалось переключить аккаунт');
+        return;
+      }
       if (!mounted) return;
       await Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AdaptiveShell()),
@@ -80,6 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _stateSub?.cancel();
     _phoneErrorTimer?.cancel();
     _logoTapTimer?.cancel();
     _phoneController.dispose();
@@ -142,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String _countryDisplayName(CountryName country) {
     final lang = Localizations.localeOf(context).languageCode;
-    return lang == 'ru' ? country.ru : country.en;
+    return country.displayName(lang);
   }
 
   String _phoneMaskHint(CountryName country) {
@@ -172,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   padding: const EdgeInsets.only(left: 8, bottom: 8),
                   child: Text(
                     l10n.loginLanguage,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -182,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   title: Text(
                     l10n.languageNameRu,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -198,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ListTile(
                   title: Text(
                     l10n.languageNameEn,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -249,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Text(
                           AppLocalizations.of(context)!.loginTermsOfUse,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 20,
                             fontWeight: FontWeight.w500,
@@ -420,7 +433,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Text(
                       l10n.loginConfirmPhoneTitle,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -429,7 +442,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 12),
                     Text(
                       '${_selectedCountry.phoneCode} $formattedPhone',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
@@ -445,7 +458,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: () => Navigator.pop(context),
                         child: Text(
                           l10n.loginEdit,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
@@ -459,6 +472,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           final fullPhone =
                               '${_selectedCountry.phoneCode}${_phoneController.text}';
 
+                          if (!_isOnline) {
+                            _showPhoneError(
+                              'Нет соединения с сервером. Подождите подключения.',
+                            );
+                            return;
+                          }
+
                           try {
                             final result = await accountModule.requestCode(
                               fullPhone,
@@ -471,18 +491,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                 builder: (context) => CodeConfirmationScreen(
                                   phoneNumber:
                                       '${_selectedCountry.phoneCode} $formattedPhone',
+                                  rawPhone: fullPhone,
                                   token: result.token,
                                 ),
                               ),
                             );
                           } catch (e) {
                             if (!screenContext.mounted) return;
-                            _showPhoneError(e.toString());
+                            _showPhoneError(
+                              isSessionStateError(e)
+                                  ? 'Нет соединения с сервером. Попробуйте ещё раз.'
+                                  : e.toString(),
+                            );
                           }
                         },
                         child: Text(
                           l10n.loginDone,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -509,6 +534,10 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     _showPhoneConfirmationDialog(_phoneController.text);
+  }
+
+  void _notifyConnecting() {
+    showCustomNotification(context, 'Подключаемся к серверу, секунду…');
   }
 
   void _showServerSettingsSheet(BuildContext context) {
@@ -558,7 +587,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.security, color: cs.onSurface),
                   title: Text(
                     l10n.loginSpoofRedacted,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -578,7 +607,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.vpn_lock, color: cs.onSurface),
                   title: Text(
                     l10n.loginProxy,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -593,7 +622,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.dns, color: cs.onSurface),
                   title: Text(
                     l10n.loginChangeServer,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -633,7 +662,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.qr_code_2, color: cs.onSurface),
                   title: Text(
                     l10n.loginSignInWithQr,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -647,7 +676,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.key, color: cs.onSurface),
                   title: Text(
                     l10n.loginSignInWithToken,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -669,7 +698,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   leading: Icon(Symbols.description, color: cs.onSurface),
                   title: Text(
                     l10n.loginSignInWithSessionFile,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -771,7 +800,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(height: 16),
                                 Text(
                                   l10n.loginTitle,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontSize: 32,
                                     fontWeight: FontWeight.w500,
@@ -801,7 +830,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 children: [
                                   Text(
                                     _countryDisplayName(_selectedCountry),
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface,
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,
@@ -823,7 +852,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 Text(
                                   _selectedCountry.phoneCode,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w400,
@@ -905,7 +934,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () => _showOtherLoginMethods(context),
                             child: Text(
                               l10n.loginOtherSignInMethods,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.primary,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w400,
@@ -922,7 +951,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   padding: const EdgeInsets.only(bottom: 24.0),
                                   child: RichText(
                                     text: TextSpan(
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: cs.onSurface,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
@@ -931,7 +960,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       children: [
                                         TextSpan(
                                           text: l10n.loginTermsIntro,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface,
                                             fontSize: 14,
                                             height: 1.4,
@@ -940,7 +969,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                         TextSpan(
                                           text: l10n.loginTermsLink,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.primary,
                                             fontSize: 14,
                                             height: 1.4,
@@ -957,21 +986,32 @@ class _LoginScreenState extends State<LoginScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 16.0),
                                 child: FloatingActionButton(
-                                  onPressed: _isPhoneValid
-                                      ? _validateAndSubmit
-                                      : null,
+                                  onPressed: !_isPhoneValid
+                                      ? null
+                                      : (_isOnline
+                                            ? _validateAndSubmit
+                                            : _notifyConnecting),
                                   backgroundColor: _isPhoneValid
                                       ? cs.primaryContainer
                                       : cs.surfaceContainerHighest,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
                                   ),
-                                  child: Icon(
-                                    Icons.arrow_forward,
-                                    color: _isPhoneValid
-                                        ? cs.onPrimaryContainer
-                                        : cs.onSurfaceVariant,
-                                  ),
+                                  child: _isPhoneValid && !_isOnline
+                                      ? SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.onPrimaryContainer,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.arrow_forward,
+                                          color: _isPhoneValid
+                                              ? cs.onPrimaryContainer
+                                              : cs.onSurfaceVariant,
+                                        ),
                                 ),
                               ),
                             ],
@@ -1016,7 +1056,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   label,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.primary,
                     fontSize: 14,
                     fontWeight: FontWeight.w400,

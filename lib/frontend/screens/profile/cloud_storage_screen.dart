@@ -12,6 +12,7 @@ import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/upload_manager.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
@@ -85,7 +86,10 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       if (!mounted) return;
       _uploadProgress.value = 0;
       setState(() => _isUploading = false);
-      showCustomNotification(context, 'Ошибка: $msg');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError(msg),
+      );
     };
   }
 
@@ -111,7 +115,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
 
     final cachedId = await CloudStorageModule.getCachedEnvGroupId(profile.id);
     if (cachedId != null) {
-      final rows = await ChatsModule.getChat(profile.id, cachedId);
+      final rows = await chats.getChat(profile.id, cachedId);
       if (rows.isNotEmpty &&
           CloudStorageModule.isCloudStorageGroup(rows.first)) {
         if (!mounted) return;
@@ -127,9 +131,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       await CloudStorageModule.clearEnvGroupCache(profile.id);
     }
 
-    final chats = await ChatsModule.getChats(profile.id);
-    CachedChat? envGroup = CloudStorageModule.findEnvGroup(chats);
-    final orphans = CloudStorageModule.findOrphanGroups(chats);
+    final cachedChats = await chats.getChats(profile.id);
+    CachedChat? envGroup = CloudStorageModule.findEnvGroup(cachedChats);
+    final orphans = CloudStorageModule.findOrphanGroups(cachedChats);
 
     if (envGroup == null && orphans.isNotEmpty) {
       final repaired = await CloudStorageModule.repairOrphan(
@@ -160,8 +164,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   }
 
   void _handleOrphansBackground(int accountId) async {
-    final chats = await ChatsModule.getChats(accountId);
-    for (final orphan in CloudStorageModule.findOrphanGroups(chats)) {
+    final cachedChats = await chats.getChats(accountId);
+    for (final orphan in CloudStorageModule.findOrphanGroups(cachedChats)) {
       _deleteOrLeave(accountId, orphan);
     }
   }
@@ -169,14 +173,14 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   void _deleteOrLeave(int accountId, CachedChat chat) async {
     final isAdmin = chat.owner == accountId || chat.admins.contains(accountId);
     if (isAdmin) {
-      await ChatsModule.deleteChat(
+      await chats.deleteChat(
         api,
         chatId: chat.id,
         lastEventTime: chat.lastEventTime,
         forAll: true,
       );
     } else {
-      await ChatsModule.leaveChat(api, chatId: chat.id);
+      await chats.leaveChat(api, chatId: chat.id);
     }
   }
 
@@ -211,7 +215,10 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     final profile = await AppDatabase.loadActiveProfile();
     if (!mounted) return;
     if (profile == null) {
-      showCustomNotification(context, 'Нет активного профиля');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.cloudStorageNoActiveProfile,
+      );
       return;
     }
     setState(() => _isCreatingEnv = true);
@@ -219,7 +226,10 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     if (!mounted) return;
     if (result == null) {
       setState(() => _isCreatingEnv = false);
-      showCustomNotification(context, 'Не удалось создать среду');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.cloudStorageSetupFailed,
+      );
       return;
     }
     await CloudStorageModule.cacheEnvGroupId(profile.id, result.id);
@@ -306,6 +316,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -317,7 +328,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           onPressed: _onBack,
         ),
         title: ConnectionTitleText(
-          'Облачное хранилище',
+          l10n.cloudStorageTitle,
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),
       ),
@@ -330,6 +341,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   }
 
   Widget _buildNotConfigured(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
@@ -337,7 +349,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Среда для облачного хранилища не настроена',
+              l10n.cloudStorageNotConfiguredTitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: cs.onSurface,
@@ -347,7 +359,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              'Начнем? Это быстро.',
+              l10n.cloudStorageNotConfiguredSubtitle,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
             ),
             const SizedBox(height: 24),
@@ -371,9 +383,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                         color: cs.onPrimary,
                       ),
                     )
-                  : const Text(
-                      'Начать',
-                      style: TextStyle(
+                  : Text(
+                      l10n.cloudStorageStart,
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -432,6 +444,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     double t,
     double availableWidth,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final cardSide = availableWidth * _cardViewportFraction;
     return Center(
       child: Opacity(
@@ -498,7 +511,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Загрузка ${(progress * 100).toStringAsFixed(0)}%',
+                        l10n.cloudStorageUploadingPercent(
+                          (progress * 100).toStringAsFixed(0),
+                        ),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 13,
@@ -509,7 +524,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                 ),
               ] else if (_files.isEmpty) ...[
                 Text(
-                  'Начните загрузку для прогресс-бара',
+                  l10n.cloudStorageStartUploadHint,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
@@ -522,6 +537,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   }
 
   Widget _buildEmptyState(ColorScheme cs, double t, double availableHeight) {
+    final l10n = AppLocalizations.of(context)!;
     return Transform.translate(
       offset: Offset(0, -t * availableHeight * _translateFactor),
       child: Padding(
@@ -530,7 +546,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Облачных файлов пока нет...',
+              l10n.cloudStorageEmptyTitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: cs.onSurface,
@@ -540,7 +556,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              'Добавите?',
+              l10n.cloudStorageEmptySubtitle,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
             ),
             const SizedBox(height: 24),
@@ -557,9 +573,12 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: const Text(
-                'Загрузить',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              child: Text(
+                l10n.cloudStorageUpload,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -569,6 +588,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   }
 
   List<Widget> _buildCornerActions(ColorScheme cs, double t) {
+    final l10n = AppLocalizations.of(context)!;
     final slide = (1 - t) * _cornerSlideAmount;
     return [
       Positioned(
@@ -578,7 +598,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           opacity: t,
           child: _CornerAction(
             icon: Symbols.upload_file,
-            label: 'С файла',
+            label: l10n.cloudStorageFromFile,
             onTap: _pickAndUploadFile,
           ),
         ),
@@ -590,7 +610,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           opacity: t,
           child: _CornerAction(
             icon: Symbols.tag,
-            label: 'По ID',
+            label: l10n.cloudStorageById,
             onTap: _showSendByIdSheet,
           ),
         ),
@@ -969,6 +989,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final f = widget.file;
     final isExpired =
         _link == null ||
@@ -1000,9 +1021,15 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          _InfoRow(label: 'ID файла', value: f.fileId?.toString() ?? '—'),
+          _InfoRow(
+            label: l10n.cloudStorageFileIdLabel,
+            value: f.fileId?.toString() ?? '—',
+          ),
           const SizedBox(height: 6),
-          _InfoRow(label: 'Размер', value: _formatSize(f.size)),
+          _InfoRow(
+            label: l10n.cloudStorageSizeLabel,
+            value: _formatSize(f.size),
+          ),
           const SizedBox(height: 20),
           Container(height: 0.5, color: cs.outlineVariant),
           const SizedBox(height: 16),
@@ -1011,11 +1038,13 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
               Expanded(
                 child: isExpired
                     ? Text(
-                        'Ссылки пока нет. Создайте.',
+                        l10n.cloudStorageNoLinkYet,
                         style: TextStyle(color: cs.error, fontSize: 13),
                       )
                     : Text(
-                        'Ссылка истечет ${_formatExpiry(_link!.expires)}',
+                        l10n.cloudStorageLinkExpiresIn(
+                          _formatExpiry(_link!.expires),
+                        ),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 13,
@@ -1048,7 +1077,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
                               );
                               showCustomNotification(
                                 context,
-                                'Ссылка скопирована',
+                                l10n.cloudStorageLinkCopied,
                               );
                             },
                     ),
@@ -1111,7 +1140,10 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
   Future<void> _submit() async {
     final id = int.tryParse(_controller.text.trim());
     if (id == null) {
-      showCustomNotification(context, 'Неверный ID');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.cloudStorageInvalidId,
+      );
       return;
     }
     setState(() => _sending = true);
@@ -1121,13 +1153,17 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
       Navigator.pop(context);
     } else {
       setState(() => _sending = false);
-      showCustomNotification(context, 'Ошибка отправки');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.cloudStorageSendError,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
@@ -1146,7 +1182,7 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
           const Center(child: SheetGrabber(margin: EdgeInsets.zero)),
           const SizedBox(height: 20),
           Text(
-            'Отправить по ID',
+            l10n.cloudStorageSendByIdTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 16,
@@ -1193,9 +1229,9 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
                       color: cs.onPrimary,
                     ),
                   )
-                : const Text(
-                    'Отправить',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                : Text(
+                    l10n.cloudStorageSend,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
           ),
         ],

@@ -1,4 +1,3 @@
-/// Shared formatting helpers (dates, durations, sizes, phone, gender).
 library;
 
 const List<String> kRuMonthsShort = [
@@ -16,9 +15,33 @@ const List<String> kRuMonthsShort = [
   'дек',
 ];
 
-String _two(int n) => n.toString().padLeft(2, '0');
+String pad2(int n) => n.toString().padLeft(2, '0');
 
-/// "512 Б" / "1.5 КБ" / "3.2 МБ" / "1.1 ГБ" — Cyrillic units, 1 decimal.
+String pluralRu(int n, String one, String few, String many) {
+  final mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  switch (n % 10) {
+    case 1:
+      return one;
+    case 2:
+    case 3:
+    case 4:
+      return few;
+    default:
+      return many;
+  }
+}
+
+String formatVoiceElapsed(int ms) {
+  final totalSec = ms ~/ 1000;
+  final m = totalSec ~/ 60;
+  final s = pad2(totalSec % 60);
+  final ds = (ms % 1000) ~/ 100;
+  return '$m:$s,$ds';
+}
+
+final RegExp _phoneNonDigits = RegExp(r'[^0-9]');
+
 String formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes Б';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
@@ -28,38 +51,42 @@ String formatBytes(int bytes) {
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} ГБ';
 }
 
-/// "m:ss" (e.g. "3:07"); with [padMinutes] the minutes are zero-padded ("03:07").
 String formatDurationMmSs(Duration d, {bool padMinutes = false}) {
   final m = d.inMinutes;
-  return '${padMinutes ? _two(m) : m}:${_two(d.inSeconds % 60)}';
+  return '${padMinutes ? pad2(m) : m}:${pad2(d.inSeconds % 60)}';
 }
 
-/// "m:ss" from a raw seconds count.
 String formatSecondsMmSs(int seconds, {bool padMinutes = false}) =>
     formatDurationMmSs(Duration(seconds: seconds), padMinutes: padMinutes);
 
-/// "HH:mm" or "HH:mm:ss" when [withSeconds] is set.
-String formatClock(DateTime dt, {bool withSeconds = false}) => withSeconds
-    ? '${_two(dt.hour)}:${_two(dt.minute)}:${_two(dt.second)}'
-    : '${_two(dt.hour)}:${_two(dt.minute)}';
+String formatDurationClock(Duration d) {
+  final s = d.inSeconds;
+  final sec = pad2(s % 60);
+  final m = s ~/ 60;
+  if (m >= 60) return '${m ~/ 60}:${pad2(m % 60)}:$sec';
+  return '$m:$sec';
+}
 
-/// "5 мая 2024".
+String formatFileStamp(DateTime t) =>
+    '${t.year}${pad2(t.month)}${pad2(t.day)}_'
+    '${pad2(t.hour)}${pad2(t.minute)}${pad2(t.second)}';
+
+String formatClock(DateTime dt, {bool withSeconds = false}) => withSeconds
+    ? '${pad2(dt.hour)}:${pad2(dt.minute)}:${pad2(dt.second)}'
+    : '${pad2(dt.hour)}:${pad2(dt.minute)}';
+
 String formatDateWords(DateTime dt) =>
     '${dt.day} ${kRuMonthsShort[dt.month - 1]} ${dt.year}';
 
-/// "05.04.2024".
 String formatDateNumeric(DateTime dt) =>
-    '${_two(dt.day)}.${_two(dt.month)}.${dt.year}';
+    '${pad2(dt.day)}.${pad2(dt.month)}.${dt.year}';
 
-/// "05.04.2024 14:30".
 String formatDateTimeNumeric(DateTime dt) =>
     '${formatDateNumeric(dt)} ${formatClock(dt)}';
 
-/// "5 мая 2024, 14:30".
 String formatDateTimeWords(DateTime dt) =>
     '${formatDateWords(dt)}, ${formatClock(dt)}';
 
-/// "Был(-а) только что / N мин назад / N ч назад / N дн назад / 5 мая 2024".
 String formatLastSeen(int secondsSinceEpoch) {
   final dt = DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000);
   final diff = DateTime.now().difference(dt);
@@ -70,14 +97,12 @@ String formatLastSeen(int secondsSinceEpoch) {
   return 'Был(-а) ${formatDateWords(dt)}';
 }
 
-/// "+7 (912) 345-67-89" for RU numbers, "+digits" otherwise.
-/// Accepts an int phone or a string; returns null if there is no usable number.
 String? formatPhone(dynamic raw) {
   String? digits;
   if (raw is int && raw > 0) {
     digits = raw.toString();
   } else if (raw is String && raw.isNotEmpty && raw != '***') {
-    digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    digits = raw.replaceAll(_phoneNonDigits, '');
     if (digits.isEmpty) return null;
   }
   if (digits == null) return null;
@@ -88,7 +113,6 @@ String? formatPhone(dynamic raw) {
   return '+$digits';
 }
 
-/// 1 → "Мужской", 2 → "Женский", anything else → null.
 String? formatGender(dynamic raw) {
   if (raw is! int) return null;
   if (raw == 1) return 'Мужской';

@@ -7,6 +7,8 @@ import '../../../main.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/utils/debouncer.dart';
+import '../../../core/utils/names.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/swipe_route.dart';
 import '../contacts/contact_profile_screen.dart';
@@ -22,7 +24,7 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
-  Timer? _debounce;
+  final _debounce = Debouncer(const Duration(milliseconds: 300));
   int _seq = 0;
   int? _accountId;
 
@@ -47,15 +49,15 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
+    _debounce.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
   void _onChanged(String value) {
-    _debounce?.cancel();
     if (value.trim().isEmpty) {
+      _debounce.cancel();
       _seq++;
       setState(() {
         _loading = false;
@@ -71,7 +73,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_phoneResult != null) {
       setState(() => _phoneResult = null);
     }
-    _debounce = Timer(const Duration(milliseconds: 300), _runSearch);
+    _debounce.run(_runSearch);
   }
 
   Future<void> _runSearch() async {
@@ -89,8 +91,8 @@ class _SearchScreenState extends State<SearchScreen> {
       accountId == null
           ? Future.value(const <Map<String, dynamic>>[])
           : AppDatabase.searchChatsByTitle(accountId, query),
-      ChatsModule.searchMessages(api, query),
-      ChatsModule.searchPublic(api, query),
+      chats.searchMessages(api, query),
+      chats.searchPublic(api, query),
       phoneQuery == null
           ? Future<PhoneLookupResult?>.value(null)
           : ContactsModule.findByPhone(api, phoneQuery),
@@ -98,9 +100,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (!mounted || token != _seq) return;
 
-    final chats = results[1] as List<Map<String, dynamic>>;
+    final localChats = results[1] as List<Map<String, dynamic>>;
     final messages = results[2] as List<MessageSearchHit>;
-    final localChatIds = chats.map((c) => c['id'] as int).toSet();
+    final localChatIds = localChats.map((c) => c['id'] as int).toSet();
     final public = (results[3] as List<ChatSearchHit>)
         .where((c) => !localChatIds.contains(c.id))
         .toList();
@@ -116,7 +118,7 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() {
       _phoneResult = results[4] as PhoneLookupResult?;
       _contacts = results[0] as List<Map<String, dynamic>>;
-      _chats = chats;
+      _chats = localChats;
       _messages = messages;
       _msgChatMeta = meta;
       _public = public;
@@ -125,10 +127,11 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   String _contactName(Map<String, dynamic> row) {
-    final first = (row['first_name'] as String?)?.trim() ?? '';
-    final last = (row['last_name'] as String?)?.trim() ?? '';
-    final name = '$first $last'.trim();
-    return name.isEmpty ? '+${row['phone']}' : name;
+    return displayName(
+      row['first_name'],
+      row['last_name'],
+      fallback: '+${row['phone']}',
+    );
   }
 
   void _openChat(int chatId, String name, String? avatarUrl, String type) {
@@ -178,7 +181,8 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final query = _controller.text.trim();
-    final hasResults = _phoneResult != null ||
+    final hasResults =
+        _phoneResult != null ||
         _contacts.isNotEmpty ||
         _chats.isNotEmpty ||
         _messages.isNotEmpty ||
@@ -238,8 +242,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        if (_loading)
-          const LinearProgressIndicator(minHeight: 2),
+        if (_loading) const LinearProgressIndicator(minHeight: 2),
         if (phoneResult != null) ...[
           _sectionHeader(cs, 'По номеру'),
           _ResultTile(
@@ -287,11 +290,11 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _chatTile(ChatSearchHit hit) => _ResultTile(
-        name: hit.title ?? '',
-        imageUrl: hit.avatarUrl,
-        subtitle: hit.subtitle,
-        onTap: () => _openChat(hit.id, hit.title ?? '', hit.avatarUrl, hit.type),
-      );
+    name: hit.title ?? '',
+    imageUrl: hit.avatarUrl,
+    subtitle: hit.subtitle,
+    onTap: () => _openChat(hit.id, hit.title ?? '', hit.avatarUrl, hit.type),
+  );
 
   Widget _messageTile(MessageSearchHit hit) {
     final meta = _msgChatMeta[hit.chatId];
@@ -307,27 +310,27 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _sectionHeader(ColorScheme cs, String title) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
-        child: Text(
-          title,
-          style: TextStyle(
-            color: cs.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+    child: Text(
+      title,
+      style: TextStyle(
+        color: cs.primary,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 
   Widget _buildHint(ColorScheme cs, IconData icon, String text) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: cs.outline),
-            const SizedBox(height: 12),
-            Text(text, style: TextStyle(color: cs.outline, fontSize: 15)),
-          ],
-        ),
-      );
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 48, color: cs.outline),
+        const SizedBox(height: 12),
+        Text(text, style: TextStyle(color: cs.outline, fontSize: 15)),
+      ],
+    ),
+  );
 }
 
 class _ResultTile extends StatelessWidget {

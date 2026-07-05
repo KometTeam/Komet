@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/utils/haptics.dart';
+import 'animated_overlay_popup.dart';
 
 class ChatMenuItem {
   final IconData icon;
@@ -57,74 +58,59 @@ class _ChatMenuLayer extends StatefulWidget {
 }
 
 class _ChatMenuLayerState extends State<_ChatMenuLayer>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AnimatedOverlayPopup<_ChatMenuLayer> {
   static const double _menuWidth = 290.0;
   static const double _hMargin = 8.0;
+  static const double _vMargin = 8.0;
   static const double _gap = 6.0;
 
-  late final AnimationController _animController;
-  late final Animation<double> _animation;
-  bool _closing = false;
+  @override
+  Duration get overlayForwardDuration => const Duration(milliseconds: 220);
 
   @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-      reverseDuration: const Duration(milliseconds: 160),
-    );
-    _animation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    _animController.forward();
-  }
+  Duration get overlayReverseDuration => const Duration(milliseconds: 160);
 
   @override
-  void dispose() {
-    _animController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _close() async {
-    if (!mounted || _closing) return;
-    _closing = true;
-    try {
-      await _animController.reverse();
-    } catch (_) {}
-    if (!mounted) return;
-    widget.onDismiss();
-  }
+  VoidCallback get onOverlayDismiss => widget.onDismiss;
 
   void _onItemTap(ChatMenuItem item) {
     Haptics.tap();
-    _close().then((_) => item.onTap?.call());
+    closeOverlay().then((_) => item.onTap?.call());
   }
 
   Rect _resolveRect(Size screen) {
-    double left = widget.anchorRect.right - _menuWidth;
-    left = left.clamp(_hMargin, screen.width - _menuWidth - _hMargin);
-    double top = widget.anchorRect.bottom + _gap;
-    return Rect.fromLTWH(left, top, _menuWidth, 0);
+    final maxWidth = screen.width - 2 * _hMargin;
+    final width = maxWidth <= 0
+        ? screen.width
+        : (_menuWidth.clamp(0.0, maxWidth));
+    final maxLeft = screen.width - width - _hMargin;
+    double left = widget.anchorRect.right - width;
+    if (left > maxLeft) left = maxLeft;
+    if (left < _hMargin) left = _hMargin;
+    final top = widget.anchorRect.bottom + _gap;
+    return Rect.fromLTWH(left, top, width, 0);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final screen = MediaQuery.sizeOf(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     final rect = _resolveRect(screen);
+    final maxHeight = (screen.height - rect.top - bottomInset - _vMargin).clamp(
+      120.0,
+      double.infinity,
+    );
     return AnimatedBuilder(
-      animation: _animation,
+      animation: overlayAnimation,
       builder: (ctx, child) {
-        final t = _animation.value.clamp(0.0, 1.0);
+        final t = overlayAnimation.value.clamp(0.0, 1.0);
         final scale = 0.9 + 0.1 * t;
         return Stack(
           children: [
             Positioned.fill(
               child: GestureDetector(
-                onTap: _close,
+                onTap: closeOverlay,
                 behavior: HitTestBehavior.opaque,
                 child: const SizedBox.expand(),
               ),
@@ -151,21 +137,26 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
         clipBehavior: Clip.antiAlias,
         elevation: 12,
         shadowColor: Colors.black.withValues(alpha: 0.45),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 6),
-            for (final item in widget.items) ...[
-              _ChatMenuRow(item: item, onTap: () => _onItemTap(item)),
-              if (item.dividerAfter)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: cs.onSurface.withValues(alpha: 0.07),
-                ),
-            ],
-            const SizedBox(height: 6),
-          ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 6),
+                for (final item in widget.items) ...[
+                  _ChatMenuRow(item: item, onTap: () => _onItemTap(item)),
+                  if (item.dividerAfter)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: cs.onSurface.withValues(alpha: 0.07),
+                    ),
+                ],
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
         ),
       ),
     );

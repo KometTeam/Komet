@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import '../../backend/modules/messages.dart';
 
 class CachedChatMessages {
@@ -8,12 +10,20 @@ class CachedChatMessages {
 }
 
 class MessageSessionCache {
-  static final Map<String, CachedChatMessages> _store = {};
+  static const int _capacity = 24;
+
+  static final LinkedHashMap<String, CachedChatMessages> _store =
+      LinkedHashMap<String, CachedChatMessages>();
 
   static String _key(int accountId, int chatId) => '$accountId:$chatId';
 
-  static CachedChatMessages? get(int accountId, int chatId) =>
-      _store[_key(accountId, chatId)];
+  static CachedChatMessages? get(int accountId, int chatId) {
+    final key = _key(accountId, chatId);
+    final entry = _store.remove(key);
+    if (entry == null) return null;
+    _store[key] = entry;
+    return entry;
+  }
 
   static void save(
     int accountId,
@@ -22,10 +32,15 @@ class MessageSessionCache {
     required bool reachedStart,
   }) {
     if (messages.isEmpty) return;
-    _store[_key(accountId, chatId)] = CachedChatMessages(
+    final key = _key(accountId, chatId);
+    _store.remove(key);
+    _store[key] = CachedChatMessages(
       List<CachedMessage>.of(messages),
       reachedStart,
     );
+    while (_store.length > _capacity) {
+      _store.remove(_store.keys.first);
+    }
   }
 
   static void remove(int accountId, int chatId) =>

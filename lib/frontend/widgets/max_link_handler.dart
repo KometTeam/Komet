@@ -10,6 +10,7 @@ import '../screens/contacts/contact_profile_screen.dart';
 import 'call_link_handler.dart';
 import 'confirm_dialog.dart';
 import 'custom_notification.dart';
+import 'sticker_pack_sheet.dart';
 import 'swipe_route.dart';
 import 'web_qr_login.dart';
 
@@ -24,6 +25,10 @@ Future<bool> tryHandleMaxLink(BuildContext context, String url) async {
   if (link.kind == MaxLinkKind.auth) {
     await confirmAndAuthorizeWebQrLogin(context, link.url);
     return true;
+  }
+
+  if (link.kind == MaxLinkKind.stickerSet) {
+    return _openStickerSet(context, link.url);
   }
 
   final resolved = await LinkModule.resolve(api, link.url);
@@ -42,6 +47,26 @@ Future<bool> tryHandleMaxLink(BuildContext context, String url) async {
       await _openResolvedChat(context, link, resolved);
       return true;
   }
+}
+
+Future<bool> _openStickerSet(BuildContext context, String url) async {
+  final path = url
+      .replaceFirst(
+        RegExp(r'^https?://(?:www\.)?max\.ru/', caseSensitive: false),
+        '',
+      )
+      .split('?')
+      .first
+      .split('#')
+      .first;
+  final set = await stickersModule.resolveSetByLink(path);
+  if (!context.mounted) return true;
+  if (set == null) {
+    showCustomNotification(context, 'Стикерпак недоступен');
+    return true;
+  }
+  await showStickerPackSheet(context, knownSetId: set.id);
+  return true;
 }
 
 void _openContact(BuildContext context, Map<dynamic, dynamic> contact) {
@@ -81,11 +106,12 @@ Future<void> _openResolvedChat(
   final profile = await AppDatabase.loadActiveProfile();
   final myId = profile?.id ?? 0;
   final participants = chat['participants'];
-  final isMember = myId != 0 &&
+  final isMember =
+      myId != 0 &&
       participants is Map &&
       participants.containsKey(myId.toString());
 
-  await ChatsModule.cacheServerChat(chat, myId, inList: isMember);
+  await chats.cacheServerChat(chat, myId, inList: isMember);
   if (!context.mounted) return;
 
   if (link.kind == MaxLinkKind.invite && access == 'PRIVATE' && !isMember) {
@@ -108,12 +134,7 @@ Future<void> _openResolvedChat(
 
   pushSwipeable(
     context,
-    (_) => ChatScreen(
-      chatId: id,
-      name: title,
-      imageUrl: icon,
-      chatType: type,
-    ),
+    (_) => ChatScreen(chatId: id, name: title, imageUrl: icon, chatType: type),
   );
 }
 

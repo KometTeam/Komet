@@ -24,8 +24,10 @@ class RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
   @override
   void handleEvent(PointerEvent event) {
     if (event is PointerMoveEvent) {
-      _velocityTrackers[event.pointer]
-          ?.addPosition(event.timeStamp, event.localPosition);
+      _velocityTrackers[event.pointer]?.addPosition(
+        event.timeStamp,
+        event.localPosition,
+      );
       final initial = _initialPositions[event.pointer];
       if (initial != null) {
         final dx = event.position.dx - initial.dx;
@@ -46,7 +48,9 @@ class RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
     double? deviceTouchSlop,
   ) {
     if (!super.hasSufficientGlobalDistanceToAccept(
-        pointerDeviceKind, deviceTouchSlop)) {
+      pointerDeviceKind,
+      deviceTouchSlop,
+    )) {
       return false;
     }
     double maxDx = 0;

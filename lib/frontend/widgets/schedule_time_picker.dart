@@ -3,18 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/utils/format.dart';
 import 'custom_notification.dart';
+import 'sheet_helpers.dart';
 
-const List<String> _weekdayShort = [
-  'пн',
-  'вт',
-  'ср',
-  'чт',
-  'пт',
-  'сб',
-  'вс',
-];
-
-String _two(int n) => n.toString().padLeft(2, '0');
+const List<String> _weekdayShort = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 
 /// Барабан выбора времени отправки («Отправить позже»): три колонки —
 /// день, час, минута. Возвращает выбранный момент в будущем или null.
@@ -26,9 +17,7 @@ Future<DateTime?> showScheduleTimePicker(
   return showModalBottomSheet<DateTime>(
     context: context,
     backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+    shape: kSheetShape,
     builder: (_) => _ScheduleSheet(initial: initial, title: title),
   );
 }
@@ -165,14 +154,14 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                     controller: _hourCtrl,
                     count: 24,
                     onChanged: (i) => _hour = i,
-                    label: _two,
+                    label: pad2,
                   ),
                   _wheel(
                     cs: cs,
                     controller: _minuteCtrl,
                     count: 60,
                     onChanged: (i) => _minute = i,
-                    label: _two,
+                    label: pad2,
                   ),
                 ],
               ),

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../utils/logger.dart';
+import '../utils/parse.dart';
 import 'call_info.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
@@ -50,11 +51,7 @@ class CallSession {
   final ConversationParams? params;
   final CallRole role;
 
-  CallSession({
-    required this.ws2Config,
-    required this.role,
-    this.params,
-  });
+  CallSession({required this.ws2Config, required this.role, this.params});
 
   Ws2Signaling? _signaling;
   RTCPeerConnection? _pc;
@@ -151,8 +148,9 @@ class CallSession {
 
   CallSessionState get currentState => _current;
 
-  int get elapsedSeconds =>
-      _activeSince == null ? 0 : DateTime.now().difference(_activeSince!).inSeconds;
+  int get elapsedSeconds => _activeSince == null
+      ? 0
+      : DateTime.now().difference(_activeSince!).inSeconds;
 
   void _setState(CallSessionState s) {
     if (_current == s || _current == CallSessionState.ended) return;
@@ -174,7 +172,9 @@ class CallSession {
     signaling.done.then((_) => _end());
     await signaling.connect();
     _levelTimer = Timer.periodic(
-        const Duration(milliseconds: 300), (_) => unawaited(_sampleLevels()));
+      const Duration(milliseconds: 300),
+      (_) => unawaited(_sampleLevels()),
+    );
   }
 
   Future<void> _sampleLevels() async {
@@ -341,7 +341,8 @@ class CallSession {
   }
 
   void _onHungup(Map<String, dynamic> msg) {
-    final raw = msg['participantId'] ??
+    final raw =
+        msg['participantId'] ??
         (msg['participant'] is Map ? (msg['participant'] as Map)['id'] : null);
     if (raw is! int) return;
     if (raw == ws2Config.userId) {
@@ -353,7 +354,8 @@ class CallSession {
 
   void _onSessionState(Map<String, dynamic> msg) {
     logger.t(
-        '[call][sfu] session-state id=${msg['participantId']} connected=${msg['connected']}');
+      '[call][sfu] session-state id=${msg['participantId']} connected=${msg['connected']}',
+    );
   }
 
   void _resolveParticipants(Object? conversation) {
@@ -413,10 +415,7 @@ class CallSession {
 
   int? _externalId(Object? ext) {
     if (ext is! Map) return null;
-    final v = ext['id'];
-    if (v is int) return v;
-    if (v is String) return int.tryParse(v);
-    return null;
+    return parseIntOrNull(ext['id']);
   }
 
   bool? _handFrom(Object? participantState) {
@@ -496,7 +495,7 @@ class CallSession {
 
     _topology =
         (conversation is Map ? conversation['topology']?.toString() : null) ??
-            _topology;
+        _topology;
     logger.t('[call] connection role=$role peer=$_peerId topology=$_topology');
 
     if (_topology == 'SERVER') {
@@ -514,6 +513,8 @@ class CallSession {
     );
 
     await _setupKometProbe(pc);
+
+    if (_isDesktop) await _preferVp8Codecs(pc);
 
     if (role == CallRole.caller) {
       _setState(CallSessionState.ringing);
@@ -597,7 +598,9 @@ class CallSession {
     if (frame != null && frame['t'] == 'chat') {
       final body = frame['text'];
       if (body is String && body.isNotEmpty) {
-        _addChat(CallChatMessage(text: body, mine: false, time: DateTime.now()));
+        _addChat(
+          CallChatMessage(text: body, mine: false, time: DateTime.now()),
+        );
       }
       return;
     }
@@ -634,7 +637,9 @@ class CallSession {
     final channel = _probeChannel;
     if (body.isEmpty || channel == null) return;
     try {
-      channel.send(RTCDataChannelMessage(jsonEncode({'t': 'chat', 'text': body})));
+      channel.send(
+        RTCDataChannelMessage(jsonEncode({'t': 'chat', 'text': body})),
+      );
     } catch (_) {
       return;
     }
@@ -731,8 +736,10 @@ class CallSession {
     final local = await pc.getLocalDescription();
     final answerSdp = local?.sdp ?? answer.sdp ?? '';
     final ssrcs = _extractSsrcs(answerSdp);
-    logger.t('[call][sfu] answer: ${_mLines(answerSdp)} m-lines, '
-        'ssrcs=${ssrcs.length}');
+    logger.t(
+      '[call][sfu] answer: ${_mLines(answerSdp)} m-lines, '
+      'ssrcs=${ssrcs.length}',
+    );
 
     await _signaling?.acceptProducer(
       description: answerSdp,
@@ -749,13 +756,20 @@ class CallSession {
       await _signaling?.changeSimulcast(
         mediaSource: 'CAMERA',
         layers: const [
-          {'rid': 'h', 'width': 1280, 'height': 720, 'fps': 30, 'bitrateKbps': 2000},
+          {
+            'rid': 'h',
+            'width': 1280,
+            'height': 720,
+            'fps': 30,
+            'bitrateKbps': 2000,
+          },
         ],
       );
     } catch (_) {}
   }
 
-  int _mLines(String sdp) => RegExp(r'^m=', multiLine: true).allMatches(sdp).length;
+  int _mLines(String sdp) =>
+      RegExp(r'^m=', multiLine: true).allMatches(sdp).length;
 
   List<int> _extractSsrcs(String sdp) {
     final set = <int>{};
@@ -766,8 +780,7 @@ class CallSession {
     return set.toList();
   }
 
-  Future<void> _waitIceGathering(
-      RTCPeerConnection pc, Duration timeout) async {
+  Future<void> _waitIceGathering(RTCPeerConnection pc, Duration timeout) async {
     if (pc.iceGatheringState ==
         RTCIceGatheringState.RTCIceGatheringStateComplete) {
       return;
@@ -809,7 +822,8 @@ class CallSession {
 
   Future<void> _onRemoteTrack(RTCTrackEvent event) async {
     logger.t(
-        '[call] remote track: ${event.track.kind} streams=${event.streams.length}');
+      '[call] remote track: ${event.track.kind} streams=${event.streams.length}',
+    );
     if (event.streams.isNotEmpty) {
       _remoteStreamRef = event.streams.first;
       _remoteStream.add(event.streams.first);
@@ -853,8 +867,7 @@ class CallSession {
     if (pc == null || peerId == null) return;
 
     final offer = await pc.createOffer({});
-    final raw = offer.sdp ?? '';
-    final sdp = _isDesktop ? _forceVp8(raw) : raw;
+    final sdp = offer.sdp ?? '';
     await pc.setLocalDescription(RTCSessionDescription(sdp, offer.type));
     logger.t('[call] our offer video: ${_videoDir(sdp)}');
     await _signaling?.transmitSdp(
@@ -871,59 +884,25 @@ class CallSession {
       defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.macOS;
 
-  String _forceVp8(String sdp) {
-    final lines = sdp.split('\r\n');
-    var mIdx = -1;
-    for (var i = 0; i < lines.length; i++) {
-      if (lines[i].startsWith('m=video')) {
-        mIdx = i;
-        break;
+  Future<void> _preferVp8Codecs(RTCPeerConnection pc) async {
+    try {
+      final caps = await getRtpSenderCapabilities('video');
+      final all = caps.codecs ?? const <RTCRtpCodecCapability>[];
+      final hasVp8 = all.any((c) => c.mimeType.toLowerCase() == 'video/vp8');
+      if (!hasVp8) return;
+      final preferred = all.where((c) {
+        final m = c.mimeType.toLowerCase();
+        return m == 'video/vp8' || m == 'video/rtx';
+      }).toList();
+      if (preferred.isEmpty) return;
+      for (final t in await pc.getTransceivers()) {
+        try {
+          await t.setCodecPreferences(preferred);
+        } catch (_) {}
       }
+    } catch (e) {
+      logger.t('[call] setCodecPreferences недоступен: $e');
     }
-    if (mIdx == -1) return sdp;
-
-    String? vp8;
-    for (final l in lines) {
-      final m = RegExp(r'^a=rtpmap:(\d+) VP8/90000').firstMatch(l);
-      if (m != null) {
-        vp8 = m.group(1);
-        break;
-      }
-    }
-    if (vp8 == null) return sdp;
-
-    String? rtx;
-    for (final l in lines) {
-      final m = RegExp('^a=fmtp:(\\d+) apt=$vp8\$').firstMatch(l);
-      if (m != null) {
-        rtx = m.group(1);
-        break;
-      }
-    }
-
-    final keep = {vp8, ?rtx};
-    final parts = lines[mIdx].split(' ');
-    if (parts.length <= 3) return sdp;
-    lines[mIdx] = [...parts.sublist(0, 3), ...keep].join(' ');
-
-    var end = lines.length;
-    for (var i = mIdx + 1; i < lines.length; i++) {
-      if (lines[i].startsWith('m=')) {
-        end = i;
-        break;
-      }
-    }
-
-    final ptLine = RegExp(r'^a=(?:rtpmap|fmtp|rtcp-fb):(\d+)');
-    final result = <String>[];
-    for (var i = 0; i < lines.length; i++) {
-      if (i > mIdx && i < end) {
-        final m = ptLine.firstMatch(lines[i]);
-        if (m != null && !keep.contains(m.group(1))) continue;
-      }
-      result.add(lines[i]);
-    }
-    return result.join('\r\n');
   }
 
   Future<void> _onTransmittedData(Map<String, dynamic> msg) async {
@@ -1038,7 +1017,8 @@ class CallSession {
 
   Future<void> _applyMuted(bool muted, {bool announce = false}) async {
     _muted = muted;
-    for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = !muted;
     }
     _notifyInfo();
@@ -1066,10 +1046,14 @@ class CallSession {
     MediaStream stream;
     try {
       stream = screen
-          ? await navigator.mediaDevices
-              .getDisplayMedia(<String, dynamic>{'video': true, 'audio': false})
-          : await navigator.mediaDevices
-              .getUserMedia(<String, dynamic>{'video': true, 'audio': false});
+          ? await navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
+              'video': true,
+              'audio': false,
+            })
+          : await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+              'video': true,
+              'audio': false,
+            });
     } catch (e) {
       logger.t('[call] video capture failed: $e');
       return;
@@ -1301,7 +1285,9 @@ class CallSession {
           _peerType = responderTypes.first.toString();
         }
         final deviceIdxs = p['responderDeviceIdxs'];
-        if (deviceIdxs is List && deviceIdxs.isNotEmpty && deviceIdxs.first is int) {
+        if (deviceIdxs is List &&
+            deviceIdxs.isNotEmpty &&
+            deviceIdxs.first is int) {
           _peerDeviceIdx = deviceIdxs.first as int;
         }
         break;

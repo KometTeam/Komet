@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../storage/token_storage.dart';
+
 enum ProxyType { none, socks5, httpConnect }
 
 class ProxySettings {
@@ -38,8 +40,22 @@ abstract class ProxyConfig {
     final typeIndex = prefs.getInt(_prefType) ?? 0;
     final host = prefs.getString(_prefHost) ?? '';
     final port = prefs.getInt(_prefPort) ?? 1080;
-    final username = prefs.getString(_prefUsername);
-    final password = prefs.getString(_prefPassword);
+    var username = await TokenStorage.readSecure(_prefUsername);
+    var password = await TokenStorage.readSecure(_prefPassword);
+    final legacyUsername = prefs.getString(_prefUsername);
+    final legacyPassword = prefs.getString(_prefPassword);
+    if (username == null && legacyUsername != null) {
+      username = legacyUsername;
+      await TokenStorage.writeSecure(_prefUsername, legacyUsername);
+    }
+    if (password == null && legacyPassword != null) {
+      password = legacyPassword;
+      await TokenStorage.writeSecure(_prefPassword, legacyPassword);
+    }
+    if (legacyUsername != null || legacyPassword != null) {
+      await prefs.remove(_prefUsername);
+      await prefs.remove(_prefPassword);
+    }
     return ProxySettings(
       type: ProxyType.values[typeIndex.clamp(0, ProxyType.values.length - 1)],
       host: host,
@@ -54,15 +70,17 @@ abstract class ProxyConfig {
     await prefs.setInt(_prefType, settings.type.index);
     await prefs.setString(_prefHost, settings.host);
     await prefs.setInt(_prefPort, settings.port);
+    await prefs.remove(_prefUsername);
+    await prefs.remove(_prefPassword);
     if (settings.username != null) {
-      await prefs.setString(_prefUsername, settings.username!);
+      await TokenStorage.writeSecure(_prefUsername, settings.username!);
     } else {
-      await prefs.remove(_prefUsername);
+      await TokenStorage.deleteSecure(_prefUsername);
     }
     if (settings.password != null) {
-      await prefs.setString(_prefPassword, settings.password!);
+      await TokenStorage.writeSecure(_prefPassword, settings.password!);
     } else {
-      await prefs.remove(_prefPassword);
+      await TokenStorage.deleteSecure(_prefPassword);
     }
   }
 
@@ -73,5 +91,7 @@ abstract class ProxyConfig {
     await prefs.remove(_prefPort);
     await prefs.remove(_prefUsername);
     await prefs.remove(_prefPassword);
+    await TokenStorage.deleteSecure(_prefUsername);
+    await TokenStorage.deleteSecure(_prefPassword);
   }
 }

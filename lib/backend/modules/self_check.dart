@@ -26,6 +26,17 @@ class SelfCheckService {
 
   void checkNow() => unawaited(_check());
 
+  void pause() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  void resume() {
+    if (_api == null || _timer != null) return;
+    _timer = Timer.periodic(interval, (_) => unawaited(_check()));
+    checkNow();
+  }
+
   Future<void> _check() async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return;

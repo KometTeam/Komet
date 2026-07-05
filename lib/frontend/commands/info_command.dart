@@ -1,5 +1,6 @@
 import '../../core/cache/info_cache.dart';
 import '../../core/utils/format.dart';
+import '../../models/contact_info.dart';
 import 'slash_command.dart';
 
 Future<void> runInfo(CommandContext ctx) async {
@@ -26,28 +27,17 @@ Future<void> runInfo(CommandContext ctx) async {
   );
 }
 
-String _summary(Map<String, dynamic> c, int targetId) {
-  final flags = (c['options'] as List?)?.whereType<String>().toList() ?? const [];
-  final region = (c['country'] as String?)?.trim();
+String _summary(ContactInfo c, int targetId) {
+  final flags = c.options;
+  final region = (c.raw['country'] as String?)?.trim();
 
-  return 'Никнейм: ${_nick(c)}\n'
-      'Дата регистрации: ${_date(c['registrationTime'])}\n'
-      'Дата последнего изменения профиля: ${_date(c['updateTime'])}\n'
-      'id: ${c['id'] ?? targetId}\n'
+  return 'Никнейм: ${c.displayName ?? '—'}\n'
+      'Дата регистрации: ${_date(c.raw['registrationTime'])}\n'
+      'Дата последнего изменения профиля: ${_date(c.raw['updateTime'])}\n'
+      'id: ${c.id ?? targetId}\n'
       'Регион: ${region == null || region.isEmpty ? '—' : region}\n'
       'Флаги: ${flags.isEmpty ? '—' : flags.join(', ')}\n'
       'ip: not fetched';
-}
-
-String _nick(Map<String, dynamic> c) {
-  final names = c['names'];
-  if (names is List && names.isNotEmpty && names.first is Map) {
-    final n = names.first as Map;
-    final name = (n['name'] as String?) ??
-        '${n['firstName'] ?? ''} ${n['lastName'] ?? ''}'.trim();
-    if (name.isNotEmpty) return name;
-  }
-  return '—';
 }
 
 String _date(dynamic ms) {

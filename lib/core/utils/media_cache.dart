@@ -17,12 +17,15 @@ class MediaCache {
 
   static Directory? _dir;
   static int? _cachedSize;
+  static final Map<String, Future<File?>> _inFlight = {};
 
   static Future<Directory> _cacheDir() async {
     final cached = _dir;
     if (cached != null) return cached;
     final base = await getApplicationSupportDirectory();
-    final dir = Directory(p.join(base.path, 'media_cache${AppInstance.suffix}'));
+    final dir = Directory(
+      p.join(base.path, 'media_cache${AppInstance.suffix}'),
+    );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -63,6 +66,23 @@ class MediaCache {
     final existingFile = await existing(name);
     if (existingFile != null) return existingFile;
 
+    final running = _inFlight[name];
+    if (running != null) return running;
+
+    final future = _download(name, url, onProgress);
+    _inFlight[name] = future;
+    try {
+      return await future;
+    } finally {
+      _inFlight.remove(name);
+    }
+  }
+
+  static Future<File?> _download(
+    String name,
+    String url,
+    void Function(double progress)? onProgress,
+  ) async {
     final file = await fileFor(name);
     final part = File('${file.path}.part');
     final client = HttpClient();
@@ -166,8 +186,9 @@ class MediaCache {
       }
     }
 
-    files.sort((a, b) =>
-        a.statSync().modified.compareTo(b.statSync().modified));
+    files.sort(
+      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+    );
 
     for (final file in files) {
       if (total <= limit) break;

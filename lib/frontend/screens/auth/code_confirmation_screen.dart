@@ -2,20 +2,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
+import 'session_stale_recovery.dart';
+import '../../../backend/api.dart';
+import '../../../core/protocol/packet.dart';
+import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
+  final String rawPhone;
   final String token;
 
   const CodeConfirmationScreen({
     super.key,
     required this.phoneNumber,
+    required this.rawPhone,
     required this.token,
   });
 
@@ -24,9 +29,10 @@ class CodeConfirmationScreen extends StatefulWidget {
 }
 
 class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, SessionStaleRecovery {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final SmsCodeListener _smsListener = SmsCodeListener();
   int _timerSeconds = 30;
   Timer? _timer;
   Timer? _errorTimer;
@@ -39,10 +45,20 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   Animation<double>? _routeAnimation;
   AnimationStatusListener? _routeAnimationListener;
 
+  late String _token;
+  bool _verifying = false;
+
+  @override
+  String get connectionDroppedMessage =>
+      'Соединение прервалось, восстанавливаем…';
+
   @override
   void initState() {
     super.initState();
+    _token = widget.token;
+    startSessionRecovery();
     _startTimer();
+    _listenForSmsCode();
 
     _shakeController = AnimationController(
       vsync: this,
@@ -69,12 +85,57 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     if (_routeAnimationListener != null) {
       _routeAnimation?.removeStatusListener(_routeAnimationListener!);
     }
+    _smsListener.dispose();
+    stopSessionRecovery();
     _timer?.cancel();
     _errorTimer?.cancel();
     _shakeController.dispose();
     _codeController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  Future<void> recoverStaleSession() async {
+    if (recovering) return;
+    setState(() => recovering = true);
+    try {
+      if (api.state != SessionState.online) {
+        final back = await api.stateStream
+            .firstWhere((s) => s == SessionState.online)
+            .timeout(
+              const Duration(seconds: 12),
+              onTimeout: () => SessionState.disconnected,
+            );
+        if (back != SessionState.online) {
+          if (mounted) {
+            showCustomNotification(context, 'Нет соединения с сервером');
+          }
+          return;
+        }
+      }
+      final fresh = await accountModule.requestCode(widget.rawPhone);
+      if (!mounted) return;
+      setState(() {
+        _token = fresh.token;
+        sessionEpoch = api.sessionEpoch;
+        dropNotified = false;
+        _codeController.clear();
+        _errorMessage = null;
+      });
+      _startTimer();
+      _listenForSmsCode();
+      showCustomNotification(
+        context,
+        'Соединение восстановлено — выслали новый код',
+      );
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(context, 'Не удалось обновить код: $e');
+      }
+    } finally {
+      if (mounted) setState(() => recovering = false);
+    }
   }
 
   void _scheduleKeyboardOpen() {
@@ -121,6 +182,23 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     });
   }
 
+  Future<void> _listenForSmsCode() async {
+    await _smsListener.start((code) {
+      if (!mounted) return;
+      _applyAutoCode(code);
+    });
+  }
+
+  void _applyAutoCode(String code) {
+    if (_verifying || recovering) return;
+    if (_codeController.text == code) return;
+    _codeController.text = code;
+    _codeController.selection = TextSelection.collapsed(offset: code.length);
+    if (_errorMessage != null) _errorMessage = null;
+    setState(() {});
+    if (code.length == 6) _verifyCode();
+  }
+
   void _showError(String message) {
     _errorTimer?.cancel();
     _shakeController.forward(from: 0);
@@ -137,13 +215,21 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   }
 
   Future<void> _verifyCode() async {
-    if (_codeController.text.length != 6) return;
+    if (_codeController.text.length != 6 || recovering || _verifying) return;
 
+    if (sessionStale) {
+      recoverStaleSession();
+      return;
+    }
+
+    setState(() => _verifying = true);
+    var verified = false;
     try {
       final result = await accountModule.verifyCode(
         _codeController.text,
-        widget.token,
+        _token,
       );
+      verified = true;
 
       if (!mounted) return;
 
@@ -197,15 +283,21 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) =>
+          pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, _, child) =>
               FadeTransition(opacity: animation, child: child),
         ),
         (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
-      _showError(e.toString());
+      if (!verified && (isSessionStateError(e) || sessionStale)) {
+        recoverStaleSession();
+      } else {
+        _showError(e.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _verifying = false);
     }
   }
 
@@ -234,7 +326,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
               const SizedBox(height: 16),
               Text(
                 widget.phoneNumber,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 22,
                   fontWeight: FontWeight.w500,
@@ -420,9 +512,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                   ),
                   const SizedBox(width: 16),
                   FloatingActionButton(
-                    onPressed: () {
-                      if (_codeController.text.length == 6) _verifyCode();
-                    },
+                    onPressed: (recovering || _verifying)
+                        ? null
+                        : () {
+                            if (_codeController.text.length == 6) _verifyCode();
+                          },
                     backgroundColor: _codeController.text.length == 6
                         ? cs.primaryContainer
                         : cs.surfaceContainerHighest,
@@ -430,12 +524,21 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(50),
                     ),
-                    child: Icon(
-                      Icons.arrow_forward,
-                      color: _codeController.text.length == 6
-                          ? cs.onPrimaryContainer
-                          : cs.onSurfaceVariant,
-                    ),
+                    child: recovering
+                        ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.onPrimaryContainer,
+                            ),
+                          )
+                        : Icon(
+                            Icons.arrow_forward,
+                            color: _codeController.text.length == 6
+                                ? cs.onPrimaryContainer
+                                : cs.onSurfaceVariant,
+                          ),
                   ),
                 ],
               ),

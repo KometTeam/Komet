@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -9,8 +9,11 @@ import '../../../core/config/app_bubble_behavior.dart';
 import '../../../core/config/app_bubble_shape.dart';
 import '../../../core/config/app_pill_gradient.dart';
 import '../../../core/config/app_visual_style.dart';
+import '../../../core/config/app_chat_chrome.dart';
 import '../../../core/utils/bubble_radius.dart';
+import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/glossy_pill.dart';
 
@@ -28,7 +31,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   final ValueNotifier<bool> _isSystem = ValueNotifier(false);
   bool _initialized = false;
   bool _accentExpanded = false;
-  Timer? _debounce;
+  final _debounce = Debouncer(const Duration(milliseconds: 350));
 
   @override
   void didChangeDependencies() {
@@ -43,7 +46,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
+    _debounce.dispose();
     _color.dispose();
     _isSystem.dispose();
     super.dispose();
@@ -52,15 +55,14 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   void _onColorChanged(Color color) {
     _color.value = color;
     _isSystem.value = false;
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
+    _debounce.run(() {
       if (mounted) KometApp.stateOf(context)?.applyAccentColor(color);
     });
   }
 
   void _resetToSystem() {
     Haptics.selection();
-    _debounce?.cancel();
+    _debounce.cancel();
     _isSystem.value = true;
     _color.value = _fallback;
     KometApp.stateOf(context)?.applyAccentColor(null);
@@ -84,11 +86,12 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: 'Внешний вид',
+        titleText: l10n.appearanceTitle,
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
@@ -114,6 +117,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             const SizedBox(height: 12),
             const _VisualStyleCard(),
             const SizedBox(height: 12),
+            const _ChatChromeCard(),
+            const SizedBox(height: 12),
             const _GradientToggleCard(),
           ],
         ),
@@ -128,6 +133,7 @@ class _VisualStyleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
@@ -137,7 +143,7 @@ class _VisualStyleCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Визуал',
+            l10n.appearanceVisualStyleTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 16,
@@ -146,7 +152,7 @@ class _VisualStyleCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Material You или объёмные Glossy-капсулы',
+            l10n.appearanceVisualStyleSubtitle,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 16),
@@ -154,14 +160,14 @@ class _VisualStyleCard extends StatelessWidget {
             valueListenable: AppVisualStyle.current,
             builder: (context, current, _) {
               return SegmentedButton<VisualStyle>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: VisualStyle.materialYou,
-                    label: Text('Material You'),
+                    label: Text(l10n.appearanceVisualStyleMaterialYou),
                   ),
                   ButtonSegment(
                     value: VisualStyle.glossy,
-                    label: Text('Glossy'),
+                    label: Text(l10n.appearanceVisualStyleGlossy),
                   ),
                 ],
                 selected: {current},
@@ -180,12 +186,76 @@ class _VisualStyleCard extends StatelessWidget {
   }
 }
 
+class _ChatChromeCard extends StatelessWidget {
+  const _ChatChromeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.appearanceChatChromeTitle,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.appearanceChatChromeSubtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<ChatChromeStyle>(
+            valueListenable: AppChatChrome.current,
+            builder: (context, current, _) {
+              return SegmentedButton<ChatChromeStyle>(
+                segments: [
+                  ButtonSegment(
+                    value: ChatChromeStyle.color,
+                    label: Text(l10n.appearanceChatChromeColor),
+                  ),
+                  ButtonSegment(
+                    value: ChatChromeStyle.blur,
+                    label: Text(l10n.appearanceChatChromeBlur),
+                  ),
+                  ButtonSegment(
+                    value: ChatChromeStyle.none,
+                    label: Text(l10n.appearanceChatChromeNone),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppChatChrome.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GradientToggleCard extends StatelessWidget {
   const _GradientToggleCard();
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
@@ -200,7 +270,7 @@ class _GradientToggleCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Градиент',
+                  l10n.appearanceGradientTitle,
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 16,
@@ -209,7 +279,7 @@ class _GradientToggleCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Объём и блики в Glossy-капсулах',
+                  l10n.appearanceGradientSubtitle,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
               ],
@@ -294,12 +364,12 @@ class _PreviewSectionState extends State<_PreviewSection> {
 class _ChatPreview extends StatelessWidget {
   const _ChatPreview();
 
-  static const _messages = <_PreviewMsg>[
-    _PreviewMsg('Привет!', true, true, false),
-    _PreviewMsg('Как тебе?', true, false, true),
-    _PreviewMsg('Привет!', false, true, false),
-    _PreviewMsg('хм...', false, false, false),
-    _PreviewMsg('Вполне неплохо!', false, false, true),
+  List<_PreviewMsg> _messagesFor(AppLocalizations l10n) => [
+    _PreviewMsg(l10n.appearancePreviewHello, true, true, false),
+    _PreviewMsg(l10n.appearancePreviewHowIsIt, true, false, true),
+    _PreviewMsg(l10n.appearancePreviewHello, false, true, false),
+    _PreviewMsg(l10n.appearancePreviewHmm, false, false, false),
+    _PreviewMsg(l10n.appearancePreviewNotBad, false, false, true),
   ];
 
   BorderRadius _radiusFor(
@@ -319,6 +389,8 @@ class _ChatPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final messages = _messagesFor(l10n);
 
     return ListenableBuilder(
       listenable: Listenable.merge([
@@ -336,12 +408,12 @@ class _ChatPreview extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var i = 0; i < _messages.length; i++) ...[
-                if (i > 0) SizedBox(height: _messages[i].isTop ? 8 : 2),
+              for (var i = 0; i < messages.length; i++) ...[
+                if (i > 0) SizedBox(height: messages[i].isTop ? 8 : 2),
                 _PreviewBubble(
-                  text: _messages[i].text,
-                  isMe: _messages[i].isMe,
-                  radius: _radiusFor(_messages[i], style, behavior),
+                  text: messages[i].text,
+                  isMe: messages[i].isMe,
+                  radius: _radiusFor(messages[i], style, behavior),
                 ),
               ],
             ],
@@ -414,18 +486,19 @@ class _ColorPickerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return ValueListenableBuilder<bool>(
       valueListenable: isSystem,
       builder: (context, sys, _) {
         return ValueListenableBuilder<Color>(
           valueListenable: color,
-          builder: (context, col, _) => _buildBody(cs, col, sys),
+          builder: (context, col, _) => _buildBody(cs, l10n, col, sys),
         );
       },
     );
   }
 
-  Widget _buildBody(ColorScheme cs, Color col, bool sys) {
+  Widget _buildBody(ColorScheme cs, AppLocalizations l10n, Color col, bool sys) {
     final swatchColor = sys ? cs.primary : col;
 
     return GlossyPill(
@@ -457,7 +530,7 @@ class _ColorPickerCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Акцентный цвет',
+                          l10n.appearanceAccentColorTitle,
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 16,
@@ -467,8 +540,8 @@ class _ColorPickerCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           sys
-                              ? 'Системный'
-                              : 'Основной цвет интерфейса и пузырей',
+                              ? l10n.appearanceAccentColorSystem
+                              : l10n.appearanceAccentColorSubtitle,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 13,
@@ -500,7 +573,10 @@ class _ColorPickerCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _HueStripPicker(color: col, onChanged: onColorChanged),
+                        _ColorWheelPicker(
+                          color: col,
+                          onChanged: onColorChanged,
+                        ),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
@@ -522,8 +598,8 @@ class _ColorPickerCard extends StatelessWidget {
                                 const SizedBox(width: 8),
                                 Text(
                                   sys
-                                      ? 'Системный цвет активен'
-                                      : 'Сбросить на системный',
+                                      ? l10n.appearanceAccentColorSystemActive
+                                      : l10n.appearanceAccentColorReset,
                                 ),
                               ],
                             ),
@@ -548,6 +624,7 @@ class _BubbleShapeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -558,7 +635,7 @@ class _BubbleShapeCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Форма сообщения',
+            l10n.appearanceBubbleShapeTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 16,
@@ -567,7 +644,7 @@ class _BubbleShapeCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Скругление углов пузырей',
+            l10n.appearanceBubbleShapeSubtitle,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 16),
@@ -575,16 +652,16 @@ class _BubbleShapeCard extends StatelessWidget {
             valueListenable: AppBubbleShape.current,
             builder: (context, current, _) {
               return SegmentedButton<BubbleStyle>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: BubbleStyle.mobile,
-                    label: Text('TG Mobile'),
-                    icon: Icon(Symbols.smartphone),
+                    label: Text(l10n.appearanceBubbleShapeMobile),
+                    icon: const Icon(Symbols.smartphone),
                   ),
                   ButtonSegment(
                     value: BubbleStyle.desktop,
-                    label: Text('TG Desktop'),
-                    icon: Icon(Symbols.desktop_windows),
+                    label: Text(l10n.appearanceBubbleShapeDesktop),
+                    icon: const Icon(Symbols.desktop_windows),
                   ),
                 ],
                 selected: {current},
@@ -608,6 +685,7 @@ class _BubbleBehaviorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -618,7 +696,7 @@ class _BubbleBehaviorCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Поведение сообщения',
+            l10n.appearanceBubbleBehaviorTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 16,
@@ -627,7 +705,7 @@ class _BubbleBehaviorCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Меняется ли форма пузыря по соседям в группе',
+            l10n.appearanceBubbleBehaviorSubtitle,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 16),
@@ -635,16 +713,16 @@ class _BubbleBehaviorCard extends StatelessWidget {
             valueListenable: AppBubbleBehavior.current,
             builder: (context, current, _) {
               return SegmentedButton<BubbleBehavior>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: BubbleBehavior.mutable,
-                    label: Text('Изменяемая'),
-                    icon: Icon(Symbols.auto_fix),
+                    label: Text(l10n.appearanceBubbleBehaviorMutable),
+                    icon: const Icon(Symbols.auto_fix),
                   ),
                   ButtonSegment(
                     value: BubbleBehavior.immutable,
-                    label: Text('Неизменяемая'),
-                    icon: Icon(Symbols.lock),
+                    label: Text(l10n.appearanceBubbleBehaviorImmutable),
+                    icon: const Icon(Symbols.lock),
                   ),
                 ],
                 selected: {current},
@@ -660,83 +738,113 @@ class _BubbleBehaviorCard extends StatelessWidget {
   }
 }
 
-class _HueStripPicker extends StatelessWidget {
+class _ColorWheelPicker extends StatefulWidget {
   final Color color;
   final ValueChanged<Color> onChanged;
 
-  const _HueStripPicker({required this.color, required this.onChanged});
+  const _ColorWheelPicker({required this.color, required this.onChanged});
 
-  static const _gradient = LinearGradient(
-    colors: [
-      Color(0xFFFF0000),
-      Color(0xFFFFFF00),
-      Color(0xFF00FF00),
-      Color(0xFF00FFFF),
-      Color(0xFF0000FF),
-      Color(0xFFFF00FF),
-      Color(0xFFFF0000),
-    ],
-  );
+  @override
+  State<_ColorWheelPicker> createState() => _ColorWheelPickerState();
+}
+
+class _ColorWheelPickerState extends State<_ColorWheelPicker> {
+  late HSVColor _hsv;
+  late Color _lastEmitted;
+
+  @override
+  void initState() {
+    super.initState();
+    _hsv = HSVColor.fromColor(widget.color).withValue(1);
+    _lastEmitted = widget.color;
+  }
+
+  @override
+  void didUpdateWidget(covariant _ColorWheelPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.color != _lastEmitted) {
+      _hsv = HSVColor.fromColor(widget.color).withValue(1);
+      _lastEmitted = widget.color;
+    }
+  }
+
+  void _handleWheel(Offset local, double size) {
+    final radius = size / 2;
+    final dx = local.dx - radius;
+    final dy = local.dy - radius;
+    final sat = (math.sqrt(dx * dx + dy * dy) / radius).clamp(0.0, 1.0);
+    var hue = math.atan2(dy, dx) * 180 / math.pi;
+    if (hue < 0) hue += 360;
+    final hsv = _hsv.withHue(hue).withSaturation(sat);
+    setState(() => _hsv = hsv);
+    final color = hsv.toColor();
+    _lastEmitted = color;
+    widget.onChanged(color);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hue = HSVColor.fromColor(color).hue;
-    const trackHeight = 26.0;
-    const thumbDiameter = 30.0;
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        void emit(double dx) {
-          final clamped = dx.clamp(0.0, width);
-          final newHue = (clamped / width) * 360;
-          onChanged(HSVColor.fromAHSV(1, newHue, 1, 1).toColor());
-        }
+        final wheelSize = math.min(260.0, constraints.maxWidth);
 
-        final thumbLeft = (hue / 360) * width - thumbDiameter / 2;
-
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanDown: (d) => emit(d.localPosition.dx),
-          onPanUpdate: (d) => emit(d.localPosition.dx),
-          child: SizedBox(
-            height: thumbDiameter + 4,
-            child: Stack(
-              children: [
-                Center(
-                  child: Container(
-                    height: trackHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(trackHeight / 2),
-                      gradient: _gradient,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: thumbLeft.clamp(0, width - thumbDiameter),
-                  top: (thumbDiameter + 4 - thumbDiameter) / 2,
-                  child: Container(
-                    width: thumbDiameter,
-                    height: thumbDiameter,
-                    decoration: BoxDecoration(
-                      color: HSVColor.fromAHSV(1, hue, 1, 1).toColor(),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.18),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+        return Center(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanDown: (d) => _handleWheel(d.localPosition, wheelSize),
+            onPanUpdate: (d) => _handleWheel(d.localPosition, wheelSize),
+            child: SizedBox(
+              width: wheelSize,
+              height: wheelSize,
+              child: CustomPaint(painter: _WheelPainter(hsv: _hsv)),
             ),
           ),
         );
       },
     );
   }
+}
+
+class _WheelPainter extends CustomPainter {
+  final HSVColor hsv;
+
+  const _WheelPainter({required this.hsv});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final hueShader = SweepGradient(
+      colors: [
+        for (var i = 0; i <= 360; i += 30)
+          HSVColor.fromAHSV(1, (i % 360).toDouble(), 1, 1).toColor(),
+      ],
+      stops: [for (var i = 0; i <= 360; i += 30) i / 360],
+    ).createShader(rect);
+    canvas.drawCircle(center, radius, Paint()..shader = hueShader);
+
+    final satShader = RadialGradient(
+      colors: [Colors.white, Colors.white.withValues(alpha: 0)],
+    ).createShader(rect);
+    canvas.drawCircle(center, radius, Paint()..shader = satShader);
+
+    final angle = hsv.hue * math.pi / 180;
+    final thumb = Offset(
+      center.dx + hsv.saturation * radius * math.cos(angle),
+      center.dy + hsv.saturation * radius * math.sin(angle),
+    );
+    canvas.drawShadow(
+      Path()..addOval(Rect.fromCircle(center: thumb, radius: 13)),
+      Colors.black,
+      2,
+      false,
+    );
+    canvas.drawCircle(thumb, 13, Paint()..color = Colors.white);
+    canvas.drawCircle(thumb, 10, Paint()..color = hsv.toColor());
+  }
+
+  @override
+  bool shouldRepaint(_WheelPainter oldDelegate) => oldDelegate.hsv != hsv;
 }

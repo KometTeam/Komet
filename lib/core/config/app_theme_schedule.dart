@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/format.dart';
+
 class ThemeSchedule {
   final TimeOfDay darkStart;
   final TimeOfDay darkEnd;
@@ -44,7 +46,9 @@ class AppThemeSchedule {
 
   static Future<ThemeSchedule> load() async {
     final prefs = await SharedPreferences.getInstance();
-    return _parse(prefs.getString(prefKey));
+    final value = _parse(prefs.getString(prefKey));
+    current.value = value;
+    return value;
   }
 
   static Future<void> save(ThemeSchedule schedule) async {
@@ -56,8 +60,7 @@ class AppThemeSchedule {
     );
   }
 
-  static String _fmt(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  static String _fmt(TimeOfDay t) => '${pad2(t.hour)}:${pad2(t.minute)}';
 
   static ThemeSchedule _parse(String? val) {
     if (val == null) {

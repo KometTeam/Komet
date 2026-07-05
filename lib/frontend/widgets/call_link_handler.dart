@@ -37,8 +37,10 @@ Future<bool> tryHandleCallLink(BuildContext context, String url) async {
   if (!confirmed || !context.mounted) return true;
 
   try {
-    final session =
-        await controller.joinByLink(token, isVideo: preview?.isVideo ?? false);
+    final session = await controller.joinByLink(
+      token,
+      isVideo: preview?.isVideo ?? false,
+    );
     navigator.push(
       MaterialPageRoute(
         builder: (_) => CallScreen(name: name, session: session, isGroup: true),

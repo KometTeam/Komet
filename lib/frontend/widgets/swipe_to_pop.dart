@@ -57,14 +57,17 @@ class _SwipeToPopState extends State<SwipeToPop>
   }
 
   void _onDragUpdate(DragUpdateDetails d) {
-    final next =
-        (_controller.value + (d.primaryDelta ?? 0.0) / _width).clamp(0.0, 1.0);
+    final next = (_controller.value + (d.primaryDelta ?? 0.0) / _width).clamp(
+      0.0,
+      1.0,
+    );
     _controller.value = next;
   }
 
   Future<void> _onDragEnd(DragEndDetails d) async {
     final velocity = d.velocity.pixelsPerSecond.dx;
-    final pastThreshold = _controller.value > widget.popThreshold ||
+    final pastThreshold =
+        _controller.value > widget.popThreshold ||
         velocity > widget.velocityThreshold;
     if (pastThreshold) {
       final remaining = 1.0 - _controller.value;
@@ -101,15 +104,15 @@ class _SwipeToPopState extends State<SwipeToPop>
           gestures: <Type, GestureRecognizerFactory>{
             RightwardDragRecognizer:
                 GestureRecognizerFactoryWithHandlers<RightwardDragRecognizer>(
-              () => RightwardDragRecognizer(debugOwner: this),
-              (instance) {
-                instance
-                  ..onStart = _onDragStart
-                  ..onUpdate = _onDragUpdate
-                  ..onEnd = _onDragEnd
-                  ..onCancel = _onDragCancel;
-              },
-            ),
+                  () => RightwardDragRecognizer(debugOwner: this),
+                  (instance) {
+                    instance
+                      ..onStart = _onDragStart
+                      ..onUpdate = _onDragUpdate
+                      ..onEnd = _onDragEnd
+                      ..onCancel = _onDragCancel;
+                  },
+                ),
           },
           child: AnimatedBuilder(
             animation: _controller,

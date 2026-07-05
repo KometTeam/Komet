@@ -1,4 +1,4 @@
-enum MaxLinkKind { call, invite, user, content, public, auth }
+enum MaxLinkKind { call, invite, user, content, public, auth, stickerSet }
 
 class MaxLink {
   final MaxLinkKind kind;
@@ -34,8 +34,10 @@ class MaxLink {
     if (match == null) return null;
 
     final path = match.group(1)!.split('?').first.split('#').first;
-    final segments =
-        path.split('/').where((s) => s.isNotEmpty).toList(growable: false);
+    final segments = path
+        .split('/')
+        .where((s) => s.isNotEmpty)
+        .toList(growable: false);
     if (segments.isEmpty) return null;
 
     switch (segments.first.toLowerCase()) {
@@ -49,6 +51,10 @@ class MaxLink {
         return segments.length >= 2 ? MaxLink(MaxLinkKind.user, url) : null;
       case 'c':
         return segments.length >= 3 ? MaxLink(MaxLinkKind.content, url) : null;
+      case 'stickerset':
+        return segments.length >= 2
+            ? MaxLink(MaxLinkKind.stickerSet, url)
+            : null;
     }
 
     if (_reserved.contains(segments.first.toLowerCase())) return null;

@@ -32,7 +32,8 @@ class SwipeRoute<T> extends PageRoute<T> {
 
   @override
   bool canTransitionTo(TransitionRoute<dynamic> nextRoute) {
-    return nextRoute is SwipeRoute || nextRoute is CupertinoRouteTransitionMixin;
+    return nextRoute is SwipeRoute ||
+        nextRoute is CupertinoRouteTransitionMixin;
   }
 
   @override
@@ -103,9 +104,9 @@ Future<T?> pushSwipeable<T>(
   WidgetBuilder builder, {
   RouteSettings? settings,
 }) {
-  return Navigator.of(context).push<T>(
-    SwipeRoute<T>(builder: builder, settings: settings),
-  );
+  return Navigator.of(
+    context,
+  ).push<T>(SwipeRoute<T>(builder: builder, settings: settings));
 }
 
 class _SwipeBackGestureDetector<T> extends StatefulWidget {
@@ -159,15 +160,15 @@ class _SwipeBackGestureDetectorState<T>
       gestures: <Type, GestureRecognizerFactory>{
         RightwardDragRecognizer:
             GestureRecognizerFactoryWithHandlers<RightwardDragRecognizer>(
-          () => RightwardDragRecognizer(debugOwner: this),
-          (instance) {
-            instance
-              ..onStart = _handleStart
-              ..onUpdate = _handleUpdate
-              ..onEnd = _handleEnd
-              ..onCancel = _handleCancel;
-          },
-        ),
+              () => RightwardDragRecognizer(debugOwner: this),
+              (instance) {
+                instance
+                  ..onStart = _handleStart
+                  ..onUpdate = _handleUpdate
+                  ..onEnd = _handleEnd
+                  ..onCancel = _handleCancel;
+              },
+            ),
       },
       child: widget.child,
     );
@@ -175,10 +176,7 @@ class _SwipeBackGestureDetectorState<T>
 }
 
 class _SwipeBackController<T> {
-  _SwipeBackController({
-    required this.navigator,
-    required this.controller,
-  });
+  _SwipeBackController({required this.navigator, required this.controller});
 
   final NavigatorState navigator;
   final AnimationController controller;

@@ -21,8 +21,11 @@ class PhotoViewerScreen extends StatelessWidget {
               maxScale: 5,
               child: Center(
                 child: _url.isEmpty
-                    ? const Icon(Symbols.broken_image,
-                        color: Colors.white54, size: 64)
+                    ? const Icon(
+                        Symbols.broken_image,
+                        color: Colors.white54,
+                        size: 64,
+                      )
                     : CachedNetworkImage(
                         imageUrl: _url,
                         fit: BoxFit.contain,

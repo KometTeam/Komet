@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/utils/link_opener.dart';
 
-final RegExp _urlPattern = RegExp(
+final RegExp linkPattern = RegExp(
   r'(https?://[^\s<>]+|www\.[^\s<>]+)',
   caseSensitive: false,
 );
@@ -15,7 +15,7 @@ class LinkText extends StatefulWidget {
   const LinkText({super.key, required this.text, required this.style});
 
   static bool hasLinks(String? text) =>
-      text != null && _urlPattern.hasMatch(text);
+      text != null && linkPattern.hasMatch(text);
 
   @override
   State<LinkText> createState() => _LinkTextState();
@@ -41,7 +41,7 @@ class _LinkTextState extends State<LinkText> {
 
     final spans = <InlineSpan>[];
     var cursor = 0;
-    for (final match in _urlPattern.allMatches(widget.text)) {
+    for (final match in linkPattern.allMatches(widget.text)) {
       if (match.start > cursor) {
         spans.add(TextSpan(text: widget.text.substring(cursor, match.start)));
       }

@@ -13,7 +13,9 @@ import '../core/transport/connection.dart';
 import '../core/transport/dispatcher.dart';
 import '../core/transport/receiver.dart';
 import '../core/transport/sender.dart';
+import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
+import '../core/utils/debug_session_log.dart';
 import '../core/utils/logger.dart';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -47,6 +49,10 @@ class Api {
   int? get callsSeed => _callsSeed;
   String? get deviceId => _deviceId;
 
+  String? spoofScope;
+
+  static bool _tzInitialized = false;
+
   List<CountryName>? _registrationCountries;
 
   List<CountryName> get registrationCountries =>
@@ -66,6 +72,9 @@ class Api {
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   bool _autoReconnect = false;
+  int _sessionEpoch = 0;
+
+  int get sessionEpoch => _sessionEpoch;
 
   /// Залипает на время сессии: VPN-путь не сработал — идём мимо туннеля.
   bool _bypassActive = false;
@@ -92,8 +101,9 @@ class Api {
     final useBypass = _bypassActive && bypassArmed;
     // Попытку через VPN ограничиваем по времени, чтобы быстро понять,
     // что туннель не пропускает, и переключиться на обход.
-    final attemptTimeout =
-        bypassArmed && !useBypass ? const Duration(seconds: 8) : null;
+    final attemptTimeout = bypassArmed && !useBypass
+        ? const Duration(seconds: 8)
+        : null;
 
     try {
       final endpoint = await ServerConfig.loadEndpoint();
@@ -104,13 +114,13 @@ class Api {
         timeout: attemptTimeout,
       );
     } catch (e) {
-      logger.e('Не удалось подключиться: $e');
-      if (_sessionState != SessionState.disconnected) {
-        _cleanup();
-        _setSessionState(SessionState.disconnected);
-        _armBypassIfPossible(bypassArmed, useBypass, 'подключение не удалось');
-        _scheduleReconnect();
-      }
+      await _handleConnectFailure(
+        e,
+        phase: 'Не удалось подключиться',
+        bypassArmed: bypassArmed,
+        useBypass: useBypass,
+        bypassWhy: 'подключение не удалось',
+      );
       return;
     }
 
@@ -123,6 +133,7 @@ class Api {
         _callsSeed = response.payload['callsSeed'] as int?;
         _registrationCountries = _parseRegistrationCountries(response.payload);
         _sessionState = SessionState.online;
+        _sessionEpoch++;
         _startPinging();
         logger.i('Сессия онлайн, хэндшейк ок');
         if (_onReconnectCallback != null) {
@@ -142,16 +153,32 @@ class Api {
         logger.e('Хэндшейк отклонён: ${response.payload}');
       }
     } catch (e) {
-      logger.e('Ошибка хэндшейка: $e');
-      // Сокет подключился (через VPN), но сервер не ответил на хэндшейк —
-      // путь нерабочий: рвём соединение и пробуем мимо VPN.
-      if (_sessionState != SessionState.disconnected) {
-        _cleanup();
-        await _connection.disconnect();
-        _setSessionState(SessionState.disconnected);
-        _armBypassIfPossible(bypassArmed, useBypass, 'хэндшейк не прошёл');
-        _scheduleReconnect();
-      }
+      await _handleConnectFailure(
+        e,
+        phase: 'Ошибка хэндшейка',
+        bypassArmed: bypassArmed,
+        useBypass: useBypass,
+        bypassWhy: 'хэндшейк не прошёл',
+        disconnectSocket: true,
+      );
+    }
+  }
+
+  Future<void> _handleConnectFailure(
+    Object error, {
+    required String phase,
+    required bool bypassArmed,
+    required bool useBypass,
+    required String bypassWhy,
+    bool disconnectSocket = false,
+  }) async {
+    logger.e('$phase: $error');
+    if (_sessionState != SessionState.disconnected) {
+      _cleanup();
+      if (disconnectSocket) await _connection.disconnect();
+      _setSessionState(SessionState.disconnected);
+      _armBypassIfPossible(bypassArmed, useBypass, bypassWhy);
+      _scheduleReconnect();
     }
   }
 
@@ -172,6 +199,21 @@ class Api {
     _setSessionState(SessionState.disconnected);
   }
 
+  void wakeUp() {
+    if (!_autoReconnect) return;
+    switch (_sessionState) {
+      case SessionState.disconnected:
+        _reconnectAttempts = 0;
+        _reconnectTimer?.cancel();
+        unawaited(connect());
+      case SessionState.connecting:
+      case SessionState.connected:
+        _reconnectAttempts = 0;
+      case SessionState.online:
+        unawaited(_probeLiveness());
+    }
+  }
+
   Future<Packet> sendHandshake() async {
     final deviceInfo = DeviceInfoPlugin();
 
@@ -183,7 +225,10 @@ class Api {
     int buildNumber = SpoofingService.hardcodedBuildNumber;
     String screen = '420dpi 420dpi 1080x2340';
 
-    tz.initializeTimeZones();
+    if (!_tzInitialized) {
+      tz.initializeTimeZones();
+      _tzInitialized = true;
+    }
     final timeZoneName = await FlutterTimezone.getLocalTimezone();
     String timezone = timeZoneName.identifier;
     String locale = 'ru';
@@ -196,10 +241,7 @@ class Api {
     if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
       osVersion = linuxInfo.name;
-      architecture = Platform.version.substring(
-        Platform.version.indexOf('_') + 1,
-        Platform.version.length - 1,
-      );
+      architecture = _archFromPlatformVersion();
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       osVersion = iosInfo.systemVersion;
@@ -212,13 +254,12 @@ class Api {
     } else if (Platform.isWindows) {
       final windowsInfo = await deviceInfo.windowsInfo;
       osVersion = windowsInfo.productName;
-      architecture = Platform.version.substring(
-        Platform.version.indexOf('_') + 1,
-        Platform.version.length - 1,
-      );
+      architecture = _archFromPlatformVersion();
     }
 
-    final spoofed = await SpoofingService.getSpoofedSessionData();
+    final spoofed = await SpoofingService.getSpoofedSessionData(
+      scope: spoofScope,
+    );
     if (spoofed != null) {
       final sDeviceType = spoofed['device_type'] as String?;
       if (sDeviceType != null && sDeviceType != 'IOS') deviceType = sDeviceType;
@@ -290,13 +331,51 @@ class Api {
   /// Отправляет запрос и ждёт ответ от сервера.
   Future<Packet> sendRequest(int opcode, Map<dynamic, dynamic> payload) {
     final seq = _sender.send(_connection, opcode, payload);
+    DebugSessionLog.instance.recordRequest(opcode, seq, payload);
     return _dispatcher
         .registerPending(seq)
         .timeout(
           ServerConfig.requestTimeout,
           onTimeout: () =>
               throw TimeoutException('${Opcode.name(opcode)} таймаут'),
+        )
+        .then(
+          (packet) {
+            DebugSessionLog.instance.recordResponse(
+              seq,
+              packet.cmd,
+              packet.payload,
+            );
+            return packet;
+          },
+          onError: (Object e, StackTrace st) {
+            DebugSessionLog.instance.recordError(seq, e);
+            Error.throwWithStackTrace(e, st);
+          },
         );
+  }
+
+  Future<Map<dynamic, dynamic>?> sendRequestMap(
+    int opcode,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final response = await sendRequest(opcode, payload);
+    if (!response.isOk || response.payload is! Map) return null;
+    return response.payload as Map<dynamic, dynamic>;
+  }
+
+  Future<bool> sendRequestOk(int opcode, Map<dynamic, dynamic> payload) async {
+    final response = await sendRequest(opcode, payload);
+    return response.isOk;
+  }
+
+  Future<Packet> sendRequestOrThrow(
+    int opcode,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final response = await sendRequest(opcode, payload);
+    throwIfPacketError(response);
+    return response;
   }
 
   /// Вешает обработчик на пуши с указанным опкодом.
@@ -333,7 +412,16 @@ class Api {
   }
 
   Future<void> _onDataReceived(Uint8List data) async {
-    final rawPackets = _receiver.feed(data);
+    final List<Uint8List> rawPackets;
+    try {
+      rawPackets = _receiver.feed(data);
+    } on ReceiverOverflowException catch (e) {
+      logger.e('$e — форсируем реконнект');
+      if (_sessionState != SessionState.disconnected) {
+        unawaited(_forceReconnect());
+      }
+      return;
+    }
     for (final raw in rawPackets) {
       final Packet packet;
       try {
@@ -342,10 +430,8 @@ class Api {
         logger.e('PacketReceiver: ошибка распаковки: $e');
         continue;
       }
-      if (packet.isError &&
-          packet.payload is Map &&
-          (packet.payload['message'] == 'FAIL_LOGIN_TOKEN' ||
-              packet.payload['message'] == 'FAIL_WRONG_PASSWORD')) {
+      TrafficMonitor.instance.recordIncoming(packet, raw.length);
+      if (packet.isError && isSessionExpiredPayload(packet.payload)) {
         _sessionExpiredController.add(
           SessionExpiredException(messageFromErrorPayload(packet.payload)),
         );
@@ -358,6 +444,31 @@ class Api {
     _cleanup();
     _setSessionState(SessionState.disconnected);
     if (_autoReconnect) _scheduleReconnect();
+  }
+
+  Future<void> _probeLiveness() async {
+    if (_sessionState != SessionState.online) return;
+    final epoch = _sessionEpoch;
+    try {
+      await sendRequest(Opcode.ping, {
+        'interactive': !KometSettings.ghostMode.value,
+      }).timeout(const Duration(seconds: 6));
+    } catch (_) {
+      if (_sessionEpoch != epoch || _sessionState != SessionState.online) {
+        return;
+      }
+      logger.w('Пробный пинг не прошёл — принудительный реконнект');
+      await _forceReconnect();
+    }
+  }
+
+  Future<void> _forceReconnect() async {
+    _cleanup();
+    await _connection.disconnect();
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _setSessionState(SessionState.disconnected);
+    if (_autoReconnect) unawaited(connect());
   }
 
   void _cleanup() {
@@ -399,6 +510,11 @@ class Api {
     }
   }
 
+  static String _archFromPlatformVersion() {
+    final v = Platform.version;
+    return v.substring(v.indexOf('_') + 1, v.length - 1);
+  }
+
   static List<CountryName>? _parseRegistrationCountries(dynamic payload) {
     if (payload is! Map) return null;
     final raw = payload['reg-country-code'];
@@ -422,12 +538,7 @@ class Api {
   }
 
   void _scheduleReconnect() {
-    if (_reconnectAttempts >= ServerConfig.maxReconnectAttempts) {
-      logger.e('Лимит попыток реконнекта');
-      return;
-    }
-
-    final delaySec = (2 * (1 << _reconnectAttempts)).clamp(2, 30);
+    final delaySec = (2 * (1 << _reconnectAttempts.clamp(0, 3))).clamp(2, 15);
     _reconnectAttempts++;
     logger.i('Реконнект через $delaySecс (попытка $_reconnectAttempts)');
 

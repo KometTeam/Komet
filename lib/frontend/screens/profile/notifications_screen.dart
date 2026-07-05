@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../main.dart' show accountModule, isOnemeFlavor;
 import '../../widgets/connection_status.dart';
-
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/section_header.dart';
-import '../../widgets/sheet_helpers.dart';
+import '../../widgets/settings_card.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -15,269 +17,212 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  bool _fkmEnabled = false;
-  bool _personalChatsEnabled = true;
-  bool _groupsEnabled = true;
-  bool _channelsEnabled = true;
-  String _selectedSound = 'По умолчанию';
+  bool _loading = true;
+  bool _saving = false;
 
-  static const List<String> _sounds = [
-    'По умолчанию',
-    'Колокольчик',
-    'Звон',
-    'Капля',
-    'Беззвучно',
-  ];
+  bool _allNotifications = true;
+  bool _messagePreview = true;
+  bool _sound = true;
+  bool _callNotifications = true;
+  bool _newContacts = false;
+  bool _hapticsEnabled = Haptics.enabled;
 
-  Future<void> _pickSound() async {
-    final cs = Theme.of(context).colorScheme;
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: cs.surfaceContainerHigh,
-      shape: kSheetShape,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Звук уведомления',
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                for (final s in _sounds)
-                  ListTile(
-                    onTap: () => Navigator.of(context).pop(s),
-                    leading: Icon(
-                      s == _selectedSound
-                          ? Symbols.radio_button_checked
-                          : Symbols.radio_button_unchecked,
-                      color: s == _selectedSound
-                          ? cs.primary
-                          : cs.onSurfaceVariant,
-                    ),
-                    title: Text(
-                      s,
-                      style: TextStyle(color: cs.onSurface, fontSize: 16),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final config = await accountModule.getPrivacyConfig();
+    if (!mounted) return;
+    setState(() {
+      _allNotifications = config.chatsPushNotification == 'ON';
+      _messagePreview = config.pushDetails;
+      _sound = config.pushSound.isNotEmpty || config.chatsPushSound.isNotEmpty;
+      _callNotifications = config.mCallPushNotification == 'ON';
+      _newContacts = config.pushNewContacts;
+      _loading = false;
+    });
+  }
+
+  Future<void> _apply(
+    bool value,
+    Future<void> Function() action,
+    ValueChanged<bool> assign,
+  ) async {
+    if (_saving) return;
+    setState(() {
+      assign(value);
+      _saving = true;
+    });
+    try {
+      await action();
+    } catch (e) {
+      if (mounted) {
+        setState(() => assign(!value));
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.notificationsSaveFailed(e.toString()),
         );
-      },
-    );
-    if (picked != null && picked != _selectedSound) {
-      setState(() => _selectedSound = picked);
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _setHaptics(bool value) async {
+    await Haptics.setEnabled(value);
+    if (value) Haptics.success();
+    if (mounted) setState(() => _hapticsEnabled = value);
+  }
+
+  void _onFkmTap() {
+    final l10n = AppLocalizations.of(context)!;
+    showCustomNotification(
+      context,
+      isOnemeFlavor
+          ? l10n.notificationsFkmAlreadyHasFcm
+          : l10n.notificationsFkmDownloadFcm,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: 'Уведомления',
+        titleText: l10n.notificationsTitle,
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
         top: false,
-        child: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-          children: [
-            const SectionHeader(
-              'FKM',
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
-            ),
-            _card(cs, [
-              _toggleRow(
-                cs,
-                icon: Symbols.notifications_active,
-                label: 'Включить уведомления',
-                subtitle:
-                    'Для работы FKM уведомлений, приложению понадобится держать уведомление в шторке.',
-                value: _fkmEnabled,
-                onChanged: (v) => setState(() => _fkmEnabled = v),
-              ),
-            ]),
-            const SizedBox(height: 20),
-            const SectionHeader(
-              'Настройки уведомлений',
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
-            ),
-            _card(cs, [
-              _toggleRow(
-                cs,
-                icon: Symbols.person,
-                label: 'Уведомления от личных чатов',
-                value: _personalChatsEnabled,
-                onChanged: (v) => setState(() => _personalChatsEnabled = v),
-              ),
-              _divider(cs),
-              _toggleRow(
-                cs,
-                icon: Symbols.groups,
-                label: 'Уведомления от групп',
-                value: _groupsEnabled,
-                onChanged: (v) => setState(() => _groupsEnabled = v),
-              ),
-              _divider(cs),
-              _toggleRow(
-                cs,
-                icon: Symbols.campaign,
-                label: 'Уведомления от каналов',
-                value: _channelsEnabled,
-                onChanged: (v) => setState(() => _channelsEnabled = v),
-              ),
-            ]),
-            const SizedBox(height: 20),
-            const SectionHeader(
-              'Звук',
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
-            ),
-            _card(cs, [
-              _tappableRow(
-                cs,
-                icon: Symbols.music_note,
-                label: 'Звук уведомления',
-                trailingText: _selectedSound,
-                onTap: _pickSound,
-              ),
-            ]),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _card(ColorScheme cs, List<Widget> children) {
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
-      depth: 6,
-      child: Column(children: children),
-    );
-  }
-
-  Widget _divider(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 58),
-      child: Divider(
-        height: 1,
-        thickness: 1,
-        color: cs.outlineVariant.withValues(alpha: 0.35),
-      ),
-    );
-  }
-
-  Widget _toggleRow(
-    ColorScheme cs, {
-    required IconData icon,
-    required String label,
-    String? subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, color: cs.onSurfaceVariant, size: 22, weight: 400),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                children: [
+                  SectionHeader(
+                    l10n.notificationsFkmSectionTitle,
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    fontSize: 14,
+                  ),
+                  SettingsCard(
+                    children: [
+                      SettingsToggleTile(
+                        icon: Symbols.notifications_active,
+                        label: l10n.notificationsFkmEnableLabel,
+                        subtitle: l10n.notificationsFkmEnableSubtitle,
+                        value: false,
+                        onChanged: (_) => _onFkmTap(),
                       ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 13,
-                          height: 1.3,
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SectionHeader(
+                    l10n.notificationsMainSectionTitle,
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    fontSize: 14,
+                  ),
+                  SettingsCard(
+                    children: [
+                      SettingsToggleTile(
+                        icon: Symbols.notifications,
+                        label: l10n.notificationsAllLabel,
+                        value: _allNotifications,
+                        onChanged: (v) => _apply(
+                          v,
+                          () => accountModule.setChatsPushNotification(v),
+                          (b) => _allNotifications = b,
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Switch(value: value, onChanged: onChanged),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _tappableRow(
-    ColorScheme cs, {
-    required IconData icon,
-    required String label,
-    required String trailingText,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
-          child: Row(
-            children: [
-              Icon(icon, color: cs.onSurfaceVariant, size: 22, weight: 400),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
                   ),
-                ),
+                  const SizedBox(height: 20),
+                  SectionHeader(
+                    l10n.notificationsNewSectionTitle,
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    fontSize: 14,
+                  ),
+                  SettingsCard(
+                    children: [
+                      SettingsToggleTile(
+                        icon: Symbols.chat,
+                        label: l10n.notificationsPreviewLabel,
+                        value: _messagePreview,
+                        enabled: _allNotifications,
+                        onChanged: (v) => _apply(
+                          v,
+                          () => accountModule.setMessagePreview(v),
+                          (b) => _messagePreview = b,
+                        ),
+                      ),
+                      SettingsToggleTile(
+                        icon: Symbols.music_note,
+                        label: l10n.notificationsSoundLabel,
+                        value: _sound,
+                        enabled: _allNotifications,
+                        onChanged: (v) => _apply(
+                          v,
+                          () => accountModule.setNotificationSound(v),
+                          (b) => _sound = b,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SectionHeader(
+                    l10n.notificationsAdditionalSectionTitle,
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    fontSize: 14,
+                  ),
+                  SettingsCard(
+                    children: [
+                      SettingsToggleTile(
+                        icon: Symbols.call,
+                        label: l10n.notificationsCallsLabel,
+                        value: _callNotifications,
+                        onChanged: (v) => _apply(
+                          v,
+                          () => accountModule.setCallNotifications(v),
+                          (b) => _callNotifications = b,
+                        ),
+                      ),
+                      SettingsToggleTile(
+                        icon: Symbols.person_add,
+                        label: l10n.notificationsNewContactsLabel,
+                        value: _newContacts,
+                        onChanged: (v) => _apply(
+                          v,
+                          () => accountModule.setNewContacts(v),
+                          (b) => _newContacts = b,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SectionHeader(
+                    l10n.notificationsHapticsSectionTitle,
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    fontSize: 14,
+                  ),
+                  SettingsCard(
+                    children: [
+                      SettingsToggleTile(
+                        icon: Symbols.vibration,
+                        label: l10n.notificationsHapticsLabel,
+                        subtitle: l10n.notificationsHapticsSubtitle,
+                        value: _hapticsEnabled,
+                        onChanged: _setHaptics,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              Text(
-                trailingText,
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-              ),
-              const SizedBox(width: 6),
-              Icon(Symbols.chevron_right, color: cs.outline, size: 20),
-            ],
-          ),
-        ),
       ),
     );
   }

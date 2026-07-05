@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.5.0+12
+version: 0.5.0+13
 
 environment:
   sdk: ^3.10.4
@@ -51,7 +51,6 @@ dependencies:
   sqflite: ^2.4.2
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
-  google_fonts: ^8.1.0
   m3e_collection: ^0.3.7
   material_symbols_icons: ^4.2906.0
   dynamic_color: ^1.8.1
@@ -60,7 +59,9 @@ dependencies:
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
   cached_network_image: ^3.4.1
+  lottie: ^3.3.1
   path_provider: ^2.1.4
+  share_plus: ^10.1.4
   open_filex: ^4.5.0
   url_launcher: ^6.3.1
   app_links: ^7.0.0
@@ -70,6 +71,16 @@ dependencies:
   flutter_local_notifications: ^22.0.1
   flutter_inappwebview: ^6.1.5
   flutter_webrtc: ^1.5.2
+  record: ^6.0.0
+  opus_dart: ^3.0.1
+  opus_flutter_android: ^3.0.1
+  ogg_opus_player: ^0.8.0
+  video_player_media_kit: ^2.0.0
+  media_kit_libs_windows_video: ^1.0.11
+  media_kit_libs_linux: ^1.2.1
+  media_kit_libs_macos_video: ^1.1.4
+  sensors_plus: ^7.1.0
+  smart_auth: ^3.2.0
 
 dev_dependencies:
   flutter_test:
@@ -114,6 +125,19 @@ flutter:
     - assets/komet.png
     - assets/komet_icon.png
     - assets/meteor_icon.png
+    - assets/emoji_keywords.json
+    - assets/lottie/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit.ttf
+    - family: Unbounded
+      fonts:
+        - asset: assets/fonts/Unbounded.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

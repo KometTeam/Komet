@@ -4,11 +4,13 @@ class CountryName {
   final String code; // ISO 3166-1 alpha-2, например "RU"
   final String en;
   final String ru;
-  final String phoneCode;   // Код страны для звонков, например "+7"
-  final int phoneDigits;    // Количество цифр номера после кода страны
-  final String phoneMask;   // Маска абонентского номера, например "(###) ###-##-##"
-  final List<int> phoneGroupSizes;        // Размеры групп цифр, например [3, 3, 2, 2]
-  final List<String> phoneGroupSeparators; // Разделители вокруг групп, например ["(", ") ", "-", "-", ""]
+  final String phoneCode; // Код страны для звонков, например "+7"
+  final int phoneDigits; // Количество цифр номера после кода страны
+  final String
+  phoneMask; // Маска абонентского номера, например "(###) ###-##-##"
+  final List<int> phoneGroupSizes; // Размеры групп цифр, например [3, 3, 2, 2]
+  final List<String>
+  phoneGroupSeparators; // Разделители вокруг групп, например ["(", ") ", "-", "-", ""]
 
   const CountryName({
     required this.code,
@@ -20,6 +22,10 @@ class CountryName {
     required this.phoneGroupSizes,
     required this.phoneGroupSeparators,
   });
+
+  String displayName(String languageCode) {
+    return languageCode == 'ru' ? ru : en;
+  }
 }
 
 /// Полный список стран (195 государств) с названием на русском и английском.
@@ -52,11 +58,7 @@ Map<String, String>? exampleCountryLookup(String code) {
   final country = countriesByCode[code.toUpperCase()];
   if (country == null) return null;
 
-  return {
-    'code': country.code,
-    'ru': country.ru,
-    'en': country.en,
-  };
+  return {'code': country.code, 'ru': country.ru, 'en': country.en};
 }
 
 List<CountryName> _buildCountries() {
@@ -79,9 +81,19 @@ List<CountryName> _buildCountries() {
     final phoneDigits = item['phoneDigits'] as int;
     final phoneMask = item['phoneMask'] as String;
     final phoneGroupSizes = (item['phoneGroupSizes'] as List).cast<int>();
-    final phoneGroupSeparators = (item['phoneGroupSeparators'] as List).cast<String>();
+    final phoneGroupSeparators = (item['phoneGroupSeparators'] as List)
+        .cast<String>();
 
-    return CountryName(code: code, en: en, ru: ru, phoneCode: phoneCode, phoneDigits: phoneDigits, phoneMask: phoneMask, phoneGroupSizes: phoneGroupSizes, phoneGroupSeparators: phoneGroupSeparators);
+    return CountryName(
+      code: code,
+      en: en,
+      ru: ru,
+      phoneCode: phoneCode,
+      phoneDigits: phoneDigits,
+      phoneMask: phoneMask,
+      phoneGroupSizes: phoneGroupSizes,
+      phoneGroupSeparators: phoneGroupSeparators,
+    );
   }).toList();
 
   countries.sort((a, b) => a.en.compareTo(b.en));

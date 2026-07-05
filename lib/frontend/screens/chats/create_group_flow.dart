@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -9,8 +8,10 @@ import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/names.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/komet_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
@@ -68,9 +69,9 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       final list = await ContactsModule.getContacts(myId);
       list.removeWhere((c) => c.id == myId);
       list.sort(
-        (a, b) => _displayName(
-          a,
-        ).toLowerCase().compareTo(_displayName(b).toLowerCase()),
+        (a, b) => displayName(a.firstName, a.lastName).toLowerCase().compareTo(
+          displayName(b.firstName, b.lastName).toLowerCase(),
+        ),
       );
       if (!mounted) return;
       setState(() {
@@ -118,7 +119,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
     setState(() => _creating = true);
     final navigator = Navigator.of(context, rootNavigator: true);
     try {
-      final chat = await ChatsModule.createGroupChat(
+      final chat = await chats.createGroupChat(
         api,
         title: title,
         userIds: _selected.map((c) => c.id).toList(),
@@ -131,7 +132,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       }
 
       if (_avatar != null) {
-        final url = await ChatsModule.requestChatPhotoUploadUrl(api);
+        final url = await chats.requestChatPhotoUploadUrl(api);
         if (url != null) {
           final bytes = await compressAvatar(await _avatar!.readAsBytes());
           if (bytes == null) {
@@ -145,11 +146,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
               filename: 'avatar.jpg',
             );
             if (token != null) {
-              await ChatsModule.setChatPhoto(
-                api,
-                chatId: chat.id,
-                photoToken: token,
-              );
+              await chats.setChatPhoto(api, chatId: chat.id, photoToken: token);
             } else if (mounted) {
               showCustomNotification(context, 'Не удалось загрузить аватарку');
             }
@@ -175,11 +172,6 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
         setState(() => _creating = false);
       }
     }
-  }
-
-  String _displayName(CachedContact c) {
-    final last = c.lastName ?? '';
-    return last.isEmpty ? c.firstName : '${c.firstName} $last';
   }
 
   String _statusText(CachedContact c) => c.isBot ? 'Бот' : 'Был(-а) недавно';
@@ -231,7 +223,12 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
     final filtered = query.isEmpty
         ? _all
         : _all
-              .where((c) => _displayName(c).toLowerCase().contains(query))
+              .where(
+                (c) => displayName(
+                  c.firstName,
+                  c.lastName,
+                ).toLowerCase().contains(query),
+              )
               .toList();
 
     return Column(
@@ -268,7 +265,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                 for (final c in _selected)
                   _SelectedChip(
                     contact: c,
-                    label: _displayName(c),
+                    label: displayName(c.firstName, c.lastName),
                     onRemove: () => _toggle(c),
                     cs: cs,
                   ),
@@ -316,14 +313,18 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                         ),
                         child: Row(
                           children: [
-                            _Avatar(contact: c, size: 40, cs: cs),
+                            KometAvatar(
+                              name: c.firstName,
+                              size: 40,
+                              imageUrl: c.baseUrl,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _displayName(c),
+                                    displayName(c.firstName, c.lastName),
                                     style: TextStyle(
                                       color: dim
                                           ? cs.onSurface.withValues(alpha: 0.5)
@@ -504,54 +505,6 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  final CachedContact contact;
-  final double size;
-  final ColorScheme cs;
-  const _Avatar({required this.contact, required this.size, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    final url = contact.baseUrl;
-    if (url != null && url.isNotEmpty) {
-      return ClipOval(
-        child: CachedNetworkImage(
-          imageUrl: url,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          placeholder: (_, _) => _initials(cs, size),
-          errorWidget: (_, _, _) => _initials(cs, size),
-        ),
-      );
-    }
-    return _initials(cs, size);
-  }
-
-  Widget _initials(ColorScheme cs, double size) {
-    final initial = contact.firstName.isNotEmpty
-        ? contact.firstName[0].toUpperCase()
-        : '?';
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: cs.primaryContainer,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initial,
-        style: TextStyle(
-          color: cs.onPrimaryContainer,
-          fontSize: size * 0.4,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
 class _SelectedChip extends StatelessWidget {
   final CachedContact contact;
   final String label;
@@ -577,7 +530,11 @@ class _SelectedChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _Avatar(contact: contact, size: 24, cs: cs),
+            KometAvatar(
+              name: contact.firstName,
+              size: 24,
+              imageUrl: contact.baseUrl,
+            ),
             const SizedBox(width: 6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 140),

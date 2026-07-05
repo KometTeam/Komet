@@ -5,7 +5,7 @@ abstract class ServerConfig {
   static const int defaultPort = 443;
   static const String prefHostKey = 'server_host_override';
   static const String prefPortKey = 'server_port_override';
-  static const Duration pingInterval = Duration(seconds: 30);
+  static const Duration pingInterval = Duration(seconds: 10);
   static const Duration requestTimeout = Duration(seconds: 30);
   static const int maxReconnectAttempts = 50;
 

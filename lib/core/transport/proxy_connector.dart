@@ -93,9 +93,7 @@ class ProxyConnector {
         throw SocketException('SOCKS5: неверная версия в ответе');
       }
       if (reply[1] != 0x00) {
-        throw SocketException(
-          'SOCKS5: ошибка подключения, код: ${reply[1]}',
-        );
+        throw SocketException('SOCKS5: ошибка подключения, код: ${reply[1]}');
       }
 
       // Пропускаем bind address
@@ -125,10 +123,7 @@ class ProxyConnector {
 
   // ── HTTP CONNECT ────────────────────────────────────────────────────────
 
-  Future<Socket> _connectHttpConnect(
-    String targetHost,
-    int targetPort,
-  ) async {
+  Future<Socket> _connectHttpConnect(String targetHost, int targetPort) async {
     final proxySocket = await RawSocket.connect(settings.host, settings.port);
     logger.i(
       'HTTP CONNECT: подключено к прокси ${settings.host}:${settings.port}',
@@ -177,9 +172,7 @@ class ProxyConnector {
       }
       final statusCode = int.tryParse(parts[1]) ?? 0;
       if (statusCode != 200) {
-        throw SocketException(
-          'HTTP CONNECT: прокси вернул статус $statusCode',
-        );
+        throw SocketException('HTTP CONNECT: прокси вернул статус $statusCode');
       }
 
       logger.i('HTTP CONNECT: туннель к $targetHost:$targetPort установлен');
@@ -197,10 +190,7 @@ class ProxyConnector {
   ) async {
     ServerSocket? server;
     try {
-      server = await ServerSocket.bind(
-        InternetAddress.loopbackIPv4,
-        0,
-      );
+      server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     } catch (e) {
       io.dispose();
       proxySocket.close();
@@ -223,11 +213,13 @@ class ProxyConnector {
 
     serverSide.listen(
       (data) {
-        unawaited(io.write(data).catchError((Object _) {
-          try {
-            serverSide.destroy();
-          } catch (_) {}
-        }));
+        unawaited(
+          io.write(data).catchError((Object _) {
+            try {
+              serverSide.destroy();
+            } catch (_) {}
+          }),
+        );
       },
       onError: (Object _) {
         proxySocket.shutdown(SocketDirection.send);
@@ -303,9 +295,7 @@ class _RawSocketIO {
       case RawSocketEvent.closed:
         _closed = true;
         onClosed?.call();
-        _readWaiter?.completeError(
-          SocketException('Прокси закрыл соединение'),
-        );
+        _readWaiter?.completeError(SocketException('Прокси закрыл соединение'));
         _readWaiter = null;
         _writeWaiter?.completeError(
           SocketException('Прокси закрыл соединение'),
@@ -328,8 +318,7 @@ class _RawSocketIO {
       _readWaiter = Completer<void>();
       await _readWaiter!.future.timeout(
         const Duration(seconds: 15),
-        onTimeout: () =>
-            throw SocketException('Тайм-аут при чтении от прокси'),
+        onTimeout: () => throw SocketException('Тайм-аут при чтении от прокси'),
       );
     }
     final result = Uint8List.fromList(_readBuffer.sublist(0, count));

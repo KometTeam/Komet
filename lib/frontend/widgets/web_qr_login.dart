@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../main.dart' show accountModule;
 import 'custom_notification.dart';
@@ -9,9 +8,7 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
   final agreed = await showModalBottomSheet<bool>(
     context: context,
     backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+    shape: kSheetShape,
     builder: (sheetContext) {
       final cs = Theme.of(sheetContext).colorScheme;
       return SafeArea(
@@ -25,7 +22,8 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
               const SizedBox(height: 20),
               Text(
                 'Вход по QR',
-                style: GoogleFonts.outfit(
+                style: TextStyle(
+                  fontFamily: 'Outfit',
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: cs.onSurface,

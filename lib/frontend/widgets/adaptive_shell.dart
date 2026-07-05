@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/utils/update_checker.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
+import 'update_dialog.dart';
 
 class AdaptiveShell extends StatefulWidget {
   const AdaptiveShell({super.key});
@@ -46,6 +48,13 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   void initState() {
     super.initState();
     _loadListWidth();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeCheckUpdate());
+  }
+
+  Future<void> _maybeCheckUpdate() async {
+    final update = await UpdateChecker.check();
+    if (update == null || !mounted) return;
+    await showUpdateDialog(context, update);
   }
 
   Future<void> _loadListWidth() async {
@@ -64,10 +73,16 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
 
   void _onChatSelected(DesktopChatSelection chat) {
     if (chat.imageUrl.isNotEmpty) {
-      unawaited(precacheImage(
-        CachedNetworkImageProvider(chat.imageUrl, maxWidth: 144, maxHeight: 144),
-        context,
-      ));
+      unawaited(
+        precacheImage(
+          CachedNetworkImageProvider(
+            chat.imageUrl,
+            maxWidth: 144,
+            maxHeight: 144,
+          ),
+          context,
+        ),
+      );
     }
     setState(() => _selected = chat);
   }
@@ -77,8 +92,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   }
 
   void _onDrag(double dx, double totalWidth) {
-    final maxAllowedByPane =
-        totalWidth - _minChatPaneWidth - _dividerHitWidth;
+    final maxAllowedByPane = totalWidth - _minChatPaneWidth - _dividerHitWidth;
     final upperBound = maxAllowedByPane < _maxListWidth
         ? maxAllowedByPane
         : _maxListWidth;
@@ -98,8 +112,10 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
         final totalWidth = constraints.maxWidth;
         final effectiveListWidth = _listWidth.clamp(
           _minListWidth,
-          (totalWidth - _minChatPaneWidth - _dividerHitWidth)
-              .clamp(_minListWidth, _maxListWidth),
+          (totalWidth - _minChatPaneWidth - _dividerHitWidth).clamp(
+            _minListWidth,
+            _maxListWidth,
+          ),
         );
         final cs = Theme.of(context).colorScheme;
         return Scaffold(
@@ -184,7 +200,9 @@ class _ResizeDividerState extends State<_ResizeDivider> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               width: widget.lineWidth,
-              color: highlight ? cs.primary.withValues(alpha: 0.6) : widget.color,
+              color: highlight
+                  ? cs.primary.withValues(alpha: 0.6)
+                  : widget.color,
             ),
           ),
         ),

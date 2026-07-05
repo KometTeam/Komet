@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/countries.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -18,15 +17,29 @@ class SelectCountryScreen extends StatefulWidget {
   State<SelectCountryScreen> createState() => _SelectCountryScreenState();
 }
 
+class _CountrySearchEntry {
+  final CountryName country;
+  final String ruLower;
+  final String enLower;
+
+  const _CountrySearchEntry(this.country, this.ruLower, this.enLower);
+}
+
 class _SelectCountryScreenState extends State<SelectCountryScreen> {
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   late List<CountryName> _filteredCountries;
+  late final List<_CountrySearchEntry> _searchEntries;
 
   @override
   void initState() {
     super.initState();
     _filteredCountries = widget.countries;
+    _searchEntries = widget.countries
+        .map(
+          (c) => _CountrySearchEntry(c, c.ru.toLowerCase(), c.en.toLowerCase()),
+        )
+        .toList();
   }
 
   @override
@@ -41,11 +54,15 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
         _filteredCountries = widget.countries;
       } else {
         final q = query.toLowerCase();
-        _filteredCountries = widget.countries.where((c) {
-          return c.ru.toLowerCase().contains(q) ||
-              c.en.toLowerCase().contains(q) ||
-              c.phoneCode.contains(q);
-        }).toList();
+        _filteredCountries = _searchEntries
+            .where(
+              (e) =>
+                  e.ruLower.contains(q) ||
+                  e.enLower.contains(q) ||
+                  e.country.phoneCode.contains(q),
+            )
+            .map((e) => e.country)
+            .toList();
       }
     });
   }
@@ -69,14 +86,14 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w400,
                 ),
                 decoration: InputDecoration(
                   hintText: l10n.selectCountrySearchHint,
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 18,
                     fontWeight: FontWeight.w400,
@@ -87,7 +104,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
               )
             : Text(
                 l10n.selectCountryTitle,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 20,
                   fontWeight: FontWeight.w500,
@@ -121,15 +138,15 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
           return ListTile(
             leading: Text(
               country.phoneCode,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurfaceVariant,
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
               ),
             ),
             title: Text(
-              lang == 'ru' ? country.ru : country.en,
-              style: GoogleFonts.inter(
+              country.displayName(lang),
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 16,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,

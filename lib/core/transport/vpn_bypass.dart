@@ -37,8 +37,9 @@ class VpnBypassService {
 
   static const String prefKey = 'dev_vpn_bypass';
 
-  static const MethodChannel _channel =
-      MethodChannel('ru.komet.app/vpn_bypass');
+  static const MethodChannel _channel = MethodChannel(
+    'ru.komet.app/vpn_bypass',
+  );
 
   bool _bound = false;
 
@@ -70,8 +71,9 @@ class VpnBypassService {
   Future<VpnBypassResult> bind() async {
     VpnBypassResult result;
     try {
-      final res = await _channel
-          .invokeMapMethod<String, dynamic>('bindToNonVpnNetwork');
+      final res = await _channel.invokeMapMethod<String, dynamic>(
+        'bindToNonVpnNetwork',
+      );
       final bound = res?['bound'] == true;
       _bound = bound;
       result = VpnBypassResult(
@@ -97,8 +99,10 @@ class VpnBypassService {
       );
     }
     if (result.bound) {
-      logger.i('VPN bypass: привязано к ${result.boundInterface} '
-          '(${result.transport})');
+      logger.i(
+        'VPN bypass: привязано к ${result.boundInterface} '
+        '(${result.transport})',
+      );
     } else {
       logger.w('VPN bypass: обойти не удалось (${result.reason})');
     }
@@ -108,8 +112,9 @@ class VpnBypassService {
 
   Future<bool> _isVpnActive() async {
     try {
-      final res = await _channel
-          .invokeMapMethod<String, dynamic>('detectInterfaces');
+      final res = await _channel.invokeMapMethod<String, dynamic>(
+        'detectInterfaces',
+      );
       if (res != null) {
         if (res['hasTun'] == true || res['hasVpn'] == true) return true;
         if (res.containsKey('hasTun')) return false;

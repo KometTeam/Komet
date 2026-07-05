@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
+import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
+import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
-import 'chats.dart' show ChatsModule;
+import 'chats.dart' show chats;
 
 class ContactCache {
   static final Map<int, String> _nameCache = {};
@@ -333,10 +335,28 @@ class ReplyInfo {
           return 'Ссылка';
         case AttachmentType.control:
           return '';
+        case AttachmentType.inlineKeyboard:
+          return '';
+        case AttachmentType.forward:
+          return 'Переслано';
+        case AttachmentType.unknown:
+          return 'Вложение';
       }
     }
     return '';
   }
+}
+
+class AudioUploadInfo {
+  final String url;
+  final int audioId;
+  final String token;
+
+  AudioUploadInfo({
+    required this.url,
+    required this.audioId,
+    required this.token,
+  });
 }
 
 class CachedMessage {
@@ -351,6 +371,7 @@ class CachedMessage {
   final List<MessageAttachment>? attachments;
   final bool isControl;
   final bool deleted;
+  final List<Map<String, dynamic>>? editHistory;
 
   const CachedMessage({
     required this.id,
@@ -364,12 +385,14 @@ class CachedMessage {
     this.attachments,
     this.isControl = false,
     this.deleted = false,
+    this.editHistory,
   });
 
   CachedMessage copyWith({
     String? status,
     bool? deleted,
     List<MessageAttachment>? attachments,
+    List<Map<String, dynamic>>? editHistory,
   }) => CachedMessage(
     id: id,
     accountId: accountId,
@@ -382,7 +405,60 @@ class CachedMessage {
     attachments: attachments ?? this.attachments,
     isControl: isControl,
     deleted: deleted ?? this.deleted,
+    editHistory: editHistory ?? this.editHistory,
   );
+
+  static List<Map<String, dynamic>>? parseEditHistory(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        final list = decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        return list.isEmpty ? null : list;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static List<Map<String, dynamic>> appendEditHistory(
+    List<Map<String, dynamic>>? current,
+    String? oldText,
+    int time,
+  ) {
+    final list = current != null
+        ? List<Map<String, dynamic>>.from(current)
+        : <Map<String, dynamic>>[];
+    if (list.isNotEmpty && (list.last['text'] as String?) == oldText) {
+      return list;
+    }
+    list.add({'text': oldText, 'time': time});
+    return list;
+  }
+
+  static (List<MessageAttachment>?, bool) parseAttachments(
+    Map<String, dynamic> map,
+  ) {
+    List<MessageAttachment>? attachments;
+    final link = map['link'];
+    final linkType = link is Map ? link['type'] as String? : null;
+    if (linkType == 'FORWARD') {
+      attachments = [ForwardedMessageAttachment.fromMap(map)];
+    } else {
+      final attaches = map['attaches'] as List?;
+      if (attaches != null) {
+        attachments = attaches
+            .whereType<Map>()
+            .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+            .toList();
+      }
+    }
+    final isControl =
+        attachments?.any((a) => a.type == AttachmentType.control) ?? false;
+    return (attachments, isControl);
+  }
 
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
     Map<String, dynamic>? payload;
@@ -394,22 +470,11 @@ class CachedMessage {
     }
 
     List<MessageAttachment>? attachments;
+    bool isControl = false;
     if (payload != null) {
-      final linkType = payload['link']?['type'] as String?;
-      if (linkType == 'FORWARD') {
-        attachments = [ForwardedMessageAttachment.fromMap(payload)];
-      } else {
-        final attaches = payload['attaches'] as List?;
-        if (attaches != null) {
-          attachments = attaches
-              .map(
-                (a) => MessageAttachment.fromMap(
-                  Map<String, dynamic>.from(a as Map),
-                ),
-              )
-              .toList();
-        }
-      }
+      final parsed = parseAttachments(payload);
+      attachments = parsed.$1;
+      isControl = parsed.$2;
     }
 
     return CachedMessage(
@@ -430,11 +495,11 @@ class CachedMessage {
       status: row['status']?.toString(),
       payload: payload,
       attachments: attachments,
-      isControl:
-          attachments?.any((a) => a.type == AttachmentType.control) ?? false,
+      isControl: isControl,
       deleted: row['deleted'] is int
           ? row['deleted'] == 1
           : row['deleted']?.toString() == '1',
+      editHistory: parseEditHistory(row['edit_history']),
     );
   }
 
@@ -451,6 +516,9 @@ class CachedMessage {
   bool get isDelayed => delayedTimeToFire != null;
 
   ReplyInfo? get replyInfo => ReplyInfo.fromPayload(payload);
+
+  List<FormatRange> get formatRanges =>
+      parseFormatElements(payload?['elements']);
 
   static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
       rows.map(CachedMessage.fromDbRow).toList();
@@ -474,17 +542,12 @@ class CachedMessage {
     'status': status,
     'payload': payload != null ? jsonEncode(payload) : null,
     'deleted': deleted ? 1 : 0,
+    'edit_history': editHistory != null ? jsonEncode(editHistory) : null,
   };
 
   static CachedMessage fromPushPayload(int accountId, int chatId, Map msg) {
-    List<MessageAttachment>? attachments;
-    final attaches = msg['attaches'];
-    if (attaches is List && attaches.isNotEmpty) {
-      attachments = attaches
-          .whereType<Map>()
-          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
-          .toList();
-    }
+    final full = Map<String, dynamic>.from(msg);
+    final parsed = parseAttachments(full);
     return CachedMessage(
       id: msg['id']?.toString() ?? '',
       accountId: accountId,
@@ -493,8 +556,9 @@ class CachedMessage {
       text: msg['text'] as String?,
       time: (msg['time'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
       status: (msg['status'] as String?) ?? 'sent',
-      payload: Map<String, dynamic>.from(msg),
-      attachments: attachments,
+      payload: full,
+      attachments: parsed.$1,
+      isControl: parsed.$2,
     );
   }
 }
@@ -504,25 +568,19 @@ class MessagesModule {
 
   MessagesModule(this._api);
 
-  /// Загружает историю сообщений для указанного чата.
-  ///
-  /// [fromTime] — опционально, время от которого грузить (миллисекунды).
-  /// Если не указано, грузит самые свежие.
-  /// [count] — количество сообщений.
   Future<List<CachedMessage>> fetchHistory(
     int accountId,
     int chatId, {
     int? fromTime,
     int count = 50,
+    int forward = 0,
+    int? backward,
   }) async {
     final payload = {
       'chatId': chatId,
-      'from':
-          fromTime ??
-          (DateTime.now().millisecondsSinceEpoch +
-              86400000), // +1 день для запаса
-      'forward': 0,
-      'backward': count,
+      'from': fromTime ?? (DateTime.now().millisecondsSinceEpoch + 86400000),
+      'forward': forward,
+      'backward': backward ?? count,
       'getMessages': true,
     };
 
@@ -537,7 +595,6 @@ class MessagesModule {
     if (messagesData is! List) return [];
 
     final List<CachedMessage> results = [];
-    final List<Map<String, dynamic>> rows = [];
 
     for (var i = 0; i < messagesData.length; i++) {
       final m = messagesData[i];
@@ -546,7 +603,6 @@ class MessagesModule {
       final msg = _parseMessage(m.cast<dynamic, dynamic>(), accountId, chatId);
       if (msg != null) {
         results.add(msg);
-        rows.add(msg.toDbRow());
       }
 
       if (i > 0 && i % 20 == 0) {
@@ -554,18 +610,82 @@ class MessagesModule {
       }
     }
 
-    if (rows.isNotEmpty) {
+    final toSave = KometSettings.viewRedacted.value && results.isNotEmpty
+        ? await _mergeEditHistory(accountId, chatId, results)
+        : results;
+
+    if (toSave.isNotEmpty) {
       try {
-        await AppDatabase.saveMessages(rows);
+        await AppDatabase.saveMessages(toSave.map((m) => m.toDbRow()).toList());
       } catch (e) {
         logger.e('saveMessages error: $e');
       }
     }
 
-    return results;
+    return toSave;
   }
 
-  /// Загружает сообщения из локальной базы данных.
+  Future<List<Map<String, dynamic>>> searchMessages(
+    int chatId,
+    String query, {
+    int count = 30,
+  }) async {
+    final response = await _api.sendRequest(Opcode.msgSearch, {
+      'chatId': chatId,
+      'query': query,
+      'count': count,
+    });
+
+    if (!response.isOk) return const [];
+
+    final data = response.payload;
+    if (data is! Map) return const [];
+
+    final result = data['result'];
+    if (result is! List) return const [];
+
+    return result
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e.cast()))
+        .toList();
+  }
+
+  Future<List<CachedMessage>> _mergeEditHistory(
+    int accountId,
+    int chatId,
+    List<CachedMessage> serverMessages,
+  ) async {
+    final cachedRows = await AppDatabase.loadMessagesByIds(
+      accountId,
+      chatId,
+      serverMessages.map((m) => m.id).toList(),
+    );
+    final byId = <String, Map<String, dynamic>>{};
+    for (final row in cachedRows) {
+      final id = row['id']?.toString();
+      if (id != null) byId[id] = row;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final out = <CachedMessage>[];
+    for (final msg in serverMessages) {
+      final existing = byId[msg.id];
+      if (existing == null) {
+        out.add(msg);
+        continue;
+      }
+      var history = CachedMessage.parseEditHistory(existing['edit_history']);
+      final oldText = existing['text']?.toString();
+      if ((oldText ?? '') != (msg.text ?? '') &&
+          oldText != null &&
+          oldText.isNotEmpty) {
+        history = CachedMessage.appendEditHistory(history, oldText, now);
+      }
+      out.add(history == null ? msg : msg.copyWith(editHistory: history));
+    }
+    return out;
+  }
+
   Future<List<CachedMessage>> getLocalHistory(
     int accountId,
     int chatId, {
@@ -589,30 +709,8 @@ class MessagesModule {
     final id = m['id']?.toString();
     if (id == null) return null;
 
-    final linkRaw = m['link'];
-    String? linkType;
-    if (linkRaw is Map) {
-      linkType = linkRaw['type'] as String?;
-    }
-
-    List<MessageAttachment>? attachments;
-    bool isControl = false;
-    if (linkType == 'FORWARD') {
-      final fwdMap = Map<String, dynamic>.from(m.cast());
-      attachments = [ForwardedMessageAttachment.fromMap(fwdMap)];
-    } else {
-      final attaches = m['attaches'] as List?;
-      if (attaches != null) {
-        attachments = attaches
-            .whereType<Map>()
-            .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
-            .toList();
-        // Detect CONTROL
-        if (attachments.any((a) => a.type == AttachmentType.control)) {
-          isControl = true;
-        }
-      }
-    }
+    final full = Map<String, dynamic>.from(m.cast());
+    final parsed = CachedMessage.parseAttachments(full);
 
     return CachedMessage(
       id: id,
@@ -622,9 +720,9 @@ class MessagesModule {
       text: m['text']?.toString(),
       time: _parseIntField(m['time']),
       status: m['status']?.toString(),
-      payload: Map<String, dynamic>.from(m.cast()),
-      attachments: attachments,
-      isControl: isControl,
+      payload: full,
+      attachments: parsed.$1,
+      isControl: parsed.$2,
     );
   }
 
@@ -642,11 +740,12 @@ class MessagesModule {
     bool notify = true,
     int? scheduledTime,
     int? replyToMessageId,
+    List<Map<String, dynamic>> elements = const [],
   }) async {
     final message = <String, dynamic>{
       'text': text,
       'cid': DateTime.now().millisecondsSinceEpoch * -1,
-      'elements': [],
+      'elements': elements,
       'attaches': [],
     };
     if (replyToMessageId != null) {
@@ -662,20 +761,18 @@ class MessagesModule {
         'notifySender': true,
       };
     }
-    final payload = {
-      'chatId': chatId,
-      'message': message,
-      'notify': notify,
-    };
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
+    return _sendAndExtractMessageId(payload, 'Ошибка отправки');
+  }
+
+  Future<String> _sendAndExtractMessageId(
+    Map<String, dynamic> payload,
+    String defaultError,
+  ) async {
     final response = await _api.sendRequest(Opcode.msgSend, payload);
     if (!response.isOk) {
-      final msg = (response.payload is Map)
-          ? (response.payload['localizedMessage'] ??
-                response.payload['message'] ??
-                'Ошибка отправки')
-          : 'Ошибка отправки';
-      throw Exception(msg.toString());
+      _throwSendError(response.payload, defaultError);
     }
     final data = response.payload;
     if (data is Map) {
@@ -688,11 +785,46 @@ class MessagesModule {
     return '';
   }
 
-  /// Пересылает сообщение [messageId] из чата [sourceChatId] в [targetChatId].
-  ///
-  /// Пересылка — это отдельное сообщение без текста и вложений, со ссылкой
-  /// `link.type = FORWARD`, указывающей на оригинал. Сервер сам подставит
-  /// тело оригинала в ответе.
+  Never _throwSendError(dynamic payload, String fallback) {
+    final msg = (payload is Map)
+        ? (payload['localizedMessage'] ?? payload['message'] ?? fallback)
+        : fallback;
+    throw Exception(msg.toString());
+  }
+
+  Map<String, dynamic>? _sentMessageMap(Packet response) {
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is Map) return Map<String, dynamic>.from(msg);
+    }
+    return null;
+  }
+
+  Future<T> _sendWithNotReadyRetry<T>({
+    required Map<String, dynamic> payload,
+    required int maxAttempts,
+    required Duration retryDelay,
+    required T Function(Packet response) onResult,
+    required T onExhausted,
+  }) async {
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        return onResult(response);
+      } on PacketError catch (e) {
+        if (!(e.errorKey?.contains('not.ready') ?? false)) {
+          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
+          rethrow;
+        }
+        if (attempt == maxAttempts - 1) return onExhausted;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return onExhausted;
+  }
+
   Future<String> forwardMessage(
     int targetChatId,
     int sourceChatId,
@@ -717,30 +849,107 @@ class MessagesModule {
       'notify': notify,
     };
 
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
-    if (!response.isOk) {
-      final msg = (response.payload is Map)
-          ? (response.payload['localizedMessage'] ??
-                response.payload['message'] ??
-                'Ошибка пересылки')
-          : 'Ошибка пересылки';
-      throw Exception(msg.toString());
-    }
-    final data = response.payload;
-    if (data is Map) {
-      final msgMap = data['message'];
-      if (msgMap is Map) {
-        final id = msgMap['id'];
-        if (id != null) return id.toString();
-      }
-    }
-    return '';
+    return _sendAndExtractMessageId(payload, 'Ошибка пересылки');
   }
 
-  /// Загружает отложенные (запланированные) сообщения чата.
-  ///
-  /// В отличие от обычной истории, отложенные сообщения не сохраняются
-  /// в локальную БД — они живут только до момента отправки.
+  static CachedMessage buildForwardMessage({
+    required int myId,
+    required int targetChatId,
+    required int sourceChatId,
+    required CachedMessage source,
+    required String tempId,
+    required int time,
+    required String status,
+  }) {
+    final srcPayload = source.payload;
+    final srcLink = srcPayload?['link'];
+    Map<String, dynamic> originalMsg;
+    if (srcLink is Map &&
+        srcLink['type'] == 'FORWARD' &&
+        srcLink['message'] is Map) {
+      originalMsg = Map<String, dynamic>.from(srcLink['message'] as Map);
+    } else {
+      originalMsg = {
+        'id': int.tryParse(source.id) ?? source.id,
+        'sender': source.senderId,
+        'time': source.time,
+        'text': source.text,
+        'attaches': (srcPayload?['attaches'] as List?) ?? const [],
+      };
+    }
+    final payload = <String, dynamic>{
+      'elements': const [],
+      'attaches': const [],
+      'link': {
+        'type': 'FORWARD',
+        'chatId': sourceChatId,
+        'messageId': int.tryParse(source.id) ?? source.id,
+        'message': originalMsg,
+      },
+    };
+    return CachedMessage(
+      id: tempId,
+      accountId: myId,
+      chatId: targetChatId,
+      senderId: myId,
+      text: null,
+      time: time,
+      status: status,
+      payload: payload,
+      attachments: [ForwardedMessageAttachment.fromMap(payload)],
+    );
+  }
+
+  static CachedMessage reidentifyMessage(
+    CachedMessage message,
+    String newId, {
+    String? status,
+  }) => CachedMessage(
+    id: newId,
+    accountId: message.accountId,
+    chatId: message.chatId,
+    senderId: message.senderId,
+    text: message.text,
+    time: message.time,
+    status: status ?? message.status,
+    payload: message.payload,
+    attachments: message.attachments,
+    isControl: message.isControl,
+    deleted: message.deleted,
+    editHistory: message.editHistory,
+  );
+
+  static String forwardPreviewText(CachedMessage message) {
+    final link = message.payload?['link'];
+    if (link is Map && link['message'] is Map) {
+      final original = link['message'] as Map;
+      final text = original['text'];
+      if (text is String && text.trim().isNotEmpty) return text;
+    }
+    return 'Пересланное сообщение';
+  }
+
+  Future<bool> sendLinkMessage(int chatId, String url) async {
+    final message = <String, dynamic>{
+      'text': url,
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'elements': [
+        {
+          'type': 'LINK',
+          'from': 0,
+          'length': url.length,
+          'attributes': {'url': url},
+        },
+      ],
+      'attaches': [],
+    };
+    return _api.sendRequestOk(Opcode.msgSend, {
+      'chatId': chatId,
+      'message': message,
+      'notify': true,
+    });
+  }
+
   Future<List<CachedMessage>> fetchDelayedMessages(
     int accountId,
     int chatId,
@@ -783,10 +992,6 @@ class MessagesModule {
     return results;
   }
 
-  /// Редактирует текст (подпись) обычного сообщения.
-  ///
-  /// Поле `attachments` не передаётся — сервер сохраняет существующие
-  /// вложения.
   Future<bool> editMessage(
     int chatId,
     String messageId, {
@@ -805,13 +1010,9 @@ class MessagesModule {
     };
     if (sendAttachments) payload['attachments'] = const <dynamic>[];
 
-    final response = await _api.sendRequest(Opcode.msgEdit, payload);
-    return response.isOk;
+    return _api.sendRequestOk(Opcode.msgEdit, payload);
   }
 
-  /// Редактирует отложенное сообщение: меняет текст и/или время отправки.
-  ///
-  /// Вложения сервер сохраняет сам — в payload они не передаются.
   Future<bool> editScheduledMessage(
     int chatId,
     String messageId, {
@@ -826,14 +1027,10 @@ class MessagesModule {
       'chatId': chatId,
       'elements': <dynamic>[],
       'text': text,
-      'delayedAttributes': {
-        'timeToFire': timeToFire,
-        'notifySender': true,
-      },
+      'delayedAttributes': {'timeToFire': timeToFire, 'notifySender': true},
     };
 
-    final response = await _api.sendRequest(Opcode.msgEdit, payload);
-    return response.isOk;
+    return _api.sendRequestOk(Opcode.msgEdit, payload);
   }
 
   Future<bool> deleteMessages(
@@ -855,8 +1052,29 @@ class MessagesModule {
       'itemType': itemType,
     };
 
-    final response = await _api.sendRequest(Opcode.msgDelete, payload);
-    return response.isOk;
+    return _api.sendRequestOk(Opcode.msgDelete, payload);
+  }
+
+  Future<Map<String, dynamic>?> sendButtonCallback({
+    required int chatId,
+    required String messageId,
+    required String callbackId,
+    String? payload,
+  }) async {
+    final mid = int.tryParse(messageId);
+    if (mid == null) return null;
+
+    final request = {
+      'chatId': chatId,
+      'messageId': mid,
+      'callbackId': callbackId,
+      'payload': ?payload,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSendCallback, request);
+    if (!response.isOk) return null;
+    final data = response.payload;
+    return data is Map ? Map<String, dynamic>.from(data) : null;
   }
 
   Future<TranscriptionResult> requestTranscription(
@@ -920,7 +1138,6 @@ class MessagesModule {
     int? scheduledTime,
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
-    Duration initialDelay = const Duration(seconds: 3),
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -940,26 +1157,15 @@ class MessagesModule {
         'notifySender': true,
       };
     }
-    final payload = {
-      'chatId': chatId,
-      'message': message,
-      'notify': notify,
-    };
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    await Future.delayed(initialDelay);
-
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (response.isOk) return true;
-        return false;
-      } on PacketError catch (e) {
-        if (e.errorKey != 'attachment.not.ready') rethrow;
-        if (attempt == maxAttempts - 1) return false;
-        await Future.delayed(retryDelay);
-      }
-    }
-    return false;
+    return _sendWithNotReadyRetry<bool>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: (response) => response.isOk,
+      onExhausted: false,
+    );
   }
 
   Future<String?> requestPhotoUploadUrl() async {
@@ -995,26 +1201,15 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (!response.isOk) return null;
-        final data = response.payload;
-        if (data is Map) {
-          final msg = data['message'];
-          if (msg is Map) return Map<String, dynamic>.from(msg);
-        }
-        return null;
-      } on PacketError catch (e) {
-        if (e.errorKey != 'attachment.not.ready') rethrow;
-        if (attempt == maxAttempts - 1) return null;
-        await Future.delayed(retryDelay);
-      }
-    }
-    return null;
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
   }
 
-  /// Запрашивает URL для загрузки видео (опкод 82).
   Future<VideoUploadInfo?> requestVideoUploadUrl() async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 0,
@@ -1039,9 +1234,6 @@ class MessagesModule {
     );
   }
 
-  /// Отправляет сообщение с видео по [token], полученному из
-  /// [requestVideoUploadUrl]. Сервер может ответить `attachment.not.ready`,
-  /// пока обрабатывает загруженное видео — в этом случае запрос повторяется.
   Future<Map<String, dynamic>?> sendVideoMessage(
     int chatId,
     String token, {
@@ -1069,23 +1261,139 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (!response.isOk) return null;
-        final data = response.payload;
-        if (data is Map) {
-          final msg = data['message'];
-          if (msg is Map) return Map<String, dynamic>.from(msg);
-        }
-        return null;
-      } on PacketError catch (e) {
-        if (e.errorKey != 'attachment.not.ready') rethrow;
-        if (attempt == maxAttempts - 1) return null;
-        await Future.delayed(retryDelay);
-      }
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
+  }
+
+  Future<AudioUploadInfo?> requestAudioUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.videoUpload, {
+      'uploaderType': 1,
+      'type': 2,
+      'count': 1,
+    });
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return AudioUploadInfo(
+      url: info['url'] as String? ?? '',
+      audioId: info['videoId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  Future<Map<String, dynamic>?> sendAudioMessage(
+    int chatId,
+    String token, {
+    required int duration,
+    Uint8List? wave,
+    bool notify = true,
+    int? scheduledTime,
+    int maxAttempts = 30,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        {
+          'duration': duration,
+          '_type': 'AUDIO',
+          'wave': (wave != null && wave.isNotEmpty) ? wave : Uint8List(80),
+          'token': token,
+        },
+      ],
+    };
+    if (scheduledTime != null) {
+      message['delayedAttributes'] = {
+        'timeToFire': scheduledTime,
+        'notifySender': true,
+      };
     }
-    return null;
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
+  }
+
+  Future<VideoUploadInfo?> requestVideoNoteUploadUrl() async {
+    final response = await _api.sendRequest(Opcode.videoUpload, {
+      'uploaderType': 1,
+      'type': 1,
+      'count': 1,
+    });
+    if (!response.isOk) return null;
+
+    final data = response.payload;
+    if (data is! Map) return null;
+
+    final infoList = data['info'] as List?;
+    if (infoList == null || infoList.isEmpty) return null;
+
+    final info = infoList.first;
+    if (info is! Map) return null;
+
+    return VideoUploadInfo(
+      url: info['url'] as String? ?? '',
+      videoId: info['videoId'] as int? ?? 0,
+      token: info['token'] as String? ?? '',
+    );
+  }
+
+  Future<Map<String, dynamic>?> sendVideoNoteMessage(
+    int chatId,
+    String token, {
+    required int duration,
+    Uint8List? wave,
+    String? thumbhash,
+    bool notify = true,
+    int maxAttempts = 30,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    final message = <String, dynamic>{
+      'isLive': false,
+      'detectShare': false,
+      'elements': <dynamic>[],
+      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'attaches': [
+        {
+          'duration': duration,
+          'videoType': 1,
+          '_type': 'VIDEO',
+          'wave': (wave != null && wave.isNotEmpty) ? wave : Uint8List(80),
+          'token': token,
+          if (thumbhash != null && thumbhash.isNotEmpty) 'thumbhash': thumbhash,
+        },
+      ],
+    };
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
+
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
   }
 
   Future<Map<String, dynamic>?> sendLocationMessage(
@@ -1112,14 +1420,11 @@ class MessagesModule {
     };
 
     final response = await _api.sendRequest(Opcode.msgSend, payload);
-    if (!response.isOk) return null;
-    final data = response.payload;
-    if (data is Map) {
-      final msg = data['message'];
-      if (msg is Map) return Map<String, dynamic>.from(msg);
-    }
-    return null;
+    return _sentMessageMap(response);
   }
+
+  static const int _pollAnonymousFlag = 4;
+  static const int _pollMultipleFlag = 1;
 
   Future<Map<String, dynamic>?> sendPollMessage(
     int chatId,
@@ -1129,7 +1434,9 @@ class MessagesModule {
     bool anonymous = true,
     bool notify = true,
   }) async {
-    final settings = (anonymous ? 4 : 0) | (multiple ? 1 : 0);
+    final settings =
+        (anonymous ? _pollAnonymousFlag : 0) |
+        (multiple ? _pollMultipleFlag : 0);
     final payload = {
       'chatId': chatId,
       'message': {
@@ -1149,13 +1456,38 @@ class MessagesModule {
     };
 
     final response = await _api.sendRequest(Opcode.msgSend, payload);
-    if (!response.isOk) return null;
-    final data = response.payload;
-    if (data is Map) {
-      final msg = data['message'];
-      if (msg is Map) return Map<String, dynamic>.from(msg);
-    }
-    return null;
+    return _sentMessageMap(response);
+  }
+
+  void sendTyping(int chatId, String type) {
+    unawaited(() async {
+      try {
+        await _api.sendRequest(Opcode.msgTyping, {
+          'chatId': chatId,
+          'type': type,
+        });
+      } catch (_) {}
+    }());
+  }
+
+  Future<Map<String, dynamic>?> sendStickerMessage(
+    int chatId,
+    int stickerId, {
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {'_type': 'STICKER', 'stickerId': stickerId},
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    return _sentMessageMap(response);
   }
 
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
@@ -1195,13 +1527,6 @@ class MessagesModule {
     }
   }
 
-  /// Запрашивает у сервера ссылки на воспроизведение видео (opcode 83).
-  ///
-  /// Формат подтверждён дампом: запрос `{messageId, chatId, token, videoId}`,
-  /// ответ содержит `MP4_1080/MP4_720/...`, `HLS`, `DASH`, `EXTERNAL`.
-  /// Возвращает все доступные progressive-MP4 качества (label → URL),
-  /// отсортированные по убыванию. URL'ы — готовые подписанные ссылки на CDN,
-  /// поддерживающие HTTP range, поэтому пригодны для стриминга.
   Future<Map<String, String>> getVideoSources({
     required String messageId,
     required int chatId,
@@ -1246,7 +1571,6 @@ class MessagesModule {
     }
   }
 
-  /// Возвращает один лучший progressive-MP4 (или HLS как запасной).
   Future<String?> getVideoUrl({
     required String messageId,
     required int chatId,
@@ -1302,10 +1626,6 @@ class MessagesModule {
     }
   }
 
-  /// Запрашивает у сервера временный CDN-URL для скачивания файла (opcode 88).
-  ///
-  /// Формат подтверждён дампом: запрос `{messageId, chatId, fileId}`,
-  /// ответ `{url: "https://fd.oneme.ru/getfile?..."}`.
   Future<String?> getFileUrl({
     required String messageId,
     required int chatId,
@@ -1369,7 +1689,7 @@ class MessagesModule {
                 );
               }
 
-              ChatsModule.applyContactUpdate(contactId);
+              chats.applyContactUpdate(contactId);
               return fullName;
             }
           }
@@ -1379,5 +1699,66 @@ class MessagesModule {
       logger.e('searchContactById error: $e');
     }
     return null;
+  }
+
+  Future<bool> ensureContactNames(Iterable<int> ids) async {
+    final missing = ids
+        .where((id) => id != 0 && ContactCache.get(id) == null)
+        .toSet();
+    if (missing.isEmpty) return false;
+    if (_api.state != SessionState.online) return false;
+
+    try {
+      final response = await _api.sendRequest(Opcode.contactInfo, {
+        'contactIds': missing.toList(),
+      });
+
+      if (!response.isOk) return false;
+      final data = response.payload;
+      if (data is! Map) return false;
+
+      final contacts = data['contacts'];
+      if (contacts is! List) return false;
+
+      var resolvedAny = false;
+      for (final raw in contacts.whereType<Map>()) {
+        final id = raw['id'];
+        if (id is! int) continue;
+
+        final names = raw['names'];
+        if (names is List && names.isNotEmpty) {
+          final nameRaw = names.firstWhere(
+            (n) => n is Map && n['type'] == 'ONEME',
+            orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
+          );
+          if (nameRaw is Map) {
+            final firstName = (nameRaw['firstName'] as String?) ?? '';
+            final lastName = nameRaw['lastName'] as String?;
+            final fullName = (lastName != null && lastName.isNotEmpty)
+                ? '$firstName $lastName'
+                : firstName;
+            if (fullName.isNotEmpty) ContactCache.put(id, fullName);
+          }
+        }
+
+        final baseUrl = raw['baseUrl'] as String?;
+        if (baseUrl != null && baseUrl.isNotEmpty) {
+          ContactCache.putAvatar(id, baseUrl);
+        }
+
+        final rawOpts = raw['options'];
+        if (rawOpts is List) {
+          ContactCache.putOptions(id, rawOpts.whereType<String>().toSet());
+        }
+
+        chats.applyContactUpdate(id);
+        resolvedAny = true;
+      }
+
+      return resolvedAny;
+    } catch (e) {
+      logger.e('ensureContactNames error: $e');
+      return false;
+    }
   }
 }

@@ -11,13 +11,16 @@ import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
-const List<PillNavItem> _navItems = [
-  PillNavItem(icon: Symbols.image, label: 'Галерея'),
-  PillNavItem(icon: Symbols.description, label: 'Файл'),
-  PillNavItem(icon: Symbols.location_on, label: 'Геопозиция'),
-  PillNavItem(icon: Symbols.bar_chart, label: 'Опрос'),
-  PillNavItem(icon: Symbols.person, label: 'Контакт'),
+const int _navItemCount = 5;
+
+List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
+  PillNavItem(icon: Symbols.image, label: l10n.attachSheetGallery),
+  PillNavItem(icon: Symbols.description, label: l10n.scheduledAttachFile),
+  PillNavItem(icon: Symbols.location_on, label: l10n.scheduledAttachLocation),
+  PillNavItem(icon: Symbols.bar_chart, label: l10n.attachSheetPoll),
+  PillNavItem(icon: Symbols.person, label: l10n.nfcPeerFirstNameFallback),
 ];
 
 Future<void> showAttachmentSheet(
@@ -71,6 +74,8 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
   final Map<String, PhotoEditState> _edits = {};
+  final Set<String> _tempFiles = {};
+  final Set<String> _sentFiles = {};
   final TextEditingController _captionCtrl = TextEditingController();
   final PageController _pageController = PageController();
 
@@ -101,6 +106,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     _pageController.dispose();
     _selected.dispose();
     _captionCtrl.dispose();
+    for (final path in _tempFiles) {
+      if (_sentFiles.contains(path)) continue;
+      File(path).delete().then((_) {}, onError: (_) {});
+    }
     super.dispose();
   }
 
@@ -149,6 +158,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           },
           initialCaption: _captionCtrl.text,
           onCaptionChanged: (text) => _captionCtrl.text = text,
+          tempFiles: _tempFiles,
         ),
       ),
     );
@@ -163,7 +173,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   void _onCameraTap() {
-    showCustomNotification(context, 'Камера скоро появится');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.attachSheetCameraComingSoon,
+    );
   }
 
   void _sendSelection({GalleryItem? fallback}) {
@@ -175,6 +188,12 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         .map((it) => PickedPhoto(item: it, editedFile: _edits[it.id]?.working))
         .toList();
     final callback = widget.onSend;
+    if (callback != null) {
+      for (final photo in picked) {
+        final path = photo.editedFile?.path;
+        if (path != null) _sentFiles.add(path);
+      }
+    }
     final caption = _captionCtrl.text.trim();
     Navigator.of(context).pop();
     callback?.call(picked, caption);
@@ -215,7 +234,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     Positioned(
                       right: 16,
                       bottom:
-                          barReserve + 8 + MediaQuery.viewInsetsOf(context).bottom,
+                          barReserve +
+                          8 +
+                          MediaQuery.viewInsetsOf(context).bottom,
                       child: AnimatedBuilder(
                         animation: Listenable.merge([
                           _selected,
@@ -267,6 +288,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     ColorScheme cs,
     double bottomReserve,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     return PageView(
       controller: _pageController,
       children: [
@@ -277,27 +299,27 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           cs,
           bottomReserve,
           icon: Symbols.description,
-          title: 'Отправить файл',
-          subtitle: 'Документ, архив или любой другой файл',
-          buttonLabel: 'Выбрать файл',
+          title: l10n.attachSheetSendFileTitle,
+          subtitle: l10n.attachSheetSendFileSubtitle,
+          buttonLabel: l10n.attachSheetChooseFileButton,
           onTap: widget.onPickFile,
         ),
         _buildActionPage(
           cs,
           bottomReserve,
           icon: Symbols.location_on,
-          title: 'Поделиться геопозицией',
-          subtitle: 'Отправить ваше текущее местоположение',
-          buttonLabel: 'Отправить геопозицию',
+          title: l10n.attachSheetShareLocationTitle,
+          subtitle: l10n.attachSheetShareLocationSubtitle,
+          buttonLabel: l10n.attachSheetSendLocationButton,
           onTap: widget.onShareLocation,
         ),
         _buildActionPage(
           cs,
           bottomReserve,
           icon: Symbols.bar_chart,
-          title: 'Создать опрос',
-          subtitle: 'Вопрос с вариантами ответа',
-          buttonLabel: 'Создать опрос',
+          title: l10n.attachSheetCreatePoll,
+          subtitle: l10n.attachSheetCreatePollSubtitle,
+          buttonLabel: l10n.attachSheetCreatePoll,
           onTap: widget.onCreatePoll,
         ),
         _buildPlaceholderPage(cs, bottomReserve),
@@ -379,7 +401,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       return _buildMessage(
         scrollController,
         cs,
-        'Изображений не найдено',
+        AppLocalizations.of(context)!.attachSheetNoImagesFound,
         bottomReserve,
       );
     }
@@ -420,7 +442,12 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
               ),
             ),
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(hpad, spacing, hpad, bottomReserve + 6),
+              padding: EdgeInsets.fromLTRB(
+                hpad,
+                spacing,
+                hpad,
+                bottomReserve + 6,
+              ),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
@@ -489,6 +516,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildLimitedBanner(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return InkWell(
       onTap: () => _source.manageAccess().then((_) => _loadGallery()),
       child: Container(
@@ -500,12 +528,12 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Доступны не все фото',
+                l10n.attachSheetLimitedAccessInfo,
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
             ),
             Text(
-              'Изменить',
+              l10n.loginEdit,
               style: TextStyle(
                 color: cs.primary,
                 fontSize: 13,
@@ -528,7 +556,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
             Icon(Symbols.construction, size: 48, color: cs.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              'Раздел в разработке',
+              AppLocalizations.of(context)!.attachSheetSectionInProgress,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
             ),
           ],
@@ -542,6 +570,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     ColorScheme cs,
     double bottomReserve,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     return _scrollableCenter(
       scrollController,
       bottomReserve,
@@ -553,13 +582,13 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
             Icon(Symbols.no_photography, size: 48, color: cs.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              'Нет доступа к галерее',
+              l10n.attachSheetNoGalleryAccessTitle,
               textAlign: TextAlign.center,
               style: TextStyle(color: cs.onSurface, fontSize: 16),
             ),
             const SizedBox(height: 4),
             Text(
-              'Разрешите доступ к фото, чтобы выбрать их отсюда',
+              l10n.attachSheetNoGalleryAccessSubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
@@ -569,12 +598,12 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
               children: [
                 TextButton(
                   onPressed: _loadGallery,
-                  child: const Text('Разрешить'),
+                  child: Text(l10n.attachSheetAllow),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => _source.openSettings(),
-                  child: const Text('Настройки'),
+                  child: Text(l10n.attachSheetSettings),
                 ),
               ],
             ),
@@ -648,7 +677,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     _navDragAccumDx += dx;
     final pageT = (_navDragBasePageT + _navDragAccumDx / inactiveWidth).clamp(
       0.0,
-      (_navItems.length - 1).toDouble(),
+      (_navItemCount - 1).toDouble(),
     );
     _pageController.jumpTo(pageT * _pageController.position.viewportDimension);
   }
@@ -656,7 +685,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   void _onPillDragEnd() {
     if (!_navDragging) return;
     _navDragging = false;
-    final target = _currentPageT().round().clamp(0, _navItems.length - 1);
+    final target = _currentPageT().round().clamp(0, _navItemCount - 1);
     _pageController.animateToPage(
       target,
       duration: _navAnim,
@@ -691,12 +720,13 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildPillNav() {
+    final navItems = _buildNavItems(AppLocalizations.of(context)!);
     return LayoutBuilder(
       key: const ValueKey('nav'),
       builder: (context, constraints) {
         final geometry = PillNavGeometry.fromInnerWidth(
           constraints.maxWidth - 4,
-          _navItems.length,
+          navItems.length,
         );
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -710,7 +740,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
             builder: (context, _) {
               final cs = Theme.of(context).colorScheme;
               return SlidingPillNav(
-                items: _navItems,
+                items: navItems,
                 position: _currentPageT(),
                 geometry: geometry,
                 onTap: _onSectionTap,
@@ -725,6 +755,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildCaptionBar(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       key: const ValueKey('caption'),
       height: SlidingPillNav.height,
@@ -747,7 +778,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                   decoration: InputDecoration(
                     isCollapsed: true,
                     border: InputBorder.none,
-                    hintText: 'Добавить подпись...',
+                    hintText: l10n.attachSheetAddCaptionHint,
                     hintStyle: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 15,
@@ -808,7 +839,7 @@ class _CameraTile extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Камера',
+              AppLocalizations.of(context)!.attachSheetCamera,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
             ),
           ],

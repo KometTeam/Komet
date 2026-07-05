@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../main.dart';
+import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../models/poll.dart';
 import 'custom_notification.dart';
@@ -62,7 +63,7 @@ class _PollViewState extends State<PollView>
       widget.chatId,
       widget.messageId,
       widget.pollId,
-      force: true,
+      force: false,
     );
   }
 
@@ -177,7 +178,8 @@ class _PollViewState extends State<PollView>
         ? 'Несколько вариантов ответа'
         : 'Один вариант ответа';
     if (poll.total == 0) return kind;
-    return '$kind · ${_votesLabel(poll.total)}';
+    return '$kind · ${poll.total} '
+        '${pluralRu(poll.total, 'голос', 'голоса', 'голосов')}';
   }
 
   Widget _buildChoiceRow(PollAnswer answer, bool multiple) {
@@ -274,8 +276,7 @@ class _PollViewState extends State<PollView>
   ) {
     final pct = total > 0 ? answer.voteCount / total : 0.0;
     final value = answer.rate > 0 ? (answer.rate / 100.0).clamp(0.0, 1.0) : pct;
-    final pctLabel =
-        '${(answer.rate > 0 ? answer.rate : pct * 100).round()}%';
+    final pctLabel = '${(answer.rate > 0 ? answer.rate : pct * 100).round()}%';
 
     final leadWidth = 30.0 * (1 - m);
     final dotOpacity = (1 - m * 1.8).clamp(0.0, 1.0);
@@ -358,8 +359,9 @@ class _PollViewState extends State<PollView>
                     value: fillFactor,
                     minHeight: 6,
                     backgroundColor: widget.dimColor.withValues(alpha: 0.2),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(widget.accentColor),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      widget.accentColor,
+                    ),
                   ),
                 ),
               ),
@@ -368,19 +370,5 @@ class _PollViewState extends State<PollView>
         ],
       ),
     );
-  }
-
-  String _votesLabel(int total) {
-    final mod10 = total % 10;
-    final mod100 = total % 100;
-    String word;
-    if (mod10 == 1 && mod100 != 11) {
-      word = 'голос';
-    } else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
-      word = 'голоса';
-    } else {
-      word = 'голосов';
-    }
-    return '$total $word';
   }
 }

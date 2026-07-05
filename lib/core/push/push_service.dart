@@ -1,64 +1,154 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../backend/api.dart';
 import '../../backend/modules/account.dart';
+import '../../backend/modules/messages.dart';
+import '../calls/conversation_params.dart';
+import '../calls/ws2_signaling.dart';
+import '../protocol/opcode_map.dart';
+import '../storage/app_instance.dart';
+import '../storage/token_storage.dart';
 import '../utils/logger.dart';
 
 const _channelId = 'komet_messages';
 const _channelName = 'Сообщения';
 const _prefsTokenKey = 'fcm_push_token';
 
-@pragma('vm:entry-point')
-Future<void> _backgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  if (message.notification != null) return;
-  final plugin = FlutterLocalNotificationsPlugin();
-  await plugin.initialize(
-    settings: const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ),
-  );
-  await _display(plugin, message);
+Future<void> _clearHistory(int chatId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('notif_hist_$chatId');
 }
 
-Future<void> _display(
-  FlutterLocalNotificationsPlugin plugin,
-  RemoteMessage message,
-) async {
-  final data = message.data;
-  final title = message.notification?.title ??
-      data['title']?.toString() ??
-      data['sender']?.toString() ??
-      'MAX';
-  final body = message.notification?.body ??
-      data['body']?.toString() ??
-      data['text']?.toString() ??
-      data['message']?.toString() ??
-      'Новое сообщение';
-  await plugin.show(
-    id: message.messageId?.hashCode ??
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    title: title,
-    body: body,
-    notificationDetails: const NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        importance: Importance.high,
-        priority: Priority.high,
+@pragma('vm:entry-point')
+void _onNotificationResponse(NotificationResponse response) {
+  if (response.actionId == 'call_decline') {
+    final payload = response.payload;
+    if (payload != null) unawaited(_handleCallDecline(payload));
+    return;
+  }
+  if (response.actionId != 'reply') return;
+  final text = response.input?.trim();
+  final payload = response.payload;
+  if (text == null || text.isEmpty || payload == null) return;
+  unawaited(_handleReply(payload, text));
+}
+
+Future<void> _handleCallDecline(String payloadJson) async {
+  String vcp;
+  String conversationId;
+  try {
+    final decoded = jsonDecode(payloadJson);
+    if (decoded is! Map) return;
+    vcp = decoded['vcp']?.toString() ?? '';
+    conversationId = decoded['conversationId']?.toString() ?? '';
+  } catch (_) {
+    return;
+  }
+  if (vcp.isEmpty || conversationId.isEmpty) return;
+
+  final params = ConversationParams.decode(vcp);
+  if (params == null) return;
+
+  final config = Ws2Config.fromVcp(params, conversationId: conversationId);
+  final signaling = Ws2Signaling(config);
+  try {
+    await signaling.connect();
+    await signaling.hangup(reason: 'REJECTED');
+  } catch (_) {
+  } finally {
+    await signaling.close();
+  }
+}
+
+Future<void> _handleReply(String payloadJson, String text) async {
+  int account;
+  int chatId;
+  int? replyTo;
+  try {
+    final decoded = jsonDecode(payloadJson);
+    if (decoded is! Map) return;
+    account = (decoded['c'] as num?)?.toInt() ?? 0;
+    chatId = (decoded['chat'] as num?)?.toInt() ?? 0;
+    replyTo = (decoded['mid'] as num?)?.toInt();
+  } catch (_) {
+    return;
+  }
+  if (account == 0 || chatId == 0) return;
+
+  WidgetsFlutterBinding.ensureInitialized();
+  if (AppInstance.isNamed) {
+    try {
+      SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
+    } catch (_) {}
+  }
+
+  final plugin = FlutterLocalNotificationsPlugin();
+  final notifId = chatId & 0x7fffffff;
+  Api? api;
+  var sent = false;
+  try {
+    final token = await TokenStorage.readToken(account);
+    if (token != null && token.isNotEmpty) {
+      api = Api()..spoofScope = '$account';
+      await api.connect();
+      if (api.state != SessionState.online) {
+        await api.stateStream
+            .firstWhere((s) => s == SessionState.online)
+            .timeout(const Duration(seconds: 20));
+      }
+      final login = await api.sendRequest(
+        Opcode.login,
+        AccountModule(api).buildLoginPayload(token, interactive: false),
+      );
+      if (login.isOk) {
+        await MessagesModule(
+          api,
+        ).sendMessage(account, chatId, text, replyToMessageId: replyTo);
+        sent = true;
+      }
+    }
+  } catch (_) {
+    sent = false;
+  } finally {
+    await api?.disconnect();
+  }
+
+  if (sent) {
+    await _clearHistory(chatId);
+    await plugin.cancel(id: notifId);
+  } else {
+    await plugin.show(
+      id: notifId,
+      title: 'Komet',
+      body: 'Не удалось отправить ответ',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class PushService {
   PushService._();
   static final PushService instance = PushService._();
+
+  static Future<void> clearChatNotification(int chatId) async {
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.cancel(id: chatId & 0x7fffffff);
+    await _clearHistory(chatId);
+  }
 
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
@@ -84,12 +174,15 @@ class PushService {
 
     await _local.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('ic_notification'),
       ),
+      onDidReceiveNotificationResponse: _onNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: _onNotificationResponse,
     );
     await _local
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(
           const AndroidNotificationChannel(
             _channelId,
@@ -101,10 +194,6 @@ class PushService {
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission();
 
-    FirebaseMessaging.onBackgroundMessage(_backgroundHandler);
-    FirebaseMessaging.onMessage.listen((m) {
-      _display(_local, m);
-    });
     messaging.onTokenRefresh.listen((t) async {
       _token = t;
       await _persistToken(t);

@@ -45,8 +45,10 @@ class CommandSuggestionsPanel extends StatelessWidget {
             return InkWell(
               onTap: onSelected == null ? null : () => onSelected!(c),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 11,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

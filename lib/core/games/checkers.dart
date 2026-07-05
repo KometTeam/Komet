@@ -64,8 +64,14 @@ class Checkers {
     return quiet;
   }
 
-  static void _collectCaptures(List<int> work, int at, CheckersSide side,
-      List<int> path, Set<int> captured, List<List<int>> out) {
+  static void _collectCaptures(
+    List<int> work,
+    int at,
+    CheckersSide side,
+    List<int> path,
+    Set<int> captured,
+    List<List<int>> out,
+  ) {
     final steps = _captureSteps(work, at, captured);
     if (steps.isEmpty) {
       if (path.length > 1) out.add(List<int>.of(path));
@@ -93,7 +99,10 @@ class Checkers {
   }
 
   static List<List<int>> _captureSteps(
-      List<int> work, int at, Set<int> captured) {
+    List<int> work,
+    int at,
+    Set<int> captured,
+  ) {
     final piece = work[at];
     final side = sideOf(piece);
     if (side == null) return const [];
@@ -139,7 +148,11 @@ class Checkers {
   }
 
   static void _collectQuiet(
-      List<int> board, int at, CheckersSide side, List<List<int>> out) {
+    List<int> board,
+    int at,
+    CheckersSide side,
+    List<List<int>> out,
+  ) {
     final piece = board[at];
     final r0 = _row(at);
     final c0 = _col(at);

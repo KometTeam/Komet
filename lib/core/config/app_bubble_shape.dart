@@ -1,30 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 enum BubbleStyle { mobile, desktop }
 
 class AppBubbleShape {
   static const prefKey = 'app_bubble_shape';
-  static final ValueNotifier<BubbleStyle> current = ValueNotifier(
-    BubbleStyle.mobile,
+
+  static final _setting = PersistedEnum<BubbleStyle>(
+    prefKey: prefKey,
+    defaultValue: BubbleStyle.mobile,
+    encode: (value) => value.name,
+    decode: _parse,
   );
 
-  static Future<BubbleStyle> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final val = prefs.getString(prefKey);
-    return _parse(val);
-  }
+  static ValueNotifier<BubbleStyle> get current => _setting.current;
 
-  static Future<void> save(BubbleStyle style) async {
-    current.value = style;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(prefKey, style.name);
-  }
+  static Future<BubbleStyle> load() => _setting.load();
 
-  static BubbleStyle _parse(String? val) {
-    if (val == BubbleStyle.desktop.name) return BubbleStyle.desktop;
-    return BubbleStyle.mobile;
-  }
+  static Future<void> save(BubbleStyle style) => _setting.save(style);
+
+  static BubbleStyle _parse(String? val) =>
+      enumFromName(BubbleStyle.values, val, BubbleStyle.mobile);
 
   static String label(BubbleStyle style) {
     switch (style) {

@@ -10,7 +10,9 @@ import '../../../core/cache/info_cache.dart';
 import '../../../core/nfc/nfc_exchange_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../../models/contact_info.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 
@@ -43,7 +45,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
   _Stage _stage = _Stage.checking;
   int? _peerId;
   int? _peerPhone;
-  Map<String, dynamic>? _peerInfo;
+  ContactInfo? _peerInfo;
   String _failReason = '';
 
   @override
@@ -126,39 +128,15 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
   }
 
   String _peerName() {
-    final info = _peerInfo;
-    if (info != null) {
-      final names = info['names'];
-      if (names is List && names.isNotEmpty) {
-        for (final n in names) {
-          if (n is! Map) continue;
-          final full = n['name']?.toString();
-          if (full != null && full.isNotEmpty) return full;
-          final first = n['firstName']?.toString() ?? '';
-          final last = n['lastName']?.toString() ?? '';
-          final combined = '$first $last'.trim();
-          if (combined.isNotEmpty) return combined;
-        }
-      }
-    }
-    return 'Контакт #${_peerId ?? ''}';
+    final l10n = AppLocalizations.of(context)!;
+    return _peerInfo?.displayName ??
+        l10n.nfcPeerNameFallback('${_peerId ?? ''}');
   }
 
   String _firstNameForAdd() {
-    final info = _peerInfo;
-    if (info != null) {
-      final names = info['names'];
-      if (names is List && names.isNotEmpty) {
-        for (final n in names) {
-          if (n is! Map) continue;
-          final first = n['firstName']?.toString();
-          if (first != null && first.isNotEmpty) return first;
-          final full = n['name']?.toString();
-          if (full != null && full.isNotEmpty) return full;
-        }
-      }
-    }
-    return 'Контакт';
+    return _peerInfo?.firstName ??
+        _peerInfo?.displayName ??
+        AppLocalizations.of(context)!.nfcPeerFirstNameFallback;
   }
 
   Future<void> _add() async {
@@ -174,24 +152,28 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       );
       if (!mounted) return;
       setState(() => _stage = _Stage.added);
-      showCustomNotification(context, 'Контакт добавлен');
+      showCustomNotification(context, AppLocalizations.of(context)!.nfcContactAdded);
       await Future.delayed(const Duration(milliseconds: 700));
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       setState(() => _stage = _Stage.found);
-      showCustomNotification(context, 'Не удалось добавить: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.nfcAddFailed(e.toString()),
+      );
     }
   }
 
   String _reasonText(String? reason) {
+    final l10n = AppLocalizations.of(context)!;
     switch (reason) {
       case 'bluetooth_off':
-        return 'Включите Bluetooth и попробуйте снова';
+        return l10n.nfcReasonBluetoothOff;
       case 'permission':
-        return 'Нужны разрешения Bluetooth для обмена';
+        return l10n.nfcReasonPermission;
       default:
-        return 'Не удалось установить соединение';
+        return l10n.nfcReasonDefault;
     }
   }
 
@@ -201,59 +183,62 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
     return SizedBox(
       width: double.infinity,
       child: Material(
-      color: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+        color: cs.surfaceContainerHigh,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: Text(
-                    'Обмен контактом',
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        AppLocalizations.of(context)!.nfcSheetTitle,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Symbols.close, color: cs.onSurfaceVariant),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(Symbols.close, color: cs.onSurfaceVariant),
+                const SizedBox(height: 12),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+                  switchInCurve: Curves.easeOutBack,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(scale: animation, child: child),
+                  ),
+                  child: KeyedSubtree(
+                    key: ValueKey(
+                      _stage == _Stage.found ? 'found' : _stage.name,
+                    ),
+                    child: _buildContent(cs),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 350),
-              switchInCurve: Curves.easeOutBack,
-              switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(scale: animation, child: child),
-              ),
-              child: KeyedSubtree(
-                key: ValueKey(_stage == _Stage.found ? 'found' : _stage.name),
-                child: _buildContent(cs),
-              ),
-            ),
-            ],
           ),
         ),
-      ),
       ),
     );
   }
 
   Widget _buildContent(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     switch (_stage) {
       case _Stage.checking:
         return const Padding(
@@ -261,13 +246,9 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           child: CircularProgressIndicator(),
         );
       case _Stage.unsupported:
-        return _message(cs, Symbols.nfc, 'NFC недоступен на этом устройстве');
+        return _message(cs, Symbols.nfc, l10n.nfcUnsupported);
       case _Stage.disabled:
-        return _message(
-          cs,
-          Symbols.nfc,
-          'Включите NFC в настройках телефона и попробуйте снова',
-        );
+        return _message(cs, Symbols.nfc, l10n.nfcDisabled);
       case _Stage.failed:
         return _message(cs, Symbols.bluetooth_disabled, _failReason);
       case _Stage.scanning:
@@ -299,6 +280,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
   }
 
   Widget _scanning(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
@@ -319,7 +301,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 20),
           Text(
-            'Поднесите телефоны друг к другу',
+            l10n.nfcScanningTitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: cs.onSurface,
@@ -329,7 +311,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 6),
           Text(
-            'Оба устройства должны держать этот экран открытым',
+            l10n.nfcScanningSubtitle,
             textAlign: TextAlign.center,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
@@ -339,6 +321,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
   }
 
   Widget _exchanging(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
@@ -359,7 +342,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 22),
           Text(
-            'Идёт обмен контактами…',
+            l10n.nfcExchangingTitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: cs.onSurface,
@@ -369,7 +352,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 6),
           Text(
-            'Почти готово',
+            l10n.nfcExchangingSubtitle,
             textAlign: TextAlign.center,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
@@ -379,6 +362,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
   }
 
   Widget _foundCard(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final loading = _peerInfo == null && _stage == _Stage.found;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -401,7 +385,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
               },
               child: KometAvatar(
                 name: _peerName(),
-                imageUrl: _peerInfo?['baseUrl'] as String?,
+                imageUrl: _peerInfo?.avatarUrl,
                 size: 92,
                 fontSize: 34,
               ),
@@ -421,7 +405,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 4),
           Text(
-            formatPhone(_peerPhone) ?? 'ID ${_peerId ?? ''}',
+            formatPhone(_peerPhone) ?? l10n.nfcPeerIdFallback('${_peerId ?? ''}'),
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 24),
@@ -441,7 +425,11 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(_stage == _Stage.added ? 'Добавлено' : 'Добавить контакт'),
+                  : Text(
+                      _stage == _Stage.added
+                          ? l10n.nfcAdded
+                          : l10n.nfcAddContact,
+                    ),
             ),
           ),
         ],
@@ -472,7 +460,9 @@ class _RadarPainter extends CustomPainter {
       canvas.drawCircle(center, radius, paint);
     }
     final corePaint = Paint()
-      ..color = color.withValues(alpha: 0.10 + 0.05 * math.sin(progress * 2 * math.pi));
+      ..color = color.withValues(
+        alpha: 0.10 + 0.05 * math.sin(progress * 2 * math.pi),
+      );
     canvas.drawCircle(center, maxRadius * 0.32, corePaint);
   }
 
@@ -494,8 +484,7 @@ class _BurstPainter extends CustomPainter {
     final maxRadius = size.width / 2;
     final eased = Curves.easeOut.transform(progress.clamp(0.0, 1.0));
 
-    final glow = Paint()
-      ..color = color.withValues(alpha: (1.0 - eased) * 0.18);
+    final glow = Paint()..color = color.withValues(alpha: (1.0 - eased) * 0.18);
     canvas.drawCircle(center, maxRadius * (0.45 + 0.55 * eased), glow);
 
     for (var i = 0; i < 3; i++) {

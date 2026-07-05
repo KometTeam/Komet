@@ -19,7 +19,7 @@ on:
       - '.github/workflows/build-windows.yml'
 
 env:
-  FLUTTER_VERSION: '3.41.5'
+  FLUTTER_VERSION: '3.44.3'
 
 jobs:
   build-windows:

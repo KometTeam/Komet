@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
@@ -180,32 +181,32 @@ class _InfoScreenState extends State<InfoScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         depth: 6,
         child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: cs.onSurfaceVariant,
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.end,
               ),
-              textAlign: TextAlign.end,
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -262,8 +263,7 @@ class _InfoScreenState extends State<InfoScreen> {
       final weeks = value ~/ 604800;
       final days = (value % 604800) ~/ 86400;
       if (weeks > 0) {
-        return '$weeks ${_w(weeks)} ${days > 0 ? '$days ${_d(days)}' : ''}'
-            .trim();
+        return '$weeks нед ${days > 0 ? '$days дн' : ''}'.trim();
       }
       final h = value ~/ 3600;
       final m = (value % 3600) ~/ 60;
@@ -276,21 +276,7 @@ class _InfoScreenState extends State<InfoScreen> {
   String _formatTs(int ts) {
     if (ts < 1000000000000) return ts.toString();
     final dt = DateTime.fromMillisecondsSinceEpoch(ts);
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
-  }
-
-  String _w(int n) {
-    final m = n % 10;
-    if (m == 1 && n != 11) return 'нед';
-    if ((m == 2 || m == 3 || m == 4) && (n < 10 || n > 20)) return 'нед';
-    return 'нед';
-  }
-
-  String _d(int n) {
-    final m = n % 10;
-    if (m == 1 && n != 11) return 'дн';
-    if ((m == 2 || m == 3 || m == 4) && (n < 10 || n > 20)) return 'дн';
-    return 'дн';
+    return '${dt.year}-${pad2(dt.month)}-${pad2(dt.day)} '
+        '${pad2(dt.hour)}:${pad2(dt.minute)}:${pad2(dt.second)}';
   }
 }

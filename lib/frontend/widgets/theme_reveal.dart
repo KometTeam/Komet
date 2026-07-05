@@ -21,10 +21,7 @@ class ThemeRevealOverlay {
                 animation.value.clamp(0.0, 1.0),
               );
               return ClipPath(
-                clipper: _RevealClipper(
-                  center: center,
-                  radius: maxRadius * t,
-                ),
+                clipper: _RevealClipper(center: center, radius: maxRadius * t),
                 child: Opacity(
                   opacity: 1.0 - (t * t * t * t),
                   child: RawImage(

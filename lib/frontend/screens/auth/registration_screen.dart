@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
 import '../../../backend/modules/account.dart';
@@ -109,9 +108,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             ? cs.primaryContainer
             : cs.surfaceContainerHighest,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(50),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
         child: _isSubmitting
             ? SizedBox(
                 width: 22,
@@ -123,9 +120,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               )
             : Icon(
                 Icons.arrow_forward,
-                color: _canSubmit
-                    ? cs.onPrimaryContainer
-                    : cs.onSurfaceVariant,
+                color: _canSubmit ? cs.onPrimaryContainer : cs.onSurfaceVariant,
               ),
       ),
       body: SafeArea(
@@ -134,7 +129,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           children: [
             Text(
               l10n.registrationTitle,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 26,
                 fontWeight: FontWeight.w600,
@@ -203,7 +198,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const SizedBox(height: 28),
               Text(
                 l10n.registrationChooseAvatar,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -307,12 +302,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       child: CachedNetworkImage(
                         imageUrl: avatar.url,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          color: cs.surfaceContainerHigh,
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          color: cs.surfaceContainerHigh,
-                        ),
+                        placeholder: (_, __) =>
+                            Container(color: cs.surfaceContainerHigh),
+                        errorWidget: (_, __, ___) =>
+                            Container(color: cs.surfaceContainerHigh),
                       ),
                     ),
                   ),

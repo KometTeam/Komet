@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, fileUploader, KometApp;
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/komet_avatar.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -212,24 +213,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             width: 2.5,
                           ),
                         ),
-                        child: ClipOval(
-                          child: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                              ? Image.network(_avatarUrl!, fit: BoxFit.cover)
-                              : Container(
-                                  color: cs.primaryContainer,
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    _firstNameController.text.isNotEmpty
-                                        ? _firstNameController.text[0]
-                                              .toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      color: cs.onPrimaryContainer,
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
+                        child: KometAvatar(
+                          name: _firstNameController.text,
+                          imageUrl: _avatarUrl,
+                          size: 88,
+                          fontSize: 32,
                         ),
                       ),
                       Positioned(

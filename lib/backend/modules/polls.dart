@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/utils/logger.dart';
 import '../../models/poll.dart';
 
 class PollsModule extends ChangeNotifier {
@@ -52,8 +53,8 @@ class PollsModule extends ChangeNotifier {
         }
       }
       if (changed) notifyListeners();
-    } catch (_) {
-      // тихо игнорируем — опрос просто не отобразится
+    } catch (e) {
+      logger.w('PollsModule.fetch: pollId=$pollId chatId=$chatId $e');
     } finally {
       _inFlight.remove(pollId);
     }
@@ -84,7 +85,8 @@ class PollsModule extends ChangeNotifier {
         await fetch(chatId, messageId, pollId, force: true);
       }
       return true;
-    } catch (_) {
+    } catch (e) {
+      logger.w('PollsModule.vote: pollId=$pollId chatId=$chatId $e');
       return false;
     }
   }

@@ -3,11 +3,14 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_fonts.dart';
+import '../../../core/config/custom_font_service.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/prompt_dialog.dart';
 
 class FontSettingsScreen extends StatefulWidget {
   const FontSettingsScreen({super.key});
@@ -18,6 +21,7 @@ class FontSettingsScreen extends StatefulWidget {
 
 class _FontSettingsScreenState extends State<FontSettingsScreen> {
   List<String> _custom = const [];
+  bool _adding = false;
 
   @override
   void initState() {
@@ -26,7 +30,7 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
   }
 
   Future<void> _reloadCustom() async {
-    final list = await AppFonts.loadCustomFamilies();
+    final list = await CustomFontService.families();
     if (mounted) setState(() => _custom = list);
   }
 
@@ -41,93 +45,60 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
     final parsed = AppFonts.familyFromInput(raw);
     if (parsed == null) {
       if (mounted) {
-        showCustomNotification(context, 'Введите ссылку или название шрифта');
-      }
-      return;
-    }
-    final canonical = AppFonts.matchGoogleFamily(parsed);
-    if (canonical == null) {
-      if (mounted) {
         showCustomNotification(
           context,
-          'Шрифт «$parsed» не найден в Google Fonts',
+          AppLocalizations.of(context)!.fontSettingsInvalidInput,
         );
       }
       return;
     }
-    await AppFonts.addCustomFamily(canonical);
+    setState(() => _adding = true);
+    String? family;
+    try {
+      family = await CustomFontService.addFamily(parsed);
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+    if (!mounted) return;
+    if (family == null) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fontSettingsFontNotFound(parsed),
+      );
+      return;
+    }
     await _reloadCustom();
     if (!mounted) return;
-    KometApp.stateOf(context)?.applyAppFont(AppFonts.customId(canonical));
+    KometApp.stateOf(context)?.applyAppFont(AppFonts.customId(family));
     Haptics.success();
-    showCustomNotification(context, 'Шрифт «$canonical» добавлен');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.fontSettingsFontAdded(family),
+    );
   }
 
   Future<void> _removeFont(String family) async {
-    await AppFonts.removeCustomFamily(family);
+    await CustomFontService.removeFamily(family);
     await _reloadCustom();
     if (!mounted) return;
     final app = KometApp.stateOf(context);
     if (app != null && app.fontId == AppFonts.customId(family)) {
       app.applyAppFont(AppFonts.fallback.id);
     }
-    showCustomNotification(context, 'Шрифт «$family» удалён');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.fontSettingsFontRemoved(family),
+    );
   }
 
   Future<void> _showAddFontDialog() async {
-    final cs = Theme.of(context).colorScheme;
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: cs.surfaceContainerHigh,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          title: const Text('Добавить шрифт'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Вставьте ссылку Google Fonts или название шрифта',
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 13,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                textInputAction: TextInputAction.done,
-                decoration: InputDecoration(
-                  hintText: 'fonts.google.com/specimen/Roboto',
-                  filled: true,
-                  fillColor: cs.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onSubmitted: (v) => Navigator.pop(ctx, v),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('Добавить'),
-            ),
-          ],
-        );
-      },
+    final l10n = AppLocalizations.of(context)!;
+    final result = await showTextInputDialog(
+      context,
+      title: l10n.fontSettingsAddFontTitle,
+      description: l10n.fontSettingsAddFontDescription,
+      hint: 'fonts.google.com/specimen/Roboto',
+      confirmLabel: l10n.fontSettingsAddFontConfirm,
     );
     if (result != null) await _addFont(result);
   }
@@ -135,13 +106,14 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final app = KometApp.stateOf(context);
     final currentId = app?.fontId ?? AppFonts.fallback.id;
 
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: 'Шрифты',
+        titleText: l10n.fontSettingsTitle,
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
@@ -152,7 +124,10 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
           children: [
             _PreviewCard(fontId: currentId),
             const SizedBox(height: 28),
-            const _SectionLabel(icon: Symbols.text_fields, text: 'Шрифт'),
+            _SectionLabel(
+              icon: Symbols.text_fields,
+              text: l10n.fontSettingsSectionFont,
+            ),
             const SizedBox(height: 14),
             for (final font in AppFonts.builtIn) ...[
               _FontOption(
@@ -175,17 +150,21 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
             SizedBox(
               width: double.infinity,
               child: ButtonM3E(
-                onPressed: _showAddFontDialog,
+                onPressed: _adding ? null : _showAddFontDialog,
                 style: ButtonM3EStyle.outlined,
                 size: ButtonM3ESize.md,
-                icon: const Icon(Symbols.add),
-                label: const Text('Добавить шрифт'),
+                icon: Icon(_adding ? Symbols.hourglass_top : Symbols.add),
+                label: Text(
+                  _adding
+                      ? l10n.fontSettingsLoading
+                      : l10n.fontSettingsAddFontTitle,
+                ),
               ),
             ),
             const SizedBox(height: 30),
-            const _SectionLabel(
+            _SectionLabel(
               icon: Symbols.format_size,
-              text: 'Размер шрифта',
+              text: l10n.fontSettingsSectionFontSize,
             ),
             const SizedBox(height: 6),
             if (app != null)
@@ -230,7 +209,7 @@ class _PreviewCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'ПРЕДПРОСМОТР',
+              AppLocalizations.of(context)!.fontSettingsPreviewLabel,
               style: TextStyle(
                 color: cs.primary,
                 fontSize: 12,
@@ -333,7 +312,7 @@ class _FontOption extends StatelessWidget {
         const SizedBox(width: 8),
         IconButton(
           onPressed: onDelete,
-          tooltip: 'Удалить',
+          tooltip: AppLocalizations.of(context)!.msgActionsDelete,
           icon: Icon(Symbols.delete, color: cs.onSurfaceVariant, weight: 500),
         ),
       ],
@@ -408,7 +387,7 @@ class _FontSizeControl extends StatelessWidget {
                 enabled: !isDefault,
                 style: ButtonM3EStyle.text,
                 size: ButtonM3ESize.sm,
-                label: const Text('Сбросить'),
+                label: Text(AppLocalizations.of(context)!.fontSettingsReset),
               ),
             ],
           ),

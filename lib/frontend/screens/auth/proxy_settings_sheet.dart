@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:komet/backend/api.dart';
 import 'package:komet/core/config/proxy_config.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/labeled_settings_field.dart';
 import '../../widgets/sheet_helpers.dart';
 
 class ProxySettingsSheet extends StatefulWidget {
@@ -128,7 +128,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
               ),
               Text(
                 l10n.proxySettingsTitle,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -148,40 +148,40 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
                 child: isActive
                     ? Column(
                         children: [
-                          _buildTextField(
+                          LabeledSettingsField(
                             controller: _hostController,
                             label: l10n.proxyHostLabel,
                             hintText: '127.0.0.1',
-                            cs: cs,
                             keyboardType: TextInputType.url,
+                            enabled: !_busy,
                           ),
                           const SizedBox(height: 16),
-                          _buildTextField(
+                          LabeledSettingsField(
                             controller: _portController,
                             label: l10n.proxyPortLabel,
                             hintText: _selectedType == ProxyType.socks5
                                 ? '1080'
                                 : '8080',
-                            cs: cs,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                             ],
+                            enabled: !_busy,
                           ),
                           const SizedBox(height: 16),
-                          _buildTextField(
+                          LabeledSettingsField(
                             controller: _usernameController,
                             label: l10n.proxyUsernameLabel,
-                            cs: cs,
                             keyboardType: TextInputType.text,
+                            enabled: !_busy,
                           ),
                           const SizedBox(height: 16),
-                          _buildTextField(
+                          LabeledSettingsField(
                             controller: _passwordController,
                             label: l10n.proxyPasswordLabel,
-                            cs: cs,
                             keyboardType: TextInputType.visiblePassword,
                             obscureText: true,
+                            enabled: !_busy,
                           ),
                           const SizedBox(height: 8),
                         ],
@@ -230,7 +230,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
                 alignment: Alignment.center,
                 child: Text(
                   labels[type]!,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: selected ? cs.onPrimary : cs.onSurfaceVariant,
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
@@ -241,56 +241,6 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
           );
         }).toList(),
       ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required ColorScheme cs,
-    String? hintText,
-    TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-    bool obscureText = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            color: cs.onSurfaceVariant,
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          inputFormatters: inputFormatters,
-          enabled: !_busy,
-          obscureText: obscureText,
-          style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15),
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: GoogleFonts.inter(
-              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-              fontSize: 15,
-            ),
-            filled: true,
-            fillColor: cs.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

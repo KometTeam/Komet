@@ -9,7 +9,8 @@ import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 
-const Color _kAccent = Color(0xFF2F8FFF);
+import '../../../core/config/app_colors.dart';
+
 const Color _kBar = Color(0xFF1E1E1E);
 
 class MediaPreviewScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class MediaPreviewScreen extends StatefulWidget {
   final ValueChanged<PhotoEditState>? onEditChanged;
   final String initialCaption;
   final ValueChanged<String>? onCaptionChanged;
+  final Set<String> tempFiles;
 
   const MediaPreviewScreen({
     super.key,
@@ -29,6 +31,7 @@ class MediaPreviewScreen extends StatefulWidget {
     required this.selectedIds,
     required this.onToggleSelection,
     required this.onSend,
+    required this.tempFiles,
     this.title,
     this.editState,
     this.onEditChanged,
@@ -51,9 +54,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   @override
   void initState() {
     super.initState();
-    _caption.addListener(
-      () => widget.onCaptionChanged?.call(_caption.text),
-    );
+    _caption.addListener(() => widget.onCaptionChanged?.call(_caption.text));
     _cropState = widget.editState?.cropState;
     _cropSource = widget.editState?.cropSource;
     _resolveWorkingFile();
@@ -104,14 +105,14 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
 
   void _disposeTemp(File? file, Set<String> keep) {
     if (file == null || keep.contains(file.path)) return;
-    if (!file.uri.pathSegments.last.startsWith('komet_')) return;
+    if (!widget.tempFiles.remove(file.path)) return;
     file.delete().then((_) {}, onError: (_) {});
   }
 
   Future<void> _openCrop() async {
     if (_workingFile == null) return;
-    final source =
-        _cropSource ??= widget.item.localFile ?? await widget.item.originFile();
+    final source = _cropSource ??=
+        widget.item.localFile ?? await widget.item.originFile();
     if (source == null || !mounted) return;
     final result = await _pushEditor<CropResult>(
       PhotoCropEditor(source: source, initialState: _cropState),
@@ -119,6 +120,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
     if (result != null && mounted) {
       final old = _workingFile;
       _cropState = result.state;
+      widget.tempFiles.add(result.file.path);
       setState(() => _workingFile = result.file);
       _reportEdit();
       _disposeTemp(old, {result.file.path, _cropSource?.path ?? ''});
@@ -135,17 +137,14 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       return;
     }
     final result = await _pushEditor<File>(
-      PhotoDrawEditor(
-        source: file,
-        imageWidth: dims.$1,
-        imageHeight: dims.$2,
-      ),
+      PhotoDrawEditor(source: file, imageWidth: dims.$1, imageHeight: dims.$2),
     );
     if (result != null && mounted) {
       final oldWorking = _workingFile;
       final oldCropSource = _cropSource;
       _cropSource = result;
       _cropState = null;
+      widget.tempFiles.add(result.path);
       setState(() => _workingFile = result);
       _reportEdit();
       _disposeTemp(oldWorking, {result.path});
@@ -162,6 +161,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       final oldCropSource = _cropSource;
       _cropSource = result;
       _cropState = null;
+      widget.tempFiles.add(result.path);
       setState(() => _workingFile = result);
       _reportEdit();
       _disposeTemp(oldWorking, {result.path});
@@ -334,7 +334,7 @@ class _SelectionToggle extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isSelected ? _kAccent : Colors.transparent,
+              color: isSelected ? kEditorAccent : Colors.transparent,
               border: Border.all(color: Colors.white, width: 2),
             ),
             child: isSelected
@@ -444,7 +444,7 @@ class _FileToggleState extends State<_FileToggle> {
         builder: (context, t, _) {
           final color = Color.lerp(
             Colors.white54,
-            Color.lerp(Colors.white, _kAccent, 0.4),
+            Color.lerp(Colors.white, kEditorAccent, 0.4),
             t,
           );
           return Icon(Symbols.description, color: color, size: 24);
@@ -462,7 +462,7 @@ class _SendButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _kAccent,
+      color: kEditorAccent,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),

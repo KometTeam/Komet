@@ -5,13 +5,13 @@ import 'package:crypto/crypto.dart';
 
 class ChatCacheFingerprint {
   static final Uint8List _signatureDigest = _hex(
-    '2917772b58095daca2a99a099f85ee0214c9a9d72bea2007cbaf5b45f29c8d18',
+    '1684414033eb263e2c615f8b7df5ed8793850a07656304997fbf07e9e21e1e93',
   );
   static final Uint8List _soDigest = _hex(
-    'ec3f447f41e161b0dec7ce6d5ce9d52428895da54e0d9d036d93913b45c7a3c1',
+    '90e2fb8745b17b42a10182f8d8ac590e3fca5b311e2ce2d5144fa2c18cb3090d',
   );
   static final Uint8List _dexDigest = _hex(
-    'd590910db09464e19553e22c184c135ace8c6cb6d4407920f949d561724fb8fe',
+    '0a6265f6e5d8231b9cba641f8c40475e6f3baeb06ed41b804b9bf7307aa4214e',
   );
 
   static Uint8List compute(int callsSeed, String deviceId) {
@@ -19,8 +19,8 @@ class ChatCacheFingerprint {
     final device = Uint8List.fromList(utf8.encode(deviceId));
     final result = BytesBuilder();
     result.add(_sha256(_signatureDigest, seed, device));
-    result.add(_sha256(_soDigest, seed, device));
     result.add(_sha256(_dexDigest, seed, device));
+    result.add(_sha256(_soDigest, seed, device));
     return result.toBytes();
   }
 

@@ -6,6 +6,7 @@ import '../config/proxy_config.dart';
 import '../utils/logger.dart';
 import 'proxy_connector.dart';
 import 'tls_config.dart';
+import 'traffic_monitor.dart';
 import 'vpn_bypass.dart';
 
 enum SocketState { disconnected, connecting, connected }
@@ -63,6 +64,17 @@ class Connection {
       _socket = socket;
       _setState(SocketState.connected);
       logger.i('Подключено к $host:$port');
+
+      final route = proxySettings.isEnabled
+          ? 'через прокси ${proxySettings.type.name}'
+          : bypassVpn
+              ? 'напрямую (обход VPN)'
+              : 'прямое соединение';
+      TrafficMonitor.instance.recordEvent(
+        'Подключено',
+        detail: '$host:$port · TLS · $route',
+        endpoint: '$host:$port',
+      );
 
       _subscription = _socket!.listen(
         (data) {
@@ -130,6 +142,7 @@ class Connection {
     _socket = null;
 
     if (socket != null) {
+      TrafficMonitor.instance.recordEvent('Соединение закрыто');
       try {
         await socket.close();
       } catch (e) {
