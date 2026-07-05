@@ -639,5 +639,20 @@
   "fontSettingsLoading": "Загрузка…",
   "fontSettingsSectionFontSize": "Размер шрифта",
   "fontSettingsPreviewLabel": "ПРЕДПРОСМОТР",
-  "fontSettingsReset": "Сбросить"
+  "fontSettingsReset": "Сбросить",
+  "updateAvailableTitle": "Доступно обновление",
+  "updateAvailableBody": "Вышла версия {version}. Обновить приложение?",
+  "@updateAvailableBody": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateWhatsNew": "ЧТО НОВОГО",
+  "updateAction": "Обновить",
+  "updateLater": "Позже",
+  "updateSkip": "Пропустить",
+  "updateDownloading": "Загрузка обновления…",
+  "updateDownloadFailed": "Не удалось скачать обновление"
 }

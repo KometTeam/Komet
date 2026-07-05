@@ -1959,4 +1959,30 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get fontSettingsReset => 'Сбросить';
+
+  @override
+  String get updateAvailableTitle => 'Доступно обновление';
+
+  @override
+  String updateAvailableBody(String version) {
+    return 'Вышла версия $version. Обновить приложение?';
+  }
+
+  @override
+  String get updateWhatsNew => 'ЧТО НОВОГО';
+
+  @override
+  String get updateAction => 'Обновить';
+
+  @override
+  String get updateLater => 'Позже';
+
+  @override
+  String get updateSkip => 'Пропустить';
+
+  @override
+  String get updateDownloading => 'Загрузка обновления…';
+
+  @override
+  String get updateDownloadFailed => 'Не удалось скачать обновление';
 }

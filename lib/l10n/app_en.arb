@@ -817,5 +817,20 @@
   "fontSettingsLoading": "Loading…",
   "fontSettingsSectionFontSize": "Font size",
   "fontSettingsPreviewLabel": "PREVIEW",
-  "fontSettingsReset": "Reset"
+  "fontSettingsReset": "Reset",
+  "updateAvailableTitle": "Update available",
+  "updateAvailableBody": "Version {version} is out. Update the app?",
+  "@updateAvailableBody": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateWhatsNew": "WHAT'S NEW",
+  "updateAction": "Update",
+  "updateLater": "Later",
+  "updateSkip": "Skip",
+  "updateDownloading": "Downloading update…",
+  "updateDownloadFailed": "Failed to download the update"
 }

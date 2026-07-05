@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/utils/update_checker.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
+import 'update_dialog.dart';
 
 class AdaptiveShell extends StatefulWidget {
   const AdaptiveShell({super.key});
@@ -46,6 +48,13 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   void initState() {
     super.initState();
     _loadListWidth();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeCheckUpdate());
+  }
+
+  Future<void> _maybeCheckUpdate() async {
+    final update = await UpdateChecker.check();
+    if (update == null || !mounted) return;
+    await showUpdateDialog(context, update);
   }
 
   Future<void> _loadListWidth() async {

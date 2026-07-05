@@ -1949,4 +1949,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fontSettingsReset => 'Reset';
+
+  @override
+  String get updateAvailableTitle => 'Update available';
+
+  @override
+  String updateAvailableBody(String version) {
+    return 'Version $version is out. Update the app?';
+  }
+
+  @override
+  String get updateWhatsNew => 'WHAT\'S NEW';
+
+  @override
+  String get updateAction => 'Update';
+
+  @override
+  String get updateLater => 'Later';
+
+  @override
+  String get updateSkip => 'Skip';
+
+  @override
+  String get updateDownloading => 'Downloading update…';
+
+  @override
+  String get updateDownloadFailed => 'Failed to download the update';
 }
