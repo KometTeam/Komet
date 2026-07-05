@@ -247,10 +247,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
     return IgnorePointer(
       child: CustomPaint(
         size: const Size(140, 140),
-        painter: _RingPainter(
-          progress: _ringSweep.value,
-          color: cs.primary,
-        ),
+        painter: _RingPainter(progress: _ringSweep.value, color: cs.primary),
       ),
     );
   }

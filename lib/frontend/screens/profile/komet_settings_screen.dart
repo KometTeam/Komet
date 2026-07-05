@@ -5,8 +5,8 @@ import '../../widgets/connection_status.dart';
 
 import '../../../core/config/komet_settings.dart';
 import '../../../main.dart';
-import '../../widgets/glossy_pill.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/settings_card.dart';
 
 class KometSettingsScreen extends StatelessWidget {
   const KometSettingsScreen({super.key});
@@ -17,7 +17,10 @@ class KometSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: ConnectionTitleBar(titleText: 'Komet', backgroundColor: cs.surface),
+      appBar: ConnectionTitleBar(
+        titleText: 'Komet',
+        backgroundColor: cs.surface,
+      ),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -29,70 +32,82 @@ class KometSettingsScreen extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
               fontSize: 14,
             ),
-            _card(cs, [
-              _toggle(
-                cs,
-                icon: Symbols.delete_history,
-                label: 'View deleted message',
-                subtitle: 'Показывать удалённые сообщения',
-                notifier: KometSettings.viewDeleted,
-                onChanged: KometSettings.setViewDeleted,
-              ),
-              _divider(cs),
-              _toggle(
-                cs,
-                icon: Symbols.history_edu,
-                label: 'View redacted message history',
-                subtitle: 'Показывать историю у редактированных сообщений',
-                notifier: KometSettings.viewRedacted,
-                onChanged: KometSettings.setViewRedacted,
-              ),
-              _divider(cs),
-              _toggle(
-                cs,
-                icon: Symbols.schedule,
-                label: 'View full timestamp',
-                subtitle: 'Показывать время в секундах у сообщений',
-                notifier: KometSettings.fullTimestamp,
-                onChanged: KometSettings.setFullTimestamp,
-              ),
-            ]),
+            SettingsCard(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.viewDeleted,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.delete_history,
+                    label: 'View deleted message',
+                    subtitle: 'Показывать удалённые сообщения',
+                    value: value,
+                    onChanged: KometSettings.setViewDeleted,
+                  ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.viewRedacted,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.history_edu,
+                    label: 'View redacted message history',
+                    subtitle: 'Показывать историю у редактированных сообщений',
+                    value: value,
+                    onChanged: KometSettings.setViewRedacted,
+                  ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.fullTimestamp,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.schedule,
+                    label: 'View full timestamp',
+                    subtitle: 'Показывать время в секундах у сообщений',
+                    value: value,
+                    onChanged: KometSettings.setFullTimestamp,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
             const SectionHeader(
               'Ghost Mode',
               padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
               fontSize: 14,
             ),
-            _card(cs, [
-              _toggle(
-                cs,
-                icon: Symbols.visibility_off,
-                label: 'Ghost Mode',
-                subtitle: 'Вас не видно в сети',
-                notifier: KometSettings.ghostMode,
-                onChanged: _setGhostMode,
-              ),
-              _divider(cs),
-              _toggle(
-                cs,
-                icon: Symbols.mark_chat_read,
-                label: 'Anti read',
-                subtitle: 'Нечиталка сообщений',
-                notifier: KometSettings.antiRead,
-                onChanged: KometSettings.setAntiRead,
-              ),
-              _divider(cs),
-              _toggle(
-                cs,
-                icon: Symbols.radar,
-                label: 'Self Online Check',
-                subtitle:
-                    'Каждые ~10 секунд сверяет, когда вы были онлайн. '
-                    'Полезно для проверки ghost mode',
-                notifier: KometSettings.selfOnlineCheck,
-                onChanged: KometSettings.setSelfOnlineCheck,
-              ),
-            ]),
+            SettingsCard(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.ghostMode,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.visibility_off,
+                    label: 'Ghost Mode',
+                    subtitle: 'Вас не видно в сети',
+                    value: value,
+                    onChanged: _setGhostMode,
+                  ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.antiRead,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.mark_chat_read,
+                    label: 'Anti read',
+                    subtitle: 'Нечиталка сообщений',
+                    value: value,
+                    onChanged: KometSettings.setAntiRead,
+                  ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.selfOnlineCheck,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.radar,
+                    label: 'Self Online Check',
+                    subtitle:
+                        'Каждые ~10 секунд сверяет, когда вы были онлайн. '
+                        'Полезно для проверки ghost mode',
+                    value: value,
+                    onChanged: KometSettings.setSelfOnlineCheck,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -102,81 +117,5 @@ class KometSettingsScreen extends StatelessWidget {
   Future<void> _setGhostMode(bool value) async {
     await KometSettings.setGhostMode(value);
     api.sendPing(interactive: !value);
-  }
-
-  Widget _card(ColorScheme cs, List<Widget> children) {
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
-      depth: 6,
-      child: Column(children: children),
-    );
-  }
-
-  Widget _divider(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 58),
-      child: Divider(
-        height: 1,
-        thickness: 1,
-        color: cs.outlineVariant.withValues(alpha: 0.35),
-      ),
-    );
-  }
-
-  Widget _toggle(
-    ColorScheme cs, {
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required ValueNotifier<bool> notifier,
-    required Future<void> Function(bool) onChanged,
-  }) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: notifier,
-      builder: (context, value, _) {
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => onChanged(!value),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                children: [
-                  Icon(icon, color: cs.onSurfaceVariant, size: 22, weight: 400),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          label,
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 13,
-                            height: 1.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Switch(value: value, onChanged: onChanged),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 }

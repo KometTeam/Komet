@@ -71,7 +71,8 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
         ),
         title: Text(
           'QR для веба и ПК',
-          style: TextStyle(fontFamily: 'Outfit', 
+          style: TextStyle(
+            fontFamily: 'Outfit',
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -133,15 +134,13 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
                   child: Text(
                     'Наведите камеру на QR-код на экране компьютера',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontFamily: 'Outfit', 
+                    style: TextStyle(
+                      fontFamily: 'Outfit',
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: Colors.white,
                       shadows: const [
-                        Shadow(
-                          blurRadius: 8,
-                          color: Colors.black54,
-                        ),
+                        Shadow(blurRadius: 8, color: Colors.black54),
                       ],
                     ),
                   ),
@@ -169,7 +168,8 @@ class _TelegramStyleFinderOverlay extends StatefulWidget {
       _TelegramStyleFinderOverlayState();
 }
 
-class _TelegramStyleFinderOverlayState extends State<_TelegramStyleFinderOverlay>
+class _TelegramStyleFinderOverlayState
+    extends State<_TelegramStyleFinderOverlay>
     with SingleTickerProviderStateMixin {
   static const _animDuration = Duration(milliseconds: 320);
   static const _snapPx = 14.0;
@@ -331,16 +331,18 @@ class _TelegramStyleFinderOverlayState extends State<_TelegramStyleFinderOverlay
     var r = Rect.fromCenter(center: Offset(cx, cy), width: side, height: side);
     r = r.intersect(Rect.fromLTWH(0, 0, layout.width, layout.height));
     if (r.isEmpty) {
-      return Rect.fromLTWH(0, 0, layout.shortestSide * 0.5, layout.shortestSide * 0.5);
+      return Rect.fromLTWH(
+        0,
+        0,
+        layout.shortestSide * 0.5,
+        layout.shortestSide * 0.5,
+      );
     }
     return r;
   }
 
   static RRect _finderRRect(Rect rect, double maxRadius) {
-    final r = math.min(
-      maxRadius,
-      math.min(rect.width, rect.height) * 0.14,
-    );
+    final r = math.min(maxRadius, math.min(rect.width, rect.height) * 0.14);
     return RRect.fromRectAndRadius(rect, Radius.circular(r));
   }
 
@@ -355,8 +357,7 @@ class _TelegramStyleFinderOverlayState extends State<_TelegramStyleFinderOverlay
 
         final finderRect = _interpolatedFinderRect();
         final rrect = _finderRRect(finderRect, _frameCornerRadius);
-        final frameColor =
-            _qrInView ? const Color(0xFF4ADE80) : Colors.white;
+        final frameColor = _qrInView ? const Color(0xFF4ADE80) : Colors.white;
         return IgnorePointer(
           child: Stack(
             fit: StackFit.expand,
@@ -385,18 +386,14 @@ class _TelegramStyleFinderOverlayState extends State<_TelegramStyleFinderOverlay
 }
 
 class _ScannerDimOutsideRRectPainter extends CustomPainter {
-  _ScannerDimOutsideRRectPainter({
-    required this.hole,
-    required this.dimColor,
-  });
+  _ScannerDimOutsideRRectPainter({required this.hole, required this.dimColor});
 
   final RRect hole;
   final Color dimColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final outer = Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    final outer = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
     final inner = Path()..addRRect(hole);
     final mask = Path.combine(PathOperation.difference, outer, inner);
     canvas.drawPath(mask, Paint()..color = dimColor);
@@ -455,7 +452,8 @@ List<Offset> _mapBarcodeCornersToLayout(
     return [];
   }
 
-  final isLandscape = deviceOrientation == DeviceOrientation.landscapeLeft ||
+  final isLandscape =
+      deviceOrientation == DeviceOrientation.landscapeLeft ||
       deviceOrientation == DeviceOrientation.landscapeRight;
   final cam = isLandscape ? cameraPreviewSize.flipped : cameraPreviewSize;
 
@@ -467,10 +465,6 @@ List<Offset> _mapBarcodeCornersToLayout(
 
   return [
     for (final o in barcodeCorners)
-      Offset(
-        o.dx * ratio - hPad,
-        o.dy * ratio - vPad,
-      ),
+      Offset(o.dx * ratio - hPad, o.dy * ratio - vPad),
   ];
 }
-

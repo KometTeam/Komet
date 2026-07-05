@@ -42,6 +42,9 @@ class UploadError extends UploadEvent {
 }
 
 class FileUploader {
+  static const String _userAgentHeader =
+      'OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)';
+
   final Api api;
   final MessagesModule messages;
 
@@ -87,36 +90,24 @@ class FileUploader {
         }());
 
         final uri = Uri.parse(info.url);
-        socket = await _openSocket(uri);
-        if (cancelled) return;
-
-        _writeHeaders(socket!, uri, filename, totalSize);
-
-        final stopwatch = Stopwatch()..start();
-        var sent = 0;
-        final body = file.openRead().map((chunk) {
-          sent += chunk.length;
-          if (stopwatch.elapsed >= progressThrottle) {
-            ctrl.add(UploadProgress(sent: sent, total: totalSize));
-            stopwatch.reset();
-          }
-          return chunk;
-        });
-        await socket!.addStream(body);
-        await socket!.flush();
-        if (cancelled) return;
-        ctrl.add(UploadProgress(sent: totalSize, total: totalSize));
-
-        final statusCode = await _readResponse(
-          socket!,
+        final result = await _sendHttpRequest(
+          uri,
+          method: 'POST',
+          headers: _buildUploadHeaders(uri, filename, totalSize),
+          bodyStream: file.openRead(),
+          progressTotal: totalSize,
+          onProgress: (sent, total) {
+            if (!cancelled) ctrl.add(UploadProgress(sent: sent, total: total));
+          },
+          progressThrottle: progressThrottle,
           autoForceAfter: autoForceAfter,
-          overallTimeout: overallTimeout,
+          timeout: overallTimeout,
+          onSocketReady: (s) => socket = s,
+          shouldAbort: () => cancelled,
         );
-        try {
-          socket!.destroy();
-        } catch (_) {}
         if (cancelled) return;
 
+        final statusCode = result?.$1 ?? 0;
         if (statusCode != 200 && statusCode != 0) {
           ctrl.add(UploadError('http_$statusCode'));
           return;
@@ -134,13 +125,15 @@ class FileUploader {
           return;
         }
 
-        ctrl.add(UploadDone(
-          fileId: info.fileId,
-          token: info.token,
-          url: info.url,
-          filename: filename,
-          size: totalSize,
-        ));
+        ctrl.add(
+          UploadDone(
+            fileId: info.fileId,
+            token: info.token,
+            url: info.url,
+            filename: filename,
+            size: totalSize,
+          ),
+        );
       } catch (e) {
         if (!cancelled) ctrl.add(UploadError(e.toString()));
       } finally {
@@ -155,11 +148,6 @@ class FileUploader {
     return ctrl.stream;
   }
 
-  /// Загружает медиа (Ogg/Opus аудио или MP4 видеосообщение) на CDN-URL,
-  /// полученный из [MessagesModule.requestAudioUploadUrl] /
-  /// [MessagesModule.requestVideoNoteUploadUrl]. Одиночный POST всего файла
-  /// (`octet-stream`, `Content-Range` на весь объём, `filename=<число>`).
-  /// Токен уже известен, поэтому возвращается только признак успеха.
   Future<bool> uploadMediaFile(
     Uri uri,
     File file, {
@@ -167,43 +155,30 @@ class FileUploader {
     Duration overallTimeout = const Duration(minutes: 5),
     Duration progressThrottle = const Duration(milliseconds: 16),
   }) async {
-    Socket? socket;
     try {
       final total = await file.length();
       if (total <= 0) return false;
-      final filename =
-          (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
+      final filename = _syntheticFilename();
 
-      socket = await _openSocket(uri);
-      _writeHeaders(
-        socket,
+      final result = await _sendHttpRequest(
         uri,
-        filename,
-        total,
-        contentType: 'application/octet-stream',
-        connection: 'close',
+        method: 'POST',
+        headers: _buildUploadHeaders(
+          uri,
+          filename,
+          total,
+          contentType: 'application/octet-stream',
+          connection: 'close',
+        ),
+        bodyStream: file.openRead(),
+        progressTotal: total,
+        onProgress: onProgress,
+        progressThrottle: progressThrottle,
+        timeout: overallTimeout,
       );
 
-      final stopwatch = Stopwatch()..start();
-      var sent = 0;
-      final body = file.openRead().map((chunk) {
-        sent += chunk.length;
-        if (onProgress != null && stopwatch.elapsed >= progressThrottle) {
-          onProgress(sent, total);
-          stopwatch.reset();
-        }
-        return chunk;
-      });
-      await socket.addStream(body);
-      await socket.flush();
-      onProgress?.call(total, total);
-
-      final response = await _readFullResponse(socket, timeout: overallTimeout);
-      try {
-        socket.destroy();
-      } catch (_) {}
-      final statusCode = response?.$1 ?? 0;
-      final respBody = response?.$2 ?? '';
+      final statusCode = result?.$1 ?? 0;
+      final respBody = result?.$2 ?? '';
       logger.w(
         'uploadMediaFile: status=$statusCode total=$total '
         'host=${uri.host} body=${respBody.length > 200 ? respBody.substring(0, 200) : respBody}',
@@ -213,9 +188,6 @@ class FileUploader {
       return statusCode == 200 && !hasError;
     } catch (e) {
       logger.w('uploadMediaFile: $e');
-      try {
-        socket?.destroy();
-      } catch (_) {}
       return false;
     }
   }
@@ -228,39 +200,49 @@ class FileUploader {
     if (uri.scheme != 'https') return base;
     final allowInsecure = await TlsConfig.isInsecureAllowed();
     if (allowInsecure) {
-      logger.w('TLS: проверка сертификата отключена (дебаг) — загрузка уязвима к MitM');
-      return SecureSocket.secure(base, host: uri.host, onBadCertificate: (_) => true);
+      logger.w(
+        'TLS: проверка сертификата отключена (дебаг) — загрузка уязвима к MitM',
+      );
+      return SecureSocket.secure(
+        base,
+        host: uri.host,
+        onBadCertificate: (_) => true,
+      );
     }
     return SecureSocket.secure(base, host: uri.host);
   }
 
-  void _writeHeaders(
-    Socket socket,
+  String _syntheticFilename() =>
+      (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
+
+  String _multipartBoundary() =>
+      '----KometBoundary${DateTime.now().microsecondsSinceEpoch}';
+
+  Map<String, String> _buildUploadHeaders(
     Uri uri,
     String filename,
     int total, {
     String contentType = 'application/x-binary; charset=x-user-defined',
     String connection = 'keep-alive',
   }) {
-    final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
-    final headers = StringBuffer()
-      ..write('POST $path HTTP/1.1\r\n')
-      ..write('Host: ${uri.host}\r\n')
-      ..write('Content-Type: $contentType\r\n')
-      ..write('Content-Disposition: attachment; filename=$filename\r\n')
-      ..write('Connection: $connection\r\n')
-      ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
-      ..write('Content-Range: bytes 0-${total - 1}/$total\r\n')
-      ..write('Content-Length: $total\r\n')
-      ..write('\r\n');
-    socket.add(utf8.encode(headers.toString()));
+    return {
+      'Host': uri.host,
+      'Content-Type': contentType,
+      'Content-Disposition': 'attachment; filename=$filename',
+      'Connection': connection,
+      'User-Agent': Uri.encodeComponent(_userAgentHeader),
+      'Content-Range': 'bytes 0-${total - 1}/$total',
+      'Content-Length': '$total',
+    };
   }
 
-  Future<String?> uploadImage(Uri uri, Uint8List bytes, {String filename = 'avatar.jpg'}) async {
-    Socket? socket;
+  Future<String?> uploadImage(
+    Uri uri,
+    Uint8List bytes, {
+    String filename = 'avatar.jpg',
+  }) async {
     try {
-      socket = await _openSocket(uri);
-      final boundary = '----KometBoundary${DateTime.now().microsecondsSinceEpoch}';
+      final boundary = _multipartBoundary();
       final preamble = utf8.encode(
         '--$boundary\r\n'
         'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
@@ -268,43 +250,40 @@ class FileUploader {
         '\r\n',
       );
       final epilogue = utf8.encode('\r\n--$boundary--\r\n');
-      _writeImageHeaders(
-        socket,
-        uri,
-        preamble.length + bytes.length + epilogue.length,
-        boundary: boundary,
-      );
-      socket.add(preamble);
-      socket.add(bytes);
-      socket.add(epilogue);
-      await socket.flush();
 
-      final response = await _readFullResponse(
-        socket,
+      final response = await _sendHttpRequest(
+        uri,
+        method: 'POST',
+        headers: _buildMultipartHeaders(
+          uri,
+          preamble.length + bytes.length + epilogue.length,
+          boundary: boundary,
+        ),
+        prefixBytes: preamble,
+        bodyStream: Stream.value(bytes),
+        suffixBytes: epilogue,
         timeout: const Duration(minutes: 2),
       );
-      try {
-        socket.destroy();
-      } catch (_) {}
 
       if (response == null) {
         return null;
       }
       final (status, body) = response;
       if (status != 200) {
-        logger.w('uploadImage: status=$status body=${body.length > 200 ? '${body.substring(0, 200)}…' : body}');
+        logger.w(
+          'uploadImage: status=$status body=${body.length > 200 ? '${body.substring(0, 200)}…' : body}',
+        );
         return null;
       }
       final token = _parsePhotoToken(body);
       if (token == null) {
-        logger.w('uploadImage: photoToken not found in body=${body.length > 200 ? '${body.substring(0, 200)}…' : body}');
+        logger.w(
+          'uploadImage: photoToken not found in body=${body.length > 200 ? '${body.substring(0, 200)}…' : body}',
+        );
       }
       return token;
     } catch (e) {
       logger.w('uploadImage: $e');
-      try {
-        socket?.destroy();
-      } catch (_) {}
       return null;
     }
   }
@@ -316,12 +295,9 @@ class FileUploader {
     void Function(int sent, int total)? onProgress,
     Duration progressThrottle = const Duration(milliseconds: 16),
   }) async {
-    Socket? socket;
     try {
       final fileLength = await file.length();
-      socket = await _openSocket(uri);
-      final boundary =
-          '----KometBoundary${DateTime.now().microsecondsSinceEpoch}';
+      final boundary = _multipartBoundary();
       final preamble = utf8.encode(
         '--$boundary\r\n'
         'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
@@ -329,36 +305,23 @@ class FileUploader {
         '\r\n',
       );
       final epilogue = utf8.encode('\r\n--$boundary--\r\n');
-      _writeImageHeaders(
-        socket,
+
+      final response = await _sendHttpRequest(
         uri,
-        preamble.length + fileLength + epilogue.length,
-        boundary: boundary,
-      );
-      socket.add(preamble);
-
-      final stopwatch = Stopwatch()..start();
-      var sent = 0;
-      final body = file.openRead().map((chunk) {
-        sent += chunk.length;
-        if (onProgress != null && stopwatch.elapsed >= progressThrottle) {
-          onProgress(sent, fileLength);
-          stopwatch.reset();
-        }
-        return chunk;
-      });
-      await socket.addStream(body);
-      socket.add(epilogue);
-      await socket.flush();
-      onProgress?.call(fileLength, fileLength);
-
-      final response = await _readFullResponse(
-        socket,
+        method: 'POST',
+        headers: _buildMultipartHeaders(
+          uri,
+          preamble.length + fileLength + epilogue.length,
+          boundary: boundary,
+        ),
+        prefixBytes: preamble,
+        bodyStream: file.openRead(),
+        suffixBytes: epilogue,
+        progressTotal: fileLength,
+        onProgress: onProgress,
+        progressThrottle: progressThrottle,
         timeout: const Duration(minutes: 2),
       );
-      try {
-        socket.destroy();
-      } catch (_) {}
 
       if (response == null) return null;
       final (status, responseBody) = response;
@@ -369,20 +332,10 @@ class FileUploader {
       return _parsePhotoToken(responseBody);
     } catch (e) {
       logger.w('uploadPhoto: $e');
-      try {
-        socket?.destroy();
-      } catch (_) {}
       return null;
     }
   }
 
-  /// Загружает видео на CDN-URL (vu.okcdn.ru/upload.do), полученный из
-  /// [MessagesModule.requestVideoUploadUrl], по протоколу OK с докачкой:
-  /// сначала GET-хендшейк (возвращает уже загруженный оффсет), затем
-  /// параллельная отправка чанков по [chunkSize] байт через `Content-Range`
-  /// ([concurrency] одновременных соединений, режим `X-Uploading-Mode:
-  /// parallel`). Токен уже известен, поэтому возвращается только признак
-  /// успеха.
   Future<bool> uploadVideoFile(
     Uri uri,
     File file, {
@@ -394,8 +347,7 @@ class FileUploader {
     final total = await file.length();
     if (total <= 0) return false;
 
-    final fileName =
-        (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
+    final fileName = _syntheticFilename();
 
     final handshake = await _okCdnRequest(
       uri,
@@ -470,56 +422,140 @@ class FileUploader {
     String? contentRange,
     required Duration timeout,
   }) async {
-    Socket? socket;
     try {
-      socket = await _openSocket(uri);
-      final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
-      final headers = StringBuffer()
-        ..write('$method $path HTTP/1.1\r\n')
-        ..write('Host: ${uri.host}\r\n')
-        ..write('Content-Type: application/x-binary; charset=x-user-defined\r\n')
-        ..write('Content-Disposition: attachment; fileName="$fileName"\r\n');
-      if (contentRange != null) {
-        headers.write('Content-Range: $contentRange\r\n');
-      }
-      headers
-        ..write('Content-Length: ${body?.length ?? 0}\r\n')
-        ..write('X-Uploading-Mode: parallel\r\n')
-        ..write('Connection: close\r\n')
-        ..write('\r\n');
-      socket.add(utf8.encode(headers.toString()));
-      if (body != null && body.isNotEmpty) socket.add(body);
-      await socket.flush();
-
-      final response = await _readFullResponse(socket, timeout: timeout);
-      try {
-        socket.destroy();
-      } catch (_) {}
-      return response;
+      final headers = {
+        'Host': uri.host,
+        'Content-Type': 'application/x-binary; charset=x-user-defined',
+        'Content-Disposition': 'attachment; fileName="$fileName"',
+        'Content-Range': ?contentRange,
+        'Content-Length': '${body?.length ?? 0}',
+        'X-Uploading-Mode': 'parallel',
+        'Connection': 'close',
+      };
+      return await _sendHttpRequest(
+        uri,
+        method: method,
+        headers: headers,
+        prefixBytes: body,
+        timeout: timeout,
+      );
     } catch (e) {
       logger.w('_okCdnRequest($method): $e');
-      try {
-        socket?.destroy();
-      } catch (_) {}
       return null;
     }
   }
 
-  void _writeImageHeaders(Socket socket, Uri uri, int total, {required String boundary}) {
+  Map<String, String> _buildMultipartHeaders(
+    Uri uri,
+    int total, {
+    required String boundary,
+  }) {
+    return {
+      'Host': uri.host,
+      'Content-Type': 'multipart/form-data; boundary=$boundary',
+      'Content-Length': '$total',
+      'Connection': 'keep-alive',
+      'User-Agent': Uri.encodeComponent(_userAgentHeader),
+    };
+  }
+
+  Future<(int, String)?> _sendHttpRequest(
+    Uri uri, {
+    required String method,
+    required Map<String, String> headers,
+    List<int>? prefixBytes,
+    Stream<List<int>>? bodyStream,
+    List<int>? suffixBytes,
+    int? progressTotal,
+    void Function(int sent, int total)? onProgress,
+    Duration progressThrottle = const Duration(milliseconds: 16),
+    Duration? autoForceAfter,
+    required Duration timeout,
+    void Function(Socket socket)? onSocketReady,
+    bool Function()? shouldAbort,
+  }) async {
+    final socket = await _openSocket(uri);
+    onSocketReady?.call(socket);
+    try {
+      if (shouldAbort?.call() ?? false) return null;
+
+      _writeRequestHeaders(socket, uri, method, headers);
+      if (prefixBytes != null && prefixBytes.isNotEmpty) {
+        socket.add(prefixBytes);
+      }
+      if (bodyStream != null) {
+        final stream = (onProgress != null && progressTotal != null)
+            ? _withProgress(
+                bodyStream,
+                progressTotal,
+                onProgress,
+                throttle: progressThrottle,
+              )
+            : bodyStream;
+        await socket.addStream(stream);
+      }
+      if (suffixBytes != null && suffixBytes.isNotEmpty) {
+        socket.add(suffixBytes);
+      }
+      await socket.flush();
+      if (onProgress != null && progressTotal != null) {
+        onProgress(progressTotal, progressTotal);
+      }
+      if (shouldAbort?.call() ?? false) return null;
+
+      if (autoForceAfter != null) {
+        final status = await _readResponse(
+          socket,
+          autoForceAfter: autoForceAfter,
+          overallTimeout: timeout,
+        );
+        return (status, '');
+      }
+      return await _readFullResponse(socket, timeout: timeout);
+    } finally {
+      try {
+        socket.destroy();
+      } catch (_) {}
+    }
+  }
+
+  void _writeRequestHeaders(
+    Socket socket,
+    Uri uri,
+    String method,
+    Map<String, String> headers,
+  ) {
     final path = '${uri.path}${uri.hasQuery ? "?${uri.query}" : ""}';
-    final headers = StringBuffer()
-      ..write('POST $path HTTP/1.1\r\n')
-      ..write('Host: ${uri.host}\r\n')
-      ..write('Content-Type: multipart/form-data; boundary=$boundary\r\n')
-      ..write('Content-Length: $total\r\n')
-      ..write('Connection: keep-alive\r\n')
-      ..write('User-Agent: ${Uri.encodeComponent('OKMessages/26.14.1 (Android 11; TECNO MOBILE LIMITED TECNO LE7n; xxhdpi 480dpi 1080x2208)')}\r\n')
-      ..write('\r\n');
-    socket.add(utf8.encode(headers.toString()));
+    final buffer = StringBuffer()..write('$method $path HTTP/1.1\r\n');
+    for (final entry in headers.entries) {
+      buffer.write('${entry.key}: ${entry.value}\r\n');
+    }
+    buffer.write('\r\n');
+    socket.add(utf8.encode(buffer.toString()));
+  }
+
+  Stream<List<int>> _withProgress(
+    Stream<List<int>> src,
+    int total,
+    void Function(int sent, int total) onProgress, {
+    Duration throttle = const Duration(milliseconds: 16),
+  }) {
+    final stopwatch = Stopwatch()..start();
+    var sent = 0;
+    return src.map((chunk) {
+      sent += chunk.length;
+      if (stopwatch.elapsed >= throttle) {
+        onProgress(sent, total);
+        stopwatch.reset();
+      }
+      return chunk;
+    });
   }
 
   String _contentTypeForFilename(String filename) {
-    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : '';
+    final ext = filename.contains('.')
+        ? filename.split('.').last.toLowerCase()
+        : '';
     switch (ext) {
       case 'png':
         return 'image/png';
@@ -557,13 +593,17 @@ class FileUploader {
     (int, String)? tryParse({required bool atClose}) {
       final headerEnd = _findHeaderEnd(bytes);
       if (headerEnd == -1) return null;
-      final headerStr = utf8.decode(bytes.sublist(0, headerEnd), allowMalformed: true);
+      final headerStr = utf8.decode(
+        bytes.sublist(0, headerEnd),
+        allowMalformed: true,
+      );
       final lines = headerStr.split('\r\n');
       final parts = lines.first.split(' ');
       final status = parts.length >= 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
       final headerLines = lines.skip(1);
       final chunked = headerLines.any(
-        (l) => l.toLowerCase().startsWith('transfer-encoding:') &&
+        (l) =>
+            l.toLowerCase().startsWith('transfer-encoding:') &&
             l.toLowerCase().contains('chunked'),
       );
       int? contentLength;
@@ -572,12 +612,17 @@ class FileUploader {
           contentLength = int.tryParse(l.split(':').last.trim());
         }
       }
-      final rawBody = utf8.decode(bytes.sublist(headerEnd), allowMalformed: true);
+      final rawBody = utf8.decode(
+        bytes.sublist(headerEnd),
+        allowMalformed: true,
+      );
       if (chunked) {
         if (!atClose && !rawBody.contains('\r\n0\r\n')) return null;
         return (status, _decodeChunked(rawBody));
       }
-      if (contentLength != null && !atClose && bytes.length - headerEnd < contentLength) {
+      if (contentLength != null &&
+          !atClose &&
+          bytes.length - headerEnd < contentLength) {
         return null;
       }
       return (status, rawBody);
@@ -596,7 +641,9 @@ class FileUploader {
       onDone: () {
         final parsed = tryParse(atClose: true);
         if (parsed == null) {
-          logger.w('uploadImage: connection closed without HTTP response (${bytes.length} bytes)');
+          logger.w(
+            'uploadImage: connection closed without HTTP response (${bytes.length} bytes)',
+          );
         }
         finishWith(parsed);
       },
@@ -697,7 +744,10 @@ class FileUploader {
       },
     );
 
-    overall = Timer(overallTimeout, () => fail(TimeoutException('Тайм-аут загрузки')));
+    overall = Timer(
+      overallTimeout,
+      () => fail(TimeoutException('Тайм-аут загрузки')),
+    );
 
     return completer.future;
   }
@@ -705,7 +755,10 @@ class FileUploader {
   int? _parseHttpStatus(List<int> bytes) {
     final headerEnd = _findHeaderEnd(bytes);
     if (headerEnd == -1) return null;
-    final headerStr = utf8.decode(bytes.sublist(0, headerEnd), allowMalformed: true);
+    final headerStr = utf8.decode(
+      bytes.sublist(0, headerEnd),
+      allowMalformed: true,
+    );
     final statusLine = headerStr.split('\r\n').first;
     final parts = statusLine.split(' ');
     if (parts.length < 2) return null;

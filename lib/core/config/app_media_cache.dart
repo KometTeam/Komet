@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 class AppMediaCacheLimit {
   static const prefKey = 'media_cache_limit_bytes';
@@ -18,16 +19,18 @@ class AppMediaCacheLimit {
     unlimited,
   ];
 
-  static final ValueNotifier<int> current = ValueNotifier(defaultValue);
+  static final _setting = PersistedSetting<int>(
+    prefKey: prefKey,
+    defaultValue: defaultValue,
+    read: (prefs, key) => prefs.getInt(key),
+    write: (prefs, key, value) async {
+      await prefs.setInt(key, value);
+    },
+  );
 
-  static Future<int> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(prefKey) ?? defaultValue;
-  }
+  static ValueNotifier<int> get current => _setting.current;
 
-  static Future<void> save(int value) async {
-    current.value = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(prefKey, value);
-  }
+  static Future<int> load() => _setting.load();
+
+  static Future<void> save(int value) => _setting.save(value);
 }

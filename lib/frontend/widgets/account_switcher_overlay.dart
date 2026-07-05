@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/haptics.dart';
+import 'animated_overlay_popup.dart';
 import 'komet_avatar.dart';
 
 class AccountSwitcherController extends ChangeNotifier {
@@ -96,16 +97,14 @@ class _AccountSwitcherLayer extends StatefulWidget {
 }
 
 class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        AnimatedOverlayPopup<_AccountSwitcherLayer> {
   static const double _menuWidth = 280.0;
   static const double _itemHeight = 60.0;
   static const double _addItemHeight = 54.0;
   static const double _vPad = 8.0;
   static const double _hMargin = 12.0;
-
-  late final AnimationController _animController;
-  late final Animation<double> _animation;
-  bool _closing = false;
 
   List<ProfileData> _accounts = const [];
   int? _activeId;
@@ -117,19 +116,17 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
   bool _committedFired = false;
 
   @override
+  Duration get overlayForwardDuration => const Duration(milliseconds: 240);
+
+  @override
+  Duration get overlayReverseDuration => const Duration(milliseconds: 180);
+
+  @override
+  VoidCallback get onOverlayDismiss => widget.onDismiss;
+
+  @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 240),
-      reverseDuration: const Duration(milliseconds: 180),
-    );
-    _animation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    _animController.forward();
     widget.controller.addListener(_onControllerUpdate);
     _loadAccounts();
   }
@@ -216,46 +213,35 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
 
   void _onCommit() {
     if (_hoveredIndex == -1) {
-      _close();
+      closeOverlay();
       return;
     }
     Haptics.medium();
     final isAddItem = _hoveredIndex == _accounts.length;
     final id = isAddItem ? null : _accounts[_hoveredIndex].id;
     if (!isAddItem && id == _activeId) {
-      _close();
+      closeOverlay();
       return;
     }
     final selected = id;
-    _close().then((_) => widget.onSelected(selected));
-  }
-
-  Future<void> _close() async {
-    if (!mounted || _closing) return;
-    _closing = true;
-    try {
-      await _animController.reverse();
-    } catch (_) {}
-    if (!mounted) return;
-    widget.onDismiss();
+    closeOverlay().then((_) => widget.onSelected(selected));
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerUpdate);
-    _animController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _animation,
+      animation: overlayAnimation,
       builder: (ctx, _) {
-        final t = _animation.value.clamp(0.0, 1.0);
+        final t = overlayAnimation.value.clamp(0.0, 1.0);
         final blurSigma = 14.0 * t;
         return GestureDetector(
-          onTap: _close,
+          onTap: closeOverlay,
           behavior: HitTestBehavior.opaque,
           child: Stack(
             children: [

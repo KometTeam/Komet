@@ -5,11 +5,7 @@ class AppFont {
   final String label;
   final String? fontFamily;
 
-  const AppFont({
-    required this.id,
-    required this.label,
-    this.fontFamily,
-  });
+  const AppFont({required this.id, required this.label, this.fontFamily});
 
   bool get isSystem => fontFamily == null;
   bool get isCustom => id.startsWith(AppFonts.customPrefix);

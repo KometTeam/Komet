@@ -56,8 +56,9 @@ class DigitalIdModule {
     final hashIndex = url.indexOf('#');
     if (hashIndex < 0) return null;
     final fragment = url.substring(hashIndex + 1);
-    final match = RegExp(r'WebAppData=([^&]*(?:&(?!WebApp)[^&]*)*)')
-        .firstMatch(fragment);
+    final match = RegExp(
+      r'WebAppData=([^&]*(?:&(?!WebApp)[^&]*)*)',
+    ).firstMatch(fragment);
     final raw = match?.group(1);
     if (raw == null || raw.isEmpty) return null;
     return Uri.decodeComponent(raw);
@@ -84,8 +85,7 @@ class DigitalIdModule {
   Future<String> _generateDeviceId() async {
     final rnd = Random.secure();
     final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
-    final hex =
-        bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     try {
       final info = DeviceInfoPlugin();
       if (Platform.isAndroid) {
@@ -162,7 +162,8 @@ class DigitalIdModule {
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map) {
-        final rawCode = decoded['code'] ?? decoded['error'] ?? decoded['status'];
+        final rawCode =
+            decoded['code'] ?? decoded['error'] ?? decoded['status'];
         if (rawCode is String && rawCode.isNotEmpty) code = rawCode;
         final rawMessage = decoded['message'] ?? decoded['error_description'];
         if (rawMessage is String && rawMessage.isNotEmpty) message = rawMessage;
@@ -191,26 +192,26 @@ class DigitalIdModule {
     final decoded = await _send(
       'POST',
       '/v3/digital-id/create-biometry-token',
-      body: {
-        'device_id': deviceId,
-        'photo_hash': ?photoHash,
-      },
+      body: {'device_id': deviceId, 'photo_hash': ?photoHash},
     );
     return _unwrapData(decoded)['token'] as String? ?? '';
   }
 
   Future<String> refreshUserDocs(String token) async {
-    final decoded =
-        await _send('POST', '/v3/digital-id/refresh-user-docs', body: {
-      'token': token,
-    });
+    final decoded = await _send(
+      'POST',
+      '/v3/digital-id/refresh-user-docs',
+      body: {'token': token},
+    );
     return _unwrapData(decoded)['state'] as String? ?? '';
   }
 
   Future<DigitalIdUserDocs?> getUserDocs(String state) async {
-    final decoded = await _send('POST', '/v2/digital-id/get-user-docs', body: {
-      'state': state,
-    });
+    final decoded = await _send(
+      'POST',
+      '/v2/digital-id/get-user-docs',
+      body: {'state': state},
+    );
     if (decoded is Map && decoded['status'] == 'done') {
       final data = decoded['data'];
       if (data is Map) return DigitalIdUserDocs.fromMap(data);
@@ -227,19 +228,22 @@ class DigitalIdModule {
     required String deviceId,
     String? photoHash,
   }) async {
-    final decoded = await _send('POST', '/digital-id-verify-photo', body: {
-      'device_id': deviceId,
-      'photo_hash': ?photoHash,
-    });
+    final decoded = await _send(
+      'POST',
+      '/digital-id-verify-photo',
+      body: {'device_id': deviceId, 'photo_hash': ?photoHash},
+    );
     final status = decoded is Map ? decoded['status'] as String? : null;
     return DigitalIdVerification.fromValue(status);
   }
 
   Future<bool> shadowMode(String deviceId) async {
     try {
-      final decoded = await _send('POST', '/v3/digital-id/shadow-mode', body: {
-        'device_id': deviceId,
-      });
+      final decoded = await _send(
+        'POST',
+        '/v3/digital-id/shadow-mode',
+        body: {'device_id': deviceId},
+      );
       return _unwrapData(decoded)['shadow_mode'] == true;
     } on DigitalIdException catch (e) {
       if (e.code == 'HTTP_404') return false;
@@ -252,9 +256,11 @@ class DigitalIdModule {
   }
 
   Future<DigitalIdUniversalQr> userQr(String token) async {
-    final decoded = await _send('POST', '/v3/digital-id/user-qr', body: {
-      'token': token,
-    });
+    final decoded = await _send(
+      'POST',
+      '/v3/digital-id/user-qr',
+      body: {'token': token},
+    );
     return DigitalIdUniversalQr.fromMap(_unwrapData(decoded));
   }
 
@@ -264,12 +270,16 @@ class DigitalIdModule {
     required DigitalIdQrType qrType,
     String? kidAct,
   }) async {
-    final decoded = await _send('POST', '/v3/digital-id/generate-qr', body: {
-      'photo': photo,
-      'token': token,
-      'qr_type': qrType.code,
-      'kid_act': ?kidAct,
-    });
+    final decoded = await _send(
+      'POST',
+      '/v3/digital-id/generate-qr',
+      body: {
+        'photo': photo,
+        'token': token,
+        'qr_type': qrType.code,
+        'kid_act': ?kidAct,
+      },
+    );
     return DigitalIdQr.fromMap(_unwrapData(decoded));
   }
 
@@ -277,14 +287,9 @@ class DigitalIdModule {
     String? passStatus,
     String? inn,
   }) async {
-    final query = <String, String>{
-      'pass_status': ?passStatus,
-      'inn': ?inn,
-    };
-    final suffix =
-        query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
-    final decoded =
-        await _send('GET', '/v2/digital-id/get-cards-list$suffix');
+    final query = <String, String>{'pass_status': ?passStatus, 'inn': ?inn};
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    final decoded = await _send('GET', '/v2/digital-id/get-cards-list$suffix');
     final cards = _unwrapData(decoded)['acms_cards'];
     if (cards is! List) return const [];
     return cards
@@ -294,17 +299,19 @@ class DigitalIdModule {
   }
 
   Future<void> activateAcms({required String id, required String inn}) async {
-    await _send('POST', '/v2/digital-id/activate-acms', body: {
-      'id': id,
-      'inn': inn,
-      'pass_status': 'active',
-    });
+    await _send(
+      'POST',
+      '/v2/digital-id/activate-acms',
+      body: {'id': id, 'inn': inn, 'pass_status': 'active'},
+    );
   }
 
   Future<void> createLiteProfile(String deviceId) async {
-    await _send('POST', '/v2/digital-id/create-lite-profile', body: {
-      'device_id': deviceId,
-    });
+    await _send(
+      'POST',
+      '/v2/digital-id/create-lite-profile',
+      body: {'device_id': deviceId},
+    );
   }
 
   Future<void> deleteProfile() async {

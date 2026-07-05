@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -5,16 +7,37 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/webapp.dart';
 import '../../../core/storage/spoofing_service.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/error_view.dart';
 import '../../widgets/webview_permission_prompt.dart';
 
 class WebAppScreen extends StatefulWidget {
   final String title;
   final Future<WebAppLaunch> Function() loader;
+  final List<UserScript>? extraUserScripts;
+  final void Function(InAppWebViewController controller)? onWebViewCreated;
+  final void Function(
+    InAppWebViewController controller,
+    ConsoleMessage consoleMessage,
+  )?
+  onConsoleMessage;
+  final void Function(InAppWebViewController controller, WebUri? url)?
+  onLoadStart;
+  final Future<NavigationActionPolicy?> Function(
+    InAppWebViewController controller,
+    NavigationAction navigationAction,
+    String? currentUrl,
+  )?
+  shouldOverrideUrlLoading;
 
   const WebAppScreen({
     super.key,
     required this.title,
     required this.loader,
+    this.extraUserScripts,
+    this.onWebViewCreated,
+    this.onConsoleMessage,
+    this.onLoadStart,
+    this.shouldOverrideUrlLoading,
   });
 
   @override
@@ -84,9 +107,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
           actions: [
             IconButton(
               icon: const Icon(Symbols.refresh),
-              onPressed: _launch == null
-                  ? null
-                  : () => _controller?.reload(),
+              onPressed: _launch == null ? null : () => _controller?.reload(),
             ),
           ],
           bottom: _progress > 0 && _progress < 1
@@ -107,7 +128,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
 
   Widget _buildBody(ColorScheme cs) {
     if (_loadError != null) {
-      return _ErrorView(message: _loadError!, onRetry: _load);
+      return ErrorView(message: _loadError!, onRetry: _load);
     }
     final launch = _launch;
     if (launch == null) {
@@ -115,6 +136,9 @@ class _WebAppScreenState extends State<WebAppScreen> {
     }
     return InAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(launch.url)),
+      initialUserScripts: widget.extraUserScripts == null
+          ? null
+          : UnmodifiableListView<UserScript>(widget.extraUserScripts!),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
         domStorageEnabled: true,
@@ -123,11 +147,24 @@ class _WebAppScreenState extends State<WebAppScreen> {
         transparentBackground: true,
         mediaPlaybackRequiresUserGesture: false,
         useHybridComposition: true,
+        useShouldOverrideUrlLoading: widget.shouldOverrideUrlLoading != null,
         userAgent: _userAgent,
       ),
-      onWebViewCreated: (controller) => _controller = controller,
+      onWebViewCreated: (controller) {
+        _controller = controller;
+        widget.onWebViewCreated?.call(controller);
+      },
       onPermissionRequest: (controller, request) =>
           askWebViewPermission(context, request),
+      onConsoleMessage: widget.onConsoleMessage,
+      onLoadStart: widget.onLoadStart,
+      shouldOverrideUrlLoading: widget.shouldOverrideUrlLoading == null
+          ? null
+          : (controller, action) => widget.shouldOverrideUrlLoading!(
+              controller,
+              action,
+              launch.url,
+            ),
       onProgressChanged: (controller, progress) {
         if (!mounted) return;
         setState(() => _progress = progress / 100);
@@ -138,40 +175,6 @@ class _WebAppScreenState extends State<WebAppScreen> {
           setState(() => _loadError = error.description);
         }
       },
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _ErrorView({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Symbols.cloud_off, size: 48, color: cs.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Повторить'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

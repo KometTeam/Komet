@@ -4,27 +4,32 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/digital_id.dart';
 import '../../../backend/modules/webapp.dart';
 import '../../../core/utils/webview_support.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show digitalIdModule;
 import '../../../models/digital_id.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/error_view.dart';
 import '../webapp/web_app_screen.dart';
 
-const Map<String, String> _documentLabels = {
-  'passport': 'Паспорт РФ',
-  'oms': 'Полис ОМС',
-  'inn': 'ИНН',
-  'driver_license': 'Водительское удостоверение',
-  'vehicle_sts': 'СТС',
-  'snils': 'СНИЛС',
-  'child_birth_cert': 'Свидетельство о рождении',
-  'pension_cert': 'Пенсионное удостоверение',
-  'disabled_cert': 'Справка об инвалидности',
-  'large_family_cert': 'Удостоверение многодетной семьи',
-  'student_ticket': 'Студенческий билет',
-  'child_inn': 'ИНН ребёнка',
-  'child_oms': 'Полис ОМС ребёнка',
-};
+String _documentLabel(AppLocalizations l10n, String type) {
+  return switch (type) {
+    'passport' => l10n.digitalIdDocPassport,
+    'oms' => l10n.digitalIdDocOms,
+    'inn' => l10n.digitalIdInnLabel,
+    'driver_license' => l10n.digitalIdDocDriverLicense,
+    'vehicle_sts' => l10n.digitalIdDocVehicleSts,
+    'snils' => l10n.digitalIdSnilsLabel,
+    'child_birth_cert' => l10n.digitalIdDocChildBirthCert,
+    'pension_cert' => l10n.digitalIdDocPensionCert,
+    'disabled_cert' => l10n.digitalIdDocDisabledCert,
+    'large_family_cert' => l10n.digitalIdDocLargeFamilyCert,
+    'student_ticket' => l10n.digitalIdDocStudentTicket,
+    'child_inn' => l10n.digitalIdDocChildInn,
+    'child_oms' => l10n.digitalIdDocChildOms,
+    _ => type,
+  };
+}
 
 class DigitalIdScreen extends StatefulWidget {
   const DigitalIdScreen({super.key});
@@ -94,7 +99,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     if (!webViewSupported) {
       showCustomNotification(
         context,
-        'Привязка Госуслуг недоступна на этой платформе. Сделайте это в приложении на телефоне.',
+        AppLocalizations.of(context)!.digitalIdGosuslugiLinkUnavailable,
       );
       return;
     }
@@ -103,14 +108,17 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       final link = await digitalIdModule.createEsiaLink();
       if (!mounted) return;
       if (link.url.isEmpty) {
-        showCustomNotification(context, 'Не удалось получить ссылку Госуслуг');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.digitalIdGosuslugiLinkFailed,
+        );
         return;
       }
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => WebAppScreen(
-            title: 'Госуслуги',
+            title: AppLocalizations.of(context)!.digitalIdGosuslugiTitle,
             loader: () async => WebAppLaunch(url: link.url),
           ),
         ),
@@ -120,7 +128,12 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     } on DigitalIdException catch (e) {
       if (mounted) showCustomNotification(context, e.message);
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Ошибка: $e');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.devicesGenericError(e.toString()),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -137,7 +150,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       } else {
         showCustomNotification(
           context,
-          'Документы пока недоступны. Попробуйте позже.',
+          AppLocalizations.of(context)!.digitalIdDocsUnavailable,
         );
       }
     } on DigitalIdException catch (e) {
@@ -145,7 +158,12 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       if (e.isNoGosuslugiLink) setState(() => _needsGosuslugi = true);
       showCustomNotification(context, e.message);
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Ошибка: $e');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.devicesGenericError(e.toString()),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -154,6 +172,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
@@ -161,7 +180,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        title: const Text('Цифровой ID'),
+        title: Text(l10n.digitalIdTitle),
         leading: IconButton(
           icon: const Icon(Symbols.arrow_back),
           onPressed: () => Navigator.of(context).maybePop(),
@@ -182,7 +201,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return _ErrorView(message: _error!, onRetry: _load);
+      return ErrorView(message: _error!, onRetry: _load);
     }
     if (_docs == null) {
       return _buildOnboarding(cs);
@@ -203,6 +222,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
   }
 
   Widget _buildOnboarding(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
@@ -217,7 +237,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                       Icon(Symbols.badge, size: 72, color: cs.primary),
                       const SizedBox(height: 20),
                       Text(
-                        'Цифровой ID не настроен',
+                        l10n.digitalIdNotConfiguredTitle,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 20,
@@ -228,8 +248,8 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                       const SizedBox(height: 10),
                       Text(
                         _needsGosuslugi
-                            ? 'Привяжите аккаунт Госуслуг, чтобы документы появились в Цифровом ID. Номер телефона в MAX должен совпадать с номером в профиле Госуслуг.'
-                            : 'Привяжите Госуслуги, чтобы получить доступ к документам, или обновите страницу, если уже настраивали Цифровой ID.',
+                            ? l10n.digitalIdLinkGosuslugiHint
+                            : l10n.digitalIdLinkOrRefreshHint,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
@@ -247,8 +267,8 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                   child: OutlinedButton.icon(
                     onPressed: _busy ? null : _loadDocsExplicit,
                     icon: const Icon(Symbols.sync, size: 18),
-                    label: const Text(
-                      'Загрузить документы',
+                    label: Text(
+                      l10n.digitalIdLoadDocuments,
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -264,8 +284,8 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Symbols.link, size: 18),
-                    label: const Text(
-                      'Привязать Госуслуги',
+                    label: Text(
+                      l10n.digitalIdLinkGosuslugiButton,
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -281,6 +301,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
   }
 
   List<Widget> _buildProfile(ColorScheme cs, DigitalIdUserDocs docs) {
+    final l10n = AppLocalizations.of(context)!;
     final profile = docs.profile;
     return [
       Container(
@@ -298,7 +319,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    profile.fullName.isEmpty ? 'Профиль Госуслуг' : profile.fullName,
+                    profile.fullName.isEmpty
+                        ? l10n.digitalIdGosuslugiProfileFallback
+                        : profile.fullName,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -307,7 +330,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                   ),
                   if (profile.birthDate != null)
                     Text(
-                      'Дата рождения: ${profile.birthDate}',
+                      l10n.digitalIdBirthDate(profile.birthDate!),
                       style: TextStyle(
                         fontSize: 13,
                         color: cs.onPrimaryContainer.withValues(alpha: 0.8),
@@ -320,18 +343,23 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
         ),
       ),
       const SizedBox(height: 16),
-      _buildInfoSection(cs, 'Личные данные', [
-        if (profile.snils != null) ('СНИЛС', profile.snils!),
-        if (profile.inn != null) ('ИНН', profile.inn!),
-        if (profile.gender != null) ('Пол', profile.gender!),
-        if (profile.birthPlace != null) ('Место рождения', profile.birthPlace!),
+      _buildInfoSection(cs, l10n.digitalIdPersonalDataTitle, [
+        if (profile.snils != null) (l10n.digitalIdSnilsLabel, profile.snils!),
+        if (profile.inn != null) (l10n.digitalIdInnLabel, profile.inn!),
+        if (profile.gender != null)
+          (l10n.contactProfileInfoGender, profile.gender!),
+        if (profile.birthPlace != null)
+          (l10n.digitalIdBirthPlaceLabel, profile.birthPlace!),
         if (profile.registrationAddress != null)
-          ('Адрес регистрации', profile.registrationAddress!.formatted),
+          (
+            l10n.digitalIdRegistrationAddressLabel,
+            profile.registrationAddress!.formatted,
+          ),
       ]),
       if (profile.documents.isNotEmpty) ...[
         const SizedBox(height: 16),
         Text(
-          'Документы',
+          l10n.digitalIdDocumentsTitle,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -368,37 +396,43 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          ...rows.map((row) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 130,
-                      child: Text(
-                        row.$1,
-                        style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 130,
+                    child: Text(
+                      row.$1,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
-                    Expanded(
-                      child: Text(
-                        row.$2,
-                        style: TextStyle(fontSize: 14, color: cs.onSurface),
-                      ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      row.$2,
+                      style: TextStyle(fontSize: 14, color: cs.onSurface),
                     ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildDocumentTile(ColorScheme cs, DigitalIdDocument doc) {
-    final label = _documentLabels[doc.type] ?? doc.type;
+    final l10n = AppLocalizations.of(context)!;
+    final label = _documentLabel(l10n, doc.type);
     final subtitleParts = <String>[
-      if (doc.series != null) 'серия ${doc.series}',
-      if (doc.number != null) '№ ${doc.number}',
+      if (doc.series != null) l10n.digitalIdDocSeries(doc.series!),
+      if (doc.number != null) l10n.digitalIdDocNumber(doc.number!),
     ];
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -437,10 +471,11 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
   }
 
   List<Widget> _buildCards(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return [
       const SizedBox(height: 16),
       Text(
-        'Пропуска',
+        l10n.digitalIdPassesTitle,
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
@@ -448,42 +483,47 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
         ),
       ),
       const SizedBox(height: 8),
-      ..._cards.map((card) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Icon(Symbols.badge, color: cs.primary),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        card.companyName,
-                        style: TextStyle(fontSize: 15, color: cs.onSurface),
+      ..._cards.map(
+        (card) => Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(Symbols.badge, color: cs.primary),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      card.companyName,
+                      style: TextStyle(fontSize: 15, color: cs.onSurface),
+                    ),
+                    Text(
+                      l10n.digitalIdCardInn(card.inn),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurfaceVariant,
                       ),
-                      Text(
-                        'ИНН ${card.inn}',
-                        style:
-                            TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )),
+              ),
+            ],
+          ),
+        ),
+      ),
     ];
   }
 
   Widget _buildBiometryInfo(ColorScheme cs) {
     final biometry = _biometry;
     if (biometry == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Icon(
@@ -495,46 +535,12 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
         Expanded(
           child: Text(
             biometry.hasBiometryToken
-                ? 'Биометрия настроена на этом устройстве'
-                : 'Биометрия на этом устройстве не настроена',
+                ? l10n.digitalIdBiometryConfigured
+                : l10n.digitalIdBiometryNotConfigured,
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _ErrorView({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Symbols.cloud_off, size: 48, color: cs.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Повторить'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

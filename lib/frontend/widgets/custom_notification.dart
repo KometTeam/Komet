@@ -58,9 +58,12 @@ class _CustomNotificationState extends State<CustomNotification>
     _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
     final fadeOutDelay = widget.duration - const Duration(milliseconds: 300);
-    Future.delayed(fadeOutDelay > Duration.zero ? fadeOutDelay : Duration.zero, () {
-      if (mounted) _controller.reverse();
-    });
+    Future.delayed(
+      fadeOutDelay > Duration.zero ? fadeOutDelay : Duration.zero,
+      () {
+        if (mounted) _controller.reverse();
+      },
+    );
   }
 
   @override

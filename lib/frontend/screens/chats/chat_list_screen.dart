@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
@@ -28,7 +27,8 @@ import '../profile/settings_tab.dart';
 import '../auth/login_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
-import '../../widgets/animated_text_swap.dart';
+import 'chat/view/chat_list_shimmer.dart';
+import 'chat/view/chat_list_tile.dart';
 import '../../widgets/connection_status.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/opcode_map.dart';
@@ -36,6 +36,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_stories.dart';
+import '../../../core/config/app_colors.dart';
 import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
@@ -204,9 +205,6 @@ class _ChatListScreenState extends State<ChatListScreen>
   Widget? _cachedChatsBody;
   Object? _chatsBodyCacheKey;
 
-  /// Возвращает дерево вкладки «Чаты», кэшируя его между ребилдами
-  /// родителя. Тап/драг навбара и FAB не трогают эти state-vars,
-  /// поэтому ключ остаётся прежним и subtree не пересобирается.
   Widget _getChatsBody() {
     final key = Object.hashAll([
       identityHashCode(_chats),
@@ -281,7 +279,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final selected = _selectedChatObjects();
     if (selected.isEmpty) return;
     final anyPinned = selected.any((c) => (c.favIndex ?? 0) > 0);
-    final err = await ChatsModule.togglePin(
+    final err = await chats.togglePin(
       api,
       chatIds: selected.map((c) => c.id).toList(),
       pin: !anyPinned,
@@ -299,7 +297,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     final errors = <String>[];
     for (final c in selected) {
-      final err = await ChatsModule.setChatMute(
+      final err = await chats.setChatMute(
         api,
         chatId: c.id,
         dontDisturbUntil: targetDDU,
@@ -324,10 +322,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final myId = _profile?.id;
     if (myId == null) return;
 
-    await ChatsModule.refreshChats(
-      api,
-      selectedBefore.map((c) => c.id).toList(),
-    );
+    await chats.refreshChats(api, selectedBefore.map((c) => c.id).toList());
     if (!mounted) return;
 
     final selectedAfter = _selectedChatObjects();
@@ -348,7 +343,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final errors = <String>[];
     for (final c in selectedAfter) {
       final forAll = kind == _DeleteKind.ownerGroup;
-      final err = await ChatsModule.deleteChat(
+      final err = await chats.deleteChat(
         api,
         chatId: c.id,
         lastEventTime: c.lastEventTime,
@@ -540,13 +535,13 @@ class _ChatListScreenState extends State<ChatListScreen>
         _requestReload();
       }
     });
-    ChatsModule.chatsChanged.addListener(_onChatsChanged);
+    chats.chatsChanged.addListener(_onChatsChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     _typingSub = api.pushStream
         .where((p) => p.opcode == Opcode.notifTyping)
         .listen(_onTypingPush);
-    _typingMsgSub = ChatsModule.messageEvents.listen(_onTypingMessageEvent);
+    _typingMsgSub = chats.messageEvents.listen(_onTypingMessageEvent);
     unawaited(_runReload());
   }
 
@@ -658,7 +653,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
 
     try {
-      final chats = await ChatsModule.getChats(p.id);
+      final loadedChats = await chats.getChats(p.id);
       var folders = await FoldersModule.loadFolders(p.id);
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
 
@@ -677,7 +672,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       final pageCount = folders.isEmpty ? 1 : folders.length;
       _syncFolderChatScrollControllersForCount(pageCount);
 
-      final filteredChats = chats
+      final filteredChats = loadedChats
           .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
           .toList();
       final newIds = filteredChats.map((c) => c.id.toString()).toSet();
@@ -712,7 +707,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
           _isInitialLoading = false;
         });
-        _prefetchContactsForChats(chats);
+        _prefetchContactsForChats(loadedChats);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _jumpFolderPageToSelection();
@@ -767,7 +762,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     return 0;
   }
 
-  void _prefetchContactsForChats(List<CachedChat> chats) {
+  Future<void> _prefetchContactsForChats(List<CachedChat> chats) async {
     final myId = _profile?.id;
     final ids = <int>{};
     for (final chat in chats) {
@@ -786,11 +781,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     ids.removeAll(_inflightContactIds);
     if (ids.isEmpty) return;
     _inflightContactIds.addAll(ids);
-    for (final id in ids) {
-      messagesModule.searchContactById(id).whenComplete(() {
-        _inflightContactIds.remove(id);
-        _scheduleContactRebuild();
-      });
+    try {
+      await messagesModule.ensureContactNames(ids);
+    } finally {
+      _inflightContactIds.removeAll(ids);
+      _scheduleContactRebuild();
     }
   }
 
@@ -949,60 +944,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     return formatClock(DateTime.fromMillisecondsSinceEpoch(timestamp));
   }
 
-  Widget _buildChatShimmer() {
-    final cs = Theme.of(context).colorScheme;
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        final opacity = 0.3 + 0.3 * sin(_shimmerController.value * pi * 2);
-        return Opacity(opacity: opacity, child: child);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                    ),
-                    Container(
-                      width: double.infinity,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _onStoriesRevealTick() {
     if (!mounted) return;
     final t = Curves.easeOutCubic.transform(_storiesRevealController.value);
@@ -1130,7 +1071,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   void dispose() {
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
-    ChatsModule.chatsChanged.removeListener(_onChatsChanged);
+    chats.chatsChanged.removeListener(_onChatsChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     _loginSub?.cancel();
@@ -1179,7 +1120,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
       return;
     }
-    // Detent "click" when crossing into a different tab.
     Haptics.selection();
     double fromT;
     if (_navPageAnimController.isAnimating) {
@@ -1404,7 +1344,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   },
                 ),
                 child: _showFoldersShimmer
-                    ? _buildFolderStripShimmer(cs)
+                    ? FolderStripShimmer(shimmer: _shimmerController)
                     : LayoutBuilder(
                         builder: (context, constraints) {
                           final availableWidth = constraints.maxWidth - 40;
@@ -1516,141 +1456,141 @@ class _ChatListScreenState extends State<ChatListScreen>
             )
           else
             SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                if (_isInitialLoading) {
-                  return _buildChatShimmer();
-                }
-
-                if (hasSeparator && index == pinnedCount) {
-                  return Padding(
-                    key: const ValueKey('pinned_divider'),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Divider(
-                      height: 1,
-                      thickness: 0.5,
-                      color: cs.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                  );
-                }
-
-                final chatIndex = hasSeparator && index > pinnedCount
-                    ? index - 1
-                    : index;
-                final chat = chats[chatIndex];
-                final isPinned = (chat.favIndex ?? 0) > 0;
-
-                if (chat.type.isNotEmpty &&
-                    chat.type == "DIALOG" &&
-                    chat.id != 0) {
-                  int secondId = _profile?.id ?? 0;
-                  for (final entry in chat.participants.entries) {
-                    if (entry.key != _profile?.id) {
-                      secondId = entry.key;
-                      break;
-                    }
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  if (_isInitialLoading) {
+                    return ChatShimmerTile(shimmer: _shimmerController);
                   }
-                  final name = ContactCache.get(secondId) ?? chat.title;
-                  final avatar =
-                      ContactCache.getAvatar(secondId) ?? chat.iconUrl;
-                  // ContactCache.isOfficial covers contacts loaded via opcode 32;
-                  // chat.isOfficial covers contacts from the login payload.
-                  final isVerified =
-                      ContactCache.isOfficial(secondId) || chat.isOfficial;
 
-                  final isPlaceholder =
-                      chat.lastMsgText == ChatsModule.lastMsgPlaceholder;
-                  final previewText = isPlaceholder
-                      ? 'зайдите в чат для подгрузки'
-                      : (chat.lastMsgTextOneLine ?? '');
-                  return _animateChatTile(
-                    chat.id.toString(),
-                    _buildChatItem(
-                    chat.id.toString(),
-                    name ?? "Пользователь",
-                    previewText,
-                    _formatTime(chat.lastMsgTime),
-                    avatar ?? "",
-                    presenceUserId: secondId,
-                    unreadCount: chat.unreadCount,
-                    isMuted: chat.isMuted,
-                    isVerified: isVerified,
-                    isPinned: isPinned,
-                    chatType: "DIALOG",
-                    messageItalic: isPlaceholder,
-                    draft: _draftFor(chat.id),
-                    ownStatus: _ownStatusFor(chat, isPlaceholder),
-                    ownRead: chat.lastMsgReadByOthers,
-                    messageRanges: isPlaceholder
-                        ? const []
-                        : chat.lastMsgFormatRanges,
-                  ),
-                  );
-                } else {
-                  final isPlaceholder =
-                      chat.lastMsgText == ChatsModule.lastMsgPlaceholder;
-                  final sender = chat.lastMsgSenderId != null
-                      ? ContactCache.get(chat.lastMsgSenderId!)
-                      : null;
+                  if (hasSeparator && index == pinnedCount) {
+                    return Padding(
+                      key: const ValueKey('pinned_divider'),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: cs.outlineVariant.withValues(alpha: 0.5),
+                      ),
+                    );
+                  }
 
-                  String fullMsg = "";
-                  List<FormatRange> messageRanges = const [];
-                  if (isPlaceholder) {
-                    fullMsg = 'зайдите в чат для подгрузки';
+                  final chatIndex = hasSeparator && index > pinnedCount
+                      ? index - 1
+                      : index;
+                  final chat = chats[chatIndex];
+                  final isPinned = (chat.favIndex ?? 0) > 0;
+
+                  if (chat.type.isNotEmpty &&
+                      chat.type == "DIALOG" &&
+                      chat.id != 0) {
+                    int secondId = _profile?.id ?? 0;
+                    for (final entry in chat.participants.entries) {
+                      if (entry.key != _profile?.id) {
+                        secondId = entry.key;
+                        break;
+                      }
+                    }
+                    final name = ContactCache.get(secondId) ?? chat.title;
+                    final avatar =
+                        ContactCache.getAvatar(secondId) ?? chat.iconUrl;
+                    final isVerified =
+                        ContactCache.isOfficial(secondId) || chat.isOfficial;
+
+                    final isPlaceholder = chat.isLastMsgDeleted;
+                    final previewText = isPlaceholder
+                        ? 'зайдите в чат для подгрузки'
+                        : (chat.lastMsgTextOneLine ?? '');
+                    return _animateChatTile(
+                      chat.id.toString(),
+                      _buildChatItem(
+                        chat.id.toString(),
+                        name ?? "Пользователь",
+                        previewText,
+                        _formatTime(chat.lastMsgTime),
+                        avatar ?? "",
+                        presenceUserId: secondId,
+                        unreadCount: chat.unreadCount,
+                        isMuted: chat.isMuted,
+                        isVerified: isVerified,
+                        isPinned: isPinned,
+                        chatType: "DIALOG",
+                        messageItalic: isPlaceholder,
+                        draft: _draftFor(chat.id),
+                        ownStatus: _ownStatusFor(chat, isPlaceholder),
+                        ownRead: chat.lastMsgReadByOthers,
+                        messageRanges: isPlaceholder
+                            ? const []
+                            : chat.lastMsgFormatRanges,
+                      ),
+                    );
                   } else {
-                    var prefixLen = 0;
-                    if (sender?.isNotEmpty == true && chat.id != 0) {
-                      final prefix = "$sender: ";
-                      fullMsg += prefix;
-                      prefixLen = prefix.length;
-                    }
-                    if (chat.lastMsgText?.isNotEmpty == true) {
-                      fullMsg += chat.lastMsgText ?? "";
-                      final ranges = chat.lastMsgFormatRanges;
-                      messageRanges = prefixLen == 0
-                          ? ranges
-                          : [
-                              for (final r in ranges)
-                                FormatRange(
-                                  format: r.format,
-                                  start: r.start + prefixLen,
-                                  length: r.length,
-                                  attributes: r.attributes,
-                                ),
-                            ];
-                    }
-                  }
+                    final isPlaceholder = chat.isLastMsgDeleted;
+                    final sender = chat.lastMsgSenderId != null
+                        ? ContactCache.get(chat.lastMsgSenderId!)
+                        : null;
 
-                  return _animateChatTile(
-                    chat.id.toString(),
-                    _buildChatItem(
-                    chat.id.toString(),
-                    chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
-                    fullMsg,
-                    _formatTime(chat.lastMsgTime),
-                    (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
-                        ? chat.iconUrl!
-                        : '',
-                    unreadCount: chat.unreadCount,
-                    isMuted: chat.isMuted,
-                    isVerified: chat.isOfficial,
-                    isPinned: isPinned,
-                    chatType: chat.type,
-                    messageItalic: isPlaceholder,
-                    draft: chat.id == 0 ? null : _draftFor(chat.id),
-                    ownStatus: _ownStatusFor(chat, isPlaceholder),
-                    ownRead: chat.lastMsgReadByOthers,
-                    messageRanges: messageRanges,
-                  ),
-                  );
-                }
-              }, childCount: totalItems, findChildIndexCallback: (Key key) {
-                if (key is! ValueKey<String>) return null;
-                final v = key.value;
-                if (!v.startsWith('chat_')) return null;
-                final idx = idToIndex[v.substring(5)];
-                if (idx == null) return null;
-                return hasSeparator && idx >= pinnedCount ? idx + 1 : idx;
-              }),
+                    String fullMsg = "";
+                    List<FormatRange> messageRanges = const [];
+                    if (isPlaceholder) {
+                      fullMsg = 'зайдите в чат для подгрузки';
+                    } else {
+                      var prefixLen = 0;
+                      if (sender?.isNotEmpty == true && chat.id != 0) {
+                        final prefix = "$sender: ";
+                        fullMsg += prefix;
+                        prefixLen = prefix.length;
+                      }
+                      if (chat.lastMsgText?.isNotEmpty == true) {
+                        fullMsg += chat.lastMsgText ?? "";
+                        final ranges = chat.lastMsgFormatRanges;
+                        messageRanges = prefixLen == 0
+                            ? ranges
+                            : [
+                                for (final r in ranges)
+                                  FormatRange(
+                                    format: r.format,
+                                    start: r.start + prefixLen,
+                                    length: r.length,
+                                    attributes: r.attributes,
+                                  ),
+                              ];
+                      }
+                    }
+
+                    return _animateChatTile(
+                      chat.id.toString(),
+                      _buildChatItem(
+                        chat.id.toString(),
+                        chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
+                        fullMsg,
+                        _formatTime(chat.lastMsgTime),
+                        (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                            ? chat.iconUrl!
+                            : '',
+                        unreadCount: chat.unreadCount,
+                        isMuted: chat.isMuted,
+                        isVerified: chat.isOfficial,
+                        isPinned: isPinned,
+                        chatType: chat.type,
+                        messageItalic: isPlaceholder,
+                        draft: chat.id == 0 ? null : _draftFor(chat.id),
+                        ownStatus: _ownStatusFor(chat, isPlaceholder),
+                        ownRead: chat.lastMsgReadByOthers,
+                        messageRanges: messageRanges,
+                      ),
+                    );
+                  }
+                },
+                childCount: totalItems,
+                findChildIndexCallback: (Key key) {
+                  if (key is! ValueKey<String>) return null;
+                  final v = key.value;
+                  if (!v.startsWith('chat_')) return null;
+                  final idx = idToIndex[v.substring(5)];
+                  if (idx == null) return null;
+                  return hasSeparator && idx >= pinnedCount ? idx + 1 : idx;
+                },
+              ),
             ),
           SliverPadding(
             padding: EdgeInsets.only(
@@ -2104,8 +2044,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                   radius: 26,
                   backgroundImage: CachedNetworkImageProvider(
                     imageUrl,
-                    maxWidth: 144,
-                    maxHeight: 144,
+                    maxWidth: kAvatarThumbSize,
+                    maxHeight: kAvatarThumbSize,
                   ),
                 ),
               ),
@@ -2129,45 +2069,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     final e = f.emoji;
     if (e != null && e.isNotEmpty) return '$e ${f.title}';
     return f.title;
-  }
-
-  Widget _buildFolderStripShimmer(ColorScheme cs) {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        final opacity = 0.3 + 0.3 * sin(_shimmerController.value * pi * 2);
-        return Opacity(
-          opacity: opacity,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            physics: const BouncingScrollPhysics(),
-            children: [
-              _folderShimmerPill(cs, 88),
-              const SizedBox(width: 8),
-              _folderShimmerPill(cs, 72),
-              const SizedBox(width: 8),
-              _folderShimmerPill(cs, 96),
-              const SizedBox(width: 8),
-              _folderShimmerPill(cs, 64),
-              const SizedBox(width: 8),
-              _folderShimmerPill(cs, 80),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _folderShimmerPill(ColorScheme cs, double width) {
-    return Container(
-      width: width,
-      height: 32,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-    );
   }
 
   Widget _buildFolderChip(String title, {required String folderId}) {
@@ -2240,7 +2141,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       default:
         if (read) {
           icon = Symbols.done_all;
-          color = const Color(0xFF4FC3F7);
+          color = kReadReceiptBlue;
         } else {
           icon = Symbols.check;
           color = cs.outline;
@@ -2253,7 +2154,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _animateChatTile(String id, Widget child) {
-    return _AnimatedChatTile(
+    return AnimatedChatTile(
       key: ValueKey('chat_$id'),
       id: id,
       revision: _chatListRevision,
@@ -2273,8 +2174,14 @@ class _ChatListScreenState extends State<ChatListScreen>
       return Text.rich(
         TextSpan(
           children: [
-            TextSpan(text: 'Черновик: ', style: TextStyle(color: cs.error)),
-            TextSpan(text: draft, style: TextStyle(color: cs.outline)),
+            TextSpan(
+              text: 'Черновик: ',
+              style: TextStyle(color: cs.error),
+            ),
+            TextSpan(
+              text: draft,
+              style: TextStyle(color: cs.outline),
+            ),
           ],
           style: const TextStyle(
             fontSize: 14,
@@ -2303,7 +2210,11 @@ class _ChatListScreenState extends State<ChatListScreen>
       );
     }
     return Text.rich(
-      FormattedMessageText.buildInlineSpan(message, messageRanges, previewStyle),
+      FormattedMessageText.buildInlineSpan(
+        message,
+        messageRanges,
+        previewStyle,
+      ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
@@ -2345,7 +2256,11 @@ class _ChatListScreenState extends State<ChatListScreen>
       radius: 24,
       backgroundColor: cs.surfaceContainerHighest,
       backgroundImage: imageUrl.isNotEmpty
-          ? CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144)
+          ? CachedNetworkImageProvider(
+              imageUrl,
+              maxWidth: kAvatarThumbSize,
+              maxHeight: kAvatarThumbSize,
+            )
           : null,
       child: imageUrl.isEmpty
           ? Text(
@@ -2386,8 +2301,8 @@ class _ChatListScreenState extends State<ChatListScreen>
             precacheImage(
               CachedNetworkImageProvider(
                 imageUrl,
-                maxWidth: 144,
-                maxHeight: 144,
+                maxWidth: kAvatarThumbSize,
+                maxHeight: kAvatarThumbSize,
               ),
               context,
             ),
@@ -2532,7 +2447,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Expanded(
-                              child: _ActivitySubtitle(
+                              child: ActivitySubtitle(
                                 chatId: int.tryParse(id) ?? 0,
                                 child: messageLine,
                               ),
@@ -2710,8 +2625,8 @@ class _ChatListScreenState extends State<ChatListScreen>
           radius: 12,
           backgroundImage: CachedNetworkImageProvider(
             imageUrl,
-            maxWidth: 144,
-            maxHeight: 144,
+            maxWidth: kAvatarThumbSize,
+            maxHeight: kAvatarThumbSize,
           ),
         ),
       ),
@@ -2726,163 +2641,4 @@ class _StoriesUi extends ChangeNotifier {
   bool shouldCollapseSearch = false;
 
   void notify() => notifyListeners();
-}
-
-class _AnimatedChatTile extends StatefulWidget {
-  final Widget child;
-  final String id;
-  final int revision;
-  final bool isNew;
-
-  const _AnimatedChatTile({
-    required Key key,
-    required this.child,
-    required this.id,
-    required this.revision,
-    required this.isNew,
-  }) : super(key: key);
-
-  @override
-  State<_AnimatedChatTile> createState() => _AnimatedChatTileState();
-}
-
-class _AnimatedChatTileState extends State<_AnimatedChatTile>
-    with SingleTickerProviderStateMixin {
-  static const Duration _moveDuration = Duration(milliseconds: 300);
-  static const Duration _enterDuration = Duration(milliseconds: 260);
-
-  AnimationController? _controller;
-  double? _lastContentY;
-  late int _lastRevision;
-  double _moveDy = 0;
-  bool _entering = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _lastRevision = widget.revision;
-    if (widget.isNew) {
-      _entering = true;
-      final c = _controller = AnimationController(
-        vsync: this,
-        duration: _enterDuration,
-      );
-      c.forward(from: 0).whenComplete(() {
-        if (mounted) setState(() => _entering = false);
-      });
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _lastContentY = _measureContentY();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _AnimatedChatTile oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.revision == _lastRevision) return;
-    _lastRevision = widget.revision;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _runMove();
-    });
-  }
-
-  double? _measureContentY() {
-    final box = context.findRenderObject();
-    if (box is! RenderBox || !box.attached) return null;
-    try {
-      return RenderAbstractViewport.of(box).getOffsetToReveal(box, 0.0).offset;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _runMove() {
-    final newY = _measureContentY();
-    final oldY = _lastContentY;
-    if (newY != null) _lastContentY = newY;
-    debugPrint('[FLIP] move id=${widget.id} oldY=$oldY newY=$newY');
-    if (_entering || oldY == null || newY == null) return;
-    final dy = oldY - newY;
-    if (dy.abs() < 1.0 || dy.abs() > 2000) return;
-    final c = _controller ??= AnimationController(vsync: this);
-    c.duration = _moveDuration;
-    setState(() => _moveDy = dy);
-    c.forward(from: 0);
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = _controller;
-    if (c == null) return SizedBox(child: widget.child);
-    return SizedBox(
-      child: AnimatedBuilder(
-        animation: c,
-        builder: (context, child) {
-          if (_entering) {
-            final t = Curves.easeOut.transform(c.value);
-            return Opacity(
-              opacity: t,
-              child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
-            );
-          }
-          if (_moveDy != 0) {
-            final t = 1 - Curves.easeOutCubic.transform(c.value);
-            return Transform.translate(
-              offset: Offset(0, _moveDy * t),
-              child: child,
-            );
-          }
-          return child!;
-        },
-        child: widget.child,
-      ),
-    );
-  }
-}
-
-class _ActivitySubtitle extends StatefulWidget {
-  const _ActivitySubtitle({required this.chatId, required this.child});
-
-  final int chatId;
-  final Widget child;
-
-  @override
-  State<_ActivitySubtitle> createState() => _ActivitySubtitleState();
-}
-
-class _ActivitySubtitleState extends State<_ActivitySubtitle> {
-  ChatActivity _lastActivity = ChatActivity.typing;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ValueListenableBuilder<ChatActivity?>(
-      valueListenable: ChatActivityStore.instance.listenable(widget.chatId),
-      child: widget.child,
-      builder: (context, activity, base) {
-        if (activity != null) _lastActivity = activity;
-        return AnimatedTextSwap(
-          showAlternate: activity != null,
-          alternate: Text(
-            _lastActivity.label.toLowerCase(),
-            style: TextStyle(
-              color: cs.primary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              height: 1.2,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          child: base!,
-        );
-      },
-    );
-  }
 }

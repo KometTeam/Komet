@@ -13,17 +13,21 @@ import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
 import '../api.dart';
+import 'chat_parsing.dart';
+import 'chat_preview.dart';
 import 'folders.dart';
 import 'messages.dart' show ContactCache, CachedMessage;
 
-Map<int, int> _parseParticipants(dynamic raw) {
+Map<int, int> parseParticipants(dynamic raw) {
   try {
     final decoded = raw is String ? jsonDecode(raw) : raw;
     if (decoded is Map) {
-      return decoded.map((k, v) => MapEntry(
-        k is int ? k : int.parse(k.toString()),
-        v is int ? v : int.tryParse(v.toString()) ?? 0,
-      ));
+      return decoded.map(
+        (k, v) => MapEntry(
+          k is int ? k : int.parse(k.toString()),
+          v is int ? v : int.tryParse(v.toString()) ?? 0,
+        ),
+      );
     }
   } catch (e) {
     logger.e('Failed to parse participants: $e');
@@ -80,8 +84,8 @@ class CachedChat {
     this.owner,
     this.admins = const {},
   }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
-            ? lastMsgText.replaceAll('\n', ' ')
-            : lastMsgText;
+           ? lastMsgText.replaceAll('\n', ' ')
+           : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
 
@@ -112,6 +116,8 @@ class CachedChat {
     return dontDisturbUntil > DateTime.now().millisecondsSinceEpoch;
   }
 
+  bool get isLastMsgDeleted => lastMsgText == ChatsModule.lastMsgPlaceholder;
+
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
     accountId: row['account_id'] as int,
@@ -131,7 +137,7 @@ class CachedChat {
     dontDisturbUntil: row['dont_disturb_until'] as int,
     isOnline: (row['is_online'] as int) == 1,
     seenTime: row['seen_time'] as int,
-    participants: _parseParticipants(row['participants']),
+    participants: parseParticipants(row['participants']),
     options: _decodeOptions(row['options']),
     owner: row['owner'] as int?,
     admins: _decodeAdmins(row['admins']),
@@ -170,11 +176,75 @@ class CachedChat {
     'dont_disturb_until': dontDisturbUntil,
     'is_online': isOnline ? 1 : 0,
     'seen_time': seenTime,
-    'participants': jsonEncode(participants.map((k, v) => MapEntry(k.toString(), v))),
+    'participants': jsonEncode(
+      participants.map((k, v) => MapEntry(k.toString(), v)),
+    ),
     'options': options.isEmpty ? null : options.join(','),
     'owner': owner,
     'admins': admins.isEmpty ? null : admins.join(','),
   };
+
+  static const Object _keep = Object();
+
+  CachedChat copyWith({
+    String? type,
+    Object? title = _keep,
+    Object? iconUrl = _keep,
+    Object? lastMsgId = _keep,
+    Object? lastMsgTime = _keep,
+    Object? lastMsgText = _keep,
+    Object? lastMsgElements = _keep,
+    Object? lastMsgSenderId = _keep,
+    Object? lastMsgStatus = _keep,
+    int? unreadCount,
+    int? lastEventTime,
+    int? cachedAt,
+    Object? favIndex = _keep,
+    int? dontDisturbUntil,
+    bool? isOnline,
+    int? seenTime,
+    Map<int, int>? participants,
+    Set<String>? options,
+    Object? owner = _keep,
+    Set<int>? admins,
+  }) {
+    return CachedChat(
+      id: id,
+      accountId: accountId,
+      type: type ?? this.type,
+      title: identical(title, _keep) ? this.title : title as String?,
+      iconUrl: identical(iconUrl, _keep) ? this.iconUrl : iconUrl as String?,
+      lastMsgId: identical(lastMsgId, _keep)
+          ? this.lastMsgId
+          : lastMsgId as int?,
+      lastMsgTime: identical(lastMsgTime, _keep)
+          ? this.lastMsgTime
+          : lastMsgTime as int?,
+      lastMsgText: identical(lastMsgText, _keep)
+          ? this.lastMsgText
+          : lastMsgText as String?,
+      lastMsgElements: identical(lastMsgElements, _keep)
+          ? this.lastMsgElements
+          : lastMsgElements as String?,
+      lastMsgSenderId: identical(lastMsgSenderId, _keep)
+          ? this.lastMsgSenderId
+          : lastMsgSenderId as int?,
+      lastMsgStatus: identical(lastMsgStatus, _keep)
+          ? this.lastMsgStatus
+          : lastMsgStatus as String?,
+      unreadCount: unreadCount ?? this.unreadCount,
+      lastEventTime: lastEventTime ?? this.lastEventTime,
+      cachedAt: cachedAt ?? this.cachedAt,
+      favIndex: identical(favIndex, _keep) ? this.favIndex : favIndex as int?,
+      dontDisturbUntil: dontDisturbUntil ?? this.dontDisturbUntil,
+      isOnline: isOnline ?? this.isOnline,
+      seenTime: seenTime ?? this.seenTime,
+      participants: participants ?? this.participants,
+      options: options ?? this.options,
+      owner: identical(owner, _keep) ? this.owner : owner as int?,
+      admins: admins ?? this.admins,
+    );
+  }
 }
 
 class ChatSearchHit {
@@ -237,7 +307,11 @@ class MessageMarkedDeletedEvent extends MessageEvent {
 class MessageReactionsChangedEvent extends MessageEvent {
   final String messageId;
   final Map<String, dynamic>? reactionInfo;
-  const MessageReactionsChangedEvent(super.chatId, this.messageId, this.reactionInfo);
+  const MessageReactionsChangedEvent(
+    super.chatId,
+    this.messageId,
+    this.reactionInfo,
+  );
 }
 
 class MessageSentEvent extends MessageEvent {
@@ -254,117 +328,16 @@ class ChatsModule {
   /// а кеша истории нет — UI должен отрисовать курсивную плашку.
   static const String lastMsgPlaceholder = '__komet_lastmsg_placeholder__';
 
-  static String? attachPreviewLabel(dynamic attaches) {
-    if (attaches is! List || attaches.isEmpty) return null;
-    final first = attaches.first;
-    if (first is! Map) return null;
-    final type = (first['_type'] as String? ?? '').toUpperCase();
-    switch (type) {
-      case 'PHOTO':
-        return 'Фото';
-      case 'VIDEO':
-        return 'Видео';
-      case 'AUDIO':
-        return 'Голосовое сообщение';
-      case 'FILE':
-        final name = first['name']?.toString();
-        return name != null && name.isNotEmpty ? 'Файл: $name' : 'Файл';
-      case 'STICKER':
-        return 'Стикер';
-      case 'SHARE':
-        final title = first['title']?.toString();
-        return title != null && title.isNotEmpty ? 'Ссылка: $title' : 'Ссылка';
-      case 'POLL':
-        final title = first['title']?.toString();
-        return title != null && title.isNotEmpty ? 'Опрос: $title' : 'Опрос';
-      case 'LOCATION':
-        return 'Геопозиция';
-      case 'CONTACT':
-        return 'Контакт';
-      case 'CONTROL':
-        return _controlPreviewLabel(first);
-      case 'INLINE_KEYBOARD':
-        return null;
-      case 'CALL':
-        final video = first['callType']?.toString().toUpperCase() == 'VIDEO';
-        final dur = (first['duration'] as num?)?.toInt() ?? 0;
-        final hangup = first['hangupType']?.toString();
-        final failed = dur == 0 ||
-            hangup == 'CANCELED' ||
-            hangup == 'REJECTED' ||
-            hangup == 'MISSED';
-        if (first['joinLink'] != null) {
-          return video ? 'Групповой видеозвонок' : 'Групповой звонок';
-        }
-        if (failed) return video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок';
-        return video ? 'Видеозвонок' : 'Звонок';
-      default:
-        return 'Вложение';
-    }
-  }
+  ChatsModule._();
 
-  static String? _controlPreviewLabel(Map c) {
-    final title = c['title']?.toString();
-    if (title != null && title.isNotEmpty) return title;
-    final short = c['shortMessage']?.toString();
-    if (short != null && short.isNotEmpty) return short;
-    switch (c['event']?.toString()) {
-      case 'new':
-        return 'Чат создан';
-      case 'add':
-      case 'joinByLink':
-        return 'Новый участник';
-      case 'leave':
-        return 'Участник вышел';
-      case 'remove':
-        return 'Участник удалён';
-      case 'pin':
-        return 'Закреплённое сообщение';
-      case 'changeTitle':
-        return 'Название чата изменено';
-      case 'changeIcon':
-        return 'Фото чата обновлено';
-      default:
-        return 'Системное сообщение';
-    }
-  }
+  final _messageEventsController = StreamController<MessageEvent>.broadcast();
+  Stream<MessageEvent> get messageEvents => _messageEventsController.stream;
 
-  static String? messagePreviewText(Map msg) {
-    final link = msg['link'];
-    if (link is Map && link['type']?.toString().toUpperCase() == 'FORWARD') {
-      final original = link['message'];
-      final inner = original is Map ? _bodyPreviewText(original) : null;
-      return inner != null && inner.isNotEmpty
-          ? '↪ $inner'
-          : '↪ Пересланное сообщение';
-    }
-    return _bodyPreviewText(msg);
-  }
-
-  static String? _bodyPreviewText(Map msg) {
-    final text = msg['text']?.toString();
-    if (text != null && text.isNotEmpty) return text;
-    return attachPreviewLabel(msg['attaches']);
-  }
-
-  static String? messagePreviewElements(Map msg) {
-    final text = msg['text'];
-    if (text is! String || text.isEmpty) return null;
-    final elements = msg['elements'];
-    if (elements is List && elements.isNotEmpty) return jsonEncode(elements);
-    return null;
-  }
-
-  static final _messageEventsController =
-      StreamController<MessageEvent>.broadcast();
-  static Stream<MessageEvent> get messageEvents =>
-      _messageEventsController.stream;
-
-  static void emitMessageSent(int chatId, String tempId, CachedMessage message) {
+  void emitMessageSent(int chatId, String tempId, CachedMessage message) {
     _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
   }
 
-  static Future<void> markRead(
+  Future<void> markRead(
     Api api,
     int accountId,
     int chatId,
@@ -393,12 +366,7 @@ class ChatsModule {
     _bump();
   }
 
-  static Future<int?> markUnread(
-    Api api,
-    int accountId,
-    int chatId,
-    int mark,
-  ) async {
+  Future<int?> markUnread(Api api, int accountId, int chatId, int mark) async {
     int? unread;
     try {
       final resp = await api.sendRequest(Opcode.chatMark, {
@@ -413,17 +381,15 @@ class ChatsModule {
     }
     if (unread == null) return null;
 
-    final rows = await AppDatabase.loadChat(accountId, chatId);
-    if (rows.isNotEmpty) {
-      final row = Map<String, dynamic>.from(rows.first);
-      row['unread_count'] = unread;
-      await AppDatabase.saveChats([row]);
-      _bump();
-    }
+    await _updateChat(
+      accountId,
+      chatId,
+      (chat) => chat.copyWith(unreadCount: unread),
+    );
     return unread;
   }
 
-  static Future<void> applyOutgoing(
+  Future<void> applyOutgoing(
     int accountId,
     int chatId, {
     required String messageId,
@@ -432,47 +398,80 @@ class ChatsModule {
     required String status,
     List<Map<String, dynamic>>? elements,
   }) async {
-    final rows = await AppDatabase.loadChat(accountId, chatId);
-    if (rows.isEmpty) return;
-    final row = Map<String, dynamic>.from(rows.first);
     final thisId = int.tryParse(messageId);
-    final existingTime = (row['last_msg_time'] as int?) ?? 0;
-    final existingId = row['last_msg_id'] as int?;
-    if (time < existingTime && existingId != thisId) return;
-    row['last_msg_id'] = thisId;
-    row['last_msg_text'] = text;
-    row['last_msg_elements'] = (elements != null && elements.isNotEmpty)
-        ? jsonEncode(elements)
-        : null;
-    row['last_msg_time'] = time;
-    row['last_event_time'] = time;
-    row['last_msg_sender'] = accountId;
-    row['last_msg_status'] = status;
-    await AppDatabase.saveChats([row]);
-    _bump();
+    await _updateChat(accountId, chatId, (chat) {
+      final existingTime = chat.lastMsgTime ?? 0;
+      if (time < existingTime && chat.lastMsgId != thisId) return null;
+      return chat.copyWith(
+        lastMsgId: thisId,
+        lastMsgText: text,
+        lastMsgElements: (elements != null && elements.isNotEmpty)
+            ? jsonEncode(elements)
+            : null,
+        lastMsgTime: time,
+        lastEventTime: time,
+        lastMsgSenderId: accountId,
+        lastMsgStatus: status,
+      );
+    });
   }
 
-  static final ValueNotifier<int> chatsChanged = ValueNotifier(0);
-  static void _bump() => chatsChanged.value = chatsChanged.value + 1;
+  final ValueNotifier<int> chatsChanged = ValueNotifier(0);
+  void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
-  static StreamSubscription<Packet>? _globalPushSub;
-  static StreamSubscription<SessionState>? _globalStateSub;
-  static Future<void> _pushQueue = Future.value();
+  Future<bool> _updateChat(
+    int accountId,
+    int chatId,
+    CachedChat? Function(CachedChat chat) mutate,
+  ) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return false;
+    final updated = mutate(CachedChat.fromDbRow(rows.first));
+    if (updated == null) return false;
+    final row = Map<String, dynamic>.from(rows.first)
+      ..addAll(updated.toDbRow());
+    await AppDatabase.saveChats([row]);
+    _bump();
+    return true;
+  }
 
-  static final Set<int> _historyFetched = {};
+  static Map<String, dynamic>? _decodePayload(dynamic raw) {
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      } catch (_) {}
+    }
+    return null;
+  }
 
-  static bool wasHistoryFetched(int chatId) =>
-      _historyFetched.contains(chatId);
-  static void markHistoryFetched(int chatId) => _historyFetched.add(chatId);
+  StreamSubscription<Packet>? _globalPushSub;
+  StreamSubscription<SessionState>? _globalStateSub;
+  Future<void> _pushQueue = Future.value();
 
-  static void attachGlobalPushHandlers(Api api) {
+  final Set<int> _historyFetched = {};
+
+  bool wasHistoryFetched(int chatId) => _historyFetched.contains(chatId);
+  void markHistoryFetched(int chatId) => _historyFetched.add(chatId);
+
+  void attachGlobalPushHandlers(Api api) {
     _globalPushSub?.cancel();
     _globalStateSub?.cancel();
     _globalPushSub = api.pushStream.listen(_enqueueGlobalPush);
     _globalStateSub = api.stateStream.listen(_handleSessionState);
   }
 
-  static void _handleSessionState(SessionState state) {
+  void dispose() {
+    _globalPushSub?.cancel();
+    _globalStateSub?.cancel();
+    _globalPushSub = null;
+    _globalStateSub = null;
+    _contactFlushTimer?.cancel();
+    _contactFlushTimer = null;
+    _messageEventsController.close();
+    chatsChanged.dispose();
+  }
+
+  void _handleSessionState(SessionState state) {
     if (state == SessionState.disconnected) {
       ContactInfoFetch.clear();
       PresenceFetch.clear();
@@ -481,22 +480,22 @@ class ChatsModule {
     }
   }
 
-  static void resetForAccountSwitch() {
+  void resetForAccountSwitch() {
     _historyFetched.clear();
     ContactInfoFetch.clear();
     PresenceFetch.clear();
     ChatInfoFetch.clear();
   }
 
-  static void _enqueueGlobalPush(Packet packet) {
-    _pushQueue = _pushQueue
-        .then((_) => _handleGlobalPush(packet))
-        .catchError((Object e) {
-          logger.w('Ошибка обработки пуша: $e');
-        });
+  void _enqueueGlobalPush(Packet packet) {
+    _pushQueue = _pushQueue.then((_) => _handleGlobalPush(packet)).catchError((
+      Object e,
+    ) {
+      logger.w('Ошибка обработки пуша: $e');
+    });
   }
 
-  static Future<void> _handleGlobalPush(Packet packet) async {
+  Future<void> _handleGlobalPush(Packet packet) async {
     switch (packet.opcode) {
       case Opcode.notifMessage:
         await _handleNotifMessage(packet);
@@ -511,7 +510,7 @@ class ChatsModule {
     }
   }
 
-  static void _handlePresence(Packet packet) {
+  void _handlePresence(Packet packet) {
     final payload = packet.payload;
     if (payload is! Map) return;
     final userId = payload['userId'];
@@ -521,7 +520,7 @@ class ChatsModule {
     PresenceFetch.apply(userId, Map<String, dynamic>.from(presence));
   }
 
-  static Future<void> _handleNotifMsgDelete(Packet packet) async {
+  Future<void> _handleNotifMsgDelete(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
     final accountId = await TokenStorage.getActiveAccountId();
@@ -555,7 +554,7 @@ class ChatsModule {
     _bump();
   }
 
-  static Future<void> _handleNotifMessage(Packet packet) async {
+  Future<void> _handleNotifMessage(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
     final chatId = payload['chatId'];
@@ -581,10 +580,12 @@ class ChatsModule {
       try {
         final chatInfo = await ChatInfoFetch.get(chatId);
         if (chatInfo != null) {
-          await cacheServerChat(chatInfo, accountId);
+          await cacheServerChat(chatInfo.raw, accountId);
         }
       } catch (e) {
-        logger.w('notifMessage: fetch info for unknown chat $chatId failed: $e');
+        logger.w(
+          'notifMessage: fetch info for unknown chat $chatId failed: $e',
+        );
         return;
       }
       rows = await AppDatabase.loadChat(accountId, chatId);
@@ -600,7 +601,12 @@ class ChatsModule {
       }
       final cachedChat = CachedChat.fromDbRow(rows.first);
       if (cachedChat.lastMsgId == msgIdInt) {
-        await _reconcileLastMessage(accountId, chatId, rows.first, unread: unread);
+        await _reconcileLastMessage(
+          accountId,
+          chatId,
+          rows.first,
+          unread: unread,
+        );
       } else if (unread != null) {
         final newRow = Map<String, dynamic>.from(rows.first);
         newRow['unread_count'] = unread;
@@ -617,21 +623,15 @@ class ChatsModule {
 
     CachedMessage? emittedMessage;
     if (status == 'EDITED' && msgIdStr != null) {
-      final existing = await AppDatabase.loadMessage(accountId, chatId, msgIdStr);
+      final existing = await AppDatabase.loadMessage(
+        accountId,
+        chatId,
+        msgIdStr,
+      );
       if (existing != null) {
-        Map<String, dynamic> mergedPayload;
-        final existingPayloadRaw = existing['payload'];
-        if (existingPayloadRaw is String && existingPayloadRaw.isNotEmpty) {
-          try {
-            mergedPayload = Map<String, dynamic>.from(
-              jsonDecode(existingPayloadRaw) as Map,
-            );
-          } catch (_) {
-            mergedPayload = Map<String, dynamic>.from(msg);
-          }
-        } else {
-          mergedPayload = Map<String, dynamic>.from(msg);
-        }
+        final mergedPayload =
+            _decodePayload(existing['payload']) ??
+            Map<String, dynamic>.from(msg);
         for (final entry in msg.entries) {
           if (entry.key == 'reactionInfo') continue;
           mergedPayload[entry.key.toString()] = entry.value;
@@ -655,10 +655,16 @@ class ChatsModule {
         newRow['payload'] = jsonEncode(mergedPayload);
         await AppDatabase.saveMessages([newRow]);
         emittedMessage = CachedMessage.fromDbRow(newRow);
-        _messageEventsController.add(MessageEditedEvent(chatId, emittedMessage));
+        _messageEventsController.add(
+          MessageEditedEvent(chatId, emittedMessage),
+        );
       }
     } else if (msgIdStr != null) {
-      final existing = await AppDatabase.loadMessage(accountId, chatId, msgIdStr);
+      final existing = await AppDatabase.loadMessage(
+        accountId,
+        chatId,
+        msgIdStr,
+      );
       if (existing == null) {
         final cached = CachedMessage.fromPushPayload(accountId, chatId, msg);
         await AppDatabase.saveMessages([cached.toDbRow()]);
@@ -668,7 +674,8 @@ class ChatsModule {
     }
 
     final cached = CachedChat.fromDbRow(rows.first);
-    final isStaleLast = status != 'REMOVED' &&
+    final isStaleLast =
+        status != 'REMOVED' &&
         msgIdInt != null &&
         cached.lastMsgId == msgIdInt &&
         status != 'EDITED';
@@ -697,7 +704,7 @@ class ChatsModule {
     _bump();
   }
 
-  static Future<void> _reconcileLastMessage(
+  Future<void> _reconcileLastMessage(
     int accountId,
     int chatId,
     Map<String, dynamic> chatRow, {
@@ -715,27 +722,11 @@ class ChatsModule {
       final rawText = m['text']?.toString();
       String? previewText = rawText;
       String? elementsJson;
+      final payload = _decodePayload(m['payload']);
       if (rawText == null || rawText.isEmpty) {
-        final payloadRaw = m['payload'];
-        if (payloadRaw is String && payloadRaw.isNotEmpty) {
-          try {
-            final payload = jsonDecode(payloadRaw);
-            if (payload is Map) {
-              previewText = messagePreviewText(payload);
-            }
-          } catch (_) {}
-        }
+        if (payload != null) previewText = messagePreviewText(payload);
       } else {
-        final payloadRaw = m['payload'];
-        if (payloadRaw is String && payloadRaw.isNotEmpty) {
-          try {
-            final payload = jsonDecode(payloadRaw);
-            if (payload is Map) {
-              final els = payload['elements'];
-              if (els is List && els.isNotEmpty) elementsJson = jsonEncode(els);
-            }
-          } catch (_) {}
-        }
+        if (payload != null) elementsJson = messagePreviewElements(payload);
       }
       newRow['last_msg_id'] = int.tryParse(m['id']?.toString() ?? '');
       newRow['last_msg_text'] = previewText ?? m['text'];
@@ -757,26 +748,26 @@ class ChatsModule {
   /// Вызывается после успешного фетча истории чата —
   /// если в превью был placeholder, заменяем его на актуальное
   /// последнее сообщение из кеша.
-  static Future<void> reconcileLastMessageIfPlaceholder(
+  Future<void> reconcileLastMessageIfPlaceholder(
     int accountId,
     int chatId,
   ) async {
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
     final chat = CachedChat.fromDbRow(rows.first);
-    if (chat.lastMsgText != lastMsgPlaceholder) return;
+    if (!chat.isLastMsgDeleted) return;
     await _reconcileLastMessage(accountId, chatId, rows.first);
     _bump();
   }
 
-  static Future<void> reconcileLastMessage(int accountId, int chatId) async {
+  Future<void> reconcileLastMessage(int accountId, int chatId) async {
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
     await _reconcileLastMessage(accountId, chatId, rows.first);
     _bump();
   }
 
-  static Future<List<String>> reconcileDeletedFromFetch(
+  Future<List<String>> reconcileDeletedFromFetch(
     int accountId,
     int chatId,
     List<CachedMessage> serverMessages,
@@ -824,7 +815,7 @@ class ChatsModule {
     return newlyDeleted;
   }
 
-  static Future<void> _handleNotifMsgReactionsChanged(Packet packet) async {
+  Future<void> _handleNotifMsgReactionsChanged(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
     final chatId = payload['chatId'];
@@ -835,20 +826,15 @@ class ChatsModule {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
 
-    final existing = await AppDatabase.loadMessage(accountId, chatId, messageId);
+    final existing = await AppDatabase.loadMessage(
+      accountId,
+      chatId,
+      messageId,
+    );
     if (existing == null) return;
 
-    Map<String, dynamic> payloadMap;
-    final raw = existing['payload'];
-    if (raw is String && raw.isNotEmpty) {
-      try {
-        payloadMap = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-      } catch (_) {
-        payloadMap = {};
-      }
-    } else {
-      payloadMap = {};
-    }
+    final payloadMap =
+        _decodePayload(existing['payload']) ?? <String, dynamic>{};
 
     final counters = payload['counters'];
     final totalCount = payload['totalCount'];
@@ -859,7 +845,8 @@ class ChatsModule {
     }
     if (counters is List) reactionInfo['counters'] = counters;
     if (totalCount is int) reactionInfo['totalCount'] = totalCount;
-    if (reactionInfo['counters'] == null || (counters is List && counters.isEmpty)) {
+    if (reactionInfo['counters'] == null ||
+        (counters is List && counters.isEmpty)) {
       payloadMap.remove('reactionInfo');
     } else {
       payloadMap['reactionInfo'] = reactionInfo;
@@ -875,7 +862,7 @@ class ChatsModule {
     _bump();
   }
 
-  static Future<void> _handleNotifMark(Packet packet) async {
+  Future<void> _handleNotifMark(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
     final chatId = payload['chatId'];
@@ -898,19 +885,19 @@ class ChatsModule {
     _bump();
   }
 
-  static final Set<int> _pendingContactUpdates = {};
-  static Timer? _contactFlushTimer;
-  static Future<void>? _contactFlushFuture;
+  final Set<int> _pendingContactUpdates = {};
+  Timer? _contactFlushTimer;
+  Future<void>? _contactFlushFuture;
   static const _contactFlushDelay = Duration(milliseconds: 250);
 
-  static void applyContactUpdate(int contactId) {
+  void applyContactUpdate(int contactId) {
     _pendingContactUpdates.add(contactId);
     if (_contactFlushTimer != null) return;
     if (_contactFlushFuture != null) return;
     _contactFlushTimer = Timer(_contactFlushDelay, _kickFlush);
   }
 
-  static void _kickFlush() {
+  void _kickFlush() {
     _contactFlushTimer = null;
     if (_contactFlushFuture != null) return;
     _contactFlushFuture = _flushContactUpdates().whenComplete(() {
@@ -921,7 +908,7 @@ class ChatsModule {
     });
   }
 
-  static Future<void> _flushContactUpdates() async {
+  Future<void> _flushContactUpdates() async {
     if (_pendingContactUpdates.isEmpty) return;
     final ids = _pendingContactUpdates.toList();
     _pendingContactUpdates.clear();
@@ -936,9 +923,10 @@ class ChatsModule {
       final cached = CachedChat.fromDbRow(row);
       for (final pid in cached.participants.keys) {
         if (pid == accountId) continue;
-        byParticipant
-            .putIfAbsent(pid, () => [])
-            .add((row: row, cached: cached));
+        byParticipant.putIfAbsent(pid, () => []).add((
+          row: row,
+          cached: cached,
+        ));
       }
     }
 
@@ -955,7 +943,8 @@ class ChatsModule {
         final cached = entry.cached;
         final sameTitle = cached.title == name;
         final sameAvatar = (cached.iconUrl ?? '') == (avatar ?? '');
-        final sameOptions = cached.options.length == options.length &&
+        final sameOptions =
+            cached.options.length == options.length &&
             cached.options.containsAll(options);
         if (sameTitle && sameAvatar && sameOptions) continue;
         final newRow = Map<String, dynamic>.from(row);
@@ -971,7 +960,7 @@ class ChatsModule {
     }
   }
 
-  static Future<CachedChat?> cacheServerChat(
+  Future<CachedChat?> cacheServerChat(
     Map<dynamic, dynamic> chat,
     int accountId, {
     Map<int, CachedChat>? preloadedExisting,
@@ -988,7 +977,7 @@ class ChatsModule {
         existing = {id: CachedChat.fromDbRow(rows.first)};
       }
     }
-    final parsed = _parseChat(
+    final parsed = parseChatRow(
       chat,
       accountId,
       accountId,
@@ -1003,7 +992,7 @@ class ChatsModule {
       return null;
     }
     final ex = existing[parsed.id];
-    if (ex != null && _sameContent(ex, parsed)) {
+    if (ex != null && sameChatContent(ex, parsed)) {
       return parsed;
     }
     final row = parsed.toDbRow();
@@ -1013,38 +1002,12 @@ class ChatsModule {
     return parsed;
   }
 
-  static bool _sameContent(CachedChat a, CachedChat b) {
-    if (a.title != b.title) return false;
-    if (a.iconUrl != b.iconUrl) return false;
-    if (a.owner != b.owner) return false;
-    if (a.dontDisturbUntil != b.dontDisturbUntil) return false;
-    if (a.favIndex != b.favIndex) return false;
-    if (a.lastMsgId != b.lastMsgId) return false;
-    if (a.lastMsgTime != b.lastMsgTime) return false;
-    if (a.lastMsgText != b.lastMsgText) return false;
-    if (a.lastMsgElements != b.lastMsgElements) return false;
-    if (a.lastMsgSenderId != b.lastMsgSenderId) return false;
-    if (a.unreadCount != b.unreadCount) return false;
-    if (a.lastEventTime != b.lastEventTime) return false;
-    if (a.isOnline != b.isOnline) return false;
-    if (a.seenTime != b.seenTime) return false;
-    if (a.admins.length != b.admins.length) return false;
-    if (!a.admins.containsAll(b.admins)) return false;
-    if (a.options.length != b.options.length) return false;
-    if (!a.options.containsAll(b.options)) return false;
-    if (a.participants.length != b.participants.length) return false;
-    for (final e in a.participants.entries) {
-      if (b.participants[e.key] != e.value) return false;
-    }
-    return true;
-  }
-
   /// Парсит и кэширует чаты из payload opcode 19.
   ///
   /// Для диалогов разрезолвит имя и аватар из списка [contacts] того же
   /// ответа. На warm start контакты не приходят — используется существующий
   /// кэш.
-  static Future<void> syncFromLoginPayload(
+  Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
     int accountId,
     int currentUserId,
@@ -1053,7 +1016,7 @@ class ChatsModule {
       final chats = data['chats'];
       if (chats is! List || chats.isEmpty) return;
 
-      final contactsMap = _buildContactsMap(data['contacts']);
+      final contactsMap = buildContactsMap(data['contacts']);
       // Config contains mute setup and fav indexes: config -> chats -> id
       final configMap = data['config'] is Map ? data['config'] as Map : {};
       final chatsConfig = configMap['chats'] is Map
@@ -1061,7 +1024,9 @@ class ChatsModule {
           : {};
 
       // Presence for online statuses
-      final presenceMap = data['presence'] is Map ? data['presence'] as Map : {};
+      final presenceMap = data['presence'] is Map
+          ? data['presence'] as Map
+          : {};
       PresenceFetch.primeAll(presenceMap);
       final cachedAt = DateTime.now().millisecondsSinceEpoch;
 
@@ -1074,7 +1039,7 @@ class ChatsModule {
       final rows = chats
           .whereType<Map>()
           .map(
-            (c) => _parseChat(
+            (c) => parseChatRow(
               c.cast<dynamic, dynamic>(),
               accountId,
               currentUserId,
@@ -1098,7 +1063,7 @@ class ChatsModule {
     }
   }
 
-  static Future<List<CachedChat>> getChats(int accountId) async {
+  Future<List<CachedChat>> getChats(int accountId) async {
     try {
       final rows = await AppDatabase.loadChats(accountId);
       final chats = rows.map(CachedChat.fromDbRow).toList();
@@ -1108,10 +1073,11 @@ class ChatsModule {
       return [];
     }
   }
-  static Future<List<CachedChat>> getChat(int accountId, int chatId) async {
+
+  Future<List<CachedChat>> getChat(int accountId, int chatId) async {
     try {
       final rows = await AppDatabase.loadChat(accountId, chatId);
-      
+
       return rows.map(CachedChat.fromDbRow).toList();
     } catch (e) {
       logger.e("Ошибка при получении чата: $e");
@@ -1120,186 +1086,10 @@ class ChatsModule {
     }
   }
 
-  static Future<void> clearCache(int accountId) =>
+  Future<void> clearCache(int accountId) =>
       AppDatabase.clearChatsCache(accountId);
 
-  static Map<int, Map<dynamic, dynamic>> _buildContactsMap(dynamic contacts) {
-    if (contacts is! List) return {};
-    final result = <int, Map<dynamic, dynamic>>{};
-    for (final c in contacts.whereType<Map>()) {
-      final id = c['id'];
-      if (id is int) result[id] = c.cast();
-    }
-    return result;
-  }
-
-  static CachedChat? _parseChat(
-    Map<dynamic, dynamic> chat,
-    int accountId,
-    int currentUserId,
-    Map<int, Map<dynamic, dynamic>> contactsMap,
-    Map<dynamic, dynamic> chatsConfig,
-    Map<dynamic, dynamic> presenceMap,
-    Map<int, CachedChat> existing,
-    int cachedAt,
-  ) {
-    try {
-        final id = chat['id'];
-        if (id is! int) return null;
-
-        final type = (chat['type'] as String?) ?? 'DIALOG';
-        int? otherId;
-
-        String? title;
-        String? iconUrl;
-        Set<String> options = const {};
-
-        if (type == 'DIALOG') {
-          otherId = _otherParticipantId(chat['participants'], currentUserId);
-          final contact = otherId != null ? contactsMap[otherId] : null;
-
-          if (contact != null) {
-            title = _nameFromContact(contact);
-            iconUrl = contact['baseUrl'] as String?;
-            final contactOpts = contact['options'];
-            if (contactOpts is List) {
-              options = contactOpts.whereType<String>().toSet();
-            }
-          } else {
-            title = existing[id]?.title;
-            iconUrl = existing[id]?.iconUrl;
-            options = existing[id]?.options ?? const {};
-          }
-        } else {
-          title = chat['title'] as String?;
-          iconUrl = chat['baseIconUrl'] as String?;
-          final chatOpts = chat['options'];
-          if (chatOpts is Map) {
-            options = {
-              for (final entry in chatOpts.entries)
-                if (entry.value == true && entry.key is String) entry.key as String,
-            };
-          }
-        }
-
-        final lastMsg = chat['lastMessage'];
-        int? lastMsgId;
-        int? lastMsgTime;
-        String? lastMsgText;
-        String? lastMsgElements;
-        int? lastMsgSenderId;
-
-        if (lastMsg is Map) {
-          lastMsgId = lastMsg['id'] as int?;
-          lastMsgTime = lastMsg['time'] as int?;
-          lastMsgText = messagePreviewText(lastMsg);
-          lastMsgElements = messagePreviewElements(lastMsg);
-          lastMsgSenderId = lastMsg['sender'] as int?;
-        }
-
-        final config = chatsConfig[id.toString()] ?? chatsConfig[id];
-        int? favIndex;
-        int dontDisturbUntil = 0;
-        if (config is Map) {
-          favIndex = config['favIndex'] as int?;
-          dontDisturbUntil = (config['dontDisturbUntil'] as int?) ?? 0;
-        } else {
-          final ex = existing[id];
-          if (ex != null) {
-            favIndex = ex.favIndex;
-            dontDisturbUntil = ex.dontDisturbUntil;
-          }
-        }
-
-
-        int seenTime = 0;
-        bool isOnline = false;
-        if (type == 'DIALOG' && otherId != null) {
-          final presence = presenceMap[otherId.toString()] ?? presenceMap[otherId];
-          if (presence is Map) {
-            seenTime = (presence['seen'] as int?) ?? 0;
-            isOnline = (presence['status'] as int?) == 1;
-          }
-        }
-        Map<int, int> participants = _parseParticipants(chat['participants']);
-
-        int? owner;
-        final ownerRaw = chat['owner'];
-        if (ownerRaw is int) {
-          owner = ownerRaw;
-        } else if (ownerRaw is String) {
-          owner = int.tryParse(ownerRaw);
-        }
-
-        Set<int> admins = const {};
-        final adminsRaw = chat['admins'];
-        if (adminsRaw is List) {
-          admins = adminsRaw
-              .map((e) => e is int ? e : int.tryParse(e.toString()))
-              .whereType<int>()
-              .toSet();
-        } else {
-          final adminParticipants = chat['adminParticipants'];
-          if (adminParticipants is Map) {
-            admins = adminParticipants.keys
-                .map((k) => k is int ? k : int.tryParse(k.toString()))
-                .whereType<int>()
-                .toSet();
-          }
-        }
-
-        return CachedChat(
-          id: id,
-          accountId: accountId,
-          type: type,
-          title: title,
-          iconUrl: iconUrl,
-          lastMsgId: lastMsgId,
-          lastMsgTime: lastMsgTime,
-          lastMsgText: lastMsgText,
-          lastMsgElements: lastMsgElements,
-          lastMsgSenderId: lastMsgSenderId,
-          unreadCount: (chat['newMessages'] as int?) ?? 0,
-          lastEventTime: (chat['lastEventTime'] as int?) ?? 0,
-          cachedAt: cachedAt,
-          favIndex: favIndex,
-          dontDisturbUntil: dontDisturbUntil,
-          isOnline: isOnline,
-          seenTime: seenTime,
-          participants: participants,
-          options: options,
-          owner: owner,
-          admins: admins,
-        );
-    } catch (e) {
-      logger.e("Ошибка при парсинге чата: $e");
-
-      return null;
-    }
-  }
-
-  static int? _otherParticipantId(dynamic participants, int currentUserId) {
-    if (participants is! Map) return null;
-    for (final key in participants.keys) {
-      final id = key is int ? key : int.tryParse(key.toString());
-      if (id != null && id != currentUserId) return id;
-    }
-    return null;
-  }
-
-  static String? _nameFromContact(Map<dynamic, dynamic> contact) {
-    final names = contact['names'];
-    if (names is! List || names.isEmpty) return null;
-    final nameRaw = names.firstWhere(
-      (n) => n is Map && n['type'] == 'ONEME',
-      orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
-    );
-    if (nameRaw is! Map) return null;
-    final name = nameRaw;
-    return name['name'] as String?;
-  }
-
-  static Future<Map<String, dynamic>?> getChatInfo(Api api, int chatId) async {
+  Future<Map<String, dynamic>?> getChatInfo(Api api, int chatId) async {
     final packet = await api.sendRequest(Opcode.chatInfo, {
       'chatIds': [chatId],
     });
@@ -1310,7 +1100,7 @@ class ChatsModule {
     return Map<String, dynamic>.from(chats.first as Map);
   }
 
-  static Future<dynamic> searchById(Api api, int userId) async {
+  Future<dynamic> searchById(Api api, int userId) async {
     final packet = await api.sendRequest(Opcode.publicSearch, {
       'query': userId.toString(),
       'from': 0,
@@ -1319,53 +1109,7 @@ class ChatsModule {
     return packet.payload;
   }
 
-  static List<ChatSearchHit> _parseSearchResult(dynamic payload) {
-    final result = (payload as Map?)?['result'];
-    if (result is! List) return const [];
-    final hits = <ChatSearchHit>[];
-    for (final item in result) {
-      if (item is! Map) continue;
-      final chat = item['chat'];
-      if (chat is! Map) continue;
-      final id = chat['id'];
-      if (id is! int) continue;
-      final last = chat['lastMessage'];
-      final link = chat['link'];
-      hits.add(ChatSearchHit(
-        id: id,
-        type: (chat['type'] as String?) ?? 'CHAT',
-        title: chat['title'] as String?,
-        avatarUrl: chat['baseIconUrl'] as String?,
-        subtitle: link is String && link.isNotEmpty
-            ? '@$link'
-            : (last is Map ? last['text'] as String? : null),
-      ));
-    }
-    return hits;
-  }
-
-  static List<MessageSearchHit> _parseMessageResult(dynamic payload) {
-    final result = (payload as Map?)?['result'];
-    if (result is! List) return const [];
-    final hits = <MessageSearchHit>[];
-    for (final item in result) {
-      if (item is! Map) continue;
-      final message = item['message'];
-      if (message is! Map) continue;
-      final chatId = item['chatId'];
-      if (chatId is! int || chatId == 0) continue;
-      hits.add(MessageSearchHit(
-        chatId: chatId,
-        messageId: message['id']?.toString(),
-        text: message['text'] as String?,
-        time: (message['time'] as int?) ?? 0,
-        senderId: (message['sender'] as int?) ?? 0,
-      ));
-    }
-    return hits;
-  }
-
-  static Future<List<MessageSearchHit>> searchMessages(
+  Future<List<MessageSearchHit>> searchMessages(
     Api api,
     String query, {
     int count = 50,
@@ -1378,14 +1122,14 @@ class ChatsModule {
         'query': term,
       });
       if (packet.isError) return const [];
-      return _parseMessageResult(packet.payload);
+      return parseMessageResult(packet.payload);
     } catch (e) {
       logger.w('searchMessages failed: $e');
       return const [];
     }
   }
 
-  static Future<List<ChatSearchHit>> searchPublic(
+  Future<List<ChatSearchHit>> searchPublic(
     Api api,
     String query, {
     int count = 20,
@@ -1399,14 +1143,14 @@ class ChatsModule {
         'query': term,
       });
       if (packet.isError) return const [];
-      return _parseSearchResult(packet.payload);
+      return parseSearchResult(packet.payload);
     } catch (e) {
       logger.w('searchPublic failed: $e');
       return const [];
     }
   }
 
-  static Future<void> subscribeChat(
+  Future<void> subscribeChat(
     Api api,
     int chatId, {
     bool subscribe = true,
@@ -1421,11 +1165,7 @@ class ChatsModule {
     }
   }
 
-  static Future<bool> ensureChatCached(
-    Api api,
-    int accountId,
-    int chatId,
-  ) async {
+  Future<bool> ensureChatCached(Api api, int accountId, int chatId) async {
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isNotEmpty) return true;
     try {
@@ -1439,7 +1179,7 @@ class ChatsModule {
     }
   }
 
-  static Future<CachedChat?> createGroupChat(
+  Future<CachedChat?> createGroupChat(
     Api api, {
     required String title,
     required List<int> userIds,
@@ -1483,7 +1223,7 @@ class ChatsModule {
     return cacheServerChat(chat, accountId);
   }
 
-  static Future<String?> requestChatPhotoUploadUrl(Api api) async {
+  Future<String?> requestChatPhotoUploadUrl(Api api) async {
     final packet = await api.sendRequest(Opcode.photoUpload, {'count': 1});
     if (!packet.isOk) return null;
     final data = packet.payload;
@@ -1491,31 +1231,29 @@ class ChatsModule {
     return data['url'] as String?;
   }
 
-  static Future<bool> setChatPhoto(
+  Future<bool> setChatPhoto(
     Api api, {
     required int chatId,
     required String photoToken,
   }) async {
-    final packet = await api.sendRequest(Opcode.chatUpdate, {
+    return api.sendRequestOk(Opcode.chatUpdate, {
       'chatId': chatId,
       'photoToken': photoToken,
     });
-    return packet.isOk;
   }
 
-  static Future<bool> setChatOptions(
+  Future<bool> setChatOptions(
     Api api, {
     required int chatId,
     required Map<String, dynamic> options,
   }) async {
-    final packet = await api.sendRequest(Opcode.chatUpdate, {
+    return api.sendRequestOk(Opcode.chatUpdate, {
       'chatId': chatId,
       'options': options,
     });
-    return packet.isOk;
   }
 
-  static Future<bool> setChatTitle(
+  Future<bool> setChatTitle(
     Api api, {
     required int chatId,
     required String title,
@@ -1527,17 +1265,11 @@ class ChatsModule {
     if (!packet.isOk) return false;
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return true;
-    final rows = await AppDatabase.loadChat(accountId, chatId);
-    if (rows.isNotEmpty) {
-      final updated = Map<String, dynamic>.from(rows.first);
-      updated['title'] = title;
-      await AppDatabase.saveChats([updated]);
-      _bump();
-    }
+    await _updateChat(accountId, chatId, (chat) => chat.copyWith(title: title));
     return true;
   }
 
-  static Future<String?> togglePin(
+  Future<String?> togglePin(
     Api api, {
     required List<int> chatIds,
     required bool pin,
@@ -1563,7 +1295,12 @@ class ChatsModule {
         favorites.removeWhere((id) => chatIds.contains(id));
       }
 
-      await FoldersModule.setFolderFavorites(api, accountId, allFolder, favorites);
+      await FoldersModule.setFolderFavorites(
+        api,
+        accountId,
+        allFolder,
+        favorites,
+      );
 
       final existingRows = await AppDatabase.loadChatsByIds(accountId, chatIds);
       final updates = <Map<String, dynamic>>[];
@@ -1593,7 +1330,7 @@ class ChatsModule {
     }
   }
 
-  static Future<String?> setChatMute(
+  Future<String?> setChatMute(
     Api api, {
     required int chatId,
     required int dontDisturbUntil,
@@ -1608,13 +1345,11 @@ class ChatsModule {
       });
       final accountId = await TokenStorage.getActiveAccountId();
       if (accountId != null) {
-        final rows = await AppDatabase.loadChat(accountId, chatId);
-        if (rows.isNotEmpty) {
-          final row = Map<String, dynamic>.from(rows.first);
-          row['dont_disturb_until'] = dontDisturbUntil;
-          await AppDatabase.saveChats([row]);
-          _bump();
-        }
+        await _updateChat(
+          accountId,
+          chatId,
+          (chat) => chat.copyWith(dontDisturbUntil: dontDisturbUntil),
+        );
       }
       return null;
     } on PacketError catch (e) {
@@ -1626,7 +1361,7 @@ class ChatsModule {
     }
   }
 
-  static Future<String?> deleteChat(
+  Future<String?> deleteChat(
     Api api, {
     required int chatId,
     required int lastEventTime,
@@ -1653,7 +1388,7 @@ class ChatsModule {
     }
   }
 
-  static Future<String?> clearHistory(
+  Future<String?> clearHistory(
     Api api, {
     required int chatId,
     required int lastEventTime,
@@ -1682,7 +1417,7 @@ class ChatsModule {
     }
   }
 
-  static Future<bool> leaveChat(Api api, {required int chatId}) async {
+  Future<bool> leaveChat(Api api, {required int chatId}) async {
     try {
       await api.sendRequest(Opcode.chatLeave, {'chatId': chatId});
       final accountId = await TokenStorage.getActiveAccountId();
@@ -1696,10 +1431,7 @@ class ChatsModule {
     }
   }
 
-  static Future<List<CachedChat>> refreshChats(
-    Api api,
-    List<int> chatIds,
-  ) async {
+  Future<List<CachedChat>> refreshChats(Api api, List<int> chatIds) async {
     if (chatIds.isEmpty) return const [];
     try {
       final packet = await api.sendRequest(Opcode.chatInfo, {
@@ -1737,3 +1469,5 @@ class ChatsModule {
     }
   }
 }
+
+final chats = ChatsModule._();

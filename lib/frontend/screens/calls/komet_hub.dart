@@ -5,6 +5,8 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/calls/call_session.dart';
 import '../../../core/games/checkers.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../widgets/sheet_helpers.dart';
 
 Future<void> showKometHub(
   BuildContext context, {
@@ -16,9 +18,7 @@ Future<void> showKometHub(
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: scheme.surfaceContainerHigh,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+    shape: kSheetShape,
     builder: (_) => Theme(
       data: Theme.of(context).copyWith(colorScheme: scheme),
       child: _KometHub(session: session),
@@ -58,15 +58,16 @@ class _KometHubState extends State<_KometHub> {
   }
 
   String get _title {
+    final l10n = AppLocalizations.of(context)!;
     switch (_page) {
       case _HubPage.menu:
-        return 'Komet';
+        return l10n.hubTitleMenu;
       case _HubPage.chat:
-        return 'Анонимный чат';
+        return l10n.hubChatPageTitle;
       case _HubPage.games:
-        return 'Игры';
+        return l10n.hubGamesTitle;
       case _HubPage.checkers:
-        return 'Шашки';
+        return l10n.hubCheckersTitle;
     }
   }
 
@@ -74,7 +75,9 @@ class _KometHubState extends State<_KometHub> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.78,
@@ -134,32 +137,60 @@ class _KometHubState extends State<_KometHub> {
   }
 
   Widget _menu(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _tile(cs, Symbols.forum, 'Чат', 'Анонимные сообщения',
-            () => _go(_HubPage.chat)),
-        _tile(cs, Symbols.stadia_controller, 'Игры', 'Сыграть с собеседником',
-            () => _go(_HubPage.games)),
+        _tile(
+          cs,
+          Symbols.forum,
+          l10n.hubChatTileTitle,
+          l10n.hubChatTileSubtitle,
+          () => _go(_HubPage.chat),
+        ),
+        _tile(
+          cs,
+          Symbols.stadia_controller,
+          l10n.hubGamesTitle,
+          l10n.hubGamesTileSubtitle,
+          () => _go(_HubPage.games),
+        ),
         const SizedBox(height: 12),
       ],
     );
   }
 
   Widget _games(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _tile(cs, Symbols.grid_on, 'Шашки', 'Русские шашки',
-            () => _go(_HubPage.checkers)),
-        _tile(cs, Symbols.more_horiz, 'Скоро ещё…', 'В разработке', null),
+        _tile(
+          cs,
+          Symbols.grid_on,
+          l10n.hubCheckersTitle,
+          l10n.hubCheckersTileSubtitle,
+          () => _go(_HubPage.checkers),
+        ),
+        _tile(
+          cs,
+          Symbols.more_horiz,
+          l10n.hubMoreSoonTitle,
+          l10n.hubMoreSoonSubtitle,
+          null,
+        ),
         const SizedBox(height: 12),
       ],
     );
   }
 
-  Widget _tile(ColorScheme cs, IconData icon, String title, String subtitle,
-      VoidCallback? onTap) {
+  Widget _tile(
+    ColorScheme cs,
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback? onTap,
+  ) {
     final enabled = onTap != null;
     return ListTile(
       onTap: onTap,
@@ -244,6 +275,7 @@ class _KometChatViewState extends State<_KometChatView> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final messages = widget.session.chatLog;
     return Column(
@@ -257,7 +289,7 @@ class _KometChatViewState extends State<_KometChatView> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Напрямую через звонок, нигде не сохраняется',
+                  l10n.hubChatPrivacyNote,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
               ),
@@ -284,7 +316,7 @@ class _KometChatViewState extends State<_KometChatView> {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Text(
-          'Сообщений пока нет',
+          AppLocalizations.of(context)!.hubChatEmpty,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
       ),
@@ -331,12 +363,14 @@ class _KometChatViewState extends State<_KometChatView> {
               onSubmitted: (_) => _send(),
               style: TextStyle(color: cs.onSurface, fontSize: 15),
               decoration: InputDecoration(
-                hintText: 'Сообщение…',
+                hintText: AppLocalizations.of(context)!.hubChatInputHint,
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
                 fillColor: cs.surfaceContainerHighest,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 11,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
@@ -445,8 +479,10 @@ class _CheckersViewState extends State<_CheckersView> {
     final prefix = [..._path, square];
     final matching = _legal.where((p) => _startsWith(p, prefix)).toList();
     if (matching.isEmpty) {
-      setState(() =>
-          _path = _legal.any((p) => p.first == square) ? [square] : const []);
+      setState(
+        () =>
+            _path = _legal.any((p) => p.first == square) ? [square] : const [],
+      );
       return;
     }
     if (matching.any((p) => p.length == prefix.length)) {
@@ -470,6 +506,7 @@ class _CheckersViewState extends State<_CheckersView> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -491,7 +528,7 @@ class _CheckersViewState extends State<_CheckersView> {
               TextButton.icon(
                 onPressed: _reset,
                 icon: const Icon(Symbols.refresh, size: 20),
-                label: const Text('Заново'),
+                label: Text(l10n.hubCheckersRestart),
               ),
             ],
           ),
@@ -500,8 +537,8 @@ class _CheckersViewState extends State<_CheckersView> {
           const SizedBox(height: 10),
           Text(
             _me == CheckersSide.white
-                ? 'Вы играете белыми'
-                : 'Вы играете чёрными',
+                ? l10n.hubCheckersYouWhite
+                : l10n.hubCheckersYouBlack,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
         ],
@@ -510,9 +547,10 @@ class _CheckersViewState extends State<_CheckersView> {
   }
 
   String _status() {
+    final l10n = AppLocalizations.of(context)!;
     final w = _result;
-    if (w != null) return w == _me ? 'Вы выиграли 🎉' : 'Вы проиграли';
-    return _turn == _me ? 'Ваш ход' : 'Ход соперника…';
+    if (w != null) return w == _me ? l10n.hubCheckersWon : l10n.hubCheckersLost;
+    return _turn == _me ? l10n.hubCheckersYourMove : l10n.hubCheckersOpponentMove;
   }
 
   Widget _boardWidget(ColorScheme cs) {
@@ -598,7 +636,11 @@ class _CheckersViewState extends State<_CheckersView> {
             width: option ? 2.5 : 1.5,
           ),
           boxShadow: const [
-            BoxShadow(color: Colors.black38, blurRadius: 3, offset: Offset(0, 1)),
+            BoxShadow(
+              color: Colors.black38,
+              blurRadius: 3,
+              offset: Offset(0, 1),
+            ),
           ],
         ),
         child: king
@@ -606,7 +648,9 @@ class _CheckersViewState extends State<_CheckersView> {
                 Symbols.star,
                 fill: 1,
                 size: 16,
-                color: white ? const Color(0xFF8A6D00) : const Color(0xFFE7C200),
+                color: white
+                    ? const Color(0xFF8A6D00)
+                    : const Color(0xFFE7C200),
               )
             : null,
       ),

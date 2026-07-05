@@ -25,7 +25,10 @@ Future<bool> showConfirmDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text(cancelLabel, style: TextStyle(color: cs.onSurfaceVariant)),
+          child: Text(
+            cancelLabel,
+            style: TextStyle(color: cs.onSurfaceVariant),
+          ),
         ),
         FilledButton.tonal(
           onPressed: () => Navigator.of(context).pop(true),

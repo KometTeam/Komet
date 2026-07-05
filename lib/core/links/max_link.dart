@@ -34,8 +34,10 @@ class MaxLink {
     if (match == null) return null;
 
     final path = match.group(1)!.split('?').first.split('#').first;
-    final segments =
-        path.split('/').where((s) => s.isNotEmpty).toList(growable: false);
+    final segments = path
+        .split('/')
+        .where((s) => s.isNotEmpty)
+        .toList(growable: false);
     if (segments.isEmpty) return null;
 
     switch (segments.first.toLowerCase()) {

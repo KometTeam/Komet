@@ -25,10 +25,7 @@ class FoldersModule {
   static bool isAllChatsFolder(ChatFolder f) {
     if (f.id == 'all.chat.folder') return true;
     final t = f.title.trim().toLowerCase();
-    return t == 'все' ||
-        t == 'все чаты' ||
-        t == 'all' ||
-        t == 'all chats';
+    return t == 'все' || t == 'все чаты' || t == 'all' || t == 'all chats';
   }
 
   static String? preferredInitialFolderId(List<ChatFolder> folders) {
@@ -88,20 +85,42 @@ class FoldersModule {
     return false;
   }
 
+  static List<ChatFolder> _parseFolderList(
+    List<dynamic> json, {
+    bool lenient = true,
+  }) {
+    if (lenient) {
+      return json
+          .map((e) {
+            try {
+              final m = e is Map<String, dynamic>
+                  ? e
+                  : Map<String, dynamic>.from(e as Map);
+              return ChatFolder.fromJson(m);
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<ChatFolder>()
+          .toList();
+    }
+    return json.map((e) {
+      final m = e is Map<String, dynamic>
+          ? e
+          : Map<String, dynamic>.from(e as Map);
+      return ChatFolder.fromJson(m);
+    }).toList();
+  }
+
   static Future<List<ChatFolder>> loadFolders(int accountId) async {
     final raw = await AppDatabase.getSyncValue(accountId, _syncKey);
     if (raw == null || raw.isEmpty) return [];
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;
-      final folders = (map['folders'] as List<dynamic>?)
-              ?.map((e) {
-                final m = e is Map<String, dynamic>
-                    ? e
-                    : Map<String, dynamic>.from(e as Map);
-                return ChatFolder.fromJson(m);
-              })
-              .toList() ??
-          [];
+      final foldersJson = map['folders'] as List<dynamic>?;
+      final folders = foldersJson == null
+          ? <ChatFolder>[]
+          : _parseFolderList(foldersJson, lenient: false);
       final order = map['foldersOrder'] as List<dynamic>?;
       sortFoldersInPlace(folders, order);
       return folders;
@@ -135,19 +154,7 @@ class FoldersModule {
 
     List<ChatFolder> folders;
     if (foldersJson != null) {
-      folders = foldersJson
-          .map((json) {
-            try {
-              final m = json is Map<String, dynamic>
-                  ? json
-                  : Map<String, dynamic>.from(json as Map);
-              return ChatFolder.fromJson(m);
-            } catch (_) {
-              return null;
-            }
-          })
-          .whereType<ChatFolder>()
-          .toList();
+      folders = _parseFolderList(foldersJson);
     } else {
       folders = await loadFolders(accountId);
     }
@@ -164,19 +171,7 @@ class FoldersModule {
     final foldersJson = chatFolders['FOLDERS'] as List<dynamic>?;
     if (foldersJson == null) return;
     final order = chatFolders['foldersOrder'] as List<dynamic>?;
-    final folders = foldersJson
-        .map((json) {
-          try {
-            final m = json is Map<String, dynamic>
-                ? json
-                : Map<String, dynamic>.from(json as Map);
-            return ChatFolder.fromJson(m);
-          } catch (_) {
-            return null;
-          }
-        })
-        .whereType<ChatFolder>()
-        .toList();
+    final folders = _parseFolderList(foldersJson);
     sortFoldersInPlace(folders, order);
     await _persist(accountId, folders, order);
     await markFoldersListReady(accountId);
@@ -196,9 +191,7 @@ class FoldersModule {
       'filters': folder.filters,
       'options': folder.options ?? const [],
     });
-    if (packet.isError) {
-      throw PacketError(messageFromErrorPayload(packet.payload));
-    }
+    throwIfPacketError(packet);
     final data = packet.payload;
     if (data is! Map) return null;
     final folderJson = data['folder'];
@@ -213,15 +206,10 @@ class FoldersModule {
     final snapshot = (currentRaw != null && currentRaw.isNotEmpty)
         ? jsonDecode(currentRaw) as Map<String, dynamic>
         : <String, dynamic>{};
-    final existing = (snapshot['folders'] as List?)
-            ?.map((e) {
-              final m = e is Map<String, dynamic>
-                  ? e
-                  : Map<String, dynamic>.from(e as Map);
-              return ChatFolder.fromJson(m);
-            })
-            .toList() ??
-        <ChatFolder>[];
+    final existingRaw = snapshot['folders'] as List<dynamic>?;
+    final existing = existingRaw == null
+        ? <ChatFolder>[]
+        : _parseFolderList(existingRaw, lenient: false);
     final idx = existing.indexWhere((f) => f.id == updated.id);
     if (idx >= 0) {
       existing[idx] = updated;
@@ -238,9 +226,7 @@ class FoldersModule {
       final packet = await api.sendRequest(Opcode.foldersGet, {
         'folderSync': 0,
       });
-      if (packet.isError) {
-        throw PacketError(messageFromErrorPayload(packet.payload));
-      }
+      throwIfPacketError(packet);
       final data = packet.payload;
       if (data is Map) {
         await applyPayload(accountId, data.cast<dynamic, dynamic>());

@@ -1,21 +1,18 @@
-// Backend module for parsing calls from Komet platform
 import 'dart:convert';
-import 'dart:math';
 
 import 'contacts.dart';
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/utils/ids.dart';
+import '../../core/utils/logger.dart';
 
 enum CallStatus { missed, canceled, outgoing, incoming }
 
-/// Параметры подключения для исходящего звонка (ответ opcode 78).
 class OutgoingCallParams {
   final String conversationId;
 
-  /// Полный ws2 URL с уже вшитым токеном (`internalCallerParams.endpoint`).
   final String endpoint;
 
-  /// Наш id в системе звонков (`internalCallerParams.id.internal`).
   final int callsUserId;
 
   final int peerExternalId;
@@ -68,70 +65,92 @@ class CallLogEntry {
   });
 }
 
+class _CallerEndpointMissingException implements Exception {
+  final String message;
+
+  const _CallerEndpointMissingException(this.message);
+
+  @override
+  String toString() => 'Exception: $message';
+}
+
+typedef _CallerEndpoint = ({String endpoint, int callsUserId, int? external});
+
 class CallsModule {
   final Api _api;
 
   CallsModule(this._api);
 
-  /// Инициирует исходящий 1:1 звонок (opcode 78).
+  _CallerEndpoint _parseCallerEndpoint(
+    Map payload,
+    String key, {
+    required String context,
+  }) {
+    final raw = payload[key];
+    final parsed = raw is String
+        ? jsonDecode(raw) as Map<dynamic, dynamic>
+        : const <dynamic, dynamic>{};
+
+    final endpoint = parsed['endpoint'] as String?;
+    if (endpoint == null) {
+      throw _CallerEndpointMissingException('$context: no endpoint');
+    }
+
+    final id = parsed['id'];
+    final callsUserId = (id is Map ? id['internal'] as int? : null) ?? 0;
+    final external = id is Map ? int.tryParse('${id['external']}') : null;
+
+    return (endpoint: endpoint, callsUserId: callsUserId, external: external);
+  }
+
   Future<OutgoingCallParams> initiateCall(
     int calleeId, {
     bool isVideo = false,
   }) async {
-    final conversationId = _uuidV4();
+    final conversationId = uuidV4();
 
-    final response = await _api.sendRequest(Opcode.videoChatStartActive, {
+    final payload = await _api.sendRequestMap(Opcode.videoChatStartActive, {
       'conversationId': conversationId,
       'calleeIds': [calleeId],
       'internalParams': _internalParams(),
       'isVideo': isVideo,
     });
 
-    if (!response.isOk || response.payload is! Map) {
+    if (payload == null) {
       throw Exception('initiateCall: bad response');
     }
-    final payload = response.payload as Map;
 
-    final icpRaw = payload['internalCallerParams'];
-    final icp = icpRaw is String
-        ? jsonDecode(icpRaw) as Map<dynamic, dynamic>
-        : const <dynamic, dynamic>{};
-
-    final endpoint = icp['endpoint'] as String?;
-    if (endpoint == null) {
-      throw Exception('initiateCall: no endpoint');
-    }
-
-    final id = icp['id'];
-    final callsUserId = (id is Map ? id['internal'] as int? : null) ?? 0;
-    final external =
-        (id is Map ? int.tryParse('${id['external']}') : null) ?? calleeId;
+    final parsed = _parseCallerEndpoint(
+      payload,
+      'internalCallerParams',
+      context: 'initiateCall',
+    );
 
     return OutgoingCallParams(
       conversationId: (payload['conversationId'] as String?) ?? conversationId,
-      endpoint: endpoint,
-      callsUserId: callsUserId,
-      peerExternalId: external,
+      endpoint: parsed.endpoint,
+      callsUserId: parsed.callsUserId,
+      peerExternalId: parsed.external ?? calleeId,
       isVideo: isVideo,
     );
   }
 
   String _internalParams() => jsonEncode({
-        'platform': 'ANDROID',
-        'sdkVersion': '0.1.16.4',
-        'clientAppKey': 'CGPGAGLGDIHBABABA',
-        'deviceId': _api.deviceId ?? '',
-        'protocolVersion': 5,
-        'onlyAdminCanRecord': false,
-        'waitForAdmin': false,
-        'capabilities': '3c03f',
-      });
+    'platform': 'ANDROID',
+    'sdkVersion': '0.1.16.4',
+    'clientAppKey': 'CGPGAGLGDIHBABABA',
+    'deviceId': _api.deviceId ?? '',
+    'protocolVersion': 5,
+    'onlyAdminCanRecord': false,
+    'waitForAdmin': false,
+    'capabilities': '3c03f',
+  });
 
   Future<CallLinkPreview?> resolveCallLink(String url) async {
-    final response = await _api.sendRequest(Opcode.linkInfo, {'link': url});
-    if (!response.isOk || response.payload is! Map) return null;
+    final payload = await _api.sendRequestMap(Opcode.linkInfo, {'link': url});
+    if (payload == null) return null;
 
-    final vc = (response.payload as Map)['videoConference'];
+    final vc = payload['videoConference'];
     if (vc is! Map) return null;
 
     return CallLinkPreview(
@@ -146,59 +165,38 @@ class CallsModule {
     String token, {
     bool isVideo = false,
   }) async {
-    final response = await _api.sendRequest(Opcode.videoChatJoinByLink, {
+    final payload = await _api.sendRequestMap(Opcode.videoChatJoinByLink, {
       'joinLink': token,
       'internalParams': _internalParams(),
       'isVideo': isVideo,
     });
 
-    if (!response.isOk || response.payload is! Map) {
+    if (payload == null) {
       throw Exception('joinByLink: bad response');
     }
-    final payload = response.payload as Map;
 
-    final ipRaw = payload['internalParams'];
-    final ip = ipRaw is String
-        ? jsonDecode(ipRaw) as Map<dynamic, dynamic>
-        : const <dynamic, dynamic>{};
-
-    final endpoint = ip['endpoint'] as String?;
-    if (endpoint == null) {
-      throw Exception('joinByLink: no endpoint');
-    }
-
-    final id = ip['id'];
-    final callsUserId = (id is Map ? id['internal'] as int? : null) ?? 0;
+    final parsed = _parseCallerEndpoint(
+      payload,
+      'internalParams',
+      context: 'joinByLink',
+    );
 
     return OutgoingCallParams(
       conversationId: (payload['conversationId'] as String?) ?? '',
-      endpoint: endpoint,
-      callsUserId: callsUserId,
+      endpoint: parsed.endpoint,
+      callsUserId: parsed.callsUserId,
       peerExternalId: 0,
       isVideo: isVideo,
     );
   }
 
-  static String _uuidV4() {
-    final r = Random();
-    final b = List<int>.generate(16, (_) => r.nextInt(256));
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    String hex(int i) => b[i].toRadixString(16).padLeft(2, '0');
-    final s = List.generate(16, hex).join();
-    return '${s.substring(0, 8)}-${s.substring(8, 12)}-${s.substring(12, 16)}'
-        '-${s.substring(16, 20)}-${s.substring(20)}';
-  }
-
-  /// Fetch call history from opcode 79
   Future<List<CallLogEntry>> fetchHistory(
     int accountId,
     int currentUserId,
   ) async {
-    final response = await _api.sendRequest(Opcode.videoChatHistory, {});
-    if (!response.isOk || response.payload is! Map) return [];
+    final payload = await _api.sendRequestMap(Opcode.videoChatHistory, {});
+    if (payload == null) return [];
 
-    final payload = response.payload as Map<dynamic, dynamic>;
     return parseHistoryPayload(
       payload,
       accountId,
@@ -224,19 +222,19 @@ class CallsModule {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logger.w('resolveContacts: $e');
+    }
     return out;
   }
 
   Future<bool> deleteHistory(List<int> historyIds) async {
     if (historyIds.isEmpty) return true;
-    final response = await _api.sendRequest(Opcode.videoChatDeleteHistory, {
+    return _api.sendRequestOk(Opcode.videoChatDeleteHistory, {
       'historyIds': historyIds,
     });
-    return response.isOk;
   }
 
-  /// Парсинг истории звонков (opcode 79: videoChatHistory)
   static Future<List<CallLogEntry>> parseHistoryPayload(
     Map<dynamic, dynamic> payload,
     int accountId,
@@ -249,8 +247,7 @@ class CallsModule {
     final recentContacts = await ContactsModule.getContacts(accountId);
     final contactsMap = {for (final c in recentContacts) c.id: c};
 
-    final parsed =
-        <({int peerId, CallStatus status, int time, String id})>[];
+    final parsed = <({int peerId, CallStatus status, int time, String id})>[];
 
     for (final item in history.whereType<Map>()) {
       final msg = item['message'];

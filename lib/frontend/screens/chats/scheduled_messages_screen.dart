@@ -9,10 +9,12 @@ import '../../../models/attachment.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/schedule_time_picker.dart';
+import '../../widgets/sheet_helpers.dart';
 
 class ScheduledMessagesScreen extends StatefulWidget {
   final int chatId;
@@ -70,10 +72,14 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
     });
   }
 
-  Future<DateTime?> _pickTime(DateTime initial) =>
-      showScheduleTimePicker(context, initial: initial, title: 'Когда отправить');
+  Future<DateTime?> _pickTime(DateTime initial) => showScheduleTimePicker(
+    context,
+    initial: initial,
+    title: AppLocalizations.of(context)!.scheduledPickTimeTitle,
+  );
 
   Future<void> _edit(CachedMessage msg) async {
+    final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController(text: msg.text ?? '');
     var when = DateTime.fromMillisecondsSinceEpoch(
       msg.delayedTimeToFire ?? msg.time,
@@ -84,9 +90,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheet) => Padding(
           padding: EdgeInsets.only(
@@ -100,7 +104,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Изменить',
+                l10n.scheduledEditTitle,
                 style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 18,
@@ -116,7 +120,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
                 maxLines: 5,
                 style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
-                  hintText: 'Текст сообщения',
+                  hintText: l10n.scheduledMessageTextHint,
                   filled: true,
                   fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(
@@ -163,7 +167,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: () => Navigator.of(sheetContext).pop(true),
-                child: const Text('Сохранить'),
+                child: Text(l10n.scheduledSave),
               ),
             ],
           ),
@@ -188,16 +192,17 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
       Haptics.send();
       _load();
     } else {
-      showCustomNotification(context, 'Не удалось изменить сообщение');
+      showCustomNotification(context, l10n.scheduledEditFailed);
     }
   }
 
   Future<void> _delete(CachedMessage msg) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Удалить запланированное сообщение?',
-      message: 'Сообщение не будет отправлено.',
-      confirmLabel: 'Удалить',
+      title: l10n.scheduledDeleteConfirmTitle,
+      message: l10n.scheduledDeleteConfirmMessage,
+      confirmLabel: l10n.scheduledDeleteConfirmLabel,
       destructive: true,
     );
     if (!confirmed || !mounted) return;
@@ -213,12 +218,13 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
       Haptics.send();
       setState(() => _messages.removeWhere((m) => m.id == msg.id));
     } else {
-      showCustomNotification(context, 'Не удалось удалить сообщение');
+      showCustomNotification(context, l10n.scheduledDeleteFailed);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
@@ -230,8 +236,8 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Отложенные',
+            Text(
+              l10n.scheduledAppBarTitle,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -274,7 +280,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
         Icon(Symbols.schedule, size: 56, color: cs.onSurfaceVariant),
         const SizedBox(height: 12),
         Text(
-          'Нет отложенных сообщений',
+          AppLocalizations.of(context)!.scheduledEmpty,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
         ),
       ],
@@ -284,19 +290,22 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
   (IconData, String)? _attachLabel(CachedMessage msg) {
     final attaches = msg.attachments;
     if (attaches == null || attaches.isEmpty) return null;
+    final l10n = AppLocalizations.of(context)!;
     switch (attaches.first.type) {
       case AttachmentType.photo:
-        return (Symbols.image, 'Фото');
+        return (Symbols.image, l10n.scheduledAttachPhoto);
       case AttachmentType.video:
-        return (Symbols.videocam, 'Видео');
+        return (Symbols.videocam, l10n.scheduledAttachVideo);
       case AttachmentType.audio:
-        return (Symbols.mic, 'Голосовое');
+        return (Symbols.mic, l10n.scheduledAttachVoice);
       case AttachmentType.file:
-        return (Symbols.description, 'Файл');
+        return (Symbols.description, l10n.scheduledAttachFile);
       case AttachmentType.location:
-        return (Symbols.location_on, 'Геопозиция');
+        return (Symbols.location_on, l10n.scheduledAttachLocation);
+      case AttachmentType.forward:
+        return (Symbols.forward, l10n.scheduledAttachForwarded);
       default:
-        return (Symbols.attach_file, 'Вложение');
+        return (Symbols.attach_file, l10n.scheduledAttachGeneric);
     }
   }
 
@@ -309,84 +318,84 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
       borderRadius: BorderRadius.circular(18),
       onTap: () => _edit(msg),
       child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (attach != null)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: hasText ? 4 : 0),
-                    child: Row(
-                      children: [
-                        Icon(attach.$1, size: 16, color: cs.onSurfaceVariant),
-                        const SizedBox(width: 6),
-                        Text(
-                          attach.$2,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (attach != null)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: hasText ? 4 : 0),
+                      child: Row(
+                        children: [
+                          Icon(attach.$1, size: 16, color: cs.onSurfaceVariant),
+                          const SizedBox(width: 6),
+                          Text(
+                            attach.$2,
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (hasText)
-                  Text(
-                    msg.text!,
-                    style: TextStyle(color: cs.onSurface, fontSize: 15),
-                  )
-                else if (attach == null)
-                  Text(
-                    'Вложение',
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 15,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      Symbols.schedule,
-                      size: 14,
-                      color: cs.primary,
-                      weight: 500,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      formatDateTimeWords(fireAt),
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  if (hasText)
+                    Text(
+                      msg.text!,
+                      style: TextStyle(color: cs.onSurface, fontSize: 15),
+                    )
+                  else if (attach == null)
+                    Text(
+                      AppLocalizations.of(context)!.scheduledAttachGeneric,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 15,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Symbols.schedule,
+                        size: 14,
+                        color: cs.primary,
+                        weight: 500,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        formatDateTimeWords(fireAt),
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            icon: Icon(Symbols.edit, color: cs.onSurfaceVariant, weight: 400),
-            onPressed: () => _edit(msg),
-          ),
-          IconButton(
-            icon: Icon(Symbols.delete, color: cs.error, weight: 400),
-            onPressed: () => _delete(msg),
-          ),
-        ],
-      ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: Icon(Symbols.edit, color: cs.onSurfaceVariant, weight: 400),
+              onPressed: () => _edit(msg),
+            ),
+            IconButton(
+              icon: Icon(Symbols.delete, color: cs.error, weight: 400),
+              onPressed: () => _delete(msg),
+            ),
+          ],
+        ),
       ),
     );
   }

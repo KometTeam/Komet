@@ -4,6 +4,7 @@ import '../../backend/api.dart';
 import '../../backend/modules/calls.dart';
 import '../protocol/opcode_map.dart';
 import '../protocol/packet.dart';
+import '../utils/parse.dart';
 import 'call_bridge.dart';
 import 'call_session.dart';
 import 'conversation_params.dart';
@@ -83,14 +84,16 @@ class CallController {
     final params = ConversationParams.decode(vcp);
     if (params == null) return;
 
-    _emitIncoming(IncomingCall(
-      conversationId: conversationId,
-      callerId: callerId,
-      isVideo: payload['type'] == 'VIDEO' || params.isVideo,
-      params: params,
-      country: payload['country'] as String?,
-      isContact: payload['isContact'] as bool?,
-    ));
+    _emitIncoming(
+      IncomingCall(
+        conversationId: conversationId,
+        callerId: callerId,
+        isVideo: payload['type'] == 'VIDEO' || params.isVideo,
+        params: params,
+        country: payload['country'] as String?,
+        isContact: payload['isContact'] as bool?,
+      ),
+    );
   }
 
   void injectFromNative(Map<dynamic, dynamic> data, {bool autoAccept = false}) {
@@ -100,11 +103,10 @@ class CallController {
     final params = ConversationParams.decode(vcp);
     if (params == null) return;
 
-    final conversationId =
-        (data['conversationId'] ?? data['vcId'])?.toString();
+    final conversationId = (data['conversationId'] ?? data['vcId'])?.toString();
     if (conversationId == null || conversationId.isEmpty) return;
 
-    final callerId = _asInt(data['callerId'] ?? data['suid']);
+    final callerId = parseIntOrNull(data['callerId'] ?? data['suid']);
     if (callerId == null) return;
 
     final type = (data['type'] ?? data['callType'])?.toString();
@@ -139,17 +141,16 @@ class CallController {
     _canceled.add(null);
   }
 
-  static int? _asInt(Object? v) {
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    if (v is String) return int.tryParse(v);
-    return null;
-  }
-
-  Future<CallSession> startOutgoing(int calleeId, {bool isVideo = false}) async {
+  Future<CallSession> startOutgoing(
+    int calleeId, {
+    bool isVideo = false,
+  }) async {
     if (_active != null) throw StateError('уже идёт звонок');
     final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
-    final config = Ws2Config.fromEndpoint(out.endpoint, userId: out.callsUserId);
+    final config = Ws2Config.fromEndpoint(
+      out.endpoint,
+      userId: out.callsUserId,
+    );
     final session = CallSession(ws2Config: config, role: CallRole.caller);
     _bind(session);
     await session.start();
@@ -163,8 +164,10 @@ class CallController {
   Future<CallSession> joinByLink(String token, {bool isVideo = false}) async {
     if (_active != null) throw StateError('уже идёт звонок');
     final params = await _calls!.joinByLink(token, isVideo: isVideo);
-    final config =
-        Ws2Config.fromEndpoint(params.endpoint, userId: params.callsUserId);
+    final config = Ws2Config.fromEndpoint(
+      params.endpoint,
+      userId: params.callsUserId,
+    );
     final session = CallSession(ws2Config: config, role: CallRole.joiner);
     _bind(session);
     await session.start();

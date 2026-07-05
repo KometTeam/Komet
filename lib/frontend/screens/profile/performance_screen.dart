@@ -50,6 +50,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
         _lowWarnDismissed = true;
         await AppCacheExtent.save(v);
       } else {
+        if (!mounted) return;
         setState(() => _value = _preZoneValue);
         await AppCacheExtent.save(_preZoneValue);
       }
@@ -66,6 +67,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
         _highWarnDismissed = true;
         await AppCacheExtent.save(v);
       } else {
+        if (!mounted) return;
         setState(() => _value = _preZoneValue);
         await AppCacheExtent.save(_preZoneValue);
       }

@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/device_presets.dart';
 import '../../models/spoof_profile.dart';
 import 'token_storage.dart';
+import '../utils/ids.dart';
+import '../utils/logger.dart';
 
 class SpoofingService {
   static const String hardcodedAppVersion = '26.20.2';
@@ -84,8 +86,9 @@ class SpoofingService {
     final fresh = devicePresets
         .where((p) => isAndroid(p) && !used.contains(p.deviceName))
         .toList();
-    final pool =
-        fresh.isNotEmpty ? fresh : devicePresets.where(isAndroid).toList();
+    final pool = fresh.isNotEmpty
+        ? fresh
+        : devicePresets.where(isAndroid).toList();
     final preset = pool[_rng.nextInt(pool.length)];
     final shortLocale = preset.locale.split(RegExp(r'[-_]')).first;
 
@@ -103,7 +106,7 @@ class SpoofingService {
       appVersion: hardcodedAppVersion,
       buildNumber: hardcodedBuildNumber,
       pushDeviceType: 'GCM',
-      instanceId: _uuidV4(),
+      instanceId: uuidV4(),
       clientSessionId: _rng.nextInt(0x7FFFFFFF) + 1,
       userAgent: preset.userAgent,
     );
@@ -131,11 +134,13 @@ class SpoofingService {
       'device_locale': profile.deviceLocale,
       'device_id': profile.deviceId,
       'device_type': profile.deviceType,
-      'app_version':
-          profile.appVersion.isEmpty ? hardcodedAppVersion : profile.appVersion,
+      'app_version': profile.appVersion.isEmpty
+          ? hardcodedAppVersion
+          : profile.appVersion,
       'arch': profile.arch.isEmpty ? 'arm64-v8a' : profile.arch,
-      'build_number':
-          profile.buildNumber == 0 ? hardcodedBuildNumber : profile.buildNumber,
+      'build_number': profile.buildNumber == 0
+          ? hardcodedBuildNumber
+          : profile.buildNumber,
       'instance_id': profile.instanceId,
       'client_session_id': profile.clientSessionId,
       'push_device_type': profile.pushDeviceType,
@@ -155,14 +160,16 @@ class SpoofingService {
   }
 
   static String _deriveUserAgent(SpoofProfile profile) {
-    final deviceType =
-        profile.deviceType.isEmpty ? 'ANDROID' : profile.deviceType;
+    final deviceType = profile.deviceType.isEmpty
+        ? 'ANDROID'
+        : profile.deviceType;
     final osVersion = profile.osVersion;
     final model = profile.deviceName.isEmpty ? 'K' : profile.deviceName;
 
     if (deviceType == 'IOS' || deviceType == 'iOS') {
-      final version =
-          osVersion.replaceAll(RegExp(r'[^0-9.]'), '').replaceAll('.', '_');
+      final version = osVersion
+          .replaceAll(RegExp(r'[^0-9.]'), '')
+          .replaceAll('.', '_');
       return 'Mozilla/5.0 (iPhone; CPU iPhone OS '
           '${version.isEmpty ? '17_0' : version} like Mac OS X) '
           'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
@@ -181,10 +188,13 @@ class SpoofingService {
     final raw = prefs.getString(_profileKey(scope));
     if (raw != null && raw.isNotEmpty) {
       try {
-        final profile =
-            SpoofProfile.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        final profile = SpoofProfile.fromJson(
+          jsonDecode(raw) as Map<String, dynamic>,
+        );
         return _migrateVersion(prefs, scope, profile);
-      } catch (_) {}
+      } catch (e) {
+        logger.w('spoof profile read failed: $e');
+      }
     }
     if (scope != pendingScope) {
       return _migrateLegacy(prefs, scope);
@@ -247,14 +257,5 @@ class SpoofingService {
       sb.write(_rng.nextInt(256).toRadixString(16).padLeft(2, '0'));
     }
     return sb.toString();
-  }
-
-  static String _uuidV4() {
-    final b = List<int>.generate(16, (_) => _rng.nextInt(256));
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    String h(int i) => b[i].toRadixString(16).padLeft(2, '0');
-    return '${h(0)}${h(1)}${h(2)}${h(3)}-${h(4)}${h(5)}-${h(6)}${h(7)}-'
-        '${h(8)}${h(9)}-${h(10)}${h(11)}${h(12)}${h(13)}${h(14)}${h(15)}';
   }
 }

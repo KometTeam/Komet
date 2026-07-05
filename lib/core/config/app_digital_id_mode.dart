@@ -1,18 +1,22 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 class AppDigitalIdNative {
   static const prefKey = 'app_digital_id_native';
-  static final ValueNotifier<bool> current = ValueNotifier(false);
 
-  static Future<bool> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(prefKey) ?? false;
-  }
+  static final _setting = PersistedSetting<bool>(
+    prefKey: prefKey,
+    defaultValue: false,
+    read: (prefs, key) => prefs.getBool(key),
+    write: (prefs, key, value) async {
+      await prefs.setBool(key, value);
+    },
+  );
 
-  static Future<void> save(bool value) async {
-    current.value = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(prefKey, value);
-  }
+  static ValueNotifier<bool> get current => _setting.current;
+
+  static Future<bool> load() => _setting.load();
+
+  static Future<void> save(bool value) => _setting.save(value);
 }

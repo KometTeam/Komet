@@ -15,6 +15,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/spoof_profile.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/section_header.dart';
 import '../auth/login_screen.dart';
@@ -115,14 +116,16 @@ class _SpoofScreenState extends State<SpoofScreen> {
     _timezoneController.text = profile.timezone;
     _localeController.text = profile.locale;
     _deviceIdController.text = profile.deviceId;
-    _appVersionController.text =
-        profile.appVersion.isEmpty ? _hardcodedVersion : profile.appVersion;
+    _appVersionController.text = profile.appVersion.isEmpty
+        ? _hardcodedVersion
+        : profile.appVersion;
     _selectedArch = profile.arch.isEmpty ? 'arm64-v8a' : profile.arch;
     _buildNumberController.text = profile.buildNumber == 0
         ? '$_hardcodedBuildNumber'
         : '${profile.buildNumber}';
-    _pushDeviceTypeController.text =
-        profile.pushDeviceType.isEmpty ? 'GCM' : profile.pushDeviceType;
+    _pushDeviceTypeController.text = profile.pushDeviceType.isEmpty
+        ? 'GCM'
+        : profile.pushDeviceType;
     _userAgent = profile.userAgent;
 
     if (profile.deviceLocale.isNotEmpty) {
@@ -240,10 +243,12 @@ class _SpoofScreenState extends State<SpoofScreen> {
   }
 
   Future<void> _applyGeneratedData() async {
-    final type =
-        _selectedMethod == SpoofingMethod.full ? _selectedDeviceType : 'ANDROID';
-    final filteredPresets =
-        devicePresets.where((p) => p.deviceType == type).toList();
+    final type = _selectedMethod == SpoofingMethod.full
+        ? _selectedDeviceType
+        : 'ANDROID';
+    final filteredPresets = devicePresets
+        .where((p) => p.deviceType == type)
+        .toList();
 
     if (filteredPresets.isEmpty) return;
 
@@ -309,7 +314,8 @@ class _SpoofScreenState extends State<SpoofScreen> {
       identityChanged = true;
     } else {
       identityChanged =
-          jsonEncode(_initialProfile!.toJson()) != jsonEncode(newProfile.toJson());
+          jsonEncode(_initialProfile!.toJson()) !=
+          jsonEncode(newProfile.toJson());
     }
 
     if (!identityChanged) {
@@ -390,13 +396,9 @@ class _SpoofScreenState extends State<SpoofScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.spoofErrorApplyFailed(e.toString()),
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.spoofErrorApplyFailed(e.toString()),
         );
       }
     }
@@ -623,11 +625,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
                 selected: _selectedDeviceType,
                 onSelected: _onDeviceTypeChanged,
                 trailing: [
-                  _buildDisabledChip(
-                    'iOS',
-                    Icons.phone_iphone_outlined,
-                    theme,
-                  ),
+                  _buildDisabledChip('iOS', Icons.phone_iphone_outlined, theme),
                 ],
               )
             else
@@ -638,11 +636,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
                 selected: 'ANDROID',
                 onSelected: _onDeviceTypeChanged,
                 trailing: [
-                  _buildDisabledChip(
-                    'iOS',
-                    Icons.phone_iphone_outlined,
-                    theme,
-                  ),
+                  _buildDisabledChip('iOS', Icons.phone_iphone_outlined, theme),
                   _buildDisabledChip(
                     'Desktop',
                     Icons.desktop_windows_outlined,
@@ -906,31 +900,31 @@ class _SpoofScreenState extends State<SpoofScreen> {
         ...options.map((opt) {
           final isSelected = opt.value == selected;
           return ChoiceChip(
-          label: Text(opt.label),
-          avatar: isSelected
-              ? Icon(Icons.check, size: 18, color: cs.onSecondaryContainer)
-              : (opt.icon != null
-                    ? Icon(opt.icon, size: 18, color: cs.onSurfaceVariant)
-                    : null),
-          selected: isSelected,
-          showCheckmark: false,
-          onSelected: (_) => onSelected(opt.value),
-          labelStyle: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: isSelected ? cs.onSecondaryContainer : cs.onSurface,
-          ),
-          backgroundColor: cs.surfaceContainerHighest,
-          selectedColor: cs.secondaryContainer,
-          side: BorderSide(
-            color: isSelected ? Colors.transparent : cs.outlineVariant,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        );
+            label: Text(opt.label),
+            avatar: isSelected
+                ? Icon(Icons.check, size: 18, color: cs.onSecondaryContainer)
+                : (opt.icon != null
+                      ? Icon(opt.icon, size: 18, color: cs.onSurfaceVariant)
+                      : null),
+            selected: isSelected,
+            showCheckmark: false,
+            onSelected: (_) => onSelected(opt.value),
+            labelStyle: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? cs.onSecondaryContainer : cs.onSurface,
+            ),
+            backgroundColor: cs.surfaceContainerHighest,
+            selectedColor: cs.secondaryContainer,
+            side: BorderSide(
+              color: isSelected ? Colors.transparent : cs.outlineVariant,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          );
         }),
         ...trailing,
       ],

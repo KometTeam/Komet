@@ -77,7 +77,8 @@ class OpusOggEncoder {
         if (end <= pcm.length) {
           frame = Int16List.sublistView(pcm, off, end);
         } else {
-          frame = Int16List(_frameSamples)..setRange(0, pcm.length - off, pcm, off);
+          frame = Int16List(_frameSamples)
+            ..setRange(0, pcm.length - off, pcm, off);
         }
         packets.add(encoder.encode(input: frame));
       }
@@ -87,12 +88,29 @@ class OpusOggEncoder {
     return _buildOgg(packets, totalSamples: pcm.length);
   }
 
-  static Uint8List _buildOgg(List<Uint8List> packets, {required int totalSamples}) {
+  static Uint8List _buildOgg(
+    List<Uint8List> packets, {
+    required int totalSamples,
+  }) {
     final out = BytesBuilder();
     var seq = 0;
 
-    out.add(_page(headerType: 0x02, granulePos: 0, seq: seq++, packets: [_opusHead()]));
-    out.add(_page(headerType: 0x00, granulePos: 0, seq: seq++, packets: [_opusTags()]));
+    out.add(
+      _page(
+        headerType: 0x02,
+        granulePos: 0,
+        seq: seq++,
+        packets: [_opusHead()],
+      ),
+    );
+    out.add(
+      _page(
+        headerType: 0x00,
+        granulePos: 0,
+        seq: seq++,
+        packets: [_opusTags()],
+      ),
+    );
 
     var pagePackets = <Uint8List>[];
     var pageSegments = 0;
@@ -100,12 +118,14 @@ class OpusOggEncoder {
 
     void flush({required bool last}) {
       final granule = last ? totalSamples + _preSkip : samples + _preSkip;
-      out.add(_page(
-        headerType: last ? 0x04 : 0x00,
-        granulePos: granule,
-        seq: seq++,
-        packets: pagePackets,
-      ));
+      out.add(
+        _page(
+          headerType: last ? 0x04 : 0x00,
+          granulePos: granule,
+          seq: seq++,
+          packets: pagePackets,
+        ),
+      );
       pagePackets = <Uint8List>[];
       pageSegments = 0;
     }
@@ -214,7 +234,8 @@ class OpusOggEncoder {
   static int _crc32(Uint8List data) {
     var crc = 0;
     for (final b in data) {
-      crc = (((crc << 8) & 0xffffffff) ^ _crcTable[((crc >> 24) & 0xff) ^ b]) &
+      crc =
+          (((crc << 8) & 0xffffffff) ^ _crcTable[((crc >> 24) & 0xff) ^ b]) &
           0xffffffff;
     }
     return crc & 0xffffffff;

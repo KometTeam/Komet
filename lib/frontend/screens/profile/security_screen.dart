@@ -5,6 +5,8 @@ import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart'
     show PrivacyConfig, BlockedContact;
 import '../../../core/storage/app_database.dart';
+import '../../../core/config/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
@@ -68,7 +70,10 @@ class _SecurityScreenState extends State<SecurityScreen>
       }
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Ошибка загрузки: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.securityLoadError(e.toString()),
+        );
         setState(() => _isLoading = false);
       }
     }
@@ -84,7 +89,10 @@ class _SecurityScreenState extends State<SecurityScreen>
       }
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Ошибка сохранения: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.securitySaveError(e.toString()),
+        );
       }
     } finally {
       if (mounted) {
@@ -199,7 +207,7 @@ class _SecurityScreenState extends State<SecurityScreen>
           ),
           const SizedBox(width: 4),
           ConnectionTitleText(
-            'Безопасность',
+            AppLocalizations.of(context)!.securityTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 20,
@@ -226,20 +234,22 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   String _getPrivacyLabel(String value) {
+    final l10n = AppLocalizations.of(context)!;
     switch (value) {
       case 'ALL':
-        return 'Все';
+        return l10n.securityPrivacyAll;
       case 'CONTACTS':
-        return 'Мои контакты';
+        return l10n.securityPrivacyContacts;
       case 'NONE':
       case 'NOBODY':
-        return 'Никто';
+        return l10n.securityPrivacyNobody;
       default:
         return value;
     }
   }
 
   Widget _buildTopSection(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
@@ -247,13 +257,13 @@ class _SecurityScreenState extends State<SecurityScreen>
       child: Column(
         children: [
           _buildPasswordRow(cs),
-          _buildNavRow(
+          _settingsRow(
             cs,
             icon: Symbols.shield,
-            label: 'Семейная защита',
+            label: l10n.securityFamilyProtection,
             subtitle: _privacyConfig?.familyProtection == 'ON'
-                ? 'Включена'
-                : 'Отключена',
+                ? l10n.securityEnabledFem
+                : l10n.securityDisabledFem,
             isLast: true,
           ),
         ],
@@ -262,6 +272,7 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   Widget _buildPasswordRow(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         Material(
@@ -292,7 +303,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Пароль для входа',
+                          l10n.securityPasswordTitle,
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 16,
@@ -301,7 +312,9 @@ class _SecurityScreenState extends State<SecurityScreen>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _is2faEnabled ? 'Включён' : 'Отключён',
+                          _is2faEnabled
+                              ? l10n.securityEnabledMasc
+                              : l10n.securityDisabledMasc,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 13,
@@ -336,6 +349,7 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   Widget _buildPrivacySettings(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final isSafeMode = _privacyConfig?.safeMode ?? false;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -359,7 +373,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Безопасный режим',
+                        l10n.securityModeTitle,
                         style: TextStyle(
                           color: cs.onSurface,
                           fontSize: 16,
@@ -368,7 +382,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Скрывает личную информацию',
+                        l10n.securityModeSubtitle,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 13,
@@ -381,7 +395,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                   value: isSafeMode,
                   onChanged: (v) => showCustomNotification(
                     context,
-                    'Изменение настроек пока недоступно',
+                    l10n.securitySettingsUnavailable,
                   ),
                 ),
               ],
@@ -396,34 +410,56 @@ class _SecurityScreenState extends State<SecurityScreen>
                 color: cs.outlineVariant.withValues(alpha: 0.35),
               ),
             ),
-            _buildSubRow(
+            _settingsRow(
               cs,
-              label: 'Найти меня по номеру',
-              value: _getPrivacyLabel(_privacyConfig?.searchByPhone ?? 'ALL'),
+              label: l10n.securityFindByPhone,
+              trailingText: _getPrivacyLabel(
+                _privacyConfig?.searchByPhone ?? 'ALL',
+              ),
+              verticalPadding: 16,
+              labelFontSize: 15,
+              labelFontWeight: null,
+              chevronSize: 18,
+              insetDivider: false,
               isLast: false,
             ),
-            _buildSubRow(
+            _settingsRow(
               cs,
-              label: 'Кто может мне звонить',
-              value: _getPrivacyLabel(
+              label: l10n.securityWhoCanCall,
+              trailingText: _getPrivacyLabel(
                 _privacyConfig?.incomingCall ?? 'CONTACTS',
               ),
+              verticalPadding: 16,
+              labelFontSize: 15,
+              labelFontWeight: null,
+              chevronSize: 18,
+              insetDivider: false,
               isLast: false,
             ),
-            _buildSubRow(
+            _settingsRow(
               cs,
-              label: 'Кто может приглашать в чаты',
-              value: _getPrivacyLabel(
+              label: l10n.securityWhoCanInvite,
+              trailingText: _getPrivacyLabel(
                 _privacyConfig?.chatsInvite ?? 'CONTACTS',
               ),
+              verticalPadding: 16,
+              labelFontSize: 15,
+              labelFontWeight: null,
+              chevronSize: 18,
+              insetDivider: false,
               isLast: false,
             ),
-            _buildSubRow(
+            _settingsRow(
               cs,
-              label: 'Показывать контакт',
-              value: _privacyConfig?.contentLevelAccess == true
-                  ? 'Безопасный'
-                  : 'Весь',
+              label: l10n.securityShowContact,
+              trailingText: _privacyConfig?.contentLevelAccess == true
+                  ? l10n.securityContentSafe
+                  : l10n.securityContentAll,
+              verticalPadding: 16,
+              labelFontSize: 15,
+              labelFontWeight: null,
+              chevronSize: 18,
+              insetDivider: false,
               isLast: true,
             ),
           ],
@@ -436,80 +472,93 @@ class _SecurityScreenState extends State<SecurityScreen>
                 color: cs.outlineVariant.withValues(alpha: 0.35),
               ),
             ),
-            _buildOptionRow(
+            _settingsRow(
               cs,
               icon: Symbols.phone,
-              label: 'Кто может мне звонить',
-              value: _getPrivacyLabel(
+              label: l10n.securityWhoCanCall,
+              trailingText: _getPrivacyLabel(
                 _privacyConfig?.incomingCall ?? 'CONTACTS',
               ),
               isLast: false,
               onTap: () => _showOptionSheet(
                 context,
                 cs,
-                title: 'Кто может мне звонить',
+                title: l10n.securityWhoCanCall,
                 currentValue: _privacyConfig?.incomingCall ?? 'CONTACTS',
-                options: const [('ALL', 'Все'), ('CONTACTS', 'Мои контакты')],
+                options: [
+                  ('ALL', l10n.securityPrivacyAll),
+                  ('CONTACTS', l10n.securityPrivacyContacts),
+                ],
                 onSelect: (value) => _updateSetting('INCOMING_CALL', value),
               ),
             ),
-            _buildOptionRow(
+            _settingsRow(
               cs,
               icon: Symbols.group,
-              label: 'Кто может приглашать в чаты',
-              value: _getPrivacyLabel(
+              label: l10n.securityWhoCanInvite,
+              trailingText: _getPrivacyLabel(
                 _privacyConfig?.chatsInvite ?? 'CONTACTS',
               ),
               isLast: false,
               onTap: () => _showOptionSheet(
                 context,
                 cs,
-                title: 'Кто может приглашать в чаты',
+                title: l10n.securityWhoCanInvite,
                 currentValue: _privacyConfig?.chatsInvite ?? 'CONTACTS',
-                options: const [('ALL', 'Все'), ('CONTACTS', 'Мои контакты')],
+                options: [
+                  ('ALL', l10n.securityPrivacyAll),
+                  ('CONTACTS', l10n.securityPrivacyContacts),
+                ],
                 onSelect: (value) => _updateSetting('CHATS_INVITE', value),
               ),
             ),
-            _buildOptionRow(
+            _settingsRow(
               cs,
               icon: Symbols.contact_phone,
-              label: 'Найти меня по номеру',
-              value: _getPrivacyLabel(_privacyConfig?.searchByPhone ?? 'ALL'),
+              label: l10n.securityFindByPhone,
+              trailingText: _getPrivacyLabel(
+                _privacyConfig?.searchByPhone ?? 'ALL',
+              ),
               isLast: false,
               onTap: () => _showOptionSheet(
                 context,
                 cs,
-                title: 'Найти меня по номеру',
+                title: l10n.securityFindByPhone,
                 currentValue: _privacyConfig?.searchByPhone ?? 'ALL',
-                options: const [('ALL', 'Все'), ('CONTACTS', 'Мои контакты')],
+                options: [
+                  ('ALL', l10n.securityPrivacyAll),
+                  ('CONTACTS', l10n.securityPrivacyContacts),
+                ],
                 onSelect: (value) => _updateSetting('SEARCH_BY_PHONE', value),
               ),
             ),
-            _buildOptionRow(
+            _settingsRow(
               cs,
               icon: Icons.visibility_off_outlined,
-              label: 'Видеть статус «в сети»',
-              value: _privacyConfig?.hidden == true ? 'Никто' : 'Мои контакты',
+              label: l10n.securityShowOnlineStatus,
+              trailingText: _privacyConfig?.hidden == true
+                  ? l10n.securityPrivacyNobody
+                  : l10n.securityPrivacyContacts,
               isLast: false,
               onTap: () => _showHiddenStatusSheet(context, cs),
             ),
-            _buildOptionRow(
+            _settingsRow(
               cs,
               icon: Symbols.contact_page,
-              label: 'Видеть мой номер',
-              value: _getPrivacyLabel(
+              label: l10n.securityShowMyNumber,
+              trailingText: _getPrivacyLabel(
                 _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
               ),
               isLast: true,
               onTap: () => _showOptionSheet(
                 context,
                 cs,
-                title: 'Видеть мой номер',
+                title: l10n.securityShowMyNumber,
                 currentValue: _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
-                options: const [
-                  ('ALL', 'Все'),
-                  ('CONTACTS', 'Мои контакты'),
-                  ('NOBODY', 'Никто'),
+                options: [
+                  ('ALL', l10n.securityPrivacyAll),
+                  ('CONTACTS', l10n.securityPrivacyContacts),
+                  ('NOBODY', l10n.securityPrivacyNobody),
                 ],
                 onSelect: (value) =>
                     _updateSetting('PHONE_NUMBER_PRIVACY', value),
@@ -532,9 +581,7 @@ class _SecurityScreenState extends State<SecurityScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: kSheetShape,
       builder: (context) {
         return SafeArea(
           child: Column(
@@ -597,59 +644,35 @@ class _SecurityScreenState extends State<SecurityScreen>
     BuildContext context,
     ColorScheme cs,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final currentValue = _privacyConfig?.hidden == true ? 'NONE' : 'CONTACTS';
 
     if (currentValue == 'NONE') {
       final confirmed = await showConfirmDialog(
         context,
-        title: 'Вы уверены?',
-        message: 'Вы не сможете видеть статусы посещения других пользователей.',
-        confirmLabel: 'Да',
+        title: l10n.securityConfirmTitle,
+        message: l10n.securityHiddenStatusWarning,
+        confirmLabel: l10n.spoofDialogYes,
       );
       if (confirmed) _updateSetting('HIDDEN', false);
       return;
     }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              const SheetGrabber(margin: EdgeInsets.zero),
-              const SizedBox(height: 16),
-              Text(
-                'Видеть статус «в сети»',
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _buildOptionSheetItem(
-                cs,
-                'Мои контакты',
-                currentValue == 'CONTACTS',
-                () {
-                  Navigator.pop(context);
-                  _updateSetting('HIDDEN', false);
-                },
-              ),
-              _buildOptionSheetItem(cs, 'Никто', currentValue == 'NONE', () {
-                Navigator.pop(context);
-                _showHiddenStatusConfirmDialog(context, cs);
-              }, isLast: true),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
+    _showOptionSheet(
+      context,
+      cs,
+      title: l10n.securityShowOnlineStatus,
+      currentValue: currentValue,
+      options: [
+        ('CONTACTS', l10n.securityPrivacyContacts),
+        ('NONE', l10n.securityPrivacyNobody),
+      ],
+      onSelect: (value) {
+        if (value == 'CONTACTS') {
+          _updateSetting('HIDDEN', false);
+        } else {
+          _showHiddenStatusConfirmDialog(context, cs);
+        }
       },
     );
   }
@@ -658,64 +681,23 @@ class _SecurityScreenState extends State<SecurityScreen>
     BuildContext context,
     ColorScheme cs,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Вы уверены?',
-      message: 'Вы не сможете видеть статусы посещения других пользователей.',
-      confirmLabel: 'Да',
+      title: l10n.securityConfirmTitle,
+      message: l10n.securityHiddenStatusWarning,
+      confirmLabel: l10n.spoofDialogYes,
     );
     if (confirmed) _updateSetting('HIDDEN', true);
-  }
-
-  Widget _buildOptionSheetItem(
-    ColorScheme cs,
-    String label,
-    bool isSelected,
-    VoidCallback onTap, {
-    bool isLast = false,
-  }) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(color: cs.onSurface, fontSize: 16),
-                    ),
-                  ),
-                  if (isSelected)
-                    Icon(Symbols.check, color: cs.primary, size: 20),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (!isLast)
-          Padding(
-            padding: const EdgeInsets.only(left: 20),
-            child: Divider(
-              height: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.3),
-            ),
-          ),
-      ],
-    );
   }
 
   Widget _buildInfoLabel(ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 0),
       child: Text(
-        'КОНФИДЕНЦИАЛЬНОСТЬ',
+        AppLocalizations.of(context)!.securityConfidentialityHeader,
         style: TextStyle(
-          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+          color: cs.mutedText,
           fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.8,
@@ -725,43 +707,73 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   Widget _buildConfidentialSection(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    final showReadMark = _privacyConfig?.showReadMark ?? true;
+    final altKeyboard = _privacyConfig?.altKeyboard ?? false;
+    final unsafeFiles = _privacyConfig?.unsafeFiles ?? true;
+    final audioTranscription =
+        _privacyConfig?.audioTranscriptionEnabled ?? true;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
       child: Column(
         children: [
-          _buildSwitchRow(
+          _settingsRow(
             cs,
             icon: Symbols.description,
-            label: 'Галочки «Прочитано»',
-            value: _privacyConfig?.showReadMark ?? true,
+            label: l10n.securityReadReceipts,
+            trailingWidget: Switch(
+              value: showReadMark,
+              onChanged: (v) => _updateSetting('SHOW_READ_MARK', v),
+            ),
+            showChevron: false,
+            verticalPadding: 14,
             isLast: false,
-            onChanged: (v) => _updateSetting('SHOW_READ_MARK', v),
+            onTap: () => _updateSetting('SHOW_READ_MARK', !showReadMark),
           ),
-          _buildSwitchRow(
+          _settingsRow(
             cs,
             icon: Symbols.keyboard_alt,
-            label: 'Альтернативная клавиатура',
-            value: _privacyConfig?.altKeyboard ?? false,
+            label: l10n.securityAltKeyboard,
+            trailingWidget: Switch(
+              value: altKeyboard,
+              onChanged: (v) => _updateSetting('ALT_KEYBOARD', v),
+            ),
+            showChevron: false,
+            verticalPadding: 14,
             isLast: false,
-            onChanged: (v) => _updateSetting('ALT_KEYBOARD', v),
+            onTap: () => _updateSetting('ALT_KEYBOARD', !altKeyboard),
           ),
-          _buildSwitchRow(
+          _settingsRow(
             cs,
             icon: Symbols.warning,
-            label: 'Принимать опасные файлы',
-            value: _privacyConfig?.unsafeFiles ?? true,
+            label: l10n.securityUnsafeFiles,
+            trailingWidget: Switch(
+              value: unsafeFiles,
+              onChanged: (v) => _updateSetting('UNSAFE_FILES', v),
+            ),
+            showChevron: false,
+            verticalPadding: 14,
             isLast: false,
-            onChanged: (v) => _updateSetting('UNSAFE_FILES', v),
+            onTap: () => _updateSetting('UNSAFE_FILES', !unsafeFiles),
           ),
-          _buildSwitchRow(
+          _settingsRow(
             cs,
             icon: Icons.mic_none_outlined,
-            label: 'Транскрибация аудио',
-            value: _privacyConfig?.audioTranscriptionEnabled ?? true,
+            label: l10n.securityAudioTranscription,
+            trailingWidget: Switch(
+              value: audioTranscription,
+              onChanged: (v) =>
+                  _updateSetting('AUDIO_TRANSCRIPTION_ENABLED', v),
+            ),
+            showChevron: false,
+            verticalPadding: 14,
             isLast: true,
-            onChanged: (v) => _updateSetting('AUDIO_TRANSCRIPTION_ENABLED', v),
+            onTap: () => _updateSetting(
+              'AUDIO_TRANSCRIPTION_ENABLED',
+              !audioTranscription,
+            ),
           ),
         ],
       ),
@@ -769,6 +781,7 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   Widget _buildBlacklistSection(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final count = _blockedContacts.length;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -779,7 +792,7 @@ class _SecurityScreenState extends State<SecurityScreen>
         child: InkWell(
           onTap: () => showCustomNotification(
             context,
-            'Чёрный список: $count контактов',
+            l10n.securityBlacklistNotification('$count'),
           ),
           borderRadius: BorderRadius.circular(20),
           child: Padding(
@@ -798,7 +811,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Чёрный список',
+                        l10n.securityBlacklistTitle,
                         style: TextStyle(
                           color: cs.onSurface,
                           fontSize: 16,
@@ -839,30 +852,47 @@ class _SecurityScreenState extends State<SecurityScreen>
     return 'контактов';
   }
 
-  Widget _buildNavRow(
+  Widget _settingsRow(
     ColorScheme cs, {
-    required IconData icon,
+    IconData? icon,
     required String label,
     String? subtitle,
-    String? value,
-    Widget? trailing,
-    required bool isLast,
+    String? trailingText,
+    Widget? trailingWidget,
+    bool showChevron = true,
+    double chevronSize = 20,
+    double verticalPadding = 17,
+    double labelFontSize = 16,
+    FontWeight? labelFontWeight = FontWeight.w500,
+    bool insetDivider = true,
+    bool isLast = false,
+    VoidCallback? onTap,
   }) {
     return Column(
       children: [
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => showCustomNotification(context, label),
+            onTap: onTap ?? () => showCustomNotification(context, label),
             borderRadius: isLast
                 ? const BorderRadius.vertical(bottom: Radius.circular(20))
                 : BorderRadius.zero,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+              padding: EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: verticalPadding,
+              ),
               child: Row(
                 children: [
-                  Icon(icon, color: cs.onSurfaceVariant, size: 22, weight: 400),
-                  const SizedBox(width: 16),
+                  if (icon != null) ...[
+                    Icon(
+                      icon,
+                      color: cs.onSurfaceVariant,
+                      size: 22,
+                      weight: 400,
+                    ),
+                    const SizedBox(width: 16),
+                  ],
                   Expanded(
                     child: subtitle != null
                         ? Column(
@@ -872,8 +902,8 @@ class _SecurityScreenState extends State<SecurityScreen>
                                 label,
                                 style: TextStyle(
                                   color: cs.onSurface,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
+                                  fontSize: labelFontSize,
+                                  fontWeight: labelFontWeight,
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -890,208 +920,51 @@ class _SecurityScreenState extends State<SecurityScreen>
                             label,
                             style: TextStyle(
                               color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
+                              fontSize: labelFontSize,
+                              fontWeight: labelFontWeight,
                             ),
                           ),
                   ),
-                  if (value != null)
+                  if (trailingText != null)
                     Text(
-                      value,
+                      trailingText,
                       style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 14,
                       ),
                     ),
-                  ?trailing,
-                  const SizedBox(width: 4),
-                  Icon(
-                    Symbols.chevron_right,
-                    color: cs.outline,
-                    size: 20,
-                    weight: 400,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (!isLast)
-          Padding(
-            padding: const EdgeInsets.only(left: 58),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.35),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildOptionRow(
-    ColorScheme cs, {
-    required IconData icon,
-    required String label,
-    required String value,
-    required bool isLast,
-    required VoidCallback onTap,
-  }) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
-                : BorderRadius.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
-              child: Row(
-                children: [
-                  Icon(icon, color: cs.onSurfaceVariant, size: 22, weight: 400),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  ?trailingWidget,
+                  if (showChevron) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      Symbols.chevron_right,
+                      color: cs.outline,
+                      size: chevronSize,
+                      weight: 400,
                     ),
-                  ),
-                  Text(
-                    value,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Symbols.chevron_right,
-                    color: cs.outline,
-                    size: 20,
-                    weight: 400,
-                  ),
+                  ],
                 ],
               ),
             ),
           ),
         ),
         if (!isLast)
-          Padding(
-            padding: const EdgeInsets.only(left: 58),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.35),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSubRow(
-    ColorScheme cs, {
-    required String label,
-    required String value,
-    required bool isLast,
-  }) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => showCustomNotification(context, label),
-            borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
-                : BorderRadius.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(color: cs.onSurface, fontSize: 15),
-                    ),
+          insetDivider
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 58),
+                  child: Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: cs.outlineVariant.withValues(alpha: 0.35),
                   ),
-                  Text(
-                    value,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Symbols.chevron_right,
-                    color: cs.outline,
-                    size: 18,
-                    weight: 400,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: cs.outlineVariant.withValues(alpha: 0.35),
-            indent: 20,
-            endIndent: 20,
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSwitchRow(
-    ColorScheme cs, {
-    required IconData icon,
-    required String label,
-    required bool value,
-    required bool isLast,
-    required void Function(bool) onChanged,
-  }) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => onChanged(!value),
-            borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
-                : BorderRadius.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                children: [
-                  Icon(icon, color: cs.onSurfaceVariant, size: 22, weight: 400),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Switch(value: value, onChanged: onChanged),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (!isLast)
-          Padding(
-            padding: const EdgeInsets.only(left: 58),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.35),
-            ),
-          ),
+                )
+              : Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.35),
+                  indent: 20,
+                  endIndent: 20,
+                ),
       ],
     );
   }

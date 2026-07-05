@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../backend/api.dart';
+import '../../models/chat_info.dart';
+import '../../models/contact_info.dart';
 import '../protocol/opcode_map.dart';
 
 Api? _api;
@@ -94,20 +96,20 @@ class InfoCache<T> {
 }
 
 class ContactInfoFetch {
-  static final _cache = InfoCache<Map<String, dynamic>>(
+  static final _cache = InfoCache<ContactInfo>(
     ttl: const Duration(minutes: 5),
     fetcher: _fetch,
   );
 
-  static Future<Map<String, dynamic>?> get(int id, {bool forceRefresh = false}) =>
+  static Future<ContactInfo?> get(int id, {bool forceRefresh = false}) =>
       _cache.get(id, forceRefresh: forceRefresh);
 
-  static Map<String, dynamic>? peek(int id) => _cache.peek(id);
+  static ContactInfo? peek(int id) => _cache.peek(id);
 
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 
-  static Future<Map<String, dynamic>?> _fetch(int id) async {
+  static Future<ContactInfo?> _fetch(int id) async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return null;
     final resp = await api.sendRequest(Opcode.contactInfo, {
@@ -119,7 +121,7 @@ class ContactInfoFetch {
     if (contacts is! List || contacts.isEmpty) return null;
     final first = contacts.first;
     if (first is! Map) return null;
-    return Map<String, dynamic>.from(first);
+    return ContactInfo.fromMap(Map<String, dynamic>.from(first));
   }
 }
 
@@ -129,8 +131,10 @@ class PresenceFetch {
     fetcher: _fetch,
   );
 
-  static Future<Map<String, dynamic>?> get(int id, {bool forceRefresh = false}) =>
-      _cache.get(id, forceRefresh: forceRefresh);
+  static Future<Map<String, dynamic>?> get(
+    int id, {
+    bool forceRefresh = false,
+  }) => _cache.get(id, forceRefresh: forceRefresh);
 
   static Map<String, dynamic>? peek(int id) => _cache.peek(id);
 
@@ -206,7 +210,9 @@ class PresenceFetch {
     return result;
   }
 
-  static Future<Map<int, Map<String, dynamic>>> _fetchBatch(List<int> ids) async {
+  static Future<Map<int, Map<String, dynamic>>> _fetchBatch(
+    List<int> ids,
+  ) async {
     final api = _api;
     if (api == null || api.state != SessionState.online || ids.isEmpty) {
       return const {};
@@ -230,20 +236,20 @@ class PresenceFetch {
 }
 
 class ChatInfoFetch {
-  static final _cache = InfoCache<Map<String, dynamic>>(
+  static final _cache = InfoCache<ChatInfo>(
     ttl: const Duration(minutes: 5),
     fetcher: _fetch,
   );
 
-  static Future<Map<String, dynamic>?> get(int id, {bool forceRefresh = false}) =>
+  static Future<ChatInfo?> get(int id, {bool forceRefresh = false}) =>
       _cache.get(id, forceRefresh: forceRefresh);
 
-  static Map<String, dynamic>? peek(int id) => _cache.peek(id);
+  static ChatInfo? peek(int id) => _cache.peek(id);
 
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 
-  static Future<Map<String, dynamic>?> _fetch(int id) async {
+  static Future<ChatInfo?> _fetch(int id) async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return null;
     final resp = await api.sendRequest(Opcode.chatInfo, {
@@ -255,6 +261,6 @@ class ChatInfoFetch {
     if (chats is! List || chats.isEmpty) return null;
     final first = chats.first;
     if (first is! Map) return null;
-    return Map<String, dynamic>.from(first);
+    return ChatInfo.fromMap(Map<String, dynamic>.from(first));
   }
 }

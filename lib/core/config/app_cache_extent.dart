@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 class AppCacheExtent {
   static const prefKey = 'app_cache_extent';
@@ -9,21 +10,21 @@ class AppCacheExtent {
   static const double lowWarnThreshold = 2500;
   static const double highWarnThreshold = 7000;
 
-  static final ValueNotifier<double> current = ValueNotifier(defaultValue);
+  static final _setting = PersistedSetting<double>(
+    prefKey: prefKey,
+    defaultValue: defaultValue,
+    read: (prefs, key) => prefs.getDouble(key),
+    write: (prefs, key, value) async {
+      await prefs.setDouble(key, value);
+    },
+    sanitize: clamp,
+  );
 
-  static Future<double> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getDouble(prefKey);
-    if (raw == null) return defaultValue;
-    return clamp(raw);
-  }
+  static ValueNotifier<double> get current => _setting.current;
 
-  static Future<void> save(double value) async {
-    final clamped = clamp(value);
-    current.value = clamped;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(prefKey, clamped);
-  }
+  static Future<double> load() => _setting.load();
+
+  static Future<void> save(double value) => _setting.save(value);
 
   static double clamp(double v) {
     if (v < min) return min;

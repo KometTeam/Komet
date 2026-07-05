@@ -1,18 +1,22 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 class AppPillGradient {
   static const prefKey = 'app_pill_gradient';
-  static final ValueNotifier<bool> current = ValueNotifier(true);
 
-  static Future<bool> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(prefKey) ?? true;
-  }
+  static final _setting = PersistedSetting<bool>(
+    prefKey: prefKey,
+    defaultValue: true,
+    read: (prefs, key) => prefs.getBool(key),
+    write: (prefs, key, value) async {
+      await prefs.setBool(key, value);
+    },
+  );
 
-  static Future<void> save(bool value) async {
-    current.value = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(prefKey, value);
-  }
+  static ValueNotifier<bool> get current => _setting.current;
+
+  static Future<bool> load() => _setting.load();
+
+  static Future<void> save(bool value) => _setting.save(value);
 }

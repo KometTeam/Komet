@@ -11,7 +11,8 @@ const int _maxDecompressedSize = 1048576; // 1 MB
 
 /// Типы команд в протоколе
 abstract class CmdType {
-  static const int request = 0; // запрос клиента / пуш от сервера (направление определяет смысл)
+  static const int request =
+      0; // запрос клиента / пуш от сервера (направление определяет смысл)
   static const int push = 0; // пуш от сервера (имеет смысл только для incoming)
 
   static const int ok = 1; // ответ: ок
@@ -81,6 +82,21 @@ String messageFromErrorPayload(dynamic payload) {
   if (payload == null) return 'Неизвестная ошибка';
   final s = payload.toString();
   return s.isNotEmpty ? s : 'Неизвестная ошибка';
+}
+
+bool isSessionExpiredPayload(dynamic payload) {
+  return payload is Map &&
+      (payload['message'] == 'FAIL_LOGIN_TOKEN' ||
+          payload['message'] == 'FAIL_WRONG_PASSWORD');
+}
+
+void throwIfPacketError(Packet packet) {
+  if (!packet.isError) return;
+  final payload = packet.payload;
+  if (isSessionExpiredPayload(payload)) {
+    throw SessionExpiredException(messageFromErrorPayload(payload));
+  }
+  throw PacketError(messageFromErrorPayload(payload));
 }
 
 bool isSessionStateError(Object error) {
@@ -192,7 +208,9 @@ Uint8List _decompressPayload(Uint8List src) {
       src[2] == 0x2F &&
       src[3] == 0xFD) {
     try {
-      return ZstdCodec(maxDecompressedSize: _maxDecompressedSize).decompress(src);
+      return ZstdCodec(
+        maxDecompressedSize: _maxDecompressedSize,
+      ).decompress(src);
     } catch (e) {
       throw Exception('Zstd decompression error: $e');
     }
@@ -218,4 +236,3 @@ Uint8List _decompressPayload(Uint8List src) {
     throw Exception('LZ4 block decompression error: $e');
   }
 }
-

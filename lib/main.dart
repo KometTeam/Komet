@@ -13,6 +13,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
+import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
@@ -120,7 +121,7 @@ void main() async {
     await ContactsModule.primeCacheFromDb(activeAccountId);
   }
   attachInfoCacheApi(api);
-  ChatsModule.attachGlobalPushHandlers(api);
+  chats.attachGlobalPushHandlers(api);
   unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
@@ -176,24 +177,26 @@ void main() async {
     unawaited(CustomFontService.preloadCached());
   }
   final initialAccentSeed = await accentFuture;
-  AppBubbleShape.current.value = await bubbleShapeFuture;
-  AppBubbleBehavior.current.value = await bubbleBehaviorFuture;
-  AppCacheExtent.current.value = await cacheExtentFuture;
-  AppThemeModeConfig.current.value = await themeModeFuture;
-  AppAmoled.current.value = await amoledFuture;
-  AppPillGradient.current.value = await pillGradientFuture;
-  AppVisualStyle.current.value = await visualStyleFuture;
-  AppChatChrome.current.value = await chatChromeFuture;
-  AppThemeSchedule.current.value = await themeScheduleFuture;
-  AppMessageActionsStyle.current.value = await messageActionsFuture;
-  AppSwipeBackDesktop.current.value = await swipeBackFuture;
-  AppPranks.current.value = await pranksFuture;
-  AppStories.current.value = await storiesFuture;
-  AppCommands.current.value = await commandsFuture;
-  AppLinkPreview.current.value = await linkPreviewFuture;
-  AppMediaCacheLimit.current.value = await cacheLimitFuture;
-  AppDigitalIdNative.current.value = await digitalIdNativeFuture;
-  AppShowExtraInfo.current.value = await showExtraInfoFuture;
+  await Future.wait<dynamic>([
+    bubbleShapeFuture,
+    bubbleBehaviorFuture,
+    cacheExtentFuture,
+    themeModeFuture,
+    amoledFuture,
+    pillGradientFuture,
+    visualStyleFuture,
+    chatChromeFuture,
+    themeScheduleFuture,
+    messageActionsFuture,
+    swipeBackFuture,
+    pranksFuture,
+    storiesFuture,
+    commandsFuture,
+    linkPreviewFuture,
+    cacheLimitFuture,
+    digitalIdNativeFuture,
+    showExtraInfoFuture,
+  ]);
   await trafficCaptureFuture;
   await debugLogFuture;
   runApp(
@@ -303,7 +306,9 @@ class KometAppState extends State<KometApp>
             await accountModule.login(accountId: accountId, token: token);
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        logger.w('reconnect login failed: $e');
+      }
     });
 
     _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
@@ -419,7 +424,9 @@ class KometAppState extends State<KometApp>
     if (call == null || _incomingRouteActive || !_shellReady) return;
     final navState = KometApp.navigatorKey.currentState;
     if (navState == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _presentIncomingCall());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _presentIncomingCall(),
+      );
       return;
     }
     _incomingRouteActive = true;
@@ -435,9 +442,9 @@ class KometAppState extends State<KometApp>
           ),
         )
         .whenComplete(() {
-      _incomingRouteActive = false;
-      if (identical(_pendingIncoming, call)) _pendingIncoming = null;
-    });
+          _incomingRouteActive = false;
+          if (identical(_pendingIncoming, call)) _pendingIncoming = null;
+        });
   }
 
   @override
@@ -469,9 +476,11 @@ class KometAppState extends State<KometApp>
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       DebugSessionLog.instance.flushNow();
+      SelfCheckService.instance.pause();
     }
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();
+    SelfCheckService.instance.resume();
     CallBridge.instance.checkInitialCall();
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
     _rescheduleSwitch();

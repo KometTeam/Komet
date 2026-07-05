@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:komet/core/storage/app_instance.dart';
@@ -166,7 +167,8 @@ class AppDatabase {
       final dir = await getApplicationSupportDirectory();
       return dir.path;
     }
-    return _mobileDbDir ??= await databaseFactorySqflitePlugin.getDatabasesPath();
+    return _mobileDbDir ??= await databaseFactorySqflitePlugin
+        .getDatabasesPath();
   }
 
   static Future<void> _migrateLegacyDb(String target) async {
@@ -180,7 +182,9 @@ class AppDatabase {
         await legacy.copy(target);
         logger.i('[db] перенёс komet.db -> $target');
       }
-    } catch (_) {}
+    } catch (e) {
+      logger.w('legacy db migration failed: $e');
+    }
   }
 
   static Future<Database> _open() async {
@@ -190,13 +194,16 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 16,
+      version: 17,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _addColumnIfMissing(
-            db, 'profile', 'is_active', 'INTEGER NOT NULL DEFAULT 0',
+            db,
+            'profile',
+            'is_active',
+            'INTEGER NOT NULL DEFAULT 0',
           );
           await db.execute('DROP TABLE IF EXISTS sync_state');
           await db.execute(_syncStateSchema);
@@ -232,16 +239,27 @@ class AppDatabase {
           await _createIndexes(db);
         }
         if (oldVersion < 12) {
-          await _addColumnIfMissing(db, 'chats_cache', 'last_msg_status', 'TEXT');
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'last_msg_status',
+            'TEXT',
+          );
         }
         if (oldVersion < 13) {
           await _addColumnIfMissing(
-            db, 'messages', 'deleted', 'INTEGER NOT NULL DEFAULT 0',
+            db,
+            'messages',
+            'deleted',
+            'INTEGER NOT NULL DEFAULT 0',
           );
         }
         if (oldVersion < 14) {
           await _addColumnIfMissing(
-            db, 'chats_cache', 'in_list', 'INTEGER NOT NULL DEFAULT 1',
+            db,
+            'chats_cache',
+            'in_list',
+            'INTEGER NOT NULL DEFAULT 1',
           );
         }
         if (oldVersion < 15) {
@@ -249,8 +267,16 @@ class AppDatabase {
         }
         if (oldVersion < 16) {
           await _addColumnIfMissing(
-            db, 'chats_cache', 'last_msg_elements', 'TEXT',
+            db,
+            'chats_cache',
+            'last_msg_elements',
+            'TEXT',
           );
+        }
+        if (oldVersion < 17) {
+          await db.execute(_chatParticipantsSchema);
+          await _createChatParticipantsIndex(db);
+          await _backfillChatParticipants(db);
         }
       },
     );
@@ -277,7 +303,9 @@ class AppDatabase {
     await db.execute(_chatsCacheSchema);
     await db.execute(_contactsSchema);
     await db.execute(_messagesSchema);
+    await db.execute(_chatParticipantsSchema);
     await _createIndexes(db);
+    await _createChatParticipantsIndex(db);
   }
 
   static Future<void> _addColumnIfMissing(
@@ -302,6 +330,51 @@ class AppDatabase {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_contacts_account ON contacts(account_id)',
     );
+  }
+
+  static Future<void> _createChatParticipantsIndex(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_chat_participants_lookup '
+      'ON chat_participants(account_id, participant_id, chat_id)',
+    );
+  }
+
+  static List<int> _participantIdsFromRaw(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return const [];
+      final ids = <int>[];
+      for (final key in decoded.keys) {
+        final id = key is int ? key : int.tryParse(key.toString());
+        if (id != null) ids.add(id);
+      }
+      return ids;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> _backfillChatParticipants(Database db) async {
+    final chats = await db.query(
+      'chats_cache',
+      columns: ['id', 'account_id', 'participants'],
+      where: "type = 'DIALOG'",
+    );
+    final batch = db.batch();
+    for (final chat in chats) {
+      final accountId = chat['account_id'];
+      final chatId = chat['id'];
+      if (accountId is! int || chatId is! int) continue;
+      for (final pid in _participantIdsFromRaw(chat['participants'])) {
+        batch.insert('chat_participants', {
+          'account_id': accountId,
+          'chat_id': chatId,
+          'participant_id': pid,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    }
+    await batch.commit(noResult: true);
   }
 
   static const _contactsSchema = '''
@@ -357,6 +430,17 @@ class AppDatabase {
     )
   ''';
 
+  static const _chatParticipantsSchema = '''
+    CREATE TABLE chat_participants (
+      account_id     INTEGER NOT NULL,
+      chat_id        INTEGER NOT NULL,
+      participant_id INTEGER NOT NULL,
+      PRIMARY KEY (account_id, chat_id, participant_id),
+      FOREIGN KEY (chat_id, account_id)
+        REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
+    )
+  ''';
+
   static const _messagesSchema = '''
     CREATE TABLE messages (
       id         TEXT    NOT NULL,
@@ -374,7 +458,10 @@ class AppDatabase {
     )
   ''';
 
-  static Future<void> saveProfile(ProfileData profile, {bool isActive = true}) async {
+  static Future<void> saveProfile(
+    ProfileData profile, {
+    bool isActive = true,
+  }) async {
     final db = await _instance;
     final row = profile.toDbRow(isActive: isActive);
     final cols = row.keys.toList();
@@ -524,7 +611,8 @@ class AppDatabase {
           .where((c) => c != 'id' && c != 'account_id')
           .map((c) => '$c = excluded.$c')
           .join(', ');
-      final sql = 'INSERT INTO chats_cache (${cols.join(', ')}) '
+      final sql =
+          'INSERT INTO chats_cache (${cols.join(', ')}) '
           'VALUES ($placeholders) '
           'ON CONFLICT(id, account_id) DO UPDATE SET $updates';
       await db.transaction((txn) async {
@@ -533,13 +621,35 @@ class AppDatabase {
           batch.rawInsert(sql, cols.map((c) => row[c]).toList());
         }
         await batch.commit(noResult: true);
+        for (final row in rows) {
+          if (!row.containsKey('participants')) continue;
+          if (row['type'] != 'DIALOG') continue;
+          final accountId = row['account_id'];
+          final chatId = row['id'];
+          if (accountId is! int || chatId is! int) continue;
+          await txn.delete(
+            'chat_participants',
+            where: 'account_id = ? AND chat_id = ?',
+            whereArgs: [accountId, chatId],
+          );
+          for (final pid in _participantIdsFromRaw(row['participants'])) {
+            await txn.insert('chat_participants', {
+              'account_id': accountId,
+              'chat_id': chatId,
+              'participant_id': pid,
+            }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }
+        }
       });
     } catch (e) {
       logger.e("Ошибка при сохранении чата: $e");
     }
   }
 
-  static Future<List<Map<String, dynamic>>> loadChat(int accountId, int chatId) async {
+  static Future<List<Map<String, dynamic>>> loadChat(
+    int accountId,
+    int chatId,
+  ) async {
     final db = await _instance;
     return db.query(
       'chats_cache',
@@ -548,7 +658,7 @@ class AppDatabase {
       orderBy: 'last_event_time DESC',
     );
   }
-  
+
   static Future<List<Map<String, dynamic>>> loadChats(int accountId) async {
     final db = await _instance;
     return db.query(
@@ -575,20 +685,25 @@ class AppDatabase {
     return (result.first['total'] as int?) ?? 0;
   }
 
-  static Future<int?> findDialogChatByParticipant(int accountId, int contactId) async {
+  static Future<int?> findDialogChatByParticipant(
+    int accountId,
+    int contactId,
+  ) async {
     final db = await _instance;
-    final rows = await db.query(
-      'chats_cache',
-      columns: ['id'],
-      where: "account_id = ? AND type = 'DIALOG' AND participants LIKE ?",
-      whereArgs: [accountId, '%"$contactId":%'],
-      limit: 1,
+    final rows = await db.rawQuery(
+      'SELECT p.chat_id AS id FROM chat_participants p '
+      'JOIN chats_cache c ON c.id = p.chat_id AND c.account_id = p.account_id '
+      "WHERE p.account_id = ? AND p.participant_id = ? AND c.type = 'DIALOG' "
+      'LIMIT 1',
+      [accountId, contactId],
     );
     if (rows.isEmpty) return null;
     return rows.first['id'] as int?;
   }
 
-  static Future<List<Map<String, dynamic>>> loadDialogChats(int accountId) async {
+  static Future<List<Map<String, dynamic>>> loadDialogChats(
+    int accountId,
+  ) async {
     final db = await _instance;
     return db.query(
       'chats_cache',
@@ -597,8 +712,10 @@ class AppDatabase {
     );
   }
 
-  static String _escapeLike(String value) =>
-      value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+  static String _escapeLike(String value) => value
+      .replaceAll('\\', '\\\\')
+      .replaceAll('%', '\\%')
+      .replaceAll('_', '\\_');
 
   static Future<List<Map<String, dynamic>>> searchContacts(
     int accountId,
@@ -611,7 +728,8 @@ class AppDatabase {
     final like = '%${_escapeLike(term)}%';
     return db.query(
       'contacts',
-      where: 'account_id = ? AND '
+      where:
+          'account_id = ? AND '
           "(first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
           "OR CAST(phone AS TEXT) LIKE ? ESCAPE '\\')",
       whereArgs: [accountId, like, like, like],

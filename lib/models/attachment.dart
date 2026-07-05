@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../core/utils/parse.dart';
+
 enum AttachmentType {
   photo,
   video,
@@ -13,6 +15,8 @@ enum AttachmentType {
   share,
   call,
   inlineKeyboard,
+  forward,
+  unknown,
 }
 
 String? decodeAttachPreview(dynamic raw) {
@@ -128,7 +132,6 @@ class VideoAttachment extends MessageAttachment {
   final int? duration;
   final int? size;
 
-  /// 0 — обычное видео, 1 — видеосообщение-кружок.
   final int? videoType;
 
   bool get isNote => videoType == 1;
@@ -307,7 +310,8 @@ class StickerAttachment extends MessageAttachment {
       previewData: decodeAttachPreview(map['previewData']),
       baseUrl: (map['url'] ?? map['baseUrl'])?.toString(),
       stickerId: map['stickerId']?.toString(),
-      stickerPackId: map['setId']?.toString() ?? map['stickerPackId']?.toString(),
+      stickerPackId:
+          map['setId']?.toString() ?? map['stickerPackId']?.toString(),
       lottieUrl: map['lottieUrl']?.toString(),
       width: map['width'] as int?,
       height: map['height'] as int?,
@@ -358,7 +362,9 @@ class ContactAttachment extends MessageAttachment {
       lastName: map['lastName']?.toString(),
       phoneNumber: map['phoneNumber']?.toString(),
       photoUrl: map['photoUrl']?.toString(),
-      contactId: map['contactId'] is int ? map['contactId'] as int : int.tryParse(map['contactId']?.toString() ?? ''),
+      contactId: map['contactId'] is int
+          ? map['contactId'] as int
+          : int.tryParse(map['contactId']?.toString() ?? ''),
       name: map['name']?.toString(),
     );
   }
@@ -448,8 +454,10 @@ class ControlAttachment extends MessageAttachment {
       baseUrl: map['baseUrl']?.toString(),
       event: map['event']?.toString(),
       title: title,
-      userIds: (map['userIds'] as List?)?.map((e) => e is int ? e : int.tryParse(e?.toString() ?? '') ?? 0).toList(),
-      userId: map['userId'] is int ? map['userId'] as int : int.tryParse(map['userId']?.toString() ?? ''),
+      userIds: map['userIds'] is List ? parseIntList(map['userIds']) : null,
+      userId: map['userId'] is int
+          ? map['userId'] as int
+          : int.tryParse(map['userId']?.toString() ?? ''),
     );
   }
 
@@ -469,10 +477,8 @@ class PollAttachment extends MessageAttachment {
   final int pollId;
   final String? title;
 
-  const PollAttachment({
-    required this.pollId,
-    this.title,
-  }) : super(type: AttachmentType.poll);
+  const PollAttachment({required this.pollId, this.title})
+    : super(type: AttachmentType.poll);
 
   factory PollAttachment.fromMap(Map<String, dynamic> map) {
     final id = map['pollId'] ?? map['id'];
@@ -522,10 +528,7 @@ class CallAttachment extends MessageAttachment {
       hangupType: map['hangupType']?.toString(),
       conversationId: map['conversationId']?.toString(),
       joinLink: map['joinLink']?.toString(),
-      contactIds: (map['contactIds'] as List?)
-              ?.map((e) => e is int ? e : int.tryParse(e?.toString() ?? '') ?? 0)
-              .toList() ??
-          const [],
+      contactIds: parseIntList(map['contactIds']),
     );
   }
 
@@ -631,10 +634,8 @@ class InlineKeyboardAttachment extends MessageAttachment {
   final String? callbackId;
   final List<List<InlineKeyboardButton>> rows;
 
-  const InlineKeyboardAttachment({
-    this.callbackId,
-    required this.rows,
-  }) : super(type: AttachmentType.inlineKeyboard);
+  const InlineKeyboardAttachment({this.callbackId, required this.rows})
+    : super(type: AttachmentType.inlineKeyboard);
 
   bool get isEmpty => rows.every((row) => row.isEmpty);
 
@@ -667,9 +668,7 @@ class InlineKeyboardAttachment extends MessageAttachment {
     '_type': 'INLINE_KEYBOARD',
     if (callbackId != null) 'callbackId': callbackId,
     'keyboard': {
-      'buttons': rows
-          .map((row) => row.map((b) => b.toMap()).toList())
-          .toList(),
+      'buttons': rows.map((row) => row.map((b) => b.toMap()).toList()).toList(),
     },
   };
 }
@@ -695,7 +694,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
     this.originalChatId,
     this.originalAttachments,
     this.originalContact,
-  }) : super(type: AttachmentType.photo);
+  }) : super(type: AttachmentType.forward);
 
   factory ForwardedMessageAttachment.fromMap(Map<String, dynamic> map) {
     final linkRaw = map['link'];
@@ -764,7 +763,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
 class UnknownAttachment extends MessageAttachment {
   final Map<String, dynamic> rawData;
 
-  const UnknownAttachment(this.rawData) : super(type: AttachmentType.photo);
+  const UnknownAttachment(this.rawData) : super(type: AttachmentType.unknown);
 
   @override
   Map<String, dynamic> toMap() => rawData;

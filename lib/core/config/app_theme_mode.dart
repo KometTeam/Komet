@@ -1,37 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 enum AppThemeMode { system, light, dark, schedule }
 
 class AppThemeModeConfig {
   static const prefKey = 'app_theme_mode';
-  static final ValueNotifier<AppThemeMode> current = ValueNotifier(
-    AppThemeMode.system,
+
+  static final _setting = PersistedEnum<AppThemeMode>(
+    prefKey: prefKey,
+    defaultValue: AppThemeMode.system,
+    encode: (mode) => mode.name,
+    decode: _parse,
   );
 
-  static Future<AppThemeMode> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return _parse(prefs.getString(prefKey));
-  }
+  static ValueNotifier<AppThemeMode> get current => _setting.current;
 
-  static Future<void> save(AppThemeMode mode) async {
-    current.value = mode;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(prefKey, mode.name);
-  }
+  static Future<AppThemeMode> load() => _setting.load();
 
-  static AppThemeMode _parse(String? val) {
-    switch (val) {
-      case 'light':
-        return AppThemeMode.light;
-      case 'dark':
-        return AppThemeMode.dark;
-      case 'schedule':
-        return AppThemeMode.schedule;
-      default:
-        return AppThemeMode.system;
-    }
-  }
+  static Future<void> save(AppThemeMode mode) => _setting.save(mode);
+
+  static AppThemeMode _parse(String? val) =>
+      enumFromName(AppThemeMode.values, val, AppThemeMode.system);
 
   static String label(AppThemeMode mode) {
     switch (mode) {

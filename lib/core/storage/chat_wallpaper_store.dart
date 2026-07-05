@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../utils/logger.dart';
+import 'per_chat_json_store.dart';
 
 enum ChatWallpaperKind { image, theme }
 
@@ -39,18 +40,18 @@ class ChatWallpaper {
     this.blur = false,
     this.motion = false,
     this.offsetX = 0,
-  })  : kind = ChatWallpaperKind.image,
-        imagePath = path,
-        themeId = null;
+  }) : kind = ChatWallpaperKind.image,
+       imagePath = path,
+       themeId = null;
 
   const ChatWallpaper.theme(String id)
-      : kind = ChatWallpaperKind.theme,
-        imagePath = null,
-        themeId = id,
-        dim = 0,
-        blur = false,
-        motion = false,
-        offsetX = 0;
+    : kind = ChatWallpaperKind.theme,
+      imagePath = null,
+      themeId = id,
+      dim = 0,
+      blur = false,
+      motion = false,
+      offsetX = 0;
 
   bool get isImage => kind == ChatWallpaperKind.image;
 
@@ -82,42 +83,19 @@ class ChatWallpaper {
   }
 }
 
-class ChatWallpaperStore {
-  ChatWallpaperStore._();
+class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
+  ChatWallpaperStore._()
+    : super(
+        prefsKey: 'chat_wallpapers',
+        fromJson: ChatWallpaper._fromJson,
+        toJson: (value) => value._toJson(),
+      );
 
   static final ChatWallpaperStore instance = ChatWallpaperStore._();
 
-  static const String _prefsKey = 'chat_wallpapers';
   static const String _dirName = 'chat_wallpapers';
 
-  final Map<String, ChatWallpaper> _wallpapers = {};
-  final ValueNotifier<int> revision = ValueNotifier(0);
-  bool _loaded = false;
-
-  String _key(int accountId, int chatId) => '$accountId/$chatId';
-
-  Future<void> load() async {
-    if (_loaded) return;
-    _loaded = true;
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey);
-    if (raw == null) return;
-    try {
-      final map = jsonDecode(raw);
-      if (map is Map) {
-        map.forEach((k, v) {
-          if (k is! String) return;
-          final wp = ChatWallpaper._fromJson(v);
-          if (wp != null) _wallpapers[k] = wp;
-        });
-      }
-    } catch (_) {}
-  }
-
-  ChatWallpaper? get(int accountId, int chatId) {
-    if (accountId == 0) return null;
-    return _wallpapers[_key(accountId, chatId)];
-  }
+  ChatWallpaper? get(int accountId, int chatId) => read(accountId, chatId);
 
   Future<ChatWallpaper?> setImage(
     int accountId,
@@ -139,7 +117,7 @@ class ChatWallpaperStore {
       motion: settings.motion,
       offsetX: settings.offsetX,
     );
-    await _store(accountId, chatId, wallpaper);
+    await write(accountId, chatId, wallpaper);
     return wallpaper;
   }
 
@@ -149,36 +127,20 @@ class ChatWallpaperStore {
     String themeId,
   ) async {
     final wallpaper = ChatWallpaper.theme(themeId);
-    await _store(accountId, chatId, wallpaper);
+    await write(accountId, chatId, wallpaper);
     return wallpaper;
   }
 
-  Future<void> clear(int accountId, int chatId) => _store(accountId, chatId, null);
+  Future<void> clear(int accountId, int chatId) =>
+      write(accountId, chatId, null);
 
-  Future<void> _store(
-    int accountId,
-    int chatId,
-    ChatWallpaper? wallpaper,
-  ) async {
-    if (accountId == 0) return;
-    final key = _key(accountId, chatId);
-    final previous = _wallpapers[key];
+  @override
+  void onBeforeWrite(String key, ChatWallpaper? previous, ChatWallpaper? next) {
     if (previous != null &&
         previous.isImage &&
-        previous.imagePath != wallpaper?.imagePath) {
+        previous.imagePath != next?.imagePath) {
       unawaited(_deleteImage(previous.imagePath));
     }
-    if (wallpaper == null) {
-      if (previous == null) return;
-      _wallpapers.remove(key);
-    } else {
-      _wallpapers[key] = wallpaper;
-    }
-    revision.value++;
-    final prefs = await SharedPreferences.getInstance();
-    final serializable = <String, dynamic>{};
-    _wallpapers.forEach((k, v) => serializable[k] = v._toJson());
-    await prefs.setString(_prefsKey, jsonEncode(serializable));
   }
 
   Future<void> _deleteImage(String? path) async {
@@ -186,6 +148,8 @@ class ChatWallpaperStore {
     try {
       final file = File(path);
       if (await file.exists()) await file.delete();
-    } catch (_) {}
+    } catch (e) {
+      logger.w('wallpaper image delete failed: $e');
+    }
   }
 }

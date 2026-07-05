@@ -20,8 +20,10 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/utils/format.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/sheet_helpers.dart';
 import 'komet_hub.dart';
 
 const Color _kEndRed = Color(0xFFE5484D);
@@ -49,8 +51,7 @@ class CallScreen extends StatefulWidget {
   State<CallScreen> createState() => _CallScreenState();
 }
 
-class _CallScreenState extends State<CallScreen>
-    with TickerProviderStateMixin {
+class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   CallSession? _session;
   StreamSubscription<CallSessionState>? _stateSub;
   StreamSubscription<void>? _canceledSub;
@@ -82,8 +83,7 @@ class _CallScreenState extends State<CallScreen>
 
   final Map<int, _PeerInfo> _peerInfo = {};
 
-  bool get _isGroup =>
-      widget.isGroup || (_session?.participantCount ?? 0) > 2;
+  bool get _isGroup => widget.isGroup || (_session?.participantCount ?? 0) > 2;
 
   bool get _tileVideoReady {
     if (_session?.topology == 'SERVER') return false;
@@ -133,8 +133,8 @@ class _CallScreenState extends State<CallScreen>
     if (name == null || avatar == null) {
       final info = await ContactInfoFetch.get(id);
       if (info != null) {
-        name ??= _contactName(info);
-        avatar ??= info['baseUrl'] as String?;
+        name ??= info.displayName;
+        avatar ??= info.avatarUrl;
         if (name != null) ContactCache.put(id, name);
         ContactCache.putAvatar(id, avatar);
       }
@@ -144,25 +144,6 @@ class _CallScreenState extends State<CallScreen>
       if (name != null && name.isNotEmpty) _name = name;
       if (avatar != null && avatar.isNotEmpty) _avatarUrl = avatar;
     });
-  }
-
-  String? _contactName(Map<String, dynamic> info) {
-    final names = info['names'];
-    if (names is! List) return null;
-    Map? pick;
-    for (final n in names) {
-      if (n is! Map) continue;
-      pick ??= n;
-      if (n['type'] == 'ONEME') {
-        pick = n;
-        break;
-      }
-    }
-    if (pick == null) return null;
-    final first = (pick['firstName'] as String?) ?? '';
-    final last = pick['lastName'] as String?;
-    final full = (last != null && last.isNotEmpty) ? '$first $last' : first;
-    return full.trim().isEmpty ? null : full.trim();
   }
 
   Future<void> _initRenderer() async {
@@ -243,7 +224,8 @@ class _CallScreenState extends State<CallScreen>
 
   void _showKometBadge() {
     if (!mounted) return;
-    showCustomNotification(context, 'Этот человек использует Komet! :3');
+    final l10n = AppLocalizations.of(context)!;
+    showCustomNotification(context, l10n.callKometDetectedNotification);
   }
 
   void _onChatMessage(CallChatMessage message) {
@@ -276,8 +258,8 @@ class _CallScreenState extends State<CallScreen>
     if (name == null) {
       final info = await ContactInfoFetch.get(id);
       if (info != null) {
-        name = _contactName(info);
-        avatar ??= info['baseUrl'] as String?;
+        name = info.displayName;
+        avatar ??= info.avatarUrl;
         if (name != null) ContactCache.put(id, name);
         ContactCache.putAvatar(id, avatar);
       }
@@ -398,9 +380,7 @@ class _CallScreenState extends State<CallScreen>
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: kSheetShape,
       builder: (_) => Theme(
         data: Theme.of(context).copyWith(colorScheme: cs),
         child: _CallInfoSheet(
@@ -489,6 +469,7 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _buildGroupBody(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final participants = _session?.participants ?? const <CallParticipant>[];
     return SafeArea(
       child: Column(
@@ -499,7 +480,7 @@ class _CallScreenState extends State<CallScreen>
           const SizedBox(height: 8),
           Expanded(
             child: participants.isEmpty
-                ? Center(child: _statusWithDots(cs, 'Соединение'))
+                ? Center(child: _statusWithDots(cs, l10n.callStatusConnecting))
                 : _participantGrid(cs, participants),
           ),
           const SizedBox(height: 12),
@@ -511,13 +492,15 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _groupHeader(ColorScheme cs, int count) {
+    final l10n = AppLocalizations.of(context)!;
     final String subtitle;
     if (count == 0) {
-      subtitle = 'Соединение…';
+      subtitle = l10n.callGroupConnecting;
     } else if (count <= 1) {
-      subtitle = 'Ожидание участников…';
+      subtitle = l10n.callGroupWaitingParticipants;
     } else {
-      subtitle = _participantsLabel(count);
+      subtitle =
+          '$count ${pluralRu(count, 'участник', 'участника', 'участников')}';
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -549,8 +532,8 @@ class _CallScreenState extends State<CallScreen>
     final cols = ps.length <= 1
         ? 1
         : ps.length <= 4
-            ? 2
-            : 3;
+        ? 2
+        : 3;
     return GridView.count(
       crossAxisCount: cols,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
@@ -562,11 +545,14 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _participantTile(ColorScheme cs, CallParticipant p) {
+    final l10n = AppLocalizations.of(context)!;
     final ext = p.externalId;
     final info = ext != null ? _peerInfo[ext] : null;
     final name = p.isSelf
-        ? 'Вы'
-        : (info?.name?.isNotEmpty == true ? info!.name! : 'Участник');
+        ? l10n.callParticipantYou
+        : (info?.name?.isNotEmpty == true
+              ? info!.name!
+              : l10n.callParticipantFallback);
     final url = p.isSelf ? _avatarUrl : info?.avatar;
     final muted = p.isSelf ? _isMuted : !p.audioEnabled;
     final speaking = !muted && _session?.isSpeaking(p.id) == true;
@@ -577,8 +563,9 @@ class _CallScreenState extends State<CallScreen>
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
-      borderSide:
-          speaking ? const BorderSide(color: _kAcceptGreen, width: 2.5) : null,
+      borderSide: speaking
+          ? const BorderSide(color: _kAcceptGreen, width: 2.5)
+          : null,
       padding: EdgeInsets.all(showVideo ? 0 : 12),
       child: showVideo
           ? _videoTile(cs, name, muted, p.handRaised, p.screenSharing)
@@ -586,8 +573,14 @@ class _CallScreenState extends State<CallScreen>
     );
   }
 
-  Widget _avatarTile(ColorScheme cs, String name, String? url, bool muted,
-      bool hand, bool screen) {
+  Widget _avatarTile(
+    ColorScheme cs,
+    String name,
+    String? url,
+    bool muted,
+    bool hand,
+    bool screen,
+  ) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -607,22 +600,34 @@ class _CallScreenState extends State<CallScreen>
                         Positioned(
                           top: -2,
                           right: -2,
-                          child: _tileBadge(cs, Symbols.front_hand,
-                              cs.tertiaryContainer, cs.onTertiaryContainer),
+                          child: _tileBadge(
+                            cs,
+                            Symbols.front_hand,
+                            cs.tertiaryContainer,
+                            cs.onTertiaryContainer,
+                          ),
                         ),
                       if (screen)
                         Positioned(
                           top: -2,
                           left: -2,
-                          child: _tileBadge(cs, Symbols.screen_share,
-                              cs.primaryContainer, cs.onPrimaryContainer),
+                          child: _tileBadge(
+                            cs,
+                            Symbols.screen_share,
+                            cs.primaryContainer,
+                            cs.onPrimaryContainer,
+                          ),
                         ),
                       if (muted)
                         Positioned(
                           bottom: -2,
                           right: -2,
-                          child: _tileBadge(cs, Symbols.mic_off,
-                              cs.surfaceContainerHighest, cs.onSurfaceVariant),
+                          child: _tileBadge(
+                            cs,
+                            Symbols.mic_off,
+                            cs.surfaceContainerHighest,
+                            cs.onSurfaceVariant,
+                          ),
                         ),
                     ],
                   ),
@@ -647,7 +652,12 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _videoTile(
-      ColorScheme cs, String name, bool muted, bool hand, bool screen) {
+    ColorScheme cs,
+    String name,
+    bool muted,
+    bool hand,
+    bool screen,
+  ) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Stack(
@@ -666,8 +676,12 @@ class _CallScreenState extends State<CallScreen>
                 if (muted)
                   Padding(
                     padding: const EdgeInsets.only(right: 4),
-                    child: Icon(Symbols.mic_off,
-                        size: 16, color: Colors.white, fill: 1),
+                    child: Icon(
+                      Symbols.mic_off,
+                      size: 16,
+                      color: Colors.white,
+                      fill: 1,
+                    ),
                   ),
                 Flexible(
                   child: Text(
@@ -689,15 +703,23 @@ class _CallScreenState extends State<CallScreen>
             Positioned(
               top: 8,
               right: 8,
-              child: _tileBadge(cs, Symbols.front_hand, cs.tertiaryContainer,
-                  cs.onTertiaryContainer),
+              child: _tileBadge(
+                cs,
+                Symbols.front_hand,
+                cs.tertiaryContainer,
+                cs.onTertiaryContainer,
+              ),
             ),
           if (screen)
             Positioned(
               top: 8,
               left: 8,
-              child: _tileBadge(cs, Symbols.screen_share, cs.primaryContainer,
-                  cs.onPrimaryContainer),
+              child: _tileBadge(
+                cs,
+                Symbols.screen_share,
+                cs.primaryContainer,
+                cs.onPrimaryContainer,
+              ),
             ),
         ],
       ),
@@ -714,16 +736,6 @@ class _CallScreenState extends State<CallScreen>
       ),
       child: Icon(icon, size: 14, color: fg, fill: 1),
     );
-  }
-
-  String _participantsLabel(int n) {
-    final mod10 = n % 10;
-    final mod100 = n % 100;
-    if (mod10 == 1 && mod100 != 11) return '$n участник';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-      return '$n участника';
-    }
-    return '$n участников';
   }
 
   Widget _buildBody(
@@ -774,7 +786,9 @@ class _CallScreenState extends State<CallScreen>
             ),
           ),
         if (t > 0.001)
-          IgnorePointer(child: Opacity(opacity: t, child: _videoScrim(cs))),
+          IgnorePointer(
+            child: Opacity(opacity: t, child: _videoScrim(cs)),
+          ),
         SafeArea(
           child: Column(
             children: [
@@ -833,7 +847,9 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _buildTopBar(ColorScheme cs, double t) {
-    final showTimer = t > 0.001 &&
+    final l10n = AppLocalizations.of(context)!;
+    final showTimer =
+        t > 0.001 &&
         _session != null &&
         _state == CallSessionState.active &&
         _session!.mediaConnected;
@@ -845,7 +861,7 @@ class _CallScreenState extends State<CallScreen>
             alignment: Alignment.centerLeft,
             child: IconButton(
               onPressed: () => Navigator.of(context).maybePop(),
-              tooltip: 'Свернуть',
+              tooltip: l10n.callTooltipMinimize,
               icon: Icon(
                 Symbols.close_fullscreen,
                 color: cs.onSurface,
@@ -863,8 +879,7 @@ class _CallScreenState extends State<CallScreen>
                   if (_session?.peerIsKomet == true)
                     IconButton(
                       onPressed: _openKometHub,
-                      tooltip: 'Komet',
-                      //TODO: Бля иконку кометы в код дайтtе' мориарти 00. ал.о
+                      tooltip: l10n.callTooltipKometHub,
                       icon: Icon(
                         Symbols.auto_awesome,
                         color: cs.primary,
@@ -874,7 +889,7 @@ class _CallScreenState extends State<CallScreen>
                     ),
                   IconButton(
                     onPressed: _showInfoSheet,
-                    tooltip: 'О звонке',
+                    tooltip: l10n.callInfoTitle,
                     icon: Icon(
                       Symbols.info,
                       color: cs.onSurface,
@@ -907,13 +922,13 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget? _peerStateBar(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final session = _session;
     if (session == null) return null;
     final pills = <Widget>[
-      if (session.peerMuted)
-        _statePill(cs, Symbols.mic_off, 'Микрофон выключен'),
+      if (session.peerMuted) _statePill(cs, Symbols.mic_off, l10n.callPeerMicOff),
       if (session.peerVideo)
-        _statePill(cs, Symbols.videocam, 'Камера включена'),
+        _statePill(cs, Symbols.videocam, l10n.callPeerCameraOn),
     ];
     if (pills.isEmpty) return null;
     return Wrap(
@@ -949,12 +964,15 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _buildAvatar(ColorScheme cs) {
-    final avatarSize =
-        (MediaQuery.of(context).size.shortestSide * 0.42).clamp(128.0, 172.0);
+    final avatarSize = (MediaQuery.of(context).size.shortestSide * 0.42).clamp(
+      128.0,
+      172.0,
+    );
     return _avatarCircle(avatarSize, cs);
   }
 
-  String get _displayName => _name.isEmpty ? 'Неизвестный' : _name;
+  String get _displayName =>
+      _name.isEmpty ? AppLocalizations.of(context)!.callUnknownName : _name;
 
   Widget _avatarCircle(double size, ColorScheme cs) =>
       _circleAvatar(size, cs, name: _displayName, url: _avatarUrl);
@@ -1033,11 +1051,12 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _buildStatus(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     if (!_incomingPending && _state == CallSessionState.active) {
       final session = _session;
       if (session == null) return const SizedBox.shrink();
       if (!session.mediaConnected) {
-        return _statusWithDots(cs, 'Соединение');
+        return _statusWithDots(cs, l10n.callStatusConnecting);
       }
       return _ElapsedText(
         session: session,
@@ -1052,7 +1071,7 @@ class _CallScreenState extends State<CallScreen>
 
     if (_incomingPending) {
       return Text(
-        'Входящий звонок',
+        l10n.callIncoming,
         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
       );
     }
@@ -1060,13 +1079,13 @@ class _CallScreenState extends State<CallScreen>
     String text;
     switch (_state) {
       case CallSessionState.connecting:
-        text = 'Соединение';
+        text = l10n.callStatusConnecting;
       case CallSessionState.ringing:
-        text = 'Вызов';
+        text = l10n.callStatusRinging;
       case CallSessionState.active:
         text = '';
       case CallSessionState.ended:
-        text = 'Звонок завершён';
+        text = l10n.callStatusEnded;
     }
 
     return _statusWithDots(cs, text);
@@ -1076,10 +1095,7 @@ class _CallScreenState extends State<CallScreen>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          text,
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
-        ),
+        Text(text, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
         const SizedBox(width: 4),
         _CallingDots(animation: _dotsController, color: cs.onSurfaceVariant),
       ],
@@ -1092,6 +1108,7 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _incomingControls(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 56),
       child: Row(
@@ -1099,14 +1116,14 @@ class _CallScreenState extends State<CallScreen>
         children: [
           _CallButton(
             icon: Symbols.call_end,
-            label: 'Отклонить',
+            label: l10n.callDecline,
             background: _kEndRed,
             foreground: Colors.white,
             onTap: _decline,
           ),
           _CallButton(
             icon: Symbols.call,
-            label: 'Принять',
+            label: l10n.callAccept,
             background: _kAcceptGreen,
             foreground: Colors.white,
             onTap: _accept,
@@ -1117,6 +1134,7 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _activeControls(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final video = _session?.localVideo == true;
     final screen = _session?.localScreen == true;
     return Padding(
@@ -1126,14 +1144,14 @@ class _CallScreenState extends State<CallScreen>
         children: [
           _CallButton(
             icon: _isSpeaker ? Symbols.volume_up : Symbols.volume_down,
-            label: 'Динамик',
+            label: l10n.callSpeaker,
             background: _isSpeaker ? cs.primary : cs.surfaceContainerHighest,
             foreground: _isSpeaker ? cs.onPrimary : cs.onSurface,
             onTap: _toggleSpeaker,
           ),
           _CallButton(
             icon: video ? Symbols.videocam : Symbols.videocam_off,
-            label: 'Видео',
+            label: l10n.callVideoLabel,
             background: video ? cs.primary : cs.surfaceContainerHighest,
             foreground: video ? cs.onPrimary : cs.onSurface,
             busy: _videoBusy,
@@ -1141,7 +1159,7 @@ class _CallScreenState extends State<CallScreen>
           ),
           _CallButton(
             icon: Symbols.screen_share,
-            label: 'Экран',
+            label: l10n.callScreenLabel,
             background: screen ? cs.primary : cs.surfaceContainerHighest,
             foreground: screen ? cs.onPrimary : cs.onSurface,
             busy: _videoBusy,
@@ -1149,14 +1167,14 @@ class _CallScreenState extends State<CallScreen>
           ),
           _CallButton(
             icon: _isMuted ? Symbols.mic_off : Symbols.mic,
-            label: _isMuted ? 'Вкл. звук' : 'Выкл. звук',
+            label: _isMuted ? l10n.callUnmute : l10n.callMute,
             background: _isMuted ? cs.primary : cs.surfaceContainerHighest,
             foreground: _isMuted ? cs.onPrimary : cs.onSurface,
             onTap: _toggleMute,
           ),
           _CallButton(
             icon: Symbols.call_end,
-            label: 'Завершить',
+            label: l10n.callEndButton,
             background: _kEndRed,
             foreground: Colors.white,
             onTap: _hangup,
@@ -1320,6 +1338,7 @@ class _CallInfoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final info = session?.info;
 
@@ -1328,41 +1347,64 @@ class _CallInfoSheet extends StatelessWidget {
       if (v != null && v.isNotEmpty) rows.add([k, v]);
     }
 
-    add('Клиент', _clientLine(info));
-    add('Платформа', info?.peerPlatform);
-    add('Страна', incoming?.country);
+    add(l10n.callInfoClient, _clientLine(info));
+    add(l10n.callInfoPlatform, info?.peerPlatform);
+    add(l10n.callInfoCountry, incoming?.country);
     final isContact = incoming?.isContact;
-    if (isContact != null) add('В контактах', isContact ? 'да' : 'нет');
-    add('IP собеседника', info?.peerIp);
-    add('Сеть собеседника', info?.peerNetwork);
-    add('Путь соединения', info?.path);
-    add('Кодек', info?.audioCodec);
-    add('Сервер', info?.region);
-    add('Топология', info?.topology);
+    if (isContact != null) {
+      add(l10n.callInfoInContacts, isContact ? l10n.callValueYes : l10n.callValueNo);
+    }
+    add(l10n.callInfoPeerIp, info?.peerIp);
+    add(l10n.callInfoPeerNetwork, info?.peerNetwork);
+    add(l10n.callInfoPath, info?.path);
+    add(l10n.callInfoCodec, info?.audioCodec);
+    add(l10n.callInfoServer, info?.region);
+    add(l10n.callInfoTopology, info?.topology);
     add('Conversation ID', info?.conversationId);
     if (info?.dtlsFingerprint != null) {
       add('DTLS', _shortFp(info!.dtlsFingerprint!));
     }
     if (session != null) {
-      add('Статус', session!.mediaConnected ? 'соединён' : 'соединение…');
-      add('Микрофон собеседника', session!.peerMuted ? 'выключен' : 'включён');
-      add('Камера собеседника', session!.peerVideo ? 'включена' : 'выключена');
+      add(
+        l10n.callInfoStatus,
+        session!.mediaConnected
+            ? l10n.callStatusValueConnected
+            : l10n.callStatusValueConnecting,
+      );
+      add(
+        l10n.callInfoPeerMic,
+        session!.peerMuted ? l10n.callMicValueOff : l10n.callMicValueOn,
+      );
+      add(
+        l10n.callInfoPeerCamera,
+        session!.peerVideo ? l10n.callCameraValueOn : l10n.callCameraValueOff,
+      );
     }
 
     final vtracks = renderer.srcObject?.getVideoTracks().length ?? 0;
-    add('Видео-дорожка', vtracks > 0 ? 'есть ($vtracks)' : 'нет');
+    add(
+      l10n.callInfoVideoTrack,
+      vtracks > 0
+          ? l10n.callInfoVideoTrackPresent(vtracks)
+          : l10n.callValueNo,
+    );
     final w = renderer.value.width.toInt();
     final h = renderer.value.height.toInt();
-    add('Размер видео', (w > 0 && h > 0) ? '$w×$h' : '—');
-    add('Отрисовка кадров', renderer.renderVideo ? 'да' : 'нет');
+    add(l10n.callInfoVideoSize, (w > 0 && h > 0) ? '$w×$h' : '—');
+    add(
+      l10n.callInfoFrameRendering,
+      renderer.renderVideo ? l10n.callValueYes : l10n.callValueNo,
+    );
 
     final badges = <Widget>[
-      _badge(cs, Symbols.lock, 'Зашифрован'),
-      _badge(cs, Symbols.call, 'Аудио'),
-      if (info?.record == true) _badge(cs, Symbols.radio_button_checked, 'Запись'),
+      _badge(cs, Symbols.lock, l10n.callBadgeEncrypted),
+      _badge(cs, Symbols.call, l10n.callBadgeAudio),
+      if (info?.record == true)
+        _badge(cs, Symbols.radio_button_checked, l10n.callBadgeRecording),
       if (info?.denoise == true)
-        _badge(cs, Symbols.noise_control_on, 'Шумоподавление'),
-      if (info?.animoji == true) _badge(cs, Symbols.mood, 'Анимодзи'),
+        _badge(cs, Symbols.noise_control_on, l10n.callBadgeNoiseSuppression),
+      if (info?.animoji == true)
+        _badge(cs, Symbols.mood, l10n.callBadgeAnimoji),
     ];
 
     return SafeArea(
@@ -1375,7 +1417,7 @@ class _CallInfoSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'О звонке',
+                l10n.callInfoTitle,
                 style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 20,
@@ -1393,7 +1435,7 @@ class _CallInfoSheet extends StatelessWidget {
               const SizedBox(height: 16),
               if (rows.isEmpty)
                 Text(
-                  'Данные появятся после соединения…',
+                  l10n.callInfoNoDataYet,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
               for (final r in rows)

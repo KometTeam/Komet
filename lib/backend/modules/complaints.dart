@@ -11,14 +11,15 @@ class ComplaintReason {
 class ComplaintsModule {
   static Map<int, List<ComplaintReason>>? _cache;
 
+  static void clear() => _cache = null;
+
   static Future<Map<int, List<ComplaintReason>>> fetchReasons(Api api) async {
     final cached = _cache;
     if (cached != null) return cached;
 
-    final response = await api.sendRequest(
-      Opcode.complainReasonsGet,
-      {'complainSync': 0},
-    );
+    final response = await api.sendRequest(Opcode.complainReasonsGet, {
+      'complainSync': 0,
+    });
     if (!response.isOk) return cached ?? const {};
 
     final payload = response.payload;

@@ -31,8 +31,7 @@ class RichMessageController extends TextEditingController {
     super.value = newValue;
   }
 
-  bool get hasFormatting =>
-      _intervals.values.any((list) => list.isNotEmpty);
+  bool get hasFormatting => _intervals.values.any((list) => list.isNotEmpty);
 
   void clearFormatting() {
     if (_intervals.isEmpty) return;
@@ -44,9 +43,9 @@ class RichMessageController extends TextEditingController {
     _intervals.clear();
     for (final range in ranges) {
       if (!composerFormats.contains(range.format)) continue;
-      _intervals.putIfAbsent(range.format, () => []).add(
-        _Interval(range.start, range.end),
-      );
+      _intervals
+          .putIfAbsent(range.format, () => [])
+          .add(_Interval(range.start, range.end));
     }
     for (final list in _intervals.values) {
       _normalize(list);
@@ -55,6 +54,10 @@ class RichMessageController extends TextEditingController {
   }
 
   List<Map<String, dynamic>> elementsForSend() {
+    return serializeFormatElements(_toFormatRanges());
+  }
+
+  List<FormatRange> _toFormatRanges() {
     final ranges = <FormatRange>[];
     _intervals.forEach((format, list) {
       for (final interval in list) {
@@ -67,7 +70,7 @@ class RichMessageController extends TextEditingController {
         );
       }
     });
-    return serializeFormatElements(ranges);
+    return ranges;
   }
 
   bool isFormatActive(TextFormat format) {
@@ -205,18 +208,7 @@ class RichMessageController extends TextEditingController {
       return TextSpan(style: baseStyle, text: content);
     }
 
-    final ranges = <FormatRange>[];
-    _intervals.forEach((format, list) {
-      for (final interval in list) {
-        ranges.add(
-          FormatRange(
-            format: format,
-            start: interval.start,
-            length: interval.end - interval.start,
-          ),
-        );
-      }
-    });
+    final ranges = _toFormatRanges();
 
     final baseColor = baseStyle.color;
     final quoteColor = baseColor?.withValues(alpha: 0.85);

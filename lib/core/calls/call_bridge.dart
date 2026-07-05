@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart';
 
+import '../utils/logger.dart';
 import 'call_controller.dart';
 
 class CallBridge {
@@ -26,14 +27,19 @@ class CallBridge {
   void init() {
     if (_started || !_android) return;
     _started = true;
-    _events.receiveBroadcastStream().listen(_handle, onError: (_) {});
+    _events.receiveBroadcastStream().listen(
+      _handle,
+      onError: (e) => logger.w('CallBridge.init: events stream error: $e'),
+    );
   }
 
   Future<void> checkInitialCall() async {
     if (!_android) return;
     try {
       _handle(await _method.invokeMethod<dynamic>('consumeInitialCall'));
-    } catch (_) {}
+    } catch (e) {
+      logger.w('CallBridge.checkInitialCall: $e');
+    }
   }
 
   void _handle(Object? event) {
@@ -52,7 +58,8 @@ class CallBridge {
     Object? decoded;
     try {
       decoded = jsonDecode(dataStr);
-    } catch (_) {
+    } catch (e) {
+      logger.w('CallBridge._handle: action=$action jsonDecode failed: $e');
       return;
     }
     if (decoded is! Map) return;
@@ -66,28 +73,35 @@ class CallBridge {
     if (!_android) return;
     try {
       await _method.invokeMethod<void>('notifyAccepted', {'caller': caller});
-    } catch (_) {}
+    } catch (e) {
+      logger.w('CallBridge.notifyAccepted: caller=$caller $e');
+    }
   }
 
   Future<void> notifyEnded() async {
     if (!_android) return;
     try {
       await _method.invokeMethod<void>('notifyEnded');
-    } catch (_) {}
+    } catch (e) {
+      logger.w('CallBridge.notifyEnded: $e');
+    }
   }
 
   Future<void> cancelIncoming() async {
     if (!_android) return;
     try {
       await _method.invokeMethod<void>('cancelIncoming');
-    } catch (_) {}
+    } catch (e) {
+      logger.w('CallBridge.cancelIncoming: $e');
+    }
   }
 
   Future<bool> canUseFullScreenIntent() async {
     if (!_android) return true;
     try {
       return await _method.invokeMethod<bool>('canUseFullScreenIntent') ?? true;
-    } catch (_) {
+    } catch (e) {
+      logger.w('CallBridge.canUseFullScreenIntent: $e');
       return true;
     }
   }
@@ -96,6 +110,8 @@ class CallBridge {
     if (!_android) return;
     try {
       await _method.invokeMethod<void>('openFullScreenIntentSettings');
-    } catch (_) {}
+    } catch (e) {
+      logger.w('CallBridge.openFullScreenIntentSettings: $e');
+    }
   }
 }

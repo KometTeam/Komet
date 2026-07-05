@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/utils/format.dart';
 import '../../main.dart' show stickersModule, messagesModule;
 import '../../models/sticker.dart';
 import '../screens/chats/chat_list_screen.dart';
 import 'custom_notification.dart';
+import 'small_spinner.dart';
 import 'sticker_image.dart';
 import 'sticker_peek.dart';
 
@@ -21,10 +23,8 @@ Future<void> showStickerPackSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _StickerPackSheet(
-      stickerId: stickerId,
-      knownSetId: knownSetId,
-    ),
+    builder: (_) =>
+        _StickerPackSheet(stickerId: stickerId, knownSetId: knownSetId),
   );
 }
 
@@ -53,7 +53,8 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
 
   Future<void> _load() async {
     try {
-      final setId = widget.knownSetId ??
+      final setId =
+          widget.knownSetId ??
           (widget.stickerId != null
               ? await stickersModule.resolveSetId(widget.stickerId!)
               : null);
@@ -162,13 +163,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
 
   Widget _buildBody(ColorScheme cs) {
     if (_loading) {
-      return Center(
-        child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(strokeWidth: 2.4, color: cs.primary),
-        ),
-      );
+      return Center(child: SmallSpinner());
     }
     final set = _set;
     if (_error != null || set == null) {
@@ -210,7 +205,8 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _pluralStickers(set.stickerIds.length),
+                  '${set.stickerIds.length} '
+                  '${pluralRu(set.stickerIds.length, 'стикер', 'стикера', 'стикеров')}',
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
               ],
@@ -332,14 +328,5 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
         ),
       ),
     );
-  }
-
-  String _pluralStickers(int n) {
-    final mod100 = n % 100;
-    final mod10 = n % 10;
-    if (mod100 >= 11 && mod100 <= 14) return '$n стикеров';
-    if (mod10 == 1) return '$n стикер';
-    if (mod10 >= 2 && mod10 <= 4) return '$n стикера';
-    return '$n стикеров';
   }
 }

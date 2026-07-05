@@ -17,15 +17,29 @@ class SelectCountryScreen extends StatefulWidget {
   State<SelectCountryScreen> createState() => _SelectCountryScreenState();
 }
 
+class _CountrySearchEntry {
+  final CountryName country;
+  final String ruLower;
+  final String enLower;
+
+  const _CountrySearchEntry(this.country, this.ruLower, this.enLower);
+}
+
 class _SelectCountryScreenState extends State<SelectCountryScreen> {
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   late List<CountryName> _filteredCountries;
+  late final List<_CountrySearchEntry> _searchEntries;
 
   @override
   void initState() {
     super.initState();
     _filteredCountries = widget.countries;
+    _searchEntries = widget.countries
+        .map(
+          (c) => _CountrySearchEntry(c, c.ru.toLowerCase(), c.en.toLowerCase()),
+        )
+        .toList();
   }
 
   @override
@@ -40,11 +54,15 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
         _filteredCountries = widget.countries;
       } else {
         final q = query.toLowerCase();
-        _filteredCountries = widget.countries.where((c) {
-          return c.ru.toLowerCase().contains(q) ||
-              c.en.toLowerCase().contains(q) ||
-              c.phoneCode.contains(q);
-        }).toList();
+        _filteredCountries = _searchEntries
+            .where(
+              (e) =>
+                  e.ruLower.contains(q) ||
+                  e.enLower.contains(q) ||
+                  e.country.phoneCode.contains(q),
+            )
+            .map((e) => e.country)
+            .toList();
       }
     });
   }
@@ -127,7 +145,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
               ),
             ),
             title: Text(
-              lang == 'ru' ? country.ru : country.en,
+              country.displayName(lang),
               style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 16,

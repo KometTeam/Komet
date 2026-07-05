@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
 import '../protocol/opcode_map.dart';
+import 'log_redact.dart';
 
 class _LogEntry {
   final int opcode;
@@ -132,7 +132,7 @@ class DebugSessionLog {
         opcode: opcode,
         seq: seq,
         requestTime: DateTime.now(),
-        request: _redact(payload),
+        request: redactForLog(payload),
       ),
     );
     if (_entries.length > _maxEntriesPerSession) {
@@ -147,7 +147,7 @@ class DebugSessionLog {
     if (entry == null) return;
     entry.responseTime = DateTime.now();
     entry.cmd = cmd;
-    entry.response = _redact(payload);
+    entry.response = redactForLog(payload);
     _scheduleFlush();
   }
 
@@ -270,7 +270,9 @@ class DebugSessionLog {
     for (var s = 0; s < lastN.length; s++) {
       final session = lastN[s];
       buffer.writeln('==================================================');
-      buffer.writeln('ЗАХОД #${s + 1} — ${session.startedAt.toIso8601String()}');
+      buffer.writeln(
+        'ЗАХОД #${s + 1} — ${session.startedAt.toIso8601String()}',
+      );
       buffer.writeln(
         'запросов: ${session.entries.length}'
         '${session.truncated ? ' (обрезано до $_maxEntriesPerSession)' : ''}',
@@ -328,38 +330,4 @@ String _cmdName(int? cmd) {
     default:
       return 'cmd$cmd';
   }
-}
-
-bool _isTokenKey(String key) => key.toLowerCase().contains('token');
-
-bool _isPhoneKey(String key) {
-  final k = key.toLowerCase();
-  return k.contains('phone') || k == 'msisdn';
-}
-
-String _maskPhone(dynamic value) {
-  final text = value?.toString() ?? '';
-  if (text.length <= 3) return text;
-  return '${text.substring(0, 3)}***';
-}
-
-dynamic _redact(dynamic value) {
-  if (value is Map) {
-    final out = <String, dynamic>{};
-    value.forEach((k, v) {
-      final key = k.toString();
-      if (_isTokenKey(key)) {
-        out[key] = '***';
-      } else if (_isPhoneKey(key)) {
-        out[key] = _maskPhone(v);
-      } else {
-        out[key] = _redact(v);
-      }
-    });
-    return out;
-  }
-  if (value is List) return value.map(_redact).toList();
-  if (value is Uint8List) return '<bytes: ${value.length}>';
-  if (value is num || value is bool || value is String) return value;
-  return value?.toString();
 }

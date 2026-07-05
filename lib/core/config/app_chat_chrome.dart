@@ -1,43 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 enum ChatChromeStyle { color, blur, none }
 
 class AppChatChrome {
   static const prefKey = 'app_chat_chrome';
-  static final ValueNotifier<ChatChromeStyle> current =
-      ValueNotifier(ChatChromeStyle.none);
 
-  static ChatChromeStyle _parse(String? value) {
-    switch (value) {
-      case 'color':
-        return ChatChromeStyle.color;
-      case 'blur':
-        return ChatChromeStyle.blur;
-      default:
-        return ChatChromeStyle.none;
-    }
-  }
+  static final _setting = PersistedEnum<ChatChromeStyle>(
+    prefKey: prefKey,
+    defaultValue: ChatChromeStyle.none,
+    encode: _encode,
+    decode: _parse,
+  );
 
-  static String _encode(ChatChromeStyle value) {
-    switch (value) {
-      case ChatChromeStyle.color:
-        return 'color';
-      case ChatChromeStyle.blur:
-        return 'blur';
-      case ChatChromeStyle.none:
-        return 'none';
-    }
-  }
+  static ValueNotifier<ChatChromeStyle> get current => _setting.current;
 
-  static Future<ChatChromeStyle> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return _parse(prefs.getString(prefKey));
-  }
+  static ChatChromeStyle _parse(String? value) =>
+      enumFromName(ChatChromeStyle.values, value, ChatChromeStyle.none);
 
-  static Future<void> save(ChatChromeStyle value) async {
-    current.value = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(prefKey, _encode(value));
-  }
+  static String _encode(ChatChromeStyle value) => value.name;
+
+  static Future<ChatChromeStyle> load() => _setting.load();
+
+  static Future<void> save(ChatChromeStyle value) => _setting.save(value);
 }

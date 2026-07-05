@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/labeled_settings_field.dart';
 import '../../widgets/sheet_helpers.dart';
 
 class ServerSettingsSheet extends StatefulWidget {
@@ -137,21 +138,21 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-              _buildTextField(
+              LabeledSettingsField(
                 controller: _hostController,
                 label: l10n.serverHostLabel,
                 hintText: ServerConfig.defaultHost,
-                cs: cs,
                 keyboardType: TextInputType.url,
+                enabled: !_busy,
               ),
               const SizedBox(height: 16),
-              _buildTextField(
+              LabeledSettingsField(
                 controller: _portController,
                 label: l10n.serverPortLabel,
                 hintText: '${ServerConfig.defaultPort}',
-                cs: cs,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                enabled: !_busy,
               ),
               const SizedBox(height: 24),
               FilledButton(
@@ -167,54 +168,6 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required ColorScheme cs,
-    String? hintText,
-    TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: cs.onSurfaceVariant,
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          inputFormatters: inputFormatters,
-          enabled: !_busy,
-          style: TextStyle(color: cs.onSurface, fontSize: 15),
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: TextStyle(
-              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-              fontSize: 15,
-            ),
-            filled: true,
-            fillColor: cs.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

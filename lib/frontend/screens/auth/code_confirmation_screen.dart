@@ -4,6 +4,7 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
+import 'session_stale_recovery.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/sms_code_listener.dart';
@@ -28,7 +29,7 @@ class CodeConfirmationScreen extends StatefulWidget {
 }
 
 class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, SessionStaleRecovery {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final SmsCodeListener _smsListener = SmsCodeListener();
@@ -45,21 +46,17 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   AnimationStatusListener? _routeAnimationListener;
 
   late String _token;
-  late int _epoch;
-  StreamSubscription<SessionState>? _stateSub;
-  bool _recovering = false;
   bool _verifying = false;
-  bool _dropNotified = false;
 
-  bool get _sessionStale =>
-      api.sessionEpoch != _epoch || api.state != SessionState.online;
+  @override
+  String get connectionDroppedMessage =>
+      'Соединение прервалось, восстанавливаем…';
 
   @override
   void initState() {
     super.initState();
     _token = widget.token;
-    _epoch = api.sessionEpoch;
-    _stateSub = api.stateStream.listen(_onSessionState);
+    startSessionRecovery();
     _startTimer();
     _listenForSmsCode();
 
@@ -89,7 +86,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       _routeAnimation?.removeStatusListener(_routeAnimationListener!);
     }
     _smsListener.dispose();
-    _stateSub?.cancel();
+    stopSessionRecovery();
     _timer?.cancel();
     _errorTimer?.cancel();
     _shakeController.dispose();
@@ -98,24 +95,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     super.dispose();
   }
 
-  void _onSessionState(SessionState state) {
-    if (!mounted) return;
-    if (state != SessionState.online) {
-      if (!_dropNotified) {
-        _dropNotified = true;
-        showCustomNotification(
-          context,
-          'Соединение прервалось, восстанавливаем…',
-        );
-      }
-      return;
-    }
-    if (api.sessionEpoch != _epoch) _recoverStaleSession();
-  }
-
-  Future<void> _recoverStaleSession() async {
-    if (_recovering) return;
-    setState(() => _recovering = true);
+  @override
+  Future<void> recoverStaleSession() async {
+    if (recovering) return;
+    setState(() => recovering = true);
     try {
       if (api.state != SessionState.online) {
         final back = await api.stateStream
@@ -135,8 +118,8 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       if (!mounted) return;
       setState(() {
         _token = fresh.token;
-        _epoch = api.sessionEpoch;
-        _dropNotified = false;
+        sessionEpoch = api.sessionEpoch;
+        dropNotified = false;
         _codeController.clear();
         _errorMessage = null;
       });
@@ -151,7 +134,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         showCustomNotification(context, 'Не удалось обновить код: $e');
       }
     } finally {
-      if (mounted) setState(() => _recovering = false);
+      if (mounted) setState(() => recovering = false);
     }
   }
 
@@ -207,7 +190,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   }
 
   void _applyAutoCode(String code) {
-    if (_verifying || _recovering) return;
+    if (_verifying || recovering) return;
     if (_codeController.text == code) return;
     _codeController.text = code;
     _codeController.selection = TextSelection.collapsed(offset: code.length);
@@ -232,10 +215,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   }
 
   Future<void> _verifyCode() async {
-    if (_codeController.text.length != 6 || _recovering || _verifying) return;
+    if (_codeController.text.length != 6 || recovering || _verifying) return;
 
-    if (_sessionStale) {
-      _recoverStaleSession();
+    if (sessionStale) {
+      recoverStaleSession();
       return;
     }
 
@@ -308,8 +291,8 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      if (!verified && (isSessionStateError(e) || _sessionStale)) {
-        _recoverStaleSession();
+      if (!verified && (isSessionStateError(e) || sessionStale)) {
+        recoverStaleSession();
       } else {
         _showError(e.toString());
       }
@@ -529,7 +512,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                   ),
                   const SizedBox(width: 16),
                   FloatingActionButton(
-                    onPressed: (_recovering || _verifying)
+                    onPressed: (recovering || _verifying)
                         ? null
                         : () {
                             if (_codeController.text.length == 6) _verifyCode();
@@ -541,7 +524,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(50),
                     ),
-                    child: _recovering
+                    child: recovering
                         ? SizedBox(
                             width: 24,
                             height: 24,

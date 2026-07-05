@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../main.dart' show stickersModule;
 import '../../models/sticker.dart';
+import 'small_spinner.dart';
 import 'sticker_image.dart';
 import 'sticker_lottie.dart';
 import 'sticker_peek.dart';
@@ -162,17 +163,13 @@ class _StickerPanelState extends State<StickerPanel>
       height: widget.height,
       color: cs.surface,
       child: _loading
-          ? Center(
-              child: SizedBox(
-                width: 26,
-                height: 26,
-                child: CircularProgressIndicator(strokeWidth: 2.4, color: cs.primary),
-              ),
-            )
+          ? Center(child: SmallSpinner())
           : _error != null || _sections.isEmpty
           ? Center(
               child: Text(
-                _error != null ? 'Не удалось загрузить стикеры' : 'Нет стикеров',
+                _error != null
+                    ? 'Не удалось загрузить стикеры'
+                    : 'Нет стикеров',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
               ),
             )
@@ -259,17 +256,26 @@ class _StickerPanelState extends State<StickerPanel>
               height: 44,
               margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
               decoration: BoxDecoration(
-                color: selected ? cs.surfaceContainerHighest : Colors.transparent,
+                color: selected
+                    ? cs.surfaceContainerHighest
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               padding: const EdgeInsets.all(8),
               child: s.icon != null
-                  ? Icon(s.icon, size: 24, color: selected ? cs.primary : cs.onSurfaceVariant)
+                  ? Icon(
+                      s.icon,
+                      size: 24,
+                      color: selected ? cs.primary : cs.onSurfaceVariant,
+                    )
                   : CachedNetworkImage(
                       imageUrl: s.iconUrl ?? '',
                       fit: BoxFit.contain,
-                      errorWidget: (_, _, _) =>
-                          Icon(Symbols.image, size: 20, color: cs.onSurfaceVariant),
+                      errorWidget: (_, _, _) => Icon(
+                        Symbols.image,
+                        size: 20,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
             ),
           );

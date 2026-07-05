@@ -1,29 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 enum MessageActionsStyle { radial, list }
 
 class AppMessageActionsStyle {
   static const prefKey = 'app_message_actions_style';
-  static final ValueNotifier<MessageActionsStyle> current = ValueNotifier(
-    MessageActionsStyle.radial,
+
+  static final _setting = PersistedEnum<MessageActionsStyle>(
+    prefKey: prefKey,
+    defaultValue: MessageActionsStyle.radial,
+    encode: (value) => value.name,
+    decode: _parse,
   );
 
-  static Future<MessageActionsStyle> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return _parse(prefs.getString(prefKey));
-  }
+  static ValueNotifier<MessageActionsStyle> get current => _setting.current;
 
-  static Future<void> save(MessageActionsStyle style) async {
-    current.value = style;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(prefKey, style.name);
-  }
+  static Future<MessageActionsStyle> load() => _setting.load();
 
-  static MessageActionsStyle _parse(String? val) {
-    if (val == MessageActionsStyle.list.name) return MessageActionsStyle.list;
-    return MessageActionsStyle.radial;
-  }
+  static Future<void> save(MessageActionsStyle style) => _setting.save(style);
+
+  static MessageActionsStyle _parse(String? val) =>
+      enumFromName(MessageActionsStyle.values, val, MessageActionsStyle.radial);
 
   static String label(MessageActionsStyle style) {
     switch (style) {

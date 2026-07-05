@@ -64,10 +64,16 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
 
   void _onChatSelected(DesktopChatSelection chat) {
     if (chat.imageUrl.isNotEmpty) {
-      unawaited(precacheImage(
-        CachedNetworkImageProvider(chat.imageUrl, maxWidth: 144, maxHeight: 144),
-        context,
-      ));
+      unawaited(
+        precacheImage(
+          CachedNetworkImageProvider(
+            chat.imageUrl,
+            maxWidth: 144,
+            maxHeight: 144,
+          ),
+          context,
+        ),
+      );
     }
     setState(() => _selected = chat);
   }
@@ -77,8 +83,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   }
 
   void _onDrag(double dx, double totalWidth) {
-    final maxAllowedByPane =
-        totalWidth - _minChatPaneWidth - _dividerHitWidth;
+    final maxAllowedByPane = totalWidth - _minChatPaneWidth - _dividerHitWidth;
     final upperBound = maxAllowedByPane < _maxListWidth
         ? maxAllowedByPane
         : _maxListWidth;
@@ -98,8 +103,10 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
         final totalWidth = constraints.maxWidth;
         final effectiveListWidth = _listWidth.clamp(
           _minListWidth,
-          (totalWidth - _minChatPaneWidth - _dividerHitWidth)
-              .clamp(_minListWidth, _maxListWidth),
+          (totalWidth - _minChatPaneWidth - _dividerHitWidth).clamp(
+            _minListWidth,
+            _maxListWidth,
+          ),
         );
         final cs = Theme.of(context).colorScheme;
         return Scaffold(
@@ -184,7 +191,9 @@ class _ResizeDividerState extends State<_ResizeDivider> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               width: widget.lineWidth,
-              color: highlight ? cs.primary.withValues(alpha: 0.6) : widget.color,
+              color: highlight
+                  ? cs.primary.withValues(alpha: 0.6)
+                  : widget.color,
             ),
           ),
         ),

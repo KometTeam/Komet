@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/utils/format.dart';
+
 class VideoPlayerScreen extends StatefulWidget {
   final Map<String, String> sources;
   final String? initialQuality;
@@ -22,11 +24,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _controlsVisible = true;
   double? _dragValue;
   late String _quality;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _quality = widget.initialQuality != null &&
+    _quality =
+        widget.initialQuality != null &&
             widget.sources.containsKey(widget.initialQuality)
         ? widget.initialQuality!
         : widget.sources.keys.first;
@@ -44,6 +48,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       return;
     }
 
+    final generation = ++_loadGeneration;
     final old = _controller;
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     _controller = controller;
@@ -60,12 +65,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         await controller.dispose();
         return;
       }
+      if (generation != _loadGeneration) {
+        return;
+      }
       if (position != null) await controller.seekTo(position);
+      if (generation != _loadGeneration) {
+        return;
+      }
       controller.addListener(_onTick);
       if (wasPlaying) controller.play();
       setState(() {});
     } catch (_) {
-      if (mounted) setState(() => _error = true);
+      if (generation == _loadGeneration && mounted) {
+        setState(() => _error = true);
+      }
     }
   }
 
@@ -98,18 +111,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     setState(() => _controlsVisible = !_controlsVisible);
   }
 
-  static String _fmt(Duration d) {
-    final s = d.inSeconds;
-    final sec = (s % 60).toString().padLeft(2, '0');
-    final m = s ~/ 60;
-    if (m >= 60) {
-      final h = m ~/ 60;
-      final mm = (m % 60).toString().padLeft(2, '0');
-      return '$h:$mm:$sec';
-    }
-    return '$m:$sec';
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = _controller;
@@ -128,14 +129,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               child: _error
                   ? const Icon(Symbols.error, color: Colors.white54, size: 64)
                   : ready
-                      ? AspectRatio(
-                          aspectRatio: c.value.aspectRatio,
-                          child: VideoPlayer(c),
-                        )
-                      : const CircularProgressIndicator(color: Colors.white),
+                  ? AspectRatio(
+                      aspectRatio: c.value.aspectRatio,
+                      child: VideoPlayer(c),
+                    )
+                  : const CircularProgressIndicator(color: Colors.white),
             ),
             if (buffering)
-              const Center(child: CircularProgressIndicator(color: Colors.white)),
+              const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
             if (!_error)
               AnimatedOpacity(
                 opacity: _controlsVisible ? 1 : 0,
@@ -192,7 +195,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     onSelected: _switchQuality,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white24,
                         borderRadius: BorderRadius.circular(8),
@@ -200,12 +205,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Symbols.tune,
-                              color: Colors.white, size: 18),
+                          const Icon(
+                            Symbols.tune,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                           const SizedBox(width: 6),
-                          Text(_quality,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 14)),
+                          Text(
+                            _quality,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -225,9 +237,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                   size: 18,
                                 ),
                                 const SizedBox(width: 8),
-                                Text(q,
-                                    style:
-                                        const TextStyle(color: Colors.white)),
+                                Text(
+                                  q,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
                               ],
                             ),
                           ),
@@ -253,19 +266,27 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ),
           Padding(
-            padding: EdgeInsets.only(left: 12, right: 12, bottom: bottomPad + 8),
+            padding: EdgeInsets.only(
+              left: 12,
+              right: 12,
+              bottom: bottomPad + 8,
+            ),
             child: Row(
               children: [
-                Text(_fmt(position),
-                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                Text(
+                  formatDurationClock(position),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
                 Expanded(
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 2,
                       thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 6),
+                        enabledThumbRadius: 6,
+                      ),
                       overlayShape: const RoundSliderOverlayShape(
-                          overlayRadius: 14),
+                        overlayRadius: 14,
+                      ),
                       activeTrackColor: Colors.white,
                       inactiveTrackColor: Colors.white30,
                       thumbColor: Colors.white,
@@ -282,15 +303,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       onChangeEnd: maxMs <= 0
                           ? null
                           : (v) {
-                              _controller
-                                  ?.seekTo(Duration(milliseconds: v.round()));
+                              _controller?.seekTo(
+                                Duration(milliseconds: v.round()),
+                              );
                               setState(() => _dragValue = null);
                             },
                     ),
                   ),
                 ),
-                Text(_fmt(duration),
-                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                Text(
+                  formatDurationClock(duration),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
               ],
             ),
           ),

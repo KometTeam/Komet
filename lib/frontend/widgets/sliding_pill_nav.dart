@@ -135,8 +135,9 @@ class SlidingPillNav extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(34),
                   child: DecoratedBox(
-                    decoration:
-                        BoxDecoration(gradient: GlossyDecor.topSheen(base)),
+                    decoration: BoxDecoration(
+                      gradient: GlossyDecor.topSheen(base),
+                    ),
                   ),
                 ),
               ),

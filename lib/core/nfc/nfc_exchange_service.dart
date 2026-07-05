@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import '../utils/parse.dart';
+
 enum NfcEventType { received, exchanging, cancelled, error }
 
 class NfcEvent {
@@ -60,17 +62,19 @@ class NfcExchangeService {
 
   NfcEvent _decodeEvent(dynamic raw) {
     final map = raw is Map ? raw : const {};
-    final id = map['id'];
-    final parsedId = id is int ? id : (id is num ? id.toInt() : null);
-    final phone = map['phone'];
-    final parsedPhone = phone is int ? phone : (phone is num ? phone.toInt() : null);
+    final parsedId = parseIntOrNull(map['id']);
+    final parsedPhone = parseIntOrNull(map['phone']);
     switch (map['event']) {
       case 'received':
         return NfcEvent(NfcEventType.received, parsedId, phone: parsedPhone);
       case 'exchanging':
         return const NfcEvent(NfcEventType.exchanging, null);
       case 'error':
-        return NfcEvent(NfcEventType.error, null, reason: map['reason'] as String?);
+        return NfcEvent(
+          NfcEventType.error,
+          null,
+          reason: map['reason'] as String?,
+        );
       default:
         return const NfcEvent(NfcEventType.cancelled, null);
     }

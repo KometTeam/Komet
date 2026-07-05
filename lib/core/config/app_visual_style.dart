@@ -1,26 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 enum VisualStyle { materialYou, glossy }
 
 class AppVisualStyle {
   static const prefKey = 'app_visual_style';
-  static final ValueNotifier<VisualStyle> current =
-      ValueNotifier(VisualStyle.materialYou);
 
-  static Future<VisualStyle> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(prefKey) == 'glossy'
-        ? VisualStyle.glossy
-        : VisualStyle.materialYou;
-  }
+  static final _setting = PersistedEnum<VisualStyle>(
+    prefKey: prefKey,
+    defaultValue: VisualStyle.materialYou,
+    encode: _encode,
+    decode: _parse,
+  );
 
-  static Future<void> save(VisualStyle value) async {
-    current.value = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      prefKey,
-      value == VisualStyle.glossy ? 'glossy' : 'materialYou',
-    );
-  }
+  static ValueNotifier<VisualStyle> get current => _setting.current;
+
+  static Future<VisualStyle> load() => _setting.load();
+
+  static Future<void> save(VisualStyle value) => _setting.save(value);
+
+  static String _encode(VisualStyle value) => value.name;
+
+  static VisualStyle _parse(String? val) =>
+      enumFromName(VisualStyle.values, val, VisualStyle.materialYou);
 }

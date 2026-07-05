@@ -106,11 +106,12 @@ Future<void> _openResolvedChat(
   final profile = await AppDatabase.loadActiveProfile();
   final myId = profile?.id ?? 0;
   final participants = chat['participants'];
-  final isMember = myId != 0 &&
+  final isMember =
+      myId != 0 &&
       participants is Map &&
       participants.containsKey(myId.toString());
 
-  await ChatsModule.cacheServerChat(chat, myId, inList: isMember);
+  await chats.cacheServerChat(chat, myId, inList: isMember);
   if (!context.mounted) return;
 
   if (link.kind == MaxLinkKind.invite && access == 'PRIVATE' && !isMember) {
@@ -133,12 +134,7 @@ Future<void> _openResolvedChat(
 
   pushSwipeable(
     context,
-    (_) => ChatScreen(
-      chatId: id,
-      name: title,
-      imageUrl: icon,
-      chatType: type,
-    ),
+    (_) => ChatScreen(chatId: id, name: title, imageUrl: icon, chatType: type),
   );
 }
 

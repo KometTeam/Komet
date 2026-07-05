@@ -3,20 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import '../../../backend/modules/chats.dart';
-import '../../../backend/modules/messages.dart';
 import '../../../core/cache/self_presence.dart';
+import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
-import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
-import '../../widgets/glossy_pill.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
@@ -199,17 +197,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Future<void> _doLogout() async {
     final navState = KometApp.navigatorKey.currentState;
-    try {
-      await api.disconnect();
-    } catch (_) {}
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId != null) {
-      await TokenStorage.deleteAccount(accountId);
-      await AppDatabase.deleteAccount(accountId);
-    }
-    ContactCache.clear();
-    TranscriptionCache.clear();
-    ChatsModule.resetForAccountSwitch();
+    await accountModule.logout();
     await resetDigitalIdSession();
     try {
       await api.connect();
@@ -252,7 +240,6 @@ class _SettingsTabState extends State<SettingsTab> {
                   builder: (context, showExtraInfo, _) {
                     return _buildSection(
                       context,
-                      cs,
                       items: [
                         _SettingsItem(
                           icon: Symbols.badge,
@@ -309,7 +296,6 @@ class _SettingsTabState extends State<SettingsTab> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: _buildSection(
                   context,
-                  cs,
                   items: [
                     _SettingsItem(
                       icon: Symbols.palette,
@@ -332,7 +318,6 @@ class _SettingsTabState extends State<SettingsTab> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: _buildSection(
                   context,
-                  cs,
                   items: [
                     _SettingsItem(
                       icon: Symbols.notifications_active,
@@ -386,6 +371,9 @@ class _SettingsTabState extends State<SettingsTab> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(
+                              name: 'SecurityScreen',
+                            ),
                             builder: (context) => const SecurityScreen(),
                           ),
                         );
@@ -435,7 +423,6 @@ class _SettingsTabState extends State<SettingsTab> {
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                           child: _buildSection(
                             context,
-                            cs,
                             items: [
                               _SettingsItem(
                                 icon: Symbols.construction,
@@ -464,7 +451,6 @@ class _SettingsTabState extends State<SettingsTab> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: _buildSection(
                   context,
-                  cs,
                   items: [
                     _SettingsItem(
                       leading: Image.asset(
@@ -623,7 +609,7 @@ class _SettingsTabState extends State<SettingsTab> {
               Icon(
                 _isPhoneVisible ? Symbols.visibility : Symbols.visibility_off,
                 size: 14,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                color: cs.mutedText,
               ),
             ],
           ),
@@ -659,7 +645,9 @@ class _SettingsTabState extends State<SettingsTab> {
               builder: (context, seen, _) {
                 final label = online
                     ? 'онлайн'
-                    : (seen != null ? 'Был(-а) ${_formatSelfSeen(seen)}' : 'офлайн');
+                    : (seen != null
+                          ? 'Был(-а) ${_formatSelfSeen(seen)}'
+                          : 'офлайн');
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -667,9 +655,7 @@ class _SettingsTabState extends State<SettingsTab> {
                       Symbols.check_circle,
                       fill: 1,
                       size: 15,
-                      color: online
-                          ? const Color(0xFF34C759)
-                          : cs.onSurfaceVariant.withValues(alpha: 0.6),
+                      color: online ? kOnlineGreen : cs.mutedText,
                     ),
                     const SizedBox(width: 5),
                     Text(
@@ -691,82 +677,21 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   Widget _buildSection(
-    BuildContext context,
-    ColorScheme cs, {
+    BuildContext context, {
     required List<_SettingsItem> items,
   }) {
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
-      depth: 6,
-      child: Column(
-        children: List.generate(items.length, (index) {
-          final item = items[index];
-          final isLast = index == items.length - 1;
-          return _buildSettingsRow(context, cs, item, isLast: isLast);
-        }),
-      ),
-    );
-  }
-
-  Widget _buildSettingsRow(
-    BuildContext context,
-    ColorScheme cs,
-    _SettingsItem item, {
-    bool isLast = false,
-  }) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: item.onTap ?? () {},
-            borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
-              child: Row(
-                children: [
-                  item.leading ??
-                      Icon(
-                        item.icon,
-                        color: item.tintColor ?? cs.onSurfaceVariant,
-                        size: 22,
-                        weight: 400,
-                      ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      item.label,
-                      style: TextStyle(
-                        color: item.tintColor ?? cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    Symbols.chevron_right,
-                    color: cs.outline,
-                    size: 20,
-                    weight: 400,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (!isLast)
-          Padding(
-            padding: const EdgeInsets.only(left: 58),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.35),
-            ),
-          ),
-      ],
+    return SettingsCard(
+      children: List.generate(items.length, (index) {
+        final item = items[index];
+        return SettingsNavTile(
+          icon: item.icon,
+          leading: item.leading,
+          label: item.label,
+          tintColor: item.tintColor,
+          onTap: item.onTap,
+          isLast: index == items.length - 1,
+        );
+      }),
     );
   }
 }
@@ -865,7 +790,6 @@ class _SpoilerPainter extends CustomPainter {
       ..color = color.withValues(alpha: 0.15)
       ..style = PaintingStyle.fill;
 
-    // Draw the background
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(0, 0, size.width, size.height),
@@ -874,10 +798,8 @@ class _SpoilerPainter extends CustomPainter {
       paint,
     );
 
-    // Draw "noisy" particles
     final particlePaint = Paint()..style = PaintingStyle.fill;
 
-    // Simple noise effect with dots using animation value for movement
     for (int i = 0; i < 60; i++) {
       double dx = (i * 17.5 + animation.value * 20) % size.width;
       double dy = (i * 13.7 + animation.value * 15) % size.height;

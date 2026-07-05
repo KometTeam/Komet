@@ -47,12 +47,12 @@ class StickersModule {
 
   Future<void> _loadFavorites() async {
     final favIds = <int>[];
-    final favResp = await _api.sendRequest(Opcode.assetsUpdate, {
+    final fav = await _api.sendRequestMap(Opcode.assetsUpdate, {
       'type': 'FAVORITE_STICKER',
       'sync': 0,
     });
-    if (favResp.isOk && favResp.payload is Map) {
-      final sections = favResp.payload['sections'];
+    if (fav != null) {
+      final sections = fav['sections'];
       if (sections is List) {
         for (final s in sections) {
           if (s is Map && s['id'] == 'FAVORITE_STICKER_SETS') {
@@ -68,12 +68,12 @@ class StickersModule {
     final newSetIds = <int>[];
     int marker = 0;
 
-    final stickerResp = await _api.sendRequest(Opcode.assetsUpdate, {
+    final stickerData = await _api.sendRequestMap(Opcode.assetsUpdate, {
       'type': 'STICKER',
       'sync': 0,
     });
-    if (stickerResp.isOk && stickerResp.payload is Map) {
-      final sections = stickerResp.payload['sections'];
+    if (stickerData != null) {
+      final sections = stickerData['sections'];
       if (sections is List) {
         for (final s in sections) {
           if (s is! Map) continue;
@@ -91,16 +91,16 @@ class StickersModule {
     var guard = 0;
     while (marker != 0 && guard < 50) {
       guard++;
-      final page = await _api.sendRequest(Opcode.assetsGet, {
+      final page = await _api.sendRequestMap(Opcode.assetsGet, {
         'sectionId': 'NEW_STICKER_SETS',
         'from': marker,
         'count': 100,
       });
-      if (!page.isOk || page.payload is! Map) break;
+      if (page == null) break;
       final before = newSetIds.length;
-      _appendIntList(newSetIds, page.payload['stickerSets']);
+      _appendIntList(newSetIds, page['stickerSets']);
       if (newSetIds.length == before) break;
-      final m = page.payload['marker'];
+      final m = page['marker'];
       marker = m is int ? m : 0;
     }
 
@@ -112,47 +112,53 @@ class StickersModule {
       if (seen.add(id)) ordered.add(id);
     }
     _orderedSetIds = ordered;
-    logger.i('Стикеры: ${ordered.length} паков, ${_recentStickerIds.length} недавних');
+    logger.i(
+      'Стикеры: ${ordered.length} паков, ${_recentStickerIds.length} недавних',
+    );
 
     await _ensureSetMetas(ordered);
   }
 
-  Future<void> _ensureSetMetas(List<int> ids) async {
-    final missing = ids.where((id) => !_sets.containsKey(id)).toList();
+  Future<void> _fetchAndCache<T>({
+    required String type,
+    required List<int> ids,
+    required String listKey,
+    required T Function(Map) fromMap,
+    required Map<int, T> cache,
+  }) async {
+    final missing = ids.where((id) => !cache.containsKey(id)).toList();
     for (final batch in _chunk(missing, 100)) {
-      final resp = await _api.sendRequest(Opcode.assetsGetByIds, {
-        'type': 'STICKER_SET',
+      final map = await _api.sendRequestMap(Opcode.assetsGetByIds, {
+        'type': type,
         'ids': batch,
       });
-      if (!resp.isOk || resp.payload is! Map) continue;
-      final list = resp.payload['stickerSets'];
+      if (map == null) continue;
+      final list = map[listKey];
       if (list is! List) continue;
       for (final e in list) {
         if (e is Map && e['id'] is int) {
-          final set = StickerSet.fromMap(e);
-          _sets[set.id] = set;
+          cache[e['id'] as int] = fromMap(e);
         }
       }
     }
   }
 
+  Future<void> _ensureSetMetas(List<int> ids) => _fetchAndCache<StickerSet>(
+    type: 'STICKER_SET',
+    ids: ids,
+    listKey: 'stickerSets',
+    fromMap: StickerSet.fromMap,
+    cache: _sets,
+  );
+
   Future<List<StickerItem>> ensureStickers(List<int> stickerIds) async {
-    final missing = stickerIds.where((id) => !_stickers.containsKey(id)).toList();
-    for (final batch in _chunk(missing, 100)) {
-      final resp = await _api.sendRequest(Opcode.assetsGetByIds, {
-        'type': 'STICKER',
-        'ids': batch,
-      });
-      if (!resp.isOk || resp.payload is! Map) continue;
-      final list = resp.payload['stickers'];
-      if (list is! List) continue;
-      for (final e in list) {
-        if (e is Map && e['id'] is int) {
-          final item = StickerItem.fromMap(e);
-          _stickers[item.id] = item;
-        }
-      }
-    }
+    await _fetchAndCache<StickerItem>(
+      type: 'STICKER',
+      ids: stickerIds,
+      listKey: 'stickers',
+      fromMap: StickerItem.fromMap,
+      cache: _stickers,
+    );
     return stickerIds
         .map((id) => _stickers[id])
         .whereType<StickerItem>()
@@ -167,9 +173,9 @@ class StickersModule {
   void cacheSet(StickerSet set) => _sets[set.id] = set;
 
   Future<StickerSet?> resolveSetByLink(String link) async {
-    final resp = await _api.sendRequest(Opcode.linkInfo, {'link': link});
-    if (!resp.isOk || resp.payload is! Map) return null;
-    final raw = resp.payload['stickerSet'];
+    final map = await _api.sendRequestMap(Opcode.linkInfo, {'link': link});
+    if (map == null) return null;
+    final raw = map['stickerSet'];
     if (raw is! Map || raw['id'] is! int) return null;
     final set = StickerSet.fromMap(raw);
     _sets[set.id] = set;
@@ -182,21 +188,21 @@ class StickersModule {
   }
 
   Future<bool> favoriteSet(int setId) async {
-    final resp = await _api.sendRequest(Opcode.assetsAdd, {
+    final map = await _api.sendRequestMap(Opcode.assetsAdd, {
       'type': 'FAVORITE_STICKER_SET',
       'id': setId,
     });
-    final ok = resp.isOk && resp.payload is Map && resp.payload['success'] == true;
+    final ok = map != null && map['success'] == true;
     if (ok) _markFavorite(setId, true);
     return ok;
   }
 
   Future<bool> unfavoriteSet(int setId) async {
-    final resp = await _api.sendRequest(Opcode.assetsRemove, {
+    final map = await _api.sendRequestMap(Opcode.assetsRemove, {
       'type': 'FAVORITE_STICKER_SET',
       'ids': [setId],
     });
-    final ok = resp.isOk && resp.payload is Map && resp.payload['success'] == true;
+    final ok = map != null && map['success'] == true;
     if (ok) _markFavorite(setId, false);
     return ok;
   }

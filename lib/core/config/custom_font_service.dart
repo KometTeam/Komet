@@ -6,9 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/logger.dart';
+
 class CustomFontService {
   static const String prefKey = 'app_custom_fonts';
-  static const String _userAgent = 'Mozilla/5.0 (X11; Linux x86_64) Chrome/120';
+  static const String _userAgent =
+      'Mozilla/5.0 (Linux; U; Android 4.4.2; en-us) '
+      'AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30';
 
   static final Set<String> _loaded = <String>{};
 
@@ -30,24 +34,26 @@ class CustomFontService {
   }
 
   static Future<String?> addFamily(String family) async {
-    final dir = await _cacheDir();
-    final file = _fileFor(dir, family);
-    Uint8List? bytes;
-    if (await file.exists()) {
-      bytes = await file.readAsBytes();
-    } else {
-      bytes = await _download(family);
-      if (bytes == null) return null;
-      await file.writeAsBytes(bytes);
-    }
     try {
+      final dir = await _cacheDir();
+      final file = _fileFor(dir, family);
+      Uint8List? bytes;
+      if (await file.exists()) {
+        final cached = await file.readAsBytes();
+        if (_isSfnt(cached)) bytes = cached;
+      }
+      if (bytes == null) {
+        bytes = await _download(family);
+        if (bytes == null) return null;
+        await file.writeAsBytes(bytes);
+      }
       await _register(family, bytes);
-    } catch (_) {
-      if (await file.exists()) await file.delete();
+      await _persist(family);
+      return family;
+    } catch (e) {
+      logger.w('CustomFont: не удалось добавить «$family»: $e');
       return null;
     }
-    await _persist(family);
-    return family;
   }
 
   static Future<void> removeFamily(String family) async {
@@ -102,19 +108,23 @@ class CustomFontService {
   static Future<Uint8List?> _download(String family) async {
     final encoded = Uri.encodeQueryComponent(family);
     final variants = <String>[
-      'https://fonts.googleapis.com/css2?family=$encoded:wght@100..900',
       'https://fonts.googleapis.com/css2?family=$encoded',
+      'https://fonts.googleapis.com/css2?family=$encoded:wght@400',
+      'https://fonts.googleapis.com/css2?family=$encoded:wght@100..900',
     ];
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final urlRegex = RegExp(r'url\((https://[^)]+)\)');
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
       for (final url in variants) {
         final css = await _fetchText(client, Uri.parse(url));
         if (css == null) continue;
-        final ttf = RegExp(r'url\((https://[^)]+\.ttf)\)').firstMatch(css);
-        final ttfUrl = ttf?.group(1);
-        if (ttfUrl == null) continue;
-        final bytes = await _fetchBytes(client, Uri.parse(ttfUrl));
-        if (bytes != null && _isSfnt(bytes)) return bytes;
+        for (final match in urlRegex.allMatches(css)) {
+          final fontUrl = match.group(1);
+          if (fontUrl == null) continue;
+          final bytes = await _fetchBytes(client, Uri.parse(fontUrl));
+          if (bytes != null && _isSfnt(bytes)) return bytes;
+        }
       }
       return null;
     } catch (_) {
@@ -127,26 +137,27 @@ class CustomFontService {
   static Future<String?> _fetchText(HttpClient client, Uri uri) async {
     final req = await client.getUrl(uri);
     req.headers.set(HttpHeaders.userAgentHeader, _userAgent);
-    final resp = await req.close();
+    final resp = await req.close().timeout(const Duration(seconds: 20));
     if (resp.statusCode != HttpStatus.ok) {
       await resp.drain<void>();
       return null;
     }
-    return resp.transform(const Utf8Decoder()).join();
+    return resp
+        .transform(const Utf8Decoder())
+        .join()
+        .timeout(const Duration(seconds: 20));
   }
 
   static Future<Uint8List?> _fetchBytes(HttpClient client, Uri uri) async {
     final req = await client.getUrl(uri);
     req.headers.set(HttpHeaders.userAgentHeader, _userAgent);
-    final resp = await req.close();
+    final resp = await req.close().timeout(const Duration(seconds: 20));
     if (resp.statusCode != HttpStatus.ok) {
       await resp.drain<void>();
       return null;
     }
     final builder = BytesBuilder(copy: false);
-    await for (final chunk in resp) {
-      builder.add(chunk);
-    }
+    await resp.forEach(builder.add).timeout(const Duration(seconds: 30));
     return builder.takeBytes();
   }
 }

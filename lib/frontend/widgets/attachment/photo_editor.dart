@@ -6,11 +6,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
-import 'package:komet/core/utils/image_utils.dart';
+import 'package:komet/core/media/raster.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+
+import '../../../core/config/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
+import '../small_spinner.dart';
 
 const Color _kPanel = Color(0xFF0A0A0A);
 
@@ -329,7 +331,10 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
     if (!mounted) return;
     if (file == null) {
       setState(() => _baking = false);
-      showCustomNotification(context, 'Не удалось применить');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.photoEditorApplyFailed,
+      );
       return;
     }
     Navigator.of(context).pop(CropResult(file, state));
@@ -374,23 +379,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
         Paint()..filterQuality = FilterQuality.high,
       );
       final picture = recorder.endRecording();
-      final rendered = await picture.toImage(pxW, pxH);
-      picture.dispose();
-      final bd = await rendered.toByteData(format: ui.ImageByteFormat.rawRgba);
-      rendered.dispose();
-      if (bd == null) return null;
-
-      final jpeg = await encodeRgbaToJpeg(bd.buffer.asUint8List(), pxW, pxH);
-      if (jpeg == null) return null;
-      final dir = await getTemporaryDirectory();
-      final out = File(
-        p.join(
-          dir.path,
-          'komet_crop_${DateTime.now().microsecondsSinceEpoch}.jpg',
-        ),
-      );
-      await out.writeAsBytes(jpeg);
-      return out;
+      return await rasterPictureToJpegFile(picture, pxW, pxH, prefix: 'crop');
     } catch (_) {
       return null;
     }
@@ -447,6 +436,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
   }
 
   Widget _buildTools() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(
@@ -455,9 +445,9 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
             onPressed: _flip,
             icon: Icon(
               Symbols.flip,
-              color: _flipH ? const Color(0xFF2F8FFF) : Colors.white,
+              color: _flipH ? kEditorAccent : Colors.white,
             ),
-            tooltip: 'Отразить',
+            tooltip: l10n.photoEditorFlipTooltip,
           ),
           Expanded(
             child: ValueListenableBuilder<int>(
@@ -477,7 +467,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
               Symbols.rotate_90_degrees_ccw,
               color: Colors.white,
             ),
-            tooltip: 'Повернуть',
+            tooltip: l10n.photoEditorRotateTooltip,
           ),
         ],
       ),
@@ -485,6 +475,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
   }
 
   Widget _buildActions() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       color: _kPanel,
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -493,24 +484,24 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
         children: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'ОТМЕНА',
-              style: TextStyle(color: Colors.white, fontSize: 15),
+            child: Text(
+              l10n.photoEditorCancel,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
             ),
           ),
           TextButton(
             onPressed: _reset,
-            child: const Text(
-              'СБРОС',
-              style: TextStyle(color: Colors.white, fontSize: 15),
+            child: Text(
+              l10n.photoEditorReset,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
             ),
           ),
           TextButton(
             onPressed: _baking ? null : _done,
             child: Text(
-              'ГОТОВО',
+              l10n.photoEditorDone,
               style: TextStyle(
-                color: _baking ? Colors.white38 : const Color(0xFF2F8FFF),
+                color: _baking ? Colors.white38 : kEditorAccent,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -647,7 +638,7 @@ class _RulerPainter extends CustomPainter {
       Offset(cx, baseY - 18),
       Offset(cx, baseY + 2),
       Paint()
-        ..color = const Color(0xFF2F8FFF)
+        ..color = kEditorAccent
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round,
     );
@@ -898,6 +889,7 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
   }
 
   Future<void> _addText() async {
+    final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController();
     final String? text;
     try {
@@ -905,26 +897,29 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: const Color(0xFF1E1E1E),
-          title: const Text('Текст', style: TextStyle(color: Colors.white)),
+          title: Text(
+            l10n.photoEditorTextDialogTitle,
+            style: const TextStyle(color: Colors.white),
+          ),
           content: TextField(
             controller: controller,
             autofocus: true,
             style: const TextStyle(color: Colors.white),
             cursorColor: Colors.white,
-            decoration: const InputDecoration(
-              hintText: 'Введите текст',
-              hintStyle: TextStyle(color: Colors.white38),
+            decoration: InputDecoration(
+              hintText: l10n.photoEditorTextDialogHint,
+              hintStyle: const TextStyle(color: Colors.white38),
             ),
             onSubmitted: (v) => Navigator.pop(ctx, v),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
+              child: Text(l10n.spoofDialogCancel),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('ОК'),
+              child: Text(l10n.photoEditorOk),
             ),
           ],
         ),
@@ -958,7 +953,10 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
     if (!mounted) return;
     if (file == null) {
       setState(() => _baking = false);
-      showCustomNotification(context, 'Не удалось применить изменения');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.photoEditorApplyChangesFailed,
+      );
       return;
     }
     Navigator.of(context).pop(file);
@@ -995,29 +993,7 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
       image.dispose();
       codec.dispose();
 
-      final rendered = await picture.toImage(outW, outH);
-      picture.dispose();
-      final byteData = await rendered.toByteData(
-        format: ui.ImageByteFormat.rawRgba,
-      );
-      rendered.dispose();
-      if (byteData == null) return null;
-
-      final jpeg = await encodeRgbaToJpeg(
-        byteData.buffer.asUint8List(),
-        outW,
-        outH,
-      );
-      if (jpeg == null) return null;
-      final dir = await getTemporaryDirectory();
-      final out = File(
-        p.join(
-          dir.path,
-          'komet_edit_${DateTime.now().microsecondsSinceEpoch}.jpg',
-        ),
-      );
-      await out.writeAsBytes(jpeg);
-      return out;
+      return await rasterPictureToJpegFile(picture, outW, outH, prefix: 'edit');
     } catch (_) {
       return null;
     }
@@ -1037,15 +1013,7 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
             ],
           ),
           if (_tab == _EditTab.draw) _buildSideSlider(),
-          if (_baking)
-            const Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black54,
-                child: Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
-              ),
-            ),
+          if (_baking) const BusyOverlay(),
         ],
       ),
     );
@@ -1068,7 +1036,7 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
             TextButton(
               onPressed: _marks.isEmpty ? null : _clearAll,
               child: Text(
-                'Очистить всё',
+                AppLocalizations.of(context)!.photoEditorClearAll,
                 style: TextStyle(
                   color: _marks.isEmpty ? Colors.white24 : Colors.white,
                   fontSize: 15,
@@ -1244,9 +1212,9 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
           TextButton.icon(
             onPressed: _addText,
             icon: const Icon(Symbols.add, color: Colors.white),
-            label: const Text(
-              'Добавить текст',
-              style: TextStyle(color: Colors.white, fontSize: 15),
+            label: Text(
+              AppLocalizations.of(context)!.photoEditorAddText,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
             ),
           ),
           const Spacer(),
@@ -1271,9 +1239,9 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
             colors: [
               Color(0xFFFF3B30),
               Color(0xFFFFCC00),
-              Color(0xFF34C759),
+              kOnlineGreen,
               Color(0xFF00C7BE),
-              Color(0xFF2F8FFF),
+              kEditorAccent,
               Color(0xFFAF52DE),
               Color(0xFFFF3B30),
             ],
@@ -1356,6 +1324,7 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
   }
 
   Widget _buildTabs() {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       height: 48,
       child: Row(
@@ -1368,9 +1337,13 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildTab('РИСУНОК', _EditTab.draw),
-                _buildTab('СТИКЕРЫ', _EditTab.stickers, disabled: true),
-                _buildTab('ТЕКСТ', _EditTab.text),
+                _buildTab(l10n.photoEditorTabDraw, _EditTab.draw),
+                _buildTab(
+                  l10n.photoEditorTabStickers,
+                  _EditTab.stickers,
+                  disabled: true,
+                ),
+                _buildTab(l10n.photoEditorTabText, _EditTab.text),
               ],
             ),
           ),
@@ -1703,7 +1676,7 @@ class _SelectionPainter extends CustomPainter {
     _dashedLine(canvas, bl, tl, border);
 
     final fill = Paint()
-      ..color = const Color(0xFF2F8FFF)
+      ..color = kEditorAccent
       ..style = PaintingStyle.fill;
     final ring = Paint()
       ..color = Colors.white
@@ -1887,8 +1860,6 @@ class _ColorPickerState extends State<_ColorPicker> {
     );
   }
 }
-
-const Color _kAccent = Color(0xFF2F8FFF);
 
 enum BlurMode { off, radial, linear }
 
@@ -2320,24 +2291,15 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
       }
 
       final picture = recorder.endRecording();
-      final rendered = await picture.toImage(outW, outH);
-      picture.dispose();
-      if (curved != img) curved.dispose();
-      final bd = await rendered.toByteData(format: ui.ImageByteFormat.rawRgba);
-      rendered.dispose();
-      if (bd == null) return null;
-
-      final jpeg = await encodeRgbaToJpeg(bd.buffer.asUint8List(), outW, outH);
-      if (jpeg == null) return null;
-      final dir = await getTemporaryDirectory();
-      final out = File(
-        p.join(
-          dir.path,
-          'komet_adj_${DateTime.now().microsecondsSinceEpoch}.jpg',
-        ),
+      return await rasterPictureToJpegFile(
+        picture,
+        outW,
+        outH,
+        prefix: 'adj',
+        onPictureDisposed: () {
+          if (curved != img) curved.dispose();
+        },
       );
-      await out.writeAsBytes(jpeg);
-      return out;
     } catch (_) {
       return null;
     }
@@ -2354,7 +2316,10 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
     if (!mounted) return;
     if (file == null) {
       setState(() => _baking = false);
-      showCustomNotification(context, 'Не удалось применить');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.photoEditorApplyFailed,
+      );
       return;
     }
     Navigator.of(context).pop(file);
@@ -2374,15 +2339,7 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
                 _buildBottomBar(),
               ],
             ),
-            if (_baking)
-              const Positioned.fill(
-                child: ColoredBox(
-                  color: Colors.black54,
-                  child: Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
-                ),
-              ),
+            if (_baking) const BusyOverlay(),
           ],
         ),
       ),
@@ -2516,7 +2473,13 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
   }
 
   Widget _buildCurves() {
-    const labels = ['Все', 'Красный', 'Зелёный', 'Синий'];
+    final l10n = AppLocalizations.of(context)!;
+    final labels = [
+      l10n.photoEditorChannelAll,
+      l10n.photoEditorChannelRed,
+      l10n.photoEditorChannelGreen,
+      l10n.photoEditorChannelBlue,
+    ];
     return SizedBox(
       height: 110,
       child: Row(
@@ -2573,23 +2536,54 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
     return ValueListenableBuilder<int>(
       valueListenable: _rev,
       builder: (context, _, _) {
+        final l10n = AppLocalizations.of(context)!;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _slider('Улучшение', _enhance, 0, 1, (v) => _enhance = v),
-              _slider('Экспозиция', _exposure, -1, 1, (v) => _exposure = v),
-              _slider('Контраст', _contrast, -1, 1, (v) => _contrast = v),
               _slider(
-                'Насыщенность',
+                l10n.photoEditorEnhance,
+                _enhance,
+                0,
+                1,
+                (v) => _enhance = v,
+              ),
+              _slider(
+                l10n.photoEditorExposure,
+                _exposure,
+                -1,
+                1,
+                (v) => _exposure = v,
+              ),
+              _slider(
+                l10n.photoEditorContrast,
+                _contrast,
+                -1,
+                1,
+                (v) => _contrast = v,
+              ),
+              _slider(
+                l10n.photoEditorSaturation,
                 _saturation,
                 -1,
                 1,
                 (v) => _saturation = v,
               ),
-              _slider('Тёплость', _warmth, -1, 1, (v) => _warmth = v),
-              _slider('Виньетка', _vignette, 0, 1, (v) => _vignette = v),
+              _slider(
+                l10n.photoEditorWarmth,
+                _warmth,
+                -1,
+                1,
+                (v) => _warmth = v,
+              ),
+              _slider(
+                l10n.photoEditorVignette,
+                _vignette,
+                0,
+                1,
+                (v) => _vignette = v,
+              ),
             ],
           ),
         );
@@ -2640,14 +2634,23 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
   }
 
   Widget _buildBlurOptions() {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       height: 110,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _blurOption('Откл.', Symbols.block, BlurMode.off),
-          _blurOption('Радиальное', Symbols.blur_circular, BlurMode.radial),
-          _blurOption('Линейное', Symbols.blur_linear, BlurMode.linear),
+          _blurOption(l10n.photoEditorBlurOff, Symbols.block, BlurMode.off),
+          _blurOption(
+            l10n.photoEditorBlurRadial,
+            Symbols.blur_circular,
+            BlurMode.radial,
+          ),
+          _blurOption(
+            l10n.photoEditorBlurLinear,
+            Symbols.blur_linear,
+            BlurMode.linear,
+          ),
         ],
       ),
     );
@@ -2661,12 +2664,12 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: selected ? _kAccent : Colors.white, size: 30),
+          Icon(icon, color: selected ? kEditorAccent : Colors.white, size: 30),
           const SizedBox(height: 6),
           Text(
             label,
             style: TextStyle(
-              color: selected ? _kAccent : Colors.white70,
+              color: selected ? kEditorAccent : Colors.white70,
               fontSize: 12,
             ),
           ),
@@ -2676,6 +2679,7 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
   }
 
   Widget _buildBottomBar() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       color: _kPanel,
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -2683,9 +2687,9 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
         children: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'ОТМЕНА',
-              style: TextStyle(color: Colors.white, fontSize: 15),
+            child: Text(
+              l10n.photoEditorCancel,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
             ),
           ),
           const Spacer(),
@@ -2698,9 +2702,9 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
           TextButton(
             onPressed: _baking ? null : _done,
             child: Text(
-              'ГОТОВО',
+              l10n.photoEditorDone,
               style: TextStyle(
-                color: _baking ? Colors.white38 : _kAccent,
+                color: _baking ? Colors.white38 : kEditorAccent,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -2716,7 +2720,7 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
     return IconButton(
       onPressed: disabled ? null : () => setState(() => _tab = tab),
       icon: Icon(icon),
-      color: selected ? _kAccent : Colors.white,
+      color: selected ? kEditorAccent : Colors.white,
       disabledColor: Colors.white24,
     );
   }

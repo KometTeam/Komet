@@ -23,47 +23,39 @@ class ChatFolder {
     this.options,
   });
 
+  static List<int>? _parseIntList(dynamic raw) {
+    return (raw as List<dynamic>?)?.map((e) {
+      if (e is int) return e;
+      if (e is String) return int.tryParse(e) ?? 0;
+      return 0;
+    }).toList();
+  }
+
   factory ChatFolder.fromJson(Map<String, dynamic> json) {
     return ChatFolder(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       emoji: json['emoji']?.toString(),
-      include: (json['include'] as List<dynamic>?)
-          ?.map((e) {
-            if (e is int) return e;
-            if (e is String) return int.tryParse(e) ?? 0;
-            return 0;
-          })
-          .toList(),
+      include: _parseIntList(json['include']),
       filters:
-          (json['filters'] as List<dynamic>?)
-              ?.map((e) {
-                if (e is int) return e;
-                if (e is String) return int.tryParse(e) ?? e;
-                return e;
-              })
-              .toList() ??
+          (json['filters'] as List<dynamic>?)?.map((e) {
+            if (e is int) return e;
+            if (e is String) return int.tryParse(e) ?? e;
+            return e;
+          }).toList() ??
           [],
       hideEmpty: json['hideEmpty'] ?? false,
       widgets:
-          (json['widgets'] as List<dynamic>?)
-              ?.map((w) {
-                if (w is Map<String, dynamic>) {
-                  return ChatFolderWidget.fromJson(w);
-                }
-                return ChatFolderWidget.fromJson(
-                  Map<String, dynamic>.from(w as Map),
-                );
-              })
-              .toList() ??
+          (json['widgets'] as List<dynamic>?)?.map((w) {
+            if (w is Map<String, dynamic>) {
+              return ChatFolderWidget.fromJson(w);
+            }
+            return ChatFolderWidget.fromJson(
+              Map<String, dynamic>.from(w as Map),
+            );
+          }).toList() ??
           [],
-      favorites: (json['favorites'] as List<dynamic>?)
-          ?.map((e) {
-            if (e is int) return e;
-            if (e is String) return int.tryParse(e) ?? 0;
-            return 0;
-          })
-          .toList(),
+      favorites: _parseIntList(json['favorites']),
       filterSubjects: json['filterSubjects'] is Map<String, dynamic>
           ? json['filterSubjects'] as Map<String, dynamic>
           : (json['filterSubjects'] is Map
@@ -71,13 +63,7 @@ class ChatFolder {
                     (json['filterSubjects'] as Map).cast<dynamic, dynamic>(),
                   )
                 : null),
-      options: (json['options'] as List<dynamic>?)
-          ?.map((e) {
-            if (e is int) return e;
-            if (e is String) return int.tryParse(e) ?? 0;
-            return 0;
-          })
-          .toList(),
+      options: _parseIntList(json['options']),
     );
   }
 

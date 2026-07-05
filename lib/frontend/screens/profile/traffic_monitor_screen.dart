@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/config/app_colors.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/transport/traffic_monitor.dart';
 import '../../../core/utils/format.dart';
@@ -62,7 +63,7 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
     try {
       final json = _monitor.buildExport();
       final dir = await getTemporaryDirectory();
-      final stamp = _fileStamp(DateTime.now());
+      final stamp = formatFileStamp(DateTime.now());
       final file = File('${dir.path}/komet_traffic_$stamp.json');
       await file.writeAsString(json);
       await Share.shareXFiles(
@@ -77,12 +78,6 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
         showCustomNotification(context, 'Не удалось поделиться: $e');
       }
     }
-  }
-
-  String _fileStamp(DateTime t) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${t.year}${two(t.month)}${two(t.day)}_'
-        '${two(t.hour)}${two(t.minute)}${two(t.second)}';
   }
 
   @override
@@ -221,7 +216,7 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
                 height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: on ? const Color(0xFF34C759) : cs.outline,
+                  color: on ? kOnlineGreen : cs.outline,
                 ),
               ),
               const SizedBox(width: 12),
@@ -253,10 +248,7 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
                   ],
                 ),
               ),
-              Switch(
-                value: on,
-                onChanged: (v) => _monitor.setEnabled(v),
-              ),
+              Switch(value: on, onChanged: (v) => _monitor.setEnabled(v)),
             ],
           );
         },
@@ -476,8 +468,7 @@ class _TrafficRow extends StatelessWidget {
   }
 
   String _formatTime(DateTime t) {
-    String two(int n) => n.toString().padLeft(2, '0');
     final ms = t.millisecond.toString().padLeft(3, '0');
-    return '${two(t.hour)}:${two(t.minute)}:${two(t.second)}.$ms';
+    return '${pad2(t.hour)}:${pad2(t.minute)}:${pad2(t.second)}.$ms';
   }
 }

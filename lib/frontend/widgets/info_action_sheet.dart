@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'sheet_helpers.dart';
+
 class InfoActionSheetItem {
   final IconData icon;
   final String title;
@@ -47,9 +49,7 @@ Future<bool> showInfoActionSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: cs.surfaceContainerHigh,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+    shape: kSheetShape,
     builder: (ctx) => _InfoActionSheet(
       headerEmoji: headerEmoji,
       headerIcon: headerIcon,
@@ -194,10 +194,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
               ),
               child: Text(
                 buttonText,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -216,12 +213,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
       );
     }
     return Center(
-      child: Icon(
-        widget.headerIcon,
-        size: 72,
-        color: cs.primary,
-        weight: 400,
-      ),
+      child: Icon(widget.headerIcon, size: 72, color: cs.primary, weight: 400),
     );
   }
 
@@ -233,12 +225,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Icon(
-            item.icon,
-            size: 26,
-            color: iconColor,
-            weight: 400,
-          ),
+          child: Icon(item.icon, size: 26, color: iconColor, weight: 400),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -271,4 +258,3 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
     );
   }
 }
-

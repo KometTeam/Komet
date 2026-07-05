@@ -76,8 +76,9 @@ class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
 
   void _startMotion() {
     _offset.value = Offset.zero;
-    _sub ??= accelerometerEventStream(samplingPeriod: SensorInterval.gameInterval)
-        .listen(_onAccelerometer, onError: (_) {}, cancelOnError: false);
+    _sub ??= accelerometerEventStream(
+      samplingPeriod: SensorInterval.gameInterval,
+    ).listen(_onAccelerometer, onError: (_) {}, cancelOnError: false);
   }
 
   void _stopMotion() {

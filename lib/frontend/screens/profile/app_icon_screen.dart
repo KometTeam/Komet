@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../../widgets/connection_status.dart';
 
@@ -7,6 +6,7 @@ import '../../../core/config/app_icon.dart';
 import '../../../core/utils/haptics.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/settings_radio_tile.dart';
 
 class AppIconScreen extends StatefulWidget {
   const AppIconScreen({super.key});
@@ -91,8 +91,23 @@ class _AppIconScreenState extends State<AppIconScreen> {
                       return Column(
                         children: [
                           for (final icon in AppIcon.values)
-                            _IconTile(
-                              icon: icon,
+                            SettingsRadioTile(
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.asset(
+                                  icon.previewAsset,
+                                  width: 56,
+                                  height: 56,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              leadingGap: 16,
+                              label: icon.title,
+                              labelStyle: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                               selected: current == icon,
                               onTap: () => _select(icon),
                             ),
@@ -104,65 +119,6 @@ class _AppIconScreenState extends State<AppIconScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _IconTile extends StatelessWidget {
-  final AppIcon icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _IconTile({
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.asset(
-                  icon.previewAsset,
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  icon.title,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Icon(
-                selected
-                    ? Symbols.radio_button_checked
-                    : Symbols.radio_button_unchecked,
-                color: selected ? cs.primary : cs.outline,
-                size: 22,
-                fill: selected ? 1 : 0,
-              ),
-            ],
-          ),
         ),
       ),
     );

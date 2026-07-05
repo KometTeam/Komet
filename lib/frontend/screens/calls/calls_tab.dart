@@ -147,9 +147,7 @@ class _CallsTabState extends State<CallsTab> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          // Open call details or initiate call
-        },
+        onTap: () {},
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
@@ -268,17 +266,20 @@ class _CallsTabState extends State<CallsTab> {
     );
   }
 
-  Future<void> _deleteCall(CallLogEntry call) async {
+  void _deleteCall(CallLogEntry call) {
+    if (_removing.contains(call.id)) return;
     setState(() => _removing.add(call.id));
     final historyId = int.tryParse(call.id);
     if (historyId != null) {
       unawaited(CallsModule(api).deleteHistory([historyId]));
     }
-    await Future.delayed(const Duration(milliseconds: 260));
+  }
+
+  void _onRemovalComplete(String id) {
     if (!mounted) return;
     setState(() {
-      _calls.removeWhere((c) => c.id == call.id);
-      _removing.remove(call.id);
+      _calls.removeWhere((c) => c.id == id);
+      _removing.remove(id);
     });
   }
 
@@ -295,8 +296,11 @@ class _CallsTabState extends State<CallsTab> {
     if (active != null) {
       await navigator.push(
         MaterialPageRoute(
-          builder: (_) =>
-              CallScreen(name: call.name, avatarUrl: avatarUrl, session: active),
+          builder: (_) => CallScreen(
+            name: call.name,
+            avatarUrl: avatarUrl,
+            session: active,
+          ),
         ),
       );
       return;
@@ -437,6 +441,7 @@ class _CallsTabState extends State<CallsTab> {
                         return _RemovableCallEntry(
                           key: ValueKey(call.id),
                           removing: _removing.contains(call.id),
+                          onDismissed: () => _onRemovalComplete(call.id),
                           child: _buildCallItem(context, cs, call),
                         );
                       },
@@ -451,11 +456,13 @@ class _CallsTabState extends State<CallsTab> {
 
 class _RemovableCallEntry extends StatefulWidget {
   final bool removing;
+  final VoidCallback onDismissed;
   final Widget child;
 
   const _RemovableCallEntry({
     required Key key,
     required this.removing,
+    required this.onDismissed,
     required this.child,
   }) : super(key: key);
 
@@ -476,6 +483,16 @@ class _RemovableCallEntryState extends State<_RemovableCallEntry>
   );
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addStatusListener(_onStatus);
+  }
+
+  void _onStatus(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed) widget.onDismissed();
+  }
+
+  @override
   void didUpdateWidget(covariant _RemovableCallEntry oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.removing && !oldWidget.removing) _controller.reverse();
@@ -483,6 +500,7 @@ class _RemovableCallEntryState extends State<_RemovableCallEntry>
 
   @override
   void dispose() {
+    _controller.removeStatusListener(_onStatus);
     _controller.dispose();
     super.dispose();
   }

@@ -120,7 +120,14 @@ class _AssetGalleryItem implements GalleryItem {
 
 class _DesktopGallerySource implements GallerySource {
   static const _imageExtensions = {
-    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif',
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.webp',
+    '.bmp',
+    '.heic',
+    '.heif',
   };
 
   @override
@@ -140,10 +147,7 @@ class _DesktopGallerySource implements GallerySource {
       } catch (_) {}
     }
     entries.sort((a, b) => b.modified.compareTo(a.modified));
-    return entries
-        .take(limit)
-        .map((e) => _FileGalleryItem(e.file))
-        .toList();
+    return entries.take(limit).map((e) => _FileGalleryItem(e.file)).toList();
   }
 
   @override

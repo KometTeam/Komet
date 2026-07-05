@@ -82,23 +82,27 @@ class CloudStorageModule {
   }
 
   static Future<void> _configurePrivacy(Api api, int chatId) async {
-    await Future.wait([
-      ChatsModule.setChatOptions(api, chatId: chatId, options: {'ONLY_OWNER_CAN_CHANGE_ICON_TITLE': true}),
-      ChatsModule.setChatOptions(api, chatId: chatId, options: {'ONLY_ADMIN_CAN_ADD_MEMBER': true}),
-      ChatsModule.setChatOptions(api, chatId: chatId, options: {'ALL_CAN_PIN_MESSAGE': false}),
-      ChatsModule.setChatOptions(api, chatId: chatId, options: {'ONLY_ADMIN_CAN_CALL': true}),
-    ]);
+    await chats.setChatOptions(
+      api,
+      chatId: chatId,
+      options: {
+        'ONLY_OWNER_CAN_CHANGE_ICON_TITLE': true,
+        'ONLY_ADMIN_CAN_ADD_MEMBER': true,
+        'ALL_CAN_PIN_MESSAGE': false,
+        'ONLY_ADMIN_CAN_CALL': true,
+      },
+    );
   }
 
   static Future<CachedChat?> setupEnv(Api api) async {
-    final temp = await ChatsModule.createGroupChat(
+    final temp = await chats.createGroupChat(
       api,
       title: _tempName,
       userIds: [],
     );
     if (temp == null) return null;
     final name = '$_prefix${_computeSpecialNumber(temp.id)}';
-    final ok = await ChatsModule.setChatTitle(api, chatId: temp.id, title: name);
+    final ok = await chats.setChatTitle(api, chatId: temp.id, title: name);
     if (!ok) return null;
     await _configurePrivacy(api, temp.id);
     return temp;
@@ -107,10 +111,32 @@ class CloudStorageModule {
   // Turns an orphan "Облачное хранилище" group into a valid env group
   static Future<CachedChat?> repairOrphan(Api api, CachedChat orphan) async {
     final name = '$_prefix${_computeSpecialNumber(orphan.id)}';
-    final ok = await ChatsModule.setChatTitle(api, chatId: orphan.id, title: name);
+    final ok = await chats.setChatTitle(api, chatId: orphan.id, title: name);
     if (!ok) return null;
     await _configurePrivacy(api, orphan.id);
     return orphan;
+  }
+
+  static Iterable<CloudFile> _cloudFilesFrom(
+    Iterable<CachedMessage> msgs,
+    int chatId,
+    int accountId,
+  ) sync* {
+    for (final msg in msgs) {
+      for (final a in msg.attachments ?? []) {
+        if (a is FileAttachment && a.name != null) {
+          yield CloudFile(
+            name: a.name!,
+            size: a.size,
+            time: msg.time,
+            fileId: a.fileId,
+            messageId: msg.id,
+            chatId: chatId,
+            accountId: accountId,
+          );
+        }
+      }
+    }
   }
 
   static Future<List<CloudFile>> fetchFiles(
@@ -120,23 +146,7 @@ class CloudStorageModule {
     int count = 200,
   }) async {
     final msgs = await messages.fetchHistory(accountId, chatId, count: count);
-    final files = <CloudFile>[];
-    for (final msg in msgs) {
-      for (final a in msg.attachments ?? []) {
-        if (a is FileAttachment && a.name != null) {
-          files.add(CloudFile(
-            name: a.name!,
-            size: a.size,
-            time: msg.time,
-            fileId: a.fileId,
-            messageId: msg.id,
-            chatId: chatId,
-            accountId: accountId,
-          ));
-        }
-      }
-    }
-    return files;
+    return _cloudFilesFrom(msgs, chatId, accountId).toList();
   }
 
   // Fetches only the last few messages to find a newly uploaded file — avoids full 200-msg reload
@@ -147,21 +157,9 @@ class CloudStorageModule {
     int? expectedFileId,
   }) async {
     final msgs = await messages.fetchHistory(accountId, chatId, count: 5);
-    for (final msg in msgs) {
-      for (final a in msg.attachments ?? []) {
-        if (a is FileAttachment && a.name != null) {
-          if (expectedFileId == null || a.fileId == expectedFileId) {
-            return CloudFile(
-              name: a.name!,
-              size: a.size,
-              time: msg.time,
-              fileId: a.fileId,
-              messageId: msg.id,
-              chatId: chatId,
-              accountId: accountId,
-            );
-          }
-        }
+    for (final file in _cloudFilesFrom(msgs, chatId, accountId)) {
+      if (expectedFileId == null || file.fileId == expectedFileId) {
+        return file;
       }
     }
     return null;

@@ -1,30 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'persisted_setting.dart';
 
 enum BubbleBehavior { mutable, immutable }
 
 class AppBubbleBehavior {
   static const prefKey = 'app_bubble_behavior';
-  static final ValueNotifier<BubbleBehavior> current = ValueNotifier(
-    BubbleBehavior.mutable,
+
+  static final _setting = PersistedEnum<BubbleBehavior>(
+    prefKey: prefKey,
+    defaultValue: BubbleBehavior.mutable,
+    encode: (value) => value.name,
+    decode: _parse,
   );
 
-  static Future<BubbleBehavior> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final val = prefs.getString(prefKey);
-    return _parse(val);
-  }
+  static ValueNotifier<BubbleBehavior> get current => _setting.current;
 
-  static Future<void> save(BubbleBehavior behavior) async {
-    current.value = behavior;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(prefKey, behavior.name);
-  }
+  static Future<BubbleBehavior> load() => _setting.load();
 
-  static BubbleBehavior _parse(String? val) {
-    if (val == BubbleBehavior.immutable.name) return BubbleBehavior.immutable;
-    return BubbleBehavior.mutable;
-  }
+  static Future<void> save(BubbleBehavior behavior) => _setting.save(behavior);
+
+  static BubbleBehavior _parse(String? val) =>
+      enumFromName(BubbleBehavior.values, val, BubbleBehavior.mutable);
 
   static String label(BubbleBehavior behavior) {
     switch (behavior) {

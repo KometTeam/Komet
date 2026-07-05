@@ -6,6 +6,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../main.dart';
+import '../../../models/contact_info.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -74,7 +75,10 @@ class _ContactsTabState extends State<ContactsTab> {
         child: NfcExchangeSheet(),
       ),
       transitionBuilder: (_, anim, _, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        final curved = CurvedAnimation(
+          parent: anim,
+          curve: Curves.easeOutCubic,
+        );
         return SlideTransition(
           position: Tween(
             begin: const Offset(0, -1),
@@ -104,7 +108,6 @@ class _ContactsTabState extends State<ContactsTab> {
       return;
     }
     final contacts = await ContactsModule.getContacts(p.id);
-    // Sort contacts by first name
     contacts.sort((a, b) => a.firstName.compareTo(b.firstName));
     if (mounted) {
       setState(() {
@@ -324,12 +327,7 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
         return;
       }
       final raw = Map<String, dynamic>.from(contacts.first as Map);
-      String? name;
-      final namesRaw = raw['names'];
-      if (namesRaw is List && namesRaw.isNotEmpty) {
-        final n = namesRaw.first;
-        if (n is Map) name = n['name']?.toString();
-      }
+      final info = ContactInfo.fromMap(raw);
       if (!mounted) return;
       final navigator = Navigator.of(context);
       final accountId = await TokenStorage.getActiveAccountId();
@@ -343,8 +341,8 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
         MaterialPageRoute(
           builder: (_) => ChatInfoScreen(
             chatId: chatId,
-            name: name ?? 'User #$id',
-            imageUrl: raw['baseUrl'] as String? ?? '',
+            name: info.displayName ?? 'User #$id',
+            imageUrl: info.avatarUrl ?? '',
             chatType: 'DIALOG',
             dialogPeerId: id,
           ),

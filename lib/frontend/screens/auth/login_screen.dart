@@ -66,7 +66,11 @@ class _LoginScreenState extends State<LoginScreen> {
       await resetDigitalIdSession();
       try {
         await accountModule.switchAccount(returnId);
-      } catch (_) {}
+      } catch (_) {
+        if (!mounted) return;
+        showCustomNotification(context, 'Не удалось переключить аккаунт');
+        return;
+      }
       if (!mounted) return;
       await Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AdaptiveShell()),
@@ -151,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String _countryDisplayName(CountryName country) {
     final lang = Localizations.localeOf(context).languageCode;
-    return lang == 'ru' ? country.ru : country.en;
+    return country.displayName(lang);
   }
 
   String _phoneMaskHint(CountryName country) {

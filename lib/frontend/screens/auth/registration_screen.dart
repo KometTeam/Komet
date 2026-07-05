@@ -108,9 +108,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             ? cs.primaryContainer
             : cs.surfaceContainerHighest,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(50),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
         child: _isSubmitting
             ? SizedBox(
                 width: 22,
@@ -122,9 +120,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               )
             : Icon(
                 Icons.arrow_forward,
-                color: _canSubmit
-                    ? cs.onPrimaryContainer
-                    : cs.onSurfaceVariant,
+                color: _canSubmit ? cs.onPrimaryContainer : cs.onSurfaceVariant,
               ),
       ),
       body: SafeArea(
@@ -306,12 +302,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       child: CachedNetworkImage(
                         imageUrl: avatar.url,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          color: cs.surfaceContainerHigh,
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          color: cs.surfaceContainerHigh,
-                        ),
+                        placeholder: (_, __) =>
+                            Container(color: cs.surfaceContainerHigh),
+                        errorWidget: (_, __, ___) =>
+                            Container(color: cs.surfaceContainerHigh),
                       ),
                     ),
                   ),

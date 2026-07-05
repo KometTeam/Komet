@@ -11,10 +11,18 @@ import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import 'chats.dart';
+import 'complaints.dart';
 import 'contacts.dart';
 import 'folders.dart';
 import 'messages.dart';
 import 'webapp.dart';
+
+import 'account/account_models.dart';
+import 'account/privacy_module.dart';
+import 'account/profile_module.dart';
+import 'account/sessions_module.dart';
+import 'account/two_factor_module.dart';
+export 'account/account_models.dart';
 
 String _normalizeAuthPhone(String phone) {
   final digits = phone.replaceAll(RegExp(r'\D'), '');
@@ -26,427 +34,12 @@ String _maskPhone(String phone) {
   return '${phone.substring(0, 3)}***${phone.substring(phone.length - 2)}';
 }
 
-class PrivacyConfig {
-  final String searchByPhone;
-  final String incomingCall;
-  final bool doubleTapReactionDisabled;
-  final bool safeModeNoPin;
-  final String? doubleTapReactionValue;
-  final String familyProtection;
-  final bool pushDetails;
-  final bool hidden;
-  final String chatsInvite;
-  final bool pushNewContacts;
-  final bool unsafeFiles;
-  final String phoneNumberPrivacy;
-  final String inactiveTtl;
-  final bool showReadMark;
-  final bool altKeyboard;
-  final bool contentLevelAccess;
-  final String stickersSuggest;
-  final bool safeMode;
-  final bool audioTranscriptionEnabled;
-  final String chatsPushNotification;
-  final String mCallPushNotification;
-  final String pushSound;
-  final String chatsPushSound;
-  final String hash;
-
-  const PrivacyConfig({
-    required this.searchByPhone,
-    required this.incomingCall,
-    required this.doubleTapReactionDisabled,
-    required this.safeModeNoPin,
-    this.doubleTapReactionValue,
-    required this.familyProtection,
-    required this.pushDetails,
-    required this.hidden,
-    required this.chatsInvite,
-    required this.pushNewContacts,
-    required this.unsafeFiles,
-    required this.phoneNumberPrivacy,
-    required this.inactiveTtl,
-    required this.showReadMark,
-    required this.altKeyboard,
-    required this.contentLevelAccess,
-    required this.stickersSuggest,
-    required this.safeMode,
-    required this.audioTranscriptionEnabled,
-    required this.chatsPushNotification,
-    required this.mCallPushNotification,
-    required this.pushSound,
-    required this.chatsPushSound,
-    required this.hash,
-  });
-
-  factory PrivacyConfig.fromMap(Map<dynamic, dynamic> map) {
-    return PrivacyConfig(
-      searchByPhone: map['SEARCH_BY_PHONE']?.toString() ?? 'ALL',
-      incomingCall: map['INCOMING_CALL']?.toString() ?? 'CONTACTS',
-      doubleTapReactionDisabled: map['DOUBLE_TAP_REACTION_DISABLED'] ?? false,
-      safeModeNoPin: map['SAFE_MODE_NO_PIN'] ?? false,
-      doubleTapReactionValue: map['DOUBLE_TAP_REACTION_VALUE']?.toString(),
-      familyProtection: map['FAMILY_PROTECTION']?.toString() ?? 'OFF',
-      pushDetails: map['PUSH_DETAILS'] ?? false,
-      hidden: map['HIDDEN'] ?? true,
-      chatsInvite: map['CHATS_INVITE']?.toString() ?? 'CONTACTS',
-      pushNewContacts: map['PUSH_NEW_CONTACTS'] ?? false,
-      unsafeFiles: map['UNSAFE_FILES'] ?? true,
-      phoneNumberPrivacy: map['PHONE_NUMBER_PRIVACY']?.toString() ?? 'ALL',
-      inactiveTtl: map['INACTIVE_TTL']?.toString() ?? '6M',
-      showReadMark: map['SHOW_READ_MARK'] ?? true,
-      altKeyboard: map['ALT_KEYBOARD'] ?? false,
-      contentLevelAccess: map['CONTENT_LEVEL_ACCESS'] ?? false,
-      stickersSuggest: map['STICKERS_SUGGEST']?.toString() ?? 'ON',
-      safeMode: map['SAFE_MODE'] ?? false,
-      audioTranscriptionEnabled: map['AUDIO_TRANSCRIPTION_ENABLED'] ?? true,
-      chatsPushNotification: map['CHATS_PUSH_NOTIFICATION']?.toString() ?? 'ON',
-      mCallPushNotification: map['M_CALL_PUSH_NOTIFICATION']?.toString() ?? 'ON',
-      pushSound: map['PUSH_SOUND']?.toString() ?? 'oki.aiff',
-      chatsPushSound: map['CHATS_PUSH_SOUND']?.toString() ?? 'oki.aiff',
-      hash: map['hash']?.toString() ?? '',
-    );
-  }
-
-  String toJson() => jsonEncode({
-    'SEARCH_BY_PHONE': searchByPhone,
-    'INCOMING_CALL': incomingCall,
-    'DOUBLE_TAP_REACTION_DISABLED': doubleTapReactionDisabled,
-    'SAFE_MODE_NO_PIN': safeModeNoPin,
-    'DOUBLE_TAP_REACTION_VALUE': doubleTapReactionValue,
-    'FAMILY_PROTECTION': familyProtection,
-    'PUSH_DETAILS': pushDetails,
-    'HIDDEN': hidden,
-    'CHATS_INVITE': chatsInvite,
-    'PUSH_NEW_CONTACTS': pushNewContacts,
-    'UNSAFE_FILES': unsafeFiles,
-    'PHONE_NUMBER_PRIVACY': phoneNumberPrivacy,
-    'INACTIVE_TTL': inactiveTtl,
-    'SHOW_READ_MARK': showReadMark,
-    'ALT_KEYBOARD': altKeyboard,
-    'CONTENT_LEVEL_ACCESS': contentLevelAccess,
-    'STICKERS_SUGGEST': stickersSuggest,
-    'SAFE_MODE': safeMode,
-    'AUDIO_TRANSCRIPTION_ENABLED': audioTranscriptionEnabled,
-    'CHATS_PUSH_NOTIFICATION': chatsPushNotification,
-    'M_CALL_PUSH_NOTIFICATION': mCallPushNotification,
-    'PUSH_SOUND': pushSound,
-    'CHATS_PUSH_SOUND': chatsPushSound,
-    'hash': hash,
-  });
-
-  factory PrivacyConfig.fromJson(String json) {
-    try {
-      final map = jsonDecode(json) as Map<String, dynamic>;
-      return PrivacyConfig.fromMap(map);
-    } catch (_) {
-      return PrivacyConfig.empty();
-    }
-  }
-
-  static PrivacyConfig empty() {
-    return const PrivacyConfig(
-      searchByPhone: 'ALL',
-      incomingCall: 'CONTACTS',
-      doubleTapReactionDisabled: false,
-      safeModeNoPin: false,
-      familyProtection: 'OFF',
-      pushDetails: false,
-      hidden: true,
-      chatsInvite: 'CONTACTS',
-      pushNewContacts: false,
-      unsafeFiles: true,
-      phoneNumberPrivacy: 'ALL',
-      inactiveTtl: '6M',
-      showReadMark: true,
-      altKeyboard: false,
-      contentLevelAccess: false,
-      stickersSuggest: 'ON',
-      safeMode: false,
-      audioTranscriptionEnabled: true,
-      chatsPushNotification: 'ON',
-      mCallPushNotification: 'ON',
-      pushSound: 'oki.aiff',
-      chatsPushSound: 'oki.aiff',
-      hash: '',
-    );
-  }
-}
-
-class BlockedContact {
-  final int id;
-  final String? firstName;
-  final String? lastName;
-  final String? baseUrl;
-  final int? photoId;
-  final String status;
-  final int registrationTime;
-  final int updateTime;
-
-  const BlockedContact({
-    required this.id,
-    this.firstName,
-    this.lastName,
-    this.baseUrl,
-    this.photoId,
-    required this.status,
-    required this.registrationTime,
-    required this.updateTime,
-  });
-
-  factory BlockedContact.fromMap(Map<dynamic, dynamic> map) {
-    String? firstName;
-    String? lastName;
-    final names = map['names'] as List?;
-    if (names != null && names.isNotEmpty) {
-      for (final n in names) {
-        if (n is Map) {
-          firstName = n['firstName'] as String?;
-          lastName = n['lastName'] as String?;
-          if (n['type'] == 'ONEME') break;
-        }
-      }
-    }
-
-    return BlockedContact(
-      id: map['id'] as int? ?? 0,
-      firstName: firstName,
-      lastName: lastName,
-      baseUrl: map['baseUrl'] as String?,
-      photoId: map['photoId'] as int?,
-      status: map['status']?.toString() ?? 'BLOCKED',
-      registrationTime: map['registrationTime'] as int? ?? 0,
-      updateTime: map['updateTime'] as int? ?? 0,
-    );
-  }
-}
-
-class TwoFactorDetails {
-  final bool enabled;
-  final String? email;
-  final String? hint;
-
-  const TwoFactorDetails({required this.enabled, this.email, this.hint});
-}
-
-enum AuthRequestType {
-  startAuth('START_AUTH'),
-  resend('RESEND'),
-  checkCode('CHECK_CODE'),
-  register('REGISTER');
-
-  const AuthRequestType(this.value);
-  final String value;
-}
-
-enum LoginStatus { idle, loading, success, error }
-
-class WrongDeviceTokenException implements Exception {
-  const WrongDeviceTokenException();
-  @override
-  String toString() => 'WrongDeviceTokenException';
-}
-
-class RequestCodeResult {
-  final String token;
-
-  const RequestCodeResult({required this.token});
-}
-
-class PresetAvatar {
-  final int id;
-  final String url;
-
-  const PresetAvatar({required this.id, required this.url});
-}
-
-class PresetAvatarCategory {
-  final String name;
-  final List<PresetAvatar> avatars;
-
-  const PresetAvatarCategory({required this.name, required this.avatars});
-}
-
-class VerifyCodeResult {
-  final Map<dynamic, dynamic> payload;
-
-  const VerifyCodeResult({required this.payload});
-
-  String? get loginToken => _nestedToken('LOGIN');
-
-  String? get registerToken => _nestedToken('REGISTER');
-
-  bool get isRegistration => registerToken != null && loginToken == null;
-
-  List<PresetAvatarCategory> get presetAvatars {
-    final raw = payload['presetAvatars'];
-    if (raw is! List) return const [];
-    final categories = <PresetAvatarCategory>[];
-    for (final cat in raw) {
-      if (cat is! Map) continue;
-      final avatarsRaw = cat['avatars'];
-      if (avatarsRaw is! List) continue;
-      final avatars = <PresetAvatar>[];
-      for (final a in avatarsRaw) {
-        if (a is! Map) continue;
-        final id = a['id'];
-        final url = a['url'];
-        if (id is int && url is String && url.isNotEmpty) {
-          avatars.add(PresetAvatar(id: id, url: url));
-        }
-      }
-      if (avatars.isNotEmpty) {
-        categories.add(
-          PresetAvatarCategory(
-            name: cat['name']?.toString() ?? '',
-            avatars: avatars,
-          ),
-        );
-      }
-    }
-    return categories;
-  }
-
-  bool get requiresPassword => payload['passwordChallenge'] != null;
-
-  Map<dynamic, dynamic>? get passwordChallenge {
-    final c = payload['passwordChallenge'];
-    return c is Map ? c.cast<dynamic, dynamic>() : null;
-  }
-
-  String? get challengeTrackId => passwordChallenge?['trackId'] as String?;
-
-  String? get challengeHint => passwordChallenge?['hint'] as String?;
-
-  int? get accountId {
-    final profileData = payload['profile'];
-    if (profileData is! Map) return null;
-    final contact = profileData['contact'];
-    if (contact is! Map) return null;
-    return contact['id'] as int?;
-  }
-
-  String? _nestedToken(String key) {
-    final attrs = payload['tokenAttrs'];
-    if (attrs is! Map) return null;
-    final entry = attrs[key];
-    if (entry is! Map) return null;
-    return entry['token'] as String?;
-  }
-}
-
-class TwoFactorResult {
-  final String loginToken;
-
-  const TwoFactorResult({required this.loginToken});
-}
-
-class LoginSyncParams {
-  final int chatsSync;
-  final int contactsSync;
-  final int callsSync;
-  final int draftsSync;
-  final int bannersSync;
-  final int presenceSync;
-  final int lastLogin;
-  final String? configHash;
-  final String? chatCacheFingerprint;
-
-  const LoginSyncParams({
-    required this.chatsSync,
-    required this.contactsSync,
-    required this.callsSync,
-    required this.draftsSync,
-    required this.bannersSync,
-    required this.presenceSync,
-    required this.lastLogin,
-    this.configHash,
-    this.chatCacheFingerprint,
-  });
-
-  static Future<LoginSyncParams?> fromDatabase(int accountId) async {
-    final values = await AppDatabase.getAllSyncValues(accountId);
-    final lastLogin = values[SyncKey.lastLogin];
-    if (lastLogin == null) return null;
-
-    return LoginSyncParams(
-      chatsSync: int.tryParse(values[SyncKey.chatsSync] ?? '') ?? 0,
-      contactsSync: int.tryParse(values[SyncKey.contactsSync] ?? '') ?? 0,
-      callsSync: int.tryParse(values[SyncKey.callsSync] ?? '') ?? 0,
-      draftsSync: int.tryParse(values[SyncKey.draftsSync] ?? '') ?? 0,
-      bannersSync: int.tryParse(values[SyncKey.bannersSync] ?? '') ?? 0,
-      presenceSync: int.tryParse(values[SyncKey.presenceSync] ?? '') ?? -1,
-      lastLogin: int.tryParse(lastLogin) ?? 0,
-      configHash: values[SyncKey.configHash],
-      chatCacheFingerprint: values[SyncKey.chatCacheFingerprint],
-    );
-  }
-}
-
-class SessionInfo {
-  final int? id;
-  final String client;
-  final String location;
-  final bool current;
-  final int time;
-  final String info;
-
-  const SessionInfo({
-    this.id,
-    required this.client,
-    required this.location,
-    required this.current,
-    required this.time,
-    required this.info,
-  });
-
-  factory SessionInfo.fromMap(Map<dynamic, dynamic> map) {
-    return SessionInfo(
-      id: map['id'] is int
-          ? map['id']
-          : (int.tryParse(map['id']?.toString() ?? '')),
-      client: map['client'] ?? '',
-      location: map['location'] ?? '',
-      current: map['current'] ?? false,
-      time: map['time'] ?? 0,
-      info: map['info'] ?? '',
-    );
-  }
-
-  int get uniqueId => Object.hash(id, client, time, info);
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SessionInfo &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          client == other.client &&
-          location == other.location &&
-          current == other.current &&
-          time == other.time &&
-          info == other.info;
-
-  @override
-  int get hashCode => Object.hash(id, client, location, current, time, info);
-}
-
-class LoginResult {
-  final ProfileData profile;
-  final String? updatedToken;
-  final int serverTime;
-  final Map<dynamic, dynamic> raw;
-
-  const LoginResult({
-    required this.profile,
-    required this.updatedToken,
-    required this.serverTime,
-    required this.raw,
-  });
-}
-
 class AccountModule {
   final Api _api;
+  late final SessionsModule _sessions = SessionsModule(_api);
+  late final PrivacyModule _privacy = PrivacyModule(_api);
+  late final ProfileModule _profile = ProfileModule(_api);
+  late final TwoFactorModule _twoFactor = TwoFactorModule(_api, _profile);
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
   bool _loggedIn = false;
 
@@ -462,416 +55,99 @@ class AccountModule {
   /// login (opcode 19), а не просто после хэндшейка (opcode 6).
   bool get isLoggedIn => _loggedIn;
 
-  Future<PrivacyConfig> getPrivacyConfig() async {
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId != null) {
-      final saved = await AppDatabase.getPrivacyConfig(accountId);
-      if (saved != null) return PrivacyConfig.fromJson(saved);
-    }
-    return PrivacyConfig.empty();
-  }
+  Future<PrivacyConfig> getPrivacyConfig() => _privacy.getPrivacyConfig();
 
-  Future<List<BlockedContact>> getBlockedContacts() async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.contactList, {
-      'status': 'BLOCKED',
-      'count': 100,
-      'from': 0,
-    });
-    _checkPacketError(packet, 'getBlockedContacts');
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'getBlockedContacts: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
-    final contacts = data['contacts'] as List?;
-    if (contacts == null) return [];
-    return contacts
-        .whereType<Map>()
-        .map((c) => BlockedContact.fromMap(c.cast<dynamic, dynamic>()))
-        .toList();
-  }
+  Future<List<BlockedContact>> getBlockedContacts() =>
+      _privacy.getBlockedContacts();
 
-  Future<PrivacyConfig> updatePrivacyConfig(
-    Map<String, dynamic> settings,
-  ) async {
-    _ensureOnline();
-    final payload = <dynamic, dynamic>{
-      'settings': {'user': settings},
-    };
-    final packet = await _api.sendRequest(Opcode.config, payload);
-    _checkPacketError(packet, 'updatePrivacyConfig');
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'updatePrivacyConfig: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
-    final user = data['user'];
-    if (user is! Map) {
-      throw Exception('updatePrivacyConfig: отсутствует user в payload');
-    }
-    final config = PrivacyConfig.fromMap(user.cast<dynamic, dynamic>());
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId != null) {
-      await AppDatabase.savePrivacyConfig(accountId, config.toJson());
-    }
-    return config;
-  }
+  Future<PrivacyConfig> updatePrivacyConfig(Map<String, dynamic> settings) =>
+      _privacy.updatePrivacyConfig(settings);
 
-  Future<void> registerPushToken(String pushToken) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.config, <dynamic, dynamic>{
-      'pushToken': pushToken,
-      'pushOptions': 0,
-    });
-    if (packet.isError) {
-      final msg = messageFromErrorPayload(packet.payload).toUpperCase();
-      if (msg.contains('WRONG_DEVICE_TOKEN') ||
-          msg.contains('WRONG.DEVICE.TOKEN')) {
-        throw const WrongDeviceTokenException();
-      }
-      throw PacketError(messageFromErrorPayload(packet.payload));
-    }
-  }
+  Future<PrivacyConfig> setChatsPushNotification(bool value) =>
+      _privacy.setChatsPushNotification(value);
 
-  Future<void> unregisterPushToken(String pushToken) async {
-    if (_api.state != SessionState.online) return;
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) return;
-    final authToken = await TokenStorage.readToken(accountId);
-    if (authToken == null) return;
-    await _api.sendRequest(Opcode.logout, <dynamic, dynamic>{
-      'token': authToken,
-      'pushToken': pushToken,
-    });
-  }
+  Future<PrivacyConfig> setMessagePreview(bool value) =>
+      _privacy.setMessagePreview(value);
 
-  Future<ProfileData> updateProfileName(String firstName, String? lastName) async {
-    _ensureOnline();
-    final payload = <dynamic, dynamic>{
-      'firstName': firstName,
-    };
-    if (lastName != null) payload['lastName'] = lastName;
-    final packet = await _api.sendRequest(Opcode.profile, payload);
-    if (packet.isError) {
-      throw Exception(packet.payload?.toString() ?? 'Server error');
-    }
-    final data = packet.payload as Map?;
-    if (data == null) throw Exception('Empty response');
-    final profile = data['profile'] as Map?;
-    if (profile == null) throw Exception('No profile in response');
-    final contact = profile['contact'] as Map?;
-    if (contact == null) throw Exception('No contact in response');
-    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-    await AppDatabase.saveProfile(newProfile, isActive: true);
-    return newProfile;
-  }
+  Future<PrivacyConfig> setNotificationSound(bool value) =>
+      _privacy.setNotificationSound(value);
 
-  Future<ProfileData> updateProfileAvatar(String photoToken, {String avatarType = 'USER_AVATAR'}) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.profile, {
-      'photoToken': photoToken,
-      'avatarType': avatarType,
-    });
-    if (packet.isError) {
-      throw Exception(packet.payload?.toString() ?? 'Server error');
-    }
-    final data = packet.payload as Map?;
-    if (data == null) throw Exception('Empty response');
-    final profile = data['profile'] as Map?;
-    if (profile == null) throw Exception('No profile in response');
-    final contact = profile['contact'] as Map?;
-    if (contact == null) throw Exception('No contact in response');
-    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-    await AppDatabase.saveProfile(newProfile, isActive: true);
-    return newProfile;
-  }
+  Future<PrivacyConfig> setCallNotifications(bool value) =>
+      _privacy.setCallNotifications(value);
 
-  Future<String> getAvatarUploadUrl() async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.photoUpload, {
-      'count': 1,
-      'profile': true,
-    });
-    if (packet.isError) {
-      throw Exception(packet.payload?.toString() ?? 'Server error');
-    }
-    final data = packet.payload as Map?;
-    if (data == null) throw Exception('Empty response');
-    final url = data['url'] as String?;
-    if (url == null) throw Exception('No url in response');
-    return url;
-  }
+  Future<PrivacyConfig> setNewContacts(bool value) =>
+      _privacy.setNewContacts(value);
 
-  Future<ProfileData> removeProfilePhoto(int photoId) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.removeContactPhoto, {
-      'photoId': photoId,
-    });
-    if (packet.isError) {
-      throw Exception(packet.payload?.toString() ?? 'Server error');
-    }
-    final data = packet.payload as Map?;
-    if (data == null) throw Exception('Empty response');
-    final profile = data['profile'] as Map?;
-    if (profile == null) throw Exception('No profile in response');
-    final contact = profile['contact'] as Map?;
-    if (contact == null) throw Exception('No contact in response');
-    final newProfile = ProfileData.fromServerMap(contact.cast<dynamic, dynamic>());
-    await AppDatabase.saveProfile(newProfile, isActive: true);
-    return newProfile;
-  }
+  Future<void> registerPushToken(String pushToken) =>
+      _privacy.registerPushToken(pushToken);
 
-  // 2FA Creation (when not set)
-  Future<String> create2faTrack() async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authCreateTrack, {'type': 0});
-    _checkPacketError(packet, 'create2faTrack');
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'create2faTrack: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
-    final trackId = data['trackId'] as String?;
-    if (trackId == null) {
-      throw Exception('create2faTrack: отсутствует trackId');
-    }
-    return trackId;
-  }
+  Future<void> unregisterPushToken(String pushToken) =>
+      _privacy.unregisterPushToken(pushToken);
 
-  Future<void> set2faPassword(String trackId, String password) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authValidatePassword, {
-      'trackId': trackId,
-      'password': password,
-    });
-    _checkPacketError(packet, 'set2faPassword');
-    if (packet.payload != null && packet.payload is! Map) {
-      throw Exception('set2faPassword: неожиданный ответ');
-    }
-  }
+  Future<ProfileData> updateProfileName(String firstName, String? lastName) =>
+      _profile.updateProfileName(firstName, lastName);
 
-  Future<void> set2faHint(String trackId, String hint) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authValidateHint, {
-      'trackId': trackId,
-      'hint': hint,
-    });
-    _checkPacketError(packet, 'set2faHint');
-    if (packet.payload != null && packet.payload is! Map) {
-      throw Exception('set2faHint: неожиданный ответ');
-    }
-  }
+  Future<ProfileData> updateProfileAvatar(
+    String photoToken, {
+    String avatarType = 'USER_AVATAR',
+  }) => _profile.updateProfileAvatar(photoToken, avatarType: avatarType);
 
-  Future<int> verify2faEmail(String trackId, String email) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authVerifyEmail, {
-      'trackId': trackId,
-      'email': email,
-    });
-    _checkPacketError(packet, 'verify2faEmail');
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'verify2faEmail: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
-    final blockingDuration = data['blockingDuration'] as int? ?? 60;
-    return blockingDuration;
-  }
+  Future<String> getAvatarUploadUrl() => _profile.getAvatarUploadUrl();
 
-  Future<String> verify2faCode(String trackId, String code) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authCheckEmail, {
-      'trackId': trackId,
-      'verifyCode': code,
-    });
-    _checkPacketError(packet, 'verify2faCode');
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'verify2faCode: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
-    final email = data['email'] as String? ?? '';
-    return email;
-  }
+  Future<ProfileData> removeProfilePhoto(int photoId) =>
+      _profile.removeProfilePhoto(photoId);
+
+  Future<String> create2faTrack() => _twoFactor.create2faTrack();
+
+  Future<void> set2faPassword(String trackId, String password) =>
+      _twoFactor.set2faPassword(trackId, password);
+
+  Future<void> set2faHint(String trackId, String hint) =>
+      _twoFactor.set2faHint(trackId, hint);
+
+  Future<int> verify2faEmail(String trackId, String email) =>
+      _twoFactor.verify2faEmail(trackId, email);
+
+  Future<String> verify2faCode(String trackId, String code) =>
+      _twoFactor.verify2faCode(trackId, code);
 
   Future<ProfileData> confirm2fa({
     required String trackId,
     required String password,
     String? hint,
     bool withEmail = true,
-  }) async {
-    _ensureOnline();
-    final capabilities = <int>[0, if (hint != null) 3, if (withEmail) 4];
-    final payload = <dynamic, dynamic>{
-      'expectedCapabilities': capabilities,
-      'trackId': trackId,
-      'password': password,
-    };
-    if (hint != null) payload['hint'] = hint;
-    return _processProfileUpdate(
-      _api.sendRequest(Opcode.authSet2fa, payload),
-      'confirm2fa',
-    );
-  }
+  }) => _twoFactor.confirm2fa(
+    trackId: trackId,
+    password: password,
+    hint: hint,
+    withEmail: withEmail,
+  );
 
-  // 2FA Management (when already set)
-  Future<String> enter2faPanel() async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authCreateTrack, {'type': 0});
-    _checkPacketError(packet, 'enter2faPanel');
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'enter2faPanel: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
-    final trackId = data['trackId'] as String?;
-    if (trackId == null) {
-      throw Exception('enter2faPanel: отсутствует trackId');
-    }
-    return trackId;
-  }
+  Future<String> enter2faPanel() => _twoFactor.enter2faPanel();
 
-  Future<TwoFactorDetails> get2faDetails(String trackId) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.auth2faDetails, {
-      'trackId': trackId,
-    });
-    _checkPacketError(packet, 'get2faDetails');
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'get2faDetails: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
-    final password = data['password'] as Map?;
-    return TwoFactorDetails(
-      enabled: password?['enabled'] ?? false,
-      email: password?['email'] as String?,
-      hint: password?['hint'] as String?,
-    );
-  }
+  Future<TwoFactorDetails> get2faDetails(String trackId) =>
+      _twoFactor.get2faDetails(trackId);
 
-  Future<TwoFactorDetails> get2faStatus() async {
-    final trackId = await enter2faPanel();
-    return get2faDetails(trackId);
-  }
+  Future<TwoFactorDetails> get2faStatus() => _twoFactor.get2faStatus();
 
-  Future<void> check2faPassword(String trackId, String password) async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.authCheckPassword, {
-      'trackId': trackId,
-      'password': password,
-    });
-    _checkPacketError(packet, 'check2faPassword');
-    final data = packet.payload;
-    if (data is Map && data['error'] != null) {
-      throw Exception('Неверный пароль');
-    }
-  }
+  Future<void> check2faPassword(String trackId, String password) =>
+      _twoFactor.check2faPassword(trackId, password);
 
   Future<ProfileData> update2faPassword({
     required String trackId,
     required String newPassword,
     String? hint,
-  }) async {
-    _ensureOnline();
-    final validatePacket = await _api.sendRequest(Opcode.authValidatePassword, {
-      'trackId': trackId,
-      'password': newPassword,
-    });
-    _checkPacketError(validatePacket, 'update2faPassword: validate');
-    if (validatePacket.payload != null && validatePacket.payload is! Map) {
-      throw Exception('update2faPassword: неожиданный ответ при валидации');
-    }
+  }) => _twoFactor.update2faPassword(
+    trackId: trackId,
+    newPassword: newPassword,
+    hint: hint,
+  );
 
-    if (hint != null) {
-      final hintPacket = await _api.sendRequest(Opcode.authValidateHint, {
-        'trackId': trackId,
-        'hint': hint,
-      });
-      _checkPacketError(hintPacket, 'update2faPassword: hint');
-    }
+  Future<ProfileData> commit2faEmailChange(String trackId) =>
+      _twoFactor.commit2faEmailChange(trackId);
 
-    final payload = <dynamic, dynamic>{
-      'expectedCapabilities': <int>[1, if (hint != null) 3],
-      'trackId': trackId,
-      'password': newPassword,
-    };
-    if (hint != null) payload['hint'] = hint;
-
-    return _processProfileUpdate(
-      _api.sendRequest(Opcode.authSet2fa, payload),
-      'update2faPassword',
-    );
-  }
-
-  Future<ProfileData> commit2faEmailChange(String trackId) async {
-    _ensureOnline();
-    final payload = <dynamic, dynamic>{
-      'expectedCapabilities': [4],
-      'trackId': trackId,
-    };
-    return _processProfileUpdate(
-      _api.sendRequest(Opcode.authSet2fa, payload),
-      'commit2faEmailChange',
-    );
-  }
-
-  Future<ProfileData> remove2fa(String trackId) async {
-    _ensureOnline();
-    final payload = <dynamic, dynamic>{
-      'expectedCapabilities': [5],
-      'trackId': trackId,
-      'remove2fa': true,
-    };
-    return _processProfileUpdate(
-      _api.sendRequest(Opcode.authSet2fa, payload),
-      'remove2fa',
-    );
-  }
-
-  Future<ProfileData> _processProfileUpdate(
-    Future<Packet> requestFuture,
-    String tag,
-  ) async {
-    final completer = Completer<ProfileData>();
-    final sub = _api.pushStream
-        .where((p) => p.opcode == Opcode.notifProfile)
-        .listen((push) {
-      if (completer.isCompleted) return;
-      final payload = push.payload;
-      if (payload is! Map) return;
-      final profile = payload['profile'];
-      if (profile is! Map) return;
-      final contact = profile['contact'];
-      if (contact is! Map) return;
-      completer.complete(
-        ProfileData.fromServerMap(contact.cast<dynamic, dynamic>()),
-      );
-    });
-    final timer = Timer(const Duration(seconds: 15), () {
-      if (!completer.isCompleted) {
-        completer.completeError(
-          Exception('Таймаут ожидания обновления профиля'),
-        );
-      }
-    });
-    try {
-      final packet = await requestFuture;
-      _checkPacketError(packet, tag);
-      return await completer.future;
-    } finally {
-      timer.cancel();
-      await sub.cancel();
-    }
-  }
+  Future<ProfileData> remove2fa(String trackId) =>
+      _twoFactor.remove2fa(trackId);
 
   Future<RequestCodeResult> requestCode(
     String phone, {
@@ -896,14 +172,7 @@ class AccountModule {
 
     final packet = await _api.sendRequest(Opcode.auth, payload);
 
-    _checkPacketError(packet, 'verifyCode');
-
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'verifyCode: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
+    final data = _requireMapPayload(packet, 'verifyCode');
 
     final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
 
@@ -944,14 +213,7 @@ class AccountModule {
 
     final packet = await _api.sendRequest(Opcode.authConfirm, payload);
 
-    _checkPacketError(packet, 'completeRegistration');
-
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'completeRegistration: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
+    final data = _requireMapPayload(packet, 'completeRegistration');
 
     final profileMap = data['profile'];
     if (profileMap is! Map) {
@@ -996,18 +258,13 @@ class AccountModule {
       }
     }
 
-    final requestPayload = _buildLoginPayload(authToken, syncParams);
+    final requestPayload = buildLoginPayload(authToken, sync: syncParams);
 
     _loginStatusController.add(LoginStatus.loading);
     try {
       final packet = await _api.sendRequest(Opcode.login, requestPayload);
 
-      _checkPacketError(packet, 'login');
-
-      final data = packet.payload;
-      if (data is! Map) {
-        throw Exception('login: неожиданный тип payload: ${data.runtimeType}');
-      }
+      final data = _requireMapPayload(packet, 'login');
 
       final dataMap = data.cast<dynamic, dynamic>();
 
@@ -1037,39 +294,12 @@ class AccountModule {
     }
   }
 
-  Future<List<SessionInfo>> getSessions() async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.sessionsInfo, {});
-    _checkPacketError(packet, 'getSessions');
-    final data = packet.payload;
-    if (data is! Map || data['sessions'] is! List) return [];
-    final sessions = data['sessions'] as List;
-    return sessions
-        .map((s) => SessionInfo.fromMap(s as Map<dynamic, dynamic>))
-        .toList();
-  }
+  Future<List<SessionInfo>> getSessions() => _sessions.getSessions();
 
-  Future<void> terminateOtherSessions() async {
-    _ensureOnline();
-    final packet = await _api.sendRequest(Opcode.sessionsClose, {});
-    _checkPacketError(packet, 'terminateOtherSessions');
-  }
+  Future<void> terminateOtherSessions() => _sessions.terminateOtherSessions();
 
-  Future<void> authorizeWebQrLogin(String qrLink) async {
-    _ensureOnline();
-    final link = qrLink.trim();
-    if (link.isEmpty) {
-      throw ArgumentError('Пустая ссылка из QR');
-    }
-
-    await _api.sendRequest(Opcode.ping, {'interactive': true});
-    await _api.sendRequest(Opcode.sessionsInfo, {});
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    final packet = await _api.sendRequest(Opcode.authQrApprove, {
-      'qrLink': link,
-    });
-    _checkPacketError(packet, 'authorizeWebQrLogin');
-  }
+  Future<void> authorizeWebQrLogin(String qrLink) =>
+      _sessions.authorizeWebQrLogin(qrLink);
 
   Future<void> beginAddAccount() async {
     final existing = await AppDatabase.loadAllProfiles();
@@ -1085,7 +315,8 @@ class AccountModule {
 
     ContactCache.clear();
     TranscriptionCache.clear();
-    ChatsModule.resetForAccountSwitch();
+    ComplaintsModule.clear();
+    chats.resetForAccountSwitch();
 
     logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
   }
@@ -1098,7 +329,8 @@ class AccountModule {
 
     ContactCache.clear();
     TranscriptionCache.clear();
-    ChatsModule.resetForAccountSwitch();
+    ComplaintsModule.clear();
+    chats.resetForAccountSwitch();
 
     await _api.connect();
     if (_api.state != SessionState.online) {
@@ -1128,12 +360,24 @@ class AccountModule {
 
     ContactCache.clear();
     TranscriptionCache.clear();
-    ChatsModule.resetForAccountSwitch();
+    ComplaintsModule.clear();
+    chats.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
 
     try {
       await _api.connect();
-    } catch (_) {}
+    } catch (e) {
+      logger.e(
+        'switchAccount: ошибка соединения при переключении на $accountId: $e',
+      );
+      throw StateError('switchAccount: не удалось подключиться к серверу');
+    }
+    if (_api.state != SessionState.online) {
+      logger.w(
+        'switchAccount: нет соединения с сервером после переключения на $accountId',
+      );
+      throw StateError('switchAccount: нет соединения с сервером');
+    }
 
     logger.i('Активный аккаунт переключён на $accountId');
     return profile;
@@ -1148,6 +392,20 @@ class AccountModule {
     await TokenStorage.deleteAccount(accountId);
     await SpoofingService.clearAccountSpoof(accountId);
     logger.i('Аккаунт $accountId удалён локально');
+  }
+
+  Future<void> logout() async {
+    try {
+      await _api.disconnect();
+    } catch (_) {}
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId != null) {
+      await removeAccount(accountId);
+    }
+    ContactCache.clear();
+    TranscriptionCache.clear();
+    ComplaintsModule.clear();
+    chats.resetForAccountSwitch();
   }
 
   Future<TwoFactorResult> checkPassword({
@@ -1168,14 +426,7 @@ class AccountModule {
       payload,
     );
 
-    _checkPacketError(packet, 'checkPassword');
-
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'checkPassword: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
+    final data = _requireMapPayload(packet, 'checkPassword');
 
     if (data['error'] != null) {
       throw Exception('checkPassword: неверный пароль');
@@ -1200,13 +451,14 @@ class AccountModule {
     return TwoFactorResult(loginToken: loginToken);
   }
 
-  Map<dynamic, dynamic> _buildLoginPayload(
-    String token,
+  Map<dynamic, dynamic> buildLoginPayload(
+    String token, {
     LoginSyncParams? sync,
-  ) {
+    bool? interactive,
+  }) {
     final payload = <dynamic, dynamic>{
       'token': token,
-      'interactive': !KometSettings.ghostMode.value,
+      'interactive': interactive ?? !KometSettings.ghostMode.value,
       'exp': {
         'chatsCountGroups': Uint8List.fromList([0x0b, 0x32]),
       },
@@ -1215,8 +467,10 @@ class AccountModule {
     final callsSeed = _api.callsSeed;
     final deviceId = _api.deviceId;
     if (callsSeed != null && deviceId != null) {
-      payload['chatCacheFingerprint'] =
-          ChatCacheFingerprint.compute(callsSeed, deviceId);
+      payload['chatCacheFingerprint'] = ChatCacheFingerprint.compute(
+        callsSeed,
+        deviceId,
+      );
     }
 
     if (sync != null) {
@@ -1261,7 +515,7 @@ class AccountModule {
 
     await _saveSyncState(data, serverTime, profile.id);
     await ContactsModule.syncFromLoginPayload(data, profile.id);
-    await ChatsModule.syncFromLoginPayload(data, profile.id, profile.id);
+    await chats.syncFromLoginPayload(data, profile.id, profile.id);
 
     final config = data['config'];
     if (config is Map) {
@@ -1271,10 +525,7 @@ class AccountModule {
       );
       final userConfig = config['user'];
       if (userConfig is Map) {
-        await AppDatabase.savePrivacyConfig(
-          profile.id,
-          jsonEncode(userConfig),
-        );
+        await AppDatabase.savePrivacyConfig(profile.id, jsonEncode(userConfig));
       }
     }
     try {
@@ -1323,10 +574,7 @@ class AccountModule {
     }
   }
 
-  Future<void> _saveLoginInfo(
-    Map<dynamic, dynamic> data,
-    int accountId,
-  ) async {
+  Future<void> _saveLoginInfo(Map<dynamic, dynamic> data, int accountId) async {
     final contact = data['profile']?['contact'] as Map?;
     final videoChatHistory = data['videoChatHistory'];
     final chats = data['chats'] as List?;
@@ -1338,7 +586,8 @@ class AccountModule {
     }
     final yMap = serverConfig?['y-map'] as Map?;
     final whiteListLinks = serverConfig?['white-list-links'] as List?;
-    final fileUploadUnsupported = serverConfig?['file-upload-unsupported-types'] as List?;
+    final fileUploadUnsupported =
+        serverConfig?['file-upload-unsupported-types'] as List?;
     final time = data['time'] as int?;
 
     final info = {
@@ -1352,7 +601,12 @@ class AccountModule {
           : null,
       'time': time,
       'server': serverConfig != null
-          ? _extractServerInfo(serverConfig, yMap, whiteListLinks, fileUploadUnsupported)
+          ? _extractServerInfo(
+              serverConfig,
+              yMap,
+              whiteListLinks,
+              fileUploadUnsupported,
+            )
           : null,
       'user': userConfig != null ? _extractUserConfig(userConfig) : null,
     };
@@ -1380,7 +634,11 @@ class AccountModule {
       }
     }
     for (final entry in resolved.entries) {
-      await AppDatabase.setSyncValue(accountId, entry.key, entry.value.toString());
+      await AppDatabase.setSyncValue(
+        accountId,
+        entry.key,
+        entry.value.toString(),
+      );
     }
   }
 
@@ -1388,7 +646,8 @@ class AccountModule {
     int? latestTime;
     for (final chat in chats) {
       final lastEventTime = chat['lastEventTime'] as int?;
-      if (lastEventTime != null && (latestTime == null || lastEventTime > latestTime)) {
+      if (lastEventTime != null &&
+          (latestTime == null || lastEventTime > latestTime)) {
         latestTime = lastEventTime;
       }
     }
@@ -1418,13 +677,16 @@ class AccountModule {
       'image-quality': serverConfig['image-quality'],
       'unsafe-files-alert': serverConfig['unsafe-files-alert'],
       'account-nickname-enabled': serverConfig['account-nickname-enabled'],
-      'mentions_entity_names_limit': serverConfig['mentions_entity_names_limit'],
+      'mentions_entity_names_limit':
+          serverConfig['mentions_entity_names_limit'],
       'reactions-enabled': serverConfig['reactions-enabled'],
-      'y-map': yMap != null ? {
-        'tile': yMap['tile'],
-        'geocoder': yMap['geocoder'],
-        'static': yMap['static'],
-      } : null,
+      'y-map': yMap != null
+          ? {
+              'tile': yMap['tile'],
+              'geocoder': yMap['geocoder'],
+              'static': yMap['static'],
+            }
+          : null,
       'white-list-links': whiteListLinks,
       'file-upload-unsupported-types': fileUploadUnsupported,
     };
@@ -1441,7 +703,8 @@ class AccountModule {
       'AUDIO_TRANSCRIPTION_ENABLED': userConfig['AUDIO_TRANSCRIPTION_ENABLED'],
       'SEARCH_BY_PHONE': userConfig['SEARCH_BY_PHONE'],
       'INCOMING_CALL': userConfig['INCOMING_CALL'],
-      'DOUBLE_TAP_REACTION_DISABLED': userConfig['DOUBLE_TAP_REACTION_DISABLED'],
+      'DOUBLE_TAP_REACTION_DISABLED':
+          userConfig['DOUBLE_TAP_REACTION_DISABLED'],
       'SAFE_MODE_NO_PIN': userConfig['SAFE_MODE_NO_PIN'],
       'CHATS_PUSH_SOUND': userConfig['CHATS_PUSH_SOUND'],
       'DOUBLE_TAP_REACTION_VALUE': userConfig['DOUBLE_TAP_REACTION_VALUE'],
@@ -1480,18 +743,13 @@ class AccountModule {
       payload['mode'] = ChatCacheFingerprint.compute(callsSeed, deviceId);
     }
 
-    logger.i('Запрос OTP-кода: phone=${_maskPhone(normalizedPhone)} type=${type.value}');
+    logger.i(
+      'Запрос OTP-кода: phone=${_maskPhone(normalizedPhone)} type=${type.value}',
+    );
 
     final packet = await _api.sendRequest(Opcode.authRequest, payload);
 
-    _checkPacketError(packet, 'requestCode');
-
-    final data = packet.payload;
-    if (data is! Map) {
-      throw Exception(
-        'requestCode: неожиданный тип payload: ${data.runtimeType}',
-      );
-    }
+    final data = _requireMapPayload(packet, 'requestCode');
 
     final token = data['token'];
     if (token is! String || token.isEmpty) {
@@ -1510,15 +768,16 @@ class AccountModule {
     }
   }
 
-  void _checkPacketError(Packet packet, String method) {
-    if (packet.isError) {
-      final payload = packet.payload;
-      if (payload is Map &&
-          (payload['message'] == 'FAIL_LOGIN_TOKEN' ||
-              payload['message'] == 'FAIL_WRONG_PASSWORD')) {
-        throw SessionExpiredException(messageFromErrorPayload(payload));
-      }
-      throw PacketError(messageFromErrorPayload(payload));
+  Map _requireMapPayload(Packet packet, String method) {
+    _checkPacketError(packet, method);
+    final data = packet.payload;
+    if (data is! Map) {
+      throw Exception('$method: неожиданный тип payload: ${data.runtimeType}');
     }
+    return data;
+  }
+
+  void _checkPacketError(Packet packet, String method) {
+    throwIfPacketError(packet);
   }
 }

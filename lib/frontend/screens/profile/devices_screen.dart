@@ -6,11 +6,14 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/config/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show SessionInfo;
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/prompt_dialog.dart';
 import '../../widgets/web_qr_login.dart';
 import 'web_qr_scan_screen.dart';
 
@@ -57,59 +60,23 @@ class _DevicesScreenState extends State<DevicesScreen>
       }
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Ошибка загрузки: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.devicesLoadFailed(e.toString()),
+        );
         setState(() => _isLoading = false);
       }
     }
   }
 
-  Future<String?> _showPasteQrDialog() async {
-    final tec = TextEditingController();
-    try {
-      return await showDialog<String>(
-        context: context,
-        builder: (dialogContext) {
-          final cs = Theme.of(dialogContext).colorScheme;
-          return AlertDialog(
-            backgroundColor: cs.surfaceContainerHigh,
-            title: Text(
-              'Ссылка из QR',
-              style: TextStyle(fontFamily: 'Outfit', 
-                fontWeight: FontWeight.w600,
-                fontSize: 18,
-                color: cs.onSurface,
-              ),
-            ),
-            content: TextField(
-              controller: tec,
-              decoration: const InputDecoration(
-                hintText: 'Вставьте содержимое QR-кода',
-              ),
-              autofocus: true,
-              maxLines: 4,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: Text(
-                  'Отмена',
-                  style: TextStyle(color: cs.onSurfaceVariant),
-                ),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final v = tec.text.trim();
-                  Navigator.pop(dialogContext, v.isEmpty ? null : v);
-                },
-                child: const Text('Подтвердить'),
-              ),
-            ],
-          );
-        },
-      );
-    } finally {
-      tec.dispose();
-    }
+  Future<String?> _showPasteQrDialog() {
+    final l10n = AppLocalizations.of(context)!;
+    return showTextInputDialog(
+      context,
+      title: l10n.devicesQrLinkDialogTitle,
+      hint: l10n.devicesQrLinkDialogHint,
+      maxLines: 4,
+    );
   }
 
   Future<void> _startWebQrAuth() async {
@@ -139,12 +106,18 @@ class _DevicesScreenState extends State<DevicesScreen>
     try {
       await accountModule.terminateOtherSessions();
       if (mounted) {
-        showCustomNotification(context, 'Все сессии завершены');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.devicesAllTerminated,
+        );
         _loadSessions();
       }
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Ошибка: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.devicesGenericError(e.toString()),
+        );
       }
     }
   }
@@ -188,7 +161,10 @@ class _DevicesScreenState extends State<DevicesScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _loadingIps.remove(id));
-        showCustomNotification(context, 'Ошибка IP: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.devicesIpLookupError(e.toString()),
+        );
       }
     } finally {
       client?.close();
@@ -216,6 +192,7 @@ class _DevicesScreenState extends State<DevicesScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -228,8 +205,9 @@ class _DevicesScreenState extends State<DevicesScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: ConnectionTitleText(
-          'Устройства',
-          style: TextStyle(fontFamily: 'Outfit', 
+          l10n.devicesTitle,
+          style: TextStyle(
+            fontFamily: 'Outfit',
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: cs.onSurface,
@@ -253,6 +231,7 @@ class _DevicesScreenState extends State<DevicesScreen>
   }
 
   Widget _buildPromoCard(BuildContext context, ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: GlossyPill(
@@ -261,66 +240,69 @@ class _DevicesScreenState extends State<DevicesScreen>
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
         depth: 6,
         child: Center(
-        child: Column(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: cs.onSurface.withValues(alpha: 0.1),
-                  width: 1,
+          child: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: cs.onSurface.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(Symbols.devices, color: cs.onSurface, size: 28),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                l10n.devicesPromoTitle,
+                style: TextStyle(
+                  fontFamily: 'Outfit',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
                 ),
               ),
-              child: Icon(Symbols.devices, color: cs.onSurface, size: 28),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Устройства в KOMET',
-              style: TextStyle(fontFamily: 'Outfit', 
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Кто имеет доступ к вашему аккаунту?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: _startWebQrAuth,
-              icon: const Icon(Symbols.qr_code_scanner, size: 22),
-              label: Text(
-                'Сканировать QR',
-                style: TextStyle(fontFamily: 'Outfit', 
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(height: 8),
+              Text(
+                l10n.devicesPromoSubtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                  height: 1.3,
                 ),
               ),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _startWebQrAuth,
+                icon: const Icon(Symbols.qr_code_scanner, size: 22),
+                label: Text(
+                  l10n.devicesScanQrButton,
+                  style: TextStyle(
+                    fontFamily: 'Outfit',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildDevicesList(BuildContext context, ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: GlossyPill(
@@ -329,54 +311,56 @@ class _DevicesScreenState extends State<DevicesScreen>
         padding: const EdgeInsets.symmetric(vertical: 8),
         depth: 6,
         child: Column(
-        children: [
-          if (_isLoading)
-            ...List.generate(5, (index) => _buildShimmerItem(cs))
-          else
-            ..._sessions.map(
-              (session) => _buildDeviceItem(
-                context,
-                cs,
-                id: session.uniqueId,
-                title: session.client + (session.current ? ' (текущая)' : ''),
-                platform: session.info,
-                location: session.location,
-                status: session.current ? 'В сети' : null,
-                time: session.current ? null : _formatTime(session.time),
-                isOnline: session.current,
-              ),
-            ),
-          if (!_isLoading) ...[
-            const SizedBox(height: 12),
-            Divider(
-              height: 1,
-              color: cs.onSurface.withValues(alpha: 0.05),
-              indent: 20,
-              endIndent: 20,
-            ),
-            InkWell(
-              onTap: _terminateOthers,
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(24),
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 20,
-                  horizontal: 20,
+          children: [
+            if (_isLoading)
+              ...List.generate(5, (index) => _buildShimmerItem(cs))
+            else
+              ..._sessions.map(
+                (session) => _buildDeviceItem(
+                  context,
+                  cs,
+                  id: session.uniqueId,
+                  title:
+                      session.client +
+                      (session.current ? l10n.devicesCurrentSuffix : ''),
+                  platform: session.info,
+                  location: session.location,
+                  status: session.current ? l10n.devicesOnlineStatus : null,
+                  time: session.current ? null : _formatTime(session.time),
+                  isOnline: session.current,
                 ),
-                child: Text(
-                  'Завершить все сессии, кроме текущей',
-                  style: TextStyle(
-                    color: cs.error.withValues(alpha: 0.8),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+              ),
+            if (!_isLoading) ...[
+              const SizedBox(height: 12),
+              Divider(
+                height: 1,
+                color: cs.onSurface.withValues(alpha: 0.05),
+                indent: 20,
+                endIndent: 20,
+              ),
+              InkWell(
+                onTap: _terminateOthers,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(24),
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 20,
+                    horizontal: 20,
+                  ),
+                  child: Text(
+                    l10n.devicesTerminateOthersButton,
+                    style: TextStyle(
+                      color: cs.error.withValues(alpha: 0.8),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
         ),
       ),
     );
@@ -454,6 +438,7 @@ class _DevicesScreenState extends State<DevicesScreen>
     String? time,
     bool isOnline = false,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     final details = _ipDetails[id];
     final isLoading = _loadingIps.contains(id);
     final isExpanded = _expandedSessions.contains(id);
@@ -472,7 +457,8 @@ class _DevicesScreenState extends State<DevicesScreen>
                   children: [
                     Text(
                       title,
-                      style: TextStyle(fontFamily: 'Outfit', 
+                      style: TextStyle(
+                        fontFamily: 'Outfit',
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: cs.onSurface,
@@ -584,66 +570,67 @@ class _DevicesScreenState extends State<DevicesScreen>
                       child: SizedBox(
                         width: double.infinity,
                         child: Stack(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildDetailRow(
-                              cs,
-                              Symbols.location_city,
-                              '${details['city'] ?? 'Unknown'}, ${details['country'] ?? ''}',
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildDetailRow(
+                                  cs,
+                                  Symbols.location_city,
+                                  '${details['city'] ?? 'Unknown'}, ${details['country'] ?? ''}',
+                                ),
+                                _buildDetailRow(
+                                  cs,
+                                  Symbols.dns,
+                                  details['isp'] ?? 'Unknown',
+                                ),
+                                _buildDetailRow(
+                                  cs,
+                                  Symbols.public,
+                                  details['as'] ?? 'Unknown',
+                                ),
+                                if (details['mobile'] == true)
+                                  _buildDetailRow(
+                                    cs,
+                                    Symbols.stay_current_portrait,
+                                    l10n.devicesMobileNetworkLabel,
+                                    color: Colors.blueAccent,
+                                  ),
+                                if (details['proxy'] == true)
+                                  _buildDetailRow(
+                                    cs,
+                                    Symbols.vpn_lock,
+                                    l10n.devicesProxyDetectedLabel,
+                                    color: Colors.orangeAccent,
+                                  ),
+                                _buildDetailRow(
+                                  cs,
+                                  Symbols.schedule,
+                                  details['timezone'] ?? 'Unknown',
+                                ),
+                              ],
                             ),
-                            _buildDetailRow(
-                              cs,
-                              Symbols.dns,
-                              details['isp'] ?? 'Unknown',
-                            ),
-                            _buildDetailRow(
-                              cs,
-                              Symbols.public,
-                              details['as'] ?? 'Unknown',
-                            ),
-                            if (details['mobile'] == true)
-                              _buildDetailRow(
-                                cs,
-                                Symbols.stay_current_portrait,
-                                'Мобильная сеть',
-                                color: Colors.blueAccent,
-                              ),
-                            if (details['proxy'] == true)
-                              _buildDetailRow(
-                                cs,
-                                Symbols.vpn_lock,
-                                'Обнаружен прокси/VPN',
-                                color: Colors.orangeAccent,
-                              ),
-                            _buildDetailRow(
-                              cs,
-                              Symbols.schedule,
-                              details['timezone'] ?? 'Unknown',
-                            ),
-                          ],
-                        ),
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: InkWell(
-                            onTap: () =>
-                                setState(() => _expandedSessions.remove(id)),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              child: Icon(
-                                Symbols.do_not_disturb_on,
-                                size: 20,
-                                color: cs.onSurfaceVariant.withValues(
-                                  alpha: 0.4,
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: InkWell(
+                                onTap: () => setState(
+                                  () => _expandedSessions.remove(id),
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    Symbols.do_not_disturb_on,
+                                    size: 20,
+                                    color: cs.onSurfaceVariant.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ],
+                          ],
                         ),
                       ),
                     ),
@@ -665,11 +652,7 @@ class _DevicesScreenState extends State<DevicesScreen>
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: color ?? cs.onSurfaceVariant.withValues(alpha: 0.6),
-          ),
+          Icon(icon, size: 14, color: color ?? cs.mutedText),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

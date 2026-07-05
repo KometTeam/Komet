@@ -10,7 +10,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
-import 'chats.dart' show ChatsModule;
+import 'chats.dart' show chats;
 
 class ContactCache {
   static final Map<int, String> _nameCache = {};
@@ -337,6 +337,10 @@ class ReplyInfo {
           return '';
         case AttachmentType.inlineKeyboard:
           return '';
+        case AttachmentType.forward:
+          return 'Переслано';
+        case AttachmentType.unknown:
+          return 'Вложение';
       }
     }
     return '';
@@ -434,6 +438,28 @@ class CachedMessage {
     return list;
   }
 
+  static (List<MessageAttachment>?, bool) parseAttachments(
+    Map<String, dynamic> map,
+  ) {
+    List<MessageAttachment>? attachments;
+    final link = map['link'];
+    final linkType = link is Map ? link['type'] as String? : null;
+    if (linkType == 'FORWARD') {
+      attachments = [ForwardedMessageAttachment.fromMap(map)];
+    } else {
+      final attaches = map['attaches'] as List?;
+      if (attaches != null) {
+        attachments = attaches
+            .whereType<Map>()
+            .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
+            .toList();
+      }
+    }
+    final isControl =
+        attachments?.any((a) => a.type == AttachmentType.control) ?? false;
+    return (attachments, isControl);
+  }
+
   factory CachedMessage.fromDbRow(Map<String, dynamic> row) {
     Map<String, dynamic>? payload;
     final payloadRaw = row['payload'];
@@ -444,22 +470,11 @@ class CachedMessage {
     }
 
     List<MessageAttachment>? attachments;
+    bool isControl = false;
     if (payload != null) {
-      final linkType = payload['link']?['type'] as String?;
-      if (linkType == 'FORWARD') {
-        attachments = [ForwardedMessageAttachment.fromMap(payload)];
-      } else {
-        final attaches = payload['attaches'] as List?;
-        if (attaches != null) {
-          attachments = attaches
-              .map(
-                (a) => MessageAttachment.fromMap(
-                  Map<String, dynamic>.from(a as Map),
-                ),
-              )
-              .toList();
-        }
-      }
+      final parsed = parseAttachments(payload);
+      attachments = parsed.$1;
+      isControl = parsed.$2;
     }
 
     return CachedMessage(
@@ -480,8 +495,7 @@ class CachedMessage {
       status: row['status']?.toString(),
       payload: payload,
       attachments: attachments,
-      isControl:
-          attachments?.any((a) => a.type == AttachmentType.control) ?? false,
+      isControl: isControl,
       deleted: row['deleted'] is int
           ? row['deleted'] == 1
           : row['deleted']?.toString() == '1',
@@ -503,7 +517,8 @@ class CachedMessage {
 
   ReplyInfo? get replyInfo => ReplyInfo.fromPayload(payload);
 
-  List<FormatRange> get formatRanges => parseFormatElements(payload?['elements']);
+  List<FormatRange> get formatRanges =>
+      parseFormatElements(payload?['elements']);
 
   static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
       rows.map(CachedMessage.fromDbRow).toList();
@@ -531,14 +546,8 @@ class CachedMessage {
   };
 
   static CachedMessage fromPushPayload(int accountId, int chatId, Map msg) {
-    List<MessageAttachment>? attachments;
-    final attaches = msg['attaches'];
-    if (attaches is List && attaches.isNotEmpty) {
-      attachments = attaches
-          .whereType<Map>()
-          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
-          .toList();
-    }
+    final full = Map<String, dynamic>.from(msg);
+    final parsed = parseAttachments(full);
     return CachedMessage(
       id: msg['id']?.toString() ?? '',
       accountId: accountId,
@@ -547,8 +556,9 @@ class CachedMessage {
       text: msg['text'] as String?,
       time: (msg['time'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
       status: (msg['status'] as String?) ?? 'sent',
-      payload: Map<String, dynamic>.from(msg),
-      attachments: attachments,
+      payload: full,
+      attachments: parsed.$1,
+      isControl: parsed.$2,
     );
   }
 }
@@ -558,11 +568,6 @@ class MessagesModule {
 
   MessagesModule(this._api);
 
-  /// Загружает историю сообщений для указанного чата.
-  ///
-  /// [fromTime] — опционально, время от которого грузить (миллисекунды).
-  /// Если не указано, грузит самые свежие.
-  /// [count] — количество сообщений.
   Future<List<CachedMessage>> fetchHistory(
     int accountId,
     int chatId, {
@@ -573,10 +578,7 @@ class MessagesModule {
   }) async {
     final payload = {
       'chatId': chatId,
-      'from':
-          fromTime ??
-          (DateTime.now().millisecondsSinceEpoch +
-              86400000), // +1 день для запаса
+      'from': fromTime ?? (DateTime.now().millisecondsSinceEpoch + 86400000),
       'forward': forward,
       'backward': backward ?? count,
       'getMessages': true,
@@ -614,9 +616,7 @@ class MessagesModule {
 
     if (toSave.isNotEmpty) {
       try {
-        await AppDatabase.saveMessages(
-          toSave.map((m) => m.toDbRow()).toList(),
-        );
+        await AppDatabase.saveMessages(toSave.map((m) => m.toDbRow()).toList());
       } catch (e) {
         logger.e('saveMessages error: $e');
       }
@@ -625,11 +625,6 @@ class MessagesModule {
     return toSave;
   }
 
-  /// Поиск сообщений в чате по строке [query] (opcode 73).
-  ///
-  /// Возвращает сырые записи результата вида
-  /// `{'message': {...}, 'highlights': [...]}`, отсортированные сервером
-  /// от новых к старым.
   Future<List<Map<String, dynamic>>> searchMessages(
     int chatId,
     String query, {
@@ -691,7 +686,6 @@ class MessagesModule {
     return out;
   }
 
-  /// Загружает сообщения из локальной базы данных.
   Future<List<CachedMessage>> getLocalHistory(
     int accountId,
     int chatId, {
@@ -715,30 +709,8 @@ class MessagesModule {
     final id = m['id']?.toString();
     if (id == null) return null;
 
-    final linkRaw = m['link'];
-    String? linkType;
-    if (linkRaw is Map) {
-      linkType = linkRaw['type'] as String?;
-    }
-
-    List<MessageAttachment>? attachments;
-    bool isControl = false;
-    if (linkType == 'FORWARD') {
-      final fwdMap = Map<String, dynamic>.from(m.cast());
-      attachments = [ForwardedMessageAttachment.fromMap(fwdMap)];
-    } else {
-      final attaches = m['attaches'] as List?;
-      if (attaches != null) {
-        attachments = attaches
-            .whereType<Map>()
-            .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
-            .toList();
-        // Detect CONTROL
-        if (attachments.any((a) => a.type == AttachmentType.control)) {
-          isControl = true;
-        }
-      }
-    }
+    final full = Map<String, dynamic>.from(m.cast());
+    final parsed = CachedMessage.parseAttachments(full);
 
     return CachedMessage(
       id: id,
@@ -748,9 +720,9 @@ class MessagesModule {
       text: m['text']?.toString(),
       time: _parseIntField(m['time']),
       status: m['status']?.toString(),
-      payload: Map<String, dynamic>.from(m.cast()),
-      attachments: attachments,
-      isControl: isControl,
+      payload: full,
+      attachments: parsed.$1,
+      isControl: parsed.$2,
     );
   }
 
@@ -789,20 +761,18 @@ class MessagesModule {
         'notifySender': true,
       };
     }
-    final payload = {
-      'chatId': chatId,
-      'message': message,
-      'notify': notify,
-    };
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
+    return _sendAndExtractMessageId(payload, 'Ошибка отправки');
+  }
+
+  Future<String> _sendAndExtractMessageId(
+    Map<String, dynamic> payload,
+    String defaultError,
+  ) async {
     final response = await _api.sendRequest(Opcode.msgSend, payload);
     if (!response.isOk) {
-      final msg = (response.payload is Map)
-          ? (response.payload['localizedMessage'] ??
-                response.payload['message'] ??
-                'Ошибка отправки')
-          : 'Ошибка отправки';
-      throw Exception(msg.toString());
+      _throwSendError(response.payload, defaultError);
     }
     final data = response.payload;
     if (data is Map) {
@@ -815,11 +785,46 @@ class MessagesModule {
     return '';
   }
 
-  /// Пересылает сообщение [messageId] из чата [sourceChatId] в [targetChatId].
-  ///
-  /// Пересылка — это отдельное сообщение без текста и вложений, со ссылкой
-  /// `link.type = FORWARD`, указывающей на оригинал. Сервер сам подставит
-  /// тело оригинала в ответе.
+  Never _throwSendError(dynamic payload, String fallback) {
+    final msg = (payload is Map)
+        ? (payload['localizedMessage'] ?? payload['message'] ?? fallback)
+        : fallback;
+    throw Exception(msg.toString());
+  }
+
+  Map<String, dynamic>? _sentMessageMap(Packet response) {
+    if (!response.isOk) return null;
+    final data = response.payload;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is Map) return Map<String, dynamic>.from(msg);
+    }
+    return null;
+  }
+
+  Future<T> _sendWithNotReadyRetry<T>({
+    required Map<String, dynamic> payload,
+    required int maxAttempts,
+    required Duration retryDelay,
+    required T Function(Packet response) onResult,
+    required T onExhausted,
+  }) async {
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        return onResult(response);
+      } on PacketError catch (e) {
+        if (!(e.errorKey?.contains('not.ready') ?? false)) {
+          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
+          rethrow;
+        }
+        if (attempt == maxAttempts - 1) return onExhausted;
+        await Future.delayed(retryDelay);
+      }
+    }
+    return onExhausted;
+  }
+
   Future<String> forwardMessage(
     int targetChatId,
     int sourceChatId,
@@ -844,24 +849,7 @@ class MessagesModule {
       'notify': notify,
     };
 
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
-    if (!response.isOk) {
-      final msg = (response.payload is Map)
-          ? (response.payload['localizedMessage'] ??
-                response.payload['message'] ??
-                'Ошибка пересылки')
-          : 'Ошибка пересылки';
-      throw Exception(msg.toString());
-    }
-    final data = response.payload;
-    if (data is Map) {
-      final msgMap = data['message'];
-      if (msgMap is Map) {
-        final id = msgMap['id'];
-        if (id != null) return id.toString();
-      }
-    }
-    return '';
+    return _sendAndExtractMessageId(payload, 'Ошибка пересылки');
   }
 
   static CachedMessage buildForwardMessage({
@@ -955,18 +943,13 @@ class MessagesModule {
       ],
       'attaches': [],
     };
-    final response = await _api.sendRequest(Opcode.msgSend, {
+    return _api.sendRequestOk(Opcode.msgSend, {
       'chatId': chatId,
       'message': message,
       'notify': true,
     });
-    return response.isOk;
   }
 
-  /// Загружает отложенные (запланированные) сообщения чата.
-  ///
-  /// В отличие от обычной истории, отложенные сообщения не сохраняются
-  /// в локальную БД — они живут только до момента отправки.
   Future<List<CachedMessage>> fetchDelayedMessages(
     int accountId,
     int chatId,
@@ -1009,10 +992,6 @@ class MessagesModule {
     return results;
   }
 
-  /// Редактирует текст (подпись) обычного сообщения.
-  ///
-  /// Поле `attachments` не передаётся — сервер сохраняет существующие
-  /// вложения.
   Future<bool> editMessage(
     int chatId,
     String messageId, {
@@ -1031,13 +1010,9 @@ class MessagesModule {
     };
     if (sendAttachments) payload['attachments'] = const <dynamic>[];
 
-    final response = await _api.sendRequest(Opcode.msgEdit, payload);
-    return response.isOk;
+    return _api.sendRequestOk(Opcode.msgEdit, payload);
   }
 
-  /// Редактирует отложенное сообщение: меняет текст и/или время отправки.
-  ///
-  /// Вложения сервер сохраняет сам — в payload они не передаются.
   Future<bool> editScheduledMessage(
     int chatId,
     String messageId, {
@@ -1052,14 +1027,10 @@ class MessagesModule {
       'chatId': chatId,
       'elements': <dynamic>[],
       'text': text,
-      'delayedAttributes': {
-        'timeToFire': timeToFire,
-        'notifySender': true,
-      },
+      'delayedAttributes': {'timeToFire': timeToFire, 'notifySender': true},
     };
 
-    final response = await _api.sendRequest(Opcode.msgEdit, payload);
-    return response.isOk;
+    return _api.sendRequestOk(Opcode.msgEdit, payload);
   }
 
   Future<bool> deleteMessages(
@@ -1081,8 +1052,7 @@ class MessagesModule {
       'itemType': itemType,
     };
 
-    final response = await _api.sendRequest(Opcode.msgDelete, payload);
-    return response.isOk;
+    return _api.sendRequestOk(Opcode.msgDelete, payload);
   }
 
   Future<Map<String, dynamic>?> sendButtonCallback({
@@ -1168,7 +1138,6 @@ class MessagesModule {
     int? scheduledTime,
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
-    Duration initialDelay = const Duration(seconds: 3),
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1188,29 +1157,15 @@ class MessagesModule {
         'notifySender': true,
       };
     }
-    final payload = {
-      'chatId': chatId,
-      'message': message,
-      'notify': notify,
-    };
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    await Future.delayed(initialDelay);
-
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (response.isOk) return true;
-        return false;
-      } on PacketError catch (e) {
-        if (!(e.errorKey?.contains('not.ready') ?? false)) {
-          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
-          rethrow;
-        }
-        if (attempt == maxAttempts - 1) return false;
-        await Future.delayed(retryDelay);
-      }
-    }
-    return false;
+    return _sendWithNotReadyRetry<bool>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: (response) => response.isOk,
+      onExhausted: false,
+    );
   }
 
   Future<String?> requestPhotoUploadUrl() async {
@@ -1246,29 +1201,15 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (!response.isOk) return null;
-        final data = response.payload;
-        if (data is Map) {
-          final msg = data['message'];
-          if (msg is Map) return Map<String, dynamic>.from(msg);
-        }
-        return null;
-      } on PacketError catch (e) {
-        if (!(e.errorKey?.contains('not.ready') ?? false)) {
-          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
-          rethrow;
-        }
-        if (attempt == maxAttempts - 1) return null;
-        await Future.delayed(retryDelay);
-      }
-    }
-    return null;
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
   }
 
-  /// Запрашивает URL для загрузки видео (опкод 82).
   Future<VideoUploadInfo?> requestVideoUploadUrl() async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 0,
@@ -1293,9 +1234,6 @@ class MessagesModule {
     );
   }
 
-  /// Отправляет сообщение с видео по [token], полученному из
-  /// [requestVideoUploadUrl]. Сервер может ответить `attachment.not.ready`,
-  /// пока обрабатывает загруженное видео — в этом случае запрос повторяется.
   Future<Map<String, dynamic>?> sendVideoMessage(
     int chatId,
     String token, {
@@ -1323,33 +1261,15 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (!response.isOk) return null;
-        final data = response.payload;
-        if (data is Map) {
-          final msg = data['message'];
-          if (msg is Map) return Map<String, dynamic>.from(msg);
-        }
-        return null;
-      } on PacketError catch (e) {
-        if (!(e.errorKey?.contains('not.ready') ?? false)) {
-          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
-          rethrow;
-        }
-        if (attempt == maxAttempts - 1) return null;
-        await Future.delayed(retryDelay);
-      }
-    }
-    return null;
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
   }
 
-  /// Запрашивает URL для загрузки голосового сообщения (опкод 82).
-  ///
-  /// Тот же опкод, что и у видео, но `uploaderType: 1, type: 2`. В ответе
-  /// `videoId` — это идентификатор аудио (`audioId`), а `token` уже выдан и
-  /// используется в [sendAudioMessage] после загрузки байтов.
   Future<AudioUploadInfo?> requestAudioUploadUrl() async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 1,
@@ -1374,13 +1294,6 @@ class MessagesModule {
     );
   }
 
-  /// Отправляет голосовое сообщение по [token], полученному из
-  /// [requestAudioUploadUrl], после загрузки Ogg/Opus-байтов на CDN.
-  ///
-  /// [duration] — длительность в миллисекундах. [wave] — hex-строка амплитуд
-  /// для дорожки; если пусто, отправляется плоская (нулевая) волна, которую
-  /// сервер принимает. Сервер может ответить `attachment.not.ready`, пока
-  /// обрабатывает загрузку — запрос повторяется.
   Future<Map<String, dynamic>?> sendAudioMessage(
     int chatId,
     String token, {
@@ -1413,30 +1326,15 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (!response.isOk) return null;
-        final data = response.payload;
-        if (data is Map) {
-          final msg = data['message'];
-          if (msg is Map) return Map<String, dynamic>.from(msg);
-        }
-        return null;
-      } on PacketError catch (e) {
-        if (!(e.errorKey?.contains('not.ready') ?? false)) {
-          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
-          rethrow;
-        }
-        if (attempt == maxAttempts - 1) return null;
-        await Future.delayed(retryDelay);
-      }
-    }
-    return null;
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
   }
 
-  /// Запрашивает URL для загрузки видеосообщения-кружка (опкод 82,
-  /// `uploaderType: 1, type: 1`). Ответ — `vu.oneme.ru/uploadVideo` + token.
   Future<VideoUploadInfo?> requestVideoNoteUploadUrl() async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 1,
@@ -1461,13 +1359,6 @@ class MessagesModule {
     );
   }
 
-  /// Отправляет видеосообщение-кружок (`videoType: 1`) по [token], полученному
-  /// из [requestVideoNoteUploadUrl], после загрузки MP4-байтов на CDN.
-  ///
-  /// [duration] — длительность в мс. [wave] — амплитуды аудиодорожки (бинарь,
-  /// 80 байт; нули допустимы). [thumbhash] — компактный хеш превью (опционально,
-  /// сервер всё равно отдаёт собственный `previewData`). Повторяет запрос на
-  /// `attachment.not.ready`, пока CDN обрабатывает загрузку.
   Future<Map<String, dynamic>?> sendVideoNoteMessage(
     int chatId,
     String token, {
@@ -1496,26 +1387,13 @@ class MessagesModule {
     };
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
-        if (!response.isOk) return null;
-        final data = response.payload;
-        if (data is Map) {
-          final msg = data['message'];
-          if (msg is Map) return Map<String, dynamic>.from(msg);
-        }
-        return null;
-      } on PacketError catch (e) {
-        if (!(e.errorKey?.contains('not.ready') ?? false)) {
-          logger.w('msgSend rejected: key=${e.errorKey} msg=${e.message}');
-          rethrow;
-        }
-        if (attempt == maxAttempts - 1) return null;
-        await Future.delayed(retryDelay);
-      }
-    }
-    return null;
+    return _sendWithNotReadyRetry<Map<String, dynamic>?>(
+      payload: payload,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      onResult: _sentMessageMap,
+      onExhausted: null,
+    );
   }
 
   Future<Map<String, dynamic>?> sendLocationMessage(
@@ -1542,14 +1420,11 @@ class MessagesModule {
     };
 
     final response = await _api.sendRequest(Opcode.msgSend, payload);
-    if (!response.isOk) return null;
-    final data = response.payload;
-    if (data is Map) {
-      final msg = data['message'];
-      if (msg is Map) return Map<String, dynamic>.from(msg);
-    }
-    return null;
+    return _sentMessageMap(response);
   }
+
+  static const int _pollAnonymousFlag = 4;
+  static const int _pollMultipleFlag = 1;
 
   Future<Map<String, dynamic>?> sendPollMessage(
     int chatId,
@@ -1559,7 +1434,9 @@ class MessagesModule {
     bool anonymous = true,
     bool notify = true,
   }) async {
-    final settings = (anonymous ? 4 : 0) | (multiple ? 1 : 0);
+    final settings =
+        (anonymous ? _pollAnonymousFlag : 0) |
+        (multiple ? _pollMultipleFlag : 0);
     final payload = {
       'chatId': chatId,
       'message': {
@@ -1579,13 +1456,7 @@ class MessagesModule {
     };
 
     final response = await _api.sendRequest(Opcode.msgSend, payload);
-    if (!response.isOk) return null;
-    final data = response.payload;
-    if (data is Map) {
-      final msg = data['message'];
-      if (msg is Map) return Map<String, dynamic>.from(msg);
-    }
-    return null;
+    return _sentMessageMap(response);
   }
 
   void sendTyping(int chatId, String type) {
@@ -1616,13 +1487,7 @@ class MessagesModule {
     };
 
     final response = await _api.sendRequest(Opcode.msgSend, payload);
-    if (!response.isOk) return null;
-    final data = response.payload;
-    if (data is Map) {
-      final msg = data['message'];
-      if (msg is Map) return Map<String, dynamic>.from(msg);
-    }
-    return null;
+    return _sentMessageMap(response);
   }
 
   Future<Uint8List?> downloadPhoto(String baseUrl, String photoToken) async {
@@ -1662,13 +1527,6 @@ class MessagesModule {
     }
   }
 
-  /// Запрашивает у сервера ссылки на воспроизведение видео (opcode 83).
-  ///
-  /// Формат подтверждён дампом: запрос `{messageId, chatId, token, videoId}`,
-  /// ответ содержит `MP4_1080/MP4_720/...`, `HLS`, `DASH`, `EXTERNAL`.
-  /// Возвращает все доступные progressive-MP4 качества (label → URL),
-  /// отсортированные по убыванию. URL'ы — готовые подписанные ссылки на CDN,
-  /// поддерживающие HTTP range, поэтому пригодны для стриминга.
   Future<Map<String, String>> getVideoSources({
     required String messageId,
     required int chatId,
@@ -1713,7 +1571,6 @@ class MessagesModule {
     }
   }
 
-  /// Возвращает один лучший progressive-MP4 (или HLS как запасной).
   Future<String?> getVideoUrl({
     required String messageId,
     required int chatId,
@@ -1769,10 +1626,6 @@ class MessagesModule {
     }
   }
 
-  /// Запрашивает у сервера временный CDN-URL для скачивания файла (opcode 88).
-  ///
-  /// Формат подтверждён дампом: запрос `{messageId, chatId, fileId}`,
-  /// ответ `{url: "https://fd.oneme.ru/getfile?..."}`.
   Future<String?> getFileUrl({
     required String messageId,
     required int chatId,
@@ -1836,7 +1689,7 @@ class MessagesModule {
                 );
               }
 
-              ChatsModule.applyContactUpdate(contactId);
+              chats.applyContactUpdate(contactId);
               return fullName;
             }
           }
@@ -1898,7 +1751,7 @@ class MessagesModule {
           ContactCache.putOptions(id, rawOpts.whereType<String>().toSet());
         }
 
-        ChatsModule.applyContactUpdate(id);
+        chats.applyContactUpdate(id);
         resolvedAny = true;
       }
 

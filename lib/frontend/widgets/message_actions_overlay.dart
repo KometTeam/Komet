@@ -9,6 +9,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/config/app_message_actions_style.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
+import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
 
 enum MessageActionsInteraction { dragAndRelease, click, tap }
@@ -84,7 +85,8 @@ void showMessageActions({
   VoidCallback? onReply,
   VoidCallback? onForward,
   VoidCallback? onMarkUnread,
-  MessageActionsInteraction interaction = MessageActionsInteraction.dragAndRelease,
+  MessageActionsInteraction interaction =
+      MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late OverlayEntry entry;
@@ -281,7 +283,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         anchorY = widget.tapPoint.dy.clamp(rect.top, rect.bottom).toDouble();
     }
 
-    _showBelow = side == _RadialSide.below ||
+    _showBelow =
+        side == _RadialSide.below ||
         (side != _RadialSide.above && spaceBelow >= spaceAbove);
 
     final start = base - _arcSpan / 2;
@@ -380,32 +383,33 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   }
 
   List<_Action> _buildActions() {
-    final hasText = widget.messageText != null && widget.messageText!.isNotEmpty;
+    final l10n = AppLocalizations.of(context)!;
+    final hasText =
+        widget.messageText != null && widget.messageText!.isNotEmpty;
     return <_Action>[
-      if (hasText) _Action(Symbols.content_copy, 'Копировать', _copy),
+      if (hasText) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
       if (widget.isMe && widget.onEdit != null)
-        _Action(Symbols.edit, 'Изменить', _edit),
+        _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onReply != null)
-        _Action(Symbols.reply, 'Ответить', _reply),
+        _Action(Symbols.reply, l10n.msgActionsReply, _reply),
       if (widget.onForward != null)
-        _Action(Symbols.forward, 'Переслать', _forward),
+        _Action(Symbols.forward, l10n.msgActionsForward, _forward),
       if (widget.onMarkUnread != null)
-        _Action(Symbols.mark_chat_unread, 'Непрочитанное', _markUnread),
+        _Action(
+          Symbols.mark_chat_unread,
+          l10n.msgActionsMarkUnread,
+          _markUnread,
+        ),
       if (widget.editHistory != null && widget.editHistory!.isNotEmpty)
-        _Action(Symbols.history, 'История изменений', _showHistoryView),
+        _Action(Symbols.history, l10n.msgActionsEditHistory, _showHistoryView),
       if (widget.onReport != null && widget.loadReportReasons != null)
         _Action(
           Symbols.flag,
-          'Пожаловаться',
+          l10n.msgActionsReport,
           _showReportView,
           destructive: true,
         ),
-      _Action(
-        Symbols.delete,
-        'Удалить',
-        _delete,
-        destructive: true,
-      ),
+      _Action(Symbols.delete, l10n.msgActionsDelete, _delete, destructive: true),
     ];
   }
 
@@ -499,7 +503,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (text != null && text.isNotEmpty) {
       await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
-      showCustomNotification(context, 'Скопировано');
+      showCustomNotification(context, AppLocalizations.of(context)!.msgActionsCopied);
     }
     await _close();
   }
@@ -732,7 +736,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     rows.add(_historyRow(cs, widget.messageText, currentTime, current: true));
 
     return _buildAnchoredPanel(
-      title: 'История изменений',
+      title: AppLocalizations.of(context)!.msgActionsEditHistory,
       body: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, children: rows),
       ),
@@ -741,6 +745,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
 
   Widget _buildReportMenu() {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final Widget body;
     if (_reportLoading) {
       body = const Padding(
@@ -759,7 +764,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         body = Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
           child: Text(
-            'Не удалось загрузить причины',
+            l10n.msgActionsLoadReasonsFailed,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
         );
@@ -774,7 +779,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         );
       }
     }
-    return _buildAnchoredPanel(title: 'Пожаловаться', body: body);
+    return _buildAnchoredPanel(title: l10n.msgActionsReport, body: body);
   }
 
   Widget _reasonRow(ColorScheme cs, ({int id, String title}) reason) =>
@@ -792,10 +797,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         ),
       );
 
-  Widget _historyDivider(ColorScheme cs) => Divider(
-    height: 1,
-    color: cs.outlineVariant.withValues(alpha: 0.25),
-  );
+  Widget _historyDivider(ColorScheme cs) =>
+      Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.25));
 
   Widget _historyRow(
     ColorScheme cs,
@@ -803,12 +806,15 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     dynamic time, {
     required bool current,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     final ms = time is int ? time : int.tryParse(time?.toString() ?? '');
     final dateStr = ms != null
         ? formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(ms))
         : '';
     final label = current
-        ? (dateStr.isEmpty ? 'текущая версия' : 'текущая версия · $dateStr')
+        ? (dateStr.isEmpty
+              ? l10n.msgActionsCurrentVersion
+              : l10n.msgActionsCurrentVersionWithDate(dateStr))
         : dateStr;
     return Container(
       width: double.infinity,
@@ -817,7 +823,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            text == null || text.isEmpty ? '(без текста)' : text,
+            text == null || text.isEmpty ? l10n.msgActionsNoText : text,
             style: TextStyle(
               color: current ? cs.primary : cs.onSurface,
               fontSize: 15,
@@ -851,10 +857,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           scale: scale,
           alignment: tapAnchored
               ? Alignment(-1.0, _showBelow ? -1.0 : 1.0)
-              : Alignment(
-                  widget.isMe ? 1.0 : -1.0,
-                  _showBelow ? -1.0 : 1.0,
-                ),
+              : Alignment(widget.isMe ? 1.0 : -1.0, _showBelow ? -1.0 : 1.0),
           child: Material(
             color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(16),
@@ -903,8 +906,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
             final hoverScale = isHovered ? 1.18 : 1.0;
             final entryScale = 0.4 + 0.6 * eased;
             final centerAtFull = _buttonCenters[i];
-            final centerAtT = _anchor +
-                (centerAtFull - _anchor) * eased;
+            final centerAtT = _anchor + (centerAtFull - _anchor) * eased;
 
             return Positioned(
               left: centerAtT.dx - _btnSize / 2,
@@ -933,8 +935,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   }
 
   Widget _buildLabelBanner(Size size, double t) {
-    final label =
-        _hoveredIndex == -1 ? null : _actions[_hoveredIndex].label;
+    final label = _hoveredIndex == -1 ? null : _actions[_hoveredIndex].label;
     final bottomInset = math.max(
       MediaQuery.paddingOf(context).bottom,
       MediaQuery.viewInsetsOf(context).bottom,
@@ -987,12 +988,7 @@ class _Action {
   final String label;
   final VoidCallback onTap;
   final bool destructive;
-  const _Action(
-    this.icon,
-    this.label,
-    this.onTap, {
-    this.destructive = false,
-  });
+  const _Action(this.icon, this.label, this.onTap, {this.destructive = false});
 }
 
 class _ListMenuItem extends StatelessWidget {
@@ -1041,8 +1037,9 @@ class _ListMenuItem extends StatelessWidget {
                       style: TextStyle(
                         color: fg,
                         fontSize: 14,
-                        fontWeight:
-                            highlighted ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: highlighted
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                       ),
                     ),
                   ),
@@ -1065,10 +1062,7 @@ class _ListMenuItem extends StatelessWidget {
 class _ActionButton extends StatelessWidget {
   final _Action action;
   final bool highlighted;
-  const _ActionButton({
-    required this.action,
-    required this.highlighted,
-  });
+  const _ActionButton({required this.action, required this.highlighted});
 
   @override
   Widget build(BuildContext context) {
@@ -1098,9 +1092,7 @@ class _ActionButton extends StatelessWidget {
             Haptics.tap();
             action.onTap();
           },
-          child: Center(
-            child: Icon(action.icon, color: iconColor, size: 24),
-          ),
+          child: Center(child: Icon(action.icon, color: iconColor, size: 24)),
         ),
       ),
     );

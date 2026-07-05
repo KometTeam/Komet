@@ -51,6 +51,8 @@ class Api {
 
   String? spoofScope;
 
+  static bool _tzInitialized = false;
+
   List<CountryName>? _registrationCountries;
 
   List<CountryName> get registrationCountries =>
@@ -99,8 +101,9 @@ class Api {
     final useBypass = _bypassActive && bypassArmed;
     // Попытку через VPN ограничиваем по времени, чтобы быстро понять,
     // что туннель не пропускает, и переключиться на обход.
-    final attemptTimeout =
-        bypassArmed && !useBypass ? const Duration(seconds: 8) : null;
+    final attemptTimeout = bypassArmed && !useBypass
+        ? const Duration(seconds: 8)
+        : null;
 
     try {
       final endpoint = await ServerConfig.loadEndpoint();
@@ -111,13 +114,13 @@ class Api {
         timeout: attemptTimeout,
       );
     } catch (e) {
-      logger.e('Не удалось подключиться: $e');
-      if (_sessionState != SessionState.disconnected) {
-        _cleanup();
-        _setSessionState(SessionState.disconnected);
-        _armBypassIfPossible(bypassArmed, useBypass, 'подключение не удалось');
-        _scheduleReconnect();
-      }
+      await _handleConnectFailure(
+        e,
+        phase: 'Не удалось подключиться',
+        bypassArmed: bypassArmed,
+        useBypass: useBypass,
+        bypassWhy: 'подключение не удалось',
+      );
       return;
     }
 
@@ -150,16 +153,32 @@ class Api {
         logger.e('Хэндшейк отклонён: ${response.payload}');
       }
     } catch (e) {
-      logger.e('Ошибка хэндшейка: $e');
-      // Сокет подключился (через VPN), но сервер не ответил на хэндшейк —
-      // путь нерабочий: рвём соединение и пробуем мимо VPN.
-      if (_sessionState != SessionState.disconnected) {
-        _cleanup();
-        await _connection.disconnect();
-        _setSessionState(SessionState.disconnected);
-        _armBypassIfPossible(bypassArmed, useBypass, 'хэндшейк не прошёл');
-        _scheduleReconnect();
-      }
+      await _handleConnectFailure(
+        e,
+        phase: 'Ошибка хэндшейка',
+        bypassArmed: bypassArmed,
+        useBypass: useBypass,
+        bypassWhy: 'хэндшейк не прошёл',
+        disconnectSocket: true,
+      );
+    }
+  }
+
+  Future<void> _handleConnectFailure(
+    Object error, {
+    required String phase,
+    required bool bypassArmed,
+    required bool useBypass,
+    required String bypassWhy,
+    bool disconnectSocket = false,
+  }) async {
+    logger.e('$phase: $error');
+    if (_sessionState != SessionState.disconnected) {
+      _cleanup();
+      if (disconnectSocket) await _connection.disconnect();
+      _setSessionState(SessionState.disconnected);
+      _armBypassIfPossible(bypassArmed, useBypass, bypassWhy);
+      _scheduleReconnect();
     }
   }
 
@@ -206,7 +225,10 @@ class Api {
     int buildNumber = SpoofingService.hardcodedBuildNumber;
     String screen = '420dpi 420dpi 1080x2340';
 
-    tz.initializeTimeZones();
+    if (!_tzInitialized) {
+      tz.initializeTimeZones();
+      _tzInitialized = true;
+    }
     final timeZoneName = await FlutterTimezone.getLocalTimezone();
     String timezone = timeZoneName.identifier;
     String locale = 'ru';
@@ -219,10 +241,7 @@ class Api {
     if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
       osVersion = linuxInfo.name;
-      architecture = Platform.version.substring(
-        Platform.version.indexOf('_') + 1,
-        Platform.version.length - 1,
-      );
+      architecture = _archFromPlatformVersion();
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       osVersion = iosInfo.systemVersion;
@@ -235,10 +254,7 @@ class Api {
     } else if (Platform.isWindows) {
       final windowsInfo = await deviceInfo.windowsInfo;
       osVersion = windowsInfo.productName;
-      architecture = Platform.version.substring(
-        Platform.version.indexOf('_') + 1,
-        Platform.version.length - 1,
-      );
+      architecture = _archFromPlatformVersion();
     }
 
     final spoofed = await SpoofingService.getSpoofedSessionData(
@@ -339,6 +355,29 @@ class Api {
         );
   }
 
+  Future<Map<dynamic, dynamic>?> sendRequestMap(
+    int opcode,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final response = await sendRequest(opcode, payload);
+    if (!response.isOk || response.payload is! Map) return null;
+    return response.payload as Map<dynamic, dynamic>;
+  }
+
+  Future<bool> sendRequestOk(int opcode, Map<dynamic, dynamic> payload) async {
+    final response = await sendRequest(opcode, payload);
+    return response.isOk;
+  }
+
+  Future<Packet> sendRequestOrThrow(
+    int opcode,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final response = await sendRequest(opcode, payload);
+    throwIfPacketError(response);
+    return response;
+  }
+
   /// Вешает обработчик на пуши с указанным опкодом.
   void registerPushHandler(int opcode, void Function(Packet) handler) {
     _dispatcher.registerHandler(opcode, handler);
@@ -373,7 +412,16 @@ class Api {
   }
 
   Future<void> _onDataReceived(Uint8List data) async {
-    final rawPackets = _receiver.feed(data);
+    final List<Uint8List> rawPackets;
+    try {
+      rawPackets = _receiver.feed(data);
+    } on ReceiverOverflowException catch (e) {
+      logger.e('$e — форсируем реконнект');
+      if (_sessionState != SessionState.disconnected) {
+        unawaited(_forceReconnect());
+      }
+      return;
+    }
     for (final raw in rawPackets) {
       final Packet packet;
       try {
@@ -383,10 +431,7 @@ class Api {
         continue;
       }
       TrafficMonitor.instance.recordIncoming(packet, raw.length);
-      if (packet.isError &&
-          packet.payload is Map &&
-          (packet.payload['message'] == 'FAIL_LOGIN_TOKEN' ||
-              packet.payload['message'] == 'FAIL_WRONG_PASSWORD')) {
+      if (packet.isError && isSessionExpiredPayload(packet.payload)) {
         _sessionExpiredController.add(
           SessionExpiredException(messageFromErrorPayload(packet.payload)),
         );
@@ -463,6 +508,11 @@ class Api {
         SelfPresence.markOfflineFromPing();
       }
     }
+  }
+
+  static String _archFromPlatformVersion() {
+    final v = Platform.version;
+    return v.substring(v.indexOf('_') + 1, v.length - 1);
   }
 
   static List<CountryName>? _parseRegistrationCountries(dynamic payload) {

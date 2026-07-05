@@ -103,7 +103,7 @@ class GlossyPill extends StatelessWidget {
     this.elevated = false,
     this.borderSide,
   }) : borderRadius =
-            borderRadius ?? const BorderRadius.all(Radius.circular(100));
+           borderRadius ?? const BorderRadius.all(Radius.circular(100));
 
   @override
   Widget build(BuildContext context) {
@@ -162,8 +162,9 @@ class GlossyPill extends StatelessWidget {
                 Positioned.fill(
                   child: IgnorePointer(
                     child: DecoratedBox(
-                      decoration:
-                          BoxDecoration(gradient: GlossyDecor.topSheen(base)),
+                      decoration: BoxDecoration(
+                        gradient: GlossyDecor.topSheen(base),
+                      ),
                     ),
                   ),
                 ),

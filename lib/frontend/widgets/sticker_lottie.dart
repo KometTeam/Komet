@@ -154,8 +154,10 @@ class _StickerFrameCache {
 
   Future<_StickerFrames?> _load(String url, int pxSize, String key) async {
     try {
-      final composition =
-          await NetworkLottie(url, backgroundLoading: true).load();
+      final composition = await NetworkLottie(
+        url,
+        backgroundLoading: true,
+      ).load();
       final durationMs = composition.duration.inMilliseconds;
       var frameCount = (durationMs / 1000 * _fps).round();
       frameCount = frameCount.clamp(1, 120);
@@ -181,10 +183,9 @@ class _StickerFrameCache {
 
   void _evictIfNeeded() {
     if (_totalBytes <= _maxBytes) return;
-    final candidates = _entries.entries
-        .where((e) => e.value.active <= 0)
-        .toList()
-      ..sort((a, b) => a.value.lastUsed.compareTo(b.value.lastUsed));
+    final candidates =
+        _entries.entries.where((e) => e.value.active <= 0).toList()
+          ..sort((a, b) => a.value.lastUsed.compareTo(b.value.lastUsed));
     for (final candidate in candidates) {
       if (_totalBytes <= _maxBytes) break;
       _totalBytes -= candidate.value.bytes;
@@ -341,7 +342,8 @@ class _StickerLottieState extends State<StickerLottie>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final box = widget.size ??
+        final box =
+            widget.size ??
             (constraints.hasBoundedWidth
                 ? constraints.biggest.shortestSide
                 : 96.0);
