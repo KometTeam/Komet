@@ -10,6 +10,7 @@ import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
 import '../../../models/contact_info.dart';
+import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
@@ -1130,11 +1131,22 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _avatar() {
-    return KometAvatar(
+    final avatar = KometAvatar(
       name: widget.name,
       imageUrl: widget.imageUrl,
       size: 96,
       fontSize: 36,
+    );
+    final peerId = widget.chatType == 'DIALOG' ? _otherId : null;
+    if (peerId == null || widget.imageUrl.isEmpty) return avatar;
+    return GestureDetector(
+      onTap: () => AvatarHistoryScreen.open(
+        context,
+        contactId: peerId,
+        name: widget.name,
+        currentAvatarUrl: widget.imageUrl,
+      ),
+      child: avatar,
     );
   }
 

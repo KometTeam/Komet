@@ -7,6 +7,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/contact_info.dart';
+import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
@@ -146,11 +147,19 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               children: [
-                KometAvatar(
-                  name: _displayName(),
-                  imageUrl: _avatarUrl(),
-                  size: 96,
-                  fontSize: 36,
+                GestureDetector(
+                  onTap: () => AvatarHistoryScreen.open(
+                    context,
+                    contactId: widget.contactId,
+                    name: _displayName(),
+                    currentAvatarUrl: _avatarUrl(),
+                  ),
+                  child: KometAvatar(
+                    name: _displayName(),
+                    imageUrl: _avatarUrl(),
+                    size: 96,
+                    fontSize: 36,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 _buildNameRow(cs),
@@ -206,7 +215,11 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
         label: l10n.contactProfileActionChat,
         onTap: _openChat,
       ),
-      (icon: Symbols.notifications, label: l10n.contactProfileActionSound, onTap: null),
+      (
+        icon: Symbols.notifications,
+        label: l10n.contactProfileActionSound,
+        onTap: null,
+      ),
       if (!_isBot)
         (icon: Symbols.call, label: l10n.contactProfileActionCall, onTap: null),
     ];
@@ -250,17 +263,23 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
 
     final phoneStr = formatPhone(c.raw['phone']);
     if (phoneStr != null) {
-      rows.add(_infoRow(cs, Symbols.phone, l10n.contactProfileInfoPhone, phoneStr));
+      rows.add(
+        _infoRow(cs, Symbols.phone, l10n.contactProfileInfoPhone, phoneStr),
+      );
     }
 
     final country = c.raw['country'] as String?;
     if (country != null && country.isNotEmpty) {
-      rows.add(_infoRow(cs, Symbols.public, l10n.contactProfileInfoCountry, country));
+      rows.add(
+        _infoRow(cs, Symbols.public, l10n.contactProfileInfoCountry, country),
+      );
     }
 
     final genderStr = formatGender(c.raw['gender']);
     if (genderStr != null) {
-      rows.add(_infoRow(cs, Symbols.wc, l10n.contactProfileInfoGender, genderStr));
+      rows.add(
+        _infoRow(cs, Symbols.wc, l10n.contactProfileInfoGender, genderStr),
+      );
     }
 
     final regTime = c.raw['registrationTime'] as int?;

@@ -62,6 +62,15 @@ class PhoneLookupResult {
   const PhoneLookupResult({required this.id, this.name, this.avatarUrl});
 }
 
+class ContactPhotos {
+  final List<String> urls;
+  final int total;
+
+  const ContactPhotos({required this.urls, required this.total});
+
+  static const empty = ContactPhotos(urls: [], total: 0);
+}
+
 class ContactsModule {
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
@@ -192,6 +201,26 @@ class ContactsModule {
     if (baseUrl != null && baseUrl.isNotEmpty) {
       ContactCache.putAvatar(id, baseUrl);
     }
+  }
+
+  static Future<ContactPhotos> fetchPhotos(
+    Api api,
+    int contactId, {
+    int from = 0,
+    int count = 25,
+  }) async {
+    final map = await api.sendRequestMap(Opcode.contactPhotos, {
+      'contactId': contactId,
+      'from': from,
+      'count': count,
+    });
+    if (map == null) return ContactPhotos.empty;
+    final rawUrls = map['urls'];
+    final urls = rawUrls is List
+        ? rawUrls.whereType<String>().toList()
+        : <String>[];
+    final total = map['total'] is int ? map['total'] as int : urls.length;
+    return ContactPhotos(urls: urls, total: total);
   }
 
   static Future<List<CachedContact>> getContacts(int accountId) async {

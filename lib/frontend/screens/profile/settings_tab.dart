@@ -11,6 +11,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
@@ -557,21 +558,29 @@ class _SettingsTabState extends State<SettingsTab> {
             ],
           ),
           const SizedBox(height: 8),
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: cs.primary.withValues(alpha: 0.5),
-                width: 2.5,
-              ),
-            ),
-            child: KometAvatar(
+          GestureDetector(
+            onTap: () => AvatarHistoryScreen.open(
+              context,
+              contactId: _profile?.id ?? 0,
               name: name,
-              imageUrl: _profile?.baseUrl,
-              size: 88,
-              fontSize: 32,
+              currentAvatarUrl: _profile?.baseUrl,
+            ),
+            child: Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: cs.primary.withValues(alpha: 0.5),
+                  width: 2.5,
+                ),
+              ),
+              child: KometAvatar(
+                name: name,
+                imageUrl: _profile?.baseUrl,
+                size: 88,
+                fontSize: 32,
+              ),
             ),
           ),
           const SizedBox(height: 8),
