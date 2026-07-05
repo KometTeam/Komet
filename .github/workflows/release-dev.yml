@@ -2,6 +2,11 @@ name: Pre-release (dev/0.5.0)
 
 on:
   workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Override build number (e.g. 13). Leave empty to use the auto run number.'
+        required: false
+        default: ''
   push:
     branches:
       - 'dev/0.5.0'
@@ -253,8 +258,10 @@ jobs:
         id: ver
         run: |
           BRANCH_VERSION="${GITHUB_REF_NAME#dev/}"
-          echo "tag=v${BRANCH_VERSION}-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "name=Komet ${BRANCH_VERSION}-dev (build ${GITHUB_RUN_NUMBER})" >> "$GITHUB_OUTPUT"
+          BUILD="${{ github.event.inputs.build_number }}"
+          BUILD="${BUILD:-$GITHUB_RUN_NUMBER}"
+          echo "tag=v${BRANCH_VERSION}-dev.${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "name=Komet ${BRANCH_VERSION}-dev (build ${BUILD})" >> "$GITHUB_OUTPUT"
 
       - name: List artifacts
         run: ls -lhR dist
