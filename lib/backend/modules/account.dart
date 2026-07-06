@@ -180,6 +180,13 @@ class AccountModule {
     final accountId = result.accountId;
 
     if (sessionToken != null && accountId != null) {
+      final profileMap = data['profile'];
+      if (profileMap is Map) {
+        final profile = ProfileData.fromServerProfile(
+          profileMap.cast<dynamic, dynamic>(),
+        );
+        await AppDatabase.saveProfile(profile, isActive: true);
+      }
       await TokenStorage.saveToken(sessionToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
       await SpoofingService.commitPendingSpoof(accountId);
