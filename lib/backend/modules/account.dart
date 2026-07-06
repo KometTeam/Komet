@@ -177,15 +177,12 @@ class AccountModule {
     final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
 
     final sessionToken = result.loginToken ?? result.registerToken;
-    final accountId = result.accountId;
+    final verifiedProfile = _profileFromVerifyPayload(result.payload);
+    final accountId = result.accountId ?? verifiedProfile?.id;
 
     if (sessionToken != null && accountId != null) {
-      final profileMap = data['profile'];
-      if (profileMap is Map) {
-        final profile = ProfileData.fromServerProfile(
-          profileMap.cast<dynamic, dynamic>(),
-        );
-        await AppDatabase.saveProfile(profile, isActive: true);
+      if (result.loginToken != null && verifiedProfile != null) {
+        await AppDatabase.saveProfile(verifiedProfile, isActive: true);
       }
       await TokenStorage.saveToken(sessionToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
@@ -193,6 +190,12 @@ class AccountModule {
     }
 
     return result;
+  }
+
+  ProfileData? _profileFromVerifyPayload(Map<dynamic, dynamic> payload) {
+    final profileMap = payload['profile'];
+    if (profileMap is! Map) return null;
+    return ProfileData.fromServerProfile(profileMap.cast<dynamic, dynamic>());
   }
 
   Future<int> completeRegistration({
