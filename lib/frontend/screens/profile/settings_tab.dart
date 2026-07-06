@@ -17,6 +17,7 @@ import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/custom_notification.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
 import '../../../core/config/app_digital_id_mode.dart';
@@ -198,7 +199,12 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Future<void> _doLogout() async {
     final navState = KometApp.navigatorKey.currentState;
-    await accountModule.logout();
+    try {
+      await accountModule.logout();
+    } catch (e) {
+      if (mounted) showCustomNotification(context, 'Не удалось выйти: $e');
+      return;
+    }
     await resetDigitalIdSession();
     try {
       await api.connect();
