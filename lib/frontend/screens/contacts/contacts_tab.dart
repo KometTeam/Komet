@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/config/debug_test.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
@@ -102,6 +103,18 @@ class _ContactsTabState extends State<ContactsTab> {
   }
 
   Future<void> _loadContacts() async {
+    if (DebugTest.enabled) {
+      final debug = ContactsModule.debugContacts()
+        ..sort((a, b) => a.firstName.compareTo(b.firstName));
+      if (mounted) {
+        setState(() {
+          _contacts = debug;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
     final p = await AppDatabase.loadActiveProfile();
     if (p == null) {
       if (mounted) setState(() => _isLoading = false);

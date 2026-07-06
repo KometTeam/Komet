@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/config/debug_test.dart';
 import '../../core/utils/update_checker.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
@@ -52,6 +53,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   }
 
   Future<void> _maybeCheckUpdate() async {
+    if (DebugTest.enabled) return;
     final update = await UpdateChecker.check();
     if (update == null || !mounted) return;
     await showUpdateDialog(context, update);

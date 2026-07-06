@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/config/debug_test.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/utils/logger.dart';
 import '../api.dart';
 import 'messages.dart';
 
@@ -174,7 +176,11 @@ class ContactsModule {
 
     if (rows.isNotEmpty) {
       await AppDatabase.saveContacts(rows);
+      revision.value++;
     }
+    logger.i(
+      'Контакты: получено ${contacts.length}, сохранено ${rows.length} (акк $accountId)',
+    );
   }
 
   static void _primeContactCache(Map<dynamic, dynamic> contact) {
@@ -226,6 +232,41 @@ class ContactsModule {
   static Future<List<CachedContact>> getContacts(int accountId) async {
     final rows = await AppDatabase.loadContacts(accountId);
     return rows.map(CachedContact.fromDbRow).toList();
+  }
+
+  static const List<String> _debugFirstNames = [
+    'Алиса', 'Борис', 'Вера', 'Глеб', 'Дарья', 'Егор', 'Жанна', 'Захар',
+    'Ирина', 'Кирилл', 'Лия', 'Максим', 'Нина', 'Олег', 'Полина', 'Роман',
+    'София', 'Тимур', 'Ульяна', 'Фёдор', 'Ханна', 'Цветана', 'Чеслав', 'Шура',
+  ];
+
+  static const List<String> _debugLastNames = [
+    'Иванов', 'Петров', 'Сидоров', 'Кузнецов', 'Смирнов', 'Попов', 'Волков',
+    'Соколов', 'Морозов', 'Новиков', 'Фёдоров', 'Козлов',
+  ];
+
+  static List<CachedContact> debugContacts() {
+    final count = DebugTest.contactCount;
+    final out = <CachedContact>[];
+    for (var i = 0; i < count; i++) {
+      final first = _debugFirstNames[i % _debugFirstNames.length];
+      final last =
+          _debugLastNames[(i ~/ _debugFirstNames.length) %
+              _debugLastNames.length];
+      out.add(
+        CachedContact(
+          id: 900000000 + i,
+          accountId: DebugTest.debugAccountId,
+          firstName: '$first ${i + 1}',
+          lastName: last,
+          phone: 79000000000 + i,
+          baseUrl: 'https://i.pravatar.cc/150?u=komet_debug_$i',
+          updateTime: 1,
+          options: i % 6 == 0 ? const {'OFFICIAL'} : const {},
+        ),
+      );
+    }
+    return out;
   }
 
   /// Прогревает in-memory ContactCache из локальных контактов.

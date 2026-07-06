@@ -22,6 +22,7 @@ import 'core/config/app_amoled.dart';
 import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/komet_settings.dart';
+import 'core/config/debug_test.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
@@ -143,8 +144,9 @@ void _installLogCapture() {
   };
 }
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  DebugTest.parse(args);
   _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(
     windows: true,
@@ -930,6 +932,17 @@ class _StartupScreenState extends State<_StartupScreen> {
   }
 
   Future<void> _tryAutoLogin() async {
+    if (DebugTest.enabled) {
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdaptiveShell()),
+      );
+      KometApp.stateOf(context)?.markShellReady();
+      return;
+    }
+
     unawaited(api.connect());
 
     int? accountId = await TokenStorage.getActiveAccountId();
