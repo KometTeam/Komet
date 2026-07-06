@@ -59,6 +59,10 @@ class CachedChat {
   final Set<String> options;
   final int? owner;
   final Set<int> admins;
+  final int? pinnedMsgId;
+  final String? pinnedMsgText;
+  final int? pinnedMsgTime;
+  final bool pinnedMsgIsPreview;
 
   CachedChat({
     required this.id,
@@ -83,6 +87,10 @@ class CachedChat {
     this.options = const {},
     this.owner,
     this.admins = const {},
+    this.pinnedMsgId,
+    this.pinnedMsgText,
+    this.pinnedMsgTime,
+    this.pinnedMsgIsPreview = false,
   }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
            ? lastMsgText.replaceAll('\n', ' ')
            : lastMsgText;
@@ -109,6 +117,15 @@ class CachedChat {
   }
 
   bool iAmAdmin(int myId) => owner == myId || admins.contains(myId);
+
+  bool get hasPinnedMessage => pinnedMsgId != null;
+
+  bool get isGroupChat => type == 'CHAT' || type == 'GROUP';
+
+  bool canPinMessages(int myId) {
+    if (!isGroupChat) return false;
+    return iAmAdmin(myId) || options.contains('ALL_CAN_PIN_MESSAGE');
+  }
 
   bool get isMuted {
     if (dontDisturbUntil == ChatsModule.muteOff) return false;
@@ -141,6 +158,10 @@ class CachedChat {
     options: _decodeOptions(row['options']),
     owner: row['owner'] as int?,
     admins: _decodeAdmins(row['admins']),
+    pinnedMsgId: row['pinned_msg_id'] as int?,
+    pinnedMsgText: row['pinned_msg_text'] as String?,
+    pinnedMsgTime: row['pinned_msg_time'] as int?,
+    pinnedMsgIsPreview: (row['pinned_msg_is_preview'] as int? ?? 0) == 1,
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
@@ -182,6 +203,10 @@ class CachedChat {
     'options': options.isEmpty ? null : options.join(','),
     'owner': owner,
     'admins': admins.isEmpty ? null : admins.join(','),
+    'pinned_msg_id': pinnedMsgId,
+    'pinned_msg_text': pinnedMsgText,
+    'pinned_msg_time': pinnedMsgTime,
+    'pinned_msg_is_preview': pinnedMsgIsPreview ? 1 : 0,
   };
 
   static const Object _keep = Object();
@@ -207,6 +232,10 @@ class CachedChat {
     Set<String>? options,
     Object? owner = _keep,
     Set<int>? admins,
+    Object? pinnedMsgId = _keep,
+    Object? pinnedMsgText = _keep,
+    Object? pinnedMsgTime = _keep,
+    bool? pinnedMsgIsPreview,
   }) {
     return CachedChat(
       id: id,
@@ -243,6 +272,16 @@ class CachedChat {
       options: options ?? this.options,
       owner: identical(owner, _keep) ? this.owner : owner as int?,
       admins: admins ?? this.admins,
+      pinnedMsgId: identical(pinnedMsgId, _keep)
+          ? this.pinnedMsgId
+          : pinnedMsgId as int?,
+      pinnedMsgText: identical(pinnedMsgText, _keep)
+          ? this.pinnedMsgText
+          : pinnedMsgText as String?,
+      pinnedMsgTime: identical(pinnedMsgTime, _keep)
+          ? this.pinnedMsgTime
+          : pinnedMsgTime as int?,
+      pinnedMsgIsPreview: pinnedMsgIsPreview ?? this.pinnedMsgIsPreview,
     );
   }
 }
@@ -700,8 +739,43 @@ class ChatsModule {
     }
     if (unread != null) newRow['unread_count'] = unread;
 
+    final pinned = _extractPinnedMessage(msg);
+    if (pinned != null) {
+      newRow['pinned_msg_id'] = pinned.id;
+      newRow['pinned_msg_text'] = pinned.text;
+      newRow['pinned_msg_time'] = pinned.time;
+      newRow['pinned_msg_is_preview'] = pinned.isPreview ? 1 : 0;
+    }
+
     await AppDatabase.saveChats([newRow]);
     _bump();
+  }
+
+  ({int? id, String? text, int? time, bool isPreview})? _extractPinnedMessage(
+    Map msg,
+  ) {
+    final attaches = msg['attaches'];
+    if (attaches is! List) return null;
+    for (final a in attaches.whereType<Map>()) {
+      if ((a['_type'] as String?) != 'CONTROL') continue;
+      final event = a['event']?.toString();
+      if (event != 'pin' && event != 'unpin') continue;
+      final pinned = a['pinnedMessage'];
+      if (event == 'unpin' || pinned is! Map) {
+        return (id: null, text: null, time: null, isPreview: false);
+      }
+      final rawId = pinned['id'];
+      final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+      if (id == null) return null;
+      final preview = pinnedMessagePreview(pinned.cast<dynamic, dynamic>());
+      return (
+        id: id,
+        text: preview.text,
+        time: pinned['time'] as int?,
+        isPreview: preview.isPreview,
+      );
+    }
+    return null;
   }
 
   Future<void> _reconcileLastMessage(
@@ -1267,6 +1341,39 @@ class ChatsModule {
     if (accountId == null) return true;
     await _updateChat(accountId, chatId, (chat) => chat.copyWith(title: title));
     return true;
+  }
+
+  Future<String?> setPinnedMessage(
+    Api api, {
+    required int chatId,
+    required int? messageId,
+    bool notify = true,
+  }) async {
+    try {
+      final packet = await api.sendRequest(Opcode.chatUpdate, {
+        'chatId': chatId,
+        'notifyPin': notify,
+        'pinMessageId': messageId ?? 0,
+      });
+      if (!packet.isOk) {
+        return messageFromErrorPayload(packet.payload);
+      }
+      final data = packet.payload;
+      final chat = data is Map ? data['chat'] : null;
+      if (chat is Map) {
+        final accountId = await TokenStorage.getActiveAccountId();
+        if (accountId != null) {
+          await cacheServerChat(chat.cast<dynamic, dynamic>(), accountId);
+        }
+      }
+      return null;
+    } on PacketError catch (e) {
+      logger.w('setPinnedMessage $chatId: ${e.message}');
+      return e.message;
+    } catch (e) {
+      logger.w('setPinnedMessage $chatId: $e');
+      return 'Не удалось изменить закрепление';
+    }
   }
 
   Future<String?> togglePin(

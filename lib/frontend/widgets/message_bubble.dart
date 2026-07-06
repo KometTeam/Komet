@@ -847,6 +847,10 @@ class MessageBubble extends StatelessWidget {
         text =
             '${ContactCache.get(message.senderId) ?? 'Пользователь'} присоединился(-ась) к чату';
         break;
+      case 'pin':
+        text =
+            '${ContactCache.get(message.senderId) ?? 'Пользователь'} закрепил(а) сообщение';
+        break;
       default:
         text = control.title;
     }

@@ -212,7 +212,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 17,
+      version: 19,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -295,6 +295,34 @@ class AppDatabase {
           await db.execute(_chatParticipantsSchema);
           await _createChatParticipantsIndex(db);
           await _backfillChatParticipants(db);
+        }
+        if (oldVersion < 18) {
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_id',
+            'INTEGER',
+          );
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_text',
+            'TEXT',
+          );
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_time',
+            'INTEGER',
+          );
+        }
+        if (oldVersion < 19) {
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_is_preview',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
         }
       },
     );
@@ -444,6 +472,10 @@ class AppDatabase {
       owner           INTEGER,
       admins          TEXT,
       in_list         INTEGER NOT NULL DEFAULT 1,
+      pinned_msg_id   INTEGER,
+      pinned_msg_text TEXT,
+      pinned_msg_time INTEGER,
+      pinned_msg_is_preview INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, account_id)
     )
   ''';

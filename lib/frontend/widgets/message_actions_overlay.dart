@@ -85,6 +85,8 @@ void showMessageActions({
   VoidCallback? onReply,
   VoidCallback? onForward,
   VoidCallback? onMarkUnread,
+  VoidCallback? onPin,
+  bool isPinned = false,
   MessageActionsInteraction interaction =
       MessageActionsInteraction.dragAndRelease,
 }) {
@@ -108,6 +110,8 @@ void showMessageActions({
       onReply: onReply,
       onForward: onForward,
       onMarkUnread: onMarkUnread,
+      onPin: onPin,
+      isPinned: isPinned,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -135,6 +139,8 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onReply;
   final VoidCallback? onForward;
   final VoidCallback? onMarkUnread;
+  final VoidCallback? onPin;
+  final bool isPinned;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -154,6 +160,8 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onReply,
     this.onForward,
     this.onMarkUnread,
+    this.onPin,
+    this.isPinned = false,
   });
 
   @override
@@ -392,6 +400,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onReply != null)
         _Action(Symbols.reply, l10n.msgActionsReply, _reply),
+      if (widget.onPin != null)
+        _Action(
+          widget.isPinned ? Symbols.keep_off : Symbols.push_pin,
+          widget.isPinned ? l10n.msgActionsUnpin : l10n.msgActionsPin,
+          _pin,
+        ),
       if (widget.onForward != null)
         _Action(Symbols.forward, l10n.msgActionsForward, _forward),
       if (widget.onMarkUnread != null)
@@ -409,7 +423,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           _showReportView,
           destructive: true,
         ),
-      _Action(Symbols.delete, l10n.msgActionsDelete, _delete, destructive: true),
+      _Action(
+        Symbols.delete,
+        l10n.msgActionsDelete,
+        _delete,
+        destructive: true,
+      ),
     ];
   }
 
@@ -503,7 +522,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (text != null && text.isNotEmpty) {
       await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
-      showCustomNotification(context, AppLocalizations.of(context)!.msgActionsCopied);
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.msgActionsCopied,
+      );
     }
     await _close();
   }
@@ -536,6 +558,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final onMarkUnread = widget.onMarkUnread;
     await _close();
     onMarkUnread?.call();
+  }
+
+  Future<void> _pin() async {
+    final onPin = widget.onPin;
+    await _close();
+    onPin?.call();
   }
 
   @override

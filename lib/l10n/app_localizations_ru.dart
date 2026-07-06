@@ -540,6 +540,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsMarkUnread => 'Непрочитанное';
 
   @override
+  String get msgActionsPin => 'Закрепить';
+
+  @override
+  String get msgActionsUnpin => 'Открепить';
+
+  @override
+  String get pinnedMessageTitle => 'Закреплённое сообщение';
+
+  @override
   String get msgActionsEditHistory => 'История изменений';
 
   @override

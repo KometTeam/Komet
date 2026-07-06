@@ -1118,6 +1118,24 @@ abstract class AppLocalizations {
   /// **'Mark as unread'**
   String get msgActionsMarkUnread;
 
+  /// No description provided for @msgActionsPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin'**
+  String get msgActionsPin;
+
+  /// No description provided for @msgActionsUnpin.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get msgActionsUnpin;
+
+  /// No description provided for @pinnedMessageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message'**
+  String get pinnedMessageTitle;
+
   /// No description provided for @msgActionsEditHistory.
   ///
   /// In en, this message translates to:

@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:komet/backend/modules/chat_preview.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/backend/modules/upload_notification_service.dart';
@@ -17,10 +18,12 @@ import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/screens/contacts/contact_profile_screen.dart';
 import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
+import 'package:komet/frontend/widgets/animated_text_swap.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
 import '../../../backend/modules/complaints.dart';
@@ -568,15 +571,156 @@ class _ChatScreenState extends State<ChatScreen>
     Navigator.of(context).pop();
   }
 
+  bool _canPinMessage(CachedMessage message) {
+    if (message.isControl) return false;
+    if (int.tryParse(message.id) == null) return false;
+    return chat?.canPinMessages(_myId) ?? false;
+  }
+
+  Future<void> _togglePinMessage(CachedMessage message) async {
+    final messageId = int.tryParse(message.id);
+    if (messageId == null) return;
+    final previousChat = chat;
+    final willUnpin = chat?.pinnedMsgId == messageId;
+    if (willUnpin) {
+      _applyPinnedMessageLocally();
+    } else {
+      final preview = _pinnedPreviewFor(message);
+      _applyPinnedMessageLocally(
+        messageId: messageId,
+        text: preview.text,
+        time: message.time,
+        isPreview: preview.isPreview,
+      );
+    }
+    final error = await chats.setPinnedMessage(
+      api,
+      chatId: widget.chatId,
+      messageId: willUnpin ? null : messageId,
+      notify: !willUnpin,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      if (previousChat != null) setState(() => chat = previousChat);
+      showCustomNotification(context, error);
+      return;
+    }
+    showCustomNotification(
+      context,
+      willUnpin ? 'Сообщение откреплено' : 'Сообщение закреплено',
+    );
+  }
+
+  Future<void> _unpinCurrentMessage() async {
+    final previousChat = chat;
+    _applyPinnedMessageLocally();
+    final error = await chats.setPinnedMessage(
+      api,
+      chatId: widget.chatId,
+      messageId: null,
+      notify: false,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      if (previousChat != null) setState(() => chat = previousChat);
+      showCustomNotification(context, error);
+      return;
+    }
+    showCustomNotification(context, 'Сообщение откреплено');
+  }
+
+  ({String? text, bool isPreview}) _pinnedPreviewFor(CachedMessage message) {
+    final payload = message.payload;
+    if (payload != null) return pinnedMessagePreview(payload);
+    return pinnedMessagePreview({
+      'text': message.text,
+      'attaches':
+          message.attachments?.map((a) => a.toMap()).toList() ?? const [],
+    });
+  }
+
+  void _applyPinnedMessageLocally({
+    int? messageId,
+    String? text,
+    int? time,
+    bool isPreview = false,
+  }) {
+    final current = chat;
+    if (current == null) return;
+    setState(() {
+      chat = current.copyWith(
+        pinnedMsgId: messageId,
+        pinnedMsgText: text,
+        pinnedMsgTime: time,
+        pinnedMsgIsPreview: isPreview,
+      );
+    });
+  }
+
+  void _jumpToPinnedMessage() {
+    final id = chat?.pinnedMsgId;
+    final time = chat?.pinnedMsgTime;
+    if (id == null) return;
+    unawaited(_openPinnedMessage(id.toString(), time ?? 0));
+  }
+
+  Future<void> _openPinnedMessage(String messageId, int time) async {
+    if (!_messages.any((m) => m.id == messageId)) {
+      var guard = 0;
+      while (mounted &&
+          guard < 60 &&
+          _hasMoreHistory &&
+          !_messages.any((m) => m.id == messageId) &&
+          (_messages.isEmpty || _messages.first.time > time)) {
+        guard++;
+        final before = _messages.isEmpty ? 0 : _messages.first.time;
+        await _loadMoreHistory();
+        if (!mounted) return;
+        final after = _messages.isEmpty ? 0 : _messages.first.time;
+        if (after == before) break;
+      }
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+    if (_messages.any((m) => m.id == messageId)) {
+      _scrollToLoadedMessage(messageId);
+    } else {
+      showCustomNotification(context, 'Сообщение не загружено');
+    }
+  }
+
   bool _badgeRefreshing = false;
   bool _badgeRefreshQueued = false;
 
   void _onChatsBump() {
+    unawaited(_reloadChatMeta());
     if (_badgeRefreshing) {
       _badgeRefreshQueued = true;
       return;
     }
     unawaited(_runBadgeRefresh());
+  }
+
+  Future<void> _reloadChatMeta() async {
+    if (_myId == 0) return;
+    final rows = await chats.getChat(_myId, widget.chatId);
+    if (!mounted || rows.isEmpty) return;
+    final fresh = rows.first;
+    final current = chat;
+    if (current != null &&
+        current.pinnedMsgId == fresh.pinnedMsgId &&
+        current.pinnedMsgText == fresh.pinnedMsgText &&
+        current.pinnedMsgTime == fresh.pinnedMsgTime &&
+        current.pinnedMsgIsPreview == fresh.pinnedMsgIsPreview &&
+        current.owner == fresh.owner &&
+        current.options.length == fresh.options.length &&
+        current.options.containsAll(fresh.options) &&
+        current.admins.length == fresh.admins.length &&
+        current.admins.containsAll(fresh.admins)) {
+      return;
+    }
+    setState(() => chat = fresh);
   }
 
   Future<void> _runBadgeRefresh() async {
@@ -3108,10 +3252,26 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Widget? _buildPinnedBanner({required bool floating}) {
+    final pinned = chat;
+    if (pinned == null || !pinned.hasPinnedMessage) return null;
+    return _PinnedMessageBanner(
+      text: pinned.pinnedMsgText,
+      isPreview: pinned.pinnedMsgIsPreview,
+      floating: floating,
+      onTap: _jumpToPinnedMessage,
+      onUnpin: pinned.canPinMessages(_myId)
+          ? () => unawaited(_unpinCurrentMessage())
+          : null,
+    );
+  }
+
   Widget _buildColorBody() {
     final cs = Theme.of(context).colorScheme;
+    final banner = _buildPinnedBanner(floating: false);
     return Column(
       children: [
+        ?banner,
         Expanded(
           child: Stack(
             fit: StackFit.expand,
@@ -3150,6 +3310,12 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildUnderlapBody() {
     final cs = Theme.of(context).colorScheme;
     final vignette = AppChatChrome.current.value == ChatChromeStyle.none;
+    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    final bannerTop =
+        MediaQuery.paddingOf(context).top +
+        (glossy ? _glossyHeaderHeight : kToolbarHeight) +
+        8;
+    final banner = _buildPinnedBanner(floating: true);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -3185,6 +3351,8 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
         ],
+        if (banner != null)
+          Positioned(top: bannerTop, left: 8, right: 8, child: banner),
         ValueListenableBuilder<double>(
           valueListenable: _composerHeight,
           builder: (context, height, _) => Positioned(
@@ -3377,6 +3545,10 @@ class _ChatScreenState extends State<ChatScreen>
                 onMarkUnread: message.isControl
                     ? null
                     : () => _markMessageUnread(message),
+                onPin: _canPinMessage(message)
+                    ? () => _togglePinMessage(message)
+                    : null,
+                isPinned: () => chat?.pinnedMsgId == int.tryParse(message.id),
                 loadReportReasons: canReport
                     ? () => _loadReportReasons(reportTypeId)
                     : null,
@@ -4474,6 +4646,175 @@ class _SwipeToReplyState extends State<_SwipeToReply>
   }
 }
 
+class _PinnedMessageBanner extends StatelessWidget {
+  final String? text;
+  final bool isPreview;
+  final VoidCallback onTap;
+  final VoidCallback? onUnpin;
+  final bool floating;
+
+  const _PinnedMessageBanner({
+    required this.text,
+    required this.isPreview,
+    required this.onTap,
+    this.onUnpin,
+    this.floating = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final content = Material(
+      color: floating
+          ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
+          : cs.surfaceContainerHigh,
+      borderRadius: floating ? BorderRadius.circular(16) : null,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 3,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      AppLocalizations.of(context)!.pinnedMessageTitle,
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    _PinnedMessageText(
+                      text: text,
+                      isPreview: isPreview,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+              if (onUnpin != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Symbols.close, color: cs.onSurfaceVariant),
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onUnpin,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!floating) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: cs.outlineVariant.withValues(alpha: 0.4),
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: content,
+      );
+    }
+    return content;
+  }
+}
+
+class _PinnedMessageText extends StatefulWidget {
+  final String? text;
+  final bool isPreview;
+  final Color color;
+
+  const _PinnedMessageText({
+    required this.text,
+    required this.isPreview,
+    required this.color,
+  });
+
+  @override
+  State<_PinnedMessageText> createState() => _PinnedMessageTextState();
+}
+
+class _PinnedMessageTextState extends State<_PinnedMessageText> {
+  late String? _primaryText;
+  late bool _primaryIsPreview;
+  late String? _secondaryText;
+  late bool _secondaryIsPreview;
+  bool _showSecondary = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _primaryText = widget.text;
+    _primaryIsPreview = widget.isPreview;
+    _secondaryText = widget.text;
+    _secondaryIsPreview = widget.isPreview;
+  }
+
+  @override
+  void didUpdateWidget(covariant _PinnedMessageText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.text == oldWidget.text &&
+        widget.isPreview == oldWidget.isPreview) {
+      return;
+    }
+    if (_showSecondary) {
+      _primaryText = widget.text;
+      _primaryIsPreview = widget.isPreview;
+    } else {
+      _secondaryText = widget.text;
+      _secondaryIsPreview = widget.isPreview;
+    }
+    _showSecondary = !_showSecondary;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedTextSwap(
+        showAlternate: _showSecondary,
+        alternate: _buildText(context, _secondaryText, _secondaryIsPreview),
+        child: _buildText(context, _primaryText, _primaryIsPreview),
+      ),
+    );
+  }
+
+  Widget _buildText(BuildContext context, String? text, bool isPreview) {
+    final label = text == null || text.isEmpty
+        ? AppLocalizations.of(context)!.msgActionsNoText
+        : text;
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: widget.color,
+        fontSize: 14,
+        fontStyle: isPreview ? FontStyle.italic : null,
+      ),
+    );
+  }
+}
+
 class _SelectableMessageRow extends StatefulWidget {
   final Widget child;
   final CachedMessage message;
@@ -4488,6 +4829,8 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback? onReply;
   final VoidCallback? onForward;
   final VoidCallback? onMarkUnread;
+  final VoidCallback? onPin;
+  final bool Function() isPinned;
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
 
@@ -4505,6 +4848,8 @@ class _SelectableMessageRow extends StatefulWidget {
     this.onReply,
     this.onForward,
     this.onMarkUnread,
+    this.onPin,
+    required this.isPinned,
     this.loadReportReasons,
     this.onReport,
   });
@@ -4518,6 +4863,8 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
 
   final GlobalKey _boundaryKey = GlobalKey();
   Offset? _lastTapDown;
+
+  bool _isPinnedNow() => widget.isPinned();
 
   void _openMenu() {
     final ctx = _boundaryKey.currentContext;
@@ -4558,6 +4905,8 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onReply: widget.onReply,
       onForward: widget.onForward,
       onMarkUnread: widget.onMarkUnread,
+      onPin: widget.onPin,
+      isPinned: _isPinnedNow(),
       onDispose: controller.dispose,
     );
   }
@@ -4589,6 +4938,8 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onReply: widget.onReply,
       onForward: widget.onForward,
       onMarkUnread: widget.onMarkUnread,
+      onPin: widget.onPin,
+      isPinned: _isPinnedNow(),
       onDispose: controller.dispose,
     );
   }

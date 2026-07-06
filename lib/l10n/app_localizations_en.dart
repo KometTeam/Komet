@@ -537,6 +537,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsMarkUnread => 'Mark as unread';
 
   @override
+  String get msgActionsPin => 'Pin';
+
+  @override
+  String get msgActionsUnpin => 'Unpin';
+
+  @override
+  String get pinnedMessageTitle => 'Pinned message';
+
+  @override
   String get msgActionsEditHistory => 'Edit history';
 
   @override
