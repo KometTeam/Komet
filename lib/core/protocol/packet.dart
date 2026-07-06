@@ -7,7 +7,9 @@ import 'lz4_block.dart';
 
 /// ver(1) + cmd(1) + seq(2) + opcode(2) + packedLen(4) = 10
 const int headerSize = 10;
-const int _maxDecompressedSize = 1048576; // 1 MB
+
+/// Потолок распаковки payload (анти-бомба); буфер растёт динамически до него.
+const int _maxDecompressedSize = 32 * 1024 * 1024; // 32 MB
 
 /// Типы команд в протоколе
 abstract class CmdType {

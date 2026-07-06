@@ -586,6 +586,7 @@ class Api {
 
   void _startPinging() {
     _pingTimer?.cancel();
+    sendPing(interactive: !KometSettings.ghostMode.value);
     _pingTimer = Timer.periodic(ServerConfig.pingInterval, (_) {
       sendPing(interactive: !KometSettings.ghostMode.value);
     });

@@ -14,7 +14,7 @@ class PacketReceiver {
   int _start = 0;
   int _end = 0;
 
-  static const int _maxBufferSize = 2 * 1024 * 1024;
+  static const int _maxBufferSize = 16 * 1024 * 1024;
 
   List<Uint8List> feed(Uint8List data) {
     _append(data);
