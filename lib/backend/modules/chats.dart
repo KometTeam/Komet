@@ -405,6 +405,40 @@ class ChatsModule {
     _bump();
   }
 
+  Future<void> markReadUpTo(
+    Api api,
+    int accountId,
+    int chatId,
+    String messageId,
+    int mark, {
+    required int remaining,
+  }) async {
+    final msgIdNum = int.tryParse(messageId);
+    if (msgIdNum != null && !KometSettings.antiRead.value) {
+      try {
+        await api.sendRequest(Opcode.chatMark, {
+          'type': 'READ_MESSAGE',
+          'chatId': chatId,
+          'messageId': msgIdNum,
+          'mark': mark,
+        });
+      } catch (_) {}
+    }
+
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final cached = CachedChat.fromDbRow(rows.first);
+    final next = remaining < 0 ? 0 : remaining;
+    final currentMark = cached.participants[accountId] ?? 0;
+    final nextMark = mark > currentMark ? mark : currentMark;
+    if (cached.unreadCount == next && nextMark == currentMark) return;
+    final participants = Map<int, int>.from(cached.participants)
+      ..[accountId] = nextMark;
+    final updated = cached.copyWith(unreadCount: next, participants: participants);
+    await AppDatabase.saveChats([updated.toDbRow()]);
+    _bump();
+  }
+
   Future<int?> markUnread(Api api, int accountId, int chatId, int mark) async {
     int? unread;
     try {
@@ -420,11 +454,11 @@ class ChatsModule {
     }
     if (unread == null) return null;
 
-    await _updateChat(
-      accountId,
-      chatId,
-      (chat) => chat.copyWith(unreadCount: unread),
-    );
+    await _updateChat(accountId, chatId, (chat) {
+      final participants = Map<int, int>.from(chat.participants)
+        ..[accountId] = mark - 1;
+      return chat.copyWith(unreadCount: unread, participants: participants);
+    });
     return unread;
   }
 

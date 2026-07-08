@@ -97,6 +97,10 @@ class _MessageItem {
   const _MessageItem(this.message, this.index);
 }
 
+class _UnreadSeparatorItem {
+  const _UnreadSeparatorItem();
+}
+
 class _FrostedPanel extends StatelessWidget {
   final Color tint;
   final Border? border;
@@ -199,6 +203,15 @@ class _ChatScreenState extends State<ChatScreen>
   double _keyboardReserve = 0;
   bool _keyboardWasOpen = false;
   final ScrollController _scrollController = ScrollController();
+  bool _userDidScroll = false;
+  String? _pinnedMessageId;
+  double _pinnedAlignment = 0;
+  int? _unreadAnchorTime;
+  bool _awaitingPosition = false;
+  bool _initialPositionDone = false;
+  bool _positioningInFlight = false;
+  int _readMarkTime = 0;
+  Timer? _readMarkTimer;
   final GlobalKey _listKey = GlobalKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
@@ -324,7 +337,6 @@ class _ChatScreenState extends State<ChatScreen>
   late final CurvedAnimation _floatingDateCurved;
   final Map<int, GlobalKey> _separatorKeys = {};
   String? _lastSentId;
-  String? _lastMarkedId;
   final ValueNotifier<int> _otherUnread = ValueNotifier(0);
 
   final ValueNotifier<Set<String>> _selectedIds = ValueNotifier(const {});
@@ -344,6 +356,8 @@ class _ChatScreenState extends State<ChatScreen>
     _messageFocusNode.addListener(_onComposerFocusChanged);
     _scrollController.addListener(_onScrollForDate);
     _scrollController.addListener(_maybeLoadMoreHistory);
+    _scrollController.addListener(_recordScrollPixels);
+    _scrollController.addListener(_scheduleReadMarker);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
     AppChatChrome.current.addListener(_onVisualStyleChanged);
     _shimmerController = AnimationController(
@@ -453,20 +467,21 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_loadWallpaper());
     unawaited(_refreshBadge());
 
-    chats
-        .getChat(_myId, widget.chatId)
-        .then((value) {
-          if (mounted && value.isNotEmpty) {
-            setState(() {
-              chat = value.first;
-            });
-            _bumpMessages();
-            _seedPresenceFromChat();
-            _recomputeHeaderStatus();
-            _syncOtherReadTime();
-          }
-        })
-        .catchError((_) {});
+    try {
+      final chatRows = await chats.getChat(_myId, widget.chatId);
+      if (!mounted) return;
+      if (chatRows.isNotEmpty) {
+        setState(() {
+          chat = chatRows.first;
+        });
+        _bumpMessages();
+        _seedPresenceFromChat();
+        _recomputeHeaderStatus();
+        _syncOtherReadTime();
+      }
+    } catch (_) {}
+
+    _resolveUnreadAnchor();
 
     final cached = MessageSessionCache.get(_myId, widget.chatId);
     if (cached != null && cached.messages.isNotEmpty) {
@@ -474,10 +489,9 @@ class _ChatScreenState extends State<ChatScreen>
         _messages = List<CachedMessage>.of(cached.messages);
         _hasMoreHistory = !cached.reachedStart;
         _messagesRev.value++;
-        _isLoading = false;
-        _onLoadingFinished();
       });
       _syncReactionNotifiersFromMessages();
+      _revealOrHoldInitial();
       return;
     }
 
@@ -495,10 +509,55 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() {
         _messages = first;
         _messagesRev.value++;
-        _isLoading = false;
-        _onLoadingFinished();
       });
+      _revealOrHoldInitial();
     }
+  }
+
+  void _resolveUnreadAnchor() {
+    final c = chat;
+    _readMarkTime = c?.participants[_myId] ?? 0;
+    if (c == null || c.unreadCount <= 0) {
+      _unreadAnchorTime = null;
+    } else {
+      final myMark = c.participants[_myId] ?? 0;
+      _unreadAnchorTime = myMark > 0 ? myMark : null;
+    }
+    _awaitingPosition = c != null && c.unreadCount > 0;
+  }
+
+  void _resolveCountBasedAnchor() {
+    final c = chat;
+    if (c == null || c.unreadCount <= 0 || _messages.isEmpty) return;
+    final unread = c.unreadCount;
+    if (_messages.length > unread) {
+      _unreadAnchorTime = _messages[_messages.length - unread - 1].time;
+    } else if (!_hasMoreHistory) {
+      _unreadAnchorTime = _messages.first.time - 1;
+    }
+  }
+
+  void _revealOrHoldInitial() {
+    if (_awaitingPosition && !_canPositionNow()) return;
+    setState(() {
+      _isLoading = false;
+      _onLoadingFinished();
+    });
+  }
+
+  bool _canPositionNow() {
+    if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
+    final ua = _unreadAnchorTime;
+    if (ua == null) return false;
+    final firstUnread = _messages.indexWhere((m) => m.time > ua);
+    if (firstUnread == -1) return _newestMessageLoaded();
+    return firstUnread > 0 || !_hasMoreHistory;
+  }
+
+  bool _newestMessageLoaded() {
+    if (_messages.isEmpty) return false;
+    final serverLast = chat?.lastMsgTime ?? 0;
+    return _messages.last.time >= serverLast;
   }
 
   void _onFirstFrameRendered(Duration _) {
@@ -542,18 +601,200 @@ class _ChatScreenState extends State<ChatScreen>
   void _onLoadingFinished() {
     _shimmerStartTimer?.cancel();
     _shimmerStartTimer = null;
-    if (_shimmerController.isAnimating) _shimmerController.stop();
-    _markRead();
+    _applyInitialPositioning();
   }
 
-  void _markRead() {
-    if (_myId == 0 || _messages.isEmpty) return;
-    final newest = _messages.last;
-    if (newest.id == _lastMarkedId) return;
-    _lastMarkedId = newest.id;
-    unawaited(
-      chats.markRead(api, _myId, widget.chatId, newest.id, newest.time),
+  void _recordScrollPixels() {
+    if (!_scrollController.hasClients) return;
+    if (_initialPositionDone &&
+        _scrollController.position.userScrollDirection !=
+            ScrollDirection.idle) {
+      _userDidScroll = true;
+      _pinnedMessageId = null;
+    }
+  }
+
+  void _positionToMessage(String messageId, double alignment) {
+    _pinnedMessageId = messageId;
+    _pinnedAlignment = alignment.clamp(0.0, 1.0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToLoadedMessage(
+        messageId,
+        alignment: _pinnedAlignment,
+        highlight: false,
+        notifyIfMissing: false,
+        onSettled: () {
+          if (mounted) setState(_markPositioned);
+        },
+      );
+    });
+  }
+
+  void _reapplyPinIfNeeded() {
+    final id = _pinnedMessageId;
+    if (id == null || _userDidScroll || !_scrollController.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _pinnedMessageId != id || _userDidScroll) return;
+      _alignLoadedMessage(id, _pinnedAlignment, 0);
+    });
+  }
+
+  void _applyInitialPositioning() {
+    if (_initialPositionDone) {
+      if (_shimmerController.isAnimating) _shimmerController.stop();
+      _scheduleReadMarker();
+      return;
+    }
+    if (_positioningInFlight) return;
+    if (_messages.isEmpty) {
+      if (!_hasMoreHistory) _markPositioned();
+      return;
+    }
+
+    final c = chat;
+    if (c != null && c.unreadCount > 0) {
+      if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
+      final ua = _unreadAnchorTime;
+      if (ua == null) {
+        if (_hasMoreHistory) {
+          _positioningInFlight = true;
+          unawaited(_loadUntilUnreadReady());
+        } else {
+          _markPositioned();
+        }
+        return;
+      }
+      final firstUnread = _messages.indexWhere((m) => m.time > ua);
+      if (firstUnread == -1) {
+        _markPositioned();
+        return;
+      }
+      if (firstUnread > 0 || !_hasMoreHistory) {
+        _initialPositionDone = true;
+        _positionToMessage(_messages[firstUnread].id, 0.15);
+      } else {
+        _positioningInFlight = true;
+        unawaited(_loadUntilUnreadReady());
+      }
+      return;
+    }
+
+    _markPositioned();
+  }
+
+  void _markPositioned() {
+    _positioningInFlight = false;
+    _initialPositionDone = true;
+    _awaitingPosition = false;
+    _isLoading = false;
+    if (_shimmerController.isAnimating) _shimmerController.stop();
+    _scheduleReadMarker();
+  }
+
+  Future<void> _loadUntilUnreadReady() async {
+    var guard = 0;
+    while (mounted && guard < 80 && _hasMoreHistory) {
+      if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
+      final ua = _unreadAnchorTime;
+      if (ua != null && _messages.indexWhere((m) => m.time > ua) > 0) break;
+      guard++;
+      final before = _messages.isEmpty ? 0 : _messages.first.time;
+      await _loadMoreHistory();
+      if (!mounted) return;
+      final after = _messages.isEmpty ? 0 : _messages.first.time;
+      if (after == before) break;
+    }
+    if (!mounted) return;
+    if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
+    final ua = _unreadAnchorTime;
+    final idx = ua == null ? -1 : _messages.indexWhere((m) => m.time > ua);
+    _positioningInFlight = false;
+    _initialPositionDone = true;
+    if (idx >= 0) {
+      _positionToMessage(_messages[idx].id, 0.15);
+    } else {
+      setState(_markPositioned);
+    }
+  }
+
+  void _scheduleReadMarker() {
+    _readMarkTimer?.cancel();
+    _readMarkTimer = Timer(
+      const Duration(milliseconds: 350),
+      _updateReadMarker,
     );
+  }
+
+  void _updateReadMarker() {
+    if (!mounted || _myId == 0 || _messages.isEmpty) return;
+    if (_awaitingPosition || !_initialPositionDone) return;
+    if (!_scrollController.hasClients) return;
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox) return;
+    final viewportBottom = listBox.size.height;
+    if (viewportBottom <= 0) return;
+
+    CachedMessage? candidate;
+    int topIndex = -1;
+    for (int i = _messages.length - 1; i >= 0; i--) {
+      final m = _messages[i];
+      final ctx = _messageKeys[m.id]?.currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final top = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+      final bottom = top + box.size.height;
+      if (bottom <= 0 || top >= viewportBottom) continue;
+      candidate ??= m;
+      topIndex = i;
+    }
+    if (candidate == null) return;
+
+    final atBottom = candidate.id == _messages.last.id;
+
+    if (_unreadAnchorTime != null &&
+        _unreadSeparatorScrolledPast(atBottom, topIndex, listBox, viewportBottom)) {
+      _unreadAnchorTime = null;
+      _bumpMessages();
+    }
+
+    if (candidate.time <= _readMarkTime) return;
+    _readMarkTime = candidate.time;
+    final remaining = _messages
+        .where((m) => m.time > _readMarkTime && m.senderId != _myId)
+        .length;
+    unawaited(
+      chats.markReadUpTo(
+        api,
+        _myId,
+        widget.chatId,
+        candidate.id,
+        candidate.time,
+        remaining: remaining,
+      ),
+    );
+  }
+
+  bool _unreadSeparatorScrolledPast(
+    bool atBottom,
+    int topIndex,
+    RenderBox listBox,
+    double viewportBottom,
+  ) {
+    if (atBottom) return true;
+    final ua = _unreadAnchorTime;
+    if (ua == null) return false;
+    final firstUnread = _messages.indexWhere((m) => m.time > ua);
+    if (firstUnread == -1) return true;
+    if (topIndex >= 0 && topIndex > firstUnread) return true;
+    final box = _messageKeys[_messages[firstUnread].id]?.currentContext
+        ?.findRenderObject();
+    if (box is RenderBox && box.attached) {
+      final top = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+      if (top <= 0) return true;
+    }
+    return false;
   }
 
   Future<void> _markMessageUnread(CachedMessage message) async {
@@ -818,6 +1059,7 @@ class _ChatScreenState extends State<ChatScreen>
       _syncReactionNotifiersFromMessages();
       _pruneReactionNotifiers();
       _chatController.persistSessionCache();
+      _reapplyPinIfNeeded();
     }
   }
 
@@ -889,6 +1131,9 @@ class _ChatScreenState extends State<ChatScreen>
     _messageController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScrollForDate);
     _scrollController.removeListener(_maybeLoadMoreHistory);
+    _scrollController.removeListener(_recordScrollPixels);
+    _scrollController.removeListener(_scheduleReadMarker);
+    _readMarkTimer?.cancel();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
     _composerHeight.dispose();
@@ -1754,14 +1999,19 @@ class _ChatScreenState extends State<ChatScreen>
       case MessageAddedEvent(:final message):
         if (message.senderId == _myId) return;
         if (_messages.any((m) => m.id == message.id)) return;
+        final nearBottom = _isNearBottom();
         _lastSentId = message.id;
         _messages.add(message);
         _bumpMessages();
         _clearTyping(message.senderId);
         Haptics.tap();
-        _scrollToBottom();
+        if (nearBottom) {
+          _scrollToBottom();
+          _scheduleReadMarker();
+        } else {
+          _reapplyPinIfNeeded();
+        }
         _prank.checkTrigger(message);
-        _markRead();
       case MessageEditedEvent(:final message):
         final idx = _messages.indexWhere((m) => m.id == message.id);
         if (idx == -1) return;
@@ -2853,6 +3103,11 @@ class _ChatScreenState extends State<ChatScreen>
     });
   }
 
+  bool _isNearBottom() {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.position.pixels <= 120;
+  }
+
   void _startReply(CachedMessage message) {
     _replyTo.value = message;
     _messageFocusNode.requestFocus();
@@ -2965,53 +3220,108 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToLoadedMessage(result.id);
   }
 
-  void _scrollToLoadedMessage(String messageId) {
-    if (!_scrollController.hasClients) return;
+  void _scrollToLoadedMessage(
+    String messageId, {
+    double alignment = 0.4,
+    bool highlight = true,
+    bool notifyIfMissing = true,
+    VoidCallback? onSettled,
+  }) {
+    if (!_scrollController.hasClients) {
+      onSettled?.call();
+      return;
+    }
     final items = _buildCombinedItems();
     final pos = items.indexWhere(
       (it) => it is _MessageItem && it.message.id == messageId,
     );
     if (pos == -1) {
-      showCustomNotification(context, 'Сообщение не загружено');
+      if (notifyIfMissing) {
+        showCustomNotification(context, 'Сообщение не загружено');
+      }
+      onSettled?.call();
       return;
     }
 
-    var below = 0.0;
-    for (var i = pos + 1; i < items.length; i++) {
-      below += items[i] is _DateSeparatorItem ? 44.0 : _avgMessageHeight;
-    }
-    final maxExtent = _scrollController.position.maxScrollExtent;
-    final estimate = below.clamp(0.0, maxExtent).toDouble();
-    _scrollController.jumpTo(estimate);
-
-    _highlightTimer?.cancel();
-    _highlightMessageId.value = messageId;
-    _highlightTimer = Timer(const Duration(milliseconds: 1600), () {
-      if (!mounted) return;
-      if (_highlightMessageId.value == messageId) {
-        _highlightMessageId.value = null;
+    final laidOut = _keyForMessage(messageId).currentContext?.findRenderObject();
+    if (laidOut is! RenderBox || !laidOut.attached) {
+      var below = 0.0;
+      for (var i = pos + 1; i < items.length; i++) {
+        below += items[i] is _MessageItem ? _avgMessageHeight : 44.0;
       }
-    });
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(below.clamp(0.0, maxExtent).toDouble());
+    }
+
+    if (highlight) {
+      _highlightTimer?.cancel();
+      _highlightMessageId.value = messageId;
+      _highlightTimer = Timer(const Duration(milliseconds: 1600), () {
+        if (!mounted) return;
+        if (_highlightMessageId.value == messageId) {
+          _highlightMessageId.value = null;
+        }
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _ensureVisibleRetry(messageId, 0),
+      (_) => _alignLoadedMessage(messageId, alignment, 0, onSettled: onSettled),
     );
   }
 
-  void _ensureVisibleRetry(String messageId, int attempt) {
-    if (!mounted) return;
-    final ctx = _keyForMessage(messageId).currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOut,
-        alignment: 0.4,
+  void _alignLoadedMessage(
+    String messageId,
+    double alignment,
+    int attempt, {
+    VoidCallback? onSettled,
+  }) {
+    if (!mounted || !_scrollController.hasClients) {
+      onSettled?.call();
+      return;
+    }
+    final listBox = _listKey.currentContext?.findRenderObject();
+    final box = _keyForMessage(messageId).currentContext?.findRenderObject();
+    if (listBox is! RenderBox || box is! RenderBox || !box.attached) {
+      if (attempt >= 8) {
+        onSettled?.call();
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _alignLoadedMessage(
+          messageId,
+          alignment,
+          attempt + 1,
+          onSettled: onSettled,
+        ),
       );
       return;
     }
-    if (attempt >= 6) return;
+
+    final viewportHeight = listBox.size.height;
+    final actualTop = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+    final desiredTop = alignment.clamp(0.0, 1.0) * viewportHeight;
+    final delta = desiredTop - actualTop;
+    final pos = _scrollController.position;
+    final target = (pos.pixels + delta).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+
+    if (viewportHeight <= 0 ||
+        delta.abs() <= 0.5 ||
+        (target - pos.pixels).abs() <= 0.5 ||
+        attempt >= 8) {
+      onSettled?.call();
+      return;
+    }
+
+    _scrollController.jumpTo(target);
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _ensureVisibleRetry(messageId, attempt + 1),
+      (_) => _alignLoadedMessage(
+        messageId,
+        alignment,
+        attempt + 1,
+        onSettled: onSettled,
+      ),
     );
   }
 
@@ -3034,10 +3344,22 @@ class _ChatScreenState extends State<ChatScreen>
     return null;
   }
 
+  int _firstUnreadIndex() {
+    final anchor = _unreadAnchorTime;
+    if (anchor == null) return -1;
+    return _messages.indexWhere((m) => m.time > anchor);
+  }
+
   List<Object> _buildCombinedItems() {
-    final key = Object.hash(_messagesRev.value, _messages.length);
+    final key = Object.hash(
+      _messagesRev.value,
+      _messages.length,
+      _unreadAnchorTime,
+    );
     final cached = _combinedItemsCache;
     if (cached != null && _combinedItemsKey == key) return cached;
+
+    final unreadIndex = _firstUnreadIndex();
 
     final List<Object> items = [];
     final Set<int> usedDates = {};
@@ -3073,6 +3395,10 @@ class _ChatScreenState extends State<ChatScreen>
             _separatorKeys[dayMillis]!,
           ),
         );
+      }
+
+      if (i == unreadIndex) {
+        items.add(const _UnreadSeparatorItem());
       }
 
       items.add(_MessageItem(msg, i));
@@ -3192,6 +3518,48 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Widget _buildUnreadSeparatorWidget(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent = cs.primary;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1.5,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              'Непрочитанные сообщения',
+              style: TextStyle(
+                color: accent,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 1.5,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = _prank.active
@@ -3280,11 +3648,7 @@ class _ChatScreenState extends State<ChatScreen>
                 Positioned.fill(
                   child: ChatWallpaperView(wallpaper: _wallpaper!),
                 ),
-              Positioned.fill(
-                child: _isLoading && _messages.isEmpty
-                    ? ShimmerLoading(shimmer: _shimmerController)
-                    : _buildMessagesList(),
-              ),
+              Positioned.fill(child: _buildMessagesArea()),
               Positioned(
                 left: 0,
                 right: 0,
@@ -3322,9 +3686,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (_wallpaper != null)
           Positioned.fill(child: ChatWallpaperView(wallpaper: _wallpaper!)),
         Positioned.fill(
-          child: _isLoading && _messages.isEmpty
-              ? ShimmerLoading(shimmer: _shimmerController)
-              : _buildMessagesList(),
+          child: _buildMessagesArea(),
         ),
         SearchOverlay(
           cs: cs,
@@ -3406,6 +3768,27 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMessagesArea() {
+    final showShimmer = _messages.isEmpty ? _isLoading : _awaitingPosition;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Opacity(
+          opacity: showShimmer ? 0.0 : 1.0,
+          child: NotificationListener<ScrollEndNotification>(
+            onNotification: (_) {
+              _updateReadMarker();
+              return false;
+            },
+            child: _buildMessagesList(),
+          ),
+        ),
+        if (showShimmer)
+          Positioned.fill(child: ShimmerLoading(shimmer: _shimmerController)),
+      ],
     );
   }
 
@@ -3494,6 +3877,10 @@ class _ChatScreenState extends State<ChatScreen>
                   item.date,
                   key: item.key,
                 );
+              }
+
+              if (item is _UnreadSeparatorItem) {
+                return _buildUnreadSeparatorWidget(context);
               }
 
               final msgItem = item as _MessageItem;
