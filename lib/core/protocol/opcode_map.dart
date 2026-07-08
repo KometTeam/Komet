@@ -202,6 +202,20 @@ abstract class Opcode {
   static const int foldersReorder = 275; // Сортировка папок
   static const int foldersDelete = 276; // Удаление папки
 
+  // ── Stories ────────────────────────────────────────────────────────
+  static const int storiesList = 208; // Лента историй (кольца-превью)
+  static const int storiesListByOwner = 209; // Превью по списку владельцев
+  static const int storiesGetByOwner = 210; // Полные истории владельцев
+  static const int storiesGetStats = 211; // Агрегированная статистика
+  static const int storiesGetDetailedStats = 212; // Детальная статистика
+  static const int storiesReact = 213; // Реакция на историю
+  static const int storiesMark = 214; // Отметка просмотренной
+  static const int storiesSend = 215; // Публикация истории
+  static const int notifStoriesUpdate = 216; // Обновление кольца (push)
+  static const int storiesEdit = 217; // Изменение настроек истории
+  static const int storiesDelete = 218; // Удаление историй
+  static const int storiesGetByStoryId = 220; // Истории по ID
+
   // ── Human-readable names ───────────────────────────────────────────
 
   static String name(int opcode) => _names[opcode] ?? 'UNKNOWN($opcode)';
@@ -362,5 +376,17 @@ abstract class Opcode {
     foldersUpdate: 'FOLDERS_UPDATE',
     foldersReorder: 'FOLDERS_REORDER',
     foldersDelete: 'FOLDERS_DELETE',
+    storiesList: 'STORIES_LIST',
+    storiesListByOwner: 'STORIES_LIST_BY_OWNER_ID',
+    storiesGetByOwner: 'STORIES_GET_BY_OWNER_ID',
+    storiesGetStats: 'STORIES_GET_STATS',
+    storiesGetDetailedStats: 'STORIES_GET_DETAILED_STATS',
+    storiesReact: 'STORIES_REACT',
+    storiesMark: 'STORIES_MARK',
+    storiesSend: 'STORIES_SEND',
+    notifStoriesUpdate: 'NOTIF_STORIES_UPDATE',
+    storiesEdit: 'STORIES_EDIT',
+    storiesDelete: 'STORIES_DELETE',
+    storiesGetByStoryId: 'STORIES_GET_BY_STORY_ID',
   };
 }

@@ -46,7 +46,12 @@ import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../main.dart'
-    show accountModule, api, messagesModule, appRouteObserver;
+    show accountModule, api, messagesModule, storiesModule, appRouteObserver;
+import '../../widgets/attachment/attachment_sheet.dart';
+import '../stories/story_composer_screen.dart';
+import '../stories/story_owner_info.dart';
+import '../stories/story_ring.dart';
+import '../stories/story_viewer_screen.dart';
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -525,6 +530,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         });
         if (state == SessionState.online) {
           _requestReload();
+          _maybeLoadStories();
         }
       }
     });
@@ -532,11 +538,14 @@ class _ChatListScreenState extends State<ChatListScreen>
     _loginSub = accountModule.loginStatusStream.listen((status) {
       if (status == LoginStatus.success) {
         _requestReload();
+        _maybeLoadStories();
       }
     });
     chats.chatsChanged.addListener(_onChatsChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
+    storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
+    _maybeLoadStories();
     _typingSub = api.pushStream
         .where((p) => p.opcode == Opcode.notifTyping)
         .listen(_onTypingPush);
@@ -579,8 +588,52 @@ class _ChatListScreenState extends State<ChatListScreen>
       _storiesDockedOpen = false;
       _storiesAnimClosing = false;
       _storiesOverscrollRevealArmed = false;
+    } else {
+      _maybeLoadStories();
     }
     setState(() {});
+  }
+
+  void _onStoriesDataChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _maybeLoadStories() {
+    if (!AppStories.current.value) return;
+    if (api.state != SessionState.online) return;
+    unawaited(storiesModule.loadFeed());
+  }
+
+  StoryOwnerInfo? _selfOwnerInfo() {
+    final p = _profile;
+    if (p == null) return null;
+    final name = [p.firstName, p.lastName]
+        .where((s) => s != null && s.trim().isNotEmpty)
+        .map((s) => s!.trim())
+        .join(' ');
+    return StoryOwnerInfo(
+      name: name.isEmpty ? 'Вы' : name,
+      avatarUrl: p.baseUrl,
+    );
+  }
+
+  Map<int, StoryOwnerInfo> _storyOwnerOverrides() {
+    final me = _profile?.id;
+    final self = _selfOwnerInfo();
+    if (me == null || self == null) return const {};
+    return {me: StoryOwnerInfo(name: 'Ваша история', avatarUrl: self.avatarUrl)};
+  }
+
+  void _openStories(int index, [Offset? origin]) {
+    final previews = storiesModule.previews;
+    if (previews.isEmpty) return;
+    openStoryViewer(
+      context,
+      previews: previews,
+      initialIndex: index.clamp(0, previews.length - 1),
+      ownerOverrides: _storyOwnerOverrides(),
+      origin: origin,
+    );
   }
 
   @override
@@ -1073,6 +1126,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     chats.chatsChanged.removeListener(_onChatsChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
+    storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _typingSub?.cancel();
@@ -1175,33 +1229,23 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 Row(
                                   children: [
                                     if (AppStories.current.value &&
-                                        _pullRatio < 0.8)
+                                        _pullRatio < 0.8 &&
+                                        storiesModule.hasAny)
                                       Opacity(
                                         opacity: 1.0 - _pullRatio,
-                                        child: Container(
-                                          width: 50 * (1.0 - _pullRatio),
-                                          height: 32,
-                                          margin: const EdgeInsets.only(
-                                            right: 8,
-                                          ),
-                                          child: Stack(
-                                            children: [
-                                              _buildFoldedStory(
-                                                cs,
-                                                'https://i.pravatar.cc/150?u=dasha',
-                                                0,
-                                              ),
-                                              _buildFoldedStory(
-                                                cs,
-                                                'https://i.pravatar.cc/150?u=mastika',
-                                                1,
-                                              ),
-                                              _buildFoldedStory(
-                                                cs,
-                                                'https://i.pravatar.cc/150?u=stas',
-                                                2,
-                                              ),
-                                            ],
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () => _openStories(0),
+                                          child: Container(
+                                            width: 50 * (1.0 - _pullRatio),
+                                            height: 32,
+                                            margin: const EdgeInsets.only(
+                                              right: 8,
+                                            ),
+                                            child: FoldedStoryStack(
+                                              previews: storiesModule.previews,
+                                              opacity: 1.0 - _pullRatio,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -1260,24 +1304,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               height: 96 * _pullRatio,
                               child: Opacity(
                                 opacity: _pullRatio,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                  ),
-                                  children: [
-                                    _buildStoryItem(
-                                      'Даша',
-                                      'https://i.pravatar.cc/150?u=dasha',
-                                      true,
-                                    ),
-                                    _buildStoryItem(
-                                      'Мастика',
-                                      'https://i.pravatar.cc/150?u=mastika',
-                                      false,
-                                    ),
-                                  ],
-                                ),
+                                child: _buildStoriesRow(),
                               ),
                             ),
                           Padding(
@@ -2019,48 +2046,71 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildStoryItem(String name, String imageUrl, bool hasUpdate) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
-      child: SizedBox(
-        width: 68,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.topCenter,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(2.5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: hasUpdate
-                      ? Border.all(color: cs.primary, width: 2)
-                      : Border.all(color: cs.outlineVariant),
-                ),
-                child: CircleAvatar(
-                  radius: 26,
-                  backgroundImage: CachedNetworkImageProvider(
-                    imageUrl,
-                    maxWidth: kAvatarThumbSize,
-                    maxHeight: kAvatarThumbSize,
+  Widget _buildStoriesRow() {
+    final previews = storiesModule.previews;
+    final me = _profile?.id;
+    final selfInfo = _selfOwnerInfo();
+    final myIndex = me == null
+        ? -1
+        : previews.indexWhere((p) => p.owner.ownerId == me);
+    final otherIndices = <int>[
+      for (var i = 0; i < previews.length; i++)
+        if (i != myIndex) i,
+    ];
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      itemCount: otherIndices.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return StorySelfTile(
+            preview: myIndex >= 0 ? previews[myIndex] : null,
+            selfInfo: selfInfo == null
+                ? null
+                : StoryOwnerInfo(
+                    name: 'Ваша история',
+                    avatarUrl: selfInfo.avatarUrl,
                   ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                name,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            onOpen: (center) => _openStories(myIndex < 0 ? 0 : myIndex, center),
+            onAdd: _composeStory,
+          );
+        }
+        final gi = otherIndices[index - 1];
+        return StoryRing(
+          preview: previews[gi],
+          onTap: (center) => _openStories(gi, center),
+        );
+      },
+    );
+  }
+
+  Future<void> _composeStory() async {
+    await showAttachmentSheet(
+      context,
+      title: 'Новая история',
+      onSend: (photos, caption) async {
+        if (photos.isEmpty) return;
+        final picked = photos.first;
+        if (picked.item.isVideo) {
+          if (mounted) {
+            showCustomNotification(
+              context,
+              'Видео в историях пока не поддерживается',
+            );
+          }
+          return;
+        }
+        final file =
+            picked.editedFile ??
+            picked.item.localFile ??
+            await picked.item.originFile();
+        if (file == null) {
+          if (mounted) showCustomNotification(context, 'Не удалось открыть фото');
+          return;
+        }
+        if (!mounted) return;
+        pushSwipeable(context, (_) => StoryComposerScreen(file: file));
+      },
     );
   }
 
@@ -2603,25 +2653,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildFoldedStory(ColorScheme cs, String imageUrl, int index) {
-    return Positioned(
-      left: index * 12.0,
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: cs.surface, width: 2),
-        ),
-        child: CircleAvatar(
-          radius: 12,
-          backgroundImage: CachedNetworkImageProvider(
-            imageUrl,
-            maxWidth: kAvatarThumbSize,
-            maxHeight: kAvatarThumbSize,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _StoriesUi extends ChangeNotifier {

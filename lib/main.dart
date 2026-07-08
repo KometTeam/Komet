@@ -48,6 +48,7 @@ import 'backend/modules/messages.dart';
 import 'backend/modules/outbox.dart';
 import 'backend/modules/polls.dart';
 import 'backend/modules/stickers.dart';
+import 'backend/modules/stories.dart';
 import 'backend/modules/self_check.dart';
 import 'backend/modules/shared_content.dart';
 import 'backend/modules/webapp.dart';
@@ -80,6 +81,7 @@ final stickersModule = StickersModule(api);
 final webAppModule = WebAppModule(api);
 final digitalIdModule = DigitalIdModule(webAppModule);
 final fileUploader = FileUploader(api: api, messages: messagesModule);
+final storiesModule = StoriesModule(api);
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
@@ -165,6 +167,8 @@ void main(List<String> args) async {
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
+  storiesModule.attach();
+  unawaited(storiesModule.loadCache());
   unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
