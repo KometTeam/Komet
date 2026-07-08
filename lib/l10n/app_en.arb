@@ -497,6 +497,19 @@
       }
     }
   },
+  "sharedMembersCount": "{count, plural, =1{1 member} other{{count} members}}",
+  "@sharedMembersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedLoadMore": "Show more",
+  "sharedGoToMessage": "Go to message",
+  "sharedDownload": "Download",
+  "sharedCopyLink": "Copy link",
+  "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",
   "chatInfoBio": "About",
   "chatInfoInviteLink": "Invite link",

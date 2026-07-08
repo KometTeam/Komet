@@ -2462,6 +2462,42 @@ abstract class AppLocalizations {
   /// **'{online} of {total} online'**
   String chatInfoOnlineOfTotal(String online, String total);
 
+  /// No description provided for @sharedMembersCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 member} other{{count} members}}'**
+  String sharedMembersCount(int count);
+
+  /// No description provided for @sharedLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get sharedLoadMore;
+
+  /// No description provided for @sharedGoToMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to message'**
+  String get sharedGoToMessage;
+
+  /// No description provided for @sharedDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get sharedDownload;
+
+  /// No description provided for @sharedCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get sharedCopyLink;
+
+  /// No description provided for @sharedLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get sharedLinkCopied;
+
   /// No description provided for @chatInfoActionLeave.
   ///
   /// In en, this message translates to:

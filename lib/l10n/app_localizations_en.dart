@@ -1245,6 +1245,32 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String sharedMembersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '1 member',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sharedLoadMore => 'Show more';
+
+  @override
+  String get sharedGoToMessage => 'Go to message';
+
+  @override
+  String get sharedDownload => 'Download';
+
+  @override
+  String get sharedCopyLink => 'Copy link';
+
+  @override
+  String get sharedLinkCopied => 'Link copied';
+
+  @override
   String get chatInfoActionLeave => 'Leave';
 
   @override

@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
@@ -11,6 +12,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
 import '../../../models/contact_info.dart';
 import '../../widgets/avatar_history_screen.dart';
+import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
@@ -43,6 +45,8 @@ class ChatInfoScreen extends StatefulWidget {
 
   final int? dialogPeerId;
 
+  final void Function(String messageId, int time)? onJumpToMessage;
+
   const ChatInfoScreen({
     super.key,
     required this.chatId,
@@ -50,6 +54,7 @@ class ChatInfoScreen extends StatefulWidget {
     required this.imageUrl,
     required this.chatType,
     this.dialogPeerId,
+    this.onJumpToMessage,
   });
 
   @override
@@ -75,6 +80,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   List<_MemberInfo> _members = [];
   int _onlineCount = 0;
+
+  int _mediaChatId = 0;
+  String? _anchorMsgId;
 
   @override
   void initState() {
@@ -139,6 +147,23 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final info = await ChatInfoFetch.get(widget.chatId);
     if (!mounted) return;
     _chatInfo = info;
+
+    _mediaChatId = (info?.raw['id'] as int?) ?? widget.chatId;
+    final lastMessage = info?.raw['lastMessage'];
+    if (lastMessage is Map) {
+      _anchorMsgId = lastMessage['id']?.toString();
+    }
+    if (_anchorMsgId == null && info != null) {
+      try {
+        final recent = await messagesModule.fetchHistory(
+          _myId,
+          _mediaChatId,
+          count: 1,
+        );
+        if (recent.isNotEmpty) _anchorMsgId = recent.first.id;
+      } catch (_) {}
+      if (!mounted) return;
+    }
 
     if (widget.chatType == 'DIALOG') {
       _otherId = widget.dialogPeerId;
@@ -671,25 +696,92 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       return _buildMembersTabContent(cs);
     }
     if (_selectedTab == l10n.chatInfoTabGeneralChats) {
-      return _buildPlaceholder(cs, l10n.chatInfoEmptyGeneralChats, Icons.group);
+      final peerId = _otherId;
+      if (peerId == null) {
+        return _buildPlaceholder(
+          cs,
+          l10n.chatInfoEmptyGeneralChats,
+          Icons.group,
+        );
+      }
+      return CommonChatsTab(
+        key: const ValueKey('tab-common-chats'),
+        userId: peerId,
+        emptyLabel: l10n.chatInfoEmptyGeneralChats,
+      );
     }
     if (_selectedTab == l10n.chatInfoTabMedia) {
-      return _buildPlaceholder(
+      return _sharedTab(
         cs,
+        SharedContentKind.media,
         l10n.chatInfoEmptyMedia,
         Icons.photo_library,
       );
     }
     if (_selectedTab == l10n.chatInfoTabFiles) {
-      return _buildPlaceholder(cs, l10n.chatInfoEmptyFiles, Icons.description);
+      return _sharedTab(
+        cs,
+        SharedContentKind.files,
+        l10n.chatInfoEmptyFiles,
+        Icons.description,
+      );
     }
     if (_selectedTab == l10n.chatInfoTabVoice) {
-      return _buildPlaceholder(cs, l10n.chatInfoEmptyVoice, Icons.mic);
+      return _sharedTab(
+        cs,
+        SharedContentKind.voice,
+        l10n.chatInfoEmptyVoice,
+        Icons.mic,
+      );
     }
     if (_selectedTab == l10n.chatInfoTabLinks) {
-      return _buildPlaceholder(cs, l10n.chatInfoEmptyLinks, Icons.link);
+      return _sharedTab(
+        cs,
+        SharedContentKind.links,
+        l10n.chatInfoEmptyLinks,
+        Icons.link,
+      );
     }
     return const SizedBox.shrink();
+  }
+
+  Widget _sharedTab(
+    ColorScheme cs,
+    SharedContentKind kind,
+    String emptyLabel,
+    IconData emptyIcon,
+  ) {
+    final anchor = _anchorMsgId;
+    if (anchor == null) return _buildPlaceholder(cs, emptyLabel, emptyIcon);
+    return SharedMediaTab(
+      key: ValueKey('tab-shared-$kind'),
+      chatId: _mediaChatId,
+      anchorMessageId: anchor,
+      myId: _myId,
+      kind: kind,
+      emptyLabel: emptyLabel,
+      emptyIcon: emptyIcon,
+      onGoToMessage: _goToMessage,
+    );
+  }
+
+  void _goToMessage(String messageId, int time) {
+    final jumpInParent = widget.onJumpToMessage;
+    if (jumpInParent != null && _mediaChatId == widget.chatId) {
+      jumpInParent(messageId, time);
+      return;
+    }
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: _mediaChatId,
+        name: widget.name,
+        imageUrl: widget.imageUrl,
+        chatType: widget.chatType,
+        initialMessageId: messageId,
+        initialMessageTime: time,
+      ),
+    );
   }
 
   Widget _buildPlaceholder(ColorScheme cs, String label, IconData icon) {

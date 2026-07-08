@@ -180,6 +180,8 @@ class ChatScreen extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
   final ForwardRequest? forwardRequest;
+  final String? initialMessageId;
+  final int? initialMessageTime;
 
   const ChatScreen({
     super.key,
@@ -190,6 +192,8 @@ class ChatScreen extends StatefulWidget {
     this.embedded = false,
     this.onClose,
     this.forwardRequest,
+    this.initialMessageId,
+    this.initialMessageTime,
   });
 
   @override
@@ -208,8 +212,11 @@ class _ChatScreenState extends State<ChatScreen>
   double _pinnedAlignment = 0;
   int? _unreadAnchorTime;
   bool _awaitingPosition = false;
+  bool _navigatingToTarget = false;
   bool _initialPositionDone = false;
   bool _positioningInFlight = false;
+  bool _initialTargetHandled = false;
+  bool _suppressHistoryAutoload = false;
   int _readMarkTime = 0;
   Timer? _readMarkTimer;
   final GlobalKey _listKey = GlobalKey();
@@ -275,6 +282,9 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
   final ValueNotifier<String?> _highlightMessageId = ValueNotifier(null);
   Timer? _highlightTimer;
+  final ValueNotifier<double?> _jumpCacheExtent = ValueNotifier<double?>(null);
+  Timer? _goToMessageSettleTimer;
+  static const double _jumpCacheExtentPx = 800.0;
 
   late final ChatSearchController _search;
   late final AnimationController _searchAnim;
@@ -690,6 +700,46 @@ class _ChatScreenState extends State<ChatScreen>
     _isLoading = false;
     if (_shimmerController.isAnimating) _shimmerController.stop();
     _scheduleReadMarker();
+    _maybeRunInitialTarget();
+  }
+
+  void _maybeRunInitialTarget() {
+    if (_initialTargetHandled || widget.initialMessageId == null) return;
+    _initialTargetHandled = true;
+    _beginTargetNavigation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_navigateToInitialMessage());
+    });
+  }
+
+  void _beginTargetNavigation() {
+    _navigatingToTarget = true;
+    _jumpCacheExtent.value = _jumpCacheExtentPx;
+    _goToMessageSettleTimer?.cancel();
+    if (!_shimmerController.isAnimating) _shimmerController.repeat();
+  }
+
+  void _finishTargetNavigation() {
+    _goToMessageSettleTimer?.cancel();
+    if (!mounted) {
+      _navigatingToTarget = false;
+      return;
+    }
+    if (_navigatingToTarget) {
+      setState(() => _navigatingToTarget = false);
+    }
+    if (_shimmerController.isAnimating) _shimmerController.stop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _jumpCacheExtent.value = null;
+    });
+  }
+
+  void _requestGoToMessage(String id, int time) {
+    if (!mounted) return;
+    setState(_beginTargetNavigation);
+    _goToMessageSettleTimer = Timer(const Duration(milliseconds: 340), () {
+      if (mounted) unawaited(_runGoToMessage(id, time));
+    });
   }
 
   Future<void> _loadUntilUnreadReady() async {
@@ -754,7 +804,12 @@ class _ChatScreenState extends State<ChatScreen>
     final atBottom = candidate.id == _messages.last.id;
 
     if (_unreadAnchorTime != null &&
-        _unreadSeparatorScrolledPast(atBottom, topIndex, listBox, viewportBottom)) {
+        _unreadSeparatorScrolledPast(
+          atBottom,
+          topIndex,
+          listBox,
+          viewportBottom,
+        )) {
       _unreadAnchorTime = null;
       _bumpMessages();
     }
@@ -1014,6 +1069,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _maybeLoadMoreHistory() {
     if (!_scrollController.hasClients) return;
+    if (_suppressHistoryAutoload) return;
     if (_isLoading || _isLoadingMore || !_hasMoreHistory) return;
     if (_messages.isEmpty) return;
     final pos = _scrollController.position;
@@ -1186,6 +1242,8 @@ class _ChatScreenState extends State<ChatScreen>
     _replyTo.dispose();
     _highlightTimer?.cancel();
     _highlightMessageId.dispose();
+    _goToMessageSettleTimer?.cancel();
+    _jumpCacheExtent.dispose();
     _messageKeys.clear();
     super.dispose();
   }
@@ -2158,17 +2216,29 @@ class _ChatScreenState extends State<ChatScreen>
                             showCall:
                                 widget.chatType == 'DIALOG' && !_peerIsBot,
                             onClose: widget.onClose,
-                            onOpenInfo: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatInfoScreen(
-                                  chatId: widget.chatId,
-                                  name: widget.name,
-                                  imageUrl: widget.imageUrl,
-                                  chatType: widget.chatType,
+                            onOpenInfo: () {
+                              final navigator = Navigator.of(context);
+                              final chatRoute = ModalRoute.of(context);
+                              navigator.push(
+                                MaterialPageRoute(
+                                  builder: (context) => ChatInfoScreen(
+                                    chatId: widget.chatId,
+                                    name: widget.name,
+                                    imageUrl: widget.imageUrl,
+                                    chatType: widget.chatType,
+                                    onJumpToMessage:
+                                        (chatRoute == null || widget.embedded)
+                                        ? null
+                                        : (messageId, time) {
+                                            navigator.popUntil(
+                                              (r) => r == chatRoute,
+                                            );
+                                            _requestGoToMessage(messageId, time);
+                                          },
+                                  ),
                                 ),
-                              ),
-                            ),
+                              );
+                            },
                             onOpenScheduled: _openScheduledMessages,
                             onCall: _startCall,
                             onMenu: _openChatMenu,
@@ -3193,6 +3263,163 @@ class _ChatScreenState extends State<ChatScreen>
     _search.reset();
   }
 
+  Future<void> _navigateToInitialMessage() async {
+    final id = widget.initialMessageId;
+    if (id == null) {
+      _finishTargetNavigation();
+      return;
+    }
+    await _runGoToMessage(id, widget.initialMessageTime ?? 0);
+  }
+
+  Future<void> _runGoToMessage(String id, int targetTime) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+
+    if (!_messages.any((m) => m.id == id)) {
+      var guard = 0;
+      while (mounted &&
+          guard < 80 &&
+          _hasMoreHistory &&
+          !_messages.any((m) => m.id == id) &&
+          (_messages.isEmpty || _messages.first.time > targetTime)) {
+        guard++;
+        final before = _messages.isEmpty ? 0 : _messages.first.time;
+        await _loadMoreHistory();
+        if (!mounted) return;
+        final after = _messages.isEmpty ? 0 : _messages.first.time;
+        if (after == before) break;
+      }
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+
+    if (!_messages.any((m) => m.id == id)) {
+      if (mounted) showCustomNotification(context, 'Сообщение не загружено');
+      _finishTargetNavigation();
+      return;
+    }
+
+    _highlightTimer?.cancel();
+    _highlightMessageId.value = id;
+    _highlightTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (!mounted) return;
+      if (_highlightMessageId.value == id) _highlightMessageId.value = null;
+    });
+
+    await _scrollToMessagePrecise(id);
+    _finishTargetNavigation();
+  }
+
+  Future<void> _scrollToMessagePrecise(
+    String id, {
+    double alignment = 0.32,
+  }) async {
+    if (!mounted || !_scrollController.hasClients) return;
+    if (_messages.indexWhere((m) => m.id == id) == -1) return;
+
+    _suppressHistoryAutoload = true;
+    try {
+      var stable = 0;
+      for (var iter = 0; iter < 48; iter++) {
+        if (!mounted || !_scrollController.hasClients) return;
+        final listObj = _listKey.currentContext?.findRenderObject();
+        final boxObj = _keyForMessage(id).currentContext?.findRenderObject();
+
+        if (boxObj is RenderBox && boxObj.attached && listObj is RenderBox) {
+          final viewportH = listObj.size.height;
+          final actualTop = boxObj
+              .localToGlobal(Offset.zero, ancestor: listObj)
+              .dy;
+          final desiredTop = alignment * viewportH;
+          final delta = desiredTop - actualTop;
+          final p = _scrollController.position;
+          final target = (p.pixels + delta).clamp(
+            p.minScrollExtent,
+            p.maxScrollExtent,
+          );
+
+          if (delta.abs() <= 4.0 || (target - p.pixels).abs() <= 1.0) {
+            stable++;
+            if (stable >= 3) return;
+            await Future.delayed(const Duration(milliseconds: 130));
+            continue;
+          }
+          stable = 0;
+          _scrollController.jumpTo(target);
+          await WidgetsBinding.instance.endOfFrame;
+          continue;
+        }
+
+        stable = 0;
+        final items = _buildCombinedItems();
+        final pos = items.indexWhere(
+          (it) => it is _MessageItem && it.message.id == id,
+        );
+        if (pos == -1) return;
+        var below = 0.0;
+        for (var i = pos + 1; i < items.length; i++) {
+          below += _estimatedItemExtent(items[i]);
+        }
+        final p = _scrollController.position;
+        final maxExtent = p.maxScrollExtent;
+        final viewportH = listObj is RenderBox ? listObj.size.height : 500.0;
+        var targetOffset = below.clamp(0.0, maxExtent).toDouble();
+        if ((targetOffset - p.pixels).abs() < 4.0) {
+          targetOffset = (p.pixels + viewportH * 0.8).clamp(0.0, maxExtent);
+          if ((targetOffset - p.pixels).abs() < 4.0) return;
+        }
+        _scrollController.jumpTo(targetOffset);
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    } finally {
+      _suppressHistoryAutoload = false;
+    }
+  }
+
+  double _estimatedItemExtent(Object item) {
+    if (item is! _MessageItem) return 44.0;
+    final msg = item.message;
+    var base = 0.0;
+    final atts = msg.attachments;
+    if (atts != null && atts.isNotEmpty) {
+      for (final a in atts) {
+        switch (a.type) {
+          case AttachmentType.photo:
+          case AttachmentType.video:
+            int? w;
+            int? h;
+            if (a is PhotoAttachment) {
+              w = a.width;
+              h = a.height;
+            } else if (a is VideoAttachment) {
+              w = a.width;
+              h = a.height;
+            }
+            base += (w != null && h != null && w > 0)
+                ? (236.0 * h / w).clamp(120.0, 360.0)
+                : 260.0;
+            base += 12;
+          case AttachmentType.sticker:
+            base += 160;
+          case AttachmentType.audio:
+            base += 72;
+          case AttachmentType.file:
+            base += 80;
+          case AttachmentType.share:
+            base += 96;
+          default:
+            base += 60;
+        }
+      }
+    }
+    final textLen = msg.text?.length ?? 0;
+    if (textLen > 0) base += 24.0 + (textLen ~/ 34) * 20.0;
+    if (base <= 0) base = _avgMessageHeight;
+    return base.clamp(44.0, 1200.0).toDouble();
+  }
+
   Future<void> _openSearchResult(MessageSearchResult result) async {
     _closeSearch();
     await WidgetsBinding.instance.endOfFrame;
@@ -3243,7 +3470,9 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    final laidOut = _keyForMessage(messageId).currentContext?.findRenderObject();
+    final laidOut = _keyForMessage(
+      messageId,
+    ).currentContext?.findRenderObject();
     if (laidOut is! RenderBox || !laidOut.attached) {
       var below = 0.0;
       for (var i = pos + 1; i < items.length; i++) {
@@ -3685,9 +3914,7 @@ class _ChatScreenState extends State<ChatScreen>
       children: [
         if (_wallpaper != null)
           Positioned.fill(child: ChatWallpaperView(wallpaper: _wallpaper!)),
-        Positioned.fill(
-          child: _buildMessagesArea(),
-        ),
+        Positioned.fill(child: _buildMessagesArea()),
         SearchOverlay(
           cs: cs,
           searchAnim: _searchAnim,
@@ -3772,7 +3999,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildMessagesArea() {
-    final showShimmer = _messages.isEmpty ? _isLoading : _awaitingPosition;
+    final showShimmer = _messages.isEmpty
+        ? _isLoading
+        : (_awaitingPosition || _navigatingToTarget);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -3849,160 +4078,184 @@ class _ChatScreenState extends State<ChatScreen>
       children: [
         ValueListenableBuilder<double>(
           valueListenable: AppCacheExtent.current,
-          builder: (context, cacheExtent, _) => ListView.builder(
-            controller: _scrollController,
-            reverse: true,
-            padding: _messagesListPadding(context),
-            cacheExtent: cacheExtent,
-            itemCount: items.length + 1 + (_isLoadingMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return ValueListenableBuilder<double>(
-                  valueListenable: _composerHeight,
-                  builder: (context, height, _) => SizedBox(
-                    height: AppChatChrome.current.value == ChatChromeStyle.color
-                        ? 0
-                        : height,
-                  ),
-                );
-              }
-              if (index > items.length) {
-                return _buildLoadMoreIndicator();
-              }
-              final item = items[items.length - index];
+          builder: (context, userCacheExtent, _) =>
+              ValueListenableBuilder<double?>(
+                valueListenable: _jumpCacheExtent,
+                builder: (context, jumpExtent, _) {
+                  final cacheExtent =
+                      jumpExtent != null && jumpExtent < userCacheExtent
+                      ? jumpExtent
+                      : userCacheExtent;
+                  return ListView.builder(
+                    controller: _scrollController,
+                    reverse: true,
+                    padding: _messagesListPadding(context),
+                    cacheExtent: cacheExtent,
+                    itemCount: items.length + 1 + (_isLoadingMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return ValueListenableBuilder<double>(
+                          valueListenable: _composerHeight,
+                          builder: (context, height, _) => SizedBox(
+                            height:
+                                AppChatChrome.current.value ==
+                                    ChatChromeStyle.color
+                                ? 0
+                                : height,
+                          ),
+                        );
+                      }
+                      if (index > items.length) {
+                        return _buildLoadMoreIndicator();
+                      }
+                      final item = items[items.length - index];
 
-              if (item is _DateSeparatorItem) {
-                return _buildDateSeparatorWidget(
-                  context,
-                  item.date,
-                  key: item.key,
-                );
-              }
-
-              if (item is _UnreadSeparatorItem) {
-                return _buildUnreadSeparatorWidget(context);
-              }
-
-              final msgItem = item as _MessageItem;
-              final message = msgItem.message;
-              final msgIndex = msgItem.index;
-              final isMe = message.senderId == _myId;
-              final prevMessage = msgIndex > 0 ? _messages[msgIndex - 1] : null;
-              final nextMessage = msgIndex < _messages.length - 1
-                  ? _messages[msgIndex + 1]
-                  : null;
-
-              final bubble = MessageBubble(
-                message: message,
-                isMe: isMe,
-                myId: _myId,
-                prevMessage: prevMessage,
-                nextMessage: nextMessage,
-                chatType: chat?.type ?? 'CHAT',
-                overrideStatus: _effectiveStatus(message),
-                otherReadTime: _otherReadTime,
-                reactionsListenable: _reactionNotifierFor(message),
-                uploadProgress: _photoProgressFor(message),
-                onReplyTap: _jumpToMessage,
-                onAvatarTap: _openSenderProfile,
-                onStickerTap: _openStickerPack,
-              );
-
-              final canReport = !isMe && !message.isControl;
-              final reportTypeId = _complaintTypeId(
-                chat?.type ?? widget.chatType,
-              );
-
-              final pressable = _SelectableMessageRow(
-                message: message,
-                isMe: isMe,
-                selectedIds: _selectedIds,
-                selectionAnim: _selectionAnim,
-                isSelectionActive: () => _selectionMode,
-                onToggleSelection: () => _toggleSelection(message),
-                onEnterSelection: () => _enterSelection(message),
-                onDelete: () => _confirmDeleteMessage(message, isMe),
-                onEdit: _canEditMessage(message)
-                    ? () => _startEditMessage(message)
-                    : null,
-                onReply: message.isControl ? null : () => _startReply(message),
-                onForward: message.isControl
-                    ? null
-                    : () => _forwardMessages([message]),
-                onMarkUnread: message.isControl
-                    ? null
-                    : () => _markMessageUnread(message),
-                onPin: _canPinMessage(message)
-                    ? () => _togglePinMessage(message)
-                    : null,
-                isPinned: () => chat?.pinnedMsgId == int.tryParse(message.id),
-                loadReportReasons: canReport
-                    ? () => _loadReportReasons(reportTypeId)
-                    : null,
-                onReport: canReport
-                    ? (reasonId) =>
-                          _reportMessage(message, reportTypeId, reasonId)
-                    : null,
-                child: bubble,
-              );
-
-              final isChannel = (chat?.type ?? widget.chatType) == 'CHANNEL';
-              final swipeable = (message.isControl || isChannel)
-                  ? pressable
-                  : _SwipeToReply(
-                      isMe: isMe,
-                      onReply: () => _startReply(message),
-                      child: pressable,
-                    );
-
-              final Widget child;
-              if (_deletingIds.contains(message.id)) {
-                child = _DeletingMessageAnimation(
-                  key: ValueKey('del_${message.id}'),
-                  onComplete: () => _finalizeDelete(message.id),
-                  child: IgnorePointer(child: swipeable),
-                );
-              } else if (message.id == _lastSentId) {
-                child = _SentMessageAnimation(
-                  key: ValueKey('anim_${message.id}'),
-                  onComplete: () {
-                    if (mounted) {
-                      _lastSentId = null;
-                      _bumpMessages();
-                    }
-                  },
-                  child: swipeable,
-                );
-              } else {
-                child = swipeable;
-              }
-
-              final highlightable = ValueListenableBuilder<String?>(
-                valueListenable: _highlightMessageId,
-                builder: (context, hl, c) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  color: hl == message.id
-                      ? Theme.of(
+                      if (item is _DateSeparatorItem) {
+                        return _buildDateSeparatorWidget(
                           context,
-                        ).colorScheme.primary.withValues(alpha: 0.12)
-                      : Colors.transparent,
-                  child: c,
-                ),
-                child: child,
-              );
+                          item.date,
+                          key: item.key,
+                        );
+                      }
 
-              final builtItem = RepaintBoundary(
-                key: ValueKey('msg_${message.id}'),
-                child: KeyedSubtree(
-                  key: _keyForMessage(message.id),
-                  child: highlightable,
-                ),
-              );
-              return message.id == _prank.bubbleId
-                  ? KeyedSubtree(key: _prank.bubbleKey, child: builtItem)
-                  : builtItem;
-            },
-          ),
+                      if (item is _UnreadSeparatorItem) {
+                        return _buildUnreadSeparatorWidget(context);
+                      }
+
+                      final msgItem = item as _MessageItem;
+                      final message = msgItem.message;
+                      final msgIndex = msgItem.index;
+                      final isMe = message.senderId == _myId;
+                      final prevMessage = msgIndex > 0
+                          ? _messages[msgIndex - 1]
+                          : null;
+                      final nextMessage = msgIndex < _messages.length - 1
+                          ? _messages[msgIndex + 1]
+                          : null;
+
+                      final bubble = MessageBubble(
+                        message: message,
+                        isMe: isMe,
+                        myId: _myId,
+                        prevMessage: prevMessage,
+                        nextMessage: nextMessage,
+                        chatType: chat?.type ?? 'CHAT',
+                        overrideStatus: _effectiveStatus(message),
+                        otherReadTime: _otherReadTime,
+                        reactionsListenable: _reactionNotifierFor(message),
+                        uploadProgress: _photoProgressFor(message),
+                        onReplyTap: _jumpToMessage,
+                        onAvatarTap: _openSenderProfile,
+                        onStickerTap: _openStickerPack,
+                      );
+
+                      final canReport = !isMe && !message.isControl;
+                      final reportTypeId = _complaintTypeId(
+                        chat?.type ?? widget.chatType,
+                      );
+
+                      final pressable = _SelectableMessageRow(
+                        message: message,
+                        isMe: isMe,
+                        selectedIds: _selectedIds,
+                        selectionAnim: _selectionAnim,
+                        isSelectionActive: () => _selectionMode,
+                        onToggleSelection: () => _toggleSelection(message),
+                        onEnterSelection: () => _enterSelection(message),
+                        onDelete: () => _confirmDeleteMessage(message, isMe),
+                        onEdit: _canEditMessage(message)
+                            ? () => _startEditMessage(message)
+                            : null,
+                        onReply: message.isControl
+                            ? null
+                            : () => _startReply(message),
+                        onForward: message.isControl
+                            ? null
+                            : () => _forwardMessages([message]),
+                        onMarkUnread: message.isControl
+                            ? null
+                            : () => _markMessageUnread(message),
+                        onPin: _canPinMessage(message)
+                            ? () => _togglePinMessage(message)
+                            : null,
+                        isPinned: () =>
+                            chat?.pinnedMsgId == int.tryParse(message.id),
+                        loadReportReasons: canReport
+                            ? () => _loadReportReasons(reportTypeId)
+                            : null,
+                        onReport: canReport
+                            ? (reasonId) => _reportMessage(
+                                message,
+                                reportTypeId,
+                                reasonId,
+                              )
+                            : null,
+                        child: bubble,
+                      );
+
+                      final isChannel =
+                          (chat?.type ?? widget.chatType) == 'CHANNEL';
+                      final swipeable = (message.isControl || isChannel)
+                          ? pressable
+                          : _SwipeToReply(
+                              isMe: isMe,
+                              onReply: () => _startReply(message),
+                              child: pressable,
+                            );
+
+                      final Widget child;
+                      if (_deletingIds.contains(message.id)) {
+                        child = _DeletingMessageAnimation(
+                          key: ValueKey('del_${message.id}'),
+                          onComplete: () => _finalizeDelete(message.id),
+                          child: IgnorePointer(child: swipeable),
+                        );
+                      } else if (message.id == _lastSentId) {
+                        child = _SentMessageAnimation(
+                          key: ValueKey('anim_${message.id}'),
+                          onComplete: () {
+                            if (mounted) {
+                              _lastSentId = null;
+                              _bumpMessages();
+                            }
+                          },
+                          child: swipeable,
+                        );
+                      } else {
+                        child = swipeable;
+                      }
+
+                      final highlightable = ValueListenableBuilder<String?>(
+                        valueListenable: _highlightMessageId,
+                        builder: (context, hl, c) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          color: hl == message.id
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.12)
+                              : Colors.transparent,
+                          child: c,
+                        ),
+                        child: child,
+                      );
+
+                      final builtItem = RepaintBoundary(
+                        key: ValueKey('msg_${message.id}'),
+                        child: KeyedSubtree(
+                          key: _keyForMessage(message.id),
+                          child: highlightable,
+                        ),
+                      );
+                      return message.id == _prank.bubbleId
+                          ? KeyedSubtree(
+                              key: _prank.bubbleKey,
+                              child: builtItem,
+                            )
+                          : builtItem;
+                    },
+                  );
+                },
+              ),
         ),
         Positioned(
           top: _floatingDateTop(context),

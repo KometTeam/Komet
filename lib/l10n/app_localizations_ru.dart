@@ -1250,6 +1250,34 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String sharedMembersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count участника',
+      many: '$count участников',
+      few: '$count участника',
+      one: '1 участник',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sharedLoadMore => 'Показать ещё';
+
+  @override
+  String get sharedGoToMessage => 'Перейти к сообщению';
+
+  @override
+  String get sharedDownload => 'Скачать';
+
+  @override
+  String get sharedCopyLink => 'Копировать ссылку';
+
+  @override
+  String get sharedLinkCopied => 'Ссылка скопирована';
+
+  @override
   String get chatInfoActionLeave => 'Покинуть';
 
   @override
