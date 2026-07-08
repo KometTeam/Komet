@@ -1094,6 +1094,12 @@ abstract class AppLocalizations {
   /// **'Copy'**
   String get msgActionsCopy;
 
+  /// No description provided for @emojiSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search emoji'**
+  String get emojiSearchHint;
+
   /// No description provided for @msgActionsEdit.
   ///
   /// In en, this message translates to:

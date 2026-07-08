@@ -32,6 +32,18 @@ class EmojiKeywordIndex {
     });
   }
 
+  List<String> get all =>
+      List.unmodifiable(_entries.map((e) => e.emoji));
+
+  List<String> search(String query) {
+    final targets = resolve(query);
+    if (targets.isEmpty) return const [];
+    return [
+      for (final entry in _entries)
+        if (targets.contains(entry.emoji)) entry.emoji,
+    ];
+  }
+
   static String normalize(String emoji) =>
       emoji.replaceAll(_variationSelector, '');
 

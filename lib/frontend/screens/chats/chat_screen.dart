@@ -264,6 +264,63 @@ class _ChatScreenState extends State<ChatScreen>
     return notifier;
   }
 
+  void _reactToMessage(CachedMessage message, String emoji) {
+    final notifier = _reactionNotifierFor(message);
+    notifier.value = _applyLocalReaction(notifier.value, emoji);
+  }
+
+  Map<String, dynamic>? _applyLocalReaction(
+    Map<String, dynamic>? current,
+    String emoji,
+  ) {
+    final counters = <String, int>{};
+    final order = <String>[];
+    final rawCounters = current?['counters'];
+    if (rawCounters is List) {
+      for (final c in rawCounters) {
+        if (c is! Map) continue;
+        final r = c['reaction']?.toString();
+        if (r == null || r.isEmpty) continue;
+        final n = c['count'];
+        counters[r] = n is int ? n : 0;
+        order.add(r);
+      }
+    }
+
+    void decrement(String key) {
+      final next = (counters[key] ?? 1) - 1;
+      if (next <= 0) {
+        counters.remove(key);
+        order.remove(key);
+      } else {
+        counters[key] = next;
+      }
+    }
+
+    final prev = current?['yourReaction']?.toString();
+    String? your;
+    if (prev == emoji) {
+      decrement(emoji);
+      your = null;
+    } else {
+      if (prev != null && prev.isNotEmpty) decrement(prev);
+      if (!counters.containsKey(emoji)) order.add(emoji);
+      counters[emoji] = (counters[emoji] ?? 0) + 1;
+      your = emoji;
+    }
+
+    if (counters.isEmpty) return null;
+    final total = counters.values.fold<int>(0, (a, b) => a + b);
+    return {
+      'counters': [
+        for (final key in order)
+          {'reaction': key, 'count': counters[key]},
+      ],
+      'yourReaction': ?your,
+      'totalCount': total,
+    };
+  }
+
   void _pruneReactionNotifiers() {
     final liveIds = _messages.map((m) => m.id).toSet();
     final dead = _reactionNotifiers.keys
@@ -4190,6 +4247,10 @@ class _ChatScreenState extends State<ChatScreen>
                                 reasonId,
                               )
                             : null,
+                        onReact: message.isControl
+                            ? null
+                            : (emoji) => _reactToMessage(message, emoji),
+                        reactions: _reactionNotifierFor(message),
                         child: bubble,
                       );
 
@@ -5473,6 +5534,8 @@ class _SelectableMessageRow extends StatefulWidget {
   final bool Function() isPinned;
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
+  final void Function(String emoji)? onReact;
+  final ValueListenable<Map<String, dynamic>?>? reactions;
 
   const _SelectableMessageRow({
     required this.child,
@@ -5492,6 +5555,8 @@ class _SelectableMessageRow extends StatefulWidget {
     required this.isPinned,
     this.loadReportReasons,
     this.onReport,
+    this.onReact,
+    this.reactions,
   });
 
   @override
@@ -5547,6 +5612,8 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       isPinned: _isPinnedNow(),
+      onReact: widget.onReact,
+      selectedReaction: widget.reactions?.value?['yourReaction']?.toString(),
       onDispose: controller.dispose,
     );
   }

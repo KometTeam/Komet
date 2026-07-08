@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/config/app_message_actions_style.dart';
+import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../l10n/app_localizations.dart';
@@ -87,6 +88,9 @@ void showMessageActions({
   VoidCallback? onMarkUnread,
   VoidCallback? onPin,
   bool isPinned = false,
+  void Function(String emoji)? onReact,
+  String? selectedReaction,
+  List<String> quickReactions = const ['👍', '❤️', '🔥', '😂', '😮', '😢'],
   MessageActionsInteraction interaction =
       MessageActionsInteraction.dragAndRelease,
 }) {
@@ -112,6 +116,9 @@ void showMessageActions({
       onMarkUnread: onMarkUnread,
       onPin: onPin,
       isPinned: isPinned,
+      onReact: onReact,
+      selectedReaction: selectedReaction,
+      quickReactions: quickReactions,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -141,6 +148,9 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final bool isPinned;
+  final void Function(String emoji)? onReact;
+  final String? selectedReaction;
+  final List<String> quickReactions;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -162,6 +172,9 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onMarkUnread,
     this.onPin,
     this.isPinned = false,
+    this.onReact,
+    this.selectedReaction,
+    this.quickReactions = const [],
   });
 
   @override
@@ -172,6 +185,11 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animController;
   late final Animation<double> _animation;
+  late final AnimationController _expandController;
+  late final Animation<double> _expandAnim;
+  bool _reactionsExpanded = false;
+  bool _reactionsPanelReady = false;
+  Widget? _pickerCache;
   bool _closing = false;
   static const double _radius = 92.0;
   static const double _arcSpan = math.pi * 0.62;
@@ -199,6 +217,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   @override
   void initState() {
     super.initState();
+    if (_reactionsEnabled) {
+      EmojiKeywordIndex.instance.ensureLoaded();
+    }
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
@@ -209,8 +230,33 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
+    _expandController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+      reverseDuration: const Duration(milliseconds: 260),
+    );
+    _expandAnim = CurvedAnimation(
+      parent: _expandController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _expandController.addStatusListener(_onExpandStatus);
     _animController.forward();
   }
+
+  void _onExpandStatus(AnimationStatus status) {
+    if (!mounted) return;
+    if (status == AnimationStatus.completed) {
+      if (!_reactionsPanelReady) setState(() => _reactionsPanelReady = true);
+    } else if (status == AnimationStatus.dismissed) {
+      if (_reactionsPanelReady) setState(() => _reactionsPanelReady = false);
+    }
+  }
+
+  bool get _reactionsEnabled =>
+      widget.onReact != null &&
+      widget.quickReactions.isNotEmpty &&
+      widget.interaction != MessageActionsInteraction.click;
 
   @override
   void didChangeDependencies() {
@@ -385,6 +431,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   @override
   void dispose() {
     _animController.dispose();
+    _expandController.dispose();
     widget.controller.removeListener(_onControllerUpdate);
     widget.snapshot?.dispose();
     super.dispose();
@@ -570,12 +617,14 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isClick = widget.interaction == MessageActionsInteraction.click;
+    final showReactions = _reactionsEnabled && !isClick;
     return AnimatedBuilder(
-      animation: _animation,
+      animation: Listenable.merge([_animation, _expandController]),
       builder: (ctx, _) {
         final t = _animation.value.clamp(0.0, 1.0);
-        final blurSigma = 14.0 * t;
-        final bubbleScale = 1.0 + 0.05 * t;
+        final e = showReactions ? _expandAnim.value.clamp(0.0, 1.0) : 0.0;
+        final bubbleScale = 1.0 + 0.02 * t;
+        final menuHidden = _showHistory || _showReport || _reactionsExpanded;
 
         return GestureDetector(
           onTap: _close,
@@ -584,14 +633,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
             children: [
               if (!isClick) ...[
                 Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(
-                      sigmaX: blurSigma,
-                      sigmaY: blurSigma,
-                    ),
-                    child: ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.22 * t),
-                    ),
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.22 * t + 0.28 * e),
                   ),
                 ),
                 if (widget.snapshot != null)
@@ -600,22 +643,25 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                     top: widget.originRect.top,
                     width: widget.originRect.width,
                     height: widget.originRect.height,
-                    child: Transform.scale(
-                      scale: bubbleScale,
-                      child: RawImage(
-                        image: widget.snapshot,
-                        width: widget.originRect.width,
-                        height: widget.originRect.height,
-                        fit: BoxFit.fill,
+                    child: Opacity(
+                      opacity: 1.0 - 0.35 * e,
+                      child: Transform.scale(
+                        scale: bubbleScale,
+                        child: RawImage(
+                          image: widget.snapshot,
+                          width: widget.originRect.width,
+                          height: widget.originRect.height,
+                          fit: BoxFit.fill,
+                        ),
                       ),
                     ),
                   ),
               ],
               Positioned.fill(
                 child: IgnorePointer(
-                  ignoring: _showHistory || _showReport,
+                  ignoring: menuHidden,
                   child: AnimatedOpacity(
-                    opacity: (_showHistory || _showReport) ? 0.0 : 1.0,
+                    opacity: menuHidden ? 0.0 : 1.0,
                     duration: const Duration(milliseconds: 150),
                     curve: Curves.easeOut,
                     child: Stack(
@@ -648,10 +694,319 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                   ),
                 ),
               ),
+              if (showReactions)
+                Positioned.fill(child: _buildReactionStrip(t, e)),
             ],
           ),
         );
       },
+    );
+  }
+
+  void _toggleReactionsExpanded() {
+    Haptics.tap();
+    setState(() => _reactionsExpanded = !_reactionsExpanded);
+    if (_reactionsExpanded) {
+      _expandController.forward();
+    } else {
+      _expandController.reverse();
+    }
+  }
+
+  Future<void> _onReactionPicked(String emoji) async {
+    final cb = widget.onReact;
+    Haptics.medium();
+    await _close();
+    cb?.call(emoji);
+  }
+
+  bool _isSelectedReaction(String emoji) {
+    final sel = widget.selectedReaction;
+    if (sel == null) return false;
+    return EmojiKeywordIndex.normalize(sel) ==
+        EmojiKeywordIndex.normalize(emoji);
+  }
+
+  Rect _reactionAnchorRect() {
+    if (_effectiveStyle == MessageActionsStyle.list &&
+        _menuRect != Rect.zero) {
+      return _menuRect;
+    }
+    if (_buttonHitRects.isNotEmpty) {
+      var box = _buttonHitRects.first;
+      for (final r in _buttonHitRects.skip(1)) {
+        box = box.expandToInclude(r);
+      }
+      return box;
+    }
+    return widget.originRect;
+  }
+
+  Widget _buildReactionStrip(double t, double e) {
+    final cs = Theme.of(context).colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    final safeTop = padding.top + 8;
+    final safeBottom = size.height - math.max(padding.bottom, keyboardInset) - 8;
+
+    final quick = widget.quickReactions;
+    const chevronCell = 38.0;
+    const pillPad = 6.0;
+    const pillHeight = 46.0;
+    const gap = 10.0;
+    const maxCell = 36.0;
+
+    double pillWidth = pillPad * 2 + quick.length * maxCell + chevronCell;
+    final maxPillWidth = size.width - 16;
+    double cell = maxCell;
+    if (pillWidth > maxPillWidth) {
+      cell = ((maxPillWidth - pillPad * 2 - chevronCell) / quick.length)
+          .clamp(28.0, maxCell);
+      pillWidth = pillPad * 2 + quick.length * cell + chevronCell;
+    }
+
+    final anchor = _reactionAnchorRect();
+    double pillLeft = anchor.left.clamp(
+      8.0,
+      math.max(8.0, size.width - 8 - pillWidth),
+    );
+
+    final pillAbove = (anchor.top - safeTop) >= pillHeight + gap;
+    double pillTop = pillAbove
+        ? anchor.top - gap - pillHeight
+        : anchor.bottom + gap;
+    pillTop = pillTop.clamp(safeTop, math.max(safeTop, safeBottom - pillHeight));
+    final collapsed = Rect.fromLTWH(pillLeft, pillTop, pillWidth, pillHeight);
+
+    final panelWidth = math.min(size.width - 24, 300.0);
+    const desiredHeight = 300.0;
+    double panelLeft = collapsed.left.clamp(
+      8.0,
+      math.max(8.0, size.width - 8 - panelWidth),
+    );
+    double panelTop;
+    double panelHeight;
+    if (pillAbove) {
+      panelTop = collapsed.top;
+      panelHeight = math.min(desiredHeight, safeBottom - panelTop);
+    } else {
+      final panelBottom = collapsed.bottom;
+      panelTop = math.max(safeTop, panelBottom - desiredHeight);
+      panelHeight = panelBottom - panelTop;
+    }
+    final expanded = Rect.fromLTWH(panelLeft, panelTop, panelWidth, panelHeight);
+
+    final morph = Rect.lerp(collapsed, expanded, e)!;
+    final radius = ui.lerpDouble(pillHeight / 2, 20.0, e)!;
+    final entryAlign = pillAbove
+        ? Alignment.bottomLeft
+        : Alignment.topLeft;
+
+    return IgnorePointer(
+      ignoring: t < 0.5,
+      child: Opacity(
+        opacity: t,
+        child: Stack(
+          children: [
+            if (e < 0.999)
+              _buildCloudTail(collapsed, pillAbove, cs, t, e),
+            Positioned.fromRect(
+              rect: morph,
+              child: Transform.scale(
+                scale: 0.9 + 0.1 * t,
+                alignment: entryAlign,
+                child: _buildReactionSurface(
+                  cs,
+                  radius,
+                  e,
+                  cell,
+                  quick,
+                  expanded.size,
+                  pillAbove,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReactionSurface(
+    ColorScheme cs,
+    double radius,
+    double e,
+    double cell,
+    List<String> quick,
+    Size expandedSize,
+    bool pillAbove,
+  ) {
+    final borderRadius = BorderRadius.circular(radius);
+    _pickerCache ??= RepaintBoundary(
+      child: _ReactionEmojiPicker(onPick: _onReactionPicked),
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: borderRadius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: GestureDetector(
+          onTap: () {},
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (_reactionsPanelReady)
+                Positioned(
+                  left: 0,
+                  top: pillAbove ? 0 : null,
+                  bottom: pillAbove ? null : 0,
+                  width: expandedSize.width,
+                  height: expandedSize.height,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOut,
+                    child: _pickerCache,
+                    builder: (_, value, child) =>
+                        Opacity(opacity: value, child: child),
+                  ),
+                ),
+              if (!_reactionsPanelReady)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: pillAbove ? 0 : null,
+                  bottom: pillAbove ? null : 0,
+                  height: 46,
+                  child: Opacity(
+                    opacity: (1.0 - e).clamp(0.0, 1.0),
+                    child: IgnorePointer(
+                      ignoring: e > 0.05,
+                      child: _buildQuickRow(cs, cell, quick),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickRow(ColorScheme cs, double cell, List<String> quick) {
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(width: 6),
+          for (final emoji in quick) _quickEmoji(cs, emoji, cell),
+          _chevronButton(cs),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickEmoji(ColorScheme cs, String emoji, double cell) {
+    final selected = _isSelectedReaction(emoji);
+    return SizedBox(
+      width: cell,
+      height: cell,
+      child: Material(
+        color: selected
+            ? cs.primary.withValues(alpha: 0.22)
+            : Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => _onReactionPicked(emoji),
+          child: Center(
+            child: Text(emoji, style: TextStyle(fontSize: cell * 0.6)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chevronButton(ColorScheme cs) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Material(
+        color: cs.surfaceContainerHighest,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _toggleReactionsExpanded,
+          child: Icon(
+            Symbols.keyboard_arrow_down,
+            color: cs.onSurfaceVariant,
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCloudTail(
+    Rect pill,
+    bool above,
+    ColorScheme cs,
+    double t,
+    double e,
+  ) {
+    final fade = (t * (1.0 - e * 1.4)).clamp(0.0, 1.0);
+    final baseX = pill.right - 22;
+    final edgeY = above ? pill.bottom - 2 : pill.top + 2;
+    final dir = above ? 1.0 : -1.0;
+    final big = Offset(baseX, edgeY + dir * 6);
+    final small = Offset(baseX + 8, edgeY + dir * 17);
+
+    return IgnorePointer(
+      child: Opacity(
+        opacity: fade,
+        child: Stack(
+          children: [
+            _tailCircle(big, 8.0, cs),
+            _tailCircle(small, 5.0, cs),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tailCircle(Offset c, double r, ColorScheme cs) {
+    return Positioned(
+      left: c.dx - r,
+      top: c.dy - r,
+      width: r * 2,
+      height: r * 2,
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1017,6 +1372,172 @@ class _Action {
   final VoidCallback onTap;
   final bool destructive;
   const _Action(this.icon, this.label, this.onTap, {this.destructive = false});
+}
+
+class _ReactionEmojiPicker extends StatefulWidget {
+  final ValueChanged<String> onPick;
+  const _ReactionEmojiPicker({required this.onPick});
+
+  @override
+  State<_ReactionEmojiPicker> createState() => _ReactionEmojiPickerState();
+}
+
+class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  List<String> _all = const [];
+  List<String> _results = const [];
+  String _query = '';
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    await EmojiKeywordIndex.instance.ensureLoaded();
+    if (!mounted) return;
+    setState(() {
+      _all = EmojiKeywordIndex.instance.all;
+      _results = _all;
+      _loaded = true;
+    });
+  }
+
+  void _onQueryChanged(String value) {
+    final q = value.trim();
+    setState(() {
+      _query = q;
+      _results = q.isEmpty ? _all : EmojiKeywordIndex.instance.search(q);
+    });
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    _onQueryChanged('');
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        _buildSearchField(cs),
+        Expanded(
+          child: !_loaded
+              ? const Center(
+                  child: SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  ),
+                )
+              : _results.isEmpty
+              ? const SizedBox.shrink()
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  addAutomaticKeepAlives: false,
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 40,
+                        mainAxisSpacing: 2,
+                        crossAxisSpacing: 2,
+                      ),
+                  itemCount: _results.length,
+                  itemBuilder: (context, i) {
+                    final emoji = _results[i];
+                    return _EmojiCell(
+                      emoji: emoji,
+                      onTap: () => widget.onPick(emoji),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchField(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+      child: Container(
+        height: 42,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(21),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            Icon(Symbols.search, size: 22, color: cs.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                focusNode: _searchFocus,
+                onChanged: _onQueryChanged,
+                textInputAction: TextInputAction.search,
+                cursorColor: cs.primary,
+                style: TextStyle(color: cs.onSurface, fontSize: 15),
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: AppLocalizations.of(context)!.emojiSearchHint,
+                  hintStyle: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            if (_query.isEmpty)
+              const SizedBox(width: 12)
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _clearSearch,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Icon(
+                    Symbols.close,
+                    size: 20,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmojiCell extends StatelessWidget {
+  final String emoji;
+  final VoidCallback onTap;
+  const _EmojiCell({required this.emoji, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Center(
+        child: Text(emoji, style: const TextStyle(fontSize: 22)),
+      ),
+    );
+  }
 }
 
 class _ListMenuItem extends StatelessWidget {
