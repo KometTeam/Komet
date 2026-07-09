@@ -23,6 +23,9 @@ abstract class PerChatJsonStore<T> {
   String _buildKey(int accountId, int chatId) => '$accountId/$chatId';
 
   @protected
+  Iterable<MapEntry<String, T>> get allEntries => _values.entries;
+
+  @protected
   void onBeforeWrite(String key, T? previous, T? next) {}
 
   Future<void> load() async {

@@ -45,6 +45,7 @@ import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
+import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../main.dart'
@@ -116,12 +117,14 @@ class ChatListScreen extends StatefulWidget {
   final ValueChanged<DesktopChatSelection>? onChatSelected;
   final bool forwardMode;
   final int forwardMessageCount;
+  final bool archiveMode;
 
   const ChatListScreen({
     super.key,
     this.onChatSelected,
     this.forwardMode = false,
     this.forwardMessageCount = 1,
+    this.archiveMode = false,
   });
 
   @override
@@ -196,6 +199,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   ProfileData? _profile;
 
   List<CachedChat> _chats = [];
+  int _archivedCount = 0;
+  int _archivedUnread = 0;
+  bool _archiveHadChats = false;
 
   int _chatListRevision = 0;
   final Set<String> _knownChatIds = {};
@@ -321,6 +327,26 @@ class _ChatListScreenState extends State<ChatListScreen>
       );
     }
     _clearSelection();
+  }
+
+  Future<void> _onArchiveTap() async {
+    final selected = _selectedChatObjects();
+    if (selected.isEmpty) return;
+    final p = _profile;
+    if (p == null) return;
+    final archive = !widget.archiveMode;
+    for (final c in selected) {
+      await ArchivedChatsStore.instance.setArchived(p.id, c.id, archive);
+    }
+    if (!mounted) return;
+    _clearSelection();
+    final count = selected.length;
+    showCustomNotification(
+      context,
+      archive
+          ? (count == 1 ? 'Чат в архиве' : 'Чаты в архиве ($count)')
+          : (count == 1 ? 'Чат возвращён' : 'Чаты возвращены ($count)'),
+    );
   }
 
   Future<void> _onDeleteTap() async {
@@ -545,6 +571,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
     });
     chats.chatsChanged.addListener(_onChatsChanged);
+    ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
@@ -582,6 +609,10 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _onDraftsChanged() {
+    if (mounted) _requestReload();
+  }
+
+  void _onArchivedChanged() {
     if (mounted) _requestReload();
   }
 
@@ -712,8 +743,18 @@ class _ChatListScreenState extends State<ChatListScreen>
     try {
       final loadedChats = await chats.getChats(
         p.id,
-        includeHidden: KometSettings.showHiddenChats.value,
+        includeHidden:
+            widget.archiveMode || KometSettings.showHiddenChats.value,
       );
+      final archivedIds = ArchivedChatsStore.instance.archivedChatIds(p.id);
+      var archivedCount = 0;
+      var archivedUnread = 0;
+      for (final c in loadedChats) {
+        if (!archivedIds.contains(c.id)) continue;
+        if (CloudStorageModule.isCloudStorageGroup(c)) continue;
+        archivedCount++;
+        archivedUnread += c.unreadCount;
+      }
       var folders = await FoldersModule.loadFolders(p.id);
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
       final contactIds = (await ContactsModule.getContacts(p.id))
@@ -728,15 +769,19 @@ class _ChatListScreenState extends State<ChatListScreen>
         widgets: [],
       );
 
-      final hasRealFolders = folders.any(
-        (f) => !FoldersModule.isAllChatsFolder(f),
-      );
-      if (KometSettings.hideAllChatsFolder.value && hasRealFolders) {
-        folders = folders
-            .where((f) => !FoldersModule.isAllChatsFolder(f))
-            .toList();
-      } else if (!folders.any((f) => FoldersModule.isAllChatsFolder(f))) {
-        folders = [allChatsFolder, ...folders];
+      if (widget.archiveMode) {
+        folders = const [];
+      } else {
+        final hasRealFolders = folders.any(
+          (f) => !FoldersModule.isAllChatsFolder(f),
+        );
+        if (KometSettings.hideAllChatsFolder.value && hasRealFolders) {
+          folders = folders
+              .where((f) => !FoldersModule.isAllChatsFolder(f))
+              .toList();
+        } else if (!folders.any((f) => FoldersModule.isAllChatsFolder(f))) {
+          folders = [allChatsFolder, ...folders];
+        }
       }
 
       final pageCount = folders.isEmpty ? 1 : folders.length;
@@ -744,6 +789,11 @@ class _ChatListScreenState extends State<ChatListScreen>
 
       final filteredChats = loadedChats
           .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
+          .where(
+            (c) => widget.archiveMode
+                ? archivedIds.contains(c.id)
+                : !archivedIds.contains(c.id),
+          )
           .toList();
 
       final newIds = filteredChats.map((c) => c.id.toString()).toSet();
@@ -759,6 +809,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         setState(() {
           _profile = p;
           _chats = filteredChats;
+          _archivedCount = archivedCount;
+          _archivedUnread = archivedUnread;
           _contactIds = contactIds;
           _enteringChatIds = entering;
           _chatListRevision++;
@@ -780,6 +832,15 @@ class _ChatListScreenState extends State<ChatListScreen>
           _isInitialLoading = false;
         });
         _prefetchContactsForChats(loadedChats);
+        if (widget.archiveMode) {
+          if (filteredChats.isNotEmpty) {
+            _archiveHadChats = true;
+          } else if (_archiveHadChats) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) Navigator.of(context).maybePop();
+            });
+          }
+        }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _jumpFolderPageToSelection();
@@ -1153,6 +1214,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     chats.chatsChanged.removeListener(_onChatsChanged);
+    ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
@@ -1499,6 +1561,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
         slivers: [
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          if (_shouldShowArchiveEntry(pageIndex))
+            SliverToBoxAdapter(child: _buildArchiveEntry(cs)),
           if (chats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
@@ -1819,6 +1883,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    if (widget.archiveMode) {
+      return _buildArchiveScaffold(cs);
+    }
     return Scaffold(
       backgroundColor: cs.surface,
       body: SafeArea(
@@ -1990,84 +2057,200 @@ class _ChatListScreenState extends State<ChatListScreen>
                     );
                   },
                 ),
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                  top: _isSelectionMode ? 0 : -80,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 52,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: cs.surface,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Builder(
-                      builder: (_) {
-                        final selected = _selectedChatObjects();
-                        final deleteCategory = _selectionDeleteCategoryFor(
-                          selected,
-                        );
-                        final anyMuted = selected.any((c) => c.isMuted);
-                        final anyPinned = selected.any(
-                          (c) => (c.favIndex ?? 0) > 0,
-                        );
-                        return Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Symbols.arrow_back,
-                                color: cs.onSurface,
-                              ),
-                              onPressed: _clearSelection,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _selectedChats.length.toString(),
-                              style: TextStyle(
-                                color: cs.onSurface,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (deleteCategory != null)
-                              IconButton(
-                                icon: Icon(Symbols.delete, color: cs.onSurface),
-                                onPressed: _onDeleteTap,
-                              ),
-                            IconButton(
-                              icon: Icon(Symbols.archive, color: cs.onSurface),
-                              onPressed: () {},
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                anyPinned ? Symbols.keep_off : Symbols.keep,
-                                color: cs.onSurface,
-                              ),
-                              onPressed: selected.isEmpty ? null : _onPinTap,
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                anyMuted
-                                    ? Symbols.volume_up
-                                    : Symbols.volume_off,
-                                color: cs.onSurface,
-                              ),
-                              onPressed: selected.isEmpty ? null : _onMuteTap,
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                _buildSelectionActionBar(cs),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArchiveScaffold(ColorScheme cs) {
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                _buildArchiveAppBar(cs),
+                Expanded(child: _buildFolderChatPage(0)),
+              ],
+            ),
+            _buildSelectionActionBar(cs),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArchiveAppBar(ColorScheme cs) {
+    return SizedBox(
+      height: 52,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Symbols.arrow_back, color: cs.onSurface),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Архив',
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Outfit',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _shouldShowArchiveEntry(int pageIndex) {
+    if (widget.archiveMode || widget.forwardMode) return false;
+    if (_isInitialLoading) return false;
+    if (_archivedCount <= 0) return false;
+    if (_folders.isEmpty) return pageIndex == 0;
+    final allIdx = _folders.indexWhere(
+      (f) => FoldersModule.isAllChatsFolder(f),
+    );
+    return pageIndex == (allIdx >= 0 ? allIdx : 0);
+  }
+
+  Widget _buildArchiveEntry(ColorScheme cs) {
+    return InkWell(
+      onTap: () {
+        if (_isSelectionMode) return;
+        pushSwipeable(
+          context,
+          (_) => const ChatListScreen(archiveMode: true),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: cs.surfaceContainerHighest,
+              child: Icon(
+                Symbols.archive,
+                color: cs.onSurfaceVariant,
+                weight: 500,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Архив',
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (_archivedUnread > 0)
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _archivedUnread > 99 ? '99+' : '$_archivedUnread',
+                  style: TextStyle(
+                    color: cs.onPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
+                ),
+              ),
+            Icon(Symbols.chevron_right, color: cs.outline),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionActionBar(ColorScheme cs) {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      top: _isSelectionMode ? 0 : -80,
+      left: 0,
+      right: 0,
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Builder(
+          builder: (_) {
+            final selected = _selectedChatObjects();
+            final deleteCategory = _selectionDeleteCategoryFor(selected);
+            final anyMuted = selected.any((c) => c.isMuted);
+            final anyPinned = selected.any((c) => (c.favIndex ?? 0) > 0);
+            return Row(
+              children: [
+                IconButton(
+                  icon: Icon(Symbols.arrow_back, color: cs.onSurface),
+                  onPressed: _clearSelection,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _selectedChats.length.toString(),
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                if (deleteCategory != null)
+                  IconButton(
+                    icon: Icon(Symbols.delete, color: cs.onSurface),
+                    onPressed: _onDeleteTap,
+                  ),
+                IconButton(
+                  icon: Icon(
+                    widget.archiveMode ? Symbols.unarchive : Symbols.archive,
+                    color: cs.onSurface,
+                  ),
+                  onPressed: selected.isEmpty ? null : _onArchiveTap,
+                ),
+                IconButton(
+                  icon: Icon(
+                    anyPinned ? Symbols.keep_off : Symbols.keep,
+                    color: cs.onSurface,
+                  ),
+                  onPressed: selected.isEmpty ? null : _onPinTap,
+                ),
+                IconButton(
+                  icon: Icon(
+                    anyMuted ? Symbols.volume_up : Symbols.volume_off,
+                    color: cs.onSurface,
+                  ),
+                  onPressed: selected.isEmpty ? null : _onMuteTap,
                 ),
               ],
             );

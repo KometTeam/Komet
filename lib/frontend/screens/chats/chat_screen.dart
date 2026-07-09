@@ -38,6 +38,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
+import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
@@ -1151,6 +1152,7 @@ class _ChatScreenState extends State<ChatScreen>
     final total = await AppDatabase.sumUnread(
       _myId,
       excludeChatId: widget.chatId,
+      excludeChatIds: ArchivedChatsStore.instance.archivedChatIds(_myId),
     );
     if (mounted) _otherUnread.value = total;
   }

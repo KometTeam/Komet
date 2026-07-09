@@ -724,17 +724,26 @@ class AppDatabase {
     );
   }
 
-  static Future<int> sumUnread(int accountId, {int? excludeChatId}) async {
+  static Future<int> sumUnread(
+    int accountId, {
+    int? excludeChatId,
+    Set<int>? excludeChatIds,
+  }) async {
     final db = await _instance;
-    final where = excludeChatId != null
-        ? 'account_id = ? AND in_list = 1 AND id != ?'
-        : 'account_id = ? AND in_list = 1';
-    final args = excludeChatId != null
-        ? [accountId, excludeChatId]
-        : [accountId];
+    final buffer = StringBuffer('account_id = ? AND in_list = 1');
+    final args = <Object?>[accountId];
+    if (excludeChatId != null) {
+      buffer.write(' AND id != ?');
+      args.add(excludeChatId);
+    }
+    if (excludeChatIds != null && excludeChatIds.isNotEmpty) {
+      final placeholders = List.filled(excludeChatIds.length, '?').join(', ');
+      buffer.write(' AND id NOT IN ($placeholders)');
+      args.addAll(excludeChatIds);
+    }
     final result = await db.rawQuery(
       'SELECT COALESCE(SUM(unread_count), 0) AS total '
-      'FROM chats_cache WHERE $where',
+      'FROM chats_cache WHERE $buffer',
       args,
     );
     return (result.first['total'] as int?) ?? 0;
