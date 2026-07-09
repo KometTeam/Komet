@@ -544,7 +544,8 @@ class AccountModule {
       payload['lastLogin'] = sync.lastLogin;
       if (sync.configHash != null) payload['configHash'] = sync.configHash;
     } else {
-      payload['presenceSync'] = 0;
+      payload['presenceSync'] = -1;
+      payload['chatsSync'] = -1;
     }
 
     return payload;
@@ -585,6 +586,12 @@ class AccountModule {
     await _saveSyncState(data, serverTime, profile.id);
     await ContactsModule.syncFromLoginPayload(data, profile.id);
     await chats.syncFromLoginPayload(data, profile.id, profile.id);
+
+    try {
+      await ContactsModule.syncFromServer(_api, profile.id);
+    } catch (e) {
+      logger.w('Контакты: $e');
+    }
 
     final config = data['config'];
     if (config is Map) {

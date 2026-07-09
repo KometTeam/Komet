@@ -11,6 +11,7 @@ abstract class Opcode {
   static const int reconnect = 3; // Реконнект
   static const int log = 5; // Аналитика / события
   static const int sessionInit = 6; // Инициализация сессии (хэндшейк)
+  static const int contactsGet = 8; // Синхронизация списка контактов
 
   // ── Profile ────────────────────────────────────────────────────────
   static const int profile = 16; // Обновление профиля
@@ -226,6 +227,7 @@ abstract class Opcode {
     reconnect: 'RECONNECT',
     log: 'LOG',
     sessionInit: 'SESSION_INIT',
+    contactsGet: 'CONTACTS_GET',
     profile: 'PROFILE',
     authRequest: 'AUTH_REQUEST',
     auth: 'AUTH',

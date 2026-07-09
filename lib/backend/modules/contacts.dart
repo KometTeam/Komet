@@ -183,6 +183,14 @@ class ContactsModule {
     );
   }
 
+  static Future<void> syncFromServer(Api api, int accountId) async {
+    final map = await api.sendRequestMap(Opcode.contactsGet, {
+      'contactsSync': 0,
+    });
+    if (map == null) return;
+    await syncFromLoginPayload(map.cast<dynamic, dynamic>(), accountId);
+  }
+
   static void _primeContactCache(Map<dynamic, dynamic> contact) {
     final id = contact['id'];
     if (id is! int) return;

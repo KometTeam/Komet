@@ -68,6 +68,28 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             const SectionHeader(
+              'Папки',
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
+            SettingsCard(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.hideAllChatsFolder,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.folder_off,
+                    label: 'Hide "All" folder',
+                    subtitle:
+                        'Скрыть папку «Все», когда есть другие папки. '
+                        'Чаты сортируются только по вашим папкам',
+                    value: value,
+                    onChanged: KometSettings.setHideAllChatsFolder,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const SectionHeader(
               'Ghost Mode',
               padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
               fontSize: 14,

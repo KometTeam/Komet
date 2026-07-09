@@ -36,10 +36,12 @@ import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/config/app_colors.dart';
+import '../../../core/config/komet_settings.dart';
 import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
+import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
@@ -133,6 +135,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   String? _selectedFolderId;
 
   List<ChatFolder> _folders = [];
+  Set<int> _contactIds = <int>{};
 
   int _currentNavIndex = 0;
 
@@ -545,6 +548,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
+    KometSettings.hideAllChatsFolder.addListener(_requestReload);
     _maybeLoadStories();
     _typingSub = api.pushStream
         .where((p) => p.opcode == Opcode.notifTyping)
@@ -708,6 +712,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       final loadedChats = await chats.getChats(p.id);
       var folders = await FoldersModule.loadFolders(p.id);
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
+      final contactIds = (await ContactsModule.getContacts(p.id))
+          .map((c) => c.id)
+          .toSet();
 
       final allChatsFolder = ChatFolder(
         id: 'all.chat.folder',
@@ -717,7 +724,14 @@ class _ChatListScreenState extends State<ChatListScreen>
         widgets: [],
       );
 
-      if (!folders.any((f) => FoldersModule.isAllChatsFolder(f))) {
+      final hasRealFolders = folders.any(
+        (f) => !FoldersModule.isAllChatsFolder(f),
+      );
+      if (KometSettings.hideAllChatsFolder.value && hasRealFolders) {
+        folders = folders
+            .where((f) => !FoldersModule.isAllChatsFolder(f))
+            .toList();
+      } else if (!folders.any((f) => FoldersModule.isAllChatsFolder(f))) {
         folders = [allChatsFolder, ...folders];
       }
 
@@ -727,6 +741,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       final filteredChats = loadedChats
           .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
           .toList();
+
       final newIds = filteredChats.map((c) => c.id.toString()).toSet();
       final entering = _didInitialChatLoad
           ? newIds.difference(_knownChatIds)
@@ -740,6 +755,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         setState(() {
           _profile = p;
           _chats = filteredChats;
+          _contactIds = contactIds;
           _enteringChatIds = entering;
           _chatListRevision++;
           _folders = folders;
@@ -858,6 +874,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final baseKey = Object.hash(
       identityHashCode(_chats),
       identityHashCode(_folders),
+      identityHashCode(_contactIds),
     );
     if (_pageChatsBaseKey != baseKey) {
       _pageChatsBaseKey = baseKey;
@@ -873,10 +890,18 @@ class _ChatListScreenState extends State<ChatListScreen>
       base = _chats;
     } else {
       final folder = _folders[pageIndex];
+      final myId = _profile?.id ?? 0;
       base = FoldersModule.isAllChatsFolder(folder)
           ? _chats
           : _chats
-                .where((c) => FoldersModule.chatMatchesFolder(c, folder))
+                .where(
+                  (c) => FoldersModule.chatMatchesFolder(
+                    c,
+                    folder,
+                    myId: myId,
+                    contactIds: _contactIds,
+                  ),
+                )
                 .toList();
     }
     final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
@@ -1127,6 +1152,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
+    KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _typingSub?.cancel();
