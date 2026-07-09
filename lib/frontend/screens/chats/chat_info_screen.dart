@@ -63,6 +63,7 @@ class ChatInfoScreen extends StatefulWidget {
 
 class _ChatInfoScreenState extends State<ChatInfoScreen> {
   final _tabScrollController = ScrollController();
+  final _bodyScrollController = ScrollController();
 
   int _myId = 0;
   bool _isLoading = true;
@@ -93,6 +94,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   @override
   void dispose() {
     _tabScrollController.dispose();
+    _bodyScrollController.dispose();
     super.dispose();
   }
 
@@ -251,6 +253,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildScrollBody(ColorScheme cs) {
     return CustomScrollView(
+      controller: _bodyScrollController,
       slivers: [
         SliverAppBar(
           backgroundColor: Colors.transparent,
@@ -762,6 +765,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       emptyLabel: emptyLabel,
       emptyIcon: emptyIcon,
       onGoToMessage: _goToMessage,
+      scrollController: _bodyScrollController,
     );
   }
 

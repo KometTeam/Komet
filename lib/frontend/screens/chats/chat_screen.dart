@@ -313,8 +313,7 @@ class _ChatScreenState extends State<ChatScreen>
     final total = counters.values.fold<int>(0, (a, b) => a + b);
     return {
       'counters': [
-        for (final key in order)
-          {'reaction': key, 'count': counters[key]},
+        for (final key in order) {'reaction': key, 'count': counters[key]},
       ],
       'yourReaction': ?your,
       'totalCount': total,
@@ -2292,7 +2291,10 @@ class _ChatScreenState extends State<ChatScreen>
                                             navigator.popUntil(
                                               (r) => r == chatRoute,
                                             );
-                                            _requestGoToMessage(messageId, time);
+                                            _requestGoToMessage(
+                                              messageId,
+                                              time,
+                                            );
                                           },
                                   ),
                                 ),
@@ -3371,6 +3373,24 @@ class _ChatScreenState extends State<ChatScreen>
     _finishTargetNavigation();
   }
 
+  ({int min, int max})? _laidOutMessageRange(List<Object> items) {
+    int? lo;
+    int? hi;
+    for (var i = 0; i < items.length; i++) {
+      final it = items[i];
+      if (it is! _MessageItem) continue;
+      final ro = _keyForMessage(
+        it.message.id,
+      ).currentContext?.findRenderObject();
+      if (ro is RenderBox && ro.attached) {
+        lo ??= i;
+        hi = i;
+      }
+    }
+    if (lo == null) return null;
+    return (min: lo, max: hi!);
+  }
+
   Future<void> _scrollToMessagePrecise(
     String id, {
     double alignment = 0.32,
@@ -3381,28 +3401,28 @@ class _ChatScreenState extends State<ChatScreen>
     _suppressHistoryAutoload = true;
     try {
       var stable = 0;
-      for (var iter = 0; iter < 48; iter++) {
+      for (var iter = 0; iter < 120; iter++) {
         if (!mounted || !_scrollController.hasClients) return;
         final listObj = _listKey.currentContext?.findRenderObject();
         final boxObj = _keyForMessage(id).currentContext?.findRenderObject();
+        final p = _scrollController.position;
 
-        if (boxObj is RenderBox && boxObj.attached && listObj is RenderBox) {
+        if (listObj is RenderBox && boxObj is RenderBox && boxObj.attached) {
           final viewportH = listObj.size.height;
           final actualTop = boxObj
               .localToGlobal(Offset.zero, ancestor: listObj)
               .dy;
           final desiredTop = alignment * viewportH;
           final delta = desiredTop - actualTop;
-          final p = _scrollController.position;
           final target = (p.pixels + delta).clamp(
             p.minScrollExtent,
             p.maxScrollExtent,
           );
 
-          if (delta.abs() <= 4.0 || (target - p.pixels).abs() <= 1.0) {
+          if (delta.abs() <= 2.0 || (target - p.pixels).abs() <= 1.0) {
             stable++;
-            if (stable >= 3) return;
-            await Future.delayed(const Duration(milliseconds: 130));
+            if (stable >= 4) return;
+            await Future.delayed(const Duration(milliseconds: 60));
             continue;
           }
           stable = 0;
@@ -3417,66 +3437,25 @@ class _ChatScreenState extends State<ChatScreen>
           (it) => it is _MessageItem && it.message.id == id,
         );
         if (pos == -1) return;
-        var below = 0.0;
-        for (var i = pos + 1; i < items.length; i++) {
-          below += _estimatedItemExtent(items[i]);
-        }
-        final p = _scrollController.position;
-        final maxExtent = p.maxScrollExtent;
-        final viewportH = listObj is RenderBox ? listObj.size.height : 500.0;
-        var targetOffset = below.clamp(0.0, maxExtent).toDouble();
-        if ((targetOffset - p.pixels).abs() < 4.0) {
-          targetOffset = (p.pixels + viewportH * 0.8).clamp(0.0, maxExtent);
-          if ((targetOffset - p.pixels).abs() < 4.0) return;
-        }
-        _scrollController.jumpTo(targetOffset);
+
+        final viewportH = listObj is RenderBox ? listObj.size.height : 600.0;
+        var stepMag = viewportH * 0.8;
+        if (stepMag > 700) stepMag = 700;
+
+        final range = _laidOutMessageRange(items);
+        final step = (range != null && pos > range.max) ? -stepMag : stepMag;
+
+        final target = (p.pixels + step).clamp(
+          p.minScrollExtent,
+          p.maxScrollExtent,
+        );
+        if ((target - p.pixels).abs() < 1.0) return;
+        _scrollController.jumpTo(target);
         await WidgetsBinding.instance.endOfFrame;
       }
     } finally {
       _suppressHistoryAutoload = false;
     }
-  }
-
-  double _estimatedItemExtent(Object item) {
-    if (item is! _MessageItem) return 44.0;
-    final msg = item.message;
-    var base = 0.0;
-    final atts = msg.attachments;
-    if (atts != null && atts.isNotEmpty) {
-      for (final a in atts) {
-        switch (a.type) {
-          case AttachmentType.photo:
-          case AttachmentType.video:
-            int? w;
-            int? h;
-            if (a is PhotoAttachment) {
-              w = a.width;
-              h = a.height;
-            } else if (a is VideoAttachment) {
-              w = a.width;
-              h = a.height;
-            }
-            base += (w != null && h != null && w > 0)
-                ? (236.0 * h / w).clamp(120.0, 360.0)
-                : 260.0;
-            base += 12;
-          case AttachmentType.sticker:
-            base += 160;
-          case AttachmentType.audio:
-            base += 72;
-          case AttachmentType.file:
-            base += 80;
-          case AttachmentType.share:
-            base += 96;
-          default:
-            base += 60;
-        }
-      }
-    }
-    final textLen = msg.text?.length ?? 0;
-    if (textLen > 0) base += 24.0 + (textLen ~/ 34) * 20.0;
-    if (base <= 0) base = _avgMessageHeight;
-    return base.clamp(44.0, 1200.0).toDouble();
   }
 
   Future<void> _openSearchResult(MessageSearchResult result) async {
@@ -5597,8 +5576,15 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
 
   final GlobalKey _boundaryKey = GlobalKey();
   Offset? _lastTapDown;
+  Timer? _openTimer;
 
   bool _isPinnedNow() => widget.isPinned();
+
+  @override
+  void dispose() {
+    _openTimer?.cancel();
+    super.dispose();
+  }
 
   void _openMenu() {
     final ctx = _boundaryKey.currentContext;
@@ -5684,7 +5670,10 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
     if (widget.isSelectionActive()) {
       widget.onToggleSelection();
     } else {
-      _openMenu();
+      _openTimer?.cancel();
+      _openTimer = Timer(const Duration(milliseconds: 200), () {
+        if (mounted && !widget.isSelectionActive()) _openMenu();
+      });
     }
   }
 

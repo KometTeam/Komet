@@ -728,8 +728,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   }
 
   Rect _reactionAnchorRect() {
-    if (_effectiveStyle == MessageActionsStyle.list &&
-        _menuRect != Rect.zero) {
+    if (_effectiveStyle == MessageActionsStyle.list && _menuRect != Rect.zero) {
       return _menuRect;
     }
     if (_buttonHitRects.isNotEmpty) {
@@ -749,7 +748,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     final safeTop = padding.top + 8;
-    final safeBottom = size.height - math.max(padding.bottom, keyboardInset) - 8;
+    final safeBottom =
+        size.height - math.max(padding.bottom, keyboardInset) - 8;
 
     final quick = widget.quickReactions;
     const chevronCell = 38.0;
@@ -762,8 +762,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final maxPillWidth = size.width - 16;
     double cell = maxCell;
     if (pillWidth > maxPillWidth) {
-      cell = ((maxPillWidth - pillPad * 2 - chevronCell) / quick.length)
-          .clamp(28.0, maxCell);
+      cell = ((maxPillWidth - pillPad * 2 - chevronCell) / quick.length).clamp(
+        28.0,
+        maxCell,
+      );
       pillWidth = pillPad * 2 + quick.length * cell + chevronCell;
     }
 
@@ -777,7 +779,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     double pillTop = pillAbove
         ? anchor.top - gap - pillHeight
         : anchor.bottom + gap;
-    pillTop = pillTop.clamp(safeTop, math.max(safeTop, safeBottom - pillHeight));
+    pillTop = pillTop.clamp(
+      safeTop,
+      math.max(safeTop, safeBottom - pillHeight),
+    );
     final collapsed = Rect.fromLTWH(pillLeft, pillTop, pillWidth, pillHeight);
 
     final panelWidth = math.min(size.width - 24, 300.0);
@@ -796,13 +801,16 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       panelTop = math.max(safeTop, panelBottom - desiredHeight);
       panelHeight = panelBottom - panelTop;
     }
-    final expanded = Rect.fromLTWH(panelLeft, panelTop, panelWidth, panelHeight);
+    final expanded = Rect.fromLTWH(
+      panelLeft,
+      panelTop,
+      panelWidth,
+      panelHeight,
+    );
 
     final morph = Rect.lerp(collapsed, expanded, e)!;
     final radius = ui.lerpDouble(pillHeight / 2, 20.0, e)!;
-    final entryAlign = pillAbove
-        ? Alignment.bottomLeft
-        : Alignment.topLeft;
+    final entryAlign = pillAbove ? Alignment.bottomLeft : Alignment.topLeft;
 
     return IgnorePointer(
       ignoring: t < 0.5,
@@ -810,8 +818,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         opacity: t,
         child: Stack(
           children: [
-            if (e < 0.999)
-              _buildCloudTail(collapsed, pillAbove, cs, t, e),
+            if (e < 0.999) _buildCloudTail(collapsed, pillAbove, cs, t, e),
             Positioned.fromRect(
               rect: morph,
               child: Transform.scale(
@@ -979,10 +986,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       child: Opacity(
         opacity: fade,
         child: Stack(
-          children: [
-            _tailCircle(big, 8.0, cs),
-            _tailCircle(small, 5.0, cs),
-          ],
+          children: [_tailCircle(big, 8.0, cs), _tailCircle(small, 5.0, cs)],
         ),
       ),
     );
@@ -1429,42 +1433,45 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        _buildSearchField(cs),
-        Expanded(
-          child: !_loaded
-              ? const Center(
-                  child: SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: CircularProgressIndicator(strokeWidth: 2.4),
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        children: [
+          _buildSearchField(cs),
+          Expanded(
+            child: !_loaded
+                ? const Center(
+                    child: SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                    ),
+                  )
+                : _results.isEmpty
+                ? const SizedBox.shrink()
+                : GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    addAutomaticKeepAlives: false,
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 40,
+                          mainAxisSpacing: 2,
+                          crossAxisSpacing: 2,
+                        ),
+                    itemCount: _results.length,
+                    itemBuilder: (context, i) {
+                      final emoji = _results[i];
+                      return _EmojiCell(
+                        emoji: emoji,
+                        onTap: () => widget.onPick(emoji),
+                      );
+                    },
                   ),
-                )
-              : _results.isEmpty
-              ? const SizedBox.shrink()
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  addAutomaticKeepAlives: false,
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 40,
-                        mainAxisSpacing: 2,
-                        crossAxisSpacing: 2,
-                      ),
-                  itemCount: _results.length,
-                  itemBuilder: (context, i) {
-                    final emoji = _results[i];
-                    return _EmojiCell(
-                      emoji: emoji,
-                      onTap: () => widget.onPick(emoji),
-                    );
-                  },
-                ),
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1533,9 +1540,7 @@ class _EmojiCell extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Center(
-        child: Text(emoji, style: const TextStyle(fontSize: 22)),
-      ),
+      child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
     );
   }
 }

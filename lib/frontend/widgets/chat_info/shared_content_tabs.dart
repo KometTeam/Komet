@@ -87,7 +87,11 @@ Widget _emptyState(ColorScheme cs, String label, IconData icon) {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: cs.onSurfaceVariant.withValues(alpha: 0.35), size: 48),
+        Icon(
+          icon,
+          color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+          size: 48,
+        ),
         const SizedBox(height: 12),
         Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15)),
       ],
@@ -220,7 +224,10 @@ void _notifySave(BuildContext context, MediaSaveResult result) {
       result.toGallery ? 'Сохранено в галерею' : 'Файл сохранён',
     );
   } else {
-    showCustomNotification(context, 'Не удалось сохранить: ${result.error ?? ''}');
+    showCustomNotification(
+      context,
+      'Не удалось сохранить: ${result.error ?? ''}',
+    );
   }
 }
 
@@ -452,6 +459,7 @@ class SharedMediaTab extends StatefulWidget {
   final String emptyLabel;
   final IconData emptyIcon;
   final void Function(String messageId, int time) onGoToMessage;
+  final ScrollController? scrollController;
 
   const SharedMediaTab({
     super.key,
@@ -462,6 +470,7 @@ class SharedMediaTab extends StatefulWidget {
     required this.emptyLabel,
     required this.emptyIcon,
     required this.onGoToMessage,
+    this.scrollController,
   });
 
   @override
@@ -474,13 +483,31 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _canLoadMore = false;
+  int _total = 0;
   final List<SharedMediaItem> _items = [];
   final Set<String> _seen = {};
 
   @override
   void initState() {
     super.initState();
+    widget.scrollController?.addListener(_onScroll);
     _load(widget.anchorMessageId, initial: true);
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController?.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _loadingMore || _loading) return;
+    final controller = widget.scrollController;
+    if (controller == null || !controller.hasClients) return;
+    final position = controller.position;
+    if (position.pixels >= position.maxScrollExtent - 800) {
+      _loadMore();
+    }
   }
 
   Future<void> _load(String anchor, {required bool initial}) async {
@@ -493,7 +520,6 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
     );
     if (!mounted) return;
 
-    final pageMessageIds = page.items.map((e) => e.messageId).toSet();
     var added = 0;
     for (final item in page.items) {
       if (_seen.add(item.dedupKey)) {
@@ -502,16 +528,29 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
       }
     }
     _items.sort((a, b) => b.time.compareTo(a.time));
+    _total = page.total > _total ? page.total : _total;
 
     setState(() {
-      _canLoadMore = added > 0 && pageMessageIds.length >= _pageSize;
+      _canLoadMore = added > 0 && _items.length < _total;
       _loading = false;
       _loadingMore = false;
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoLoad());
+  }
+
+  void _maybeAutoLoad() {
+    if (!mounted || !_hasMore || _loadingMore) return;
+    final controller = widget.scrollController;
+    if (controller == null || !controller.hasClients) return;
+    final position = controller.position;
+    if (position.maxScrollExtent - position.pixels <= 800) {
+      _loadMore();
+    }
   }
 
   Future<void> _loadMore() async {
-    if (_loadingMore || _items.isEmpty) return;
+    if (_loadingMore || _loading || _items.isEmpty) return;
     setState(() => _loadingMore = true);
     await _load(_items.last.messageId, initial: false);
   }
@@ -589,7 +628,10 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
       );
     }
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
   }
 
   Widget _mediaGrid(ColorScheme cs, List<SharedMediaItem> items) {
@@ -633,7 +675,9 @@ class _MediaTile extends StatelessWidget {
     final att = item.attachment;
     final video = att is VideoAttachment ? att : null;
     final duration = video?.duration ?? 0;
-    final thumb = att.baseUrl?.isNotEmpty == true ? att.baseUrl : att.previewData;
+    final thumb = att.baseUrl?.isNotEmpty == true
+        ? att.baseUrl
+        : att.previewData;
 
     return GestureDetector(
       onTap: () => _open(context),
@@ -771,7 +815,9 @@ class _FileRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    ext.isEmpty ? formatBytes(size) : '$ext • ${formatBytes(size)}',
+                    ext.isEmpty
+                        ? formatBytes(size)
+                        : '$ext • ${formatBytes(size)}',
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   ),
                 ],
@@ -1094,7 +1140,10 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
             child: Container(
               width: 46,
               height: 46,
-              decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: cs.primary,
+                shape: BoxShape.circle,
+              ),
               child: _loadingAudio
                   ? const Padding(
                       padding: EdgeInsets.all(13),
