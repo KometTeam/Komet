@@ -86,6 +86,18 @@ class KometSettingsScreen extends StatelessWidget {
                     onChanged: KometSettings.setHideAllChatsFolder,
                   ),
                 ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.showHiddenChats,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.visibility_lock,
+                    label: 'Show hidden chats',
+                    subtitle:
+                        'Показывать скрытые чаты (например, от групповых '
+                        'звонков), которые обычно не отображаются в списке',
+                    value: value,
+                    onChanged: KometSettings.setShowHiddenChats,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),

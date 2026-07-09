@@ -1104,7 +1104,7 @@ class ChatsModule {
       return parsed;
     }
     final row = parsed.toDbRow();
-    row['in_list'] = inList ? 1 : 0;
+    row['in_list'] = !inList ? 0 : (chat['status'] == 'HIDDEN' ? 2 : 1);
     await AppDatabase.saveChats([row]);
     _bump();
     return parsed;
@@ -1144,23 +1144,24 @@ class ChatsModule {
           row['id'] as int: CachedChat.fromDbRow(row),
       };
 
-      final rows = chats
-          .whereType<Map>()
-          .map(
-            (c) => parseChatRow(
-              c.cast<dynamic, dynamic>(),
-              accountId,
-              currentUserId,
-              contactsMap,
-              chatsConfig,
-              presenceMap,
-              existing,
-              cachedAt,
-            ),
-          )
-          .whereType<CachedChat>()
-          .map((c) => c.toDbRow()..['in_list'] = 1)
-          .toList();
+      final rows = <Map<String, dynamic>>[];
+      for (final c in chats.whereType<Map>()) {
+        final map = c.cast<dynamic, dynamic>();
+        final parsed = parseChatRow(
+          map,
+          accountId,
+          currentUserId,
+          contactsMap,
+          chatsConfig,
+          presenceMap,
+          existing,
+          cachedAt,
+        );
+        if (parsed == null) continue;
+        final row = parsed.toDbRow();
+        row['in_list'] = map['status'] == 'HIDDEN' ? 2 : 1;
+        rows.add(row);
+      }
 
       if (rows.isNotEmpty) {
         await AppDatabase.saveChats(rows);
@@ -1171,9 +1172,15 @@ class ChatsModule {
     }
   }
 
-  Future<List<CachedChat>> getChats(int accountId) async {
+  Future<List<CachedChat>> getChats(
+    int accountId, {
+    bool includeHidden = false,
+  }) async {
     try {
-      final rows = await AppDatabase.loadChats(accountId);
+      final rows = await AppDatabase.loadChats(
+        accountId,
+        includeHidden: includeHidden,
+      );
       final chats = rows.map(CachedChat.fromDbRow).toList();
       return chats;
     } catch (e) {

@@ -549,6 +549,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
+    KometSettings.showHiddenChats.addListener(_requestReload);
     _maybeLoadStories();
     _typingSub = api.pushStream
         .where((p) => p.opcode == Opcode.notifTyping)
@@ -709,7 +710,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
 
     try {
-      final loadedChats = await chats.getChats(p.id);
+      final loadedChats = await chats.getChats(
+        p.id,
+        includeHidden: KometSettings.showHiddenChats.value,
+      );
       var folders = await FoldersModule.loadFolders(p.id);
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
       final contactIds = (await ContactsModule.getContacts(p.id))
@@ -1153,6 +1157,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
+    KometSettings.showHiddenChats.removeListener(_requestReload);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _typingSub?.cancel();

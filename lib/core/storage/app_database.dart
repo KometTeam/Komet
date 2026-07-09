@@ -709,11 +709,16 @@ class AppDatabase {
     );
   }
 
-  static Future<List<Map<String, dynamic>>> loadChats(int accountId) async {
+  static Future<List<Map<String, dynamic>>> loadChats(
+    int accountId, {
+    bool includeHidden = false,
+  }) async {
     final db = await _instance;
     return db.query(
       'chats_cache',
-      where: 'account_id = ? AND in_list = 1',
+      where: includeHidden
+          ? 'account_id = ? AND in_list IN (1, 2)'
+          : 'account_id = ? AND in_list = 1',
       whereArgs: [accountId],
       orderBy: 'last_event_time DESC',
     );
