@@ -372,6 +372,8 @@ class ChatsModule {
   final _messageEventsController = StreamController<MessageEvent>.broadcast();
   Stream<MessageEvent> get messageEvents => _messageEventsController.stream;
 
+  int? _paginatedAccountId;
+
   void emitMessageSent(int chatId, String tempId, CachedMessage message) {
     _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
   }
@@ -1136,39 +1138,97 @@ class ChatsModule {
           ? data['presence'] as Map
           : {};
       PresenceFetch.primeAll(presenceMap);
-      final cachedAt = DateTime.now().millisecondsSinceEpoch;
 
-      final existingRows = await AppDatabase.loadChats(accountId);
-      final existing = {
-        for (final row in existingRows)
-          row['id'] as int: CachedChat.fromDbRow(row),
-      };
-
-      final rows = <Map<String, dynamic>>[];
-      for (final c in chats.whereType<Map>()) {
-        final map = c.cast<dynamic, dynamic>();
-        final parsed = parseChatRow(
-          map,
-          accountId,
-          currentUserId,
-          contactsMap,
-          chatsConfig,
-          presenceMap,
-          existing,
-          cachedAt,
-        );
-        if (parsed == null) continue;
-        final row = parsed.toDbRow();
-        row['in_list'] = map['status'] == 'HIDDEN' ? 2 : 1;
-        rows.add(row);
-      }
-
-      if (rows.isNotEmpty) {
-        await AppDatabase.saveChats(rows);
-        _bump();
-      }
+      await _persistChatMaps(
+        chats,
+        accountId,
+        currentUserId,
+        contactsMap: contactsMap,
+        chatsConfig: chatsConfig,
+        presenceMap: presenceMap,
+      );
     } catch (e) {
       logger.e("Ошибка при синке: $e");
+    }
+  }
+
+  Future<int> _persistChatMaps(
+    List<dynamic> chats,
+    int accountId,
+    int currentUserId, {
+    Map<int, Map<dynamic, dynamic>> contactsMap = const {},
+    Map<dynamic, dynamic> chatsConfig = const {},
+    Map<dynamic, dynamic> presenceMap = const {},
+  }) async {
+    final cachedAt = DateTime.now().millisecondsSinceEpoch;
+    final existingRows = await AppDatabase.loadChats(
+      accountId,
+      includeHidden: true,
+    );
+    final existing = {
+      for (final row in existingRows)
+        row['id'] as int: CachedChat.fromDbRow(row),
+    };
+
+    final rows = <Map<String, dynamic>>[];
+    for (final c in chats.whereType<Map>()) {
+      final map = c.cast<dynamic, dynamic>();
+      final parsed = parseChatRow(
+        map,
+        accountId,
+        currentUserId,
+        contactsMap,
+        chatsConfig,
+        presenceMap,
+        existing,
+        cachedAt,
+      );
+      if (parsed == null) continue;
+      final row = parsed.toDbRow();
+      row['in_list'] = map['status'] == 'HIDDEN' ? 2 : 1;
+      rows.add(row);
+    }
+
+    if (rows.isNotEmpty) {
+      await AppDatabase.saveChats(rows);
+      _bump();
+    }
+    return rows.length;
+  }
+
+  Future<void> paginateChats(
+    Api api,
+    int accountId,
+    int currentUserId,
+    Map<dynamic, dynamic> loginData,
+  ) async {
+    if (_paginatedAccountId == accountId) return;
+    _paginatedAccountId = accountId;
+    try {
+      var marker = loginData['chatMarker'];
+      if (marker is! int || marker <= 0) return;
+
+      const count = 50;
+      var page = 0;
+      while (page < 200) {
+        page++;
+        final resp = await api.sendRequestMap(Opcode.chatsList, {
+          'marker': marker,
+          'count': count,
+        });
+        if (resp == null) break;
+        final chats = resp['chats'];
+        if (chats is! List || chats.isEmpty) break;
+
+        await _persistChatMaps(chats, accountId, currentUserId);
+
+        final next = resp['marker'];
+        if (next is! int || next == marker || chats.length < count) break;
+        marker = next;
+      }
+    } catch (e) {
+      _paginatedAccountId = null;
+      logger.w('Пагинация чатов: $e');
     }
   }
 

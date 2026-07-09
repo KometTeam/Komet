@@ -586,6 +586,7 @@ class AccountModule {
     await _saveSyncState(data, serverTime, profile.id);
     await ContactsModule.syncFromLoginPayload(data, profile.id);
     await chats.syncFromLoginPayload(data, profile.id, profile.id);
+    unawaited(chats.paginateChats(_api, profile.id, profile.id, data));
 
     try {
       await ContactsModule.syncFromServer(_api, profile.id);
