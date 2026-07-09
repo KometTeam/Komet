@@ -529,6 +529,14 @@ class _ChatScreenState extends State<ChatScreen>
     final p = await AppDatabase.loadActiveProfile();
     if (!mounted) return;
     _myId = p?.id ?? 0;
+    if (p != null && p.id != 0) {
+      final myName = [
+        p.firstName,
+        p.lastName,
+      ].whereType<String>().where((s) => s.isNotEmpty).join(' ');
+      if (myName.isNotEmpty) ContactCache.put(p.id, myName);
+      ContactCache.putAvatar(p.id, p.baseUrl);
+    }
     _restoreDraft();
     unawaited(_loadPeerKind());
     unawaited(_loadWallpaper());
@@ -4208,6 +4216,8 @@ class _ChatScreenState extends State<ChatScreen>
                         onReplyTap: _jumpToMessage,
                         onAvatarTap: _openSenderProfile,
                         onStickerTap: _openStickerPack,
+                        peerName: widget.name,
+                        peerAvatarUrl: widget.imageUrl,
                       );
 
                       final canReport = !isMe && !message.isControl;
@@ -5669,12 +5679,20 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
   void _handleTap() {
     if (widget.isSelectionActive()) {
       widget.onToggleSelection();
-    } else {
-      _openTimer?.cancel();
-      _openTimer = Timer(const Duration(milliseconds: 200), () {
-        if (mounted && !widget.isSelectionActive()) _openMenu();
-      });
+      return;
     }
+    final react = widget.onReact;
+    if (react != null && (_openTimer?.isActive ?? false)) {
+      _openTimer?.cancel();
+      _openTimer = null;
+      Haptics.tap();
+      react('❤️');
+      return;
+    }
+    _openTimer?.cancel();
+    _openTimer = Timer(const Duration(milliseconds: 200), () {
+      if (mounted && !widget.isSelectionActive()) _openMenu();
+    });
   }
 
   void _handleLongPress() {

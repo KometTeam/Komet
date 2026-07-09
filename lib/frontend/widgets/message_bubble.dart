@@ -49,6 +49,61 @@ class _RenderZeroIntrinsicWidth extends RenderProxyBox {
   double computeMaxIntrinsicWidth(double height) => 0;
 }
 
+/// A [Wrap] that reports its single-line width as the max intrinsic width, so an
+/// enclosing [IntrinsicWidth] grows the bubble to fit the chips on one line
+/// instead of collapsing to the widest single chip (which makes them stack).
+/// It still wraps to multiple lines when the available width is smaller.
+class _ReactionsWrap extends Wrap {
+  const _ReactionsWrap({
+    super.spacing,
+    super.runSpacing,
+    required super.children,
+  });
+
+  @override
+  RenderWrap createRenderObject(BuildContext context) {
+    return _RenderReactionsWrap(
+      direction: direction,
+      alignment: alignment,
+      spacing: spacing,
+      runAlignment: runAlignment,
+      runSpacing: runSpacing,
+      crossAxisAlignment: crossAxisAlignment,
+      textDirection: textDirection ?? Directionality.maybeOf(context),
+      verticalDirection: verticalDirection,
+      clipBehavior: clipBehavior,
+    );
+  }
+}
+
+class _RenderReactionsWrap extends RenderWrap {
+  _RenderReactionsWrap({
+    super.direction,
+    super.alignment,
+    super.spacing,
+    super.runAlignment,
+    super.runSpacing,
+    super.crossAxisAlignment,
+    super.textDirection,
+    super.verticalDirection,
+    super.clipBehavior,
+  });
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    var total = 0.0;
+    var count = 0;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      total += child.getMaxIntrinsicWidth(double.infinity);
+      count++;
+      child = childAfter(child);
+    }
+    if (count > 1) total += spacing * (count - 1);
+    return total;
+  }
+}
+
 class MessageBubble extends StatelessWidget {
   static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
   static const BorderRadius _reactionChipRadius = BorderRadius.all(
@@ -73,6 +128,8 @@ class MessageBubble extends StatelessWidget {
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
   final void Function(StickerAttachment sticker)? onStickerTap;
+  final String? peerName;
+  final String? peerAvatarUrl;
 
   const MessageBubble({
     super.key,
@@ -89,6 +146,8 @@ class MessageBubble extends StatelessWidget {
     this.onReplyTap,
     this.onAvatarTap,
     this.onStickerTap,
+    this.peerName,
+    this.peerAvatarUrl,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -778,13 +837,27 @@ class MessageBubble extends StatelessWidget {
   List<Widget> _buildReactionChipsFor(ColorScheme cs, ReactionInfo? info) {
     if (info == null) return const [];
     final yourReaction = info.yourReaction;
+    final isDialog = chatType == 'DIALOG';
 
     final chips = <Widget>[];
     for (final c in info.counters) {
       final isYours = yourReaction == c.reaction;
+
+      Widget? avatar;
+      if (isDialog) {
+        final peerReacted = (c.count - (isYours ? 1 : 0)) >= 1;
+        avatar = peerReacted
+            ? _reactionAvatar(cs, peerAvatarUrl, peerName)
+            : _reactionAvatar(
+                cs,
+                ContactCache.getAvatar(myId),
+                ContactCache.get(myId),
+              );
+      }
+
       chips.add(
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          padding: EdgeInsets.fromLTRB(7, 2, avatar != null ? 3 : 7, 2),
           decoration: BoxDecoration(
             color: isYours
                 ? cs.primary.withValues(alpha: 0.22)
@@ -806,12 +879,39 @@ class MessageBubble extends StatelessWidget {
                   ),
                 ),
               ],
+              if (avatar != null) ...[const SizedBox(width: 5), avatar],
             ],
           ),
         ),
       );
     }
     return chips;
+  }
+
+  Widget _reactionAvatar(ColorScheme cs, String? url, String? name) {
+    const double diameter = 17;
+    if (url != null && url.isNotEmpty) {
+      return CircleAvatar(
+        radius: diameter / 2,
+        backgroundColor: cs.primaryContainer,
+        backgroundImage: CachedNetworkImageProvider(
+          url,
+          maxWidth: 64,
+          maxHeight: 64,
+        ),
+      );
+    }
+    final letter = (name != null && name.isNotEmpty)
+        ? name[0].toUpperCase()
+        : '?';
+    return CircleAvatar(
+      radius: diameter / 2,
+      backgroundColor: cs.primaryContainer,
+      child: Text(
+        letter,
+        style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+      ),
+    );
   }
 
   Widget _buildControlContent(ColorScheme cs) {
@@ -921,7 +1021,7 @@ class MessageBubble extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
-                  child: Wrap(
+                  child: _ReactionsWrap(
                     spacing: 4,
                     runSpacing: 4,
                     children: reactionChips,
