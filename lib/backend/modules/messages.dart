@@ -7,6 +7,7 @@ import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
@@ -393,6 +394,7 @@ class CachedMessage {
     bool? deleted,
     List<MessageAttachment>? attachments,
     List<Map<String, dynamic>>? editHistory,
+    Map<String, dynamic>? payload,
   }) => CachedMessage(
     id: id,
     accountId: accountId,
@@ -401,7 +403,7 @@ class CachedMessage {
     text: text,
     time: time,
     status: status ?? this.status,
-    payload: payload,
+    payload: payload ?? this.payload,
     attachments: attachments ?? this.attachments,
     isControl: isControl,
     deleted: deleted ?? this.deleted,
@@ -1053,6 +1055,107 @@ class MessagesModule {
     };
 
     return _api.sendRequestOk(Opcode.msgDelete, payload);
+  }
+
+  Future<({bool ok, Map<String, dynamic>? info})> setReaction(
+    int chatId,
+    String messageId,
+    String emoji,
+  ) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return (ok: false, info: null);
+    final response = await _api.sendRequest(Opcode.msgReaction, {
+      'chatId': chatId,
+      'messageId': id,
+      'reaction': {'reactionType': 'EMOJI', 'id': emoji},
+    });
+    return _applyReactionResponse(chatId, messageId, response);
+  }
+
+  Future<({bool ok, Map<String, dynamic>? info})> cancelReaction(
+    int chatId,
+    String messageId,
+  ) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return (ok: false, info: null);
+    final response = await _api.sendRequest(Opcode.msgCancelReaction, {
+      'chatId': chatId,
+      'messageId': id,
+    });
+    return _applyReactionResponse(chatId, messageId, response);
+  }
+
+  Future<({bool ok, Map<String, dynamic>? info})> _applyReactionResponse(
+    int chatId,
+    String messageId,
+    Packet response,
+  ) async {
+    if (!response.isOk) return (ok: false, info: null);
+    final payload = response.payload;
+    final info = payload is Map
+        ? _normalizeReactionInfo(payload['reactionInfo'])
+        : null;
+    try {
+      await _persistReaction(chatId, messageId, info);
+    } catch (_) {}
+    return (ok: true, info: info);
+  }
+
+  static Map<String, dynamic>? _normalizeReactionInfo(dynamic raw) {
+    if (raw is! Map) return null;
+    final rawCounters = raw['counters'];
+    if (rawCounters is! List) return null;
+    final counters = <Map<String, dynamic>>[];
+    for (final c in rawCounters) {
+      if (c is! Map) continue;
+      final reaction = c['reaction']?.toString();
+      if (reaction == null || reaction.isEmpty) continue;
+      final count = c['count'];
+      counters.add({'reaction': reaction, 'count': count is int ? count : 0});
+    }
+    if (counters.isEmpty) return null;
+    final your = raw['yourReaction']?.toString();
+    final total = raw['totalCount'];
+    return {
+      'counters': counters,
+      if (your != null && your.isNotEmpty) 'yourReaction': your,
+      'totalCount': total is int
+          ? total
+          : counters.fold<int>(0, (a, b) => a + (b['count'] as int)),
+    };
+  }
+
+  Future<void> _persistReaction(
+    int chatId,
+    String messageId,
+    Map<String, dynamic>? info,
+  ) async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+    final existing = await AppDatabase.loadMessage(accountId, chatId, messageId);
+    if (existing == null) return;
+
+    Map<String, dynamic> payloadMap;
+    final raw = existing['payload'];
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        payloadMap = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      } catch (_) {
+        payloadMap = <String, dynamic>{};
+      }
+    } else {
+      payloadMap = <String, dynamic>{};
+    }
+
+    if (info == null) {
+      payloadMap.remove('reactionInfo');
+    } else {
+      payloadMap['reactionInfo'] = info;
+    }
+
+    final newRow = Map<String, dynamic>.from(existing);
+    newRow['payload'] = jsonEncode(payloadMap);
+    await AppDatabase.saveMessages([newRow]);
   }
 
   Future<Map<String, dynamic>?> sendButtonCallback({

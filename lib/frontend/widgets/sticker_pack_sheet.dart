@@ -8,7 +8,7 @@ import '../../models/sticker.dart';
 import '../screens/chats/chat_list_screen.dart';
 import 'custom_notification.dart';
 import 'small_spinner.dart';
-import 'sticker_image.dart';
+import 'lottie_image.dart';
 import 'sticker_peek.dart';
 
 enum _PackAction { forward, copyLink }
@@ -278,7 +278,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
             tags: item.tags,
             child: Padding(
               padding: const EdgeInsets.all(6),
-              child: StickerImage(
+              child: LottieImage(
                 url: item.url,
                 lottieUrl: item.lottieUrl,
                 memCacheWidth: 220,

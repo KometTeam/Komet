@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/utils/haptics.dart';
-import 'sticker_image.dart';
+import 'lottie_image.dart';
 
 class _PeekData {
   final String? url;
@@ -235,7 +235,7 @@ class _PeekOverlay extends StatelessWidget {
                             SizedBox(
                               width: previewSize,
                               height: previewSize,
-                              child: StickerImage(
+                              child: LottieImage(
                                 url: d.url,
                                 lottieUrl: d.lottieUrl,
                                 size: previewSize,

@@ -12,6 +12,19 @@ import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
+import 'lottie_image.dart';
+
+class ReactionEmoji {
+  final String emoji;
+  final String? animationUrl;
+  final String? staticUrl;
+
+  const ReactionEmoji({
+    required this.emoji,
+    this.animationUrl,
+    this.staticUrl,
+  });
+}
 
 enum MessageActionsInteraction { dragAndRelease, click, tap }
 
@@ -90,7 +103,15 @@ void showMessageActions({
   bool isPinned = false,
   void Function(String emoji)? onReact,
   String? selectedReaction,
-  List<String> quickReactions = const ['👍', '❤️', '🔥', '😂', '😮', '😢'],
+  List<ReactionEmoji> quickReactions = const [
+    ReactionEmoji(emoji: '👍'),
+    ReactionEmoji(emoji: '❤️'),
+    ReactionEmoji(emoji: '🔥'),
+    ReactionEmoji(emoji: '🤣'),
+    ReactionEmoji(emoji: '😭'),
+    ReactionEmoji(emoji: '😍'),
+  ],
+  Future<List<ReactionEmoji>> Function()? loadReactionEmojis,
   MessageActionsInteraction interaction =
       MessageActionsInteraction.dragAndRelease,
 }) {
@@ -119,6 +140,7 @@ void showMessageActions({
       onReact: onReact,
       selectedReaction: selectedReaction,
       quickReactions: quickReactions,
+      loadReactionEmojis: loadReactionEmojis,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         onDispose();
@@ -150,7 +172,8 @@ class _MessageActionsLayer extends StatefulWidget {
   final bool isPinned;
   final void Function(String emoji)? onReact;
   final String? selectedReaction;
-  final List<String> quickReactions;
+  final List<ReactionEmoji> quickReactions;
+  final Future<List<ReactionEmoji>> Function()? loadReactionEmojis;
 
   const _MessageActionsLayer({
     required this.snapshot,
@@ -175,6 +198,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onReact,
     this.selectedReaction,
     this.quickReactions = const [],
+    this.loadReactionEmojis,
   });
 
   @override
@@ -846,13 +870,16 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     double radius,
     double e,
     double cell,
-    List<String> quick,
+    List<ReactionEmoji> quick,
     Size expandedSize,
     bool pillAbove,
   ) {
     final borderRadius = BorderRadius.circular(radius);
     _pickerCache ??= RepaintBoundary(
-      child: _ReactionEmojiPicker(onPick: _onReactionPicked),
+      child: _ReactionEmojiPicker(
+        onPick: _onReactionPicked,
+        loadEmojis: widget.loadReactionEmojis,
+      ),
     );
 
     return DecoratedBox(
@@ -913,13 +940,13 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     );
   }
 
-  Widget _buildQuickRow(ColorScheme cs, double cell, List<String> quick) {
+  Widget _buildQuickRow(ColorScheme cs, double cell, List<ReactionEmoji> quick) {
     return Center(
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(width: 6),
-          for (final emoji in quick) _quickEmoji(cs, emoji, cell),
+          for (final reaction in quick) _quickEmoji(cs, reaction, cell),
           _chevronButton(cs),
           const SizedBox(width: 4),
         ],
@@ -927,8 +954,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     );
   }
 
-  Widget _quickEmoji(ColorScheme cs, String emoji, double cell) {
-    final selected = _isSelectedReaction(emoji);
+  Widget _quickEmoji(ColorScheme cs, ReactionEmoji reaction, double cell) {
+    final selected = _isSelectedReaction(reaction.emoji);
     return SizedBox(
       width: cell,
       height: cell,
@@ -939,9 +966,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: () => _onReactionPicked(emoji),
+          onTap: () => _onReactionPicked(reaction.emoji),
           child: Center(
-            child: Text(emoji, style: TextStyle(fontSize: cell * 0.6)),
+            child: _ReactionGlyph(reaction: reaction, size: cell * 0.72),
           ),
         ),
       ),
@@ -1380,7 +1407,8 @@ class _Action {
 
 class _ReactionEmojiPicker extends StatefulWidget {
   final ValueChanged<String> onPick;
-  const _ReactionEmojiPicker({required this.onPick});
+  final Future<List<ReactionEmoji>> Function()? loadEmojis;
+  const _ReactionEmojiPicker({required this.onPick, this.loadEmojis});
 
   @override
   State<_ReactionEmojiPicker> createState() => _ReactionEmojiPickerState();
@@ -1389,10 +1417,20 @@ class _ReactionEmojiPicker extends StatefulWidget {
 class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
-  List<String> _all = const [];
-  List<String> _results = const [];
+  final ValueNotifier<bool> _scrolling = ValueNotifier(false);
+  List<ReactionEmoji> _all = const [];
+  List<ReactionEmoji> _results = const [];
   String _query = '';
   bool _loaded = false;
+
+  bool _onScrollNotification(ScrollNotification n) {
+    if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
+      if (!_scrolling.value) _scrolling.value = true;
+    } else if (n is ScrollEndNotification) {
+      if (_scrolling.value) _scrolling.value = false;
+    }
+    return false;
+  }
 
   @override
   void initState() {
@@ -1402,9 +1440,15 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
 
   Future<void> _load() async {
     await EmojiKeywordIndex.instance.ensureLoaded();
+    final loader = widget.loadEmojis;
+    final emojis = loader != null
+        ? await loader()
+        : EmojiKeywordIndex.instance.all
+              .map((e) => ReactionEmoji(emoji: e))
+              .toList();
     if (!mounted) return;
     setState(() {
-      _all = EmojiKeywordIndex.instance.all;
+      _all = emojis;
       _results = _all;
       _loaded = true;
     });
@@ -1414,7 +1458,19 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
     final q = value.trim();
     setState(() {
       _query = q;
-      _results = q.isEmpty ? _all : EmojiKeywordIndex.instance.search(q);
+      if (q.isEmpty) {
+        _results = _all;
+      } else {
+        final matches = EmojiKeywordIndex.instance
+            .search(q)
+            .map(EmojiKeywordIndex.normalize)
+            .toSet();
+        _results = _all
+            .where(
+              (e) => matches.contains(EmojiKeywordIndex.normalize(e.emoji)),
+            )
+            .toList();
+      }
     });
   }
 
@@ -1427,6 +1483,7 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
   void dispose() {
     _searchCtrl.dispose();
     _searchFocus.dispose();
+    _scrolling.dispose();
     super.dispose();
   }
 
@@ -1449,25 +1506,31 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
                   )
                 : _results.isEmpty
                 ? const SizedBox.shrink()
-                : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    addAutomaticKeepAlives: false,
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 40,
-                          mainAxisSpacing: 2,
-                          crossAxisSpacing: 2,
-                        ),
-                    itemCount: _results.length,
-                    itemBuilder: (context, i) {
-                      final emoji = _results[i];
-                      return _EmojiCell(
-                        emoji: emoji,
-                        onTap: () => widget.onPick(emoji),
-                      );
-                    },
+                : LottieScrollScope(
+                    isScrolling: _scrolling,
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _onScrollNotification,
+                      child: GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        addAutomaticKeepAlives: false,
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 48,
+                              mainAxisSpacing: 2,
+                              crossAxisSpacing: 2,
+                            ),
+                        itemCount: _results.length,
+                        itemBuilder: (context, i) {
+                          final reaction = _results[i];
+                          return _EmojiCell(
+                            reaction: reaction,
+                            onTap: () => widget.onPick(reaction.emoji),
+                          );
+                        },
+                      ),
+                    ),
                   ),
           ),
         ],
@@ -1531,16 +1594,41 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
 }
 
 class _EmojiCell extends StatelessWidget {
-  final String emoji;
+  final ReactionEmoji reaction;
   final VoidCallback onTap;
-  const _EmojiCell({required this.emoji, required this.onTap});
+  const _EmojiCell({required this.reaction, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
+      child: Center(child: _ReactionGlyph(reaction: reaction, size: 34)),
+    );
+  }
+}
+
+class _ReactionGlyph extends StatelessWidget {
+  final ReactionEmoji reaction;
+  final double size;
+  const _ReactionGlyph({required this.reaction, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final anim = reaction.animationUrl;
+    final still = reaction.staticUrl;
+    final hasAsset =
+        (anim != null && anim.isNotEmpty) || (still != null && still.isNotEmpty);
+    if (!hasAsset) {
+      return Center(
+        child: Text(reaction.emoji, style: TextStyle(fontSize: size * 0.9)),
+      );
+    }
+    return LottieImage(
+      lottieUrl: anim,
+      url: still,
+      size: size,
+      memCacheWidth: (size * 3).round(),
     );
   }
 }

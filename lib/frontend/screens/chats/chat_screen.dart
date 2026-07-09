@@ -26,6 +26,8 @@ import '../../../main.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
+import '../../../backend/modules/animoji.dart';
+import '../../../models/animoji.dart';
 import '../../../backend/modules/complaints.dart';
 import '../../../core/calls/call_controller.dart';
 import '../calls/call_screen.dart';
@@ -39,6 +41,7 @@ import '../../../core/storage/draft_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/utils/emoji_keyword_index.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_colors.dart';
@@ -265,8 +268,52 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _reactToMessage(CachedMessage message, String emoji) {
+    if (message.isControl || message.id.startsWith('temp_')) return;
     final notifier = _reactionNotifierFor(message);
-    notifier.value = _applyLocalReaction(notifier.value, emoji);
+    final previous = notifier.value;
+    final applied = _applyLocalReaction(previous, emoji);
+    notifier.value = applied;
+    final isToggleOff = applied == null || applied['yourReaction'] == null;
+    unawaited(_sendReaction(message, emoji, isToggleOff, previous));
+  }
+
+  Future<void> _sendReaction(
+    CachedMessage message,
+    String emoji,
+    bool isToggleOff,
+    Map<String, dynamic>? previous,
+  ) async {
+    ({bool ok, Map<String, dynamic>? info}) result;
+    try {
+      result = isToggleOff
+          ? await messagesModule.cancelReaction(widget.chatId, message.id)
+          : await messagesModule.setReaction(widget.chatId, message.id, emoji);
+    } catch (_) {
+      result = (ok: false, info: null);
+    }
+    if (!mounted) return;
+    final notifier = _reactionNotifiers[message.id];
+    if (notifier == null) return;
+    if (!result.ok) {
+      notifier.value = previous;
+      Haptics.error();
+      showCustomNotification(context, 'Не удалось обновить реакцию');
+      return;
+    }
+    notifier.value = result.info;
+    _applyReactionInfoToMessage(message.id, result.info);
+  }
+
+  void _applyReactionInfoToMessage(String messageId, Map<String, dynamic>? info) {
+    final idx = _messages.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+    final payload = <String, dynamic>{...?_messages[idx].payload};
+    if (info == null) {
+      payload.remove('reactionInfo');
+    } else {
+      payload['reactionInfo'] = info;
+    }
+    _messages[idx] = _messages[idx].copyWith(payload: payload);
   }
 
   Map<String, dynamic>? _applyLocalReaction(
@@ -299,8 +346,9 @@ class _ChatScreenState extends State<ChatScreen>
 
     final prev = current?['yourReaction']?.toString();
     String? your;
-    if (prev == emoji) {
-      decrement(emoji);
+    if (prev != null &&
+        EmojiKeywordIndex.normalize(prev) == EmojiKeywordIndex.normalize(emoji)) {
+      decrement(prev);
       your = null;
     } else {
       if (prev != null && prev.isNotEmpty) decrement(prev);
@@ -417,6 +465,7 @@ class _ChatScreenState extends State<ChatScreen>
     _chatController.chatId = widget.chatId;
     _chatController.isMounted = () => mounted;
     unawaited(PushService.clearChatNotification(widget.chatId));
+    unawaited(animojiModule.ensureLoaded().catchError((_) {}));
     WidgetsBinding.instance.addObserver(this);
     chats.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
@@ -1186,25 +1235,12 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _syncReactionNotifiersFromMessages() {
     for (final m in _messages) {
+      if (_reactionNotifiers.containsKey(m.id)) continue;
       final info = m.payload?['reactionInfo'];
-      final value = info is Map ? Map<String, dynamic>.from(info) : null;
-      final existing = _reactionNotifiers[m.id];
-      if (existing == null) {
-        _reactionNotifiers[m.id] = ValueNotifier(value);
-      } else if (!_reactionsEqual(existing.value, value)) {
-        existing.value = value;
-      }
+      _reactionNotifiers[m.id] = ValueNotifier(
+        info is Map ? Map<String, dynamic>.from(info) : null,
+      );
     }
-  }
-
-  bool _reactionsEqual(Map<String, dynamic>? a, Map<String, dynamic>? b) {
-    if (identical(a, b)) return true;
-    if (a == null || b == null) return false;
-    if (a.length != b.length) return false;
-    for (final k in a.keys) {
-      if (a[k].toString() != b[k].toString()) return false;
-    }
-    return true;
   }
 
   @override
@@ -4216,6 +4252,9 @@ class _ChatScreenState extends State<ChatScreen>
                         onReplyTap: _jumpToMessage,
                         onAvatarTap: _openSenderProfile,
                         onStickerTap: _openStickerPack,
+                        onReactionTap: message.isControl
+                            ? null
+                            : (emoji) => _reactToMessage(message, emoji),
                         peerName: widget.name,
                         peerAvatarUrl: widget.imageUrl,
                       );
@@ -5639,9 +5678,40 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       isPinned: _isPinnedNow(),
       onReact: widget.onReact,
       selectedReaction: widget.reactions?.value?['yourReaction']?.toString(),
+      quickReactions: _quickReactionEmojis(),
+      loadReactionEmojis: () async {
+        await animojiModule.ensureLoaded();
+        return _animojiReactionEmojis();
+      },
       onDispose: controller.dispose,
     );
   }
+
+  List<ReactionEmoji> _quickReactionEmojis() {
+    final quick = animojiModule.quickAnimojis;
+    if (quick.isEmpty) {
+      return AnimojiModule.fallbackReactions
+          .map((e) => ReactionEmoji(emoji: e))
+          .toList();
+    }
+    return quick.map(_toReactionEmoji).toList();
+  }
+
+  List<ReactionEmoji> _animojiReactionEmojis() {
+    final list = animojiModule.animojis;
+    if (list.isEmpty) {
+      return AnimojiModule.fallbackReactions
+          .map((e) => ReactionEmoji(emoji: e))
+          .toList();
+    }
+    return list.map(_toReactionEmoji).toList();
+  }
+
+  ReactionEmoji _toReactionEmoji(Animoji a) => ReactionEmoji(
+    emoji: a.emoji,
+    animationUrl: a.lottieUrl,
+    staticUrl: a.iconUrl,
+  );
 
   void _onSecondaryTapDown(TapDownDetails details) {
     final ctx = _boundaryKey.currentContext;

@@ -128,6 +128,7 @@ class MessageBubble extends StatelessWidget {
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
   final void Function(StickerAttachment sticker)? onStickerTap;
+  final void Function(String emoji)? onReactionTap;
   final String? peerName;
   final String? peerAvatarUrl;
 
@@ -146,6 +147,7 @@ class MessageBubble extends StatelessWidget {
     this.onReplyTap,
     this.onAvatarTap,
     this.onStickerTap,
+    this.onReactionTap,
     this.peerName,
     this.peerAvatarUrl,
   });
@@ -855,35 +857,42 @@ class MessageBubble extends StatelessWidget {
               );
       }
 
-      chips.add(
-        Container(
-          padding: EdgeInsets.fromLTRB(7, 2, avatar != null ? 3 : 7, 2),
-          decoration: BoxDecoration(
-            color: isYours
-                ? cs.primary.withValues(alpha: 0.22)
-                : _reactionChipBg,
-            borderRadius: _reactionChipRadius,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(c.reaction, style: const TextStyle(fontSize: 13)),
-              if (c.count > 1) ...[
-                const SizedBox(width: 3),
-                Text(
-                  c.count.toString(),
-                  style: TextStyle(
-                    color: isYours ? cs.primary : cs.onSurfaceVariant,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
+      Widget chip = Container(
+        padding: EdgeInsets.fromLTRB(7, 2, avatar != null ? 3 : 7, 2),
+        decoration: BoxDecoration(
+          color: isYours ? cs.primary.withValues(alpha: 0.22) : _reactionChipBg,
+          borderRadius: _reactionChipRadius,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(c.reaction, style: const TextStyle(fontSize: 13)),
+            if (c.count > 1) ...[
+              const SizedBox(width: 3),
+              Text(
+                c.count.toString(),
+                style: TextStyle(
+                  color: isYours ? cs.primary : cs.onSurfaceVariant,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-              if (avatar != null) ...[const SizedBox(width: 5), avatar],
+              ),
             ],
-          ),
+            if (avatar != null) ...[const SizedBox(width: 5), avatar],
+          ],
         ),
       );
+
+      final onTap = onReactionTap;
+      if (onTap != null) {
+        chip = GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onTap(c.reaction),
+          child: chip,
+        );
+      }
+
+      chips.add(chip);
     }
     return chips;
   }

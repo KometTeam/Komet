@@ -8,8 +8,7 @@ import '../../core/utils/emoji_keyword_index.dart';
 import '../../main.dart' show stickersModule;
 import '../../models/sticker.dart';
 import 'small_spinner.dart';
-import 'sticker_image.dart';
-import 'sticker_lottie.dart';
+import 'lottie_image.dart';
 import 'sticker_peek.dart';
 
 class _DragScrollBehavior extends MaterialScrollBehavior {
@@ -327,7 +326,7 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   Widget _buildContent(ColorScheme cs, int columns, double cell) {
-    return StickerScrollScope(
+    return LottieScrollScope(
       isScrolling: _scrolling,
       child: StickerPeekScope(
         child: NotificationListener<ScrollNotification>(
@@ -456,7 +455,7 @@ class _StickerPanelState extends State<StickerPanel>
         onTap: () => widget.onStickerTap(item),
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: StickerImage(
+          child: LottieImage(
             url: item.url,
             lottieUrl: item.lottieUrl,
             memCacheWidth: 220,
@@ -572,7 +571,7 @@ class _StickerSectionState extends State<_StickerSection> {
         onTap: () => widget.onTap(item),
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: StickerImage(
+          child: LottieImage(
             url: item.url,
             lottieUrl: item.lottieUrl,
             memCacheWidth: 220,

@@ -6,14 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
 
-class StickerLoadGovernor {
-  StickerLoadGovernor._() {
+class LottieLoadGovernor {
+  LottieLoadGovernor._() {
     _budgetMs = _resolveBudgetMs();
     _avgMs = _budgetMs;
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
   }
 
-  static final StickerLoadGovernor instance = StickerLoadGovernor._();
+  static final LottieLoadGovernor instance = LottieLoadGovernor._();
 
   final ValueNotifier<bool> throttled = ValueNotifier(false);
   double _budgetMs = 1000 / 60;
@@ -43,7 +43,7 @@ class StickerLoadGovernor {
   }
 }
 
-class _StickerFrames {
+class _LottieFrames {
   final LottieDrawable drawable;
   final int frameCount;
   final Duration duration;
@@ -54,7 +54,7 @@ class _StickerFrames {
   int lastUsed = 0;
   int active = 0;
 
-  _StickerFrames({
+  _LottieFrames({
     required this.drawable,
     required this.frameCount,
     required this.duration,
@@ -69,7 +69,7 @@ class _StickerFrames {
     }
 
     final last = _lastImage;
-    if (last != null && StickerLoadGovernor.instance.throttled.value) {
+    if (last != null && LottieLoadGovernor.instance.throttled.value) {
       return last;
     }
 
@@ -90,7 +90,7 @@ class _StickerFrames {
     _lastImage = image;
     final added = pxSize * pxSize * 4;
     bytes += added;
-    _StickerFrameCache.instance._onBytesAdded(added);
+    _LottieFrameCache.instance._onBytesAdded(added);
     return image;
   }
 
@@ -104,21 +104,21 @@ class _StickerFrames {
   }
 }
 
-class _StickerFrameCache {
-  _StickerFrameCache._();
-  static final _StickerFrameCache instance = _StickerFrameCache._();
+class _LottieFrameCache {
+  _LottieFrameCache._();
+  static final _LottieFrameCache instance = _LottieFrameCache._();
 
   static const int _maxBytes = 384 * 1024 * 1024;
   static const double _fps = 30;
 
-  final Map<String, _StickerFrames> _entries = {};
-  final Map<String, Future<_StickerFrames?>> _loading = {};
+  final Map<String, _LottieFrames> _entries = {};
+  final Map<String, Future<_LottieFrames?>> _loading = {};
   int _totalBytes = 0;
   int _clock = 0;
 
   int _tick() => ++_clock;
 
-  Future<_StickerFrames?> acquire(String url, int pxSize) async {
+  Future<_LottieFrames?> acquire(String url, int pxSize) async {
     final key = '$url@$pxSize';
     final cached = _entries[key];
     if (cached != null) {
@@ -146,13 +146,13 @@ class _StickerFrameCache {
     return entry;
   }
 
-  void release(_StickerFrames frames) {
+  void release(_LottieFrames frames) {
     if (frames.active > 0) frames.active--;
     frames.lastUsed = _tick();
     _evictIfNeeded();
   }
 
-  Future<_StickerFrames?> _load(String url, int pxSize, String key) async {
+  Future<_LottieFrames?> _load(String url, int pxSize, String key) async {
     try {
       final composition = await NetworkLottie(
         url,
@@ -161,7 +161,7 @@ class _StickerFrameCache {
       final durationMs = composition.duration.inMilliseconds;
       var frameCount = (durationMs / 1000 * _fps).round();
       frameCount = frameCount.clamp(1, 120);
-      final entry = _StickerFrames(
+      final entry = _LottieFrames(
         drawable: LottieDrawable(composition),
         frameCount: frameCount,
         duration: durationMs <= 0
@@ -195,31 +195,31 @@ class _StickerFrameCache {
   }
 }
 
-class StickerScrollScope extends InheritedWidget {
+class LottieScrollScope extends InheritedWidget {
   final ValueListenable<bool> isScrolling;
 
-  const StickerScrollScope({
+  const LottieScrollScope({
     super.key,
     required this.isScrolling,
     required super.child,
   });
 
   static ValueListenable<bool>? of(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<StickerScrollScope>()
+      .dependOnInheritedWidgetOfExactType<LottieScrollScope>()
       ?.isScrolling;
 
   @override
-  bool updateShouldNotify(StickerScrollScope oldWidget) =>
+  bool updateShouldNotify(LottieScrollScope oldWidget) =>
       !identical(oldWidget.isScrolling, isScrolling);
 }
 
-class StickerLottie extends StatefulWidget {
+class LottiePlayer extends StatefulWidget {
   final String lottieUrl;
   final String? fallbackUrl;
   final double? size;
   final int? memCacheWidth;
 
-  const StickerLottie({
+  const LottiePlayer({
     super.key,
     required this.lottieUrl,
     this.fallbackUrl,
@@ -228,14 +228,14 @@ class StickerLottie extends StatefulWidget {
   });
 
   @override
-  State<StickerLottie> createState() => _StickerLottieState();
+  State<LottiePlayer> createState() => _LottiePlayerState();
 }
 
-class _StickerLottieState extends State<StickerLottie>
+class _LottiePlayerState extends State<LottiePlayer>
     with SingleTickerProviderStateMixin {
   final ValueNotifier<int> _frameIndex = ValueNotifier(0);
   late final Ticker _ticker;
-  _StickerFrames? _frames;
+  _LottieFrames? _frames;
   ValueListenable<bool>? _scrollState;
   int? _px;
   bool _started = false;
@@ -243,19 +243,19 @@ class _StickerLottieState extends State<StickerLottie>
 
   bool get _isScrolling => _scrollState?.value ?? false;
   bool get _canLoad =>
-      !_isScrolling && !StickerLoadGovernor.instance.throttled.value;
+      !_isScrolling && !LottieLoadGovernor.instance.throttled.value;
 
   @override
   void initState() {
     super.initState();
     _ticker = createTicker(_onTick);
-    StickerLoadGovernor.instance.throttled.addListener(_onGateChanged);
+    LottieLoadGovernor.instance.throttled.addListener(_onGateChanged);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final state = StickerScrollScope.of(context);
+    final state = LottieScrollScope.of(context);
     if (!identical(state, _scrollState)) {
       _scrollState?.removeListener(_onGateChanged);
       _scrollState = state;
@@ -264,12 +264,12 @@ class _StickerLottieState extends State<StickerLottie>
   }
 
   @override
-  void didUpdateWidget(StickerLottie oldWidget) {
+  void didUpdateWidget(LottiePlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lottieUrl != widget.lottieUrl) {
       _ticker.stop();
       final previous = _frames;
-      if (previous != null) _StickerFrameCache.instance.release(previous);
+      if (previous != null) _LottieFrameCache.instance.release(previous);
       _frames = null;
       _started = false;
       _showedFrames = false;
@@ -278,11 +278,11 @@ class _StickerLottieState extends State<StickerLottie>
 
   @override
   void dispose() {
-    StickerLoadGovernor.instance.throttled.removeListener(_onGateChanged);
+    LottieLoadGovernor.instance.throttled.removeListener(_onGateChanged);
     _scrollState?.removeListener(_onGateChanged);
     _ticker.dispose();
     final frames = _frames;
-    if (frames != null) _StickerFrameCache.instance.release(frames);
+    if (frames != null) _LottieFrameCache.instance.release(frames);
     _frameIndex.dispose();
     super.dispose();
   }
@@ -327,10 +327,10 @@ class _StickerLottieState extends State<StickerLottie>
     final px = _px;
     if (_started || px == null) return;
     _started = true;
-    _StickerFrameCache.instance.acquire(widget.lottieUrl, px).then((frames) {
+    _LottieFrameCache.instance.acquire(widget.lottieUrl, px).then((frames) {
       if (frames == null) return;
       if (!mounted) {
-        _StickerFrameCache.instance.release(frames);
+        _LottieFrameCache.instance.release(frames);
         return;
       }
       setState(() => _frames = frames);
@@ -376,6 +376,50 @@ class _StickerLottieState extends State<StickerLottie>
       height: box,
       fit: BoxFit.contain,
       memCacheWidth: widget.memCacheWidth,
+      fadeInDuration: const Duration(milliseconds: 120),
+      placeholder: (_, _) => blank,
+      errorWidget: (_, _, _) => blank,
+    );
+  }
+}
+
+class LottieImage extends StatelessWidget {
+  final String? url;
+  final String? lottieUrl;
+  final double? size;
+  final int? memCacheWidth;
+
+  const LottieImage({
+    super.key,
+    this.url,
+    this.lottieUrl,
+    this.size,
+    this.memCacheWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (lottieUrl != null && lottieUrl!.isNotEmpty) {
+      return LottiePlayer(
+        lottieUrl: lottieUrl!,
+        fallbackUrl: url,
+        size: size,
+        memCacheWidth: memCacheWidth,
+      );
+    }
+    return _static();
+  }
+
+  Widget _static() {
+    final src = url ?? '';
+    final blank = SizedBox(width: size, height: size);
+    if (src.isEmpty) return blank;
+    return CachedNetworkImage(
+      imageUrl: src,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      memCacheWidth: memCacheWidth,
       fadeInDuration: const Duration(milliseconds: 120),
       placeholder: (_, _) => blank,
       errorWidget: (_, _, _) => blank,
