@@ -397,6 +397,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _peerIsBot = false;
   ChatWallpaper? _wallpaper;
   final ValueNotifier<double> _composerHeight = ValueNotifier(96);
+  final ValueNotifier<double> _pinnedBannerHeight = ValueNotifier(0);
 
   final ValueNotifier<DateTime?> _floatingDate = ValueNotifier(null);
   Timer? _floatingDateTimer;
@@ -1250,6 +1251,7 @@ class _ChatScreenState extends State<ChatScreen>
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
     _composerHeight.dispose();
+    _pinnedBannerHeight.dispose();
     _floatingDateTimer?.cancel();
     _floatingDateCurved.dispose();
     _floatingDateAnimController.dispose();
@@ -3783,7 +3785,7 @@ class _ChatScreenState extends State<ChatScreen>
     final cs = Theme.of(context).colorScheme;
     return Padding(
       key: key,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: floating ? 2 : 8),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -3957,15 +3959,27 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  double _pinnedBannerTop() {
+    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    return MediaQuery.paddingOf(context).top +
+        (glossy ? _glossyHeaderHeight : kToolbarHeight);
+  }
+
+  void _resetPinnedBannerHeight() {
+    if (_pinnedBannerHeight.value == 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && chat?.hasPinnedMessage != true) {
+        _pinnedBannerHeight.value = 0;
+      }
+    });
+  }
+
   Widget _buildUnderlapBody() {
     final cs = Theme.of(context).colorScheme;
     final vignette = AppChatChrome.current.value == ChatChromeStyle.none;
-    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
-    final bannerTop =
-        MediaQuery.paddingOf(context).top +
-        (glossy ? _glossyHeaderHeight : kToolbarHeight) +
-        8;
+    final bannerTop = _pinnedBannerTop();
     final banner = _buildPinnedBanner(floating: true);
+    if (banner == null) _resetPinnedBannerHeight();
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -3998,7 +4012,15 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ],
         if (banner != null)
-          Positioned(top: bannerTop, left: 8, right: 8, child: banner),
+          Positioned(
+            top: bannerTop,
+            left: 8,
+            right: 8,
+            child: _MeasureSize(
+              onHeight: (value) => _pinnedBannerHeight.value = value,
+              child: banner,
+            ),
+          ),
         ValueListenableBuilder<double>(
           valueListenable: _composerHeight,
           builder: (context, height, _) => Positioned(
@@ -4089,14 +4111,17 @@ class _ChatScreenState extends State<ChatScreen>
     return EdgeInsets.only(top: topInset + 8, bottom: 8);
   }
 
-  double _floatingDateTop(BuildContext context) {
+  double _floatingDateTop(double pinnedHeight) {
     final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
     if (AppChatChrome.current.value == ChatChromeStyle.color) {
       return glossy ? 2 : 4;
     }
+    if (chat?.hasPinnedMessage == true && pinnedHeight > 0) {
+      return _pinnedBannerTop() + pinnedHeight + 2;
+    }
     return MediaQuery.paddingOf(context).top +
-        (glossy ? _glossyHeaderHeight - 16 : kToolbarHeight) +
-        4;
+        (glossy ? _glossyHeaderHeight : kToolbarHeight) +
+        2;
   }
 
   Widget _buildLoadMoreIndicator() {
@@ -4318,10 +4343,14 @@ class _ChatScreenState extends State<ChatScreen>
                 },
               ),
         ),
-        Positioned(
-          top: _floatingDateTop(context),
-          left: 0,
-          right: 0,
+        ValueListenableBuilder<double>(
+          valueListenable: _pinnedBannerHeight,
+          builder: (context, pinnedHeight, child) => Positioned(
+            top: _floatingDateTop(pinnedHeight),
+            left: 0,
+            right: 0,
+            child: child!,
+          ),
           child: IgnorePointer(
             child: ValueListenableBuilder<DateTime?>(
               valueListenable: _floatingDate,
