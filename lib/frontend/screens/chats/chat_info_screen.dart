@@ -318,7 +318,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       case 'DIALOG':
         if (_isBot) return l10n.contactProfileBot;
         if (_isOnline) return l10n.contactProfileOnline;
-        if (_presenceStatus == 3) return l10n.contactProfileRecentlyActive;
+        if (_presenceStatus == 2 || _presenceStatus == 3) return l10n.contactProfileRecentlyActive;
         if (_seenTime != null && _seenTime! > 0) {
           return formatLastSeen(_seenTime!);
         }

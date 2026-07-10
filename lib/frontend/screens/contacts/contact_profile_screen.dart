@@ -90,7 +90,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
     final l10n = AppLocalizations.of(context)!;
     if (_isBot) return l10n.contactProfileBot;
     if (_presenceStatus == 1) return l10n.contactProfileOnline;
-    if (_presenceStatus == 3) return l10n.contactProfileRecentlyActive;
+    if (_presenceStatus == 2 || _presenceStatus == 3) return l10n.contactProfileRecentlyActive;
     if (_seenTime != null && _seenTime! > 0) return formatLastSeen(_seenTime!);
     return '';
   }
