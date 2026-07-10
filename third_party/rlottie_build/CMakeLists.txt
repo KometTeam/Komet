@@ -73,4 +73,9 @@ target_link_libraries(rlottie
                         ${OSSPEC_LIBS}
                      )
 
+if (CMAKE_ANDROID_ARCH_ABI STREQUAL "armeabi-v7a"
+    OR CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|armv7)")
+    target_compile_options(rlottie PRIVATE -U__ARM_NEON__)
+endif()
+
 add_subdirectory(${RLOTTIE}/src "${CMAKE_CURRENT_BINARY_DIR}/rlottie_src")
