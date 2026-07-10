@@ -779,9 +779,10 @@ class MessageBubble extends StatelessWidget {
   }
 
   Map? _resolveReactionInfo() {
-    if (reactionsListenable != null) {
-      final v = reactionsListenable!.value;
-      if (v != null) return v;
+    final listenable = reactionsListenable;
+    if (listenable != null) {
+      final v = listenable.value;
+      return v is Map ? v : null;
     }
     final info = message.payload?['reactionInfo'];
     if (info is Map) return info;
