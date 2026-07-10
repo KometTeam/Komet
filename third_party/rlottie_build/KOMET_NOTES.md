@@ -51,6 +51,16 @@ loops. Web has no native path and falls back to the pure-Dart `lottie` player.
   `DynamicLibrary.open('rlottie.framework/rlottie')`.
 - **Windows:** rlottie builds with `/EHs-c- /GR-` and links `Shlwapi.lib` (set in
   `CMakeLists.txt`).
-- **32-bit ARM:** the pixman NEON `.S` asm is not wired; armv7 uses the C path.
+- **32-bit ARM (armeabi-v7a):** the compiler predefines `__ARM_NEON__`, which pulls
+  in `vdrawhelper_neon.cpp`'s hand-written NEON blitter. That blitter calls
+  `pixman_composite_*_asm_neon`, defined only in `pixman-arm-neon-asm.S`. Upstream
+  gates that `.S` behind the CMake var `ARCH == arm` (set by its meson/top-level
+  build, which this glue bypasses), so the symbols are undefined and the armv7 link
+  fails. Wiring the `.S` back in is a dead end on NDK r28: it's GNU-assembler syntax
+  that LLVM's integrated assembler rejects, and the NDK no longer ships GNU `as`
+  (`-fno-integrated-as` has no fallback). So `CMakeLists.txt` here passes
+  `-U__ARM_NEON__` for 32-bit ARM, which drops the hand-asm path and lets the C
+  fallback (`memfill32` in `vdrawhelper.cpp`, guarded by the same macro) take over.
+  The C loops still auto-vectorize to NEON via `-mfpu=neon`.
 - **Bumping rlottie:** `cd third_party/rlottie && git checkout <newsha>`, rebuild,
   then re-check `apple/config.h` and the podspec source globs still match upstream.
