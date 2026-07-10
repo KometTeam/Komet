@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -465,7 +466,7 @@ class MessageBubble extends StatelessWidget {
         chatType == "CHAT" &&
         prevMessage?.senderId != message.senderId;
 
-    final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.75;
+    final maxBubbleWidth = math.min(MediaQuery.sizeOf(context).width * 0.75, 560.0);
     final keyboard = _inlineKeyboard;
     final isVideoNote = _isVideoNote;
     final noBubbleBackground = isVideoNote || _isSticker;
