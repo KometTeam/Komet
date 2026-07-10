@@ -84,6 +84,9 @@ if(TARGET flutter_webrtc_plugin)
   target_compile_options(flutter_webrtc_plugin PRIVATE -include cstdint)
 endif()
 
+set(RLOTTIE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/rlottie_build")
+add_subdirectory("${RLOTTIE_DIR}" "${CMAKE_BINARY_DIR}/rlottie")
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
@@ -115,6 +118,10 @@ foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endforeach(bundled_library)
+
+install(FILES "$<TARGET_FILE:rlottie>"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
 
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")

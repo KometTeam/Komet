@@ -30,6 +30,7 @@ import '../../../backend/modules/animoji.dart';
 import '../../../models/animoji.dart';
 import '../../../backend/modules/complaints.dart';
 import '../../../core/calls/call_controller.dart';
+import '../../../core/media/rlottie/rlottie.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
@@ -460,13 +461,29 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool get _selectionMode => _selectedIds.value.isNotEmpty;
 
+  void _prewarmQuickReactions() {
+    if (!mounted || !RlottieEngine.instance.available) return;
+    final dpr =
+        (MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0).clamp(1.0, 2.0);
+    final px = ((44.0 * dpr).clamp(96.0, 512.0) / 32).ceil() * 32;
+    for (final a in animojiModule.quickAnimojis) {
+      final url = a.lottieUrl;
+      if (url != null && url.isNotEmpty) {
+        unawaited(RlottieEngine.instance.prewarm(url, px));
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _chatController.chatId = widget.chatId;
     _chatController.isMounted = () => mounted;
     unawaited(PushService.clearChatNotification(widget.chatId));
-    unawaited(animojiModule.ensureLoaded().catchError((_) {}));
+    unawaited(animojiModule
+        .ensureLoaded()
+        .then((_) => _prewarmQuickReactions())
+        .catchError((_) {}));
     WidgetsBinding.instance.addObserver(this);
     chats.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);

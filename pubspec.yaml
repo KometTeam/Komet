@@ -40,6 +40,7 @@ dependencies:
   libcompress: ^1.0.0
   msgpack_dart: ^1.0.1
   crypto: ^3.0.7
+  ffi: ^2.1.0
   logger: ^2.6.2
   device_info_plus: 12.3.0
   flutter_timezone: ^5.0.1
@@ -59,6 +60,7 @@ dependencies:
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
   cached_network_image: ^3.4.1
+  flutter_cache_manager: ^3.4.1
   lottie: ^3.3.1
   path_provider: ^2.1.4
   share_plus: ^10.1.4
@@ -93,6 +95,8 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
+  path_provider_platform_interface: ^2.1.0
+  plugin_platform_interface: ^2.1.0
 
 flutter_launcher_icons:
   image_path: "assets/komet_icon.png"

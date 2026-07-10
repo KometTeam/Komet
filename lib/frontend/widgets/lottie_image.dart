@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
 
+import '../../core/media/rlottie/rlottie.dart';
+
 class LottieLoadGovernor {
   LottieLoadGovernor._() {
     _budgetMs = _resolveBudgetMs();
@@ -39,158 +41,6 @@ class LottieLoadGovernor {
       throttled.value = true;
     } else if (throttled.value && _avgMs < exitMs) {
       throttled.value = false;
-    }
-  }
-}
-
-class _LottieFrames {
-  final LottieDrawable drawable;
-  final int frameCount;
-  final Duration duration;
-  final int pxSize;
-  final List<ui.Image?> _images;
-  ui.Image? _lastImage;
-  int bytes = 0;
-  int lastUsed = 0;
-  int active = 0;
-
-  _LottieFrames({
-    required this.drawable,
-    required this.frameCount,
-    required this.duration,
-    required this.pxSize,
-  }) : _images = List<ui.Image?>.filled(frameCount, null);
-
-  ui.Image frameAt(int index) {
-    final existing = _images[index];
-    if (existing != null) {
-      _lastImage = existing;
-      return existing;
-    }
-
-    final last = _lastImage;
-    if (last != null && LottieLoadGovernor.instance.throttled.value) {
-      return last;
-    }
-
-    final progress = frameCount <= 1 ? 0.0 : index / (frameCount - 1);
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    drawable.setProgress(progress);
-    drawable.draw(
-      canvas,
-      Rect.fromLTWH(0, 0, pxSize.toDouble(), pxSize.toDouble()),
-      fit: BoxFit.contain,
-    );
-    final picture = recorder.endRecording();
-    final image = picture.toImageSync(pxSize, pxSize);
-    picture.dispose();
-
-    _images[index] = image;
-    _lastImage = image;
-    final added = pxSize * pxSize * 4;
-    bytes += added;
-    _LottieFrameCache.instance._onBytesAdded(added);
-    return image;
-  }
-
-  void dispose() {
-    for (final image in _images) {
-      image?.dispose();
-    }
-    _images.fillRange(0, _images.length, null);
-    _lastImage = null;
-    bytes = 0;
-  }
-}
-
-class _LottieFrameCache {
-  _LottieFrameCache._();
-  static final _LottieFrameCache instance = _LottieFrameCache._();
-
-  static const int _maxBytes = 384 * 1024 * 1024;
-  static const double _fps = 30;
-
-  final Map<String, _LottieFrames> _entries = {};
-  final Map<String, Future<_LottieFrames?>> _loading = {};
-  int _totalBytes = 0;
-  int _clock = 0;
-
-  int _tick() => ++_clock;
-
-  Future<_LottieFrames?> acquire(String url, int pxSize) async {
-    final key = '$url@$pxSize';
-    final cached = _entries[key];
-    if (cached != null) {
-      cached.lastUsed = _tick();
-      cached.active++;
-      return cached;
-    }
-    final pending = _loading[key];
-    if (pending != null) {
-      final entry = await pending;
-      if (entry != null) {
-        entry.lastUsed = _tick();
-        entry.active++;
-      }
-      return entry;
-    }
-    final future = _load(url, pxSize, key);
-    _loading[key] = future;
-    final entry = await future;
-    _loading.remove(key);
-    if (entry != null) {
-      entry.lastUsed = _tick();
-      entry.active++;
-    }
-    return entry;
-  }
-
-  void release(_LottieFrames frames) {
-    if (frames.active > 0) frames.active--;
-    frames.lastUsed = _tick();
-    _evictIfNeeded();
-  }
-
-  Future<_LottieFrames?> _load(String url, int pxSize, String key) async {
-    try {
-      final composition = await NetworkLottie(
-        url,
-        backgroundLoading: true,
-      ).load();
-      final durationMs = composition.duration.inMilliseconds;
-      var frameCount = (durationMs / 1000 * _fps).round();
-      frameCount = frameCount.clamp(1, 120);
-      final entry = _LottieFrames(
-        drawable: LottieDrawable(composition),
-        frameCount: frameCount,
-        duration: durationMs <= 0
-            ? const Duration(seconds: 1)
-            : composition.duration,
-        pxSize: pxSize,
-      );
-      _entries[key] = entry;
-      return entry;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _onBytesAdded(int bytes) {
-    _totalBytes += bytes;
-    _evictIfNeeded();
-  }
-
-  void _evictIfNeeded() {
-    if (_totalBytes <= _maxBytes) return;
-    final candidates =
-        _entries.entries.where((e) => e.value.active <= 0).toList()
-          ..sort((a, b) => a.value.lastUsed.compareTo(b.value.lastUsed));
-    for (final candidate in candidates) {
-      if (_totalBytes <= _maxBytes) break;
-      _totalBytes -= candidate.value.bytes;
-      candidate.value.dispose();
-      _entries.remove(candidate.key);
     }
   }
 }
@@ -233,9 +83,12 @@ class LottiePlayer extends StatefulWidget {
 
 class _LottiePlayerState extends State<LottiePlayer>
     with SingleTickerProviderStateMixin {
+  static const int _leadFrames = 6;
+
   final ValueNotifier<int> _frameIndex = ValueNotifier(0);
   late final Ticker _ticker;
-  _LottieFrames? _frames;
+  late final bool _native;
+  RlottieClip? _clip;
   ValueListenable<bool>? _scrollState;
   int? _px;
   bool _started = false;
@@ -248,6 +101,7 @@ class _LottiePlayerState extends State<LottiePlayer>
   @override
   void initState() {
     super.initState();
+    _native = RlottieEngine.instance.available;
     _ticker = createTicker(_onTick);
     LottieLoadGovernor.instance.throttled.addListener(_onGateChanged);
   }
@@ -268,9 +122,7 @@ class _LottiePlayerState extends State<LottiePlayer>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lottieUrl != widget.lottieUrl) {
       _ticker.stop();
-      final previous = _frames;
-      if (previous != null) _LottieFrameCache.instance.release(previous);
-      _frames = null;
+      _releaseClip();
       _started = false;
       _showedFrames = false;
     }
@@ -281,21 +133,29 @@ class _LottiePlayerState extends State<LottiePlayer>
     LottieLoadGovernor.instance.throttled.removeListener(_onGateChanged);
     _scrollState?.removeListener(_onGateChanged);
     _ticker.dispose();
-    final frames = _frames;
-    if (frames != null) _LottieFrameCache.instance.release(frames);
+    _releaseClip();
     _frameIndex.dispose();
     super.dispose();
   }
 
+  void _releaseClip() {
+    final clip = _clip;
+    if (clip != null) {
+      clip.ready.removeListener(_onReady);
+      RlottieEngine.instance.release(clip);
+      _clip = null;
+    }
+  }
+
   void _onTick(Duration elapsed) {
-    final frames = _frames;
-    if (frames == null || frames.frameCount <= 1) return;
-    final periodMs = frames.duration.inMilliseconds;
+    final clip = _clip;
+    if (clip == null || clip.frameCount <= 1) return;
+    final periodMs = clip.durationMs;
     if (periodMs <= 0) return;
     final t = (elapsed.inMilliseconds % periodMs) / periodMs;
-    final index = (t * (frames.frameCount - 1)).round().clamp(
+    final index = (t * (clip.frameCount - 1)).round().clamp(
       0,
-      frames.frameCount - 1,
+      clip.frameCount - 1,
     );
     if (index != _frameIndex.value) _frameIndex.value = index;
   }
@@ -306,16 +166,29 @@ class _LottiePlayerState extends State<LottiePlayer>
       if (_ticker.isActive) _ticker.stop();
       return;
     }
-    final frames = _frames;
-    if (frames != null) {
-      if (!_ticker.isActive && frames.frameCount > 1) _ticker.start();
+    final clip = _clip;
+    if (clip != null) {
+      _maybeStartTicker(clip);
     } else if (_canLoad && !_started) {
       _startLoad();
     }
   }
 
+  void _onReady() {
+    if (!mounted) return;
+    final clip = _clip;
+    if (clip != null) _maybeStartTicker(clip);
+    if (mounted) setState(() {});
+  }
+
+  void _maybeStartTicker(RlottieClip clip) {
+    if (_isScrolling || clip.frameCount <= 1) return;
+    final lead = clip.frameCount < _leadFrames ? clip.frameCount : _leadFrames;
+    if (clip.ready.value >= lead && !_ticker.isActive) _ticker.start();
+  }
+
   void _ensure(double box) {
-    if (_frames != null) return;
+    if (_clip != null) return;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final raw = (box * dpr.clamp(1.0, 2.0)).clamp(96.0, 512.0);
     _px = (raw / 32).ceil() * 32;
@@ -327,19 +200,21 @@ class _LottiePlayerState extends State<LottiePlayer>
     final px = _px;
     if (_started || px == null) return;
     _started = true;
-    _LottieFrameCache.instance.acquire(widget.lottieUrl, px).then((frames) {
-      if (frames == null) return;
+    RlottieEngine.instance.acquire(widget.lottieUrl, px).then((clip) {
+      if (clip == null) return;
       if (!mounted) {
-        _LottieFrameCache.instance.release(frames);
+        RlottieEngine.instance.release(clip);
         return;
       }
-      setState(() => _frames = frames);
-      if (!_isScrolling && frames.frameCount > 1) _ticker.start();
+      clip.ready.addListener(_onReady);
+      setState(() => _clip = clip);
+      _maybeStartTicker(clip);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_native) return _nativeFallback();
     return LayoutBuilder(
       builder: (context, constraints) {
         final box =
@@ -348,15 +223,17 @@ class _LottiePlayerState extends State<LottiePlayer>
                 ? constraints.biggest.shortestSide
                 : 96.0);
         _ensure(box);
-        final frames = _frames;
-        if (frames == null || (_isScrolling && !_showedFrames)) {
-          return _fallback(box);
+        final clip = _clip;
+        if (clip == null ||
+            clip.ready.value == 0 ||
+            (_isScrolling && !_showedFrames)) {
+          return _staticFallback(box);
         }
         _showedFrames = true;
         return ValueListenableBuilder<int>(
           valueListenable: _frameIndex,
           builder: (_, index, _) => RawImage(
-            image: frames.frameAt(index),
+            image: clip.frameAt(index),
             width: box,
             height: box,
             fit: BoxFit.contain,
@@ -366,7 +243,18 @@ class _LottiePlayerState extends State<LottiePlayer>
     );
   }
 
-  Widget _fallback(double box) {
+  Widget _nativeFallback() {
+    return Lottie.network(
+      widget.lottieUrl,
+      width: widget.size,
+      height: widget.size,
+      fit: BoxFit.contain,
+      frameRate: FrameRate.max,
+      errorBuilder: (context, _, _) => _staticFallback(widget.size ?? 96.0),
+    );
+  }
+
+  Widget _staticFallback(double box) {
     final url = widget.fallbackUrl ?? '';
     final blank = SizedBox(width: box, height: box);
     if (url.isEmpty) return blank;

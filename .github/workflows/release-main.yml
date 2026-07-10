@@ -21,6 +21,8 @@ jobs:
         flavor: [komet, oneme]
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -96,6 +98,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -122,6 +126,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -151,6 +157,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -177,6 +185,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -238,6 +248,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4

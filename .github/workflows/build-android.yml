@@ -25,6 +25,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Setup Java
         uses: actions/setup-java@v4
