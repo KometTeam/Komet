@@ -766,6 +766,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceChatChromeNone => 'Нет';
 
   @override
+  String get appearanceChatChromeTransparent => 'Прозр.';
+
+  @override
   String get appearanceGradientTitle => 'Градиент';
 
   @override

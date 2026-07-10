@@ -1532,6 +1532,12 @@ abstract class AppLocalizations {
   /// **'None'**
   String get appearanceChatChromeNone;
 
+  /// No description provided for @appearanceChatChromeTransparent.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get appearanceChatChromeTransparent;
+
   /// No description provided for @appearanceGradientTitle.
   ///
   /// In en, this message translates to:

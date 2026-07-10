@@ -445,6 +445,15 @@ class _ChatScreenState extends State<ChatScreen>
   CachedChat? chat;
   bool _peerIsBot = false;
   ChatWallpaper? _wallpaper;
+
+  ChatChromeStyle get _effectiveChrome {
+    final chrome = AppChatChrome.current.value;
+    if (_wallpaper != null && chrome == ChatChromeStyle.none) {
+      return ChatChromeStyle.blur;
+    }
+    return chrome;
+  }
+
   final ValueNotifier<double> _composerHeight = ValueNotifier(96);
   final ValueNotifier<double> _pinnedBannerHeight = ValueNotifier(0);
 
@@ -1341,6 +1350,10 @@ class _ChatScreenState extends State<ChatScreen>
         .listenable(widget.chatId)
         .removeListener(_recomputeHeaderStatus);
     PresenceFetch.revision.removeListener(_onPresenceChanged);
+    if (_wallpaperListening) {
+      ChatWallpaperStore.instance.revision
+          .removeListener(_applyEffectiveWallpaper);
+    }
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
     _chatController.dispose();
@@ -1893,7 +1906,7 @@ class _ChatScreenState extends State<ChatScreen>
       ],
     );
     Widget wrapChrome(Widget child) {
-      if (AppChatChrome.current.value != ChatChromeStyle.blur) return child;
+      if (_effectiveChrome != ChatChromeStyle.blur) return child;
       return _FrostedPanel(
         tint: cs.surfaceContainerHigh.withValues(alpha: 0.55),
         border: Border(
@@ -2255,7 +2268,7 @@ class _ChatScreenState extends State<ChatScreen>
     final height = glossy
         ? ui.lerpDouble(_glossyHeaderHeight, _glossySearchHeight, searchT)!
         : kToolbarHeight;
-    final chrome = AppChatChrome.current.value;
+    final chrome = _effectiveChrome;
     return AppBar(
       backgroundColor: chrome == ChatChromeStyle.color
           ? (glossy ? Colors.transparent : cs.surfaceContainerHigh)
@@ -2284,6 +2297,24 @@ class _ChatScreenState extends State<ChatScreen>
                       cs.surface.withValues(alpha: 0.0),
                     ],
                     stops: const [0.0, 0.72, 1.0],
+                  ),
+                ),
+                child: const SizedBox.expand(),
+              ),
+            )
+          : (chrome == ChatChromeStyle.transparent && !glossy)
+          ? IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      cs.surface.withValues(alpha: 0.72),
+                      cs.surface.withValues(alpha: 0.45),
+                      cs.surface.withValues(alpha: 0.0),
+                    ],
+                    stops: const [0.0, 0.62, 1.0],
                   ),
                 ),
                 child: const SizedBox.expand(),
@@ -2474,11 +2505,24 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  bool _wallpaperListening = false;
+
   Future<void> _loadWallpaper() async {
     await ChatWallpaperStore.instance.load();
     if (!mounted) return;
-    final wp = ChatWallpaperStore.instance.get(_myId, widget.chatId);
-    if (wp != _wallpaper) setState(() => _wallpaper = wp);
+    if (!_wallpaperListening) {
+      _wallpaperListening = true;
+      ChatWallpaperStore.instance.revision.addListener(_applyEffectiveWallpaper);
+    }
+    _applyEffectiveWallpaper();
+  }
+
+  void _applyEffectiveWallpaper() {
+    if (!mounted) return;
+    final store = ChatWallpaperStore.instance;
+    final wp = store.get(_myId, widget.chatId) ??
+        store.get(_myId, kGlobalWallpaperChatId);
+    if (!identical(wp, _wallpaper)) setState(() => _wallpaper = wp);
   }
 
   Future<void> _openWallpaperSheet() async {
@@ -2489,13 +2533,13 @@ class _ChatScreenState extends State<ChatScreen>
     switch (pick.type) {
       case WallpaperPickType.none:
         await store.clear(_myId, widget.chatId);
-        if (mounted) setState(() => _wallpaper = null);
+        _applyEffectiveWallpaper();
         break;
       case WallpaperPickType.theme:
         final theme = pick.theme;
         if (theme == null) break;
-        final wp = await store.setTheme(_myId, widget.chatId, theme.id);
-        if (mounted) setState(() => _wallpaper = wp);
+        await store.setTheme(_myId, widget.chatId, theme.id);
+        _applyEffectiveWallpaper();
         break;
       case WallpaperPickType.gallery:
         await _pickWallpaperFromGallery();
@@ -2532,7 +2576,7 @@ class _ChatScreenState extends State<ChatScreen>
       showCustomNotification(context, 'Не удалось сохранить обои');
       return;
     }
-    setState(() => _wallpaper = wp);
+    _applyEffectiveWallpaper();
   }
 
   Future<void> _clearHistory() async {
@@ -3896,7 +3940,7 @@ class _ChatScreenState extends State<ChatScreen>
         ? _prank.pinkTheme(Theme.of(context))
         : Theme.of(context);
     final cs = theme.colorScheme;
-    final underlap = AppChatChrome.current.value != ChatChromeStyle.color;
+    final underlap = _effectiveChrome != ChatChromeStyle.color;
 
     // TODO: Локализация
     // TODO: Cклонения
@@ -4018,7 +4062,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildUnderlapBody() {
     final cs = Theme.of(context).colorScheme;
-    final vignette = AppChatChrome.current.value == ChatChromeStyle.none;
+    final vignette = _effectiveChrome == ChatChromeStyle.none;
     final bannerTop = _pinnedBannerTop();
     final banner = _buildPinnedBanner(floating: true);
     if (banner == null) _resetPinnedBannerHeight();

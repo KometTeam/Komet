@@ -38,6 +38,9 @@ import 'core/config/app_media_cache.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
 import 'core/config/app_chat_chrome.dart';
+import 'core/config/app_wallpaper_tint.dart';
+import 'core/storage/chat_wallpaper_store.dart';
+import 'core/utils/wallpaper_seed.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
@@ -187,6 +190,7 @@ void main(List<String> args) async {
   final pillGradientFuture = AppPillGradient.load();
   final visualStyleFuture = AppVisualStyle.load();
   final chatChromeFuture = AppChatChrome.load();
+  final wallpaperTintFuture = AppWallpaperTint.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
@@ -237,6 +241,7 @@ void main(List<String> args) async {
     pillGradientFuture,
     visualStyleFuture,
     chatChromeFuture,
+    wallpaperTintFuture,
     themeScheduleFuture,
     messageActionsFuture,
     swipeBackFuture,
@@ -310,6 +315,7 @@ class KometAppState extends State<KometApp>
   late final ValueNotifier<Color?> accentSeed = ValueNotifier(
     widget.initialAccentSeed,
   );
+  final ValueNotifier<Color?> wallpaperSeed = ValueNotifier(null);
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
@@ -345,8 +351,11 @@ class KometAppState extends State<KometApp>
     AppThemeModeConfig.current.addListener(_onThemeModeChanged);
     AppAmoled.current.addListener(_onAmoledChanged);
     AppThemeSchedule.current.addListener(_onScheduleChanged);
+    AppWallpaperTint.current.addListener(_onWallpaperTintChanged);
+    ChatWallpaperStore.instance.revision.addListener(_onWallpaperTintChanged);
     _lastAppliedThemeMode = _effectiveThemeMode;
     _rescheduleSwitch();
+    unawaited(_refreshWallpaperSeed());
 
     api.setReconnectCallback(() async {
       try {
@@ -365,6 +374,7 @@ class KometAppState extends State<KometApp>
     _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
       if (status == LoginStatus.success) {
         DeepLinkService.instance.markReady();
+        unawaited(_refreshWallpaperSeed());
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
         SelfCheckService.instance.init(api);
@@ -510,6 +520,8 @@ class KometAppState extends State<KometApp>
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);
     AppThemeSchedule.current.removeListener(_onScheduleChanged);
+    AppWallpaperTint.current.removeListener(_onWallpaperTintChanged);
+    ChatWallpaperStore.instance.revision.removeListener(_onWallpaperTintChanged);
     WidgetsBinding.instance.removeObserver(this);
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
@@ -517,6 +529,7 @@ class KometAppState extends State<KometApp>
     tlsInsecureEnabled.dispose();
     fontScale.dispose();
     accentSeed.dispose();
+    wallpaperSeed.dispose();
     super.dispose();
   }
 
@@ -719,6 +732,27 @@ class KometAppState extends State<KometApp>
     accentSeed.value = seed;
   }
 
+  void _onWallpaperTintChanged() => unawaited(_refreshWallpaperSeed());
+
+  Future<void> _refreshWallpaperSeed() async {
+    if (!AppWallpaperTint.current.value) {
+      wallpaperSeed.value = null;
+      return;
+    }
+    final profile = await AppDatabase.loadActiveProfile();
+    final accountId = profile?.id ?? 0;
+    if (accountId == 0) {
+      wallpaperSeed.value = null;
+      return;
+    }
+    await ChatWallpaperStore.instance.load();
+    final wallpaper =
+        ChatWallpaperStore.instance.get(accountId, kGlobalWallpaperChatId);
+    final seed = await computeWallpaperSeed(wallpaper);
+    if (!mounted) return;
+    wallpaperSeed.value = seed;
+  }
+
   Future<void> applyAppFont(String fontId) async {
     if (_fontId == fontId) return;
     final prefs = await SharedPreferences.getInstance();
@@ -850,9 +884,17 @@ class KometAppState extends State<KometApp>
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        return ValueListenableBuilder<Color?>(
-          valueListenable: accentSeed,
-          builder: (context, seed, _) {
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            accentSeed,
+            wallpaperSeed,
+            AppWallpaperTint.current,
+          ]),
+          builder: (context, _) {
+            final seed = AppWallpaperTint.current.value &&
+                    wallpaperSeed.value != null
+                ? wallpaperSeed.value
+                : accentSeed.value;
             final ColorScheme lightBase;
             final ColorScheme darkBase;
             if (seed != null) {

@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -227,10 +229,22 @@ class _StickerPanelState extends State<StickerPanel>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    return SizedBox(
       height: widget.height,
-      color: cs.surface,
-      child: _loading
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: cs.surface.withValues(alpha: 0.38),
+              border: Border(
+                top: BorderSide(
+                  color: cs.outlineVariant.withValues(alpha: 0.4),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: _loading
           ? Center(child: SmallSpinner())
           : _error != null || _sections.isEmpty
           ? Center(
@@ -276,6 +290,9 @@ class _StickerPanelState extends State<StickerPanel>
                 },
               ),
             ),
+          ),
+        ),
+      ),
     );
   }
 

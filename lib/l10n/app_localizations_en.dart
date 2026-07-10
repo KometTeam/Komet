@@ -763,6 +763,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceChatChromeNone => 'None';
 
   @override
+  String get appearanceChatChromeTransparent => 'Clear';
+
+  @override
   String get appearanceGradientTitle => 'Gradient';
 
   @override

@@ -7,6 +7,7 @@ import '../../../core/utils/haptics.dart';
 import '../../widgets/glossy_pill.dart';
 import 'app_icon_screen.dart';
 import 'appearance_screen.dart';
+import 'chat_background_screen.dart';
 import 'font_settings_screen.dart';
 import 'message_actions_screen.dart';
 import 'theme_settings_screen.dart';
@@ -42,6 +43,12 @@ class CustomizationScreen extends StatelessWidget {
       builder: _buildAppearance,
     ),
     _CustomizationCategory(
+      icon: Symbols.wallpaper,
+      title: 'Фон чатов',
+      subtitle: 'Общие обои и темы для всех чатов',
+      builder: _buildChatBackground,
+    ),
+    _CustomizationCategory(
       icon: Symbols.text_fields,
       title: 'Шрифты',
       subtitle: 'Шрифт приложения, свои шрифты, размер текста',
@@ -63,6 +70,9 @@ class CustomizationScreen extends StatelessWidget {
 
   static Widget _buildAppearance(BuildContext context) =>
       const AppearanceScreen();
+
+  static Widget _buildChatBackground(BuildContext context) =>
+      const ChatBackgroundScreen();
 
   static Widget _buildFontSettings(BuildContext context) =>
       const FontSettingsScreen();

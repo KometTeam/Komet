@@ -83,6 +83,7 @@ dependencies:
   media_kit_libs_macos_video: ^1.1.4
   sensors_plus: ^7.1.0
   smart_auth: ^3.2.0
+  flutter_svg: ^2.0.10
 
 dev_dependencies:
   flutter_test:
@@ -131,6 +132,7 @@ flutter:
     - assets/meteor_icon.png
     - assets/emoji_keywords.json
     - assets/lottie/
+    - assets/wallpapers/patterns/
 
   fonts:
     - family: Inter

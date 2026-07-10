@@ -291,6 +291,7 @@
   "appearanceChatChromeColor": "Color",
   "appearanceChatChromeBlur": "Blur",
   "appearanceChatChromeNone": "None",
+  "appearanceChatChromeTransparent": "Clear",
   "appearanceGradientTitle": "Gradient",
   "appearanceGradientSubtitle": "Depth and highlights in Glossy capsules",
   "appearanceAccentColorTitle": "Accent color",

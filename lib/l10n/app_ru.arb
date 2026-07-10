@@ -256,6 +256,7 @@
   "appearanceChatChromeColor": "Цвет",
   "appearanceChatChromeBlur": "Блюр",
   "appearanceChatChromeNone": "Нет",
+  "appearanceChatChromeTransparent": "Прозр.",
   "appearanceGradientTitle": "Градиент",
   "appearanceGradientSubtitle": "Объём и блики в Glossy-капсулах",
   "appearanceAccentColorTitle": "Акцентный цвет",

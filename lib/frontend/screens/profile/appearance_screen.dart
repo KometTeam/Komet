@@ -232,6 +232,10 @@ class _ChatChromeCard extends StatelessWidget {
                     value: ChatChromeStyle.none,
                     label: Text(l10n.appearanceChatChromeNone),
                   ),
+                  ButtonSegment(
+                    value: ChatChromeStyle.transparent,
+                    label: Text(l10n.appearanceChatChromeTransparent),
+                  ),
                 ],
                 selected: {current},
                 onSelectionChanged: (set) {

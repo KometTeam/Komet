@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
-enum ChatChromeStyle { color, blur, none }
+enum ChatChromeStyle { color, blur, none, transparent }
 
 class AppChatChrome {
   static const prefKey = 'app_chat_chrome';
