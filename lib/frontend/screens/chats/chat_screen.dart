@@ -3897,7 +3897,7 @@ class _ChatScreenState extends State<ChatScreen>
     final cs = Theme.of(context).colorScheme;
     final accent = cs.primary;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       child: Row(
         children: [
           Expanded(

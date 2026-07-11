@@ -26,7 +26,7 @@ import '../digital_id/digital_id_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_screen.dart';
 import 'cloud_storage_screen.dart';
-import 'customization_screen.dart';
+import 'customization_section.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
@@ -298,26 +298,10 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
               ),
             ),
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _buildSection(
-                  context,
-                  items: [
-                    _SettingsItem(
-                      icon: Symbols.palette,
-                      label: 'Кастомизация',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const CustomizationScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: CustomizationSection(),
               ),
             ),
             SliverToBoxAdapter(
