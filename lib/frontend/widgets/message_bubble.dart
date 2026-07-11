@@ -530,8 +530,8 @@ class MessageBubble extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
+        left: 8,
+        right: 8,
         top: topMargin,
         bottom: bottomMargin,
       ),
@@ -545,9 +545,7 @@ class MessageBubble extends StatelessWidget {
           children: [
             if (showAvatar)
               _buildLeadingAvatar(cs)
-            else if (showAvatarSlot && chatType != "CHAT")
-              const SizedBox(width: 0)
-            else if (showAvatarSlot)
+            else if (showAvatarSlot && chatType == "CHAT")
               const CircleAvatar(
                 radius: 15,
                 backgroundColor: Color(0x00000000),
