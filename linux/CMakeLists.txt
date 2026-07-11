@@ -2,6 +2,12 @@
 cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
+# Capture whether the install prefix is still CMake's default before any
+# add_subdirectory() runs. Third-party libraries (rlottie) call project()
+# again, which resets CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT to false and
+# would otherwise defeat the bundle-directory redirect below.
+set(RUNNER_PREFIX_IS_DEFAULT ${CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT})
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "Komet")
@@ -92,7 +98,7 @@ add_subdirectory("${RLOTTIE_DIR}" "${CMAKE_BINARY_DIR}/rlottie")
 # By default, "installing" just makes a relocatable bundle in the build
 # directory.
 set(BUILD_BUNDLE_DIR "${PROJECT_BINARY_DIR}/bundle")
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+if(RUNNER_PREFIX_IS_DEFAULT OR CMAKE_INSTALL_PREFIX STREQUAL "/usr/local")
   set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
 endif()
 

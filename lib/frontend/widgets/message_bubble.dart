@@ -13,6 +13,7 @@ import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/link_opener.dart';
+import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
@@ -31,6 +32,7 @@ import 'attachment/bubbles/photo_bubble.dart';
 import 'attachment/bubbles/video_bubble.dart';
 import 'attachment/bubbles/file_bubble.dart';
 import 'attachment/bubbles/forwarded_bubble.dart';
+import 'lottie_image.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
 
@@ -209,6 +211,17 @@ class MessageBubble extends StatelessWidget {
     final a = message.attachments;
     if (a == null || a.isEmpty) return false;
     return a.first is StickerAttachment;
+  }
+
+  static const int _jumboAnimojiLimit = 4;
+
+  List<String>? get _jumboAnimojiUrls {
+    if (message.attachments?.isNotEmpty ?? false) return null;
+    return animojiOnlyLottieUrls(
+      message.text,
+      message.formatRanges,
+      limit: _jumboAnimojiLimit,
+    );
   }
 
   MessageType get _contentType {
@@ -454,7 +467,10 @@ class MessageBubble extends StatelessWidget {
 
     final topMargin = _topMarginFor(contentType, shape);
     final bottomMargin = _bottomMarginFor(contentType, shape);
-    final padding = _paddingFor(contentType, shape);
+    final jumboAnimoji = _jumboAnimojiUrls;
+    final padding = jumboAnimoji != null
+        ? EdgeInsets.zero
+        : _paddingFor(contentType, shape);
 
     final showAvatarSlot = !isMe;
     final showAvatar =
@@ -469,7 +485,7 @@ class MessageBubble extends StatelessWidget {
     final maxBubbleWidth = math.min(MediaQuery.sizeOf(context).width * 0.75, 560.0);
     final keyboard = _inlineKeyboard;
     final isVideoNote = _isVideoNote;
-    final noBubbleBackground = isVideoNote || _isSticker;
+    final noBubbleBackground = isVideoNote || _isSticker || jumboAnimoji != null;
     final bubbleColor = noBubbleBackground
         ? Colors.transparent
         : (isMe ? cs.primaryContainer : cs.surfaceContainerHighest);
@@ -508,7 +524,7 @@ class MessageBubble extends StatelessWidget {
     Widget withReply(Widget content) {
       if (reply == null) return content;
       final quote = _buildReplyQuote(context, cs, textColor, reply);
-      if (contentType != MessageType.text) {
+      if (contentType != MessageType.text || jumboAnimoji != null) {
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -810,6 +826,8 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildContent(BubbleContext ctx) {
+    final jumbo = _jumboAnimojiUrls;
+    if (jumbo != null) return _buildJumboAnimojiContent(ctx, jumbo);
     switch (ctx.contentType) {
       case MessageType.control:
         return _buildControlContent(ctx.cs);
@@ -820,6 +838,86 @@ class MessageBubble extends StatelessWidget {
       case MessageType.text:
         return _buildTextContent(ctx);
     }
+  }
+
+  Widget _buildJumboAnimojiContent(BubbleContext ctx, List<String> urls) {
+    final n = urls.length;
+    final size = switch (n) {
+      1 => 96.0,
+      2 => 76.0,
+      3 => 64.0,
+      _ => 56.0,
+    };
+    final cache = (size * 2).round();
+
+    final animations = Stack(
+      children: [
+        Wrap(
+          spacing: 2,
+          runSpacing: 2,
+          alignment: ctx.isMe ? WrapAlignment.end : WrapAlignment.start,
+          children: [
+            for (final url in urls)
+              SizedBox(
+                width: size,
+                height: size,
+                child: LottieImage(
+                  lottieUrl: url,
+                  size: size,
+                  memCacheWidth: cache,
+                  eager: true,
+                ),
+              ),
+          ],
+        ),
+        Positioned(
+          bottom: BubbleContext.compactTimePadding,
+          right: BubbleContext.compactTimePadding,
+          child: _buildJumboAnimojiMeta(ctx),
+        ),
+      ],
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: ctx.isMe
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [animations, _buildReactionsBarFor(ctx.cs, ctx.reactionInfo)],
+    );
+  }
+
+  Widget _buildJumboAnimojiMeta(BubbleContext ctx) {
+    final status = ctx.overrideStatus ?? ctx.message.status;
+    final statusVisual = messageStatusVisual(status, dimColor: Colors.white);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            ctx.clockText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (ctx.isMe) ...[
+            const SizedBox(width: 3),
+            Icon(statusVisual.icon, size: 13, color: statusVisual.color),
+          ],
+          if (ctx.message.deleted) ...[
+            const SizedBox(width: 3),
+            const Icon(Symbols.delete, size: 12, color: Colors.white),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildReactionsBar(ColorScheme cs) {

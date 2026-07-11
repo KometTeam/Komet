@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -68,6 +69,8 @@ class LottiePlayer extends StatefulWidget {
   final String? fallbackUrl;
   final double? size;
   final int? memCacheWidth;
+  final bool shimmer;
+  final bool eager;
 
   const LottiePlayer({
     super.key,
@@ -75,6 +78,8 @@ class LottiePlayer extends StatefulWidget {
     this.fallbackUrl,
     this.size,
     this.memCacheWidth,
+    this.shimmer = true,
+    this.eager = false,
   });
 
   @override
@@ -95,6 +100,9 @@ class _LottiePlayerState extends State<LottiePlayer>
   int? _px;
   bool _started = false;
   bool _showedFrames = false;
+  Timer? _deferTimer;
+
+  static const Duration _maxLoadDefer = Duration(milliseconds: 700);
 
   double _speed = 1.0;
   double _targetSpeed = 1.0;
@@ -103,7 +111,8 @@ class _LottiePlayerState extends State<LottiePlayer>
 
   bool get _isScrolling => _scrollState?.value ?? false;
   bool get _canLoad =>
-      !_isScrolling && !LottieLoadGovernor.instance.throttled.value;
+      !_isScrolling &&
+      (widget.eager || !LottieLoadGovernor.instance.throttled.value);
 
   @override
   void initState() {
@@ -130,6 +139,8 @@ class _LottiePlayerState extends State<LottiePlayer>
     if (oldWidget.lottieUrl != widget.lottieUrl) {
       _ticker.stop();
       _releaseClip();
+      _deferTimer?.cancel();
+      _deferTimer = null;
       _started = false;
       _showedFrames = false;
       _playheadMs = 0.0;
@@ -141,6 +152,7 @@ class _LottiePlayerState extends State<LottiePlayer>
 
   @override
   void dispose() {
+    _deferTimer?.cancel();
     LottieLoadGovernor.instance.throttled.removeListener(_onGateChanged);
     _scrollState?.removeListener(_onGateChanged);
     _ticker.dispose();
@@ -217,13 +229,25 @@ class _LottiePlayerState extends State<LottiePlayer>
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final raw = (box * dpr.clamp(1.0, 2.0)).clamp(96.0, 384.0);
     _px = (raw / 32).ceil() * 32;
-    if (_started || !_canLoad) return;
-    _startLoad();
+    if (_started) return;
+    if (_canLoad) {
+      _startLoad();
+    } else if (!_isScrolling) {
+      // Blocked only by the frame-time governor: defer, but never starve.
+      _deferTimer ??= Timer(_maxLoadDefer, _forceDeferredLoad);
+    }
+  }
+
+  void _forceDeferredLoad() {
+    _deferTimer = null;
+    if (mounted && !_started && _clip == null && !_isScrolling) _startLoad();
   }
 
   void _startLoad() {
     final px = _px;
     if (_started || px == null) return;
+    _deferTimer?.cancel();
+    _deferTimer = null;
     _started = true;
     RlottieEngine.instance.acquire(widget.lottieUrl, px).then((clip) {
       if (clip == null) return;
@@ -281,8 +305,11 @@ class _LottiePlayerState extends State<LottiePlayer>
 
   Widget _staticFallback(double box) {
     final url = widget.fallbackUrl ?? '';
-    final blank = SizedBox(width: box, height: box);
-    if (url.isEmpty) return blank;
+    if (url.isEmpty) {
+      return widget.shimmer
+          ? LottieShimmer(size: box)
+          : SizedBox(width: box, height: box);
+    }
     return CachedNetworkImage(
       imageUrl: url,
       width: box,
@@ -290,8 +317,8 @@ class _LottiePlayerState extends State<LottiePlayer>
       fit: BoxFit.contain,
       memCacheWidth: widget.memCacheWidth,
       fadeInDuration: const Duration(milliseconds: 120),
-      placeholder: (_, _) => blank,
-      errorWidget: (_, _, _) => blank,
+      placeholder: (_, _) => LottieShimmer(size: box),
+      errorWidget: (_, _, _) => SizedBox(width: box, height: box),
     );
   }
 }
@@ -301,6 +328,8 @@ class LottieImage extends StatelessWidget {
   final String? lottieUrl;
   final double? size;
   final int? memCacheWidth;
+  final bool shimmer;
+  final bool eager;
 
   const LottieImage({
     super.key,
@@ -308,6 +337,8 @@ class LottieImage extends StatelessWidget {
     this.lottieUrl,
     this.size,
     this.memCacheWidth,
+    this.shimmer = true,
+    this.eager = false,
   });
 
   @override
@@ -318,6 +349,8 @@ class LottieImage extends StatelessWidget {
         fallbackUrl: url,
         size: size,
         memCacheWidth: memCacheWidth,
+        shimmer: shimmer,
+        eager: eager,
       );
     }
     return _static();
@@ -325,8 +358,7 @@ class LottieImage extends StatelessWidget {
 
   Widget _static() {
     final src = url ?? '';
-    final blank = SizedBox(width: size, height: size);
-    if (src.isEmpty) return blank;
+    if (src.isEmpty) return SizedBox(width: size, height: size);
     return CachedNetworkImage(
       imageUrl: src,
       width: size,
@@ -334,8 +366,56 @@ class LottieImage extends StatelessWidget {
       fit: BoxFit.contain,
       memCacheWidth: memCacheWidth,
       fadeInDuration: const Duration(milliseconds: 120),
-      placeholder: (_, _) => blank,
-      errorWidget: (_, _, _) => blank,
+      placeholder: (_, _) => LottieShimmer(size: size),
+      errorWidget: (_, _, _) => SizedBox(width: size, height: size),
+    );
+  }
+}
+
+class LottieShimmer extends StatefulWidget {
+  final double? size;
+
+  const LottieShimmer({super.key, this.size});
+
+  @override
+  State<LottieShimmer> createState() => _LottieShimmerState();
+}
+
+class _LottieShimmerState extends State<LottieShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 950),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context).colorScheme.onSurfaceVariant;
+    final box = widget.size;
+    final inset = box == null ? 2.0 : box * 0.06;
+    final radius = box == null ? 8.0 : (box * 0.2).clamp(6.0, 26.0);
+    return SizedBox(
+      width: box,
+      height: box,
+      child: Padding(
+        padding: EdgeInsets.all(inset),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => DecoratedBox(
+            decoration: BoxDecoration(
+              color: base.withValues(alpha: 0.12 + 0.16 * _controller.value),
+              borderRadius: BorderRadius.circular(radius),
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
     );
   }
 }

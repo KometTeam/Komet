@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/backend/modules/messages.dart';
+import 'package:komet/core/config/app_chat_chrome.dart';
 import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
@@ -17,6 +18,7 @@ class ComposerInputBar extends StatelessWidget {
   const ComposerInputBar({
     super.key,
     required this.chatType,
+    required this.chrome,
     required this.attachAnim,
     required this.replyTo,
     required this.myId,
@@ -40,6 +42,7 @@ class ComposerInputBar extends StatelessWidget {
   });
 
   final String chatType;
+  final ChatChromeStyle chrome;
   final Animation<double> attachAnim;
   final ValueListenable<CachedMessage?> replyTo;
   final int myId;
@@ -418,7 +421,7 @@ class ComposerInputBar extends StatelessWidget {
           attachments: reply.attachments,
         );
         final preview = info.previewText();
-        return Padding(
+        final row = Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
           child: Row(
             children: [
@@ -460,6 +463,24 @@ class ComposerInputBar extends StatelessWidget {
                 onPressed: onCancelReply,
               ),
             ],
+          ),
+        );
+        if (chrome != ChatChromeStyle.transparent) return row;
+        return ClipRect(
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: cs.surface.withValues(alpha: 0.38),
+                border: Border(
+                  top: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.4),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: row,
+            ),
           ),
         );
       },

@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/logger.dart';
@@ -17,8 +19,13 @@ class AnimojiModule {
     '😍',
   ];
 
+  static const String _recentsKey = 'komet_recent_animoji';
+  static const int _maxRecents = 24;
+
   final Map<int, Animoji> _byId = {};
   List<int> _orderedIds = [];
+  List<int> _recentIds = [];
+  bool _recentsLoaded = false;
   Future<void>? _loading;
 
   bool get isLoaded => _orderedIds.isNotEmpty;
@@ -26,7 +33,37 @@ class AnimojiModule {
   List<Animoji> get animojis =>
       _orderedIds.map((id) => _byId[id]).whereType<Animoji>().toList();
 
+  List<Animoji> get recentAnimojis =>
+      _recentIds.map((id) => _byId[id]).whereType<Animoji>().toList();
+
   List<String> get emojis => animojis.map((a) => a.emoji).toList();
+
+  Future<void> ensureRecentsLoaded() async {
+    if (_recentsLoaded) return;
+    _recentsLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_recentsKey) ?? const [];
+      _recentIds = raw.map(int.tryParse).whereType<int>().toList();
+    } catch (_) {}
+  }
+
+  Future<void> noteUsed(Animoji animoji) async {
+    await ensureRecentsLoaded();
+    _byId[animoji.id] = animoji;
+    _recentIds.remove(animoji.id);
+    _recentIds.insert(0, animoji.id);
+    if (_recentIds.length > _maxRecents) {
+      _recentIds = _recentIds.sublist(0, _maxRecents);
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _recentsKey,
+        _recentIds.map((e) => e.toString()).toList(),
+      );
+    } catch (_) {}
+  }
 
   List<Animoji> get quickAnimojis {
     final list = animojis;

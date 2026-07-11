@@ -497,7 +497,6 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.addObserver(this);
     chats.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
-    _messageFocusNode.addListener(_onComposerFocusChanged);
     _scrollController.addListener(_onScrollForDate);
     _scrollController.addListener(_maybeLoadMoreHistory);
     _scrollController.addListener(_recordScrollPixels);
@@ -1368,7 +1367,6 @@ class _ChatScreenState extends State<ChatScreen>
     _search.dispose();
     _selectedIds.dispose();
     _messageController.dispose();
-    _messageFocusNode.removeListener(_onComposerFocusChanged);
     _messageFocusNode.dispose();
     _stickers.dispose();
     _scrollController.dispose();
@@ -1413,7 +1411,11 @@ class _ChatScreenState extends State<ChatScreen>
   void _saveDraft() {
     if (_myId == 0) return;
     unawaited(
-      DraftStore.instance.set(_myId, widget.chatId, _messageController.text),
+      DraftStore.instance.set(
+        _myId,
+        widget.chatId,
+        _messageController.buildContent().text,
+      ),
     );
   }
 
@@ -1853,6 +1855,7 @@ class _ChatScreenState extends State<ChatScreen>
               ),
               ComposerInputBar(
                 chatType: widget.chatType,
+                chrome: _effectiveChrome,
                 attachAnim: _attachAnim,
                 replyTo: _replyTo,
                 myId: _myId,
@@ -1875,7 +1878,11 @@ class _ChatScreenState extends State<ChatScreen>
                 isMuted: chat?.isMuted ?? false,
                 onToggleMute: _toggleChatMute,
               ),
-              StickerPanelView(stickers: _stickers, onStickerTap: _sendSticker),
+              StickerPanelView(
+                stickers: _stickers,
+                onStickerTap: _sendSticker,
+                onEmojiTap: _insertAnimoji,
+              ),
             ],
           ),
         ),
@@ -2016,9 +2023,10 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    final rawText = controller.text;
+    final content = controller.buildContent();
+    final rawText = content.text;
     final newText = rawText.trim();
-    final elements = _trimmedElements(controller, rawText, newText);
+    final elements = _trimmedElements(content.elements, rawText, newText);
     controller.dispose();
 
     final oldElements = serializeFormatElements(
@@ -2791,6 +2799,8 @@ class _ChatScreenState extends State<ChatScreen>
         return 'Цитата';
       case TextFormat.link:
         return 'Ссылка';
+      case TextFormat.animoji:
+        return 'Animoji';
     }
   }
 
@@ -2842,11 +2852,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   List<Map<String, dynamic>> _trimmedElements(
-    RichMessageController controller,
+    List<Map<String, dynamic>> raw,
     String rawText,
     String text,
   ) {
-    final raw = controller.elementsForSend();
     if (raw.isEmpty) return const [];
     final leading = rawText.length - rawText.trimLeft().length;
     final result = <Map<String, dynamic>>[];
@@ -2866,7 +2875,8 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _sendMessage() async {
-    final rawText = _messageController.text;
+    final content = _messageController.buildContent();
+    final rawText = content.text;
     final text = rawText.trim();
     if (text.isEmpty || _myId == 0) return;
 
@@ -2911,7 +2921,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _replyTo.value = null;
 
-    final elements = _trimmedElements(_messageController, rawText, text);
+    final elements = _trimmedElements(content.elements, rawText, text);
     final Map<String, dynamic>? composedPayload =
         (replyPayload == null && elements.isEmpty)
         ? null
@@ -5117,12 +5127,6 @@ class _ChatScreenState extends State<ChatScreen>
     _stickers.showPanel.value = true;
   }
 
-  void _onComposerFocusChanged() {
-    if (_messageFocusNode.hasFocus && _stickers.showPanel.value) {
-      _stickers.hide();
-    }
-  }
-
   Future<void> _sendSticker(StickerItem sticker) async {
     _stickers.hide();
     await _sendAttachMessage([
@@ -5134,6 +5138,12 @@ class _ChatScreenState extends State<ChatScreen>
         height: sticker.height,
       ),
     ], () => messagesModule.sendStickerMessage(widget.chatId, sticker.id));
+  }
+
+  void _insertAnimoji(Animoji animoji) {
+    _messageController.insertAnimoji(animoji);
+    unawaited(animojiModule.noteUsed(animoji));
+    Haptics.selection();
   }
 
   Future<void> _shareLocation() async {

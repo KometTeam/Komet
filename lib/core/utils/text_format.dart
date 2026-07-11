@@ -8,6 +8,7 @@ enum TextFormat {
   monospaced,
   quote,
   link,
+  animoji,
 }
 
 const Map<TextFormat, String> _formatToServer = {
@@ -18,6 +19,7 @@ const Map<TextFormat, String> _formatToServer = {
   TextFormat.monospaced: 'MONOSPACED',
   TextFormat.quote: 'QUOTE',
   TextFormat.link: 'LINK',
+  TextFormat.animoji: 'ANIMOJI',
 };
 
 final Map<String, TextFormat> _serverToFormat = {
@@ -47,6 +49,11 @@ class FormatRange {
   String? get url {
     final value = attributes?['url'];
     return value is String ? value : null;
+  }
+
+  String? get animojiUrl {
+    final value = attributes?['animojiLottieUrl'];
+    return value is String && value.isNotEmpty ? value : null;
   }
 
   Map<String, dynamic> toServer() => {
@@ -87,6 +94,34 @@ List<Map<String, dynamic>> serializeFormatElements(
   Iterable<FormatRange> ranges,
 ) => [for (final range in ranges) range.toServer()];
 
+List<String>? animojiOnlyLottieUrls(
+  String? text,
+  List<FormatRange> ranges, {
+  int limit = 4,
+}) {
+  if (text == null || text.isEmpty) return null;
+  final len = text.length;
+  final animoji =
+      ranges
+          .where((r) => r.format == TextFormat.animoji && r.animojiUrl != null)
+          .toList()
+        ..sort((a, b) => a.start.compareTo(b.start));
+  if (animoji.isEmpty || animoji.length > limit) return null;
+
+  var cursor = 0;
+  for (final r in animoji) {
+    final start = r.start.clamp(0, len).toInt();
+    if (text.substring(cursor.clamp(0, len).toInt(), start).trim().isNotEmpty) {
+      return null;
+    }
+    cursor = r.end.clamp(0, len).toInt();
+  }
+  if (text.substring(cursor.clamp(0, len).toInt()).trim().isNotEmpty) {
+    return null;
+  }
+  return [for (final r in animoji) r.animojiUrl!];
+}
+
 int _asInt(dynamic value) {
   if (value is int) return value;
   if (value is String) return int.tryParse(value) ?? 0;
@@ -98,12 +133,14 @@ class FormatSegment {
   final int end;
   final Set<TextFormat> formats;
   final String? url;
+  final String? animojiUrl;
 
   const FormatSegment({
     required this.start,
     required this.end,
     required this.formats,
     this.url,
+    this.animojiUrl,
   });
 }
 
@@ -142,14 +179,22 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
     if (end <= start) continue;
     final formats = <TextFormat>{};
     String? url;
+    String? animojiUrl;
     for (final range in clamped) {
       if (range.start <= start && range.end >= end) {
         formats.add(range.format);
         if (range.format == TextFormat.link) url ??= range.url;
+        if (range.format == TextFormat.animoji) animojiUrl ??= range.animojiUrl;
       }
     }
     segments.add(
-      FormatSegment(start: start, end: end, formats: formats, url: url),
+      FormatSegment(
+        start: start,
+        end: end,
+        formats: formats,
+        url: url,
+        animojiUrl: animojiUrl,
+      ),
     );
   }
   return segments;

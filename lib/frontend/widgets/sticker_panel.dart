@@ -1,14 +1,19 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/utils/debouncer.dart';
 import '../../core/utils/emoji_keyword_index.dart';
 import '../../main.dart' show stickersModule;
+import '../../models/animoji.dart';
 import '../../models/sticker.dart';
+import 'emoji_panel.dart';
+import 'segmented_pill_toggle.dart';
 import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
@@ -43,11 +48,13 @@ class _Section {
 class StickerPanel extends StatefulWidget {
   final double height;
   final void Function(StickerItem sticker) onStickerTap;
+  final void Function(Animoji animoji)? onEmojiTap;
 
   const StickerPanel({
     super.key,
     required this.height,
     required this.onStickerTap,
+    this.onEmojiTap,
   });
 
   @override
@@ -59,6 +66,12 @@ class _StickerPanelState extends State<StickerPanel>
   static const double _tabBarHeight = 52;
   static const double _headerHeight = 34;
   static const double _searchFieldHeight = 50;
+  static const double _toggleBarHeight = 48;
+  static const int _modeEmoji = 0;
+  static const int _modeStickers = 1;
+  static const String _modePrefKey = 'komet_panel_mode';
+  static int _persistedMode = _modeStickers;
+  static bool _persistedModeLoaded = false;
 
   final ScrollController _scroll = ScrollController();
   final ValueNotifier<bool> _scrolling = ValueNotifier(false);
@@ -70,6 +83,8 @@ class _StickerPanelState extends State<StickerPanel>
   late final AnimationController _shimmer;
   bool _loading = true;
   Object? _error;
+  late int _mode;
+  bool _modeUserChosen = false;
   int _selectedTab = 0;
   List<_Section> _sections = const [];
   List<double> _heights = const [];
@@ -81,6 +96,8 @@ class _StickerPanelState extends State<StickerPanel>
   @override
   void initState() {
     super.initState();
+    _mode = widget.onEmojiTap == null ? _modeStickers : _persistedMode;
+    if (!_persistedModeLoaded) unawaited(_loadPersistedMode());
     _shimmer = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -244,55 +261,118 @@ class _StickerPanelState extends State<StickerPanel>
                 ),
               ),
             ),
-            child: _loading
-          ? Center(child: SmallSpinner())
-          : _error != null || _sections.isEmpty
-          ? Center(
-              child: Text(
-                _error != null
-                    ? 'Не удалось загрузить стикеры'
-                    : 'Нет стикеров',
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-              ),
-            )
-          : ScrollConfiguration(
-              behavior: const _DragScrollBehavior(),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-                  final columns = (width / 84).floor().clamp(4, 8);
-                  final cell = width / columns;
-
-                  final heights = <double>[];
-                  final offsets = <double>[];
-                  var acc = _searchFieldHeight;
-                  for (final s in _sections) {
-                    final rows = (s.stickerIds.length / columns).ceil();
-                    final h = _headerHeight + rows * cell;
-                    offsets.add(acc);
-                    heights.add(h);
-                    acc += h;
-                  }
-                  _heights = heights;
-                  _offsets = offsets;
-
-                  return Column(
-                    children: [
-                      _buildTabBar(cs),
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: cs.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                      Expanded(child: _buildContent(cs, columns, cell)),
-                    ],
-                  );
-                },
-              ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: _mode == _modeEmoji && widget.onEmojiTap != null
+                      ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
+                      : _buildStickerBody(cs),
+                ),
+                if (widget.onEmojiTap != null) _buildToggleBar(cs),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStickerBody(ColorScheme cs) {
+    if (_loading) return Center(child: SmallSpinner());
+    if (_error != null || _sections.isEmpty) {
+      return Center(
+        child: Text(
+          _error != null ? 'Не удалось загрузить стикеры' : 'Нет стикеров',
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+        ),
+      );
+    }
+    return ScrollConfiguration(
+      behavior: const _DragScrollBehavior(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final columns = (width / 84).floor().clamp(4, 8);
+          final cell = width / columns;
+
+          final heights = <double>[];
+          final offsets = <double>[];
+          var acc = _searchFieldHeight;
+          for (final s in _sections) {
+            final rows = (s.stickerIds.length / columns).ceil();
+            final h = _headerHeight + rows * cell;
+            offsets.add(acc);
+            heights.add(h);
+            acc += h;
+          }
+          _heights = heights;
+          _offsets = offsets;
+
+          return Column(
+            children: [
+              _buildTabBar(cs),
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.3),
+              ),
+              Expanded(child: _buildContent(cs, columns, cell)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _loadPersistedMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getInt(_modePrefKey);
+      _persistedModeLoaded = true;
+      if (value != _modeEmoji && value != _modeStickers) return;
+      _persistedMode = value!;
+      if (!mounted || _modeUserChosen || widget.onEmojiTap == null) return;
+      if (_mode != value) setState(() => _mode = value);
+    } catch (_) {
+      _persistedModeLoaded = true;
+    }
+  }
+
+  void _setMode(int mode) {
+    if (mode == _mode) return;
+    _modeUserChosen = true;
+    _persistedMode = mode;
+    setState(() => _mode = mode);
+    unawaited(_persistMode(mode));
+  }
+
+  Future<void> _persistMode(int mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_modePrefKey, mode);
+    } catch (_) {}
+  }
+
+  Widget _buildToggleBar(ColorScheme cs) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: cs.outlineVariant.withValues(alpha: 0.3),
+        ),
+        SizedBox(
+          height: _toggleBarHeight,
+          child: Center(
+            child: SegmentedPillToggle(
+              labels: const ['Эмодзи', 'Стикеры'],
+              selected: _mode,
+              onChanged: _setMode,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
