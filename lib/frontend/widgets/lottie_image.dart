@@ -84,6 +84,8 @@ class LottiePlayer extends StatefulWidget {
 class _LottiePlayerState extends State<LottiePlayer>
     with SingleTickerProviderStateMixin {
   static const int _leadFrames = 6;
+  static const double _slowSpeed = 0.5;
+  static const double _rampMs = 200.0;
 
   final ValueNotifier<int> _frameIndex = ValueNotifier(0);
   late final Ticker _ticker;
@@ -93,6 +95,11 @@ class _LottiePlayerState extends State<LottiePlayer>
   int? _px;
   bool _started = false;
   bool _showedFrames = false;
+
+  double _speed = 1.0;
+  double _targetSpeed = 1.0;
+  double _playheadMs = 0.0;
+  double? _lastElapsedMs;
 
   bool get _isScrolling => _scrollState?.value ?? false;
   bool get _canLoad =>
@@ -125,6 +132,10 @@ class _LottiePlayerState extends State<LottiePlayer>
       _releaseClip();
       _started = false;
       _showedFrames = false;
+      _playheadMs = 0.0;
+      _speed = 1.0;
+      _targetSpeed = _isScrolling ? _slowSpeed : 1.0;
+      _lastElapsedMs = null;
     }
   }
 
@@ -152,20 +163,31 @@ class _LottiePlayerState extends State<LottiePlayer>
     if (clip == null || clip.frameCount <= 1) return;
     final periodMs = clip.durationMs;
     if (periodMs <= 0) return;
-    final t = (elapsed.inMilliseconds % periodMs) / periodMs;
-    final index = (t * (clip.frameCount - 1)).round().clamp(
-      0,
-      clip.frameCount - 1,
-    );
+
+    final nowMs = elapsed.inMicroseconds / 1000.0;
+    final last = _lastElapsedMs;
+    _lastElapsedMs = nowMs;
+    if (last == null) return;
+    var dt = nowMs - last;
+    if (dt < 0) dt = 0;
+    if (dt > 64) dt = 64;
+
+    if (_speed != _targetSpeed) {
+      final step = dt / _rampMs * (1.0 - _slowSpeed);
+      final diff = _targetSpeed - _speed;
+      _speed = diff.abs() <= step ? _targetSpeed : _speed + step * diff.sign;
+    }
+
+    _playheadMs = (_playheadMs + dt * _speed) % periodMs;
+    final t = _playheadMs / periodMs;
+    final index =
+        (t * (clip.frameCount - 1)).round().clamp(0, clip.frameCount - 1);
     if (index != _frameIndex.value) _frameIndex.value = index;
   }
 
   void _onGateChanged() {
     if (!mounted) return;
-    if (_isScrolling) {
-      if (_ticker.isActive) _ticker.stop();
-      return;
-    }
+    _targetSpeed = _isScrolling ? _slowSpeed : 1.0;
     final clip = _clip;
     if (clip != null) {
       _maybeStartTicker(clip);
@@ -182,15 +204,18 @@ class _LottiePlayerState extends State<LottiePlayer>
   }
 
   void _maybeStartTicker(RlottieClip clip) {
-    if (_isScrolling || clip.frameCount <= 1) return;
+    if (clip.frameCount <= 1) return;
     final lead = clip.frameCount < _leadFrames ? clip.frameCount : _leadFrames;
-    if (clip.ready.value >= lead && !_ticker.isActive) _ticker.start();
+    if (clip.ready.value >= lead && !_ticker.isActive) {
+      _lastElapsedMs = null;
+      _ticker.start();
+    }
   }
 
   void _ensure(double box) {
     if (_clip != null) return;
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final raw = (box * dpr.clamp(1.0, 2.0)).clamp(96.0, 512.0);
+    final raw = (box * dpr.clamp(1.0, 2.0)).clamp(96.0, 384.0);
     _px = (raw / 32).ceil() * 32;
     if (_started || !_canLoad) return;
     _startLoad();

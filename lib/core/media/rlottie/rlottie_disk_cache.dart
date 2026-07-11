@@ -29,7 +29,7 @@ class RlottieDiskCache {
   static final RlottieDiskCache instance = RlottieDiskCache._();
 
   static const _magic = 0x4b524c46;
-  static const _version = 1;
+  static const _version = 2;
   static const int _maxBytes = 256 * 1024 * 1024;
 
   Directory? _dir;
@@ -103,6 +103,13 @@ class RlottieDiskCache {
       for (var i = 0; i < frameCount; i++) {
         payload.setRange(i * frameBytes, (i + 1) * frameBytes, frames[i]);
       }
+      for (var i = frameCount - 1; i >= 1; i--) {
+        final cur = i * frameBytes;
+        final prev = (i - 1) * frameBytes;
+        for (var b = 0; b < frameBytes; b++) {
+          payload[cur + b] ^= payload[prev + b];
+        }
+      }
       final compressed = gzip.encode(payload);
       final header = ByteData(28);
       header.setUint32(0, _magic);
@@ -131,6 +138,13 @@ class RlottieDiskCache {
       final frameBytes = px * px * 4;
       final payload = Uint8List.fromList(gzip.decode(bytes.sublist(28)));
       if (payload.length != frameBytes * frameCount) return null;
+      for (var i = 1; i < frameCount; i++) {
+        final cur = i * frameBytes;
+        final prev = (i - 1) * frameBytes;
+        for (var b = 0; b < frameBytes; b++) {
+          payload[cur + b] ^= payload[prev + b];
+        }
+      }
       final frames = <Uint8List>[];
       for (var i = 0; i < frameCount; i++) {
         frames.add(Uint8List.sublistView(

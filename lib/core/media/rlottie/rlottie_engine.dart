@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:isolate';
 import 'dart:ui' as ui;
 
@@ -81,7 +82,7 @@ class RlottieEngine {
 
   static String? debugLibraryPath;
 
-  static const int _maxBytes = 384 * 1024 * 1024;
+  static const int _maxBytes = 192 * 1024 * 1024;
   static const int _modelCacheBytes = 20 * 1024 * 1024;
 
   final Map<String, RlottieClip> _clips = {};
@@ -91,9 +92,10 @@ class RlottieEngine {
   int _totalBytes = 0;
   int _clock = 0;
   int _nextJobId = 1;
+  int _rrIndex = 0;
 
   bool? _available;
-  Future<SendPort>? _workerFuture;
+  Future<List<SendPort>>? _poolFuture;
 
   int _tick() => ++_clock;
   String _keyFor(String url, int px) => '$url@$px';
@@ -107,15 +109,23 @@ class RlottieEngine {
     }();
   }
 
-  Future<SendPort> _worker() {
-    return _workerFuture ??= () async {
+  Future<SendPort> _worker() async {
+    final pool = await (_poolFuture ??= _spawnPool());
+    return pool[_rrIndex++ % pool.length];
+  }
+
+  Future<List<SendPort>> _spawnPool() async {
+    final count = (Platform.numberOfProcessors - 1).clamp(1, 3);
+    final ports = <SendPort>[];
+    for (var i = 0; i < count; i++) {
       final receive = ReceivePort();
       await Isolate.spawn(rlottieWorkerMain, receive.sendPort);
       final broadcast = receive.asBroadcastStream();
       final port = await broadcast.first as SendPort;
       broadcast.listen(_onWorkerMessage);
-      return port;
-    }();
+      ports.add(port);
+    }
+    return ports;
   }
 
   void _onWorkerMessage(dynamic message) {
@@ -155,7 +165,7 @@ class RlottieEngine {
       bytes,
       frame.px,
       frame.px,
-      ui.PixelFormat.rgba8888,
+      ui.PixelFormat.bgra8888,
       (image) {
         job.clip._setFrame(frame.index, image);
         _totalBytes += frame.px * frame.px * 4;
@@ -229,8 +239,13 @@ class RlottieEngine {
     if (inlineJson == null) {
       final disk = await RlottieDiskCache.instance.load(url, px);
       if (disk != null) {
-        final clip = await _clipFromDisk(key, px, disk);
+        final clip = RlottieClip(key: key, px: px)
+          ..frameCount = disk.frameCount
+          ..frameRate = disk.frameRate
+          ..durationMs = disk.durationMs;
+        clip._allocate(disk.frameCount);
         _clips[key] = clip;
+        unawaited(_decodeDiskProgressive(clip, disk));
         return clip;
       }
     }
@@ -255,26 +270,25 @@ class RlottieEngine {
     return completer.future;
   }
 
-  Future<RlottieClip> _clipFromDisk(String key, int px, DiskClip disk) async {
-    final clip = RlottieClip(key: key, px: px)
-      ..frameCount = disk.frameCount
-      ..frameRate = disk.frameRate
-      ..durationMs = disk.durationMs
-      ..complete = true;
-    clip._allocate(disk.frameCount);
+  Future<void> _decodeDiskProgressive(RlottieClip clip, DiskClip disk) async {
     for (var i = 0; i < disk.frameCount; i++) {
-      final image = await _decode(disk.frames[i], px);
+      if (!identical(_clips[clip.key], clip)) return;
+      final image = await _decode(disk.frames[i], clip.px);
+      if (!identical(_clips[clip.key], clip)) {
+        image.dispose();
+        return;
+      }
       clip._setFrame(i, image);
-      _totalBytes += px * px * 4;
+      _totalBytes += clip.px * clip.px * 4;
     }
+    clip.complete = true;
     _evictIfNeeded();
-    return clip;
   }
 
-  Future<ui.Image> _decode(Uint8List rgba, int px) {
+  Future<ui.Image> _decode(Uint8List bgra, int px) {
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
-        rgba, px, px, ui.PixelFormat.rgba8888, completer.complete);
+        bgra, px, px, ui.PixelFormat.bgra8888, completer.complete);
     return completer.future;
   }
 

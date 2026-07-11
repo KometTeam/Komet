@@ -66,6 +66,8 @@ class CancelJob {
   final int jobId;
 }
 
+const double _maxCacheFps = 30.0;
+
 void rlottieWorkerMain(SendPort toMain) {
   final port = ReceivePort();
   toMain.send(port.sendPort);
@@ -104,24 +106,33 @@ void rlottieWorkerMain(SendPort toMain) {
       final total = rl.totalFrame(anim);
       final fps = rl.frameRate(anim);
       final durationMs = fps <= 0 ? 1000 : (total / fps * 1000).round();
+
+      var outCount = total;
+      if (fps > _maxCacheFps && total > 1) {
+        outCount = (durationMs / 1000.0 * _maxCacheFps).round().clamp(2, total);
+      }
+      final outFps = durationMs <= 0 ? fps : outCount * 1000.0 / durationMs;
       toMain.send(ClipMeta(
         jobId: job.jobId,
-        totalFrame: total,
-        frameRate: fps,
+        totalFrame: outCount,
+        frameRate: outFps,
         durationMs: durationMs,
       ));
 
       final px = job.px;
       final buffer = calloc<Uint32>(px * px);
+      final byteView = buffer.cast<Uint8>().asTypedList(px * px * 4);
       try {
-        for (var i = 0; i < total; i++) {
+        for (var i = 0; i < outCount; i++) {
           if (cancelled.contains(job.jobId)) break;
-          rl.render(anim, i, buffer, px);
-          final rgba = _bgraToRgba(buffer, px * px);
+          final src = outCount == total
+              ? i
+              : (i * (total - 1) / (outCount - 1)).round().clamp(0, total - 1);
+          rl.render(anim, src, buffer, px);
           toMain.send(RenderedFrame(
             jobId: job.jobId,
             index: i,
-            data: TransferableTypedData.fromList([rgba]),
+            data: TransferableTypedData.fromList([Uint8List.fromList(byteView)]),
             px: px,
           ));
         }
@@ -138,16 +149,3 @@ void rlottieWorkerMain(SendPort toMain) {
   });
 }
 
-Uint8List _bgraToRgba(Pointer<Uint32> buffer, int pixels) {
-  final src = buffer.asTypedList(pixels);
-  final out = Uint8List(pixels * 4);
-  for (var i = 0; i < pixels; i++) {
-    final v = src[i];
-    final o = i * 4;
-    out[o] = (v >> 16) & 0xff;
-    out[o + 1] = (v >> 8) & 0xff;
-    out[o + 2] = v & 0xff;
-    out[o + 3] = (v >> 24) & 0xff;
-  }
-  return out;
-}
