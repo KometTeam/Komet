@@ -1,0 +1,22 @@
+name: Setup Rust
+description: >
+  Install the Rust toolchain with platform targets and a build cache, so
+  cargokit can compile the kolibri native library during the Flutter build.
+
+inputs:
+  targets:
+    description: Comma-separated rustup targets for the platform being built.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ inputs.targets }}
+
+    - name: Cache Rust build
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: third_party/kolibri/kolibri-dart/rust

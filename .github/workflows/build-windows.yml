@@ -37,6 +37,11 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: x86_64-pc-windows-msvc
+
       - name: Get dependencies
         run: flutter pub get
 

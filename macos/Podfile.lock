@@ -84,6 +84,8 @@ PODS:
   - GoogleUtilities/UserDefaults (8.1.1):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
+  - kolibri (0.0.1):
+    - FlutterMacOS
   - media_kit_libs_macos_video (1.0.4):
     - FlutterMacOS
   - media_kit_video (0.0.1):
@@ -108,6 +110,7 @@ PODS:
   - PromisesObjC (2.4.1)
   - record_macos (1.2.1):
     - FlutterMacOS
+  - rlottie (0.2.0)
   - share_plus (0.0.1):
     - FlutterMacOS
   - shared_preferences_foundation (0.0.1):
@@ -139,6 +142,7 @@ DEPENDENCIES:
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - geolocator_apple (from `Flutter/ephemeral/.symlinks/plugins/geolocator_apple/darwin`)
+  - kolibri (from `Flutter/ephemeral/.symlinks/plugins/kolibri/macos`)
   - media_kit_libs_macos_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos`)
   - media_kit_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos`)
   - mobile_scanner (from `Flutter/ephemeral/.symlinks/plugins/mobile_scanner/darwin`)
@@ -146,6 +150,7 @@ DEPENDENCIES:
   - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - photo_manager (from `Flutter/ephemeral/.symlinks/plugins/photo_manager/darwin`)
   - record_macos (from `Flutter/ephemeral/.symlinks/plugins/record_macos/macos`)
+  - rlottie (from `../third_party`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
   - shared_preferences_foundation (from `Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sqflite_darwin (from `Flutter/ephemeral/.symlinks/plugins/sqflite_darwin/darwin`)
@@ -194,6 +199,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
   geolocator_apple:
     :path: Flutter/ephemeral/.symlinks/plugins/geolocator_apple/darwin
+  kolibri:
+    :path: Flutter/ephemeral/.symlinks/plugins/kolibri/macos
   media_kit_libs_macos_video:
     :path: Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos
   media_kit_video:
@@ -208,6 +215,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/photo_manager/darwin
   record_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/record_macos/macos
+  rlottie:
+    :path: "../third_party"
   share_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/share_plus/macos
   shared_preferences_foundation:
@@ -242,6 +251,7 @@ SPEC CHECKSUMS:
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleUtilities: 4f2618a4a1e762a1ee134a1e2323bba9843e06da
+  kolibri: 93062ece67f68ec0b909876b527aa15e198b4a73
   media_kit_libs_macos_video: 85a23e549b5f480e72cae3e5634b5514bc692f65
   media_kit_video: fa6564e3799a0a28bff39442334817088b7ca758
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
@@ -252,6 +262,7 @@ SPEC CHECKSUMS:
   photo_manager: 25fd77df14f4f0ba5ef99e2c61814dde77e2bceb
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
   record_macos: 5d55909f9650314be6424ffd6b123ac75a08c3c1
+  rlottie: c2780aabf858ca3c81785f09256827ca83b0765d
   share_plus: 510bf0af1a42cd602274b4629920c9649c52f4cc
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
@@ -260,6 +271,6 @@ SPEC CHECKSUMS:
   wakelock_plus: 917609be14d812ddd9e9528876538b2263aaa03b
   WebRTC-SDK: e6006119cd730d6315d875e4a421b6cc8bb88833
 
-PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
+PODFILE CHECKSUM: f9f028435b3eb11958579119e016406574b87759
 
 COCOAPODS: 1.16.2

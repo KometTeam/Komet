@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
+import 'package:kolibri/kolibri.dart' show initKolibri;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:video_player_media_kit/video_player_media_kit.dart';
@@ -156,6 +157,7 @@ void _installLogCapture() {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initKolibri();
   DebugTest.parse(args);
   _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(

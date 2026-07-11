@@ -42,6 +42,11 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
       - name: Get dependencies
         run: flutter pub get
 
@@ -110,6 +115,10 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: x86_64-pc-windows-msvc
       - name: Get dependencies
         run: flutter pub get
       - name: Build Windows
@@ -142,6 +151,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev libmpv-dev mpv libopus-dev libogg-dev
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: x86_64-unknown-linux-gnu
       - name: Get dependencies
         run: flutter pub get
       - name: Build Linux
@@ -169,6 +182,10 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
       - name: Get dependencies
         run: flutter pub get
       - name: Fix opus/ogg libs for macOS
@@ -199,6 +216,10 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
       - name: Get dependencies
         run: flutter pub get
       - name: Build iOS (no codesign)

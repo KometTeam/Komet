@@ -37,6 +37,11 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
       - name: Install create-dmg
         run: brew install create-dmg
 

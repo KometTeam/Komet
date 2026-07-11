@@ -34,11 +34,14 @@ dependencies:
     sdk: flutter
   intl: any
 
+  # Rust networking core (kolibri) — FFI plugin, replaces the Dart transport.
+  # Vendored as a git submodule (third_party/kolibri).
+  kolibri:
+    path: third_party/kolibri/kolibri-dart
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   dart_lz4: ^1.0.0
-  libcompress: ^1.0.0
-  msgpack_dart: ^1.0.1
   crypto: ^3.0.7
   ffi: ^2.1.0
   logger: ^2.6.2
