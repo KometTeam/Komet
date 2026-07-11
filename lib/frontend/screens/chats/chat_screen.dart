@@ -211,6 +211,7 @@ class _ChatScreenState extends State<ChatScreen>
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
   bool _keyboardWasOpen = false;
+  bool _keyboardBeforeStickers = false;
   final ScrollController _scrollController = ScrollController();
   bool _userDidScroll = false;
   String? _pinnedMessageId;
@@ -5106,10 +5107,11 @@ class _ChatScreenState extends State<ChatScreen>
   void _toggleStickerPanel() {
     if (_stickers.showPanel.value) {
       _stickers.hide();
-      _messageFocusNode.requestFocus();
+      if (_keyboardBeforeStickers) _messageFocusNode.requestFocus();
       return;
     }
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    _keyboardBeforeStickers = keyboard > 120 || _messageFocusNode.hasFocus;
     if (keyboard > 120) _stickers.panelHeight = keyboard;
     FocusManager.instance.primaryFocus?.unfocus();
     _stickers.showPanel.value = true;
