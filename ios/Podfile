@@ -1,0 +1,76 @@
+# Uncomment this line to define a global platform for your project
+platform :ios, '13.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+require 'json'
+
+# Firebase is Android-only: FCM is used solely by the `oneme` flavor, and on
+# iOS there is a single `ru.komet.app` bundle that never initialises push.
+# Keep the Firebase SDK out of the iOS build entirely so iOS is not forced up
+# to the iOS 15 deployment target that firebase_core's podspec requires.
+FIREBASE_IOS_PLUGINS = %w[firebase_core firebase_messaging].freeze
+
+deps_file = File.expand_path('../.flutter-plugins-dependencies', __dir__)
+if File.exist?(deps_file)
+  deps = JSON.parse(File.read(deps_file))
+  ios_plugins = deps.dig('plugins', 'ios')
+  if ios_plugins
+    ios_plugins.reject! { |p| FIREBASE_IOS_PLUGINS.include?(p['name']) }
+    File.write(deps_file, JSON.generate(deps))
+  end
+end
+
+registrant = File.expand_path('Runner/GeneratedPluginRegistrant.m', __dir__)
+if File.exist?(registrant)
+  src = File.read(registrant)
+  FIREBASE_IOS_PLUGINS.each do |mod|
+    cls = "FLT#{mod.split('_').map(&:capitalize).join}Plugin"
+    m = Regexp.escape(mod)
+    src = src.gsub(/#if __has_include\(<#{m}\/[^>]+>\).*?#endif\n/m, '')
+    src = src.gsub(/^\s*#import <#{m}\/[^>]+>\n/, '')
+    src = src.gsub(/^\s*@import #{m};\n/, '')
+    src = src.gsub(/^\s*\[#{cls} registerWithRegistrar:.*\n/, '')
+  end
+  File.write(registrant, src)
+end
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  pod 'rlottie', :path => '../third_party'
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+end

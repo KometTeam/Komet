@@ -1,0 +1,854 @@
+{
+  "@@locale": "en",
+  "loginTitle": "Sign in to Komet",
+  "loginSubtitle": "Check your country code and enter your\nphone number.",
+  "loginCountry": "Country",
+  "loginPhoneNumber": "Phone number",
+  "loginOtherSignInMethods": "Other sign-in methods",
+  "loginTermsIntro": "By continuing, you agree to \n",
+  "loginTermsLink": "the terms of use",
+  "loginTermsOfUse": "Terms of use",
+  "loginConfirmPhoneTitle": "Is this the correct number?",
+  "loginEdit": "Change",
+  "loginDone": "Done",
+  "loginReadTermsNotification": "Please read the terms of use first",
+  "loginSpoofRedacted": "Spoofing",
+  "loginProxy": "Proxy",
+  "loginChangeServer": "Change server",
+  "serverSettingsTitle": "Server",
+  "serverHostLabel": "Host",
+  "serverPortLabel": "Port",
+  "serverApply": "Apply and reconnect",
+  "serverUseDefault": "Reset to default",
+  "serverInvalidHostOrPort": "Enter a valid host and port (1–65535)",
+  "serverSettingsSaved": "Server settings applied",
+  "serverReconnectFailed": "Could not connect to the server",
+  "loginSignInWithQr": "Sign in with QR code",
+  "loginSignInWithToken": "Sign in with token",
+  "tokenLoginTitle": "Token login",
+  "tokenLoginTokenLabel": "Token",
+  "tokenLoginNote": "Token login only works with spoofing. Enter the data of the device the token belongs to, otherwise the account may be banned.",
+  "tokenLoginButton": "Sign in",
+  "tokenLoginError": "Fill in the token, device name, OS version and Device ID",
+  "tokenLoginFailed": "Sign in failed",
+  "loginSignInWithSessionFile": "Sign in with session file",
+  "loginLanguage": "Language",
+  "languageNameRu": "Русский",
+  "languageNameEn": "English",
+  "selectCountryTitle": "Select country",
+  "selectCountrySearchHint": "Search countries…",
+  "codeConfirmationSmsSent": "We sent an SMS with a verification code to your phone number.",
+  "codeResendInSeconds": "Resend in {seconds} s.",
+  "@codeResendInSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "codeResendSms": "Resend code via SMS",
+  "codeError2faMissing": "Error: missing data for 2FA",
+  "codeConfirmation2faWarning": "MAX may require 2FA on your account to sign in. If you didn't receive the code, set up 2FA from a client where you're already signed in.",
+
+  "proxySettingsTitle": "Proxy",
+  "proxyTypeNone": "Disabled",
+  "proxyTypeSocks5": "SOCKS5",
+  "proxyTypeHttp": "HTTP(S)",
+  "proxyHostLabel": "Proxy host",
+  "proxyPortLabel": "Proxy port",
+  "proxyUsernameLabel": "Username (optional)",
+  "proxyPasswordLabel": "Password (optional)",
+  "proxyApply": "Apply and reconnect",
+  "proxyDisable": "Disable proxy",
+  "proxySettingsSaved": "Proxy settings applied",
+  "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)",
+
+  "spoofScreenTitle": "Session spoofing",
+  "spoofEnableTitle": "Device spoofing",
+  "spoofEnableSubtitleOn": "Enabled for this account",
+  "spoofEnableSubtitleOff": "Disabled — using the real device",
+  "spoofInfoHint": "Tap \"Generate\":\n• Short tap: random preset.\n• Long press: real device data.",
+  "spoofMethodTitle": "Spoofing method",
+  "spoofMethodPartial": "Partial",
+  "spoofMethodFull": "Full",
+  "spoofMethodPartialDescription": "Recommended method. Random data is used, but your real timezone and locale are kept for plausibility.",
+  "spoofMethodFullDescription": "All data including timezone and locale is generated randomly. Use this method at your own risk!",
+  "spoofDeviceTypeTitle": "Device type",
+  "spoofDeviceTypeDescription": "Controls which devices are generated: Android or iOS",
+  "spoofDeviceTypeLabel": "Device type",
+  "spoofMainSectionTitle": "Main data",
+  "spoofFieldDeviceName": "Device name",
+  "spoofFieldOsVersion": "OS version",
+  "spoofRegionalSectionTitle": "Regional data",
+  "spoofFieldScreen": "Screen resolution",
+  "spoofFieldTimezone": "Timezone",
+  "spoofFieldLocale": "Locale",
+  "spoofFieldDeviceLocale": "Device locale (derived)",
+  "spoofIdentifiersSectionTitle": "Identifiers",
+  "spoofIdentifiersDescription": "mt_instanceid and clientSessionId are generated automatically on every app launch. Only the Device ID can be changed.",
+  "spoofFieldInstanceId": "mt_instanceid",
+  "spoofFieldClientSessionId": "clientSessionId",
+  "spoofFieldPushDeviceType": "Push device type",
+  "spoofFieldDeviceId": "Device ID",
+  "spoofRegenerateIdTooltip": "Generate a new ID",
+  "spoofFieldAppVersion": "App version",
+  "spoofFieldBuildNumber": "Build number",
+  "spoofFieldArchitecture": "Architecture",
+  "spoofButtonGenerate": "Generate",
+  "spoofButtonApply": "Apply",
+  "spoofDialogUnsureTitle": "Are you sure?",
+  "spoofDialogUnsureContent": "The app may become unstable due to API incompatibility",
+  "spoofDialogCancel": "Cancel",
+  "spoofDialogYes": "Yes",
+  "spoofDialogApplyTitle": "Apply settings?",
+  "spoofDialogApplyContent": "Need to reconnect the app, ok?",
+  "spoofDialogApplyWarning": "Your spoof will change immediately. But due to MAX specifics, you must re-login to the account for it to become visible",
+  "spoofDialogReloginTitle": "Done!",
+  "spoofDialogReloginContent": "Due to MAX specifics, your spoof is changed, but changes will be visible only after re-login.",
+  "spoofDialogReloginWarning": "Re-login now?",
+  "spoofDialogReloginDeny": "Later",
+  "spoofDialogReloginConfirm": "Re-login now",
+  "spoofDialogApplyDeny": "No",
+  "spoofDialogApplyConfirm": "Ok!",
+  "spoofErrorApplyFailed": "Failed to apply settings: {error}",
+  "@spoofErrorApplyFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileMenuSpoof": "Spoofing",
+  "infoTitle": "Info",
+  "infoAccountSection": "Account",
+  "infoServerSection": "Server",
+  "infoUserSection": "User",
+  "infoYMapSection": "Y-Map",
+  "infoFileUploadTypes": "file-upload-unsupported-types",
+  "infoWhiteListLinks": "white-list-links",
+  "infoRegistrationTime": "registrationTime",
+  "infoCountry": "country",
+  "infoVideoChatHistory": "videoChatHistory",
+  "infoUpdateTime": "updateTime",
+  "infoId": "id",
+  "infoChatMarker": "chatMarker",
+  "infoAccountRemovalEnabled": "account-removal-enabled",
+  "infoImageSize": "image-size",
+  "infoGce": "gce",
+  "infoGcce": "gcce",
+  "infoMaxMsgLength": "max-msg-length",
+  "infoQuotesEnabled": "quotes-enabled",
+  "infoCallsEndpoint": "calls-endpoint",
+  "infoSendLocationEnabled": "send-location-enabled",
+  "infoLgce": "lgce",
+  "infoWud": "wud",
+  "infoVideoMsgEnabled": "video-msg-enabled",
+  "infoGrse": "grse",
+  "infoEditTimeout": "edit-timeout",
+  "infoImageQuality": "image-quality",
+  "infoUnsafeFilesAlert": "unsafe-files-alert",
+  "infoAccountNicknameEnabled": "account-nickname-enabled",
+  "infoMentionsEntityNamesLimit": "mentions_entity_names_limit",
+  "infoReactionsEnabled": "reactions-enabled",
+  "infoTile": "tile",
+  "infoGeocoder": "geocoder",
+  "infoStatic": "static",
+  "chatInfoSubscribers": "subscribers:",
+  "chatInfoInvitedBy": "invited by:",
+  "chatInfoLink": "link:",
+  "chatInfoOfficial": "official:",
+  "chatInfoComments": "comments:",
+  "chatInfoAplus": "approved by Roskomnadzor:",
+  "chatInfoSignAdmin": "admin signature:",
+  "chatInfoLastChanged": "last changed:",
+  "chatInfoJoinTime": "joined:",
+  "chatInfoCreated": "created:",
+  "chatInfoTitle": "Info",
+  "chatInfoMembers": "members:",
+  "chatInfoLastSeen": "last seen recently",
+  "chatInfoHasBots": "has bots:",
+  "chatInfoBlockedCount": "blocked in group:",
+  "chatInfoOfficialStatus": "official status:",
+  "chatInfoLastChanged": "last changed:",
+  "chatInfoJoined": "joined:",
+  "chatInfoGroupCreated": "group created:",
+  "chatInfoGroupOwner": "group owner:",
+  "chatInfoDialogStarted": "dialog started:",
+  "editProfileTitle": "Edit Profile",
+  "editProfileSave": "Save",
+  "editProfileFirstName": "First name",
+  "editProfileLastName": "Last name",
+  "editProfileRemovePhoto": "Remove photo",
+  "registrationTitle": "Create your profile",
+  "registrationSubtitle": "Add your name and pick an avatar",
+  "registrationChooseAvatar": "Choose an avatar",
+  "msgActionsCopy": "Copy",
+  "emojiSearchHint": "Search emoji",
+  "msgActionsEdit": "Edit",
+  "msgActionsReply": "Reply",
+  "msgActionsForward": "Forward",
+  "msgActionsMarkUnread": "Mark as unread",
+  "msgActionsPin": "Pin",
+  "msgActionsUnpin": "Unpin",
+  "pinnedMessageTitle": "Pinned message",
+  "msgActionsEditHistory": "Edit history",
+  "msgActionsReport": "Report",
+  "msgActionsDelete": "Delete",
+  "msgActionsCopied": "Copied",
+  "msgActionsLoadReasonsFailed": "Failed to load reasons",
+  "msgActionsCurrentVersion": "current version",
+  "msgActionsCurrentVersionWithDate": "current version · {date}",
+  "@msgActionsCurrentVersionWithDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "msgActionsNoText": "(no text)",
+  "notificationsSaveFailed": "Could not save: {error}",
+  "@notificationsSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationsFkmAlreadyHasFcm": "Why? You already have FCM.",
+  "notificationsFkmDownloadFcm": "Better download the FCM version.",
+  "notificationsTitle": "Notifications",
+  "notificationsFkmSectionTitle": "FKM",
+  "notificationsFkmEnableLabel": "Enable notifications",
+  "notificationsFkmEnableSubtitle": "For FKM notifications to work, the app will need to keep a notification in the shade.",
+  "notificationsMainSectionTitle": "Notifications",
+  "notificationsAllLabel": "All notifications",
+  "notificationsNewSectionTitle": "New notifications",
+  "notificationsPreviewLabel": "Message preview",
+  "notificationsSoundLabel": "Sound",
+  "notificationsAdditionalSectionTitle": "Additional",
+  "notificationsCallsLabel": "Call notifications",
+  "notificationsNewContactsLabel": "Notifications from new contacts",
+  "notificationsHapticsSectionTitle": "Haptic feedback",
+  "notificationsHapticsLabel": "Haptic feedback",
+  "notificationsHapticsSubtitle": "Vibration feedback for actions in the app",
+  "devicesLoadFailed": "Failed to load: {error}",
+  "@devicesLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "devicesQrLinkDialogTitle": "Link from QR",
+  "devicesQrLinkDialogHint": "Paste the QR code content",
+  "devicesAllTerminated": "All sessions terminated",
+  "devicesGenericError": "Error: {error}",
+  "@devicesGenericError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "devicesIpLookupError": "IP error: {error}",
+  "@devicesIpLookupError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "devicesTitle": "Devices",
+  "devicesPromoTitle": "Devices in KOMET",
+  "devicesPromoSubtitle": "Who has access to your account?",
+  "devicesScanQrButton": "Scan QR",
+  "devicesCurrentSuffix": " (current)",
+  "devicesOnlineStatus": "Online",
+  "devicesTerminateOthersButton": "Terminate all sessions except the current one",
+  "devicesMobileNetworkLabel": "Mobile network",
+  "devicesProxyDetectedLabel": "Proxy/VPN detected",
+  "themeSettingsTitle": "Theme",
+  "themeSettingsModeCardTitle": "Theme mode",
+  "themeSettingsModeCardSubtitle": "Light, dark, or automatic switching",
+  "themeSettingsModeSystem": "System",
+  "themeSettingsModeLight": "Light",
+  "themeSettingsModeDark": "Dark",
+  "themeSettingsModeSchedule": "Scheduled",
+  "themeSettingsAmoledTitle": "AMOLED black",
+  "themeSettingsAmoledSubtitle": "Pure black background for OLED screens",
+  "themeSettingsScheduleTitle": "Schedule",
+  "themeSettingsScheduleSubtitleEnabled": "When dark theme turns on automatically",
+  "themeSettingsScheduleSubtitleDisabled": "Available in \"Scheduled\" mode",
+  "themeSettingsScheduleDarkFrom": "Dark from",
+  "themeSettingsScheduleLightFrom": "Light from",
+  "appearanceTitle": "Appearance",
+  "appearanceVisualStyleTitle": "Visual style",
+  "appearanceVisualStyleSubtitle": "Material You or dimensional Glossy capsules",
+  "appearanceVisualStyleMaterialYou": "Material You",
+  "appearanceVisualStyleGlossy": "Glossy",
+  "appearanceChatChromeTitle": "Chat screen elements",
+  "appearanceChatChromeSubtitle": "Background of the top and bottom panels: color, blur, or transparent. With blur or transparency, messages scroll under the panels",
+  "appearanceChatChromeColor": "Color",
+  "appearanceChatChromeBlur": "Blur",
+  "appearanceChatChromeNone": "None",
+  "appearanceChatChromeTransparent": "Clear",
+  "appearanceGradientTitle": "Gradient",
+  "appearanceGradientSubtitle": "Depth and highlights in Glossy capsules",
+  "appearanceAccentColorTitle": "Accent color",
+  "appearanceAccentColorSystem": "System",
+  "appearanceAccentColorSubtitle": "Main color of the interface and bubbles",
+  "appearanceAccentColorSystemActive": "System color is active",
+  "appearanceAccentColorReset": "Reset to system",
+  "appearanceBubbleShapeTitle": "Message shape",
+  "appearanceBubbleShapeSubtitle": "Bubble corner rounding",
+  "appearanceBubbleShapeMobile": "TG Mobile",
+  "appearanceBubbleShapeDesktop": "TG Desktop",
+  "appearanceBubbleBehaviorTitle": "Message behavior",
+  "appearanceBubbleBehaviorSubtitle": "Whether bubble shape changes based on neighbors in a group",
+  "appearanceBubbleBehaviorMutable": "Mutable",
+  "appearanceBubbleBehaviorImmutable": "Immutable",
+  "appearancePreviewHello": "Hi!",
+  "appearancePreviewHowIsIt": "How do you like it?",
+  "appearancePreviewHmm": "hmm...",
+  "appearancePreviewNotBad": "Not bad at all!",
+
+  "callKometDetectedNotification": "This person uses Komet! :3",
+  "callStatusConnecting": "Connecting",
+  "callGroupConnecting": "Connecting…",
+  "callGroupWaitingParticipants": "Waiting for participants…",
+  "callParticipantYou": "You",
+  "callParticipantFallback": "Participant",
+  "callTooltipMinimize": "Minimize",
+  "callTooltipKometHub": "Komet",
+  "callInfoTitle": "About call",
+  "callPeerMicOff": "Microphone off",
+  "callPeerCameraOn": "Camera on",
+  "callUnknownName": "Unknown",
+  "callIncoming": "Incoming call",
+  "callStatusRinging": "Calling",
+  "callStatusEnded": "Call ended",
+  "callDecline": "Decline",
+  "callAccept": "Accept",
+  "callSpeaker": "Speaker",
+  "callVideoLabel": "Video",
+  "callScreenLabel": "Screen",
+  "callUnmute": "Unmute",
+  "callMute": "Mute",
+  "callEndButton": "End",
+  "callInfoClient": "Client",
+  "callInfoPlatform": "Platform",
+  "callInfoCountry": "Country",
+  "callInfoInContacts": "In contacts",
+  "callValueYes": "yes",
+  "callValueNo": "no",
+  "callInfoPeerIp": "Peer IP",
+  "callInfoPeerNetwork": "Peer network",
+  "callInfoPath": "Connection path",
+  "callInfoCodec": "Codec",
+  "callInfoServer": "Server",
+  "callInfoTopology": "Topology",
+  "callInfoStatus": "Status",
+  "callStatusValueConnected": "connected",
+  "callStatusValueConnecting": "connecting…",
+  "callInfoPeerMic": "Peer microphone",
+  "callMicValueOn": "on",
+  "callMicValueOff": "off",
+  "callInfoPeerCamera": "Peer camera",
+  "callCameraValueOn": "on",
+  "callCameraValueOff": "off",
+  "callInfoVideoTrack": "Video track",
+  "callInfoVideoTrackPresent": "yes ({count})",
+  "@callInfoVideoTrackPresent": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "callInfoVideoSize": "Video size",
+  "callInfoFrameRendering": "Frame rendering",
+  "callBadgeEncrypted": "Encrypted",
+  "callBadgeAudio": "Audio",
+  "callBadgeRecording": "Recording",
+  "callBadgeNoiseSuppression": "Noise suppression",
+  "callBadgeAnimoji": "Animoji",
+  "callInfoNoDataYet": "Data will appear after connecting…",
+
+  "hubTitleMenu": "Komet",
+  "hubChatPageTitle": "Anonymous chat",
+  "hubGamesTitle": "Games",
+  "hubCheckersTitle": "Checkers",
+  "hubChatTileTitle": "Chat",
+  "hubChatTileSubtitle": "Anonymous messages",
+  "hubGamesTileSubtitle": "Play with your partner",
+  "hubCheckersTileSubtitle": "Russian checkers",
+  "hubMoreSoonTitle": "More coming soon…",
+  "hubMoreSoonSubtitle": "In development",
+  "hubChatPrivacyNote": "Sent directly through the call, stored nowhere",
+  "hubChatEmpty": "No messages yet",
+  "hubChatInputHint": "Message…",
+  "hubCheckersRestart": "Restart",
+  "hubCheckersYouWhite": "You're playing white",
+  "hubCheckersYouBlack": "You're playing black",
+  "hubCheckersWon": "You won 🎉",
+  "hubCheckersLost": "You lost",
+  "hubCheckersYourMove": "Your move",
+  "hubCheckersOpponentMove": "Opponent's move…",
+
+  "scheduledPickTimeTitle": "When to send",
+  "scheduledEditTitle": "Edit",
+  "scheduledMessageTextHint": "Message text",
+  "scheduledSave": "Save",
+  "scheduledEditFailed": "Failed to edit message",
+  "scheduledDeleteConfirmTitle": "Delete scheduled message?",
+  "scheduledDeleteConfirmMessage": "The message won't be sent.",
+  "scheduledDeleteConfirmLabel": "Delete",
+  "scheduledDeleteFailed": "Failed to delete message",
+  "scheduledAppBarTitle": "Scheduled",
+  "scheduledEmpty": "No scheduled messages",
+  "scheduledAttachPhoto": "Photo",
+  "scheduledAttachVideo": "Video",
+  "scheduledAttachVoice": "Voice message",
+  "scheduledAttachFile": "File",
+  "scheduledAttachLocation": "Location",
+  "scheduledAttachForwarded": "Forwarded",
+  "scheduledAttachGeneric": "Attachment",
+
+  "contactProfileLoadError": "Error: {error}",
+  "@contactProfileLoadError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "contactProfileBot": "Bot",
+  "contactProfileOnline": "Online",
+  "contactProfileRecentlyActive": "Recently active",
+  "contactProfileActionChat": "Chat",
+  "contactProfileActionSound": "Sound",
+  "contactProfileActionCall": "Call",
+  "contactProfileInfoPhone": "Phone",
+  "contactProfileInfoCountry": "Country",
+  "contactProfileInfoGender": "Gender",
+  "contactProfileInfoRegistration": "Registration",
+  "contactProfileInfoUpdated": "Updated",
+  "contactProfileInfoAccountStatus": "Account status",
+  "contactProfileInfoDescription": "Description",
+  "contactProfileInfoLink": "Link",
+  "contactProfileInfoFlags": "Flags",
+
+  "nfcPeerNameFallback": "Contact #{id}",
+  "@nfcPeerNameFallback": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "nfcPeerFirstNameFallback": "Contact",
+  "nfcContactAdded": "Contact added",
+  "nfcAddFailed": "Failed to add: {error}",
+  "@nfcAddFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "nfcReasonBluetoothOff": "Turn on Bluetooth and try again",
+  "nfcReasonPermission": "Bluetooth permissions are needed for exchange",
+  "nfcReasonDefault": "Failed to establish connection",
+  "nfcSheetTitle": "Contact exchange",
+  "nfcUnsupported": "NFC is not available on this device",
+  "nfcDisabled": "Turn on NFC in phone settings and try again",
+  "nfcScanningTitle": "Hold the phones close together",
+  "nfcScanningSubtitle": "Both devices must keep this screen open",
+  "nfcExchangingTitle": "Exchanging contacts…",
+  "nfcExchangingSubtitle": "Almost done",
+  "nfcPeerIdFallback": "ID {id}",
+  "@nfcPeerIdFallback": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "nfcAdded": "Added",
+  "nfcAddContact": "Add contact",
+
+  "chatInfoTabGeneralChats": "Common chats",
+  "chatInfoTabMedia": "Media",
+  "chatInfoTabFiles": "Files",
+  "chatInfoTabVoice": "Voice messages",
+  "chatInfoTabLinks": "Links",
+  "chatInfoTabMembers": "Members",
+  "chatInfoEmptyGeneralChats": "No common chats",
+  "chatInfoEmptyMedia": "No media",
+  "chatInfoEmptyFiles": "No files",
+  "chatInfoEmptyVoice": "No voice messages",
+  "chatInfoEmptyLinks": "No links",
+  "chatInfoOnlineOfTotal": "{online} of {total} online",
+  "@chatInfoOnlineOfTotal": {
+    "placeholders": {
+      "online": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedMembersCount": "{count, plural, =1{1 member} other{{count} members}}",
+  "@sharedMembersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedLoadMore": "Show more",
+  "sharedGoToMessage": "Go to message",
+  "sharedDownload": "Download",
+  "sharedCopyLink": "Copy link",
+  "sharedLinkCopied": "Link copied",
+  "chatInfoActionLeave": "Leave",
+  "chatInfoBio": "About",
+  "chatInfoInviteLink": "Invite link",
+  "chatInfoCollapse": "Collapse",
+  "chatInfoShowMore": "More",
+  "chatInfoAddMember": "Add member",
+  "chatInfoRoleOwner": "owner",
+  "chatInfoRoleAdmin": "Admin",
+  "chatInfoNoData": "No data",
+  "chatInfoHideExtra": "Hide",
+  "chatInfoShowMoreExtra": "Details",
+  "chatInfoRowId": "Chat ID",
+  "chatInfoRowCreated": "Created",
+  "chatInfoRowModified": "Modified",
+  "chatInfoRowMembersCount": "Members",
+  "chatInfoRowOwner": "Owner",
+  "chatInfoRowCreatedGroup": "Created",
+  "chatInfoRowJoined": "Joined",
+  "chatInfoRowModifiedGroup": "Modified",
+  "chatInfoRowHasBots": "Has bots",
+  "chatInfoRowBlockedCount": "Blocked",
+  "chatInfoRowOfficialGroup": "Official",
+  "chatInfoRowSignAdmin": "Admin signature",
+  "chatInfoRowSubscribersCount": "Subscribers",
+  "chatInfoRowOfficialChannel": "Official",
+  "chatInfoRowComments": "Comments",
+  "chatInfoRowRkn": "Roskomnadzor approved",
+  "chatInfoRowOnlyAdmin": "Admins only",
+
+  "securityTitle": "Security",
+  "securityLoadError": "Loading error: {error}",
+  "@securityLoadError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "securitySaveError": "Save error: {error}",
+  "@securitySaveError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "securityPrivacyAll": "Everyone",
+  "securityPrivacyContacts": "My contacts",
+  "securityPrivacyNobody": "Nobody",
+  "securityFamilyProtection": "Family protection",
+  "securityEnabledFem": "Enabled",
+  "securityDisabledFem": "Disabled",
+  "securityPasswordTitle": "Login password",
+  "securityEnabledMasc": "Enabled",
+  "securityDisabledMasc": "Disabled",
+  "securityModeTitle": "Safe mode",
+  "securityModeSubtitle": "Hides personal information",
+  "securitySettingsUnavailable": "Changing this setting is not available yet",
+  "securityFindByPhone": "Find me by phone number",
+  "securityWhoCanCall": "Who can call me",
+  "securityWhoCanInvite": "Who can invite me to chats",
+  "securityShowContact": "Show contact",
+  "securityContentSafe": "Safe",
+  "securityContentAll": "All",
+  "securityShowOnlineStatus": "See online status",
+  "securityShowMyNumber": "See my number",
+  "securityConfirmTitle": "Are you sure?",
+  "securityHiddenStatusWarning": "You won't be able to see the online status of other users.",
+  "securityConfidentialityHeader": "PRIVACY",
+  "securityReadReceipts": "Read receipts",
+  "securityAltKeyboard": "Alternative keyboard",
+  "securityUnsafeFiles": "Accept unsafe files",
+  "securityAudioTranscription": "Audio transcription",
+  "securityBlacklistTitle": "Blacklist",
+  "securityBlacklistNotification": "Blacklist: {count} contacts",
+  "@securityBlacklistNotification": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+
+  "passwordEntryWrongPassword": "Wrong password",
+  "passwordEntryConfirmTitle": "Confirm password",
+  "passwordEntryCurrentPasswordHint": "Current password",
+  "passwordEntryContinue": "Continue",
+  "passwordEntryNotSetTitle": "Password is not set",
+  "passwordEntry2faSubtitle": "Two-factor authentication",
+  "passwordEntrySetupAction": "Set password",
+  "passwordEntryGateMessage": "Enter your login password to manage protection",
+  "passwordEntryGenericPasswordHint": "Password",
+  "passwordEntrySetTitle": "Password is set",
+  "passwordEntryHintPrefix": "Hint: {hint}",
+  "@passwordEntryHintPrefix": {
+    "placeholders": {
+      "hint": {
+        "type": "String"
+      }
+    }
+  },
+  "passwordEntryChangePasswordAction": "Change password",
+  "passwordEntryChangeEmailAction": "Change email",
+  "passwordEntryDeleteAction": "Delete password",
+  "passwordEntryMinPasswordError": "Password must be at least 6 characters",
+  "passwordEntryMismatchError": "Passwords do not match",
+  "passwordEntryInvalidEmailError": "Enter a valid email",
+  "passwordEntryInvalidCodeError": "Enter the 6-digit code",
+  "passwordEntrySetupTitle": "Password setup",
+  "passwordEntryStepPassword": "Password",
+  "passwordEntryStepHint": "Hint",
+  "passwordEntryStepEmail": "Email",
+  "passwordEntryStepCode": "Code",
+  "passwordEntryChoosePassword": "Choose a password",
+  "passwordEntryMinCharsHint": "At least 6 characters",
+  "passwordEntryEnterPasswordHint": "Enter password",
+  "passwordEntryEnterAgain": "Enter the password again",
+  "passwordEntryRepeatHint": "Repeat password",
+  "passwordEntryHintForPassword": "Password hint",
+  "passwordEntryOptional": "Optional",
+  "passwordEntryHintFieldHint": "Enter a hint (optional)",
+  "passwordEntryLinkEmail": "Link an email",
+  "passwordEntryEmailPurpose": "For password recovery. Optional",
+  "passwordEntryEmailHintOptional": "example@mail.com (optional)",
+  "passwordEntryEnterCode": "Enter the code",
+  "passwordEntryCodeSentTo": "Code sent to {email}",
+  "@passwordEntryCodeSentTo": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "passwordEntryChangedNotif": "Password changed",
+  "passwordEntryNewPassword": "New password",
+  "passwordEntryNewPasswordHint": "Enter new password",
+  "passwordEntryRepeatNewPasswordHint": "Repeat new password",
+  "passwordEntryEmailChangedNotif": "Email changed",
+  "passwordEntryNewEmail": "New email",
+  "passwordEntryEmailHint": "example@mail.com",
+  "passwordEntryRemovedNotif": "Password removed",
+  "passwordEntryRemoveTitle": "Remove password",
+  "passwordEntryRemoveWarning": "Warning! Removing the password will weaken your account's protection.",
+  "cloudStorageNoActiveProfile": "No active profile",
+  "cloudStorageSetupFailed": "Could not create environment",
+  "cloudStorageTitle": "Cloud storage",
+  "cloudStorageNotConfiguredTitle": "Cloud storage environment isn't set up",
+  "cloudStorageNotConfiguredSubtitle": "Let's start? It's quick.",
+  "cloudStorageStart": "Start",
+  "cloudStorageUploadingPercent": "Uploading {percent}%",
+  "@cloudStorageUploadingPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "cloudStorageStartUploadHint": "Start an upload to see the progress bar",
+  "cloudStorageEmptyTitle": "No cloud files yet...",
+  "cloudStorageEmptySubtitle": "Add one?",
+  "cloudStorageUpload": "Upload",
+  "cloudStorageFromFile": "From file",
+  "cloudStorageById": "By ID",
+  "cloudStorageFileIdLabel": "File ID",
+  "cloudStorageSizeLabel": "Size",
+  "cloudStorageNoLinkYet": "No link yet. Create one.",
+  "cloudStorageLinkExpiresIn": "Link expires in {time}",
+  "@cloudStorageLinkExpiresIn": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "cloudStorageLinkCopied": "Link copied",
+  "cloudStorageInvalidId": "Invalid ID",
+  "cloudStorageSendError": "Send error",
+  "cloudStorageSendByIdTitle": "Send by ID",
+  "cloudStorageSend": "Send",
+  "digitalIdGosuslugiLinkUnavailable": "Linking Gosuslugi isn't available on this platform. Do this in the mobile app.",
+  "digitalIdGosuslugiLinkFailed": "Could not get the Gosuslugi link",
+  "digitalIdGosuslugiTitle": "Gosuslugi",
+  "digitalIdDocsUnavailable": "Documents aren't available yet. Try again later.",
+  "digitalIdTitle": "Digital ID",
+  "digitalIdNotConfiguredTitle": "Digital ID isn't set up",
+  "digitalIdLinkGosuslugiHint": "Link your Gosuslugi account so your documents appear in Digital ID. The phone number in MAX must match the one in your Gosuslugi profile.",
+  "digitalIdLinkOrRefreshHint": "Link Gosuslugi to get access to your documents, or refresh the page if you've already set up Digital ID.",
+  "digitalIdLoadDocuments": "Load documents",
+  "digitalIdLinkGosuslugiButton": "Link Gosuslugi",
+  "digitalIdGosuslugiProfileFallback": "Gosuslugi profile",
+  "digitalIdBirthDate": "Date of birth: {date}",
+  "@digitalIdBirthDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "digitalIdPersonalDataTitle": "Personal data",
+  "digitalIdSnilsLabel": "SNILS",
+  "digitalIdInnLabel": "INN",
+  "digitalIdBirthPlaceLabel": "Place of birth",
+  "digitalIdRegistrationAddressLabel": "Registration address",
+  "digitalIdDocumentsTitle": "Documents",
+  "digitalIdDocSeries": "series {series}",
+  "@digitalIdDocSeries": {
+    "placeholders": {
+      "series": {
+        "type": "String"
+      }
+    }
+  },
+  "digitalIdDocNumber": "No. {number}",
+  "@digitalIdDocNumber": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "digitalIdPassesTitle": "Passes",
+  "digitalIdCardInn": "INN {inn}",
+  "@digitalIdCardInn": {
+    "placeholders": {
+      "inn": {
+        "type": "String"
+      }
+    }
+  },
+  "digitalIdBiometryConfigured": "Biometrics set up on this device",
+  "digitalIdBiometryNotConfigured": "Biometrics not set up on this device",
+  "digitalIdDocPassport": "Russian passport",
+  "digitalIdDocOms": "Health insurance policy (OMS)",
+  "digitalIdDocDriverLicense": "Driver's license",
+  "digitalIdDocVehicleSts": "Vehicle registration certificate (STS)",
+  "digitalIdDocChildBirthCert": "Birth certificate",
+  "digitalIdDocPensionCert": "Pension certificate",
+  "digitalIdDocDisabledCert": "Disability certificate",
+  "digitalIdDocLargeFamilyCert": "Large family certificate",
+  "digitalIdDocStudentTicket": "Student ID",
+  "digitalIdDocChildInn": "Child's INN",
+  "digitalIdDocChildOms": "Child's health insurance policy (OMS)",
+  "attachSheetGallery": "Gallery",
+  "attachSheetPoll": "Poll",
+  "attachSheetCameraComingSoon": "Camera is coming soon",
+  "attachSheetSendFileTitle": "Send a file",
+  "attachSheetSendFileSubtitle": "A document, archive, or any other file",
+  "attachSheetChooseFileButton": "Choose file",
+  "attachSheetShareLocationTitle": "Share location",
+  "attachSheetShareLocationSubtitle": "Send your current location",
+  "attachSheetSendLocationButton": "Send location",
+  "attachSheetCreatePoll": "Create poll",
+  "attachSheetCreatePollSubtitle": "A question with answer options",
+  "attachSheetNoImagesFound": "No images found",
+  "attachSheetLimitedAccessInfo": "Not all photos are accessible",
+  "attachSheetSectionInProgress": "Section under development",
+  "attachSheetNoGalleryAccessTitle": "No access to the gallery",
+  "attachSheetNoGalleryAccessSubtitle": "Allow access to photos to pick them from here",
+  "attachSheetAllow": "Allow",
+  "attachSheetSettings": "Settings",
+  "attachSheetAddCaptionHint": "Add a caption...",
+  "attachSheetCamera": "Camera",
+  "photoEditorApplyFailed": "Couldn't apply",
+  "photoEditorFlipTooltip": "Flip",
+  "photoEditorRotateTooltip": "Rotate",
+  "photoEditorCancel": "CANCEL",
+  "photoEditorReset": "RESET",
+  "photoEditorDone": "DONE",
+  "photoEditorTextDialogTitle": "Text",
+  "photoEditorTextDialogHint": "Enter text",
+  "photoEditorOk": "OK",
+  "photoEditorApplyChangesFailed": "Couldn't apply changes",
+  "photoEditorClearAll": "Clear all",
+  "photoEditorAddText": "Add text",
+  "photoEditorTabDraw": "DRAW",
+  "photoEditorTabStickers": "STICKERS",
+  "photoEditorTabText": "TEXT",
+  "photoEditorChannelAll": "All",
+  "photoEditorChannelRed": "Red",
+  "photoEditorChannelGreen": "Green",
+  "photoEditorChannelBlue": "Blue",
+  "photoEditorEnhance": "Enhance",
+  "photoEditorExposure": "Exposure",
+  "photoEditorContrast": "Contrast",
+  "photoEditorSaturation": "Saturation",
+  "photoEditorWarmth": "Warmth",
+  "photoEditorVignette": "Vignette",
+  "photoEditorBlurOff": "Off",
+  "photoEditorBlurRadial": "Radial",
+  "photoEditorBlurLinear": "Linear",
+  "fontSettingsInvalidInput": "Enter a font link or name",
+  "fontSettingsFontNotFound": "Font \"{name}\" not found or no network",
+  "@fontSettingsFontNotFound": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fontSettingsFontAdded": "Font \"{name}\" added",
+  "@fontSettingsFontAdded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fontSettingsFontRemoved": "Font \"{name}\" removed",
+  "@fontSettingsFontRemoved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fontSettingsAddFontTitle": "Add font",
+  "fontSettingsAddFontDescription": "Paste a Google Fonts link or font name",
+  "fontSettingsAddFontConfirm": "Add",
+  "fontSettingsTitle": "Fonts",
+  "fontSettingsSectionFont": "Font",
+  "fontSettingsLoading": "Loading…",
+  "fontSettingsSectionFontSize": "Font size",
+  "fontSettingsPreviewLabel": "PREVIEW",
+  "fontSettingsReset": "Reset",
+  "updateAvailableTitle": "Update available",
+  "updateAvailableBody": "Version {version} is out. Update the app?",
+  "@updateAvailableBody": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateWhatsNew": "WHAT'S NEW",
+  "updateAction": "Update",
+  "updateLater": "Later",
+  "updateSkip": "Skip",
+  "updateDownloading": "Downloading update…",
+  "updateDownloadFailed": "Failed to download the update"
+}

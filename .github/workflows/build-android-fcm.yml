@@ -1,0 +1,131 @@
+name: Build Android (FCM)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-android-fcm.yml'
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-android-fcm.yml'
+
+jobs:
+  build-android-fcm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.3'
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Configure Gradle
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
+          echo "kotlin.daemon.jvmargs=-Xmx1536m" >> ~/.gradle/gradle.properties
+          echo "org.gradle.caching=true" >> ~/.gradle/gradle.properties
+          echo "org.gradle.parallel=true" >> ~/.gradle/gradle.properties
+          echo "org.gradle.configureondemand=true" >> ~/.gradle/gradle.properties
+
+      - name: Setup release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_BASE64 secret not set — release will be debug-signed."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/komet-release.jks
+          {
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=komet-release.jks"
+          } > android/key.properties
+          echo "Release signing configured."
+
+      - name: Build Universal APK
+        run: flutter build apk --release --flavor oneme --obfuscate --split-debug-info=build/symbols
+
+      - name: Build Split APKs
+        run: flutter build apk --release --split-per-abi --flavor oneme --obfuscate --split-debug-info=build/symbols
+
+      - name: Upload Universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-android-fcm-universal
+          path: build/app/outputs/flutter-apk/app-oneme-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload arm64-v8a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-android-fcm-arm64-v8a
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-oneme-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload armeabi-v7a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-android-fcm-armeabi-v7a
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-oneme-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-android-fcm-x86_64
+          path: build/app/outputs/flutter-apk/app-x86_64-oneme-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build App Bundle
+        run: flutter build appbundle --release --flavor oneme --obfuscate --split-debug-info=build/symbols
+
+      - name: Upload App Bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-android-fcm-aab
+          path: build/app/outputs/bundle/onemeRelease/app-oneme-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-android-fcm-symbols
+          path: build/symbols
+          if-no-files-found: error
+          retention-days: 90
