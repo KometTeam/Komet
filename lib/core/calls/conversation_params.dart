@@ -1,7 +1,4 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
-import '../protocol/lz4_block.dart';
+import 'package:kolibri/kolibri.dart' as kb;
 
 /// Параметры подключения к звонку (`vcp`), которые сервер присылает в пуше
 /// входящего звонка (opcode 137) и в ответе на инициацию исходящего.
@@ -79,73 +76,19 @@ class ConversationParams {
     return nowSec >= expiresAt! - 5;
   }
 
-  static List<String> _splitTurn(Object? value) {
-    if (value is! String || value.isEmpty) return const [];
-    return value
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
-  static List<String> _stringList(Object? value) {
-    if (value is! List) return const [];
-    return value.whereType<String>().toList();
-  }
-
-  /// Распаковывает и парсит строку `vcp`. Возвращает `null`, если формат
-  /// не распознан.
+  /// Распаковывает и парсит строку `vcp` через Rust-ядро (kolibri). Возвращает
+  /// `null`, если формат не распознан. Требует инициализации `initKolibri()`.
   static ConversationParams? decode(String vcp) {
-    final sep = vcp.indexOf(':');
-    if (sep <= 0) return null;
-
-    final rawLen = int.tryParse(vcp.substring(0, sep));
-    if (rawLen == null || rawLen <= 0) return null;
-
-    final Uint8List compressed;
-    try {
-      compressed = base64.decode(vcp.substring(sep + 1));
-    } catch (_) {
-      return null;
-    }
-
-    final Uint8List bytes;
-    try {
-      final decompressed = lz4BlockDecompress(compressed, rawLen);
-      bytes = decompressed.length > rawLen
-          ? Uint8List.sublistView(decompressed, 0, rawLen)
-          : decompressed;
-    } catch (_) {
-      return null;
-    }
-
-    final Object? json;
-    try {
-      json = jsonDecode(utf8.decode(bytes));
-    } catch (_) {
-      return null;
-    }
-    if (json is! Map) return null;
-
-    final token = json['tkn'];
-    final wse = json['wse'];
-    if (token is! String || wse is! String) return null;
-
+    final kb.CallParams? p = kb.decodeVcp(vcp: vcp, conversationId: '');
+    if (p == null) return null;
     return ConversationParams(
-      token: token,
-      wsEndpoint: wse,
-      wsIps: _stringList(json['wsip']),
-      wtEndpoint: json['wte'] as String?,
-      wtIps: _stringList(json['wtip']),
-      callsApiEndpoint: json['vcae'] as String?,
-      callsApiIps: _stringList(json['vcaip']),
-      clientType: json['srcp'] as String?,
-      expiresAt: json['et'] is int ? json['et'] as int : null,
-      stun: json['stne'] as String?,
-      turn: _splitTurn(json['trne']),
-      turnUser: json['trnu'] as String?,
-      turnPassword: json['trnp'] as String?,
-      isVideo: json['iv'] == true,
+      token: p.token,
+      wsEndpoint: p.wsEndpoint,
+      stun: p.stun,
+      turn: p.turn,
+      turnUser: p.turnUser,
+      turnPassword: p.turnPassword,
+      isVideo: p.isVideo,
     );
   }
 }

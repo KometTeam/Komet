@@ -201,14 +201,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
-  dart_lz4:
-    dependency: "direct main"
-    description:
-      name: dart_lz4
-      sha256: e2e9c30fdf83a7a1e63bc6c4d90786cf795c38eefee40b1f4c35ea6480c91db9
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.0"
   dart_webrtc:
     dependency: transitive
     description:

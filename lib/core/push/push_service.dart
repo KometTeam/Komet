@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:kolibri/kolibri.dart' show initKolibri;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../backend/api.dart';
@@ -53,6 +54,9 @@ Future<void> _handleCallDecline(String payloadJson) async {
   }
   if (vcp.isEmpty || conversationId.isEmpty) return;
 
+  // Фоновый изолят: инициализируем ядро перед vcp-декодом/сигналингом.
+  await initKolibri();
+
   final params = ConversationParams.decode(vcp);
   if (params == null) return;
 
@@ -83,6 +87,7 @@ Future<void> _handleReply(String payloadJson, String text) async {
   if (account == 0 || chatId == 0) return;
 
   WidgetsFlutterBinding.ensureInitialized();
+  await initKolibri();
   if (AppInstance.isNamed) {
     try {
       SharedPreferences.setPrefix('flutter.${AppInstance.id}.');

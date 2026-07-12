@@ -101,6 +101,7 @@ class FileUploader {
                   url: info.url,
                   path: file.path,
                   filename: filename,
+                  connection: 'close',
                 )
                 .listen(
                   (e) {
@@ -185,6 +186,8 @@ class FileUploader {
           url: uri.toString(),
           path: file.path,
           filename: _syntheticFilename(),
+          contentType: 'application/octet-stream',
+          connection: 'close',
         ),
         onProgress: onProgress,
       );
@@ -277,6 +280,11 @@ class FileUploader {
         ),
         onProgress: onProgress,
       );
+      if (result.error != null || result.status != 200) {
+        logger.w(
+          'uploadVideoFile: status=${result.status} error=${result.error}',
+        );
+      }
       return result.error == null && result.status == 200;
     } catch (e) {
       logger.w('uploadVideoFile: $e');
