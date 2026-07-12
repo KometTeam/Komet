@@ -79,6 +79,7 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/message_actions_overlay.dart';
+import '../../widgets/lottie_image.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
@@ -465,6 +466,7 @@ class _ChatScreenState extends State<ChatScreen>
   final Map<int, GlobalKey> _separatorKeys = {};
   String? _lastSentId;
   final ValueNotifier<int> _otherUnread = ValueNotifier(0);
+  final ValueNotifier<bool> _animojiHold = ValueNotifier(true);
 
   final ValueNotifier<Set<String>> _selectedIds = ValueNotifier(const {});
   late final AnimationController _selectionAnim;
@@ -740,6 +742,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _kickoffHistory() {
+    _animojiHold.value = false;
     if (_historyKickedOff) return;
     _historyKickedOff = true;
     _shimmerStartTimer = Timer(const Duration(milliseconds: 150), () {
@@ -1312,6 +1315,7 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.removeObserver(this);
     chats.chatsChanged.removeListener(_onChatsBump);
     _otherUnread.dispose();
+    _animojiHold.dispose();
     _saveDraft();
     _messageController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScrollForDate);
@@ -3990,7 +3994,10 @@ class _ChatScreenState extends State<ChatScreen>
               ),
               child: AnimatedBuilder(
                 animation: _searchAnim,
-                child: underlap ? _buildUnderlapBody() : _buildColorBody(),
+                child: LottieHoldScope(
+                  isHeld: _animojiHold,
+                  child: underlap ? _buildUnderlapBody() : _buildColorBody(),
+                ),
                 builder: (context, body) => Scaffold(
                   backgroundColor: cs.surface,
                   extendBodyBehindAppBar: underlap,

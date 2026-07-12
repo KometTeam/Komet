@@ -64,6 +64,24 @@ class LottieScrollScope extends InheritedWidget {
       !identical(oldWidget.isScrolling, isScrolling);
 }
 
+class LottieHoldScope extends InheritedWidget {
+  final ValueListenable<bool> isHeld;
+
+  const LottieHoldScope({
+    super.key,
+    required this.isHeld,
+    required super.child,
+  });
+
+  static ValueListenable<bool>? of(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<LottieHoldScope>()
+      ?.isHeld;
+
+  @override
+  bool updateShouldNotify(LottieHoldScope oldWidget) =>
+      !identical(oldWidget.isHeld, isHeld);
+}
+
 class LottiePlayer extends StatefulWidget {
   final String lottieUrl;
   final String? fallbackUrl;
@@ -97,6 +115,7 @@ class _LottiePlayerState extends State<LottiePlayer>
   late final bool _native;
   RlottieClip? _clip;
   ValueListenable<bool>? _scrollState;
+  ValueListenable<bool>? _holdState;
   int? _px;
   bool _started = false;
   bool _showedFrames = false;
@@ -110,8 +129,10 @@ class _LottiePlayerState extends State<LottiePlayer>
   double? _lastElapsedMs;
 
   bool get _isScrolling => _scrollState?.value ?? false;
+  bool get _isHeld => _holdState?.value ?? false;
   bool get _canLoad =>
       !_isScrolling &&
+      !_isHeld &&
       (widget.eager || !LottieLoadGovernor.instance.throttled.value);
 
   @override
@@ -130,6 +151,12 @@ class _LottiePlayerState extends State<LottiePlayer>
       _scrollState?.removeListener(_onGateChanged);
       _scrollState = state;
       _scrollState?.addListener(_onGateChanged);
+    }
+    final hold = LottieHoldScope.of(context);
+    if (!identical(hold, _holdState)) {
+      _holdState?.removeListener(_onGateChanged);
+      _holdState = hold;
+      _holdState?.addListener(_onGateChanged);
     }
   }
 
@@ -155,6 +182,7 @@ class _LottiePlayerState extends State<LottiePlayer>
     _deferTimer?.cancel();
     LottieLoadGovernor.instance.throttled.removeListener(_onGateChanged);
     _scrollState?.removeListener(_onGateChanged);
+    _holdState?.removeListener(_onGateChanged);
     _ticker.dispose();
     _releaseClip();
     _frameIndex.dispose();
@@ -232,15 +260,16 @@ class _LottiePlayerState extends State<LottiePlayer>
     if (_started) return;
     if (_canLoad) {
       _startLoad();
-    } else if (!_isScrolling) {
-      // Blocked only by the frame-time governor: defer, but never starve.
+    } else if (!_isScrolling && !_isHeld) {
       _deferTimer ??= Timer(_maxLoadDefer, _forceDeferredLoad);
     }
   }
 
   void _forceDeferredLoad() {
     _deferTimer = null;
-    if (mounted && !_started && _clip == null && !_isScrolling) _startLoad();
+    if (mounted && !_started && _clip == null && !_isScrolling && !_isHeld) {
+      _startLoad();
+    }
   }
 
   void _startLoad() {
