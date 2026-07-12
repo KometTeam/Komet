@@ -18,6 +18,7 @@ import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'formatted_message_text.dart';
+import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
 import '../../models/reaction_info.dart';
 import 'attachment/bubbles/voice_bubble.dart';
@@ -134,6 +135,8 @@ class MessageBubble extends StatelessWidget {
   final void Function(String emoji)? onReactionTap;
   final String? peerName;
   final String? peerAvatarUrl;
+  final ValueListenable<({String id, Offset pos})?>? textSelection;
+  final VoidCallback? onExitTextSelection;
 
   const MessageBubble({
     super.key,
@@ -153,6 +156,8 @@ class MessageBubble extends StatelessWidget {
     this.onReactionTap,
     this.peerName,
     this.peerAvatarUrl,
+    this.textSelection,
+    this.onExitTextSelection,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -1082,6 +1087,25 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _wrapSelectable(Widget textWidget) {
+    final listenable = textSelection;
+    if (listenable == null || (message.text?.isEmpty ?? true)) {
+      return textWidget;
+    }
+    return ValueListenableBuilder<({String id, Offset pos})?>(
+      valueListenable: listenable,
+      builder: (context, req, child) {
+        if (req == null || req.id != message.id) return child!;
+        return SelectableMessageText(
+          initialGlobalPosition: req.pos,
+          onExit: onExitTextSelection ?? () {},
+          child: child!,
+        );
+      },
+      child: textWidget,
+    );
+  }
+
   Widget _buildTextContent(BubbleContext ctx) {
     final attachments = message.attachments;
     final isForwardedContact =
@@ -1102,7 +1126,7 @@ class MessageBubble extends StatelessWidget {
 
     final textStyle = TextStyle(color: ctx.text, fontSize: 16, height: 1.3);
     final ranges = message.formatRanges;
-    final textWidget = isForwarded
+    final baseTextWidget = isForwarded
         ? _buildForwardedInlineText(ctx, forwarded)
         : (FormattedMessageText.isFormatted(message.text, ranges)
               ? FormattedMessageText(
@@ -1111,6 +1135,7 @@ class MessageBubble extends StatelessWidget {
                   style: textStyle,
                 )
               : Text(message.text ?? '', style: textStyle));
+    final textWidget = _wrapSelectable(baseTextWidget);
 
     final metaWidget = Text(
       message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,

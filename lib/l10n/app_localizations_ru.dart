@@ -528,6 +528,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsCopy => 'Копировать';
 
   @override
+  String get msgActionsSelectAll => 'Выбрать всё';
+
+  @override
   String get emojiSearchHint => 'Поиск эмодзи';
 
   @override

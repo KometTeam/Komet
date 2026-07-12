@@ -525,6 +525,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsCopy => 'Copy';
 
   @override
+  String get msgActionsSelectAll => 'Select all';
+
+  @override
   String get emojiSearchHint => 'Search emoji';
 
   @override
