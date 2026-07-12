@@ -1366,26 +1366,17 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
+                                  onSelected: _onOverflowMenuSelected,
                                   itemBuilder: (context) => [
                                     _buildPopupMenuItem(
                                       1,
-                                      'Кнопка 1',
-                                      Symbols.settings,
+                                      'Избранное',
+                                      Symbols.bookmark,
                                     ),
                                     _buildPopupMenuItem(
                                       2,
-                                      'Кнопка 2',
-                                      Symbols.notifications,
-                                    ),
-                                    _buildPopupMenuItem(
-                                      3,
-                                      'Кнопка 3',
-                                      Symbols.shield,
-                                    ),
-                                    _buildPopupMenuItem(
-                                      4,
-                                      'Кнопка 4',
-                                      Symbols.info,
+                                      'Прочитать всё',
+                                      Symbols.done_all,
                                     ),
                                   ],
                                 ),
@@ -2840,6 +2831,64 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
       ),
     );
+  }
+
+  void _onOverflowMenuSelected(int value) {
+    switch (value) {
+      case 1:
+        _openSavedMessages();
+      case 2:
+        unawaited(_markAllChatsRead());
+    }
+  }
+
+  void _openSavedMessages() {
+    CachedChat? self;
+    for (final c in _chats) {
+      if (c.id == 0) {
+        self = c;
+        break;
+      }
+    }
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: 0,
+        name: 'Избранное',
+        imageUrl: self?.iconUrl ?? '',
+        chatType: self?.type ?? 'DIALOG',
+      ),
+    );
+  }
+
+  Future<void> _markAllChatsRead() async {
+    final p = _profile ?? await AppDatabase.loadActiveProfile();
+    if (p == null) return;
+    final all = await chats.getChats(
+      p.id,
+      includeHidden: KometSettings.showHiddenChats.value,
+    );
+    final targets = all
+        .where((c) => c.unreadCount > 0)
+        .where((c) => c.lastMsgId != null)
+        .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
+        .toList();
+    if (targets.isEmpty) {
+      if (mounted) showCustomNotification(context, 'Непрочитанных чатов нет');
+      return;
+    }
+    for (final c in targets) {
+      await chats.markRead(
+        api,
+        p.id,
+        c.id,
+        c.lastMsgId!.toString(),
+        c.lastMsgTime ?? 0,
+      );
+    }
+    if (mounted) {
+      showCustomNotification(context, 'Все чаты отмечены прочитанными');
+    }
   }
 
   PopupMenuItem<int> _buildPopupMenuItem(
