@@ -775,7 +775,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceChatChromeNone => 'None';
 
   @override
-  String get appearanceChatChromeTransparent => 'Clear';
+  String get appearanceChatChromeTransparent => 'Frost blur';
+
+  @override
+  String get appearanceComposerTitle => 'Input bar';
+
+  @override
+  String get appearanceComposerSubtitle =>
+      'Style and background of the message input bar';
+
+  @override
+  String get appearanceComposerBackgroundStandard => 'Default';
+
+  @override
+  String get appearanceComposerBackgroundFrost => 'Frost blur';
 
   @override
   String get appearanceGradientTitle => 'Gradient';

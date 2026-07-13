@@ -38,6 +38,8 @@ import 'core/config/app_media_cache.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
 import 'core/config/app_chat_chrome.dart';
+import 'core/config/app_composer_background.dart';
+import 'core/config/app_composer_style.dart';
 import 'core/config/app_wallpaper_tint.dart';
 import 'core/storage/chat_wallpaper_store.dart';
 import 'core/utils/wallpaper_seed.dart';
@@ -190,6 +192,8 @@ void main(List<String> args) async {
   final pillGradientFuture = AppPillGradient.load();
   final visualStyleFuture = AppVisualStyle.load();
   final chatChromeFuture = AppChatChrome.load();
+  final composerStyleFuture = AppComposerStyle.load();
+  final composerBackgroundFuture = AppComposerBackground.load();
   final wallpaperTintFuture = AppWallpaperTint.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
@@ -241,6 +245,8 @@ void main(List<String> args) async {
     pillGradientFuture,
     visualStyleFuture,
     chatChromeFuture,
+    composerStyleFuture,
+    composerBackgroundFuture,
     wallpaperTintFuture,
     themeScheduleFuture,
     messageActionsFuture,

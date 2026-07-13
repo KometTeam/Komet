@@ -40,7 +40,7 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       builder: (context) => const ThemeSettingsScreen(),
     ),
     _CustomizationCategory(
-      icon: Symbols.palette,
+      icon: Symbols.styler,
       title: 'Внешний вид',
       builder: (context) => const AppearanceScreen(),
     ),

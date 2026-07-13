@@ -10,6 +10,8 @@ import '../../../core/config/app_bubble_shape.dart';
 import '../../../core/config/app_pill_gradient.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_chat_chrome.dart';
+import '../../../core/config/app_composer_background.dart';
+import '../../../core/config/app_composer_style.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
@@ -118,6 +120,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             const _VisualStyleCard(),
             const SizedBox(height: 12),
             const _ChatChromeCard(),
+            const SizedBox(height: 12),
+            const _ComposerBarCard(),
             const SizedBox(height: 12),
             const _GradientToggleCard(),
           ],
@@ -242,6 +246,90 @@ class _ChatChromeCard extends StatelessWidget {
                   if (set.isNotEmpty) {
                     Haptics.selection();
                     AppChatChrome.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerBarCard extends StatelessWidget {
+  const _ComposerBarCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.appearanceComposerTitle,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.appearanceComposerSubtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<ComposerStyle>(
+            valueListenable: AppComposerStyle.current,
+            builder: (context, current, _) {
+              return SegmentedButton<ComposerStyle>(
+                segments: [
+                  ButtonSegment(
+                    value: ComposerStyle.glossy,
+                    label: Text(l10n.appearanceVisualStyleGlossy),
+                  ),
+                  ButtonSegment(
+                    value: ComposerStyle.materialYou,
+                    label: Text(l10n.appearanceVisualStyleMaterialYou),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppComposerStyle.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          ValueListenableBuilder<ComposerBackground>(
+            valueListenable: AppComposerBackground.current,
+            builder: (context, current, _) {
+              return SegmentedButton<ComposerBackground>(
+                segments: [
+                  ButtonSegment(
+                    value: ComposerBackground.standard,
+                    label: Text(l10n.appearanceComposerBackgroundStandard),
+                  ),
+                  ButtonSegment(
+                    value: ComposerBackground.frostBlur,
+                    label: Text(l10n.appearanceComposerBackgroundFrost),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppComposerBackground.save(set.first);
                   }
                 },
               );

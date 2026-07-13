@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../backend/modules/chats.dart';
@@ -6,7 +8,7 @@ import '../../core/links/max_link.dart';
 import '../../core/storage/app_database.dart';
 import '../../main.dart';
 import '../screens/chats/chat_screen.dart';
-import '../screens/contacts/contact_profile_screen.dart';
+import '../screens/contacts/open_contact_profile.dart';
 import 'call_link_handler.dart';
 import 'confirm_dialog.dart';
 import 'custom_notification.dart';
@@ -75,13 +77,12 @@ void _openContact(BuildContext context, Map<dynamic, dynamic> contact) {
     showCustomNotification(context, 'Не удалось открыть профиль');
     return;
   }
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => ContactProfileScreen(
-        contactId: id,
-        initialName: _contactName(contact),
-        initialAvatarUrl: contact['baseUrl'] as String?,
-      ),
+  unawaited(
+    openContactDialogProfile(
+      context,
+      contactId: id,
+      name: _contactName(contact),
+      avatarUrl: contact['baseUrl'] as String?,
     ),
   );
 }

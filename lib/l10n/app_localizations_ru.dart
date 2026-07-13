@@ -778,7 +778,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceChatChromeNone => 'Нет';
 
   @override
-  String get appearanceChatChromeTransparent => 'Прозр.';
+  String get appearanceChatChromeTransparent => 'Frost blur';
+
+  @override
+  String get appearanceComposerTitle => 'Вид панели ввода';
+
+  @override
+  String get appearanceComposerSubtitle => 'Стиль и фон панели ввода сообщений';
+
+  @override
+  String get appearanceComposerBackgroundStandard => 'Default';
+
+  @override
+  String get appearanceComposerBackgroundFrost => 'Frost blur';
 
   @override
   String get appearanceGradientTitle => 'Градиент';

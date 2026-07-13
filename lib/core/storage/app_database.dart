@@ -928,6 +928,56 @@ class AppDatabase {
     );
   }
 
+  static Future<List<Map<String, dynamic>>> loadMessagesBetween(
+    int accountId,
+    int chatId, {
+    required int afterTime,
+    required int beforeTime,
+    int limit = 60,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: onlyVisible
+          ? 'account_id = ? AND chat_id = ? AND deleted = 0 '
+                'AND time > ? AND time < ?'
+          : 'account_id = ? AND chat_id = ? AND time > ? AND time < ?',
+      whereArgs: [accountId, chatId, afterTime, beforeTime],
+      orderBy: 'time ASC',
+      limit: limit,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessagesAround(
+    int accountId,
+    int chatId, {
+    required int centerTime,
+    int before = 40,
+    int after = 20,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    final base = onlyVisible
+        ? 'account_id = ? AND chat_id = ? AND deleted = 0'
+        : 'account_id = ? AND chat_id = ?';
+    final older = await db.query(
+      'messages',
+      where: '$base AND time <= ?',
+      whereArgs: [accountId, chatId, centerTime],
+      orderBy: 'time DESC',
+      limit: before,
+    );
+    final newer = await db.query(
+      'messages',
+      where: '$base AND time > ?',
+      whereArgs: [accountId, chatId, centerTime],
+      orderBy: 'time ASC',
+      limit: after,
+    );
+    return [...newer.reversed, ...older];
+  }
+
   static Future<void> markMessageDeleted(
     int accountId,
     int chatId,

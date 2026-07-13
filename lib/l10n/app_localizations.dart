@@ -1559,8 +1559,32 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceChatChromeTransparent.
   ///
   /// In en, this message translates to:
-  /// **'Clear'**
+  /// **'Frost blur'**
   String get appearanceChatChromeTransparent;
+
+  /// No description provided for @appearanceComposerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Input bar'**
+  String get appearanceComposerTitle;
+
+  /// No description provided for @appearanceComposerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Style and background of the message input bar'**
+  String get appearanceComposerSubtitle;
+
+  /// No description provided for @appearanceComposerBackgroundStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get appearanceComposerBackgroundStandard;
+
+  /// No description provided for @appearanceComposerBackgroundFrost.
+  ///
+  /// In en, this message translates to:
+  /// **'Frost blur'**
+  String get appearanceComposerBackgroundFrost;
 
   /// No description provided for @appearanceGradientTitle.
   ///

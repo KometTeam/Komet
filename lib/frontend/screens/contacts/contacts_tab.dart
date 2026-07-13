@@ -13,32 +13,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../chats/chat_info_screen.dart';
 import 'nfc_exchange_sheet.dart';
-
-Future<void> openContactDialogProfile(
-  BuildContext context, {
-  required int contactId,
-  required String name,
-  String? avatarUrl,
-}) async {
-  final accountId = await TokenStorage.getActiveAccountId();
-  final existing = accountId == null
-      ? null
-      : await AppDatabase.findDialogChatByParticipant(accountId, contactId);
-  final chatId = existing ?? ((accountId ?? 0) ^ contactId);
-  if (!context.mounted) return;
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ChatInfoScreen(
-        chatId: chatId,
-        name: name,
-        imageUrl: avatarUrl ?? '',
-        chatType: 'DIALOG',
-        dialogPeerId: contactId,
-      ),
-    ),
-  );
-}
+import 'open_contact_profile.dart';
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key});

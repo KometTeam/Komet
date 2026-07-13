@@ -494,19 +494,19 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final hasText =
         widget.messageText != null && widget.messageText!.isNotEmpty;
     return <_Action>[
+      if (widget.onReply != null)
+        _Action(Symbols.reply, l10n.msgActionsReply, _reply),
+      if (widget.onForward != null)
+        _Action(Symbols.forward, l10n.msgActionsForward, _forward),
       if (hasText) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
       if (widget.isMe && widget.onEdit != null)
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
-      if (widget.onReply != null)
-        _Action(Symbols.reply, l10n.msgActionsReply, _reply),
       if (widget.onPin != null)
         _Action(
           widget.isPinned ? Symbols.keep_off : Symbols.push_pin,
           widget.isPinned ? l10n.msgActionsUnpin : l10n.msgActionsPin,
           _pin,
         ),
-      if (widget.onForward != null)
-        _Action(Symbols.forward, l10n.msgActionsForward, _forward),
       if (widget.onMarkUnread != null)
         _Action(
           Symbols.mark_chat_unread,

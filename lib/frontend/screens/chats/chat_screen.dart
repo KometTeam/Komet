@@ -15,7 +15,7 @@ import 'package:komet/backend/modules/upload_notification_service.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
-import 'package:komet/frontend/screens/contacts/contact_profile_screen.dart';
+import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
 import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
@@ -68,6 +68,9 @@ import 'chat/view/shimmer_loading.dart';
 import '../../../core/config/app_commands.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_chat_chrome.dart';
+import 'package:komet/core/config/app_composer_background.dart';
+import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/core/config/app_composer_style.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
 import '../../../models/sticker.dart';
@@ -110,15 +113,24 @@ class _UnreadSeparatorItem {
 class _FrostedPanel extends StatelessWidget {
   final Color tint;
   final Border? border;
+  final double sigma;
+  final BackdropKey? backdropKey;
   final Widget child;
 
-  const _FrostedPanel({required this.tint, this.border, required this.child});
+  const _FrostedPanel({
+    required this.tint,
+    this.border,
+    this.sigma = AppFrost.panelSigma,
+    this.backdropKey,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ClipRect(
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+        backdropGroupKey: backdropKey,
         child: DecoratedBox(
           decoration: BoxDecoration(color: tint, border: border),
           child: child,
@@ -437,6 +449,9 @@ class _ChatScreenState extends State<ChatScreen>
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
   static const double _pinnedBannerLift = 6.0;
+
+  final BackdropKey _barBackdrop = BackdropKey();
+  final BackdropKey _pillBackdrop = BackdropKey();
   bool get _isLoadingMore => _chatController.isLoadingMore;
   set _isLoadingMore(bool v) => _chatController.isLoadingMore = v;
   bool get _hasMoreHistory => _chatController.hasMoreHistory;
@@ -449,6 +464,12 @@ class _ChatScreenState extends State<ChatScreen>
   CachedChat? chat;
   bool _peerIsBot = false;
   ChatWallpaper? _wallpaper;
+
+  bool get _composerFrosted =>
+      AppComposerBackground.current.value == ComposerBackground.frostBlur;
+
+  bool get _composerUnderlap =>
+      AppChatChrome.current.value != ChatChromeStyle.color || _composerFrosted;
 
   ChatChromeStyle get _effectiveChrome {
     final chrome = AppChatChrome.current.value;
@@ -510,6 +531,8 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_exitTextSelectionOnScroll);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
     AppChatChrome.current.addListener(_onVisualStyleChanged);
+    AppComposerStyle.current.addListener(_onVisualStyleChanged);
+    AppComposerBackground.current.addListener(_onVisualStyleChanged);
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -898,7 +921,7 @@ class _ChatScreenState extends State<ChatScreen>
         final ua = _unreadAnchorTime;
         return ua != null && _messages.indexWhere((m) => m.time > ua) > 0;
       },
-      maxPages: 80,
+      maxPages: 15,
     );
     if (!mounted) return;
     if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
@@ -1161,27 +1184,14 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _jumpToPinnedMessage() {
     final id = chat?.pinnedMsgId;
-    final time = chat?.pinnedMsgTime;
     if (id == null) return;
-    unawaited(_openPinnedMessage(id.toString(), time ?? 0));
-  }
-
-  Future<void> _openPinnedMessage(String messageId, int time) async {
-    if (!_messages.any((m) => m.id == messageId)) {
-      await _walkHistoryBack(
-        reached: () => _messages.any((m) => m.id == messageId),
-        maxPages: 60,
-        targetTime: time,
-      );
-      if (!mounted) return;
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
-    }
+    final messageId = id.toString();
     if (_messages.any((m) => m.id == messageId)) {
       _scrollToLoadedMessage(messageId);
-    } else {
-      showCustomNotification(context, 'Сообщение не загружено');
+      return;
     }
+    setState(_beginTargetNavigation);
+    unawaited(_runGoToMessage(messageId, chat?.pinnedMsgTime ?? 0));
   }
 
   bool _badgeRefreshing = false;
@@ -1269,13 +1279,84 @@ class _ChatScreenState extends State<ChatScreen>
   void _maybeLoadMoreHistory() {
     if (!_scrollController.hasClients) return;
     if (_historyAutoloadSuppressed) return;
-    if (_isLoading || _isLoadingMore || !_hasMoreHistory) return;
+    if (_isLoading) return;
+    _maybeFillGap();
+    if (_isLoadingMore || !_hasMoreHistory) return;
     if (_messages.isEmpty) return;
     final pos = _scrollController.position;
     if (pos.maxScrollExtent <= 0) return;
     if (pos.maxScrollExtent - pos.pixels <= _historyPrefetchExtent) {
       unawaited(_loadMoreHistory());
     }
+  }
+
+  void _maybeFillGap() {
+    final controller = _chatController;
+    if (!controller.hasGap || controller.loadingGap) return;
+    for (final gap in controller.gaps) {
+      final box = _keyForMessage(gap.edgeId).currentContext?.findRenderObject();
+      if (box is RenderBox && box.attached) {
+        unawaited(_fillGapForward(gap));
+        return;
+      }
+    }
+  }
+
+  Future<void> _fillGapForward(HistoryGap gap) async {
+    final edgeId = gap.edgeId;
+    final beforeDy = _messageOffsetInList(edgeId);
+    final added = await _chatController.fillGapForward(gap);
+    if (!mounted || added == 0) return;
+
+    _syncReactionNotifiersFromMessages();
+    _bumpMessages();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_scrollController.hasClients) return;
+
+    final afterDy = _messageOffsetInList(edgeId);
+    if (beforeDy != null && afterDy != null) {
+      final delta = beforeDy - afterDy;
+      if (delta.abs() > 0.5) {
+        final pos = _scrollController.position;
+        _scrollController.jumpTo(
+          (pos.pixels + delta).clamp(pos.minScrollExtent, pos.maxScrollExtent),
+        );
+      }
+    }
+    _loadForwardedSenderNames();
+    _loadGroupSenderNames();
+  }
+
+  double? _messageOffsetInList(String messageId) {
+    final listBox = _listKey.currentContext?.findRenderObject();
+    final box = _keyForMessage(messageId).currentContext?.findRenderObject();
+    if (listBox is! RenderBox || box is! RenderBox || !box.attached) return null;
+    return box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+  }
+
+  Future<void> _loadMessageWindow(String messageId, int targetTime) async {
+    if (targetTime <= 0) {
+      await _walkHistoryBack(
+        reached: () => _messages.any((m) => m.id == messageId),
+        maxPages: 10,
+      );
+      return;
+    }
+
+    _historyAutoloadSuppressCount++;
+    try {
+      await _chatController.loadMessageWindow(
+        targetId: messageId,
+        targetTime: targetTime,
+      );
+    } finally {
+      _historyAutoloadSuppressCount--;
+    }
+    if (!mounted) return;
+    _syncReactionNotifiersFromMessages();
+    _bumpMessages();
+    _loadForwardedSenderNames();
+    _loadGroupSenderNames();
   }
 
   Future<void> _walkHistoryBack({
@@ -1294,7 +1375,11 @@ class _ChatScreenState extends State<ChatScreen>
           (_messages.isEmpty || _messages.first.time > targetTime)) {
         page++;
         final before = _messages.isEmpty ? 0 : _messages.first.time;
-        await _loadMoreHistory(resolveSenderNames: false);
+        await _loadMoreHistory(
+          resolveSenderNames: false,
+          pageSize: ChatController.historyWalkPageSize,
+          persist: false,
+        );
         if (!mounted) return;
         final after = _messages.isEmpty ? 0 : _messages.first.time;
         if (after == before) break;
@@ -1303,12 +1388,19 @@ class _ChatScreenState extends State<ChatScreen>
       _historyAutoloadSuppressCount--;
     }
     if (!mounted) return;
+    _chatController.persistSessionCache();
     _loadForwardedSenderNames();
     _loadGroupSenderNames();
   }
 
-  Future<void> _loadMoreHistory({bool resolveSenderNames = true}) async {
+  Future<void> _loadMoreHistory({
+    bool resolveSenderNames = true,
+    int? pageSize,
+    bool persist = true,
+  }) async {
     await _chatController.loadMoreHistory(
+      pageSize: pageSize,
+      persist: persist,
       onLoadingStarted: _bumpMessages,
       onLoaded: (added) {
         if (added > 0) _syncReactionNotifiersFromMessages();
@@ -1411,6 +1503,8 @@ class _ChatScreenState extends State<ChatScreen>
     _readMarkTimer?.cancel();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
+    AppComposerStyle.current.removeListener(_onVisualStyleChanged);
+    AppComposerBackground.current.removeListener(_onVisualStyleChanged);
     _composerHeight.dispose();
     _pinnedBannerHeight.dispose();
     _floatingDateTimer?.cancel();
@@ -1970,6 +2064,9 @@ class _ChatScreenState extends State<ChatScreen>
               ComposerInputBar(
                 chatType: widget.chatType,
                 chrome: _effectiveChrome,
+                style: AppComposerStyle.current.value,
+                background: AppComposerBackground.current.value,
+                backdropKey: _pillBackdrop,
                 attachAnim: _attachAnim,
                 replyTo: _replyTo,
                 myId: _myId,
@@ -2028,15 +2125,23 @@ class _ChatScreenState extends State<ChatScreen>
       ],
     );
     Widget wrapChrome(Widget child) {
+      if (_composerFrosted) {
+        if (AppComposerStyle.current.value != ComposerStyle.materialYou) {
+          return child;
+        }
+        return _FrostedPanel(
+          sigma: AppFrost.sigma,
+          tint: AppFrost.panelTint(cs),
+          border: Border(top: AppFrost.hairline(cs)),
+          backdropKey: _barBackdrop,
+          child: child,
+        );
+      }
       if (_effectiveChrome != ChatChromeStyle.blur) return child;
       return _FrostedPanel(
-        tint: cs.surfaceContainerHigh.withValues(alpha: 0.55),
-        border: Border(
-          top: BorderSide(
-            color: cs.outlineVariant.withValues(alpha: 0.4),
-            width: 0.5,
-          ),
-        ),
+        tint: AppFrost.blurPanelTint(cs),
+        border: Border(top: AppFrost.hairline(cs)),
+        backdropKey: _barBackdrop,
         child: child,
       );
     }
@@ -2398,13 +2503,9 @@ class _ChatScreenState extends State<ChatScreen>
           : Colors.transparent,
       flexibleSpace: chrome == ChatChromeStyle.blur
           ? _FrostedPanel(
-              tint: cs.surfaceContainerHigh.withValues(alpha: 0.55),
-              border: Border(
-                bottom: BorderSide(
-                  color: cs.outlineVariant.withValues(alpha: 0.4),
-                  width: 0.5,
-                ),
-              ),
+              tint: AppFrost.blurPanelTint(cs),
+              border: Border(bottom: AppFrost.hairline(cs)),
+              backdropKey: _barBackdrop,
               child: const SizedBox.expand(),
             )
           : (chrome == ChatChromeStyle.none && !glossy)
@@ -2426,22 +2527,12 @@ class _ChatScreenState extends State<ChatScreen>
               ),
             )
           : (chrome == ChatChromeStyle.transparent && !glossy)
-          ? IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      cs.surface.withValues(alpha: 0.72),
-                      cs.surface.withValues(alpha: 0.45),
-                      cs.surface.withValues(alpha: 0.0),
-                    ],
-                    stops: const [0.0, 0.62, 1.0],
-                  ),
-                ),
-                child: const SizedBox.expand(),
-              ),
+          ? _FrostedPanel(
+              sigma: AppFrost.sigma,
+              tint: AppFrost.panelTint(cs),
+              border: Border(bottom: AppFrost.hairline(cs)),
+              backdropKey: _barBackdrop,
+              child: const SizedBox.expand(),
             )
           : null,
       foregroundColor: cs.onSurface,
@@ -2477,6 +2568,10 @@ class _ChatScreenState extends State<ChatScreen>
                           offset: Offset(0, -height * 0.4 * t),
                           child: ChatHeaderRow(
                             glossy: glossy,
+                            frosted:
+                                glossy &&
+                                chrome == ChatChromeStyle.transparent,
+                            backdropKey: _pillBackdrop,
                             cs: cs,
                             embedded: widget.embedded,
                             chatId: widget.chatId,
@@ -3482,14 +3577,12 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _openSenderProfile(int senderId) {
     if (senderId == 0 || senderId == _myId) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ContactProfileScreen(
-          contactId: senderId,
-          initialName: ContactCache.get(senderId),
-          initialAvatarUrl: ContactCache.getAvatar(senderId),
-        ),
+    unawaited(
+      openContactDialogProfile(
+        context,
+        contactId: senderId,
+        name: ContactCache.get(senderId) ?? 'User #$senderId',
+        avatarUrl: ContactCache.getAvatar(senderId),
       ),
     );
   }
@@ -3570,11 +3663,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
 
     if (!_messages.any((m) => m.id == id)) {
-      await _walkHistoryBack(
-        reached: () => _messages.any((m) => m.id == id),
-        maxPages: 80,
-        targetTime: targetTime,
-      );
+      await _loadMessageWindow(id, targetTime);
       if (!mounted) return;
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
@@ -3684,29 +3773,14 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _openSearchResult(MessageSearchResult result) async {
     _closeSearch();
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-
-    if (!_messages.any((m) => m.id == result.id)) {
-      var guard = 0;
-      while (mounted &&
-          guard < 60 &&
-          _hasMoreHistory &&
-          !_messages.any((m) => m.id == result.id) &&
-          (_messages.isEmpty || _messages.first.time > result.time)) {
-        guard++;
-        final before = _messages.isEmpty ? 0 : _messages.first.time;
-        await _loadMoreHistory();
-        if (!mounted) return;
-        final after = _messages.isEmpty ? 0 : _messages.first.time;
-        if (after == before) break;
-      }
-      if (!mounted) return;
+    if (_messages.any((m) => m.id == result.id)) {
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
+      _scrollToLoadedMessage(result.id);
+      return;
     }
-
-    _scrollToLoadedMessage(result.id);
+    setState(_beginTargetNavigation);
+    await _runGoToMessage(result.id, result.time);
   }
 
   void _scrollToLoadedMessage(
@@ -4129,6 +4203,8 @@ class _ChatScreenState extends State<ChatScreen>
       text: pinned.pinnedMsgText,
       isPreview: pinned.pinnedMsgIsPreview,
       floating: floating,
+      frosted: _effectiveChrome == ChatChromeStyle.transparent,
+      backdropKey: _pillBackdrop,
       onTap: _jumpToPinnedMessage,
       onUnpin: pinned.canPinMessages(_myId)
           ? () => unawaited(_unpinCurrentMessage())
@@ -4139,6 +4215,11 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildColorBody() {
     final cs = Theme.of(context).colorScheme;
     final banner = _buildPinnedBanner(floating: false);
+    final frosted = _composerFrosted;
+    final composer = _MeasureSize(
+      onHeight: (value) => _composerHeight.value = value,
+      child: _buildComposerArea(context),
+    );
     return Column(
       children: [
         ?banner,
@@ -4151,12 +4232,17 @@ class _ChatScreenState extends State<ChatScreen>
                   child: ChatWallpaperView(wallpaper: _wallpaper!),
                 ),
               Positioned.fill(child: _buildMessagesArea()),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: CommandPanelView(commandPanel: _commandPanel),
+              ValueListenableBuilder<double>(
+                valueListenable: _composerHeight,
+                builder: (context, height, _) => Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: frosted ? height : 0,
+                  child: CommandPanelView(commandPanel: _commandPanel),
+                ),
               ),
+              if (frosted)
+                Positioned(left: 0, right: 0, bottom: 0, child: composer),
               SearchOverlay(
                 cs: cs,
                 searchAnim: _searchAnim,
@@ -4168,7 +4254,7 @@ class _ChatScreenState extends State<ChatScreen>
             ],
           ),
         ),
-        _buildComposerArea(context),
+        if (!frosted) composer,
       ],
     );
   }
@@ -4391,13 +4477,8 @@ class _ChatScreenState extends State<ChatScreen>
                       if (index == 0) {
                         return ValueListenableBuilder<double>(
                           valueListenable: _composerHeight,
-                          builder: (context, height, _) => SizedBox(
-                            height:
-                                AppChatChrome.current.value ==
-                                    ChatChromeStyle.color
-                                ? 0
-                                : height,
-                          ),
+                          builder: (context, height, _) =>
+                              SizedBox(height: _composerUnderlap ? height : 0),
                         );
                       }
                       if (index > items.length) {
@@ -5609,6 +5690,8 @@ class _PinnedMessageBanner extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onUnpin;
   final bool floating;
+  final bool frosted;
+  final BackdropKey? backdropKey;
 
   const _PinnedMessageBanner({
     required this.text,
@@ -5616,13 +5699,17 @@ class _PinnedMessageBanner extends StatelessWidget {
     required this.onTap,
     this.onUnpin,
     this.floating = false,
+    this.frosted = false,
+    this.backdropKey,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final content = Material(
-      color: floating
+      color: frosted
+          ? AppFrost.panelTint(cs)
+          : floating
           ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
           : cs.surfaceContainerHigh,
       borderRadius: floating ? BorderRadius.circular(16) : null,
@@ -5679,16 +5766,32 @@ class _PinnedMessageBanner extends StatelessWidget {
       ),
     );
 
-    if (!floating) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: cs.outlineVariant.withValues(alpha: 0.4),
-              width: 0.5,
+    final bottomBorder = Border(bottom: AppFrost.hairline(cs));
+
+    if (frosted) {
+      return ClipRRect(
+        borderRadius: floating
+            ? BorderRadius.circular(16)
+            : BorderRadius.zero,
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: AppFrost.sigma,
+            sigmaY: AppFrost.sigma,
+          ),
+          backdropGroupKey: backdropKey,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: floating ? null : bottomBorder,
             ),
+            child: content,
           ),
         ),
+      );
+    }
+
+    if (!floating) {
+      return DecoratedBox(
+        decoration: BoxDecoration(border: bottomBorder),
         child: content,
       );
     }
