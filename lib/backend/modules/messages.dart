@@ -1085,6 +1085,42 @@ class MessagesModule {
     return _applyReactionResponse(chatId, messageId, response);
   }
 
+  Future<Map<int, String>> getDetailedReactions(
+    int chatId,
+    String messageId, {
+    int count = 100,
+  }) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return const {};
+    if (_api.state != SessionState.online) return const {};
+    try {
+      final response = await _api.sendRequest(Opcode.msgGetDetailedReactions, {
+        'chatId': chatId,
+        'messageId': id,
+        'count': count,
+      });
+      if (!response.isOk) return const {};
+      final payload = response.payload;
+      if (payload is! Map) return const {};
+      return _parseDetailedReactions(payload['reactions']);
+    } catch (e) {
+      logger.e('getDetailedReactions error: $e');
+      return const {};
+    }
+  }
+
+  static Map<int, String> _parseDetailedReactions(dynamic raw) {
+    if (raw is! List) return const {};
+    final result = <int, String>{};
+    for (final entry in raw.whereType<Map>()) {
+      final userId = entry['userId'];
+      final reaction = entry['reaction'];
+      if (userId is! int || reaction is! String || reaction.isEmpty) continue;
+      result[userId] = reaction;
+    }
+    return result;
+  }
+
   Future<({bool ok, Map<String, dynamic>? info})> _applyReactionResponse(
     int chatId,
     String messageId,

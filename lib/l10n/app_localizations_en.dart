@@ -555,6 +555,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsEditHistory => 'Edit history';
 
   @override
+  String get msgActionsReadBy => 'Read by';
+
+  @override
+  String get msgActionsReadByEmpty => 'Nobody has read it yet';
+
+  @override
+  String get msgActionsReadByUnknownUser => 'User';
+
+  @override
   String get msgActionsReport => 'Report';
 
   @override

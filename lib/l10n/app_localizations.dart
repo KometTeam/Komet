@@ -1154,6 +1154,24 @@ abstract class AppLocalizations {
   /// **'Edit history'**
   String get msgActionsEditHistory;
 
+  /// No description provided for @msgActionsReadBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Read by'**
+  String get msgActionsReadBy;
+
+  /// No description provided for @msgActionsReadByEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody has read it yet'**
+  String get msgActionsReadByEmpty;
+
+  /// No description provided for @msgActionsReadByUnknownUser.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get msgActionsReadByUnknownUser;
+
   /// No description provided for @msgActionsReport.
   ///
   /// In en, this message translates to:

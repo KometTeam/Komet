@@ -223,7 +223,8 @@ class _ChatScreenState extends State<ChatScreen>
   bool _initialPositionDone = false;
   bool _positioningInFlight = false;
   bool _initialTargetHandled = false;
-  bool _suppressHistoryAutoload = false;
+  int _historyAutoloadSuppressCount = 0;
+  bool get _historyAutoloadSuppressed => _historyAutoloadSuppressCount > 0;
   int _readMarkTime = 0;
   Timer? _readMarkTimer;
   final GlobalKey _listKey = GlobalKey();
@@ -435,6 +436,7 @@ class _ChatScreenState extends State<ChatScreen>
   static const double _historyPrefetchExtent = _avgMessageHeight * 8;
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
+  static const double _pinnedBannerLift = 6.0;
   bool get _isLoadingMore => _chatController.isLoadingMore;
   set _isLoadingMore(bool v) => _chatController.isLoadingMore = v;
   bool get _hasMoreHistory => _chatController.hasMoreHistory;
@@ -890,18 +892,14 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _loadUntilUnreadReady() async {
-    var guard = 0;
-    while (mounted && guard < 80 && _hasMoreHistory) {
-      if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
-      final ua = _unreadAnchorTime;
-      if (ua != null && _messages.indexWhere((m) => m.time > ua) > 0) break;
-      guard++;
-      final before = _messages.isEmpty ? 0 : _messages.first.time;
-      await _loadMoreHistory();
-      if (!mounted) return;
-      final after = _messages.isEmpty ? 0 : _messages.first.time;
-      if (after == before) break;
-    }
+    await _walkHistoryBack(
+      reached: () {
+        if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
+        final ua = _unreadAnchorTime;
+        return ua != null && _messages.indexWhere((m) => m.time > ua) > 0;
+      },
+      maxPages: 80,
+    );
     if (!mounted) return;
     if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
     final ua = _unreadAnchorTime;
@@ -1014,6 +1012,67 @@ class _ChatScreenState extends State<ChatScreen>
     Navigator.of(context).pop();
   }
 
+  bool _canShowReadBy(CachedMessage message) {
+    if (message.isControl || message.deleted) return false;
+    if (int.tryParse(message.id) == null) return false;
+    final type = chat?.type ?? widget.chatType;
+    return type == 'CHAT' || type == 'GROUP';
+  }
+
+  Future<List<MessageReader>> _loadReadBy(CachedMessage message) async {
+    final marks = await chats.getReadMarks(api, _myId, widget.chatId);
+    final reactions = await messagesModule.getDetailedReactions(
+      widget.chatId,
+      message.id,
+    );
+
+    final readerIds = <int>{
+      ...marks.entries.where((e) => e.value >= message.time).map((e) => e.key),
+      ...reactions.keys,
+    }..removeAll({_myId, message.senderId});
+    if (readerIds.isEmpty || !mounted) return const [];
+
+    await messagesModule.ensureContactNames(readerIds);
+    await animojiModule.ensureLoaded();
+    if (!mounted) return const [];
+
+    final animojiByEmoji = {
+      for (final animoji in animojiModule.animojis)
+        EmojiKeywordIndex.normalize(animoji.emoji): animoji,
+    };
+    final unknownName = AppLocalizations.of(
+      context,
+    )!.msgActionsReadByUnknownUser;
+
+    final readers = readerIds.map((id) {
+      final emoji = reactions[id];
+      final animoji = emoji == null
+          ? null
+          : animojiByEmoji[EmojiKeywordIndex.normalize(emoji)];
+      final name = ContactCache.get(id);
+      return MessageReader(
+        id: id,
+        name: name == null || name.isEmpty ? unknownName : name,
+        avatarUrl: ContactCache.getAvatar(id),
+        reaction: emoji == null
+            ? null
+            : ReactionEmoji(
+                emoji: emoji,
+                animationUrl: animoji?.lottieUrl,
+                staticUrl: animoji?.iconUrl,
+              ),
+      );
+    }).toList();
+
+    readers.sort((a, b) {
+      final aReacted = a.reaction != null;
+      final bReacted = b.reaction != null;
+      if (aReacted != bReacted) return aReacted ? -1 : 1;
+      return (marks[b.id] ?? 0).compareTo(marks[a.id] ?? 0);
+    });
+    return readers;
+  }
+
   bool _canPinMessage(CachedMessage message) {
     if (message.isControl) return false;
     if (int.tryParse(message.id) == null) return false;
@@ -1109,19 +1168,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _openPinnedMessage(String messageId, int time) async {
     if (!_messages.any((m) => m.id == messageId)) {
-      var guard = 0;
-      while (mounted &&
-          guard < 60 &&
-          _hasMoreHistory &&
-          !_messages.any((m) => m.id == messageId) &&
-          (_messages.isEmpty || _messages.first.time > time)) {
-        guard++;
-        final before = _messages.isEmpty ? 0 : _messages.first.time;
-        await _loadMoreHistory();
-        if (!mounted) return;
-        final after = _messages.isEmpty ? 0 : _messages.first.time;
-        if (after == before) break;
-      }
+      await _walkHistoryBack(
+        reached: () => _messages.any((m) => m.id == messageId),
+        maxPages: 60,
+        targetTime: time,
+      );
       if (!mounted) return;
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
@@ -1217,7 +1268,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _maybeLoadMoreHistory() {
     if (!_scrollController.hasClients) return;
-    if (_suppressHistoryAutoload) return;
+    if (_historyAutoloadSuppressed) return;
     if (_isLoading || _isLoadingMore || !_hasMoreHistory) return;
     if (_messages.isEmpty) return;
     final pos = _scrollController.position;
@@ -1227,14 +1278,45 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  Future<void> _loadMoreHistory() async {
+  Future<void> _walkHistoryBack({
+    required bool Function() reached,
+    required int maxPages,
+    int targetTime = 0,
+  }) async {
+    if (reached()) return;
+    _historyAutoloadSuppressCount++;
+    try {
+      var page = 0;
+      while (mounted &&
+          page < maxPages &&
+          _hasMoreHistory &&
+          !reached() &&
+          (_messages.isEmpty || _messages.first.time > targetTime)) {
+        page++;
+        final before = _messages.isEmpty ? 0 : _messages.first.time;
+        await _loadMoreHistory(resolveSenderNames: false);
+        if (!mounted) return;
+        final after = _messages.isEmpty ? 0 : _messages.first.time;
+        if (after == before) break;
+      }
+    } finally {
+      _historyAutoloadSuppressCount--;
+    }
+    if (!mounted) return;
+    _loadForwardedSenderNames();
+    _loadGroupSenderNames();
+  }
+
+  Future<void> _loadMoreHistory({bool resolveSenderNames = true}) async {
     await _chatController.loadMoreHistory(
       onLoadingStarted: _bumpMessages,
       onLoaded: (added) {
         if (added > 0) _syncReactionNotifiersFromMessages();
         _bumpMessages();
-        _loadForwardedSenderNames();
-        _loadGroupSenderNames();
+        if (resolveSenderNames) {
+          _loadForwardedSenderNames();
+          _loadGroupSenderNames();
+        }
       },
       onError: (_) {
         if (mounted) {
@@ -3488,19 +3570,11 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
 
     if (!_messages.any((m) => m.id == id)) {
-      var guard = 0;
-      while (mounted &&
-          guard < 80 &&
-          _hasMoreHistory &&
-          !_messages.any((m) => m.id == id) &&
-          (_messages.isEmpty || _messages.first.time > targetTime)) {
-        guard++;
-        final before = _messages.isEmpty ? 0 : _messages.first.time;
-        await _loadMoreHistory();
-        if (!mounted) return;
-        final after = _messages.isEmpty ? 0 : _messages.first.time;
-        if (after == before) break;
-      }
+      await _walkHistoryBack(
+        reached: () => _messages.any((m) => m.id == id),
+        maxPages: 80,
+        targetTime: targetTime,
+      );
       if (!mounted) return;
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
@@ -3548,7 +3622,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted || !_scrollController.hasClients) return;
     if (_messages.indexWhere((m) => m.id == id) == -1) return;
 
-    _suppressHistoryAutoload = true;
+    _historyAutoloadSuppressCount++;
     try {
       var stable = 0;
       for (var iter = 0; iter < 120; iter++) {
@@ -3604,7 +3678,7 @@ class _ChatScreenState extends State<ChatScreen>
         await WidgetsBinding.instance.endOfFrame;
       }
     } finally {
-      _suppressHistoryAutoload = false;
+      _historyAutoloadSuppressCount--;
     }
   }
 
@@ -4102,7 +4176,8 @@ class _ChatScreenState extends State<ChatScreen>
   double _pinnedBannerTop() {
     final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
     return MediaQuery.paddingOf(context).top +
-        (glossy ? _glossyHeaderHeight : kToolbarHeight);
+        (glossy ? _glossyHeaderHeight : kToolbarHeight) -
+        _pinnedBannerLift;
   }
 
   void _resetPinnedBannerHeight() {
@@ -4252,16 +4327,14 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   double _floatingDateTop(double pinnedHeight) {
-    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
     if (AppChatChrome.current.value == ChatChromeStyle.color) {
+      final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
       return glossy ? 2 : 4;
     }
     if (chat?.hasPinnedMessage == true && pinnedHeight > 0) {
       return _pinnedBannerTop() + pinnedHeight + 2;
     }
-    return MediaQuery.paddingOf(context).top +
-        (glossy ? _glossyHeaderHeight : kToolbarHeight) +
-        2;
+    return _pinnedBannerTop() + 2;
   }
 
   Widget _buildLoadMoreIndicator() {
@@ -4411,6 +4484,10 @@ class _ChatScreenState extends State<ChatScreen>
                             : null,
                         isPinned: () =>
                             chat?.pinnedMsgId == int.tryParse(message.id),
+                        loadReadBy: _canShowReadBy(message)
+                            ? () => _loadReadBy(message)
+                            : null,
+                        onReaderTap: _openSenderProfile,
                         loadReportReasons: canReport
                             ? () => _loadReportReasons(reportTypeId)
                             : null,
@@ -5712,6 +5789,8 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final bool Function() isPinned;
+  final Future<List<MessageReader>> Function()? loadReadBy;
+  final void Function(int userId)? onReaderTap;
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
   final void Function(String emoji)? onReact;
@@ -5734,6 +5813,8 @@ class _SelectableMessageRow extends StatefulWidget {
     this.onMarkUnread,
     this.onPin,
     required this.isPinned,
+    this.loadReadBy,
+    this.onReaderTap,
     this.loadReportReasons,
     this.onReport,
     this.onReact,
@@ -5791,6 +5872,8 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       style: AppMessageActionsStyle.current.value,
       interaction: MessageActionsInteraction.tap,
       editHistory: widget.message.editHistory,
+      loadReadBy: widget.loadReadBy,
+      onReaderTap: widget.onReaderTap,
       loadReportReasons: widget.loadReportReasons,
       onReport: widget.onReport,
       onDelete: widget.onDelete,
@@ -5857,6 +5940,8 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
       editHistory: widget.message.editHistory,
+      loadReadBy: widget.loadReadBy,
+      onReaderTap: widget.onReaderTap,
       loadReportReasons: widget.loadReportReasons,
       onReport: widget.onReport,
       onDelete: widget.onDelete,

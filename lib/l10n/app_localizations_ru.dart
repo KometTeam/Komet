@@ -558,6 +558,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsEditHistory => 'История изменений';
 
   @override
+  String get msgActionsReadBy => 'Кем прочитано';
+
+  @override
+  String get msgActionsReadByEmpty => 'Пока никто не прочитал';
+
+  @override
+  String get msgActionsReadByUnknownUser => 'Пользователь';
+
+  @override
   String get msgActionsReport => 'Пожаловаться';
 
   @override

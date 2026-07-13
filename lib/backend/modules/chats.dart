@@ -1275,6 +1275,18 @@ class ChatsModule {
     return Map<String, dynamic>.from(chats.first as Map);
   }
 
+  Future<Map<int, int>> getReadMarks(Api api, int accountId, int chatId) async {
+    try {
+      final info = await getChatInfo(api, chatId);
+      final fresh = parseParticipants(info?['participants']);
+      if (fresh.isNotEmpty) return fresh;
+    } catch (e) {
+      logger.w('Не удалось получить отметки прочтения для $chatId: $e');
+    }
+    final rows = await getChat(accountId, chatId);
+    return rows.isEmpty ? const {} : rows.first.participants;
+  }
+
   Future<dynamic> searchById(Api api, int userId) async {
     final packet = await api.sendRequest(Opcode.publicSearch, {
       'query': userId.toString(),
