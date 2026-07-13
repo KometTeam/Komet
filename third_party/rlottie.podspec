@@ -34,6 +34,14 @@ Pod::Spec.new do |s|
   s.public_header_files = 'rlottie/inc/*.h'
 
   s.pod_target_xcconfig = {
+    # On Apple arm64 the compiler predefines __ARM_NEON__, which pulls in
+    # vdrawhelper_neon.cpp's hand-asm blitter calling pixman_composite_*_asm_neon
+    # — defined only in pixman-arm-neon-asm.S, which we can't assemble in the pod
+    # (excluded above) → undefined symbols at link. Drop the hand-asm path (like
+    # the CMake build does for 32-bit ARM) and let the C blitter compile; clang
+    # still auto-vectorizes it to NEON. No-op on x86_64 (macro undefined there).
+    'OTHER_CFLAGS' => '$(inherited) -U__ARM_NEON__',
+    'OTHER_CPLUSPLUSFLAGS' => '$(inherited) -U__ARM_NEON__',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++14',
     'CLANG_CXX_LIBRARY' => 'libc++',
     'GCC_ENABLE_CPP_EXCEPTIONS' => 'NO',
