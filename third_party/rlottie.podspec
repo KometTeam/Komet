@@ -24,7 +24,13 @@ Pod::Spec.new do |s|
     'rlottie/src/vector/stb/*.{cpp,h}',
     'rlottie/src/binding/c/*.cpp',
   ]
-  s.exclude_files = ['rlottie/src/vector/pixman/*.S']
+  # rapidjson's msinttypes/ are MSVC-only shims (guarded by _MSC_VER in
+  # rapidjson.h); on Apple clang they must not be compiled — the module build
+  # would otherwise hit their `#error "Use this header only with MSVC"`.
+  s.exclude_files = [
+    'rlottie/src/vector/pixman/*.S',
+    'rlottie/src/lottie/rapidjson/msinttypes/*.h',
+  ]
   s.public_header_files = 'rlottie/inc/*.h'
 
   s.pod_target_xcconfig = {
