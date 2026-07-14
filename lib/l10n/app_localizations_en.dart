@@ -2084,4 +2084,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateDownloadFailed => 'Failed to download the update';
+
+  @override
+  String get updateCheck => 'Check for updates';
+
+  @override
+  String get updateChecking => 'Checking for updates…';
+
+  @override
+  String get updateUpToDate => 'You have the latest version';
+
+  @override
+  String get updateCheckFailed =>
+      'Couldn\'t check for updates. Try again later';
 }

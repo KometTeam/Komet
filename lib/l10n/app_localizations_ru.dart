@@ -2095,4 +2095,17 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get updateDownloadFailed => 'Не удалось скачать обновление';
+
+  @override
+  String get updateCheck => 'Проверить обновление';
+
+  @override
+  String get updateChecking => 'Проверяем обновления…';
+
+  @override
+  String get updateUpToDate => 'Установлена актуальная версия';
+
+  @override
+  String get updateCheckFailed =>
+      'Не удалось проверить обновления. Повторите позже';
 }

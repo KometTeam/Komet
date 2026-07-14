@@ -9,6 +9,7 @@ import '../../../core/config/komet_settings.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/avatar_history_screen.dart';
@@ -19,6 +20,7 @@ import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/update_dialog.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
 import '../../../core/config/app_digital_id_mode.dart';
@@ -49,6 +51,7 @@ class _SettingsTabState extends State<SettingsTab> {
   bool _isPhoneVisible = false;
   String? _appVersionLabel;
   bool _debugMenuVisible = false;
+  bool _isCheckingForUpdates = false;
   int _versionSecretTapCount = 0;
   Timer? _versionSecretTapResetTimer;
   StreamSubscription? _profileUpdateSub;
@@ -103,6 +106,33 @@ class _SettingsTabState extends State<SettingsTab> {
     setState(() {
       _appVersionLabel = 'Версия ${info.version} (${info.buildNumber})';
     });
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (_isCheckingForUpdates) return;
+    setState(() => _isCheckingForUpdates = true);
+
+    final result = await UpdateChecker.checkNow();
+    if (!mounted) return;
+    setState(() => _isCheckingForUpdates = false);
+
+    switch (result.status) {
+      case UpdateCheckStatus.updateAvailable:
+        await showUpdateDialog(context, result.update!);
+        return;
+      case UpdateCheckStatus.upToDate:
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.updateUpToDate,
+        );
+        return;
+      case UpdateCheckStatus.failed:
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.updateCheckFailed,
+        );
+        return;
+    }
   }
 
   Future<void> _openCloudStorage(BuildContext context) async {
@@ -221,6 +251,7 @@ class _SettingsTabState extends State<SettingsTab> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     if (_profile == null) {
       return const Center(child: SmallSpinner(size: 36));
@@ -444,6 +475,13 @@ class _SettingsTabState extends State<SettingsTab> {
                 child: _buildSection(
                   context,
                   items: [
+                    _SettingsItem(
+                      icon: Symbols.system_update,
+                      label: _isCheckingForUpdates
+                          ? l10n.updateChecking
+                          : l10n.updateCheck,
+                      onTap: _isCheckingForUpdates ? null : _checkForUpdates,
+                    ),
                     _SettingsItem(
                       leading: Image.asset(
                         'assets/komet.png',

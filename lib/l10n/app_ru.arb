@@ -685,5 +685,9 @@
   "updateLater": "Позже",
   "updateSkip": "Пропустить",
   "updateDownloading": "Загрузка обновления…",
-  "updateDownloadFailed": "Не удалось скачать обновление"
+  "updateDownloadFailed": "Не удалось скачать обновление",
+  "updateCheck": "Проверить обновление",
+  "updateChecking": "Проверяем обновления…",
+  "updateUpToDate": "Установлена актуальная версия",
+  "updateCheckFailed": "Не удалось проверить обновления. Повторите позже"
 }
