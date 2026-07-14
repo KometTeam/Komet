@@ -428,9 +428,9 @@ class KometAppState extends State<KometApp>
 
     _vpnBypassSub = VpnBypassService.instance.events.listen((r) {
       final msg = r.bound
-          ? 'Соединение через VPN не работает — '
-                'используется ${r.boundInterface ?? r.transport ?? 'прямое подключение'}'
-          : 'Соединение через VPN не работает, обойти не удалось'
+          ? 'Обход VPN включён — прямое подключение через '
+                '${r.boundInterface ?? r.transport ?? 'сеть без VPN'}'
+          : 'Обход VPN не удался, подключение через туннель'
                 '${r.reason != null ? ' (${r.reason})' : ''}';
 
       final now = DateTime.now();

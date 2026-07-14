@@ -90,9 +90,6 @@ class Api {
 
   int get sessionEpoch => _sessionEpoch;
 
-  /// Залипает на время сессии: VPN-путь не сработал — идём мимо туннеля.
-  bool _bypassActive = false;
-
   int _nextSeq() => _seq = (_seq + 1) & 0xFFFF;
 
   // Публичное API
@@ -110,19 +107,16 @@ class Api {
     _armConnectWatchdog(gen);
 
     try {
-      bool bypassArmed;
+      bool useBypass;
       try {
-        bypassArmed = await VpnBypassService.instance.shouldArm().timeout(
+        useBypass = await VpnBypassService.instance.shouldArm().timeout(
           _shouldArmTimeout,
         );
       } catch (e) {
         logger.w('connect: shouldArm завис/упал ($e) — без обхода VPN');
-        bypassArmed = false;
+        useBypass = false;
       }
       if (gen != _connectGen) return;
-
-      if (!bypassArmed) _bypassActive = false;
-      final useBypass = _bypassActive && bypassArmed;
 
       ({String host, int port}) endpoint;
       try {
@@ -168,13 +162,7 @@ class Api {
         info = await session.connect();
       } catch (e) {
         if (gen != _connectGen) return;
-        await _handleConnectFailure(
-          e,
-          phase: 'Ошибка хэндшейка',
-          bypassArmed: bypassArmed,
-          useBypass: useBypass,
-          bypassWhy: 'хэндшейк не прошёл',
-        );
+        await _handleConnectFailure(e, phase: 'Ошибка хэндшейка');
         return;
       } finally {
         if (useBypass) {
@@ -242,31 +230,19 @@ class Api {
   Future<void> _handleConnectFailure(
     Object error, {
     required String phase,
-    required bool bypassArmed,
-    required bool useBypass,
-    required String bypassWhy,
   }) async {
     logger.e('$phase: $error');
     _cancelConnectWatchdog();
     if (_sessionState != SessionState.disconnected) {
       _cleanup();
       _setSessionState(SessionState.disconnected);
-      _armBypassIfPossible(bypassArmed, useBypass, bypassWhy);
       _scheduleReconnect();
-    }
-  }
-
-  void _armBypassIfPossible(bool armed, bool alreadyBypassing, String why) {
-    if (armed && !alreadyBypassing && !_bypassActive) {
-      _bypassActive = true;
-      logger.w('VPN bypass: $why — следующая попытка мимо VPN');
     }
   }
 
   /// Отключается без автореконнекта.
   Future<void> disconnect() async {
     _autoReconnect = false;
-    _bypassActive = false;
     _connectGen++;
     _reconnectTimer?.cancel();
     _cleanup();
