@@ -91,6 +91,7 @@ import '../../widgets/swipe_route.dart';
 import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
 import '../../widgets/chat_wallpaper_view.dart';
+import '../../widgets/glossy_pill.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 
@@ -321,7 +322,10 @@ class _ChatScreenState extends State<ChatScreen>
     _applyReactionInfoToMessage(message.id, result.info);
   }
 
-  void _applyReactionInfoToMessage(String messageId, Map<String, dynamic>? info) {
+  void _applyReactionInfoToMessage(
+    String messageId,
+    Map<String, dynamic>? info,
+  ) {
     final idx = _messages.indexWhere((m) => m.id == messageId);
     if (idx == -1) return;
     final payload = <String, dynamic>{...?_messages[idx].payload};
@@ -364,7 +368,8 @@ class _ChatScreenState extends State<ChatScreen>
     final prev = current?['yourReaction']?.toString();
     String? your;
     if (prev != null &&
-        EmojiKeywordIndex.normalize(prev) == EmojiKeywordIndex.normalize(emoji)) {
+        EmojiKeywordIndex.normalize(prev) ==
+            EmojiKeywordIndex.normalize(emoji)) {
       decrement(prev);
       your = null;
     } else {
@@ -446,6 +451,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   static const double _avgMessageHeight = 72.0;
   static const double _historyPrefetchExtent = _avgMessageHeight * 8;
+  static const double _scrollDownRevealExtent = _avgMessageHeight * 30;
+  static const double _scrollDownTeleportFactor = 2.0;
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
   static const double _pinnedBannerLift = 6.0;
@@ -486,6 +493,11 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _floatingDateTimer;
   late final AnimationController _floatingDateAnimController;
   late final CurvedAnimation _floatingDateCurved;
+  late final AnimationController _scrollDownAnimController;
+  late final CurvedAnimation _scrollDownCurved;
+  bool _scrollDownVisible = false;
+  int _listEpoch = 0;
+  final List<({String id, double pixels, double alignment})> _returnStack = [];
   final Map<int, GlobalKey> _separatorKeys = {};
   String? _lastSentId;
   final ValueNotifier<int> _otherUnread = ValueNotifier(0);
@@ -500,8 +512,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _prewarmQuickReactions() {
     if (!mounted || !RlottieEngine.instance.available) return;
-    final dpr =
-        (MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0).clamp(1.0, 2.0);
+    final dpr = (MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0).clamp(
+      1.0,
+      2.0,
+    );
     final px = ((44.0 * dpr).clamp(96.0, 512.0) / 32).ceil() * 32;
     for (final a in animojiModule.quickAnimojis) {
       final url = a.lottieUrl;
@@ -517,10 +531,12 @@ class _ChatScreenState extends State<ChatScreen>
     _chatController.chatId = widget.chatId;
     _chatController.isMounted = () => mounted;
     unawaited(PushService.clearChatNotification(widget.chatId));
-    unawaited(animojiModule
-        .ensureLoaded()
-        .then((_) => _prewarmQuickReactions())
-        .catchError((_) {}));
+    unawaited(
+      animojiModule
+          .ensureLoaded()
+          .then((_) => _prewarmQuickReactions())
+          .catchError((_) {}),
+    );
     WidgetsBinding.instance.addObserver(this);
     chats.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
@@ -529,6 +545,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_recordScrollPixels);
     _scrollController.addListener(_scheduleReadMarker);
     _scrollController.addListener(_exitTextSelectionOnScroll);
+    _scrollController.addListener(_updateScrollDownVisible);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
     AppChatChrome.current.addListener(_onVisualStyleChanged);
     AppComposerStyle.current.addListener(_onVisualStyleChanged);
@@ -592,6 +609,16 @@ class _ChatScreenState extends State<ChatScreen>
     );
     _floatingDateCurved = CurvedAnimation(
       parent: _floatingDateAnimController,
+      curve: Curves.easeOut,
+      reverseCurve: Curves.easeIn,
+    );
+    _scrollDownAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      reverseDuration: const Duration(milliseconds: 180),
+    );
+    _scrollDownCurved = CurvedAnimation(
+      parent: _scrollDownAnimController,
       curve: Curves.easeOut,
       reverseCurve: Curves.easeIn,
     );
@@ -1330,7 +1357,9 @@ class _ChatScreenState extends State<ChatScreen>
   double? _messageOffsetInList(String messageId) {
     final listBox = _listKey.currentContext?.findRenderObject();
     final box = _keyForMessage(messageId).currentContext?.findRenderObject();
-    if (listBox is! RenderBox || box is! RenderBox || !box.attached) return null;
+    if (listBox is! RenderBox || box is! RenderBox || !box.attached) {
+      return null;
+    }
     return box.localToGlobal(Offset.zero, ancestor: listBox).dy;
   }
 
@@ -1500,6 +1529,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_recordScrollPixels);
     _scrollController.removeListener(_scheduleReadMarker);
     _scrollController.removeListener(_exitTextSelectionOnScroll);
+    _scrollController.removeListener(_updateScrollDownVisible);
     _readMarkTimer?.cancel();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
@@ -1511,6 +1541,8 @@ class _ChatScreenState extends State<ChatScreen>
     _floatingDateCurved.dispose();
     _floatingDateAnimController.dispose();
     _floatingDate.dispose();
+    _scrollDownCurved.dispose();
+    _scrollDownAnimController.dispose();
     _hasText.dispose();
     _scheduledCount.dispose();
     _showAttachmentPanel.removeListener(_onAttachPanelToggle);
@@ -1535,8 +1567,9 @@ class _ChatScreenState extends State<ChatScreen>
         .removeListener(_recomputeHeaderStatus);
     PresenceFetch.revision.removeListener(_onPresenceChanged);
     if (_wallpaperListening) {
-      ChatWallpaperStore.instance.revision
-          .removeListener(_applyEffectiveWallpaper);
+      ChatWallpaperStore.instance.revision.removeListener(
+        _applyEffectiveWallpaper,
+      );
     }
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
@@ -2569,8 +2602,7 @@ class _ChatScreenState extends State<ChatScreen>
                           child: ChatHeaderRow(
                             glossy: glossy,
                             frosted:
-                                glossy &&
-                                chrome == ChatChromeStyle.transparent,
+                                glossy && chrome == ChatChromeStyle.transparent,
                             backdropKey: _pillBackdrop,
                             cs: cs,
                             embedded: widget.embedded,
@@ -2730,7 +2762,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     if (!_wallpaperListening) {
       _wallpaperListening = true;
-      ChatWallpaperStore.instance.revision.addListener(_applyEffectiveWallpaper);
+      ChatWallpaperStore.instance.revision.addListener(
+        _applyEffectiveWallpaper,
+      );
     }
     _applyEffectiveWallpaper();
   }
@@ -2738,7 +2772,8 @@ class _ChatScreenState extends State<ChatScreen>
   void _applyEffectiveWallpaper() {
     if (!mounted) return;
     final store = ChatWallpaperStore.instance;
-    final wp = store.get(_myId, widget.chatId) ??
+    final wp =
+        store.get(_myId, widget.chatId) ??
         store.get(_myId, kGlobalWallpaperChatId);
     if (!identical(wp, _wallpaper)) setState(() => _wallpaper = wp);
   }
@@ -3550,14 +3585,129 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _scrollToBottom() {
+    _returnStack.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.minScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+      if (!_scrollController.hasClients) return;
+      final pos = _scrollController.position;
+      final runway = pos.viewportDimension;
+      final teleport = pos.pixels > runway * _scrollDownTeleportFactor;
+      if (teleport) {
+        _pinnedMessageId = null;
+        _listEpoch++;
+        _jumpCacheExtent.value = _jumpCacheExtentPx;
+        _bumpMessages();
+        _scrollController.jumpTo(runway);
       }
+      unawaited(
+        _scrollController
+            .animateTo(
+              pos.minScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            )
+            .whenComplete(() {
+              if (!teleport) return;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _jumpCacheExtent.value = null;
+              });
+            }),
+      );
+    });
+  }
+
+  void _updateScrollDownVisible() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (_returnStack.isNotEmpty &&
+        _isNearBottom() &&
+        pos.userScrollDirection != ScrollDirection.idle) {
+      _returnStack.clear();
+    }
+    final show =
+        pos.pixels >= _scrollDownRevealExtent || _returnStack.isNotEmpty;
+    if (show == _scrollDownVisible) return;
+    _scrollDownVisible = show;
+    if (show) {
+      _scrollDownAnimController.forward();
+    } else {
+      _scrollDownAnimController.reverse();
+    }
+  }
+
+  void _pushReturnAnchor(String messageId) {
+    if (!_scrollController.hasClients) return;
+    final listBox = _listKey.currentContext?.findRenderObject();
+    final dy = _messageOffsetInList(messageId);
+    final viewportH = listBox is RenderBox ? listBox.size.height : 0.0;
+    final alignment = viewportH > 0 && dy != null
+        ? (dy / viewportH).clamp(0.0, 1.0)
+        : 0.5;
+    _returnStack.add((
+      id: messageId,
+      pixels: _scrollController.position.pixels,
+      alignment: alignment.toDouble(),
+    ));
+    if (!_scrollDownVisible) {
+      _scrollDownVisible = true;
+      _scrollDownAnimController.forward();
+    }
+  }
+
+  void _onScrollDownTap() {
+    if (!_scrollController.hasClients) {
+      _scrollToBottom();
+      return;
+    }
+    final pixels = _scrollController.position.pixels;
+    while (_returnStack.isNotEmpty) {
+      final anchor = _returnStack.removeLast();
+      if (anchor.pixels < pixels && _messages.any((m) => m.id == anchor.id)) {
+        unawaited(_returnToAnchor(anchor));
+        return;
+      }
+    }
+    _scrollToBottom();
+  }
+
+  Future<void> _returnToAnchor(
+    ({String id, double pixels, double alignment}) anchor,
+  ) async {
+    final pos = _scrollController.position;
+    final runway = pos.viewportDimension;
+    final target = anchor.pixels.clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    final distance = (pos.pixels - target).abs();
+    final far = distance > runway * _scrollDownTeleportFactor;
+
+    if (!far) {
+      await _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+      if (!mounted) return;
+      await _scrollToMessagePrecise(anchor.id, alignment: anchor.alignment);
+      return;
+    }
+
+    _jumpCacheExtent.value = _jumpCacheExtentPx;
+    if (target + runway < distance) {
+      _listEpoch++;
+      _bumpMessages();
+      _scrollController.jumpTo(target + runway);
+      await _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+      if (!mounted) return;
+    }
+    await _scrollToMessagePrecise(anchor.id, alignment: anchor.alignment);
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _jumpCacheExtent.value = null;
     });
   }
 
@@ -3600,12 +3750,14 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  void _jumpToMessage(String messageId) {
+  void _jumpToMessage(String messageId, {String? fromId}) {
     final index = _messages.indexWhere((m) => m.id == messageId);
     if (index == -1) {
       showCustomNotification(context, 'Сообщение не загружено');
       return;
     }
+
+    if (fromId != null) _pushReturnAnchor(fromId);
 
     final key = _keyForMessage(messageId);
     final ctx = key.currentContext;
@@ -3616,6 +3768,8 @@ class _ChatScreenState extends State<ChatScreen>
         curve: Curves.easeOut,
         alignment: 0.4,
       );
+    } else {
+      unawaited(_scrollToMessagePrecise(messageId, alignment: 0.4));
     }
 
     _highlightTimer?.cancel();
@@ -4146,7 +4300,8 @@ class _ChatScreenState extends State<ChatScreen>
         _textSelection,
       ]),
       builder: (context, child) => PopScope(
-        canPop: _selectedIds.value.isEmpty &&
+        canPop:
+            _selectedIds.value.isEmpty &&
             !_search.searchMode.value &&
             _textSelection.value == null,
         onPopInvokedWithResult: (didPop, _) {
@@ -4467,185 +4622,211 @@ class _ChatScreenState extends State<ChatScreen>
                       jumpExtent != null && jumpExtent < userCacheExtent
                       ? jumpExtent
                       : userCacheExtent;
-                  return ListView.builder(
+                  return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
-                    padding: _messagesListPadding(context),
                     cacheExtent: cacheExtent,
-                    itemCount: items.length + 1 + (_isLoadingMore ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return ValueListenableBuilder<double>(
-                          valueListenable: _composerHeight,
-                          builder: (context, height, _) =>
-                              SizedBox(height: _composerUnderlap ? height : 0),
-                        );
-                      }
-                      if (index > items.length) {
-                        return _buildLoadMoreIndicator();
-                      }
-                      final item = items[items.length - index];
+                    slivers: [
+                      SliverPadding(
+                        padding: _messagesListPadding(context),
+                        sliver: SliverList(
+                          key: ValueKey(_listEpoch),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              if (index == 0) {
+                                return ValueListenableBuilder<double>(
+                                  valueListenable: _composerHeight,
+                                  builder: (context, height, _) => SizedBox(
+                                    height: _composerUnderlap ? height : 0,
+                                  ),
+                                );
+                              }
+                              if (index > items.length) {
+                                return _buildLoadMoreIndicator();
+                              }
+                              final item = items[items.length - index];
 
-                      if (item is _DateSeparatorItem) {
-                        return _buildDateSeparatorWidget(
-                          context,
-                          item.date,
-                          key: item.key,
-                        );
-                      }
-
-                      if (item is _UnreadSeparatorItem) {
-                        return _buildUnreadSeparatorWidget(context);
-                      }
-
-                      final msgItem = item as _MessageItem;
-                      final message = msgItem.message;
-                      final msgIndex = msgItem.index;
-                      final isMe = message.senderId == _myId;
-                      final prevMessage = msgIndex > 0
-                          ? _messages[msgIndex - 1]
-                          : null;
-                      final nextMessage = msgIndex < _messages.length - 1
-                          ? _messages[msgIndex + 1]
-                          : null;
-
-                      final bubble = MessageBubble(
-                        message: message,
-                        isMe: isMe,
-                        myId: _myId,
-                        prevMessage: prevMessage,
-                        nextMessage: nextMessage,
-                        chatType: chat?.type ?? 'CHAT',
-                        overrideStatus: _effectiveStatus(message),
-                        otherReadTime: _otherReadTime,
-                        reactionsListenable: _reactionNotifierFor(message),
-                        uploadProgress: _photoProgressFor(message),
-                        onReplyTap: _jumpToMessage,
-                        onAvatarTap: _openSenderProfile,
-                        onStickerTap: _openStickerPack,
-                        onReactionTap: message.isControl
-                            ? null
-                            : (emoji) => _reactToMessage(message, emoji),
-                        peerName: widget.name,
-                        peerAvatarUrl: widget.imageUrl,
-                        textSelection: _textSelection,
-                        onExitTextSelection: _exitTextSelection,
-                      );
-
-                      final canReport = !isMe && !message.isControl;
-                      final reportTypeId = _complaintTypeId(
-                        chat?.type ?? widget.chatType,
-                      );
-
-                      final pressable = _SelectableMessageRow(
-                        message: message,
-                        isMe: isMe,
-                        selectedIds: _selectedIds,
-                        selectionAnim: _selectionAnim,
-                        isSelectionActive: () => _selectionMode,
-                        onToggleSelection: () => _toggleSelection(message),
-                        onEnterSelection: () => _enterSelection(message),
-                        onStartTextSelection: (pos) =>
-                            _startTextSelection(message, pos),
-                        onDelete: () => _confirmDeleteMessage(message, isMe),
-                        onEdit: _canEditMessage(message)
-                            ? () => _startEditMessage(message)
-                            : null,
-                        onReply: message.isControl
-                            ? null
-                            : () => _startReply(message),
-                        onForward: message.isControl
-                            ? null
-                            : () => _forwardMessages([message]),
-                        onMarkUnread: message.isControl
-                            ? null
-                            : () => _markMessageUnread(message),
-                        onPin: _canPinMessage(message)
-                            ? () => _togglePinMessage(message)
-                            : null,
-                        isPinned: () =>
-                            chat?.pinnedMsgId == int.tryParse(message.id),
-                        loadReadBy: _canShowReadBy(message)
-                            ? () => _loadReadBy(message)
-                            : null,
-                        onReaderTap: _openSenderProfile,
-                        loadReportReasons: canReport
-                            ? () => _loadReportReasons(reportTypeId)
-                            : null,
-                        onReport: canReport
-                            ? (reasonId) => _reportMessage(
-                                message,
-                                reportTypeId,
-                                reasonId,
-                              )
-                            : null,
-                        onReact: message.isControl
-                            ? null
-                            : (emoji) => _reactToMessage(message, emoji),
-                        reactions: _reactionNotifierFor(message),
-                        child: bubble,
-                      );
-
-                      final isChannel =
-                          (chat?.type ?? widget.chatType) == 'CHANNEL';
-                      final swipeable = (message.isControl || isChannel)
-                          ? pressable
-                          : _SwipeToReply(
-                              isMe: isMe,
-                              onReply: () => _startReply(message),
-                              child: pressable,
-                            );
-
-                      final Widget child;
-                      if (_deletingIds.contains(message.id)) {
-                        child = _DeletingMessageAnimation(
-                          key: ValueKey('del_${message.id}'),
-                          onComplete: () => _finalizeDelete(message.id),
-                          child: IgnorePointer(child: swipeable),
-                        );
-                      } else if (message.id == _lastSentId) {
-                        child = _SentMessageAnimation(
-                          key: ValueKey('anim_${message.id}'),
-                          onComplete: () {
-                            if (mounted) {
-                              _lastSentId = null;
-                              _bumpMessages();
-                            }
-                          },
-                          child: swipeable,
-                        );
-                      } else {
-                        child = swipeable;
-                      }
-
-                      final highlightable = ValueListenableBuilder<String?>(
-                        valueListenable: _highlightMessageId,
-                        builder: (context, hl, c) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          color: hl == message.id
-                              ? Theme.of(
+                              if (item is _DateSeparatorItem) {
+                                return _buildDateSeparatorWidget(
                                   context,
-                                ).colorScheme.primary.withValues(alpha: 0.12)
-                              : Colors.transparent,
-                          child: c,
-                        ),
-                        child: child,
-                      );
+                                  item.date,
+                                  key: item.key,
+                                );
+                              }
 
-                      final builtItem = RepaintBoundary(
-                        key: ValueKey('msg_${message.id}'),
-                        child: KeyedSubtree(
-                          key: _keyForMessage(message.id),
-                          child: highlightable,
+                              if (item is _UnreadSeparatorItem) {
+                                return _buildUnreadSeparatorWidget(context);
+                              }
+
+                              final msgItem = item as _MessageItem;
+                              final message = msgItem.message;
+                              final msgIndex = msgItem.index;
+                              final isMe = message.senderId == _myId;
+                              final prevMessage = msgIndex > 0
+                                  ? _messages[msgIndex - 1]
+                                  : null;
+                              final nextMessage =
+                                  msgIndex < _messages.length - 1
+                                  ? _messages[msgIndex + 1]
+                                  : null;
+
+                              final bubble = MessageBubble(
+                                message: message,
+                                isMe: isMe,
+                                myId: _myId,
+                                prevMessage: prevMessage,
+                                nextMessage: nextMessage,
+                                chatType: chat?.type ?? 'CHAT',
+                                overrideStatus: _effectiveStatus(message),
+                                otherReadTime: _otherReadTime,
+                                reactionsListenable: _reactionNotifierFor(
+                                  message,
+                                ),
+                                uploadProgress: _photoProgressFor(message),
+                                onReplyTap: (id) =>
+                                    _jumpToMessage(id, fromId: message.id),
+                                onAvatarTap: _openSenderProfile,
+                                onStickerTap: _openStickerPack,
+                                onReactionTap: message.isControl
+                                    ? null
+                                    : (emoji) =>
+                                          _reactToMessage(message, emoji),
+                                peerName: widget.name,
+                                peerAvatarUrl: widget.imageUrl,
+                                textSelection: _textSelection,
+                                onExitTextSelection: _exitTextSelection,
+                              );
+
+                              final canReport = !isMe && !message.isControl;
+                              final reportTypeId = _complaintTypeId(
+                                chat?.type ?? widget.chatType,
+                              );
+
+                              final pressable = _SelectableMessageRow(
+                                message: message,
+                                isMe: isMe,
+                                selectedIds: _selectedIds,
+                                selectionAnim: _selectionAnim,
+                                isSelectionActive: () => _selectionMode,
+                                onToggleSelection: () =>
+                                    _toggleSelection(message),
+                                onEnterSelection: () =>
+                                    _enterSelection(message),
+                                onStartTextSelection: (pos) =>
+                                    _startTextSelection(message, pos),
+                                onDelete: () =>
+                                    _confirmDeleteMessage(message, isMe),
+                                onEdit: _canEditMessage(message)
+                                    ? () => _startEditMessage(message)
+                                    : null,
+                                onReply: message.isControl
+                                    ? null
+                                    : () => _startReply(message),
+                                onForward: message.isControl
+                                    ? null
+                                    : () => _forwardMessages([message]),
+                                onMarkUnread: message.isControl
+                                    ? null
+                                    : () => _markMessageUnread(message),
+                                onPin: _canPinMessage(message)
+                                    ? () => _togglePinMessage(message)
+                                    : null,
+                                isPinned: () =>
+                                    chat?.pinnedMsgId ==
+                                    int.tryParse(message.id),
+                                loadReadBy: _canShowReadBy(message)
+                                    ? () => _loadReadBy(message)
+                                    : null,
+                                onReaderTap: _openSenderProfile,
+                                loadReportReasons: canReport
+                                    ? () => _loadReportReasons(reportTypeId)
+                                    : null,
+                                onReport: canReport
+                                    ? (reasonId) => _reportMessage(
+                                        message,
+                                        reportTypeId,
+                                        reasonId,
+                                      )
+                                    : null,
+                                onReact: message.isControl
+                                    ? null
+                                    : (emoji) =>
+                                          _reactToMessage(message, emoji),
+                                reactions: _reactionNotifierFor(message),
+                                child: bubble,
+                              );
+
+                              final isChannel =
+                                  (chat?.type ?? widget.chatType) == 'CHANNEL';
+                              final swipeable = (message.isControl || isChannel)
+                                  ? pressable
+                                  : _SwipeToReply(
+                                      isMe: isMe,
+                                      onReply: () => _startReply(message),
+                                      child: pressable,
+                                    );
+
+                              final Widget child;
+                              if (_deletingIds.contains(message.id)) {
+                                child = _DeletingMessageAnimation(
+                                  key: ValueKey('del_${message.id}'),
+                                  onComplete: () => _finalizeDelete(message.id),
+                                  child: IgnorePointer(child: swipeable),
+                                );
+                              } else if (message.id == _lastSentId) {
+                                child = _SentMessageAnimation(
+                                  key: ValueKey('anim_${message.id}'),
+                                  onComplete: () {
+                                    if (mounted) {
+                                      _lastSentId = null;
+                                      _bumpMessages();
+                                    }
+                                  },
+                                  child: swipeable,
+                                );
+                              } else {
+                                child = swipeable;
+                              }
+
+                              final highlightable =
+                                  ValueListenableBuilder<String?>(
+                                    valueListenable: _highlightMessageId,
+                                    builder: (context, hl, c) =>
+                                        AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 250,
+                                          ),
+                                          color: hl == message.id
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.12)
+                                              : Colors.transparent,
+                                          child: c,
+                                        ),
+                                    child: child,
+                                  );
+
+                              final builtItem = RepaintBoundary(
+                                key: ValueKey('msg_${message.id}'),
+                                child: KeyedSubtree(
+                                  key: _keyForMessage(message.id),
+                                  child: highlightable,
+                                ),
+                              );
+                              return message.id == _prank.bubbleId
+                                  ? KeyedSubtree(
+                                      key: _prank.bubbleKey,
+                                      child: builtItem,
+                                    )
+                                  : builtItem;
+                            },
+                            childCount:
+                                items.length + 1 + (_isLoadingMore ? 1 : 0),
+                          ),
                         ),
-                      );
-                      return message.id == _prank.bubbleId
-                          ? KeyedSubtree(
-                              key: _prank.bubbleKey,
-                              child: builtItem,
-                            )
-                          : builtItem;
-                    },
+                      ),
+                    ],
                   );
                 },
               ),
@@ -4685,7 +4866,51 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
         ),
+        _buildScrollDownButton(),
       ],
+    );
+  }
+
+  Widget _buildScrollDownButton() {
+    final cs = Theme.of(context).colorScheme;
+    final frosted = _effectiveChrome == ChatChromeStyle.transparent;
+    return ValueListenableBuilder<double>(
+      valueListenable: _composerHeight,
+      builder: (context, height, child) => Positioned(
+        right: 16,
+        bottom: (_composerUnderlap ? height : 0) + 12,
+        child: child!,
+      ),
+      child: AnimatedBuilder(
+        animation: _scrollDownCurved,
+        builder: (context, child) {
+          final t = _scrollDownCurved.value;
+          if (t == 0) return const SizedBox.shrink();
+          return Opacity(
+            opacity: t,
+            child: Transform.scale(scale: 0.82 + 0.18 * t, child: child),
+          );
+        },
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: GlossyPill(
+            color: frosted ? AppFrost.pillTint(cs) : null,
+            blurSigma: frosted ? AppFrost.sigma : null,
+            backdropKey: _pillBackdrop,
+            elevated: true,
+            onTap: _onScrollDownTap,
+            child: Center(
+              child: Icon(
+                Symbols.keyboard_arrow_down,
+                color: cs.onSurface,
+                weight: 500,
+                size: 26,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -5770,9 +5995,7 @@ class _PinnedMessageBanner extends StatelessWidget {
 
     if (frosted) {
       return ClipRRect(
-        borderRadius: floating
-            ? BorderRadius.circular(16)
-            : BorderRadius.zero,
+        borderRadius: floating ? BorderRadius.circular(16) : BorderRadius.zero,
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(
             sigmaX: AppFrost.sigma,
@@ -5780,9 +6003,7 @@ class _PinnedMessageBanner extends StatelessWidget {
           ),
           backdropGroupKey: backdropKey,
           child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: floating ? null : bottomBorder,
-            ),
+            decoration: BoxDecoration(border: floating ? null : bottomBorder),
             child: content,
           ),
         ),
