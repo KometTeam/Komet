@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show OverScrollHeaderStretchConfiguration;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/cache/self_presence.dart';
@@ -57,6 +58,9 @@ class _SettingsTabState extends State<SettingsTab> {
   ScrollController? _scrollController;
   double _headerDelta = 0;
   bool _headerEverExpanded = false;
+  bool _expandArmed = false;
+  bool _zoneHapticFired = false;
+  bool _pastCommitPoint = false;
   String? _appVersionLabel;
   bool _debugMenuVisible = false;
   bool _isCheckingForUpdates = false;
@@ -103,6 +107,38 @@ class _SettingsTabState extends State<SettingsTab> {
       );
       c.jumpTo(target);
     });
+  }
+
+  bool _handleScrollNotification(ScrollNotification n, double delta) {
+    if (n.depth != 0) return false;
+    if (n is ScrollStartNotification) {
+      if (n.dragDetails != null) {
+        final px = n.metrics.pixels;
+        _expandArmed = delta > 0 && px <= delta + 8;
+        _zoneHapticFired = px < delta;
+        _pastCommitPoint = px < delta / 2;
+      }
+    } else if (n is ScrollUpdateNotification) {
+      if (n.dragDetails != null && delta > 0) {
+        final px = n.metrics.pixels;
+        if (px < delta) {
+          if (!_zoneHapticFired) {
+            _zoneHapticFired = true;
+            HapticFeedback.lightImpact();
+          }
+        } else {
+          _zoneHapticFired = false;
+        }
+        final pastCommit = px < delta / 2;
+        if (pastCommit != _pastCommitPoint) {
+          _pastCommitPoint = pastCommit;
+          HapticFeedback.mediumImpact();
+        }
+      }
+    } else if (n is ScrollEndNotification) {
+      _snapHeader(delta);
+    }
+    return false;
   }
 
   void _snapHeader(double delta) {
@@ -321,17 +357,18 @@ class _SettingsTabState extends State<SettingsTab> {
         _syncHeaderDelta(delta);
         return Scaffold(
           backgroundColor: cs.surface,
-          body: NotificationListener<ScrollEndNotification>(
-            onNotification: (n) {
-              if (n.depth == 0) _snapHeader(delta);
-              return false;
-            },
+          body: NotificationListener<ScrollNotification>(
+            onNotification: (n) => _handleScrollNotification(n, delta),
             child: CustomScrollView(
               key: ValueKey(delta),
               controller: _scrollController ??= ScrollController(
                 initialScrollOffset: delta,
               ),
-              physics: const BouncingScrollPhysics(),
+              physics: _HeaderPullScrollPhysics(
+                delta: delta,
+                isArmed: () => _expandArmed,
+                parent: const BouncingScrollPhysics(),
+              ),
               slivers: [
                 SliverPersistentHeader(
                   delegate: _ProfileHeaderDelegate(
@@ -996,6 +1033,89 @@ class _SettingsTabState extends State<SettingsTab> {
         );
       }),
     );
+  }
+}
+
+class _HeaderPullScrollPhysics extends ScrollPhysics {
+  final double delta;
+  final ValueGetter<bool> isArmed;
+
+  const _HeaderPullScrollPhysics({
+    required this.delta,
+    required this.isArmed,
+    super.parent,
+  });
+
+  static final SpringDescription _expressiveSpring =
+      SpringDescription.withDampingRatio(mass: 1, stiffness: 380, ratio: 0.9);
+
+  static const double _flingVelocity = 400;
+
+  @override
+  _HeaderPullScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _HeaderPullScrollPhysics(
+      delta: delta,
+      isArmed: isArmed,
+      parent: buildParent(ancestor),
+    );
+  }
+
+  @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    if (delta <= 0 || offset <= 0 || position.pixels <= 0) {
+      return super.applyPhysicsToUserOffset(position, offset);
+    }
+    final px = position.pixels;
+    final free = math.max(0.0, px - delta);
+    if (offset <= free) return offset;
+    if (!isArmed()) return free;
+    final inZone = offset - free;
+    final expandedFraction = (1 - math.min(px, delta) / delta).clamp(0.0, 1.0);
+    final friction = lerpDouble(0.58, 0.3, expandedFraction)!;
+    return free + inZone * friction;
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    if (delta > 0) {
+      final px = position.pixels;
+      final tolerance = toleranceFor(position);
+      if (px > 0 && px < delta) {
+        final double target;
+        if (velocity <= -_flingVelocity) {
+          target = 0;
+        } else if (velocity >= _flingVelocity) {
+          target = delta;
+        } else {
+          target = px < delta / 2 ? 0 : delta;
+        }
+        if ((target - px).abs() < tolerance.distance &&
+            velocity.abs() < tolerance.velocity) {
+          return null;
+        }
+        return ScrollSpringSimulation(
+          _expressiveSpring,
+          px,
+          target,
+          velocity,
+          tolerance: tolerance,
+        );
+      }
+      if (px >= delta && velocity < 0) {
+        return BouncingScrollSimulation(
+          position: px,
+          velocity: velocity,
+          leadingExtent: delta,
+          trailingExtent: math.max(delta, position.maxScrollExtent),
+          spring: spring,
+          tolerance: tolerance,
+        );
+      }
+    }
+    return super.createBallisticSimulation(position, velocity);
   }
 }
 
