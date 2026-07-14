@@ -1315,6 +1315,30 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sharedDownload => 'Скачать';
 
   @override
+  String photoViewerCounter(int index, int total) {
+    return 'Фото $index из $total';
+  }
+
+  @override
+  String photoViewerSentToday(String sender, String time) {
+    return '$sender • сегодня в $time';
+  }
+
+  @override
+  String photoViewerSentOn(String sender, String date, String time) {
+    return '$sender • $date в $time';
+  }
+
+  @override
+  String get photoViewerSaveAs => 'Сохранить как…';
+
+  @override
+  String get photoViewerViewAll => 'Все фото чата';
+
+  @override
+  String get photoViewerRotate => 'Повернуть';
+
+  @override
   String get sharedCopyLink => 'Копировать ссылку';
 
   @override

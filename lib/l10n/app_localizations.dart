@@ -2570,6 +2570,42 @@ abstract class AppLocalizations {
   /// **'Download'**
   String get sharedDownload;
 
+  /// No description provided for @photoViewerCounter.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo {index} of {total}'**
+  String photoViewerCounter(int index, int total);
+
+  /// No description provided for @photoViewerSentToday.
+  ///
+  /// In en, this message translates to:
+  /// **'{sender} • today at {time}'**
+  String photoViewerSentToday(String sender, String time);
+
+  /// No description provided for @photoViewerSentOn.
+  ///
+  /// In en, this message translates to:
+  /// **'{sender} • {date} at {time}'**
+  String photoViewerSentOn(String sender, String date, String time);
+
+  /// No description provided for @photoViewerSaveAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as…'**
+  String get photoViewerSaveAs;
+
+  /// No description provided for @photoViewerViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View all photos'**
+  String get photoViewerViewAll;
+
+  /// No description provided for @photoViewerRotate.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get photoViewerRotate;
+
   /// No description provided for @sharedCopyLink.
   ///
   /// In en, this message translates to:

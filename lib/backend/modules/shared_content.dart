@@ -17,6 +17,7 @@ class SharedMediaItem {
   final int senderId;
   final int time;
   final MessageAttachment attachment;
+  final String? text;
 
   const SharedMediaItem({
     required this.messageId,
@@ -24,6 +25,7 @@ class SharedMediaItem {
     required this.senderId,
     required this.time,
     required this.attachment,
+    this.text,
   });
 
   String get dedupKey {
@@ -93,10 +95,135 @@ class CommonChatEntry {
   }
 }
 
+class ChatPhotoFeed {
+  final List<SharedMediaItem> items;
+  final int total;
+  final bool reachedEnd;
+
+  const ChatPhotoFeed({
+    required this.items,
+    required this.total,
+    required this.reachedEnd,
+  });
+}
+
+class _ChatPhotoIndex {
+  final List<SharedMediaItem> items = [];
+  final Set<String> seen = {};
+  int total = 0;
+  bool reachedEnd = false;
+  bool started = false;
+  Future<void>? inFlight;
+}
+
+String photoDedupKey(String messageId, PhotoAttachment photo) =>
+    '$messageId:p${photo.photoId ?? photo.baseUrl}';
+
 class SharedContentModule {
+  static const int _photoIndexPageSize = 60;
+  static const int _photoIndexMaxPages = 40;
+
+  static final Map<int, _ChatPhotoIndex> _photoIndexes = {};
+
   final Api _api;
 
   SharedContentModule(this._api);
+
+  static void clearPhotoIndex() => _photoIndexes.clear();
+
+  Future<ChatPhotoFeed?> photoFeedFor({
+    required int chatId,
+    required String photoKey,
+    required Future<String?> Function() resolveAnchor,
+  }) async {
+    final index = _photoIndexes.putIfAbsent(chatId, _ChatPhotoIndex.new);
+
+    for (var page = 0; page < _photoIndexMaxPages; page++) {
+      if (index.items.any((i) => i.dedupKey == photoKey)) {
+        return _snapshot(index);
+      }
+      if (index.reachedEnd) return null;
+      await _nextPhotoPage(chatId, index, resolveAnchor);
+    }
+    return null;
+  }
+
+  Future<ChatPhotoFeed> loadMorePhotos({
+    required int chatId,
+    required Future<String?> Function() resolveAnchor,
+  }) async {
+    final index = _photoIndexes.putIfAbsent(chatId, _ChatPhotoIndex.new);
+    if (!index.reachedEnd) {
+      await _nextPhotoPage(chatId, index, resolveAnchor);
+    }
+    return _snapshot(index);
+  }
+
+  ChatPhotoFeed _snapshot(_ChatPhotoIndex index) {
+    final counted = index.items.length;
+    final total = index.reachedEnd
+        ? counted
+        : (index.total > counted ? index.total : counted);
+    return ChatPhotoFeed(
+      items: List.unmodifiable(index.items),
+      total: total,
+      reachedEnd: index.reachedEnd,
+    );
+  }
+
+  Future<void> _nextPhotoPage(
+    int chatId,
+    _ChatPhotoIndex index,
+    Future<String?> Function() resolveAnchor,
+  ) async {
+    final pending = index.inFlight;
+    if (pending != null) {
+      await pending;
+      return;
+    }
+    final task = _loadPhotoPage(chatId, index, resolveAnchor);
+    index.inFlight = task;
+    try {
+      await task;
+    } finally {
+      index.inFlight = null;
+    }
+  }
+
+  Future<void> _loadPhotoPage(
+    int chatId,
+    _ChatPhotoIndex index,
+    Future<String?> Function() resolveAnchor,
+  ) async {
+    final initial = !index.started;
+    final anchor = initial
+        ? await resolveAnchor()
+        : index.items.last.messageId;
+    if (anchor == null || anchor.isEmpty) {
+      index.reachedEnd = true;
+      return;
+    }
+
+    final page = await fetchMedia(
+      chatId: chatId,
+      anchorMessageId: anchor,
+      attachTypes: const ['PHOTO'],
+      forward: initial ? _photoIndexPageSize : 0,
+      backward: _photoIndexPageSize,
+    );
+    index.started = true;
+
+    var added = 0;
+    for (final item in page.items) {
+      if (!index.seen.add(item.dedupKey)) continue;
+      index.items.add(item);
+      added++;
+    }
+    index.items.sort((a, b) => b.time.compareTo(a.time));
+    if (page.total > index.total) index.total = page.total;
+
+    if (added == 0) index.reachedEnd = true;
+  }
 
   Future<SharedMediaPage> fetchMedia({
     required int chatId,
@@ -134,6 +261,7 @@ class SharedContentModule {
         if (id == null) continue;
         final sender = (map['sender'] as num?)?.toInt() ?? 0;
         final time = (map['time'] as num?)?.toInt() ?? 0;
+        final text = map['text'] as String?;
         final attaches = map['attaches'];
         if (attaches is! List) continue;
         for (final a in attaches) {
@@ -147,6 +275,7 @@ class SharedContentModule {
               senderId: sender,
               time: time,
               attachment: att,
+              text: text,
             ),
           );
         }

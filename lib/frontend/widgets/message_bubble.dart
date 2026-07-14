@@ -18,6 +18,7 @@ import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'formatted_message_text.dart';
+import 'photo_viewer.dart';
 import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
 import '../../models/reaction_info.dart';
@@ -125,6 +126,8 @@ class MessageBubble extends StatelessWidget {
   final CachedMessage? prevMessage;
   final CachedMessage? nextMessage;
   final String chatType;
+  final int? chatId;
+  final PhotoViewerActions? photoActions;
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
@@ -146,6 +149,8 @@ class MessageBubble extends StatelessWidget {
     this.prevMessage,
     this.nextMessage,
     required this.chatType,
+    this.chatId,
+    this.photoActions,
     this.overrideStatus,
     this.otherReadTime,
     this.reactionsListenable,
@@ -507,6 +512,8 @@ class MessageBubble extends StatelessWidget {
       isMe: isMe,
       myId: myId,
       chatType: chatType,
+      chatId: chatId,
+      photoActions: photoActions,
       overrideStatus: overrideStatus,
       otherReadTime: otherReadTime,
       uploadProgress: uploadProgress,

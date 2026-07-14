@@ -522,6 +522,45 @@
   "sharedLoadMore": "Show more",
   "sharedGoToMessage": "Go to message",
   "sharedDownload": "Download",
+  "photoViewerCounter": "Photo {index} of {total}",
+  "@photoViewerCounter": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "photoViewerSentToday": "{sender} • today at {time}",
+  "@photoViewerSentToday": {
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "photoViewerSentOn": "{sender} • {date} at {time}",
+  "@photoViewerSentOn": {
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "photoViewerSaveAs": "Save as…",
+  "photoViewerViewAll": "View all photos",
+  "photoViewerRotate": "Rotate",
   "sharedCopyLink": "Copy link",
   "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",

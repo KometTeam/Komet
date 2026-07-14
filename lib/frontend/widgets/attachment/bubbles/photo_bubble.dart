@@ -156,7 +156,7 @@ class PhotoBubble extends StatelessWidget {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _openPhotoViewer(ctx.context, photo),
+                onTap: () => _openPhotoViewer(ctx.context, 0),
               ),
             ),
         ],
@@ -284,26 +284,49 @@ class PhotoBubble extends StatelessWidget {
     final matchBottom =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
 
+    final rows = <Widget>[];
+    for (var i = 0; i < displayCount; i += 2) {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 2));
+      rows.add(
+        Row(
+          children: [
+            Expanded(child: _buildGridTile(ctx, photos, i, remaining)),
+            const SizedBox(width: 2),
+            Expanded(
+              child: i + 1 < displayCount
+                  ? _buildGridTile(ctx, photos, i + 1, remaining)
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ClipRRect(
       borderRadius: _multiPhotoCornerRadius(
         matchTop: matchTop,
         matchBottom: matchBottom,
         isMe: ctx.isMe,
       ),
-      child: GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        children: List.generate(displayCount, (i) {
-          if (i == 3 && remaining > 0) {
-            return _buildPhotoTileWithOverlay(ctx, photos[i], '+$remaining', i);
-          }
-          return _buildPhotoTile(ctx, photos[i], i);
-        }),
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: rows),
     );
+  }
+
+  Widget _buildGridTile(
+    BubbleContext ctx,
+    List<PhotoAttachment> photos,
+    int index,
+    int remaining,
+  ) {
+    if (index == 3 && remaining > 0) {
+      return _buildPhotoTileWithOverlay(
+        ctx,
+        photos[index],
+        '+$remaining',
+        index,
+      );
+    }
+    return _buildPhotoTile(ctx, photos[index], index);
   }
 
   Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) {
@@ -330,7 +353,7 @@ class PhotoBubble extends StatelessWidget {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _openPhotoViewer(ctx.context, photo),
+                onTap: () => _openPhotoViewer(ctx.context, index),
               ),
             ),
         ],
@@ -378,6 +401,13 @@ class PhotoBubble extends StatelessWidget {
           ),
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, index),
+          if (ctx.uploadProgress == null)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openPhotoViewer(ctx.context, index),
+              ),
+            ),
         ],
       ),
     );
@@ -407,13 +437,17 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  void _openPhotoViewer(BuildContext context, PhotoAttachment photo) {
-    final url = photo.baseUrl ?? '';
-    if (url.isEmpty) return;
+  void _openPhotoViewer(BuildContext context, int index) {
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => PhotoViewerScreen(baseUrl: url),
+        builder: (_) => PhotoViewerScreen(
+          photos: photos,
+          initialIndex: index,
+          chatId: ctx.chatId,
+          message: ctx.message,
+          actions: ctx.photoActions,
+        ),
       ),
     );
   }

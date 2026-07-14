@@ -7,7 +7,7 @@ import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:ogg_opus_player/ogg_opus_player.dart';
 
-import '../../../backend/modules/messages.dart' show ContactCache;
+import '../../../backend/modules/messages.dart' show CachedMessage, ContactCache;
 import '../../../backend/modules/shared_content.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/utils/download_progress.dart';
@@ -646,7 +646,11 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
       ),
       itemCount: items.length,
       itemBuilder: (context, index) =>
-          _MediaTile(item: items[index], onGoTo: () => _goTo(items[index])),
+          _MediaTile(
+            item: items[index],
+            onGoTo: () => _goTo(items[index]),
+            onGoToMessage: widget.onGoToMessage,
+          ),
     );
   }
 }
@@ -654,8 +658,13 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
 class _MediaTile extends StatelessWidget {
   final SharedMediaItem item;
   final VoidCallback onGoTo;
+  final void Function(String messageId, int time) onGoToMessage;
 
-  const _MediaTile({required this.item, required this.onGoTo});
+  const _MediaTile({
+    required this.item,
+    required this.onGoTo,
+    required this.onGoToMessage,
+  });
 
   void _menu(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -755,7 +764,25 @@ class _MediaTile extends StatelessWidget {
     }
     final url = att.baseUrl ?? att.previewData ?? '';
     if (url.isEmpty) return;
-    pushSwipeable(context, (_) => PhotoViewerScreen(baseUrl: url));
+
+    final photo = att is PhotoAttachment && (att.baseUrl ?? '').isNotEmpty
+        ? att
+        : PhotoAttachment(baseUrl: url);
+    pushSwipeable(
+      context,
+      (_) => PhotoViewerScreen(
+        photos: [photo],
+        chatId: item.chatId,
+        message: CachedMessage(
+          id: item.messageId,
+          accountId: 0,
+          chatId: item.chatId,
+          senderId: item.senderId,
+          time: item.time,
+        ),
+        actions: PhotoViewerActions(goToMessage: onGoToMessage),
+      ),
+    );
   }
 }
 

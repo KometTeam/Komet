@@ -1309,6 +1309,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sharedDownload => 'Download';
 
   @override
+  String photoViewerCounter(int index, int total) {
+    return 'Photo $index of $total';
+  }
+
+  @override
+  String photoViewerSentToday(String sender, String time) {
+    return '$sender • today at $time';
+  }
+
+  @override
+  String photoViewerSentOn(String sender, String date, String time) {
+    return '$sender • $date at $time';
+  }
+
+  @override
+  String get photoViewerSaveAs => 'Save as…';
+
+  @override
+  String get photoViewerViewAll => 'View all photos';
+
+  @override
+  String get photoViewerRotate => 'Rotate';
+
+  @override
   String get sharedCopyLink => 'Copy link';
 
   @override

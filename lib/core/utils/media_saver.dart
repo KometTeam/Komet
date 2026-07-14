@@ -30,22 +30,11 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
     if (file == null) {
       return const MediaSaveResult(ok: false, error: 'не удалось загрузить');
     }
-    final saveName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      final state = await PhotoManager.requestPermissionExtend();
-      if (!state.isAuth && !state.hasAccess) {
-        return const MediaSaveResult(ok: false, error: 'нет доступа к галерее');
-      }
-      final bytes = await file.readAsBytes();
-      await PhotoManager.editor.saveImage(bytes, filename: saveName);
-      return const MediaSaveResult(ok: true, toGallery: true);
-    }
-
-    final dir = await _targetDirectory();
-    final target = File('${dir.path}${Platform.pathSeparator}$saveName');
-    await file.copy(target.path);
-    return MediaSaveResult(ok: true, location: target.path);
+    return _persist(
+      file,
+      saveName: 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      kind: SaveMediaKind.image,
+    );
   } catch (e) {
     return MediaSaveResult(ok: false, error: e.toString());
   }
@@ -71,30 +60,52 @@ Future<MediaSaveResult> saveMediaFile({
     if (file == null) {
       return const MediaSaveResult(ok: false, error: 'не удалось загрузить');
     }
-
-    final toGallery =
-        kind == SaveMediaKind.image || kind == SaveMediaKind.video;
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS) && toGallery) {
-      final state = await PhotoManager.requestPermissionExtend();
-      if (!state.isAuth && !state.hasAccess) {
-        return const MediaSaveResult(ok: false, error: 'нет доступа к галерее');
-      }
-      if (kind == SaveMediaKind.video) {
-        await PhotoManager.editor.saveVideo(file, title: saveName);
-      } else {
-        final bytes = await file.readAsBytes();
-        await PhotoManager.editor.saveImage(bytes, filename: saveName);
-      }
-      return const MediaSaveResult(ok: true, toGallery: true);
-    }
-
-    final dir = await _targetDirectory();
-    final target = File('${dir.path}${Platform.pathSeparator}$saveName');
-    await file.copy(target.path);
-    return MediaSaveResult(ok: true, location: target.path);
+    return _persist(file, saveName: saveName, kind: kind);
   } catch (e) {
     return MediaSaveResult(ok: false, error: e.toString());
   }
+}
+
+Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
+  try {
+    final file = File(path);
+    if (!await file.exists()) {
+      return const MediaSaveResult(ok: false, error: 'файл не найден');
+    }
+    return _persist(
+      file,
+      saveName: saveName ?? 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      kind: SaveMediaKind.image,
+    );
+  } catch (e) {
+    return MediaSaveResult(ok: false, error: e.toString());
+  }
+}
+
+Future<MediaSaveResult> _persist(
+  File file, {
+  required String saveName,
+  required SaveMediaKind kind,
+}) async {
+  final toGallery = kind == SaveMediaKind.image || kind == SaveMediaKind.video;
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS) && toGallery) {
+    final state = await PhotoManager.requestPermissionExtend();
+    if (!state.isAuth && !state.hasAccess) {
+      return const MediaSaveResult(ok: false, error: 'нет доступа к галерее');
+    }
+    if (kind == SaveMediaKind.video) {
+      await PhotoManager.editor.saveVideo(file, title: saveName);
+    } else {
+      final bytes = await file.readAsBytes();
+      await PhotoManager.editor.saveImage(bytes, filename: saveName);
+    }
+    return const MediaSaveResult(ok: true, toGallery: true);
+  }
+
+  final dir = await _targetDirectory();
+  final target = File('${dir.path}${Platform.pathSeparator}$saveName');
+  await file.copy(target.path);
+  return MediaSaveResult(ok: true, location: target.path);
 }
 
 Future<Directory> _targetDirectory() async {

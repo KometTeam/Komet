@@ -81,6 +81,7 @@ import '../../../core/utils/text_format.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/lottie_image.dart';
 import '../../widgets/attachment_panel.dart';
@@ -932,6 +933,47 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _jumpCacheExtent.value = null;
     });
+  }
+
+  void _openChatInfo({ChatInfoTab? initialTab}) {
+    final navigator = Navigator.of(context);
+    final chatRoute = ModalRoute.of(context);
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => ChatInfoScreen(
+          chatId: widget.chatId,
+          name: widget.name,
+          imageUrl: widget.imageUrl,
+          chatType: widget.chatType,
+          initialTab: initialTab,
+          onJumpToMessage: (chatRoute == null || widget.embedded)
+              ? null
+              : (messageId, time) {
+                  navigator.popUntil((r) => r == chatRoute);
+                  _requestGoToMessage(messageId, time);
+                },
+        ),
+      ),
+    );
+  }
+
+  PhotoViewerActions _photoActions() {
+    return PhotoViewerActions(
+      goToMessage: _requestGoToMessage,
+      forward: _forwardMessageById,
+      delete: (messageId, senderId) =>
+          _confirmDeleteMessage(messageId, senderId == _myId),
+      viewAllPhotos: () => _openChatInfo(initialTab: ChatInfoTab.media),
+    );
+  }
+
+  void _forwardMessageById(String messageId) {
+    final message = _messages.where((m) => m.id == messageId).firstOrNull;
+    if (message == null) {
+      showCustomNotification(context, 'Сообщение не загружено');
+      return;
+    }
+    unawaited(_forwardMessages([message]));
   }
 
   void _requestGoToMessage(String id, int time) {
@@ -2333,12 +2375,12 @@ class _ChatScreenState extends State<ChatScreen>
     Haptics.send();
   }
 
-  Future<void> _confirmDeleteMessage(CachedMessage message, bool isMe) async {
-    final isLocalOnly = message.id.startsWith('temp_');
+  Future<void> _confirmDeleteMessage(String messageId, bool isMe) async {
+    final isLocalOnly = messageId.startsWith('temp_');
     final canForEveryone = isMe && !isLocalOnly;
 
     if (isLocalOnly) {
-      _startDeleteAnimation(message.id);
+      _startDeleteAnimation(messageId);
       return;
     }
 
@@ -2346,7 +2388,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (forEveryone == null || !mounted) return;
 
     final ok = await messagesModule.deleteMessages(widget.chatId, [
-      message.id,
+      messageId,
     ], forEveryone: forEveryone);
     if (!mounted) return;
     if (!ok) {
@@ -2354,7 +2396,7 @@ class _ChatScreenState extends State<ChatScreen>
       showCustomNotification(context, 'Не удалось удалить сообщение');
       return;
     }
-    _startDeleteAnimation(message.id);
+    _startDeleteAnimation(messageId);
   }
 
   void _startDeleteAnimation(String messageId) {
@@ -2619,32 +2661,7 @@ class _ChatScreenState extends State<ChatScreen>
                             showCall:
                                 widget.chatType == 'DIALOG' && !_peerIsBot,
                             onClose: widget.onClose,
-                            onOpenInfo: () {
-                              final navigator = Navigator.of(context);
-                              final chatRoute = ModalRoute.of(context);
-                              navigator.push(
-                                MaterialPageRoute(
-                                  builder: (context) => ChatInfoScreen(
-                                    chatId: widget.chatId,
-                                    name: widget.name,
-                                    imageUrl: widget.imageUrl,
-                                    chatType: widget.chatType,
-                                    onJumpToMessage:
-                                        (chatRoute == null || widget.embedded)
-                                        ? null
-                                        : (messageId, time) {
-                                            navigator.popUntil(
-                                              (r) => r == chatRoute,
-                                            );
-                                            _requestGoToMessage(
-                                              messageId,
-                                              time,
-                                            );
-                                          },
-                                  ),
-                                ),
-                              );
-                            },
+                            onOpenInfo: _openChatInfo,
                             onOpenScheduled: _openScheduledMessages,
                             onCall: _startCall,
                             onMenu: _openChatMenu,
@@ -4684,6 +4701,8 @@ class _ChatScreenState extends State<ChatScreen>
                                 prevMessage: prevMessage,
                                 nextMessage: nextMessage,
                                 chatType: chat?.type ?? 'CHAT',
+                                chatId: widget.chatId,
+                                photoActions: _photoActions(),
                                 overrideStatus: _effectiveStatus(message),
                                 otherReadTime: _otherReadTime,
                                 reactionsListenable: _reactionNotifierFor(
@@ -4722,7 +4741,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 onStartTextSelection: (pos) =>
                                     _startTextSelection(message, pos),
                                 onDelete: () =>
-                                    _confirmDeleteMessage(message, isMe),
+                                    _confirmDeleteMessage(message.id, isMe),
                                 onEdit: _canEditMessage(message)
                                     ? () => _startEditMessage(message)
                                     : null,
@@ -5270,12 +5289,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     try {
-      final tokens = await Future.wait(
-        List.generate(
-          files.length,
-          (i) => _uploadOnePhoto(files[i], i, progress),
-        ),
-      );
+      final tokens = await _uploadPhotos(files, progress);
       if (!mounted) {
         _disposePhotoProgress(tempId);
         return;
@@ -5463,12 +5477,7 @@ class _ChatScreenState extends State<ChatScreen>
       List<double>.filled(files.length, 0),
     );
     try {
-      final tokens = await Future.wait(
-        List.generate(
-          files.length,
-          (i) => _uploadOnePhoto(files[i], i, progress),
-        ),
-      );
+      final tokens = await _uploadPhotos(files, progress);
       if (!mounted) return;
       if (tokens.any((t) => t == null)) {
         showCustomNotification(context, 'Не удалось загрузить фото');
@@ -5636,26 +5645,76 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  static const int _photoUploadConcurrency = 3;
+  static const int _photoUploadAttempts = 3;
+
+  Future<List<String?>> _uploadPhotos(
+    List<File> files,
+    ValueNotifier<List<double>> progress,
+  ) async {
+    final tokens = List<String?>.filled(files.length, null);
+    var nextIndex = 0;
+    var failed = false;
+
+    Future<void> worker() async {
+      while (!failed) {
+        final i = nextIndex++;
+        if (i >= files.length) return;
+        final token = await _uploadOnePhoto(files[i], i, progress);
+        if (token == null) {
+          failed = true;
+          return;
+        }
+        tokens[i] = token;
+      }
+    }
+
+    final workerCount = math.min(_photoUploadConcurrency, files.length);
+    await Future.wait(List.generate(workerCount, (_) => worker()));
+    return tokens;
+  }
+
   Future<String?> _uploadOnePhoto(
     File file,
     int index,
     ValueNotifier<List<double>> progress,
   ) async {
-    final url = await messagesModule.requestPhotoUploadUrl();
-    if (url == null || url.isEmpty) return null;
-    return fileUploader.uploadPhoto(
-      Uri.parse(url),
-      file,
-      filename: _photoFilename(file),
-      onProgress: (sent, total) {
-        if (total <= 0) return;
-        final next = List<double>.from(progress.value);
-        if (index < next.length) {
-          next[index] = (sent / total).clamp(0.0, 1.0);
-          progress.value = next;
-        }
-      },
-    );
+    for (var attempt = 0; attempt < _photoUploadAttempts; attempt++) {
+      if (attempt > 0) {
+        await Future.delayed(Duration(seconds: attempt));
+        if (!mounted) return null;
+        _setPhotoProgress(progress, index, 0);
+      }
+      try {
+        final url = await messagesModule.requestPhotoUploadUrl();
+        if (url == null || url.isEmpty) continue;
+        final token = await fileUploader.uploadPhoto(
+          Uri.parse(url),
+          file,
+          filename: _photoFilename(file),
+          onProgress: (sent, total) {
+            if (total <= 0) return;
+            _setPhotoProgress(progress, index, (sent / total).clamp(0.0, 1.0));
+          },
+        );
+        if (token != null) return token;
+      } catch (e) {
+        logger.w('uploadOnePhoto attempt ${attempt + 1}: $e');
+      }
+    }
+    return null;
+  }
+
+  void _setPhotoProgress(
+    ValueNotifier<List<double>> progress,
+    int index,
+    double value,
+  ) {
+    final next = List<double>.from(progress.value);
+    if (index < next.length) {
+      next[index] = value;
+      progress.value = next;
+    }
   }
 
   String _photoFilename(File file) {

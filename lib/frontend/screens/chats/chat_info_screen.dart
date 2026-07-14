@@ -37,6 +37,8 @@ class _MemberInfo {
   });
 }
 
+enum ChatInfoTab { media }
+
 class ChatInfoScreen extends StatefulWidget {
   final int chatId;
   final String name;
@@ -44,6 +46,7 @@ class ChatInfoScreen extends StatefulWidget {
   final String chatType;
 
   final int? dialogPeerId;
+  final ChatInfoTab? initialTab;
 
   final void Function(String messageId, int time)? onJumpToMessage;
 
@@ -54,6 +57,7 @@ class ChatInfoScreen extends StatefulWidget {
     required this.imageUrl,
     required this.chatType,
     this.dialogPeerId,
+    this.initialTab,
     this.onJumpToMessage,
   });
 
@@ -231,10 +235,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       setState(() {
         _isLoading = false;
         if (_selectedTab.isEmpty && _tabs.isNotEmpty) {
-          _selectedTab = _tabs.first;
+          _selectedTab = _initialTabLabel() ?? _tabs.first;
         }
       });
     }
+  }
+
+  String? _initialTabLabel() {
+    if (widget.initialTab != ChatInfoTab.media) return null;
+    final media = AppLocalizations.of(context)!.chatInfoTabMedia;
+    return _tabs.contains(media) ? media : null;
   }
 
   @override
