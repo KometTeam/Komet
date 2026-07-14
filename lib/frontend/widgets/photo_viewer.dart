@@ -105,6 +105,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   late PageController _controller;
   late List<_ViewerPhoto> _items;
   late int _index;
+  int _pager = 0;
 
   final Map<String, int> _quarterTurns = {};
   bool _feedLoaded = false;
@@ -187,15 +188,28 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       return;
     }
 
-    _controller.dispose();
+    _adoptFeed(items, at, feed);
+  }
+
+  void _adoptFeed(List<_ViewerPhoto> items, int at, ChatPhotoFeed feed) {
+    final movesPage = at != _index;
+    final previous = _controller;
+
     setState(() {
       _items = items;
       _index = at;
       _total = feed.total;
       _reachedEnd = feed.reachedEnd;
       _feedLoaded = true;
-      _controller = PageController(initialPage: at);
+      if (movesPage) {
+        _pager++;
+        _controller = PageController(initialPage: at);
+      }
     });
+
+    if (movesPage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
+    }
   }
 
   Future<void> _loadMore() async {
@@ -209,21 +223,17 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       );
       if (!mounted) return;
 
-      final known = _items.length;
-      final appended =
-          known > 0 &&
-          feed.items.length > known &&
-          feed.items[known - 1].dedupKey == _items.last.id;
+      final items = feed.items.map(_ViewerPhoto.fromFeed).toList();
+      final at = items.indexWhere((i) => i.id == _current.id);
+      if (at == -1) {
+        setState(() {
+          _total = feed.total;
+          _reachedEnd = feed.reachedEnd;
+        });
+        return;
+      }
 
-      setState(() {
-        if (appended) {
-          _items.addAll(feed.items.skip(known).map(_ViewerPhoto.fromFeed));
-        } else {
-          _items = feed.items.map(_ViewerPhoto.fromFeed).toList();
-        }
-        _total = feed.total;
-        _reachedEnd = feed.reachedEnd;
-      });
+      _adoptFeed(items, at, feed);
     } finally {
       _loadingMore = false;
     }
@@ -411,6 +421,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
             children: [
               Positioned.fill(
                 child: PageView.builder(
+                  key: ValueKey(_pager),
                   controller: _controller,
                   itemCount: _items.length,
                   onPageChanged: _onPageChanged,
