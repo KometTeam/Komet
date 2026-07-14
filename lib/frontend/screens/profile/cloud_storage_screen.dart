@@ -18,6 +18,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
 
 enum _EnvState { loading, notConfigured, ready }
 
@@ -333,7 +334,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
         ),
       ),
       body: switch (_envState) {
-        _EnvState.loading => const Center(child: CircularProgressIndicator()),
+        _EnvState.loading => const Center(child: SmallSpinner(size: 36)),
         _EnvState.notConfigured => _buildNotConfigured(cs),
         _EnvState.ready => _buildReady(cs),
       },
@@ -375,14 +376,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                 ),
               ),
               child: _isCreatingEnv
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.onPrimary,
-                      ),
-                    )
+                  ? SmallSpinner(size: 18, color: cs.onPrimary)
                   : Text(
                       l10n.cloudStorageStart,
                       style: const TextStyle(
@@ -1053,14 +1047,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
               ),
               const SizedBox(width: 8),
               _loading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.primary,
-                      ),
-                    )
+                  ? SmallSpinner(size: 20, color: cs.primary)
                   : IconButton(
                       icon: Icon(
                         isExpired ? Symbols.add_link : Symbols.content_copy,
@@ -1221,14 +1208,7 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
               ),
             ),
             child: _sending
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: cs.onPrimary,
-                    ),
-                  )
+                ? SmallSpinner(size: 18, color: cs.onPrimary)
                 : Text(
                     l10n.cloudStorageSend,
                     style: const TextStyle(fontWeight: FontWeight.w600),

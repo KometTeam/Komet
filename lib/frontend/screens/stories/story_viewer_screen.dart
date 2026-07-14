@@ -14,6 +14,7 @@ import '../../../models/story.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/liquid_glass.dart';
+import '../../widgets/small_spinner.dart';
 import 'story_owner_info.dart';
 
 const _quickReactions = ['❤️', '🔥', '😍', '👏', '😂', '😮'];
@@ -490,14 +491,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           const _TopScrim(),
           if (loading)
             const Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: Colors.white,
-                ),
-              ),
+              child: SmallSpinner(size: 28, color: Colors.white),
             ),
           SafeArea(
             child: Column(
@@ -1069,14 +1063,7 @@ class _OwnerCover extends StatelessWidget {
                 imageUrl: info?.avatarUrl,
               ),
               const SizedBox(height: 14),
-              const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white30,
-                ),
-              ),
+              const SmallSpinner(size: 22, color: Colors.white30),
             ],
           ),
         ),

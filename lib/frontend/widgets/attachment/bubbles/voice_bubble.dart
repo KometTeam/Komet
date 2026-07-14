@@ -13,6 +13,7 @@ import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../core/utils/media_cache.dart';
 import '../../custom_notification.dart';
+import '../../small_spinner.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final int duration;
@@ -231,8 +232,8 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   child: _loadingAudio
                       ? Padding(
                           padding: const EdgeInsets.all(8),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                          child: SmallSpinner(
+                            size: 36,
                             color: widget.isMe
                                 ? widget.cs.onPrimaryContainer
                                 : widget.cs.primary,
@@ -273,13 +274,9 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   height: 32,
                   child: Center(
                     child: _transcriptionLoading
-                        ? SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: widget.textColor.withValues(alpha: 0.6),
-                            ),
+                        ? SmallSpinner(
+                            size: 12,
+                            color: widget.textColor.withValues(alpha: 0.6),
                           )
                         : Text(
                             'Т',

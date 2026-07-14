@@ -17,6 +17,7 @@ import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/custom_notification.dart';
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
@@ -222,7 +223,7 @@ class _SettingsTabState extends State<SettingsTab> {
     final cs = Theme.of(context).colorScheme;
 
     if (_profile == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: SmallSpinner(size: 36));
     }
 
     final String fullName =

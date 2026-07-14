@@ -310,13 +310,9 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
             ),
             onPressed: _busy ? null : _toggle,
             child: _busy
-                ? SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: _isFavorite ? cs.onSurface : cs.onPrimary,
-                    ),
+                ? SmallSpinner(
+                    size: 22,
+                    color: _isFavorite ? cs.onSurface : cs.onPrimary,
                   )
                 : Text(
                     _isFavorite ? 'Убрать' : 'Добавить',

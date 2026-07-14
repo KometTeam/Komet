@@ -16,6 +16,8 @@ import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
+import '../small_spinner.dart';
+
 const int _navItemCount = 5;
 
 List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
@@ -395,7 +397,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     double bottomReserve,
   ) {
     if (_loading) {
-      return Center(child: CircularProgressIndicator(color: cs.primary));
+      return Center(child: SmallSpinner(size: 36, color: cs.primary));
     }
     if (_permission == GalleryPermission.denied) {
       return _buildDenied(scrollController, cs, bottomReserve);

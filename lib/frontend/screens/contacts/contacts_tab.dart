@@ -11,6 +11,8 @@ import '../../../models/contact_info.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
+import '../../widgets/springy_tap.dart';
 import '../chats/chat_info_screen.dart';
 import 'nfc_exchange_sheet.dart';
 import 'open_contact_profile.dart';
@@ -115,83 +117,85 @@ class _ContactsTabState extends State<ContactsTab> {
             .trim();
     final nameToDisplay = fullName.isEmpty ? '+${contact.phone}' : fullName;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => openContactDialogProfile(
-          context,
-          contactId: contact.id,
-          name: nameToDisplay,
-          avatarUrl: contact.baseUrl,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: cs.primary.withValues(alpha: 0.1),
-                    width: 1,
+    return SpringyTap(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => openContactDialogProfile(
+            context,
+            contactId: contact.id,
+            name: nameToDisplay,
+            avatarUrl: contact.baseUrl,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: cs.primary.withValues(alpha: 0.1),
+                      width: 1,
+                    ),
+                  ),
+                  child: KometAvatar(
+                    name: nameToDisplay,
+                    imageUrl: contact.baseUrl,
+                    size: 48,
                   ),
                 ),
-                child: KometAvatar(
-                  name: nameToDisplay,
-                  imageUrl: contact.baseUrl,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            nameToDisplay,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              nameToDisplay,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        if (contact.isVerified) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Symbols.verified,
-                            color: cs.primary,
-                            size: 16,
-                            weight: 600,
-                            fill: 1,
-                          ),
+                          if (contact.isVerified) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              Symbols.verified,
+                              color: cs.primary,
+                              size: 16,
+                              weight: 600,
+                              fill: 1,
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      contact.updateTime > 0
-                          ? 'Был(а) недавно'
-                          : '+${contact.phone}',
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 14,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        contact.updateTime > 0
+                            ? 'Был(а) недавно'
+                            : '+${contact.phone}',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -243,7 +247,7 @@ class _ContactsTabState extends State<ContactsTab> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: SmallSpinner(size: 36))
                   : _contacts.isEmpty
                   ? Center(
                       child: Text(
@@ -457,11 +461,7 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 20)
                     : const Text('Найти'),
               ),
             ],

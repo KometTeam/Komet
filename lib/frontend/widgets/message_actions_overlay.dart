@@ -14,6 +14,7 @@ import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
 import 'komet_avatar.dart';
 import 'lottie_image.dart';
+import 'small_spinner.dart';
 
 class ReactionEmoji {
   final String emoji;
@@ -1227,11 +1228,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
         child: Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2.4),
-          ),
+          child: SmallSpinner(size: 24),
         ),
       );
     } else {
@@ -1314,11 +1311,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
         child: Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2.4),
-          ),
+          child: SmallSpinner(size: 24),
         ),
       );
     } else {
@@ -1647,11 +1640,7 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
           Expanded(
             child: !_loaded
                 ? const Center(
-                    child: SizedBox(
-                      width: 26,
-                      height: 26,
-                      child: CircularProgressIndicator(strokeWidth: 2.4),
-                    ),
+                    child: SmallSpinner(size: 26),
                   )
                 : _results.isEmpty
                 ? const SizedBox.shrink()

@@ -10,6 +10,7 @@ import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../core/utils/media_cache.dart';
 import '../../../../models/attachment.dart';
+import '../../small_spinner.dart';
 
 class VideoNoteBubble extends StatefulWidget {
   final VideoAttachment attachment;
@@ -182,10 +183,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble> {
                 child: _loading
                     ? const Padding(
                         padding: EdgeInsets.all(14),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                        child: SmallSpinner(size: 36, color: Colors.white),
                       )
                     : Icon(
                         _error ? Symbols.error : Symbols.play_arrow,

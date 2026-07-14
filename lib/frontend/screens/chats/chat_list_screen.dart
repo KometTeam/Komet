@@ -16,6 +16,7 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
+import '../../widgets/springy_tap.dart';
 import '../../widgets/formatted_message_text.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/text_format.dart';
@@ -2550,219 +2551,226 @@ class _ChatListScreenState extends State<ChatListScreen>
             )
           : null,
     );
-    return InkWell(
+    return SpringyTap(
       key: ValueKey('chat_$id'),
-      onTap: () {
-        if (widget.forwardMode) {
-          Navigator.of(context).pop(
-            ForwardTarget(
-              chatId: int.parse(id),
-              name: name,
-              imageUrl: imageUrl,
-              chatType: chatType,
-            ),
-          );
-          return;
-        }
-        if (_isSelectionMode) {
-          _toggleSelection(id);
-          return;
-        }
-        if (imageUrl.isNotEmpty) {
-          unawaited(
-            precacheImage(
-              CachedNetworkImageProvider(
-                imageUrl,
-                maxWidth: kAvatarThumbSize,
-                maxHeight: kAvatarThumbSize,
+      child: InkWell(
+        onTap: () {
+          if (widget.forwardMode) {
+            Navigator.of(context).pop(
+              ForwardTarget(
+                chatId: int.parse(id),
+                name: name,
+                imageUrl: imageUrl,
+                chatType: chatType,
               ),
+            );
+            return;
+          }
+          if (_isSelectionMode) {
+            _toggleSelection(id);
+            return;
+          }
+          if (imageUrl.isNotEmpty) {
+            unawaited(
+              precacheImage(
+                CachedNetworkImageProvider(
+                  imageUrl,
+                  maxWidth: kAvatarThumbSize,
+                  maxHeight: kAvatarThumbSize,
+                ),
+                context,
+              ),
+            );
+          }
+          if (widget.onChatSelected != null) {
+            widget.onChatSelected!(
+              DesktopChatSelection(
+                chatId: int.parse(id),
+                name: name,
+                imageUrl: imageUrl,
+                chatType: chatType,
+              ),
+            );
+          } else {
+            pushSwipeable(
               context,
-            ),
-          );
-        }
-        if (widget.onChatSelected != null) {
-          widget.onChatSelected!(
-            DesktopChatSelection(
-              chatId: int.parse(id),
-              name: name,
-              imageUrl: imageUrl,
-              chatType: chatType,
-            ),
-          );
-        } else {
-          pushSwipeable(
-            context,
-            (context) => ChatScreen(
-              chatId: int.parse(id),
-              name: name,
-              imageUrl: imageUrl,
-              chatType: chatType,
-            ),
-          );
-        }
-      },
-      onLongPress: widget.forwardMode ? null : () => _toggleSelection(id),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        color: isSelected
-            ? cs.primary.withValues(alpha: 0.08)
-            : Colors.transparent,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Stack(
-                children: [
-                  avatarCircle,
-                  if (isSelected)
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: cs.surface, width: 2),
-                        ),
-                        child: Icon(
-                          Symbols.check,
-                          color: cs.onPrimary,
-                          size: 14,
-                        ),
-                      ),
-                    )
-                  else if (presenceUserId != 0)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: OnlineDot(
-                        userId: presenceUserId,
-                        borderColor: cs.surface,
-                      ),
-                    ),
-                ],
+              (context) => ChatScreen(
+                chatId: int.parse(id),
+                name: name,
+                imageUrl: imageUrl,
+                chatType: chatType,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      name,
-                                      style: TextStyle(
-                                        color: cs.onSurface,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.1,
+            );
+          }
+        },
+        onLongPress: widget.forwardMode ? null : () => _toggleSelection(id),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          color: isSelected
+              ? cs.primary.withValues(alpha: 0.08)
+              : Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Stack(
+                  children: [
+                    avatarCircle,
+                    if (isSelected)
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: cs.surface, width: 2),
+                          ),
+                          child: Icon(
+                            Symbols.check,
+                            color: cs.onPrimary,
+                            size: 14,
+                          ),
+                        ),
+                      )
+                    else if (presenceUserId != 0)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: OnlineDot(
+                          userId: presenceUserId,
+                          borderColor: cs.surface,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        name,
+                                        style: TextStyle(
+                                          color: cs.onSurface,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.1,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                  if (isVerified) ...[
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Symbols.verified,
-                                      color: cs.primary,
-                                      size: 16,
-                                      weight: 600,
-                                      fill: 1,
-                                    ),
+                                    if (isVerified) ...[
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Symbols.verified,
+                                        color: cs.primary,
+                                        size: 16,
+                                        weight: 600,
+                                        fill: 1,
+                                      ),
+                                    ],
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                            if (isMuted) ...[
-                              const SizedBox(width: 4),
-                              Icon(
-                                Symbols.notifications_off,
-                                color: cs.outlineVariant,
-                                size: 14,
-                                weight: 400,
+                              if (isMuted) ...[
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Symbols.notifications_off,
+                                  color: cs.outlineVariant,
+                                  size: 14,
+                                  weight: 400,
+                                ),
+                              ],
+                              if (isPinned) ...[
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Symbols.keep,
+                                  color: cs.outlineVariant,
+                                  size: 14,
+                                  weight: 400,
+                                ),
+                              ],
+                              const SizedBox(width: 8),
+                              Text(
+                                time,
+                                style: TextStyle(
+                                  color: cs.outline,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
-                            if (isPinned) ...[
-                              const SizedBox(width: 4),
-                              Icon(
-                                Symbols.keep,
-                                color: cs.outlineVariant,
-                                size: 14,
-                                weight: 400,
-                              ),
-                            ],
-                            const SizedBox(width: 8),
-                            Text(
-                              time,
-                              style: TextStyle(color: cs.outline, fontSize: 12),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: ActivitySubtitle(
-                                chatId: int.tryParse(id) ?? 0,
-                                child: messageLine,
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: ActivitySubtitle(
+                                  chatId: int.tryParse(id) ?? 0,
+                                  child: messageLine,
+                                ),
                               ),
-                            ),
-                            ?statusIcon,
-                            const SizedBox(width: 8),
-                            if (unreadCount > 0)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isMuted
-                                      ? cs.surfaceContainerHighest
-                                      : cs.primary,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  unreadCount.toString(),
-                                  style: TextStyle(
-                                    color: isMuted ? cs.outline : cs.onPrimary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.1,
+                              ?statusIcon,
+                              const SizedBox(width: 8),
+                              if (unreadCount > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
                                   ),
+                                  decoration: BoxDecoration(
+                                    color: isMuted
+                                        ? cs.surfaceContainerHighest
+                                        : cs.primary,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    unreadCount.toString(),
+                                    style: TextStyle(
+                                      color: isMuted
+                                          ? cs.outline
+                                          : cs.onPrimary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                )
+                              else if (isRead)
+                                Icon(
+                                  Symbols.done_all,
+                                  color: cs.primary,
+                                  size: 16,
+                                  weight: 400,
                                 ),
-                              )
-                            else if (isRead)
-                              Icon(
-                                Symbols.done_all,
-                                color: cs.primary,
-                                size: 16,
-                                weight: 400,
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

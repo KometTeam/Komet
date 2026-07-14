@@ -9,6 +9,7 @@ import '../../../core/storage/spoofing_service.dart';
 import '../../../main.dart' show api;
 import '../../widgets/connection_status.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/webview_permission_prompt.dart';
 
 class WebAppScreen extends StatefulWidget {
@@ -137,7 +138,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
     }
     final launch = _launch;
     if (launch == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: SmallSpinner(size: 36));
     }
     return InAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(launch.url)),

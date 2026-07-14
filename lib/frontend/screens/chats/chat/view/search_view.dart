@@ -9,6 +9,7 @@ import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/animated_lottie_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
+import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_search_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/message_search_result.dart';
 
@@ -168,14 +169,7 @@ class SearchOverlay extends StatelessWidget {
               }
               if (loading) {
                 return Center(
-                  child: SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
+                  child: SmallSpinner(size: 26, color: cs.onSurfaceVariant),
                 );
               }
               return ValueListenableBuilder<bool>(

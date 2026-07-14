@@ -21,6 +21,7 @@ import '../../main.dart';
 import '../../models/attachment.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
+import 'small_spinner.dart';
 
 class PhotoViewerActions {
   final void Function(String messageId, int time)? goToMessage;
@@ -550,14 +551,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
               Expanded(child: _buildInfo(l10n)),
               IconButton(
                 icon: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
+                    ? const SmallSpinner(size: 20, color: Colors.white)
                     : const Icon(Symbols.download, color: Colors.white),
                 onPressed: _saving ? null : _save,
                 tooltip: l10n.sharedDownload,
@@ -666,7 +660,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       fit: BoxFit.contain,
       fadeInDuration: const Duration(milliseconds: 120),
       placeholder: (_, _) =>
-          const Center(child: CircularProgressIndicator(color: Colors.white)),
+          const Center(child: SmallSpinner(size: 36, color: Colors.white)),
       errorWidget: (_, _, _) => _broken(),
     );
   }

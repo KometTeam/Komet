@@ -18,6 +18,7 @@ import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
@@ -998,13 +999,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     borderRadius: BorderRadius.circular(50),
                                   ),
                                   child: _isPhoneValid && !_isOnline
-                                      ? SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: cs.onPrimaryContainer,
-                                          ),
+                                      ? SmallSpinner(
+                                          size: 24,
+                                          color: cs.onPrimaryContainer,
                                         )
                                       : Icon(
                                           Icons.arrow_forward,

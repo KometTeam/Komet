@@ -6,6 +6,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../main.dart';
 import '../widgets/glossy_pill.dart';
+import '../widgets/small_spinner.dart';
 
 class DebugSyncProbeSection extends StatefulWidget {
   const DebugSyncProbeSection({super.key});
@@ -147,11 +148,7 @@ class _DebugSyncProbeSectionState extends State<DebugSyncProbeSection> {
               ),
             ),
             child: _loading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SmallSpinner(size: 20)
                 : const Text('Отправить'),
           ),
           if (_result != null) ...[

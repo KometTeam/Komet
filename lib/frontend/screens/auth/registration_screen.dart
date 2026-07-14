@@ -6,6 +6,7 @@ import '../../../backend/modules/account.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
+import '../../widgets/small_spinner.dart';
 
 class RegistrationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -110,14 +111,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
         child: _isSubmitting
-            ? SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: cs.onSurfaceVariant,
-                ),
-              )
+            ? SmallSpinner(size: 22, color: cs.onSurfaceVariant)
             : Icon(
                 Icons.arrow_forward,
                 color: _canSubmit ? cs.onPrimaryContainer : cs.onSurfaceVariant,

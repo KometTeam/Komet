@@ -87,6 +87,7 @@ import '../../widgets/lottie_image.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/schedule_time_picker.dart';
@@ -4610,14 +4611,7 @@ class _ChatScreenState extends State<ChatScreen>
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.2,
-            color: cs.onSurfaceVariant,
-          ),
-        ),
+        child: SmallSpinner(size: 22, color: cs.onSurfaceVariant),
       ),
     );
   }

@@ -13,6 +13,7 @@ import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
 
@@ -295,7 +296,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
           child: _loading
               ? const Padding(
                   padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: SmallSpinner(size: 36)),
                 )
               : ListView.builder(
                   padding: EdgeInsets.zero,

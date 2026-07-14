@@ -15,6 +15,7 @@ import '../../../main.dart';
 import '../../../models/contact_info.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/small_spinner.dart';
 
 enum _Stage {
   checking,
@@ -243,7 +244,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       case _Stage.checking:
         return const Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
-          child: CircularProgressIndicator(),
+          child: SmallSpinner(size: 36),
         );
       case _Stage.unsupported:
         return _message(cs, Symbols.nfc, l10n.nfcUnsupported);
@@ -420,11 +421,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: _stage == _Stage.adding
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const SmallSpinner(size: 20)
                   : Text(
                       _stage == _Stage.added
                           ? l10n.nfcAdded

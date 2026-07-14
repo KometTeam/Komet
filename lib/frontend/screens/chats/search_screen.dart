@@ -10,6 +10,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/names.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_route.dart';
 import '../contacts/open_contact_profile.dart';
 import 'chat_screen.dart';
@@ -232,7 +233,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
     if (!hasResults) {
       if (_loading) {
-        return const Center(child: CircularProgressIndicator());
+        return const Center(child: SmallSpinner(size: 36));
       }
       return _buildHint(cs, Symbols.search_off, 'Ничего не найдено');
     }

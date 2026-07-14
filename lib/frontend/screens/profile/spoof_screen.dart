@@ -18,6 +18,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/small_spinner.dart';
 import '../auth/login_screen.dart';
 
 enum SpoofingMethod { partial, full }
@@ -444,7 +445,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SmallSpinner(size: 36))
           : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
               child: Column(

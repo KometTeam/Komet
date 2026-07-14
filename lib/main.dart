@@ -80,6 +80,7 @@ import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/liquid_glass.dart';
+import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
 
 final api = Api();
@@ -97,6 +98,9 @@ final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
 bool isOnemeFlavor = false;
+
+const ProgressIndicatorThemeData _expressiveProgressTheme =
+    ProgressIndicatorThemeData(year2023: false);
 
 const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
   builders: <TargetPlatform, PageTransitionsBuilder>{
@@ -835,6 +839,7 @@ class KometAppState extends State<KometApp>
         useMaterial3: true,
         colorScheme: light,
         pageTransitionsTheme: _appPageTransitions,
+        progressIndicatorTheme: _expressiveProgressTheme,
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.light).textTheme,
@@ -846,6 +851,7 @@ class KometAppState extends State<KometApp>
         useMaterial3: true,
         colorScheme: dark,
         pageTransitionsTheme: _appPageTransitions,
+        progressIndicatorTheme: _expressiveProgressTheme,
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.dark).textTheme,
@@ -1064,7 +1070,7 @@ class _StartupScreenState extends State<_StartupScreen> {
     return Scaffold(
       backgroundColor: cs.surface,
       body: Center(
-        child: CircularProgressIndicator(color: cs.primary, strokeWidth: 2),
+        child: SmallSpinner(size: 36, color: cs.primary),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../widgets/custom_notification.dart';
 import '../widgets/glossy_pill.dart';
+import '../widgets/small_spinner.dart';
 
 class DebugIdSearchSection extends StatelessWidget {
   final TextEditingController idController;
@@ -72,11 +73,7 @@ class DebugIdSearchSection extends StatelessWidget {
               FilledButton(
                 onPressed: isSearching ? null : onSearch,
                 child: isSearching
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 20)
                     : const Icon(Symbols.search, size: 20),
               ),
             ],

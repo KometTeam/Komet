@@ -23,6 +23,7 @@ import '../../screens/chats/chat_screen.dart';
 import '../custom_notification.dart';
 import '../komet_avatar.dart';
 import '../photo_viewer.dart';
+import '../small_spinner.dart';
 import '../swipe_route.dart';
 import '../video_player_screen.dart';
 
@@ -103,11 +104,7 @@ Widget _loadingState(ColorScheme cs) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 56),
     child: Center(
-      child: SizedBox(
-        width: 26,
-        height: 26,
-        child: CircularProgressIndicator(strokeWidth: 2.5, color: cs.primary),
-      ),
+      child: SmallSpinner(size: 26, color: cs.primary),
     ),
   );
 }
@@ -611,14 +608,7 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Center(
             child: _loadingMore
-                ? SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: cs.primary,
-                    ),
-                  )
+                ? SmallSpinner(size: 22, color: cs.primary)
                 : TextButton(
                     onPressed: _loadMore,
                     child: Text(l10n.sharedLoadMore),
@@ -1174,10 +1164,7 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
               child: _loadingAudio
                   ? const Padding(
                       padding: EdgeInsets.all(13),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
+                      child: SmallSpinner(size: 36, color: Colors.white),
                     )
                   : ValueListenableBuilder<double>(
                       valueListenable: _progress,

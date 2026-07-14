@@ -3,6 +3,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
+import '../../widgets/small_spinner.dart';
 import 'session_stale_recovery.dart';
 
 class Password2FAScreen extends StatefulWidget {
@@ -199,14 +200,7 @@ class _Password2FAScreenState extends State<Password2FAScreen>
                       borderRadius: BorderRadius.circular(50),
                     ),
                     child: _isLoading
-                        ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.onPrimaryContainer,
-                            ),
-                          )
+                        ? SmallSpinner(size: 24, color: cs.onPrimaryContainer)
                         : Icon(
                             Icons.arrow_forward,
                             color: _passwordController.text.isNotEmpty
