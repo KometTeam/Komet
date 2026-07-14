@@ -903,5 +903,9 @@
   "updateLater": "Later",
   "updateSkip": "Skip",
   "updateDownloading": "Downloading update…",
-  "updateDownloadFailed": "Failed to download the update"
+  "updateDownloadFailed": "Failed to download the update",
+  "updateCheck": "Check for updates",
+  "updateChecking": "Checking for updates…",
+  "updateUpToDate": "You have the latest version",
+  "updateCheckFailed": "Couldn't check for updates. Try again later"
 }

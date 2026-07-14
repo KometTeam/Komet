@@ -4021,6 +4021,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to download the update'**
   String get updateDownloadFailed;
+
+  /// No description provided for @updateCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get updateCheck;
+
+  /// No description provided for @updateChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get updateChecking;
+
+  /// No description provided for @updateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You have the latest version'**
+  String get updateUpToDate;
+
+  /// No description provided for @updateCheckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t check for updates. Try again later'**
+  String get updateCheckFailed;
 }
 
 class _AppLocalizationsDelegate

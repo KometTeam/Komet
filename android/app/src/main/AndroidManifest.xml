@@ -64,6 +64,15 @@
                 <data android:scheme="http" android:host="max.ru"/>
                 <data android:scheme="http" android:host="www.max.ru"/>
             </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="komet.pw"/>
+                <data android:scheme="https" android:host="www.komet.pw"/>
+                <data android:path="/export-logs"/>
+                <data android:path="/export-logs/"/>
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>

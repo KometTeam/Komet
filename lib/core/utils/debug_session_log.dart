@@ -5,7 +5,15 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../protocol/opcode_map.dart';
+import 'format.dart';
 import 'log_redact.dart';
+
+class DebugExportFile {
+  final String name;
+  final String content;
+
+  DebugExportFile(this.name, this.content);
+}
 
 class _LogEntry {
   final int opcode;
@@ -99,7 +107,8 @@ class DebugSessionLog {
   DebugSessionLog._();
   static final DebugSessionLog instance = DebugSessionLog._();
 
-  static const int _maxSessions = 3;
+  static const Duration _retention = Duration(hours: 24);
+  static const int _maxStoredSessions = 30;
   static const int _maxEntriesPerSession = 2000;
   static const int _maxLogLinesPerSession = 5000;
   static const Duration _flushDebounce = Duration(seconds: 3);
@@ -225,9 +234,17 @@ class DebugSessionLog {
 
   Future<void> _rotate() async {
     final files = await _sessionFiles();
-    const keep = _maxSessions - 1;
-    if (files.length <= keep) return;
-    for (final file in files.take(files.length - keep)) {
+    final cutoff = DateTime.now().subtract(_retention).millisecondsSinceEpoch;
+    final stale = <File>[];
+    final fresh = <File>[];
+    for (final file in files) {
+      (_startMillis(file) < cutoff ? stale : fresh).add(file);
+    }
+    const keep = _maxStoredSessions - 1;
+    if (fresh.length > keep) {
+      stale.addAll(fresh.take(fresh.length - keep));
+    }
+    for (final file in stale) {
       try {
         await file.delete();
       } catch (_) {}
@@ -255,7 +272,8 @@ class DebugSessionLog {
     return int.tryParse(digits) ?? 0;
   }
 
-  Future<String?> buildExport({String? endpoint}) async {
+  Future<List<DebugExportFile>?> buildExportFiles({String? endpoint}) async {
+    final cutoff = DateTime.now().subtract(_retention);
     final sessions = <_SessionData>[];
     final dir = _dir;
     if (dir != null) {
@@ -263,7 +281,10 @@ class DebugSessionLog {
         if (_currentFile != null && file.path == _currentFile!.path) continue;
         try {
           final decoded = jsonDecode(await file.readAsString());
-          if (decoded is Map) sessions.add(_SessionData.fromJson(decoded));
+          if (decoded is Map) {
+            final session = _SessionData.fromJson(decoded);
+            if (!session.startedAt.isBefore(cutoff)) sessions.add(session);
+          }
         } catch (_) {}
       }
     }
@@ -277,56 +298,66 @@ class DebugSessionLog {
       ),
     );
     sessions.sort((a, b) => a.startedAt.compareTo(b.startedAt));
-    final lastN = sessions.length > _maxSessions
-        ? sessions.sublist(sessions.length - _maxSessions)
-        : sessions;
-    final totalEntries = lastN.fold<int>(0, (sum, s) => sum + s.entries.length);
-    final totalLogs = lastN.fold<int>(0, (sum, s) => sum + s.logLines.length);
+    final totalEntries = sessions.fold<int>(
+      0,
+      (sum, s) => sum + s.entries.length,
+    );
+    final totalLogs = sessions.fold<int>(
+      0,
+      (sum, s) => sum + s.logLines.length,
+    );
     if (totalEntries == 0 && totalLogs == 0) return null;
 
+    final info = StringBuffer();
+    info.writeln('Komet — отладочный лог');
+    if (endpoint != null) info.writeln('Сервер: $endpoint');
+    info.writeln('Экспортирован: ${DateTime.now().toIso8601String()}');
+    info.writeln('Период: последние ${_retention.inHours} часа');
+    info.writeln('Заходов в приложение: ${sessions.length}');
+    info.writeln('Всего запросов: $totalEntries');
+    info.writeln('Всего строк лога: $totalLogs');
+    info.writeln('Скрыто: токен полностью, номер кроме первых 3 символов');
+
+    final files = <DebugExportFile>[DebugExportFile('info.txt', '$info')];
+    for (var s = 0; s < sessions.length; s++) {
+      final session = sessions[s];
+      final name =
+          'session_${(s + 1).toString().padLeft(2, '0')}_'
+          '${formatFileStamp(session.startedAt)}.txt';
+      files.add(DebugExportFile(name, _buildSessionText(s + 1, session)));
+    }
+    return files;
+  }
+
+  String _buildSessionText(int index, _SessionData session) {
     final buffer = StringBuffer();
-    buffer.writeln('Komet — отладочный лог');
-    if (endpoint != null) buffer.writeln('Сервер: $endpoint');
-    buffer.writeln('Экспортирован: ${DateTime.now().toIso8601String()}');
-    buffer.writeln('Заходов в приложение: ${lastN.length}');
-    buffer.writeln('Всего запросов: $totalEntries');
-    buffer.writeln('Всего строк лога: $totalLogs');
-    buffer.writeln('Скрыто: токен полностью, номер кроме первых 3 символов');
+    buffer.writeln('==================================================');
+    buffer.writeln('ЗАХОД #$index — ${session.startedAt.toIso8601String()}');
+    buffer.writeln(
+      'запросов: ${session.entries.length}'
+      '${session.truncated ? ' (обрезано до $_maxEntriesPerSession)' : ''}'
+      ' · строк лога: ${session.logLines.length}'
+      '${session.logsTruncated ? ' (обрезано до $_maxLogLinesPerSession)' : ''}',
+    );
+    buffer.writeln('==================================================');
     buffer.writeln();
 
-    for (var s = 0; s < lastN.length; s++) {
-      final session = lastN[s];
-      buffer.writeln('==================================================');
-      buffer.writeln(
-        'ЗАХОД #${s + 1} — ${session.startedAt.toIso8601String()}',
-      );
-      buffer.writeln(
-        'запросов: ${session.entries.length}'
-        '${session.truncated ? ' (обрезано до $_maxEntriesPerSession)' : ''}'
-        ' · строк лога: ${session.logLines.length}'
-        '${session.logsTruncated ? ' (обрезано до $_maxLogLinesPerSession)' : ''}',
-      );
-      buffer.writeln('==================================================');
-      buffer.writeln();
-
-      buffer.writeln('----- ЛОГИ ПРИЛОЖЕНИЯ -----');
-      if (session.logLines.isEmpty) {
-        buffer.writeln('(пусто)');
-      } else {
-        for (final line in session.logLines) {
-          buffer.writeln(line);
-        }
+    buffer.writeln('----- ЛОГИ ПРИЛОЖЕНИЯ -----');
+    if (session.logLines.isEmpty) {
+      buffer.writeln('(пусто)');
+    } else {
+      for (final line in session.logLines) {
+        buffer.writeln(line);
       }
-      buffer.writeln();
+    }
+    buffer.writeln();
 
-      buffer.writeln('----- ЗАПРОСЫ -----');
-      if (session.entries.isEmpty) {
-        buffer.writeln('(пусто)');
-        buffer.writeln();
-      } else {
-        for (var i = 0; i < session.entries.length; i++) {
-          _writeEntry(buffer, i + 1, session.entries[i]);
-        }
+    buffer.writeln('----- ЗАПРОСЫ -----');
+    if (session.entries.isEmpty) {
+      buffer.writeln('(пусто)');
+    } else {
+      for (var i = 0; i < session.entries.length; i++) {
+        _writeEntry(buffer, i + 1, session.entries[i]);
       }
     }
     return buffer.toString();

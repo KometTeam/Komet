@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 
 import '../../backend/api.dart';
+import '../../frontend/debug/log_export.dart';
 import '../../frontend/widgets/max_link_handler.dart';
 import '../../main.dart';
 import 'desktop_url_scheme.dart';
@@ -16,6 +17,8 @@ class DeepLinkService {
   StreamSubscription<Uri>? _sub;
   StreamSubscription<SessionState>? _stateSub;
   String? _pending;
+  bool _pendingLogExport = false;
+  Timer? _logExportRetry;
   bool _ready = false;
   bool _started = false;
 
@@ -42,6 +45,11 @@ class DeepLinkService {
   }
 
   void _onUri(Uri uri) {
+    if (_isLogExportLink(uri)) {
+      _pendingLogExport = true;
+      _flushPending();
+      return;
+    }
     final url = _normalize(uri);
     if (url == null) return;
     _pending = url;
@@ -49,14 +57,44 @@ class DeepLinkService {
   }
 
   void _flushPending() {
-    final pending = _pending;
-    if (pending == null || !_ready) return;
-    if (api.state != SessionState.online) return;
     final context = KometApp.navigatorKey.currentContext;
-    if (context == null) return;
 
+    if (_pendingLogExport) {
+      if (context == null) {
+        _logExportRetry ??= Timer(const Duration(milliseconds: 300), () {
+          _logExportRetry = null;
+          _flushPending();
+        });
+      } else {
+        _pendingLogExport = false;
+        exportDebugLog(context);
+      }
+    }
+
+    if (!_ready || context == null) return;
+    final pending = _pending;
+    if (pending == null || api.state != SessionState.online) return;
     _pending = null;
     tryHandleMaxLink(context, pending);
+  }
+
+  bool _isLogExportLink(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    final host = uri.host.toLowerCase();
+    final segments = <String>[
+      if (scheme == 'komet' && host.isNotEmpty) host,
+      ...uri.pathSegments,
+    ].where((s) => s.isNotEmpty).toList();
+
+    if (scheme == 'komet') {
+      return segments.length == 1 && segments.first == 'export-logs';
+    }
+    if (scheme == 'https' || scheme == 'http') {
+      return (host == 'komet.pw' || host == 'www.komet.pw') &&
+          segments.length == 1 &&
+          segments.first == 'export-logs';
+    }
+    return false;
   }
 
   String? _normalize(Uri uri) {
@@ -82,6 +120,8 @@ class DeepLinkService {
   }
 
   void dispose() {
+    _logExportRetry?.cancel();
+    _logExportRetry = null;
     _sub?.cancel();
     _sub = null;
     _stateSub?.cancel();
