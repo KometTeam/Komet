@@ -487,41 +487,7 @@ class _SettingsTabState extends State<SettingsTab> {
                             );
                           },
                         ),
-                      ]
-                    : const SizedBox.shrink(
-                        key: ValueKey('developers_settings_hidden'),
-                      ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _buildSection(
-                  context,
-                  items: [
-                    _SettingsItem(
-                      icon: Symbols.system_update,
-                      label: _isCheckingForUpdates
-                          ? l10n.updateChecking
-                          : l10n.updateCheck,
-                      onTap: _isCheckingForUpdates ? null : _checkForUpdates,
-                    ),
-                    _SettingsItem(
-                      leading: Image.asset(
-                        'assets/komet.png',
-                        width: 22,
-                        height: 22,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      label: 'Komet',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const KometSettingsScreen(),
-                          ),
-                        );
-                      },
+                      ],
                     ),
                   ),
                 ),
@@ -585,6 +551,15 @@ class _SettingsTabState extends State<SettingsTab> {
                     child: _buildSection(
                       context,
                       items: [
+                        _SettingsItem(
+                          icon: Symbols.system_update,
+                          label: _isCheckingForUpdates
+                              ? l10n.updateChecking
+                              : l10n.updateCheck,
+                          onTap: _isCheckingForUpdates
+                              ? null
+                              : _checkForUpdates,
+                        ),
                         _SettingsItem(
                           leading: Image.asset(
                             'assets/komet.png',
