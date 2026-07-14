@@ -957,15 +957,13 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  PhotoViewerActions _photoActions() {
-    return PhotoViewerActions(
-      goToMessage: _requestGoToMessage,
-      forward: _forwardMessageById,
-      delete: (messageId, senderId) =>
-          _confirmDeleteMessage(messageId, senderId == _myId),
-      viewAllPhotos: () => _openChatInfo(initialTab: ChatInfoTab.media),
-    );
-  }
+  late final PhotoViewerActions _photoActions = PhotoViewerActions(
+    goToMessage: _requestGoToMessage,
+    forward: _forwardMessageById,
+    delete: (messageId, senderId) =>
+        _confirmDeleteMessage(messageId, senderId == _myId),
+    viewAllPhotos: () => _openChatInfo(initialTab: ChatInfoTab.media),
+  );
 
   void _forwardMessageById(String messageId) {
     final message = _messages.where((m) => m.id == messageId).firstOrNull;
@@ -4702,7 +4700,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 nextMessage: nextMessage,
                                 chatType: chat?.type ?? 'CHAT',
                                 chatId: widget.chatId,
-                                photoActions: _photoActions(),
+                                photoActions: _photoActions,
                                 overrideStatus: _effectiveStatus(message),
                                 otherReadTime: _otherReadTime,
                                 reactionsListenable: _reactionNotifierFor(

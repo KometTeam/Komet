@@ -208,8 +208,19 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         resolveAnchor: () => _resolveAnchor(chatId),
       );
       if (!mounted) return;
+
+      final known = _items.length;
+      final appended =
+          known > 0 &&
+          feed.items.length > known &&
+          feed.items[known - 1].dedupKey == _items.last.id;
+
       setState(() {
-        _items = feed.items.map(_ViewerPhoto.fromFeed).toList();
+        if (appended) {
+          _items.addAll(feed.items.skip(known).map(_ViewerPhoto.fromFeed));
+        } else {
+          _items = feed.items.map(_ViewerPhoto.fromFeed).toList();
+        }
         _total = feed.total;
         _reachedEnd = feed.reachedEnd;
       });

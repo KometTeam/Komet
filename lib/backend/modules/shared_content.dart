@@ -139,9 +139,7 @@ class SharedContentModule {
     final index = _photoIndexes.putIfAbsent(chatId, _ChatPhotoIndex.new);
 
     for (var page = 0; page < _photoIndexMaxPages; page++) {
-      if (index.items.any((i) => i.dedupKey == photoKey)) {
-        return _snapshot(index);
-      }
+      if (index.seen.contains(photoKey)) return _snapshot(index);
       if (index.reachedEnd) return null;
       await _nextPhotoPage(chatId, index, resolveAnchor);
     }
@@ -212,17 +210,22 @@ class SharedContentModule {
       backward: _photoIndexPageSize,
     );
     index.started = true;
-
-    var added = 0;
-    for (final item in page.items) {
-      if (!index.seen.add(item.dedupKey)) continue;
-      index.items.add(item);
-      added++;
-    }
-    index.items.sort((a, b) => b.time.compareTo(a.time));
     if (page.total > index.total) index.total = page.total;
 
-    if (added == 0) index.reachedEnd = true;
+    final fresh = <SharedMediaItem>[];
+    for (final item in page.items) {
+      if (index.seen.add(item.dedupKey)) fresh.add(item);
+    }
+    if (fresh.isEmpty) {
+      index.reachedEnd = true;
+      return;
+    }
+
+    final oldest = index.items.isEmpty ? null : index.items.last;
+    index.items.addAll(fresh);
+    if (oldest != null && fresh.first.time > oldest.time) {
+      index.items.sort((a, b) => b.time.compareTo(a.time));
+    }
   }
 
   Future<SharedMediaPage> fetchMedia({
