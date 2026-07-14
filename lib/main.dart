@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
+import 'package:kolibri/kolibri.dart' show initKolibri;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:video_player_media_kit/video_player_media_kit.dart';
@@ -159,6 +160,7 @@ void _installLogCapture() {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initKolibri();
   DebugTest.parse(args);
   _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(
@@ -435,9 +437,9 @@ class KometAppState extends State<KometApp>
 
     _vpnBypassSub = VpnBypassService.instance.events.listen((r) {
       final msg = r.bound
-          ? 'Соединение через VPN не работает — '
-                'используется ${r.boundInterface ?? r.transport ?? 'прямое подключение'}'
-          : 'Соединение через VPN не работает, обойти не удалось'
+          ? 'Обход VPN включён — прямое подключение через '
+                '${r.boundInterface ?? r.transport ?? 'сеть без VPN'}'
+          : 'Обход VPN не удался, подключение через туннель'
                 '${r.reason != null ? ' (${r.reason})' : ''}';
 
       final now = DateTime.now();

@@ -1,46 +1,50 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:kolibri/kolibri.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
 
 import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
 import '../core/config/countries.dart';
 import '../core/config/komet_settings.dart';
+import '../core/config/proxy_config.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
 import '../core/storage/spoofing_service.dart';
-import '../core/transport/connection.dart';
 import '../core/transport/dispatcher.dart';
-import '../core/transport/receiver.dart';
-import '../core/transport/sender.dart';
+import '../core/transport/tls_config.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
 import '../core/utils/debug_session_log.dart';
 import '../core/utils/logger.dart';
 
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'dart:io';
-
 enum SessionState { disconnected, connecting, connected, online }
 
 /// Клиент API.
 ///
-/// Подключение, хэндшейк, пинг, реконнект.
+/// Тонкий адаптер над Rust-ядром [KolibriSession] (пакет kolibri): подключение,
+/// хэндшейк, пинг и реконнект живут в ядре, здесь — оркестрация жизненного цикла
+/// и сохранение прежнего интерфейса для модулей (Packet/пуши/стримы).
 class Api {
-  final Connection _connection = Connection();
-  final PacketReceiver _receiver = PacketReceiver();
-  final PacketSender _sender = PacketSender();
+  KolibriSession? _session;
+
+  /// Роутер пушей (ответы на запросы ядро матчит само, диспетчер держим только
+  /// ради registerHandler/pushStream).
   final PacketDispatcher _dispatcher = PacketDispatcher();
+  StreamSubscription<(int, Map<String, dynamic>)>? _pushSub;
 
   SessionState _sessionState = SessionState.disconnected;
   final _stateController = StreamController<SessionState>.broadcast();
   final _sessionExpiredController =
       StreamController<SessionExpiredException>.broadcast();
   final _handshakeSuccessController = StreamController<String>.broadcast();
-  Map<dynamic, dynamic>? _userAgent;
+  final _errorController = StreamController<String>.broadcast();
 
+  Map<dynamic, dynamic>? _userAgent;
   Map<dynamic, dynamic>? get userAgent => _userAgent;
 
   int? _callsSeed;
@@ -48,6 +52,9 @@ class Api {
 
   int? get callsSeed => _callsSeed;
   String? get deviceId => _deviceId;
+
+  /// Сырой доступ к сессии ядра — для медиа-загрузок (data-plane).
+  KolibriSession? get session => _session;
 
   String? spoofScope;
 
@@ -63,27 +70,27 @@ class Api {
       _sessionExpiredController.stream;
   Stream<String> get handshakeSuccessStream =>
       _handshakeSuccessController.stream;
-  Stream<String> get errorStream => _dispatcher.errorStream;
+  Stream<String> get errorStream => _errorController.stream;
   SessionState get state => _sessionState;
 
-  StreamSubscription<Uint8List>? _dataSubscription;
-  StreamSubscription<SocketState>? _socketStateSubscription;
-  Timer? _pingTimer;
+  Timer? _livenessTimer;
   Timer? _reconnectTimer;
   Timer? _connectWatchdog;
   int _connectGen = 0;
   int _reconnectAttempts = 0;
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
+  int _seq = 0;
+  bool? _lastInteractive;
 
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
   static const Duration _endpointTimeout = Duration(seconds: 5);
+  static const Duration _livenessInterval = Duration(seconds: 5);
 
   int get sessionEpoch => _sessionEpoch;
 
-  /// Залипает на время сессии: VPN-путь не сработал — идём мимо туннеля.
-  bool _bypassActive = false;
+  int _nextSeq() => _seq = (_seq + 1) & 0xFFFF;
 
   // Публичное API
 
@@ -100,30 +107,16 @@ class Api {
     _armConnectWatchdog(gen);
 
     try {
-      _dataSubscription = _connection.dataStream.listen(_onDataReceived);
-      _socketStateSubscription = _connection.stateStream.listen((socketState) {
-        if (socketState == SocketState.disconnected &&
-            _sessionState != SessionState.disconnected) {
-          _onDisconnected();
-        }
-      });
-
-      bool bypassArmed;
+      bool useBypass;
       try {
-        bypassArmed = await VpnBypassService.instance.shouldArm().timeout(
+        useBypass = await VpnBypassService.instance.shouldArm().timeout(
           _shouldArmTimeout,
         );
       } catch (e) {
         logger.w('connect: shouldArm завис/упал ($e) — без обхода VPN');
-        bypassArmed = false;
+        useBypass = false;
       }
       if (gen != _connectGen) return;
-
-      if (!bypassArmed) _bypassActive = false;
-      final useBypass = _bypassActive && bypassArmed;
-      final attemptTimeout = bypassArmed && !useBypass
-          ? const Duration(seconds: 8)
-          : null;
 
       ({String host, int port}) endpoint;
       try {
@@ -137,80 +130,66 @@ class Api {
       }
       if (gen != _connectGen) return;
 
+      final options = await _buildSessionOptions(endpoint);
+      if (gen != _connectGen) return;
+
       logger.i(
         'connect: endpoint ${endpoint.host}:${endpoint.port}, bypass=$useBypass',
       );
-      try {
-        await _connection.connect(
-          endpoint.host,
-          endpoint.port,
-          bypassVpn: useBypass,
-          timeout: attemptTimeout,
-        );
-      } catch (e) {
-        if (gen != _connectGen) return;
-        await _handleConnectFailure(
-          e,
-          phase: 'Не удалось подключиться',
-          bypassArmed: bypassArmed,
-          useBypass: useBypass,
-          bypassWhy: 'подключение не удалось',
-        );
-        return;
+
+      if (useBypass) {
+        try {
+          await VpnBypassService.instance.bind();
+        } catch (e) {
+          logger.w('connect: VPN bind не удался ($e)');
+        }
       }
-      if (gen != _connectGen) return;
+
+      final session = options;
+      _session = session;
+      _pushSub = session.pushesMap().listen(_onPush);
+      TrafficMonitor.instance.recordEvent(
+        'connect',
+        endpoint: '${endpoint.host}:${endpoint.port}',
+      );
 
       _setSessionState(SessionState.connected);
       _reconnectAttempts = 0;
 
+      HandshakeInfo info;
       try {
         logger.i('connect: сокет готов, отправляю хэндшейк');
-        final response = await sendHandshake();
-        if (gen != _connectGen) return;
-        if (response.isOk) {
-          _callsSeed = response.payload['callsSeed'] as int?;
-          _registrationCountries = _parseRegistrationCountries(
-            response.payload,
-          );
-          _sessionState = SessionState.online;
-          _sessionEpoch++;
-          _cancelConnectWatchdog();
-          _startPinging();
-          logger.i('Сессия онлайн, хэндшейк ок');
-          if (_onReconnectCallback != null) {
-            try {
-              await _onReconnectCallback!();
-            } catch (e) {
-              logger.w('Авто-логин при хэндшейке не удался: $e');
-            }
-          }
-          if (_sessionState == SessionState.online) {
-            _stateController.add(SessionState.online);
-            _handshakeSuccessController.add(
-              response.payload['device_name'] as String? ?? 'Unknown',
-            );
-          }
-        } else {
-          logger.e('Хэндшейк отклонён: ${response.payload}');
-          await _handleConnectFailure(
-            StateError('хэндшейк отклонён сервером'),
-            phase: 'Хэндшейк отклонён',
-            bypassArmed: bypassArmed,
-            useBypass: useBypass,
-            bypassWhy: 'хэндшейк отклонён',
-            disconnectSocket: true,
-          );
-        }
+        info = await session.connect();
       } catch (e) {
         if (gen != _connectGen) return;
-        await _handleConnectFailure(
-          e,
-          phase: 'Ошибка хэндшейка',
-          bypassArmed: bypassArmed,
-          useBypass: useBypass,
-          bypassWhy: 'хэндшейк не прошёл',
-          disconnectSocket: true,
-        );
+        await _handleConnectFailure(e, phase: 'Ошибка хэндшейка');
+        return;
+      } finally {
+        if (useBypass) {
+          try {
+            await VpnBypassService.instance.restoreDefault();
+          } catch (_) {}
+        }
+      }
+      if (gen != _connectGen) return;
+
+      _callsSeed = info.callsSeed?.toInt();
+      _registrationCountries = _parseRegistrationCountries(info.payloadMap);
+      _sessionState = SessionState.online;
+      _sessionEpoch++;
+      _cancelConnectWatchdog();
+      _startLiveness();
+      logger.i('Сессия онлайн, хэндшейк ок');
+      if (_onReconnectCallback != null) {
+        try {
+          await _onReconnectCallback!();
+        } catch (e) {
+          logger.w('Авто-логин при хэндшейке не удался: $e');
+        }
+      }
+      if (_sessionState == SessionState.online) {
+        _stateController.add(SessionState.online);
+        _handshakeSuccessController.add(info.deviceName ?? 'Unknown');
       }
     } catch (e, st) {
       logger.e('connect: непредвиденная ошибка: $e\n$st');
@@ -244,9 +223,6 @@ class Api {
     _connectGen++;
     _cancelConnectWatchdog();
     _cleanup();
-    try {
-      await _connection.disconnect();
-    } catch (_) {}
     _setSessionState(SessionState.disconnected);
     if (_autoReconnect) _scheduleReconnect();
   }
@@ -254,37 +230,22 @@ class Api {
   Future<void> _handleConnectFailure(
     Object error, {
     required String phase,
-    required bool bypassArmed,
-    required bool useBypass,
-    required String bypassWhy,
-    bool disconnectSocket = false,
   }) async {
     logger.e('$phase: $error');
     _cancelConnectWatchdog();
     if (_sessionState != SessionState.disconnected) {
       _cleanup();
-      if (disconnectSocket) await _connection.disconnect();
       _setSessionState(SessionState.disconnected);
-      _armBypassIfPossible(bypassArmed, useBypass, bypassWhy);
       _scheduleReconnect();
-    }
-  }
-
-  void _armBypassIfPossible(bool armed, bool alreadyBypassing, String why) {
-    if (armed && !alreadyBypassing && !_bypassActive) {
-      _bypassActive = true;
-      logger.w('VPN bypass: $why — следующая попытка мимо VPN');
     }
   }
 
   /// Отключается без автореконнекта.
   Future<void> disconnect() async {
     _autoReconnect = false;
-    _bypassActive = false;
     _connectGen++;
     _reconnectTimer?.cancel();
     _cleanup();
-    await _connection.disconnect();
     _setSessionState(SessionState.disconnected);
   }
 
@@ -303,7 +264,114 @@ class Api {
     }
   }
 
-  Future<Packet> sendHandshake() async {
+  /// Отправляет запрос и ждёт ответ от сервера.
+  Future<Packet> sendRequest(int opcode, Map<dynamic, dynamic> payload) async {
+    final session = _session;
+    if (session == null) {
+      throw StateError('Нет соединения (${Opcode.name(opcode)})');
+    }
+    final seq = _nextSeq();
+    DebugSessionLog.instance.recordRequest(opcode, seq, payload);
+    TrafficMonitor.instance.recordOutgoing(opcode, payload, seq, 0);
+
+    final KolibriResponse resp;
+    try {
+      resp = await session
+          .requestMapFull(opcode, Map<String, dynamic>.from(payload))
+          .timeout(
+            ServerConfig.requestTimeout,
+            onTimeout: () =>
+                throw TimeoutException('${Opcode.name(opcode)} таймаут'),
+          );
+    } catch (e, st) {
+      DebugSessionLog.instance.recordError(seq, e);
+      Error.throwWithStackTrace(e, st);
+    }
+
+    final packet = Packet(
+      cmd: resp.cmd,
+      seq: seq,
+      opcode: resp.opcode,
+      payload: resp.payload,
+    );
+    DebugSessionLog.instance.recordResponse(seq, packet.cmd, packet.payload);
+    TrafficMonitor.instance.recordIncoming(packet, 0);
+
+    if (packet.isError) {
+      if (isSessionExpiredPayload(packet.payload)) {
+        final ex = SessionExpiredException(
+          messageFromErrorPayload(packet.payload),
+        );
+        _sessionExpiredController.add(ex);
+        DebugSessionLog.instance.recordError(seq, ex);
+        throw ex;
+      }
+      final text = _serverErrorText(packet.payload);
+      if (text != null) _errorController.add(text);
+      final err = PacketError(
+        messageFromErrorPayload(packet.payload),
+        errorKey: resp.errorKey,
+      );
+      DebugSessionLog.instance.recordError(seq, err);
+      throw err;
+    }
+    return packet;
+  }
+
+  Future<Map<dynamic, dynamic>?> sendRequestMap(
+    int opcode,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final response = await sendRequest(opcode, payload);
+    if (!response.isOk || response.payload is! Map) return null;
+    return response.payload as Map<dynamic, dynamic>;
+  }
+
+  Future<bool> sendRequestOk(int opcode, Map<dynamic, dynamic> payload) async {
+    final response = await sendRequest(opcode, payload);
+    return response.isOk;
+  }
+
+  Future<Packet> sendRequestOrThrow(
+    int opcode,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final response = await sendRequest(opcode, payload);
+    throwIfPacketError(response);
+    return response;
+  }
+
+  /// Вешает обработчик на пуши с указанным опкодом.
+  void registerPushHandler(int opcode, void Function(Packet) handler) {
+    _dispatcher.registerHandler(opcode, handler);
+  }
+
+  /// Снимает обработчик пушей с указанного опкода.
+  void unregisterPushHandler(int opcode) {
+    _dispatcher.unregisterHandler(opcode);
+  }
+
+  /// Стрим всех входящих пушей от сервера.
+  Stream<Packet> get pushStream => _dispatcher.pushStream;
+
+  Future<void> dispose() async {
+    _autoReconnect = false;
+    _reconnectTimer?.cancel();
+    _cleanup();
+    _dispatcher.dispose();
+    await _stateController.close();
+    await _sessionExpiredController.close();
+    await _handshakeSuccessController.close();
+    await _errorController.close();
+  }
+
+  // Внутрянка
+
+  /// Строит устройство-поля и создаёт сессию ядра. Заодно заполняет
+  /// [_userAgent] и [_deviceId] для геттеров.
+  Future<KolibriSession> _buildSessionOptions(
+    ({String host, int port}) endpoint,
+  ) async {
     final deviceInfo = DeviceInfoPlugin();
 
     String deviceType = 'ANDROID';
@@ -404,129 +472,62 @@ class Api {
       'deviceName': deviceName,
       'deviceLocale': deviceLocale,
     };
-
     _deviceId = deviceId;
 
-    final payload = <dynamic, dynamic>{
-      'mt_instanceid': instanceId,
-      'userAgent': _userAgent,
-      'clientSessionId': clientSessionId,
-      'deviceId': deviceId,
-    };
+    final insecureTls = await TlsConfig.isInsecureAllowed();
+    final proxy = await _buildProxyUrl();
 
-    return sendRequest(Opcode.sessionInit, payload);
+    return openSession(
+      host: endpoint.host,
+      port: endpoint.port,
+      deviceId: deviceId,
+      instanceId: instanceId,
+      appVersion: appVersion,
+      buildNumber: buildNumber,
+      deviceType: deviceType,
+      osVersion: osVersion,
+      timezone: timezone,
+      screen: screen,
+      pushDeviceType: pushDeviceType,
+      arch: architecture,
+      locale: locale,
+      deviceName: deviceName,
+      deviceLocale: deviceLocale,
+      clientSessionId: clientSessionId,
+      pingIntervalSecs: ServerConfig.pingInterval.inSeconds,
+      pingInteractive: !KometSettings.ghostMode.value,
+      autoReconnect: false,
+      insecureTls: insecureTls,
+      proxy: proxy,
+    );
   }
 
-  /// Отправляет запрос и ждёт ответ от сервера.
-  Future<Packet> sendRequest(int opcode, Map<dynamic, dynamic> payload) {
-    final seq = _sender.send(_connection, opcode, payload);
-    DebugSessionLog.instance.recordRequest(opcode, seq, payload);
-    return _dispatcher
-        .registerPending(seq)
-        .timeout(
-          ServerConfig.requestTimeout,
-          onTimeout: () =>
-              throw TimeoutException('${Opcode.name(opcode)} таймаут'),
-        )
-        .then(
-          (packet) {
-            DebugSessionLog.instance.recordResponse(
-              seq,
-              packet.cmd,
-              packet.payload,
-            );
-            return packet;
-          },
-          onError: (Object e, StackTrace st) {
-            DebugSessionLog.instance.recordError(seq, e);
-            Error.throwWithStackTrace(e, st);
-          },
-        );
+  static Future<String?> _buildProxyUrl() async {
+    final p = await ProxyConfig.load();
+    if (!p.isEnabled) return null;
+    final scheme = p.type == ProxyType.socks5 ? 'socks5h' : 'http';
+    final auth = p.hasCredentials
+        ? '${Uri.encodeComponent(p.username!)}:'
+              '${Uri.encodeComponent(p.password!)}@'
+        : '';
+    return '$scheme://$auth${p.host}:${p.port}';
   }
 
-  Future<Map<dynamic, dynamic>?> sendRequestMap(
-    int opcode,
-    Map<dynamic, dynamic> payload,
-  ) async {
-    final response = await sendRequest(opcode, payload);
-    if (!response.isOk || response.payload is! Map) return null;
-    return response.payload as Map<dynamic, dynamic>;
+  void _onPush((int, Map<String, dynamic>) event) {
+    final packet = Packet(
+      cmd: CmdType.push,
+      opcode: event.$1,
+      payload: event.$2,
+    );
+    TrafficMonitor.instance.recordIncoming(packet, 0);
+    _dispatcher.dispatch(packet);
   }
-
-  Future<bool> sendRequestOk(int opcode, Map<dynamic, dynamic> payload) async {
-    final response = await sendRequest(opcode, payload);
-    return response.isOk;
-  }
-
-  Future<Packet> sendRequestOrThrow(
-    int opcode,
-    Map<dynamic, dynamic> payload,
-  ) async {
-    final response = await sendRequest(opcode, payload);
-    throwIfPacketError(response);
-    return response;
-  }
-
-  /// Вешает обработчик на пуши с указанным опкодом.
-  void registerPushHandler(int opcode, void Function(Packet) handler) {
-    _dispatcher.registerHandler(opcode, handler);
-  }
-
-  /// Снимает обработчик пушей с указанного опкода.
-  void unregisterPushHandler(int opcode) {
-    _dispatcher.unregisterHandler(opcode);
-  }
-
-  /// Стрим всех входящих пушей от сервера.
-  Stream<Packet> get pushStream => _dispatcher.pushStream;
-
-  Future<void> dispose() async {
-    _autoReconnect = false;
-    _reconnectTimer?.cancel();
-    _cleanup();
-    _dispatcher.dispose();
-    await _connection.dispose();
-    await _stateController.close();
-    await _sessionExpiredController.close();
-    await _handshakeSuccessController.close();
-  }
-
-  // Внутрянка
 
   void _setSessionState(SessionState state) {
     if (_sessionState == state) return;
     _sessionState = state;
     _stateController.add(state);
     logger.i('Сессия: ${state.name}');
-  }
-
-  Future<void> _onDataReceived(Uint8List data) async {
-    final List<Uint8List> rawPackets;
-    try {
-      rawPackets = _receiver.feed(data);
-    } on ReceiverOverflowException catch (e) {
-      logger.e('$e — форсируем реконнект');
-      if (_sessionState != SessionState.disconnected) {
-        unawaited(_forceReconnect());
-      }
-      return;
-    }
-    for (final raw in rawPackets) {
-      final Packet packet;
-      try {
-        packet = await unpackPacket(raw);
-      } catch (e) {
-        logger.e('PacketReceiver: ошибка распаковки: $e');
-        continue;
-      }
-      TrafficMonitor.instance.recordIncoming(packet, raw.length);
-      if (packet.isError && isSessionExpiredPayload(packet.payload)) {
-        _sessionExpiredController.add(
-          SessionExpiredException(messageFromErrorPayload(packet.payload)),
-        );
-      }
-      _dispatcher.dispatch(packet);
-    }
   }
 
   void _onDisconnected() {
@@ -536,13 +537,18 @@ class Api {
     if (_autoReconnect) _scheduleReconnect();
   }
 
+  /// Пробный запрос-пинг: если не ответил — форсируем реконнект.
   Future<void> _probeLiveness() async {
     if (_sessionState != SessionState.online) return;
+    final session = _session;
+    if (session == null) return;
     final epoch = _sessionEpoch;
     try {
-      await sendRequest(Opcode.ping, {
-        'interactive': !KometSettings.ghostMode.value,
-      }).timeout(const Duration(seconds: 6));
+      await session
+          .requestMapFull(Opcode.ping, {
+            'interactive': !KometSettings.ghostMode.value,
+          })
+          .timeout(const Duration(seconds: 6));
     } catch (_) {
       if (_sessionEpoch != epoch || _sessionState != SessionState.online) {
         return;
@@ -555,7 +561,6 @@ class Api {
   Future<void> _forceReconnect() async {
     _connectGen++;
     _cleanup();
-    await _connection.disconnect();
     _reconnectAttempts = 0;
     _reconnectTimer?.cancel();
     _setSessionState(SessionState.disconnected);
@@ -564,12 +569,18 @@ class Api {
 
   void _cleanup() {
     _cancelConnectWatchdog();
-    _pingTimer?.cancel();
-    _dataSubscription?.cancel();
-    _socketStateSubscription?.cancel();
-    _dataSubscription = null;
-    _socketStateSubscription = null;
-    _receiver.reset();
+    _livenessTimer?.cancel();
+    _livenessTimer = null;
+    _pushSub?.cancel();
+    _pushSub = null;
+    _lastInteractive = null;
+    final session = _session;
+    _session = null;
+    if (session != null) {
+      try {
+        session.disconnect();
+      } catch (_) {}
+    }
     _dispatcher.clearPending();
     _handshakeSuccessController.add('disconnected');
   }
@@ -584,17 +595,44 @@ class Api {
     _onReconnectCallback = callback;
   }
 
-  void _startPinging() {
-    _pingTimer?.cancel();
-    sendPing(interactive: !KometSettings.ghostMode.value);
-    _pingTimer = Timer.periodic(ServerConfig.pingInterval, (_) {
-      sendPing(interactive: !KometSettings.ghostMode.value);
-    });
+  /// Поллит состояние ядра (стрима состояний нет) — детект разрыва, плюс
+  /// синхронизация interactive-флага пинга и присутствия.
+  void _startLiveness() {
+    _livenessTimer?.cancel();
+    _lastInteractive = !KometSettings.ghostMode.value;
+    _livenessTimer = Timer.periodic(_livenessInterval, (_) => _tickLiveness());
+  }
+
+  void _tickLiveness() {
+    final session = _session;
+    if (session == null || _sessionState != SessionState.online) return;
+    final st = session.state();
+    if (st != 'online' && st != 'connected') {
+      logger.w('kolibri сессия "$st" — реконнект');
+      _onDisconnected();
+      return;
+    }
+    final interactive = !KometSettings.ghostMode.value;
+    if (interactive != _lastInteractive) {
+      _lastInteractive = interactive;
+      try {
+        session.setPingInteractive(interactive: interactive);
+      } catch (_) {}
+    }
+    if (interactive) {
+      SelfPresence.markOnline();
+    } else {
+      SelfPresence.markOfflineFromPing();
+    }
   }
 
   void sendPing({required bool interactive}) {
-    if (_connection.isConnected) {
-      _sender.send(_connection, Opcode.ping, {'interactive': interactive});
+    final session = _session;
+    if (session != null && _sessionState == SessionState.online) {
+      try {
+        session.setPingInteractive(interactive: interactive);
+      } catch (_) {}
+      _lastInteractive = interactive;
       if (interactive) {
         SelfPresence.markOnline();
       } else {
@@ -606,6 +644,15 @@ class Api {
   static String _archFromPlatformVersion() {
     final v = Platform.version;
     return v.substring(v.indexOf('_') + 1, v.length - 1);
+  }
+
+  static String? _serverErrorText(dynamic payload) {
+    if (payload is! Map) return null;
+    for (final key in ['localizedMessage', 'title']) {
+      final v = payload[key];
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    }
+    return null;
   }
 
   static List<CountryName>? _parseRegistrationCountries(dynamic payload) {

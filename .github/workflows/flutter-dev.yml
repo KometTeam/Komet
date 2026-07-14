@@ -29,6 +29,11 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
       - name: Install dependencies
         run: flutter pub get
 

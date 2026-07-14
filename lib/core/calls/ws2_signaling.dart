@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import '../utils/logger.dart';
+import 'package:kolibri/kolibri.dart' as kb;
+
 import 'conversation_params.dart';
 
 /// Параметры подключения к сигналинг-сокету ws2.
@@ -84,17 +84,19 @@ class Ws2CommandException implements Exception {
 
 /// Клиент сигналинга звонка поверх WebSocket `ws2`.
 ///
-/// Конверт сообщений (подтверждено захватом `docs/ws2_capture.log`):
+/// Тонкий адаптер над Rust-ядром (kolibri [kb.CallSignaling]): ядро держит
+/// WebSocket, корреляцию `sequence`/`response`, keepalive `ping`→`pong` и
+/// разбор кадров; здесь — прежний Dart-интерфейс для [call_session].
+///
+/// Конверт сообщений:
 /// - запрос: `{"command": ..., ..., "sequence": N}`
 /// - ответ:  `{"sequence": N, "response": "<command>", "type": "response"}`
 /// - пуш:    `{..., "notification": "<name>", "type": "notification"}`
-/// - keepalive: текстовый кадр `ping` → ответ `pong`.
 class Ws2Signaling {
   final Ws2Config config;
 
-  WebSocket? _socket;
-  int _sequence = 0;
-  final Map<int, Completer<Map<String, dynamic>>> _pending = {};
+  kb.CallSignaling? _call;
+  StreamSubscription<String>? _notifSub;
 
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
   final _closed = Completer<Object?>();
@@ -104,106 +106,60 @@ class Ws2Signaling {
   /// Пуши сервера (`type == "notification"`). Фильтруй по полю `notification`.
   Stream<Map<String, dynamic>> get notifications => _notifications.stream;
 
-  /// Завершается, когда сокет закрыт (значение — причина закрытия, если была).
+  /// Завершается, когда сокет закрыт.
   Future<Object?> get done => _closed.future;
 
-  bool get isConnected => _socket != null;
+  bool get isConnected => _call?.isConnected() ?? false;
 
   Future<void> connect() async {
-    final socket = await WebSocket.connect(
-      config.uri.toString(),
-      headers: {'User-Agent': 'okhttp/4.12.0'},
+    final call = await kb.connectCallSignaling(
+      url: config.uri.toString(),
+      userAgent: 'okhttp/4.12.0',
     );
-    _socket = socket;
-    socket.listen(
-      _onFrame,
-      onError: _onDone,
+    _call = call;
+    _notifSub = call.notifications().listen(
+      (json) {
+        Object? decoded;
+        try {
+          decoded = jsonDecode(json);
+        } catch (_) {
+          return;
+        }
+        if (decoded is Map<String, dynamic>) _notifications.add(decoded);
+      },
+      onError: (_) => _onDone(null),
       onDone: () => _onDone(null),
       cancelOnError: false,
     );
   }
 
-  void _onFrame(dynamic frame) {
-    if (frame is String && frame == 'ping') {
-      _socket?.add('pong');
-      return;
-    }
-
-    final String text;
-    if (frame is String) {
-      text = frame;
-    } else if (frame is List<int>) {
-      text = utf8.decode(frame);
-    } else {
-      return;
-    }
-
-    Object? decoded;
-    try {
-      decoded = jsonDecode(text);
-    } catch (_) {
-      return;
-    }
-    if (decoded is! Map<String, dynamic>) return;
-
-    final label =
-        decoded['notification'] ?? decoded['response'] ?? decoded['type'];
-    final dump = jsonEncode(decoded);
-    logger.t('[ws2] ← $label');
-    logger.t(dump.length > 1500
-        ? '${dump.substring(0, 1500)}… (${dump.length}b)'
-        : dump);
-
-    final type = decoded['type'];
-    if (type == 'response' || type == 'error') {
-      final seq = decoded['sequence'];
-      if (seq is int) {
-        final completer = _pending.remove(seq);
-        if (completer != null && !completer.isCompleted) {
-          completer.complete(decoded);
-        }
-      }
-      if (type == 'error') _notifications.add(decoded);
-      return;
-    }
-
-    if (type == 'notification' || decoded.containsKey('notification')) {
-      _notifications.add(decoded);
-    }
-  }
-
   void _onDone(Object? error) {
-    for (final c in _pending.values) {
-      if (!c.isCompleted) c.completeError(error ?? const SocketException('ws2 closed'));
-    }
-    _pending.clear();
     if (!_closed.isCompleted) _closed.complete(error);
     if (!_notifications.isClosed) _notifications.close();
   }
 
   /// Отправляет команду и ждёт ответ сервера. Бросает [Ws2CommandException],
-  /// если в ответе есть поле `error`.
+  /// если сервер вернул ошибку.
   Future<Map<String, dynamic>> sendCommand(
     String command, {
     Map<String, dynamic> extra = const {},
     Duration timeout = const Duration(seconds: 15),
-  }) {
-    final socket = _socket;
-    if (socket == null) {
+  }) async {
+    final call = _call;
+    if (call == null) {
       return Future.error(StateError('ws2 не подключён'));
     }
-
-    final seq = ++_sequence;
-    final completer = Completer<Map<String, dynamic>>();
-    _pending[seq] = completer;
-
-    socket.add(jsonEncode({'command': command, ...extra, 'sequence': seq}));
-
-    return completer.future.timeout(timeout).then((response) {
-      final error = response['error'];
-      if (error != null) throw Ws2CommandException(command, error);
-      return response;
-    });
+    try {
+      final response = await call
+          .sendCommand(command: command, extraJson: jsonEncode(extra))
+          .timeout(timeout);
+      final decoded = jsonDecode(response);
+      return decoded is Map<String, dynamic>
+          ? decoded
+          : <String, dynamic>{};
+    } catch (e) {
+      throw Ws2CommandException(command, e);
+    }
   }
 
   /// Передаёт SDP (offer/answer) другому участнику.
@@ -329,7 +285,9 @@ class Ws2Signaling {
           extra: {'mediaSource': mediaSource, 'layers': layers});
 
   Future<void> close() async {
-    await _socket?.close();
-    _socket = null;
+    await _notifSub?.cancel();
+    _notifSub = null;
+    _call?.close();
+    _call = null;
   }
 }
