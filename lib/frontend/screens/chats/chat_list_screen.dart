@@ -2033,17 +2033,21 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   ValueListenableBuilder<NavPillStyle>(
                                     valueListenable: AppNavPillStyle.current,
                                     builder: (context, navStyle, child) {
+                                      final liquid =
+                                          style.glossyChrome &&
+                                          NavPillMaterial.isLiquid(navStyle);
                                       final frost =
-                                          style == VisualStyle.glossy &&
-                                          navStyle == NavPillStyle.frostBlur;
+                                          style.glossyChrome &&
+                                          NavPillMaterial.isFrost(navStyle);
                                       return GlossyPill(
                                         onTap: _toggleFab,
-                                        color: frost
+                                        color: frost || liquid
                                             ? AppFrost.fabTint(cs)
                                             : cs.primaryContainer,
                                         blurSigma: frost
                                             ? AppFrost.sigma
                                             : null,
+                                        liquid: liquid,
                                         backdropKey: _frostBackdrop,
                                         borderRadius: BorderRadius.circular(28),
                                         elevated: true,

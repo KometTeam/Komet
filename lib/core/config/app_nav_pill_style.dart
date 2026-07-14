@@ -1,8 +1,18 @@
 import 'package:flutter/foundation.dart';
 
+import '../../frontend/widgets/liquid_glass.dart';
 import 'persisted_setting.dart';
 
-enum NavPillStyle { glossy, frostBlur }
+enum NavPillStyle { glossy, frostBlur, liquidGlass }
+
+class NavPillMaterial {
+  static bool isLiquid(NavPillStyle style) =>
+      style == NavPillStyle.liquidGlass && LiquidGlass.isSupported;
+
+  static bool isFrost(NavPillStyle style) =>
+      style == NavPillStyle.frostBlur ||
+      (style == NavPillStyle.liquidGlass && !LiquidGlass.isSupported);
+}
 
 class AppNavPillStyle {
   static const prefKey = 'app_nav_pill_style';

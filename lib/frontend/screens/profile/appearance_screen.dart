@@ -19,6 +19,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -134,6 +135,25 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   }
 }
 
+void _applyVisualStyle(VisualStyle style) {
+  AppVisualStyle.save(style);
+  if (style == VisualStyle.liquidGlass) {
+    AppNavPillStyle.save(NavPillStyle.liquidGlass);
+    AppComposerBackground.save(ComposerBackground.liquidGlass);
+    AppChatChrome.save(ChatChromeStyle.liquidGlass);
+    return;
+  }
+  if (AppNavPillStyle.current.value == NavPillStyle.liquidGlass) {
+    AppNavPillStyle.save(NavPillStyle.frostBlur);
+  }
+  if (AppComposerBackground.current.value == ComposerBackground.liquidGlass) {
+    AppComposerBackground.save(ComposerBackground.frostBlur);
+  }
+  if (AppChatChrome.current.value == ChatChromeStyle.liquidGlass) {
+    AppChatChrome.save(ChatChromeStyle.transparent);
+  }
+}
+
 class _VisualStyleCard extends StatelessWidget {
   const _VisualStyleCard();
 
@@ -166,7 +186,12 @@ class _VisualStyleCard extends StatelessWidget {
           ValueListenableBuilder<VisualStyle>(
             valueListenable: AppVisualStyle.current,
             builder: (context, current, _) {
+              final selectable =
+                  current == VisualStyle.liquidGlass && !LiquidGlass.isSupported
+                  ? VisualStyle.glossy
+                  : current;
               return SegmentedButton<VisualStyle>(
+                showSelectedIcon: false,
                 segments: [
                   ButtonSegment(
                     value: VisualStyle.materialYou,
@@ -176,12 +201,17 @@ class _VisualStyleCard extends StatelessWidget {
                     value: VisualStyle.glossy,
                     label: Text(l10n.appearanceVisualStyleGlossy),
                   ),
+                  if (LiquidGlass.isSupported)
+                    ButtonSegment(
+                      value: VisualStyle.liquidGlass,
+                      label: Text(l10n.appearanceVisualStyleLiquidGlass),
+                    ),
                 ],
-                selected: {current},
+                selected: {selectable},
                 onSelectionChanged: (set) {
                   if (set.isNotEmpty) {
                     Haptics.selection();
-                    AppVisualStyle.save(set.first);
+                    _applyVisualStyle(set.first);
                   }
                 },
               );
@@ -225,32 +255,46 @@ class _ChatChromeCard extends StatelessWidget {
           ValueListenableBuilder<ChatChromeStyle>(
             valueListenable: AppChatChrome.current,
             builder: (context, current, _) {
-              return SegmentedButton<ChatChromeStyle>(
-                segments: [
-                  ButtonSegment(
-                    value: ChatChromeStyle.color,
-                    label: Text(l10n.appearanceChatChromeColor),
-                  ),
-                  ButtonSegment(
-                    value: ChatChromeStyle.blur,
-                    label: Text(l10n.appearanceChatChromeBlur),
-                  ),
-                  ButtonSegment(
-                    value: ChatChromeStyle.none,
-                    label: Text(l10n.appearanceChatChromeNone),
-                  ),
-                  ButtonSegment(
-                    value: ChatChromeStyle.transparent,
-                    label: Text(l10n.appearanceChatChromeTransparent),
-                  ),
-                ],
-                selected: {current},
-                onSelectionChanged: (set) {
-                  if (set.isNotEmpty) {
-                    Haptics.selection();
-                    AppChatChrome.save(set.first);
-                  }
-                },
+              final selectable =
+                  current == ChatChromeStyle.liquidGlass &&
+                      !LiquidGlass.isSupported
+                  ? ChatChromeStyle.transparent
+                  : current;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<ChatChromeStyle>(
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment(
+                      value: ChatChromeStyle.color,
+                      label: Text(l10n.appearanceChatChromeColor),
+                    ),
+                    ButtonSegment(
+                      value: ChatChromeStyle.blur,
+                      label: Text(l10n.appearanceChatChromeBlur),
+                    ),
+                    ButtonSegment(
+                      value: ChatChromeStyle.none,
+                      label: Text(l10n.appearanceChatChromeNone),
+                    ),
+                    ButtonSegment(
+                      value: ChatChromeStyle.transparent,
+                      label: Text(l10n.appearanceChatChromeTransparent),
+                    ),
+                    if (LiquidGlass.isSupported)
+                      ButtonSegment(
+                        value: ChatChromeStyle.liquidGlass,
+                        label: Text(l10n.appearanceGlassMaterial),
+                      ),
+                  ],
+                  selected: {selectable},
+                  onSelectionChanged: (set) {
+                    if (set.isNotEmpty) {
+                      Haptics.selection();
+                      AppChatChrome.save(set.first);
+                    }
+                  },
+                ),
               );
             },
           ),
@@ -317,7 +361,13 @@ class _ComposerBarCard extends StatelessWidget {
           ValueListenableBuilder<ComposerBackground>(
             valueListenable: AppComposerBackground.current,
             builder: (context, current, _) {
+              final selectable =
+                  current == ComposerBackground.liquidGlass &&
+                      !LiquidGlass.isSupported
+                  ? ComposerBackground.frostBlur
+                  : current;
               return SegmentedButton<ComposerBackground>(
+                showSelectedIcon: false,
                 segments: [
                   ButtonSegment(
                     value: ComposerBackground.standard,
@@ -327,8 +377,13 @@ class _ComposerBarCard extends StatelessWidget {
                     value: ComposerBackground.frostBlur,
                     label: Text(l10n.appearanceComposerBackgroundFrost),
                   ),
+                  if (LiquidGlass.isSupported)
+                    ButtonSegment(
+                      value: ComposerBackground.liquidGlass,
+                      label: Text(l10n.appearanceGlassMaterial),
+                    ),
                 ],
-                selected: {current},
+                selected: {selectable},
                 onSelectionChanged: (set) {
                   if (set.isNotEmpty) {
                     Haptics.selection();
@@ -376,7 +431,13 @@ class _NavPillStyleCard extends StatelessWidget {
           ValueListenableBuilder<NavPillStyle>(
             valueListenable: AppNavPillStyle.current,
             builder: (context, current, _) {
+              final selectable =
+                  current == NavPillStyle.liquidGlass &&
+                      !LiquidGlass.isSupported
+                  ? NavPillStyle.frostBlur
+                  : current;
               return SegmentedButton<NavPillStyle>(
+                showSelectedIcon: false,
                 segments: [
                   ButtonSegment(
                     value: NavPillStyle.glossy,
@@ -386,8 +447,13 @@ class _NavPillStyleCard extends StatelessWidget {
                     value: NavPillStyle.frostBlur,
                     label: Text(l10n.appearanceNavPillFrost),
                   ),
+                  if (LiquidGlass.isSupported)
+                    ButtonSegment(
+                      value: NavPillStyle.liquidGlass,
+                      label: Text(l10n.appearanceGlassMaterial),
+                    ),
                 ],
-                selected: {current},
+                selected: {selectable},
                 onSelectionChanged: (set) {
                   if (set.isNotEmpty) {
                     Haptics.selection();

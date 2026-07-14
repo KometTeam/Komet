@@ -15,6 +15,7 @@ import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
+import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 
 class ComposerInputBar extends StatelessWidget {
@@ -418,10 +419,14 @@ class ComposerInputBar extends StatelessWidget {
 
   bool get _flat => style == ComposerStyle.materialYou;
 
-  bool get _frost => background == ComposerBackground.frostBlur;
+  bool get _frost => ComposerMaterial.isFrost(background);
+
+  bool get _liquid => ComposerMaterial.isLiquid(background);
+
+  bool get _translucent => _frost || _liquid;
 
   Widget _barSurface(ColorScheme cs, Widget child) {
-    if (!_flat || background == ComposerBackground.frostBlur) return child;
+    if (!_flat || _translucent) return child;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: cs.surface,
@@ -434,13 +439,14 @@ class ComposerInputBar extends StatelessWidget {
   Widget _fieldSurface(ColorScheme cs, Widget child) {
     if (_flat) return child;
     return GlossyPill(
-      color: _frost
+      color: _translucent
           ? AppFrost.inputTint(cs)
           : Color.alphaBlend(
               cs.surfaceContainerHighest.withValues(alpha: 0.92),
               cs.surface,
             ),
       blurSigma: _frost ? AppFrost.sigma : null,
+      liquid: _liquid,
       backdropKey: backdropKey,
       borderRadius: BorderRadius.circular(28),
       depth: 8,
@@ -471,6 +477,7 @@ class ComposerInputBar extends StatelessWidget {
     return GlossyPill(
       color: color,
       blurSigma: _frost ? AppFrost.sigma : null,
+      liquid: _liquid,
       backdropKey: backdropKey,
       borderRadius: BorderRadius.circular(27),
       onTap: onTap,
@@ -538,23 +545,14 @@ class ComposerInputBar extends StatelessWidget {
             ],
           ),
         );
-        if (_flat && _frost) return row;
-        if (!_frost && chrome != ChatChromeStyle.transparent) return row;
-        return ClipRect(
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(
-              sigmaX: AppFrost.sigma,
-              sigmaY: AppFrost.sigma,
-            ),
-            backdropGroupKey: backdropKey,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppFrost.panelTint(cs),
-                border: Border(top: AppFrost.hairline(cs)),
-              ),
-              child: row,
-            ),
-          ),
+        if (_flat && _translucent) return row;
+        if (!_translucent && chrome != ChatChromeStyle.transparent) return row;
+        return GlassSurface(
+          liquid: _liquid,
+          frostTint: AppFrost.panelTint(cs),
+          border: Border(top: AppFrost.hairline(cs)),
+          backdropKey: backdropKey,
+          child: row,
         );
       },
     );

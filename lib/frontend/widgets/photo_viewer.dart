@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
@@ -13,6 +12,7 @@ import '../../backend/modules/messages.dart';
 import '../../backend/modules/shared_content.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/config/app_frost.dart';
+import 'liquid_glass.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/media_cache.dart';
 import '../../core/utils/media_saver.dart';
@@ -578,32 +578,25 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   Widget _buildCaption(String caption) {
-    return ClipRRect(
+    return GlassSurface(
       borderRadius: BorderRadius.circular(12),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: AppFrost.panelSigma,
-          sigmaY: AppFrost.panelSigma,
-        ),
-        child: Container(
-          constraints: const BoxConstraints(maxHeight: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.28),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.12),
-              width: 0.5,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: SingleChildScrollView(
-            child: Text(
-              caption,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                height: 1.3,
-              ),
+      frostTint: Colors.black.withValues(alpha: 0.28),
+      frostSigma: AppFrost.panelSigma,
+      liquidTint: Colors.black.withValues(alpha: 0.28),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: 0.12),
+        width: 0.5,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: SingleChildScrollView(
+          child: Text(
+            caption,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              height: 1.3,
             ),
           ),
         ),

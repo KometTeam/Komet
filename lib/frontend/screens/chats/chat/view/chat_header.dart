@@ -9,6 +9,7 @@ import 'package:komet/frontend/widgets/online_dot.dart';
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
   final bool frosted;
+  final bool liquid;
   final BackdropKey? backdropKey;
   final ColorScheme cs;
   final bool embedded;
@@ -32,6 +33,7 @@ class ChatHeaderRow extends StatelessWidget {
     super.key,
     required this.glossy,
     required this.frosted,
+    this.liquid = false,
     this.backdropKey,
     required this.cs,
     required this.embedded,
@@ -56,9 +58,9 @@ class ChatHeaderRow extends StatelessWidget {
   Widget build(BuildContext context) =>
       glossy ? _glossyRow(context) : _materialRow(context);
 
-  Color? get _pillColor => frosted ? AppFrost.pillTint(cs) : null;
+  Color? get _pillColor => frosted || liquid ? AppFrost.pillTint(cs) : null;
 
-  double? get _pillBlur => frosted ? AppFrost.sigma : null;
+  double? get _pillBlur => frosted && !liquid ? AppFrost.sigma : null;
 
   Widget _glossyRow(BuildContext context) {
     return Padding(
@@ -73,6 +75,7 @@ class ChatHeaderRow extends StatelessWidget {
               child: GlossyPill(
                 color: _pillColor,
                 blurSigma: _pillBlur,
+                liquid: liquid,
                 backdropKey: backdropKey,
                 onTap: () {
                   if (embedded) {
@@ -97,6 +100,7 @@ class ChatHeaderRow extends StatelessWidget {
             child: GlossyPill(
               color: _pillColor,
               blurSigma: _pillBlur,
+              liquid: liquid,
               backdropKey: backdropKey,
               onTap: onOpenInfo,
               padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
@@ -185,6 +189,7 @@ class ChatHeaderRow extends StatelessWidget {
           GlossyPill(
             color: _pillColor,
             blurSigma: _pillBlur,
+            liquid: liquid,
             backdropKey: backdropKey,
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: SizedBox(

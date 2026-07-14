@@ -759,6 +759,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceVisualStyleGlossy => 'Glossy';
 
   @override
+  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
+
+  @override
+  String get appearanceGlassMaterial => 'Glass';
+
+  @override
   String get appearanceChatChromeTitle => 'Chat screen elements';
 
   @override

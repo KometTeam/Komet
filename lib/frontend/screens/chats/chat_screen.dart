@@ -93,6 +93,7 @@ import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
 import '../../widgets/chat_wallpaper_view.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 
@@ -129,15 +130,12 @@ class _FrostedPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-        backdropGroupKey: backdropKey,
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: tint, border: border),
-          child: child,
-        ),
-      ),
+    return GlassSurface(
+      frostTint: tint,
+      frostSigma: sigma,
+      border: border,
+      backdropKey: backdropKey,
+      child: child,
     );
   }
 }
@@ -474,13 +472,18 @@ class _ChatScreenState extends State<ChatScreen>
   ChatWallpaper? _wallpaper;
 
   bool get _composerFrosted =>
-      AppComposerBackground.current.value == ComposerBackground.frostBlur;
+      AppComposerBackground.current.value != ComposerBackground.standard;
 
   bool get _composerUnderlap =>
       AppChatChrome.current.value != ChatChromeStyle.color || _composerFrosted;
 
+  bool get _liquidChrome =>
+      AppVisualStyle.current.value.glossyChrome &&
+      ChatChromeMaterial.isLiquid(AppChatChrome.current.value);
+
   ChatChromeStyle get _effectiveChrome {
     final chrome = AppChatChrome.current.value;
+    if (chrome == ChatChromeStyle.liquidGlass) return ChatChromeStyle.transparent;
     if (_wallpaper != null && chrome == ChatChromeStyle.none) {
       return ChatChromeStyle.blur;
     }
@@ -2565,7 +2568,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   PreferredSizeWidget _buildAppBar(ColorScheme cs) {
-    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    final glossy = AppVisualStyle.current.value.glossyChrome;
     final searchT = Curves.easeOut.transform(_searchAnim.value.clamp(0.0, 1.0));
     final height = glossy
         ? ui.lerpDouble(_glossyHeaderHeight, _glossySearchHeight, searchT)!
@@ -2644,6 +2647,7 @@ class _ChatScreenState extends State<ChatScreen>
                             glossy: glossy,
                             frosted:
                                 glossy && chrome == ChatChromeStyle.transparent,
+                            liquid: _liquidChrome,
                             backdropKey: _pillBackdrop,
                             cs: cs,
                             embedded: widget.embedded,
@@ -4381,6 +4385,7 @@ class _ChatScreenState extends State<ChatScreen>
       isPreview: pinned.pinnedMsgIsPreview,
       floating: floating,
       frosted: _effectiveChrome == ChatChromeStyle.transparent,
+      liquid: _liquidChrome,
       backdropKey: _pillBackdrop,
       onTap: _jumpToPinnedMessage,
       onUnpin: pinned.canPinMessages(_myId)
@@ -4437,7 +4442,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   double _pinnedBannerTop() {
-    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    final glossy = AppVisualStyle.current.value.glossyChrome;
     return MediaQuery.paddingOf(context).top +
         (glossy ? _glossyHeaderHeight : kToolbarHeight) -
         _pinnedBannerLift;
@@ -4536,7 +4541,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (height != null) {
       resolved = height;
     } else {
-      final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+      final glossy = AppVisualStyle.current.value.glossyChrome;
       resolved =
           MediaQuery.paddingOf(context).top +
           (glossy ? _glossyHeaderHeight : kToolbarHeight);
@@ -4591,7 +4596,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   double _floatingDateTop(double pinnedHeight) {
     if (AppChatChrome.current.value == ChatChromeStyle.color) {
-      final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+      final glossy = AppVisualStyle.current.value.glossyChrome;
       return glossy ? 2 : 4;
     }
     if (chat?.hasPinnedMessage == true && pinnedHeight > 0) {
@@ -4919,8 +4924,9 @@ class _ChatScreenState extends State<ChatScreen>
           width: 46,
           height: 46,
           child: GlossyPill(
-            color: frosted ? AppFrost.pillTint(cs) : null,
-            blurSigma: frosted ? AppFrost.sigma : null,
+            color: frosted || _liquidChrome ? AppFrost.pillTint(cs) : null,
+            blurSigma: frosted && !_liquidChrome ? AppFrost.sigma : null,
+            liquid: _liquidChrome,
             backdropKey: _pillBackdrop,
             elevated: true,
             onTap: _onScrollDownTap,
@@ -5980,6 +5986,7 @@ class _PinnedMessageBanner extends StatelessWidget {
   final VoidCallback? onUnpin;
   final bool floating;
   final bool frosted;
+  final bool liquid;
   final BackdropKey? backdropKey;
 
   const _PinnedMessageBanner({
@@ -5989,6 +5996,7 @@ class _PinnedMessageBanner extends StatelessWidget {
     this.onUnpin,
     this.floating = false,
     this.frosted = false,
+    this.liquid = false,
     this.backdropKey,
   });
 
@@ -6058,19 +6066,15 @@ class _PinnedMessageBanner extends StatelessWidget {
     final bottomBorder = Border(bottom: AppFrost.hairline(cs));
 
     if (frosted) {
-      return ClipRRect(
-        borderRadius: floating ? BorderRadius.circular(16) : BorderRadius.zero,
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(
-            sigmaX: AppFrost.sigma,
-            sigmaY: AppFrost.sigma,
-          ),
-          backdropGroupKey: backdropKey,
-          child: DecoratedBox(
-            decoration: BoxDecoration(border: floating ? null : bottomBorder),
-            child: content,
-          ),
-        ),
+      return GlassSurface(
+        liquid: liquid,
+        borderRadius: floating
+            ? BorderRadius.circular(16)
+            : BorderRadius.zero,
+        frostTint: Colors.transparent,
+        border: floating ? null : bottomBorder,
+        backdropKey: backdropKey,
+        child: content,
       );
     }
 

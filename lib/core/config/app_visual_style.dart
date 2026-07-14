@@ -2,7 +2,11 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
-enum VisualStyle { materialYou, glossy }
+enum VisualStyle { materialYou, glossy, liquidGlass }
+
+extension VisualStyleChrome on VisualStyle {
+  bool get glossyChrome => this != VisualStyle.materialYou;
+}
 
 class AppVisualStyle {
   static const prefKey = 'app_visual_style';

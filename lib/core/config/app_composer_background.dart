@@ -1,8 +1,18 @@
 import 'package:flutter/foundation.dart';
 
+import '../../frontend/widgets/liquid_glass.dart';
 import 'persisted_setting.dart';
 
-enum ComposerBackground { standard, frostBlur }
+enum ComposerBackground { standard, frostBlur, liquidGlass }
+
+class ComposerMaterial {
+  static bool isLiquid(ComposerBackground value) =>
+      value == ComposerBackground.liquidGlass && LiquidGlass.isSupported;
+
+  static bool isFrost(ComposerBackground value) =>
+      value == ComposerBackground.frostBlur ||
+      (value == ComposerBackground.liquidGlass && !LiquidGlass.isSupported);
+}
 
 class AppComposerBackground {
   static const prefKey = 'app_composer_background';

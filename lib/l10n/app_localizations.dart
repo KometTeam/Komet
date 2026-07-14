@@ -1526,6 +1526,18 @@ abstract class AppLocalizations {
   /// **'Glossy'**
   String get appearanceVisualStyleGlossy;
 
+  /// No description provided for @appearanceVisualStyleLiquidGlass.
+  ///
+  /// In en, this message translates to:
+  /// **'Liquid Glass'**
+  String get appearanceVisualStyleLiquidGlass;
+
+  /// No description provided for @appearanceGlassMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Glass'**
+  String get appearanceGlassMaterial;
+
   /// No description provided for @appearanceChatChromeTitle.
   ///
   /// In en, this message translates to:

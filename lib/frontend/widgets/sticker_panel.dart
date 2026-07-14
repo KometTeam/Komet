@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
@@ -17,6 +16,8 @@ import 'segmented_pill_toggle.dart';
 import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
+import '../../core/config/app_frost.dart';
+import 'liquid_glass.dart';
 
 class _DragScrollBehavior extends MaterialScrollBehavior {
   const _DragScrollBehavior();
@@ -248,30 +249,19 @@ class _StickerPanelState extends State<StickerPanel>
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: widget.height,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: cs.surface.withValues(alpha: 0.38),
-              border: Border(
-                top: BorderSide(
-                  color: cs.outlineVariant.withValues(alpha: 0.4),
-                  width: 0.5,
-                ),
-              ),
+      child: GlassSurface(
+        liquid: false,
+        frostTint: AppFrost.panelTint(cs),
+        border: Border(top: AppFrost.hairline(cs)),
+        child: Column(
+          children: [
+            Expanded(
+              child: _mode == _modeEmoji && widget.onEmojiTap != null
+                  ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
+                  : _buildStickerBody(cs),
             ),
-            child: Column(
-              children: [
-                Expanded(
-                  child: _mode == _modeEmoji && widget.onEmojiTap != null
-                      ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
-                      : _buildStickerBody(cs),
-                ),
-                if (widget.onEmojiTap != null) _buildToggleBar(cs),
-              ],
-            ),
-          ),
+            if (widget.onEmojiTap != null) _buildToggleBar(cs),
+          ],
         ),
       ),
     );

@@ -255,6 +255,8 @@
   "appearanceVisualStyleSubtitle": "Material You или объёмные Glossy-капсулы",
   "appearanceVisualStyleMaterialYou": "Material You",
   "appearanceVisualStyleGlossy": "Glossy",
+  "appearanceVisualStyleLiquidGlass": "Liquid Glass",
+  "appearanceGlassMaterial": "Стекло",
   "appearanceChatChromeTitle": "Элементы экрана чата",
   "appearanceChatChromeSubtitle": "Фон панелей сверху и снизу: цвет, размытие или прозрачно. При размытии и прозрачности сообщения заходят под панели",
   "appearanceChatChromeColor": "Цвет",

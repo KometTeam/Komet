@@ -749,16 +749,21 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                       valueListenable: AppNavPillStyle.current,
                       builder: (context, navStyle, _) {
                         final frost =
-                            style == VisualStyle.glossy &&
-                            navStyle == NavPillStyle.frostBlur;
+                            style.glossyChrome &&
+                            NavPillMaterial.isFrost(navStyle);
+                        final liquid =
+                            style.glossyChrome &&
+                            NavPillMaterial.isLiquid(navStyle);
                         return SlidingPillNav(
                           items: navItems,
                           position: _currentPageT(),
                           geometry: geometry,
                           onTap: _onSectionTap,
-                          backgroundColor: frost
-                              ? AppFrost.navPillTint(cs)
-                              : _composerColor(cs),
+                          backgroundColor: liquid
+                              ? null
+                              : (frost
+                                    ? AppFrost.navPillTint(cs)
+                                    : _composerColor(cs)),
                           borderColor: _composerBorderColor(cs),
                         );
                       },

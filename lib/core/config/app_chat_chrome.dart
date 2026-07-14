@@ -1,8 +1,14 @@
 import 'package:flutter/foundation.dart';
 
+import '../../frontend/widgets/liquid_glass.dart';
 import 'persisted_setting.dart';
 
-enum ChatChromeStyle { color, blur, none, transparent }
+enum ChatChromeStyle { color, blur, none, transparent, liquidGlass }
+
+class ChatChromeMaterial {
+  static bool isLiquid(ChatChromeStyle style) =>
+      style == ChatChromeStyle.liquidGlass && LiquidGlass.isSupported;
+}
 
 class AppChatChrome {
   static const prefKey = 'app_chat_chrome';

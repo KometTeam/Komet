@@ -762,6 +762,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceVisualStyleGlossy => 'Glossy';
 
   @override
+  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
+
+  @override
+  String get appearanceGlassMaterial => 'Стекло';
+
+  @override
   String get appearanceChatChromeTitle => 'Элементы экрана чата';
 
   @override

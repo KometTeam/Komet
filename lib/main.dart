@@ -79,6 +79,7 @@ import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/custom_notification.dart';
+import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/theme_reveal.dart';
 
 final api = Api();
@@ -194,6 +195,7 @@ void main(List<String> args) async {
   final amoledFuture = AppAmoled.load();
   final pillGradientFuture = AppPillGradient.load();
   final visualStyleFuture = AppVisualStyle.load();
+  final liquidGlassFuture = LiquidGlass.load();
   final chatChromeFuture = AppChatChrome.load();
   final composerStyleFuture = AppComposerStyle.load();
   final composerBackgroundFuture = AppComposerBackground.load();
@@ -248,6 +250,7 @@ void main(List<String> args) async {
     amoledFuture,
     pillGradientFuture,
     visualStyleFuture,
+    liquidGlassFuture,
     chatChromeFuture,
     composerStyleFuture,
     composerBackgroundFuture,

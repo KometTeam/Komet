@@ -290,6 +290,8 @@
   "appearanceVisualStyleSubtitle": "Material You or dimensional Glossy capsules",
   "appearanceVisualStyleMaterialYou": "Material You",
   "appearanceVisualStyleGlossy": "Glossy",
+  "appearanceVisualStyleLiquidGlass": "Liquid Glass",
+  "appearanceGlassMaterial": "Glass",
   "appearanceChatChromeTitle": "Chat screen elements",
   "appearanceChatChromeSubtitle": "Background of the top and bottom panels: color, blur, or transparent. With blur or transparency, messages scroll under the panels",
   "appearanceChatChromeColor": "Color",

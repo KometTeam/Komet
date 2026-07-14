@@ -13,6 +13,7 @@ import '../../../main.dart' show storiesModule;
 import '../../../models/story.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/liquid_glass.dart';
 import 'story_owner_info.dart';
 
 const _quickReactions = ['❤️', '🔥', '😍', '👏', '😂', '😮'];
@@ -627,33 +628,26 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Center(
-            child: ClipRRect(
+            child: GlassSurface(
               borderRadius: BorderRadius.circular(30),
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final emoji in _quickReactions)
-                        _ReactionButton(
-                          emoji: emoji,
-                          selected: current == emoji,
-                          onTap: () => _toggleReaction(emoji),
-                        ),
-                    ],
-                  ),
+              frostTint: Colors.white.withValues(alpha: 0.12),
+              frostSigma: 14,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final emoji in _quickReactions)
+                      _ReactionButton(
+                        emoji: emoji,
+                        selected: current == emoji,
+                        onTap: () => _toggleReaction(emoji),
+                      ),
+                  ],
                 ),
               ),
             ),
