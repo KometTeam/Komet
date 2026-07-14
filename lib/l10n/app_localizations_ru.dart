@@ -793,6 +793,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceComposerBackgroundFrost => 'Frost blur';
 
   @override
+  String get appearanceNavPillTitle => 'Вид переключателей';
+
+  @override
+  String get appearanceNavPillSubtitle =>
+      'Переключатель разделов на экране чатов';
+
+  @override
+  String get appearanceNavPillGlossy => 'Glossy';
+
+  @override
+  String get appearanceNavPillFrost => 'G-FrostBlur';
+
+  @override
   String get appearanceGradientTitle => 'Градиент';
 
   @override

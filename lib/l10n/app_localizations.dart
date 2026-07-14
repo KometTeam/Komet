@@ -1586,6 +1586,30 @@ abstract class AppLocalizations {
   /// **'Frost blur'**
   String get appearanceComposerBackgroundFrost;
 
+  /// No description provided for @appearanceNavPillTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Switcher style'**
+  String get appearanceNavPillTitle;
+
+  /// No description provided for @appearanceNavPillSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Section switcher on the chats screen'**
+  String get appearanceNavPillSubtitle;
+
+  /// No description provided for @appearanceNavPillGlossy.
+  ///
+  /// In en, this message translates to:
+  /// **'Glossy'**
+  String get appearanceNavPillGlossy;
+
+  /// No description provided for @appearanceNavPillFrost.
+  ///
+  /// In en, this message translates to:
+  /// **'G-FrostBlur'**
+  String get appearanceNavPillFrost;
+
   /// No description provided for @appearanceGradientTitle.
   ///
   /// In en, this message translates to:

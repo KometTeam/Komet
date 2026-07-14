@@ -498,6 +498,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _scrollDownVisible = false;
   int _listEpoch = 0;
   final List<({String id, double pixels, double alignment})> _returnStack = [];
+  bool _returningToAnchor = false;
   final Map<int, GlobalKey> _separatorKeys = {};
   String? _lastSentId;
   final ValueNotifier<int> _otherUnread = ValueNotifier(0);
@@ -3654,6 +3655,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _onScrollDownTap() {
+    if (_returningToAnchor || _navigatingToTarget) return;
     if (!_scrollController.hasClients) {
       _scrollToBottom();
       return;
@@ -3662,7 +3664,12 @@ class _ChatScreenState extends State<ChatScreen>
     while (_returnStack.isNotEmpty) {
       final anchor = _returnStack.removeLast();
       if (anchor.pixels < pixels && _messages.any((m) => m.id == anchor.id)) {
-        unawaited(_returnToAnchor(anchor));
+        _returningToAnchor = true;
+        unawaited(
+          _returnToAnchor(
+            anchor,
+          ).whenComplete(() => _returningToAnchor = false),
+        );
         return;
       }
     }

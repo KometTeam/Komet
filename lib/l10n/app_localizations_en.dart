@@ -791,6 +791,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceComposerBackgroundFrost => 'Frost blur';
 
   @override
+  String get appearanceNavPillTitle => 'Switcher style';
+
+  @override
+  String get appearanceNavPillSubtitle =>
+      'Section switcher on the chats screen';
+
+  @override
+  String get appearanceNavPillGlossy => 'Glossy';
+
+  @override
+  String get appearanceNavPillFrost => 'G-FrostBlur';
+
+  @override
   String get appearanceGradientTitle => 'Gradient';
 
   @override

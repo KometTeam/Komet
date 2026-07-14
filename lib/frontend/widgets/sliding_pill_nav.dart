@@ -1,5 +1,9 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
+import '../../core/config/app_frost.dart';
+import '../../core/config/app_nav_pill_style.dart';
 import '../../core/config/app_pill_gradient.dart';
 import '../../core/config/app_visual_style.dart';
 import 'animated_lottie_icon.dart';
@@ -50,6 +54,7 @@ class SlidingPillNav extends StatelessWidget {
   final Color? backgroundColor;
   final Color? borderColor;
   final bool iconsOnly;
+  final BackdropKey? backdropKey;
 
   const SlidingPillNav({
     super.key,
@@ -64,6 +69,7 @@ class SlidingPillNav extends StatelessWidget {
     this.backgroundColor,
     this.borderColor,
     this.iconsOnly = false,
+    this.backdropKey,
   });
 
   static const double height = 68;
@@ -85,12 +91,25 @@ class SlidingPillNav extends StatelessWidget {
       valueListenable: AppVisualStyle.current,
       builder: (context, style, _) {
         if (style != VisualStyle.glossy) {
-          return _buildNav(context, glossy: false, gradient: false);
+          return _buildNav(
+            context,
+            glossy: false,
+            gradient: false,
+            frost: false,
+          );
         }
         return ValueListenableBuilder<bool>(
           valueListenable: AppPillGradient.current,
           builder: (context, gradient, _) =>
-              _buildNav(context, glossy: true, gradient: gradient),
+              ValueListenableBuilder<NavPillStyle>(
+                valueListenable: AppNavPillStyle.current,
+                builder: (context, navStyle, _) => _buildNav(
+                  context,
+                  glossy: true,
+                  gradient: gradient,
+                  frost: navStyle == NavPillStyle.frostBlur,
+                ),
+              ),
         );
       },
     );
@@ -100,11 +119,15 @@ class SlidingPillNav extends StatelessWidget {
     BuildContext context, {
     required bool glossy,
     required bool gradient,
+    required bool frost,
   }) {
     final cs = Theme.of(context).colorScheme;
     final visualSel = position.round().clamp(0, items.length - 1);
-    final base = backgroundColor ?? cs.surfaceContainerHigh;
+    final base =
+        backgroundColor ??
+        (frost ? AppFrost.navPillTint(cs) : cs.surfaceContainerHigh);
     final useGradient = glossy && gradient;
+    final frosted = frost && base.a < 1;
 
     return Container(
       height: height,
@@ -118,17 +141,35 @@ class SlidingPillNav extends StatelessWidget {
             : (borderColor != null
                   ? Border.all(color: borderColor!, width: 0.5)
                   : null),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        boxShadow: frosted
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
       ),
       child: Stack(
         clipBehavior: Clip.hardEdge,
         children: [
+          if (frosted)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(34),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(
+                      sigmaX: AppFrost.sigma,
+                      sigmaY: AppFrost.sigma,
+                    ),
+                    backdropGroupKey: backdropKey,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
           if (useGradient)
             Positioned.fill(
               child: IgnorePointer(

@@ -12,6 +12,11 @@ class AppFrost {
   static Color pillTint(ColorScheme cs) =>
       cs.surfaceContainerHigh.withValues(alpha: 0.45);
 
+  static Color navPillTint(ColorScheme cs) =>
+      cs.surfaceContainerHigh.withValues(alpha: 0.28);
+
+  static Color fabTint(ColorScheme cs) => navPillTint(cs);
+
   static Color inputTint(ColorScheme cs) =>
       cs.surfaceContainerHighest.withValues(alpha: 0.45);
 

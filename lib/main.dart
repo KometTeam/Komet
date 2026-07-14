@@ -40,6 +40,7 @@ import 'core/config/app_visual_style.dart';
 import 'core/config/app_chat_chrome.dart';
 import 'core/config/app_composer_background.dart';
 import 'core/config/app_composer_style.dart';
+import 'core/config/app_nav_pill_style.dart';
 import 'core/config/app_wallpaper_tint.dart';
 import 'core/storage/chat_wallpaper_store.dart';
 import 'core/utils/wallpaper_seed.dart';
@@ -194,6 +195,7 @@ void main(List<String> args) async {
   final chatChromeFuture = AppChatChrome.load();
   final composerStyleFuture = AppComposerStyle.load();
   final composerBackgroundFuture = AppComposerBackground.load();
+  final navPillStyleFuture = AppNavPillStyle.load();
   final wallpaperTintFuture = AppWallpaperTint.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
@@ -247,6 +249,7 @@ void main(List<String> args) async {
     chatChromeFuture,
     composerStyleFuture,
     composerBackgroundFuture,
+    navPillStyleFuture,
     wallpaperTintFuture,
     themeScheduleFuture,
     messageActionsFuture,
@@ -527,7 +530,9 @@ class KometAppState extends State<KometApp>
     AppAmoled.current.removeListener(_onAmoledChanged);
     AppThemeSchedule.current.removeListener(_onScheduleChanged);
     AppWallpaperTint.current.removeListener(_onWallpaperTintChanged);
-    ChatWallpaperStore.instance.revision.removeListener(_onWallpaperTintChanged);
+    ChatWallpaperStore.instance.revision.removeListener(
+      _onWallpaperTintChanged,
+    );
     WidgetsBinding.instance.removeObserver(this);
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
@@ -752,8 +757,10 @@ class KometAppState extends State<KometApp>
       return;
     }
     await ChatWallpaperStore.instance.load();
-    final wallpaper =
-        ChatWallpaperStore.instance.get(accountId, kGlobalWallpaperChatId);
+    final wallpaper = ChatWallpaperStore.instance.get(
+      accountId,
+      kGlobalWallpaperChatId,
+    );
     final seed = await computeWallpaperSeed(wallpaper);
     if (!mounted) return;
     wallpaperSeed.value = seed;
@@ -897,8 +904,8 @@ class KometAppState extends State<KometApp>
             AppWallpaperTint.current,
           ]),
           builder: (context, _) {
-            final seed = AppWallpaperTint.current.value &&
-                    wallpaperSeed.value != null
+            final seed =
+                AppWallpaperTint.current.value && wallpaperSeed.value != null
                 ? wallpaperSeed.value
                 : accentSeed.value;
             final ColorScheme lightBase;

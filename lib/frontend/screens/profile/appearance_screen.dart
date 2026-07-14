@@ -12,6 +12,7 @@ import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_chat_chrome.dart';
 import '../../../core/config/app_composer_background.dart';
 import '../../../core/config/app_composer_style.dart';
+import '../../../core/config/app_nav_pill_style.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
@@ -122,6 +123,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             const _ChatChromeCard(),
             const SizedBox(height: 12),
             const _ComposerBarCard(),
+            const SizedBox(height: 12),
+            const _NavPillStyleCard(),
             const SizedBox(height: 12),
             const _GradientToggleCard(),
           ],
@@ -330,6 +333,65 @@ class _ComposerBarCard extends StatelessWidget {
                   if (set.isNotEmpty) {
                     Haptics.selection();
                     AppComposerBackground.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavPillStyleCard extends StatelessWidget {
+  const _NavPillStyleCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.appearanceNavPillTitle,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.appearanceNavPillSubtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<NavPillStyle>(
+            valueListenable: AppNavPillStyle.current,
+            builder: (context, current, _) {
+              return SegmentedButton<NavPillStyle>(
+                segments: [
+                  ButtonSegment(
+                    value: NavPillStyle.glossy,
+                    label: Text(l10n.appearanceNavPillGlossy),
+                  ),
+                  ButtonSegment(
+                    value: NavPillStyle.frostBlur,
+                    label: Text(l10n.appearanceNavPillFrost),
+                  ),
+                ],
+                selected: {current},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppNavPillStyle.save(set.first);
                   }
                 },
               );
@@ -590,7 +652,12 @@ class _ColorPickerCard extends StatelessWidget {
     );
   }
 
-  Widget _buildBody(ColorScheme cs, AppLocalizations l10n, Color col, bool sys) {
+  Widget _buildBody(
+    ColorScheme cs,
+    AppLocalizations l10n,
+    Color col,
+    bool sys,
+  ) {
     final swatchColor = sys ? cs.primary : col;
 
     return GlossyPill(

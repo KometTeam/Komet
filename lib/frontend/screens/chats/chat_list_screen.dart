@@ -34,6 +34,9 @@ import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_animations.dart';
+import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_nav_pill_style.dart';
+import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
@@ -186,6 +189,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   late AnimationController _navPageAnimController;
   late AnimationController _fabController;
+  final BackdropKey _frostBackdrop = BackdropKey();
   late PageController _folderPageController;
   late AnimationController _storiesRevealController;
 
@@ -657,7 +661,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     final me = _profile?.id;
     final self = _selfOwnerInfo();
     if (me == null || self == null) return const {};
-    return {me: StoryOwnerInfo(name: 'Ваша история', avatarUrl: self.avatarUrl)};
+    return {
+      me: StoryOwnerInfo(name: 'Ваша история', avatarUrl: self.avatarUrl),
+    };
   }
 
   void _openStories(int index, [Offset? origin]) {
@@ -757,9 +763,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
       var folders = await FoldersModule.loadFolders(p.id);
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
-      final contactIds = (await ContactsModule.getContacts(p.id))
-          .map((c) => c.id)
-          .toSet();
+      final contactIds = (await ContactsModule.getContacts(
+        p.id,
+      )).map((c) => c.id).toSet();
 
       final allChatsFolder = ChatFolder(
         id: 'all.chat.folder',
@@ -1859,6 +1865,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 geometry: geometry,
                 iconSize: 20,
                 labelGap: 4,
+                backdropKey: _frostBackdrop,
                 onTap: _onNavTabSelected,
                 onItemLongPress: (index, pos) {
                   if (index == 3) _openAccountSwitcher(pos);
@@ -2020,12 +2027,32 @@ class _ChatListScreenState extends State<ChatListScreen>
                           Positioned(
                             right: 20,
                             bottom: bottomInset + 90,
-                            child: GlossyPill(
-                              onTap: _toggleFab,
-                              color: cs.primaryContainer,
-                              borderRadius: BorderRadius.circular(28),
-                              elevated: true,
-                              depth: 12,
+                            child: ValueListenableBuilder<VisualStyle>(
+                              valueListenable: AppVisualStyle.current,
+                              builder: (context, style, child) =>
+                                  ValueListenableBuilder<NavPillStyle>(
+                                    valueListenable: AppNavPillStyle.current,
+                                    builder: (context, navStyle, child) {
+                                      final frost =
+                                          style == VisualStyle.glossy &&
+                                          navStyle == NavPillStyle.frostBlur;
+                                      return GlossyPill(
+                                        onTap: _toggleFab,
+                                        color: frost
+                                            ? AppFrost.fabTint(cs)
+                                            : cs.primaryContainer,
+                                        blurSigma: frost
+                                            ? AppFrost.sigma
+                                            : null,
+                                        backdropKey: _frostBackdrop,
+                                        borderRadius: BorderRadius.circular(28),
+                                        elevated: true,
+                                        depth: 12,
+                                        child: child!,
+                                      );
+                                    },
+                                    child: child,
+                                  ),
                               child: SizedBox(
                                 width: 56,
                                 height: 56,
@@ -2119,10 +2146,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     return InkWell(
       onTap: () {
         if (_isSelectionMode) return;
-        pushSwipeable(
-          context,
-          (_) => const ChatListScreen(archiveMode: true),
-        );
+        pushSwipeable(context, (_) => const ChatListScreen(archiveMode: true));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -2151,10 +2175,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             if (_archivedUnread > 0)
               Container(
                 margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 7,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: cs.primary,
                   borderRadius: BorderRadius.circular(12),
@@ -2310,7 +2331,9 @@ class _ChatListScreenState extends State<ChatListScreen>
             picked.item.localFile ??
             await picked.item.originFile();
         if (file == null) {
-          if (mounted) showCustomNotification(context, 'Не удалось открыть фото');
+          if (mounted) {
+            showCustomNotification(context, 'Не удалось открыть фото');
+          }
           return;
         }
         if (!mounted) return;
@@ -2915,7 +2938,6 @@ class _ChatListScreenState extends State<ChatListScreen>
       ),
     );
   }
-
 }
 
 class _StoriesUi extends ChangeNotifier {

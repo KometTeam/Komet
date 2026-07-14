@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/core/config/app_nav_pill_style.dart';
+import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
@@ -739,13 +742,27 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
             animation: _pageController,
             builder: (context, _) {
               final cs = Theme.of(context).colorScheme;
-              return SlidingPillNav(
-                items: navItems,
-                position: _currentPageT(),
-                geometry: geometry,
-                onTap: _onSectionTap,
-                backgroundColor: _composerColor(cs),
-                borderColor: _composerBorderColor(cs),
+              return ValueListenableBuilder<VisualStyle>(
+                valueListenable: AppVisualStyle.current,
+                builder: (context, style, _) =>
+                    ValueListenableBuilder<NavPillStyle>(
+                      valueListenable: AppNavPillStyle.current,
+                      builder: (context, navStyle, _) {
+                        final frost =
+                            style == VisualStyle.glossy &&
+                            navStyle == NavPillStyle.frostBlur;
+                        return SlidingPillNav(
+                          items: navItems,
+                          position: _currentPageT(),
+                          geometry: geometry,
+                          onTap: _onSectionTap,
+                          backgroundColor: frost
+                              ? AppFrost.navPillTint(cs)
+                              : _composerColor(cs),
+                          borderColor: _composerBorderColor(cs),
+                        );
+                      },
+                    ),
               );
             },
           ),
