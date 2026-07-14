@@ -1,8 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/chats.dart';
@@ -10,8 +5,6 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
-import '../../../core/transport/traffic_monitor.dart';
-import '../../../core/utils/debug_session_log.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_cache.dart';
@@ -20,6 +13,7 @@ import '../../debug/cache_section.dart';
 import '../../debug/feature_toggles_section.dart';
 import '../../debug/header_section.dart';
 import '../../debug/id_search_section.dart';
+import '../../debug/log_export.dart';
 import '../../debug/network_section.dart';
 import '../../debug/previews_section.dart';
 import '../../debug/quick_actions_section.dart';
@@ -66,38 +60,6 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   Future<void> _loadCacheSize() async {
     final size = await MediaCache.currentSize();
     if (mounted) setState(() => _cacheSize = size);
-  }
-
-  Future<void> _exportDebugLog() async {
-    final content = await DebugSessionLog.instance.buildExport(
-      endpoint: TrafficMonitor.instance.activeEndpoint,
-    );
-    if (content == null) {
-      if (mounted) showCustomNotification(context, 'Лог пуст');
-      return;
-    }
-    final bytes = Uint8List.fromList(utf8.encode(content));
-    final fileName = 'komet_debug_${formatFileStamp(DateTime.now())}.txt';
-    final isMobile = Platform.isAndroid || Platform.isIOS;
-    try {
-      final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'Сохранить отладочный лог',
-        fileName: fileName,
-        type: FileType.any,
-        bytes: isMobile ? bytes : null,
-      );
-      if (path == null) return;
-      if (!isMobile) {
-        await File(path).writeAsBytes(bytes);
-      }
-      if (mounted) {
-        showCustomNotification(context, 'Лог сохранён: $path');
-      }
-    } catch (e) {
-      if (mounted) {
-        showCustomNotification(context, 'Не удалось сохранить лог: $e');
-      }
-    }
   }
 
   Future<void> _clearCache() async {
@@ -255,7 +217,9 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
               ),
             ),
             SliverToBoxAdapter(
-              child: DebugQuickActionsSection(onExportLog: _exportDebugLog),
+              child: DebugQuickActionsSection(
+                onExportLog: () => exportDebugLog(context),
+              ),
             ),
             SliverToBoxAdapter(child: DebugNetworkSection(appState: appState)),
             const SliverToBoxAdapter(child: DebugFeatureTogglesSection()),
