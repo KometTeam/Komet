@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show OverScrollHeaderStretchConfiguration;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/cache/self_presence.dart';
@@ -49,6 +54,9 @@ class SettingsTab extends StatefulWidget {
 class _SettingsTabState extends State<SettingsTab> {
   ProfileData? _profile;
   bool _isPhoneVisible = false;
+  ScrollController? _scrollController;
+  double _headerDelta = 0;
+  bool _headerEverExpanded = false;
   String? _appVersionLabel;
   bool _debugMenuVisible = false;
   bool _isCheckingForUpdates = false;
@@ -73,7 +81,44 @@ class _SettingsTabState extends State<SettingsTab> {
   void dispose() {
     _versionSecretTapResetTimer?.cancel();
     _profileUpdateSub?.cancel();
+    _scrollController?.dispose();
     super.dispose();
+  }
+
+  void _syncHeaderDelta(double delta) {
+    if (_scrollController == null) {
+      _scrollController = ScrollController(initialScrollOffset: delta);
+      _headerDelta = delta;
+      return;
+    }
+    if (_headerDelta == delta) return;
+    final prev = _headerDelta;
+    _headerDelta = delta;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _scrollController;
+      if (!mounted || c == null || !c.hasClients) return;
+      final target = (c.offset + (delta - prev)).clamp(
+        0.0,
+        c.position.maxScrollExtent,
+      );
+      c.jumpTo(target);
+    });
+  }
+
+  void _snapHeader(double delta) {
+    final c = _scrollController;
+    if (c == null || !c.hasClients || delta <= 0) return;
+    final offset = c.offset;
+    if (offset <= 0 || offset >= delta) return;
+    final target = offset < delta / 2 ? 0.0 : delta;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !c.hasClients) return;
+      c.animateTo(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   void _scheduleVersionSecretTapReset() {
@@ -261,209 +306,188 @@ class _SettingsTabState extends State<SettingsTab> {
         '${_profile!.firstName}${_profile!.lastName != null ? ' ${_profile!.lastName}' : ''}';
     final String phone = '+${_profile!.phone}';
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      body: SafeArea(
-        bottom: false,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _buildHeader(context, cs, fullName, phone),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: AppShowExtraInfo.current,
-                  builder: (context, showExtraInfo, _) {
-                    return _buildSection(
+    final size = MediaQuery.sizeOf(context);
+    final topPad = MediaQuery.paddingOf(context).top;
+    final hasPhoto = (_profile!.baseUrl ?? '').isNotEmpty;
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: KometSettings.selfOnlineCheck,
+      builder: (context, statusEnabled, _) {
+        final collapsedH = topPad + (statusEnabled ? 268.0 : 242.0);
+        final expandedH = hasPhoto
+            ? math.max(collapsedH, math.min(size.width, size.height * 0.65))
+            : collapsedH;
+        final delta = expandedH - collapsedH;
+        _syncHeaderDelta(delta);
+        return Scaffold(
+          backgroundColor: cs.surface,
+          body: NotificationListener<ScrollEndNotification>(
+            onNotification: (n) {
+              if (n.depth == 0) _snapHeader(delta);
+              return false;
+            },
+            child: CustomScrollView(
+              key: ValueKey(delta),
+              controller: _scrollController ??= ScrollController(
+                initialScrollOffset: delta,
+              ),
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPersistentHeader(
+                  delegate: _ProfileHeaderDelegate(
+                    collapsedExtent: collapsedH,
+                    expandedExtent: expandedH,
+                    headerBuilder: (ctx, t) =>
+                        _buildHeader(ctx, cs, fullName, phone, t),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: AppShowExtraInfo.current,
+                      builder: (context, showExtraInfo, _) {
+                        return _buildSection(
+                          context,
+                          items: [
+                            _SettingsItem(
+                              icon: Symbols.badge,
+                              label: 'Цифровой ID',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        AppDigitalIdNative.current.value ||
+                                            !webViewSupported
+                                        ? const DigitalIdScreen()
+                                        : const DigitalIdWebScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                            _SettingsItem(
+                              icon: Symbols.language,
+                              label: 'Войти в Сферум',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => WebAppScreen(
+                                      title: 'Сферум',
+                                      loader: () => webAppModule.fetchSferum(),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            if (showExtraInfo)
+                              _SettingsItem(
+                                icon: Symbols.info,
+                                label: 'Info',
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const InfoScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: CustomizationSection(),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _buildSection(
                       context,
                       items: [
                         _SettingsItem(
-                          icon: Symbols.badge,
-                          label: 'Цифровой ID',
+                          icon: Symbols.notifications_active,
+                          label: 'Уведомления',
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
-                                    AppDigitalIdNative.current.value ||
-                                        !webViewSupported
-                                    ? const DigitalIdScreen()
-                                    : const DigitalIdWebScreen(),
+                                    const NotificationsScreen(),
                               ),
                             );
                           },
                         ),
                         _SettingsItem(
-                          icon: Symbols.language,
-                          label: 'Войти в Сферум',
+                          icon: Symbols.cloud,
+                          label: 'Облачное хранилище [BETA]',
+                          onTap: () => _openCloudStorage(context),
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.vpn_lock,
+                          label: 'Прокси',
+                          onTap: () {
+                            final cs = Theme.of(context).colorScheme;
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: cs.surfaceContainerHigh,
+                              shape: kSheetShape,
+                              builder: (_) {
+                                return SafeArea(
+                                  child: const ProxySettingsSheet(),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.shield_lock,
+                          label: AppLocalizations.of(context)!.profileMenuSpoof,
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => WebAppScreen(
-                                  title: 'Сферум',
-                                  loader: () => webAppModule.fetchSferum(),
-                                ),
+                                builder: (context) => const SpoofScreen(),
                               ),
                             );
                           },
                         ),
-                        if (showExtraInfo)
-                          _SettingsItem(
-                            icon: Symbols.info,
-                            label: 'Info',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const InfoScreen(),
+                        _SettingsItem(
+                          icon: Symbols.lock,
+                          label: 'Безопасность',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                settings: const RouteSettings(
+                                  name: 'SecurityScreen',
                                 ),
-                              );
-                            },
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: CustomizationSection(),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _buildSection(
-                  context,
-                  items: [
-                    _SettingsItem(
-                      icon: Symbols.notifications_active,
-                      label: 'Уведомления',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const NotificationsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.cloud,
-                      label: 'Облачное хранилище [BETA]',
-                      onTap: () => _openCloudStorage(context),
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.vpn_lock,
-                      label: 'Прокси',
-                      onTap: () {
-                        final cs = Theme.of(context).colorScheme;
-                        showModalBottomSheet<void>(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: cs.surfaceContainerHigh,
-                          shape: kSheetShape,
-                          builder: (_) {
-                            return SafeArea(child: const ProxySettingsSheet());
-                          },
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.shield_lock,
-                      label: AppLocalizations.of(context)!.profileMenuSpoof,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SpoofScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.lock,
-                      label: 'Безопасность',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            settings: const RouteSettings(
-                              name: 'SecurityScreen',
-                            ),
-                            builder: (context) => const SecurityScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _SettingsItem(
-                      icon: Symbols.devices,
-                      label: 'Устройства',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DevicesScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 340),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) {
-                  return ClipRect(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      heightFactor: animation.value.clamp(0.0, 1.0),
-                      child: FadeTransition(opacity: animation, child: child),
-                    ),
-                  );
-                },
-                layoutBuilder: (currentChild, previousChildren) {
-                  return Stack(
-                    alignment: Alignment.topCenter,
-                    clipBehavior: Clip.none,
-                    children: <Widget>[...previousChildren, ?currentChild],
-                  );
-                },
-                child: _debugMenuVisible
-                    ? KeyedSubtree(
-                        key: const ValueKey('developers_settings_row'),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                          child: _buildSection(
-                            context,
-                            items: [
-                              _SettingsItem(
-                                icon: Symbols.construction,
-                                label: 'Для разработчиков',
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const DebugMenuScreen(),
-                                    ),
-                                  );
-                                },
+                                builder: (context) => const SecurityScreen(),
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      )
+                        _SettingsItem(
+                          icon: Symbols.devices,
+                          label: 'Устройства',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const DevicesScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ]
                     : const SizedBox.shrink(
                         key: ValueKey('developers_settings_hidden'),
                       ),
@@ -499,47 +523,131 @@ class _SettingsTabState extends State<SettingsTab> {
                         );
                       },
                     ),
-                    _SettingsItem(
-                      icon: Symbols.logout,
-                      label: 'Выйти из аккаунта',
-                      tintColor: cs.error,
-                      onTap: _confirmLogout,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            if (_appVersionLabel != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
-                  child: Center(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _onVersionLabelTap,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 8,
+                SliverToBoxAdapter(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 340),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return ClipRect(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          heightFactor: animation.value.clamp(0.0, 1.0),
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
                         ),
-                        child: Text(
-                          _appVersionLabel!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
+                      );
+                    },
+                    layoutBuilder: (currentChild, previousChildren) {
+                      return Stack(
+                        alignment: Alignment.topCenter,
+                        clipBehavior: Clip.none,
+                        children: <Widget>[...previousChildren, ?currentChild],
+                      );
+                    },
+                    child: _debugMenuVisible
+                        ? KeyedSubtree(
+                            key: const ValueKey('developers_settings_row'),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                              child: _buildSection(
+                                context,
+                                items: [
+                                  _SettingsItem(
+                                    icon: Symbols.construction,
+                                    label: 'Для разработчиков',
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const DebugMenuScreen(),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(
+                            key: ValueKey('developers_settings_hidden'),
+                          ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _buildSection(
+                      context,
+                      items: [
+                        _SettingsItem(
+                          leading: Image.asset(
+                            'assets/komet.png',
+                            width: 22,
+                            height: 22,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          label: 'Komet',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const KometSettingsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.logout,
+                          label: 'Выйти из аккаунта',
+                          tintColor: cs.error,
+                          onTap: _confirmLogout,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_appVersionLabel != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
+                      child: Center(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _onVersionLabelTap,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 8,
+                            ),
+                            child: Text(
+                              _appVersionLabel!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant.withValues(
+                                  alpha: 0.75,
+                                ),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            const SliverToBoxAdapter(child: SizedBox(height: 120)),
-          ],
-        ),
-      ),
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -548,111 +656,292 @@ class _SettingsTabState extends State<SettingsTab> {
     ColorScheme cs,
     String name,
     String phone,
+    double t,
   ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final topPad = MediaQuery.paddingOf(context).top;
+    final hasPhoto = (_profile?.baseUrl ?? '').isNotEmpty;
+    final pt = hasPhoto ? t : 0.0;
+    if (pt > 0) _headerEverExpanded = true;
+
+    return ClipRect(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          const avatarSize = 88.0;
+          final avatarRect = Rect.lerp(
+            Rect.fromLTWH(
+              (w - avatarSize) / 2,
+              topPad + 68,
+              avatarSize,
+              avatarSize,
+            ),
+            Rect.fromLTWH(0, 0, w, h),
+            pt,
+          )!;
+          final radius = lerpDouble(avatarSize / 2, 0, pt)!;
+          final iconColor = Color.lerp(cs.onSurfaceVariant, Colors.white, pt)!;
+          final nameColor = Color.lerp(cs.onSurface, Colors.white, pt)!;
+          final subColor = Color.lerp(
+            cs.onSurfaceVariant,
+            Colors.white.withValues(alpha: 0.85),
+            pt,
+          )!;
+
+          return Stack(
+            clipBehavior: Clip.hardEdge,
             children: [
-              IconButton(
-                icon: Icon(
-                  Symbols.qr_code_2,
-                  color: cs.onSurfaceVariant,
-                  size: 26,
-                  weight: 400,
-                ),
-                onPressed: () {},
-              ),
-              const Expanded(
-                child: ConnectionStatusLine(textAlign: TextAlign.center),
-              ),
-              IconButton(
-                icon: Icon(
-                  Symbols.edit,
-                  color: cs.onSurfaceVariant,
-                  size: 22,
-                  weight: 400,
-                ),
-                onPressed: () {
-                  Navigator.push(
+              Positioned.fromRect(
+                rect: avatarRect,
+                child: GestureDetector(
+                  onTap: () => AvatarHistoryScreen.open(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const EditProfileScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () => AvatarHistoryScreen.open(
-              context,
-              contactId: _profile?.id ?? 0,
-              name: name,
-              currentAvatarUrl: _profile?.baseUrl,
-            ),
-            child: Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: cs.primary.withValues(alpha: 0.5),
-                  width: 2.5,
+                    contactId: _profile?.id ?? 0,
+                    name: name,
+                    currentAvatarUrl: _profile?.baseUrl,
+                  ),
+                  child: _buildMorphAvatar(cs, name, radius, pt),
                 ),
               ),
-              child: KometAvatar(
-                name: name,
-                imageUrl: _profile?.baseUrl,
-                size: 88,
-                fontSize: 32,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            name,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
-            ),
-          ),
-          _buildOnlineStatus(cs),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: () => setState(() => _isPhoneVisible = !_isPhoneVisible),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: _PhoneSpoiler(
-                    text: phone,
-                    isVisible: _isPhoneVisible,
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0.5,
+              if (hasPhoto)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: topPad + 72,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: pt,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.black38, Colors.transparent],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
+              if (hasPhoto)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 150,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: pt,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black54],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                left: 8,
+                right: 8,
+                top: topPad + 8,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Symbols.qr_code_2,
+                        color: iconColor,
+                        size: 26,
+                        weight: 400,
+                      ),
+                      onPressed: () {},
+                    ),
+                    Expanded(
+                      child: Opacity(
+                        opacity: 1 - pt,
+                        child: const ConnectionStatusLine(
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Symbols.edit,
+                        color: iconColor,
+                        size: 22,
+                        weight: 400,
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const EditProfileScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 4),
-              Icon(
-                _isPhoneVisible ? Symbols.visibility : Symbols.visibility_off,
-                size: 14,
-                color: cs.mutedText,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: lerpDouble(20, 14, pt)!,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _headerAligned(
+                      pt,
+                      Text(
+                        name,
+                        style: TextStyle(
+                          color: nameColor,
+                          fontSize: lerpDouble(20, 26, pt),
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Outfit',
+                        ),
+                      ),
+                    ),
+                    _headerAligned(
+                      pt,
+                      _buildOnlineStatus(cs, textColor: subColor),
+                    ),
+                    const SizedBox(height: 6),
+                    _headerAligned(
+                      pt,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () => setState(
+                              () => _isPhoneVisible = !_isPhoneVisible,
+                            ),
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: _PhoneSpoiler(
+                                text: phone,
+                                isVisible: _isPhoneVisible,
+                                style: TextStyle(
+                                  color: subColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            _isPhoneVisible
+                                ? Symbols.visibility
+                                : Symbols.visibility_off,
+                            size: 14,
+                            color: Color.lerp(cs.mutedText, Colors.white70, pt),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
+    );
+  }
+
+  Widget _headerAligned(double t, Widget child) {
+    return Align(
+      alignment: Alignment.lerp(Alignment.center, Alignment.centerLeft, t)!,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: lerpDouble(12, 18, t)!),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildMorphAvatar(
+    ColorScheme cs,
+    String name,
+    double radius,
+    double pt,
+  ) {
+    final base = _profile?.baseUrl;
+    final borderOpacity = (1 - pt * 2).clamp(0.0, 1.0);
+    if (base == null || base.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: cs.primary.withValues(alpha: 0.5),
+            width: 2.5,
+          ),
+        ),
+        child: KometAvatar(name: name, size: 88, fontSize: 32),
+      );
+    }
+    final letterFallback = ColoredBox(
+      color: cs.primaryContainer,
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: TextStyle(
+            color: cs.onPrimaryContainer,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: base,
+                fit: BoxFit.cover,
+                memCacheWidth: 264,
+                memCacheHeight: 264,
+                errorWidget: (_, _, _) => letterFallback,
+              ),
+              if (_headerEverExpanded &&
+                  _profile?.baseRawUrl != null &&
+                  _profile!.baseRawUrl!.isNotEmpty)
+                CachedNetworkImage(
+                  imageUrl: _profile!.baseRawUrl!,
+                  fit: BoxFit.cover,
+                  fadeInDuration: const Duration(milliseconds: 250),
+                  errorWidget: (_, _, _) => const SizedBox.shrink(),
+                ),
+            ],
+          ),
+        ),
+        if (borderOpacity > 0)
+          IgnorePointer(
+            child: Opacity(
+              opacity: borderOpacity,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(radius),
+                  border: Border.all(
+                    color: cs.primary.withValues(alpha: 0.5),
+                    width: 2.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -669,7 +958,7 @@ class _SettingsTabState extends State<SettingsTab> {
     return '$datePart, $time';
   }
 
-  Widget _buildOnlineStatus(ColorScheme cs) {
+  Widget _buildOnlineStatus(ColorScheme cs, {Color? textColor}) {
     return ValueListenableBuilder<bool>(
       valueListenable: KometSettings.selfOnlineCheck,
       builder: (context, enabled, _) {
@@ -687,6 +976,7 @@ class _SettingsTabState extends State<SettingsTab> {
                           ? 'Был(-а) ${_formatSelfSeen(seen)}'
                           : 'офлайн');
                 return Row(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
@@ -699,7 +989,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     Text(
                       label,
                       style: TextStyle(
-                        color: cs.onSurfaceVariant,
+                        color: textColor ?? cs.onSurfaceVariant,
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
                       ),
@@ -732,6 +1022,42 @@ class _SettingsTabState extends State<SettingsTab> {
       }),
     );
   }
+}
+
+class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double collapsedExtent;
+  final double expandedExtent;
+  final Widget Function(BuildContext context, double t) headerBuilder;
+
+  _ProfileHeaderDelegate({
+    required this.collapsedExtent,
+    required this.expandedExtent,
+    required this.headerBuilder,
+  });
+
+  @override
+  double get minExtent => collapsedExtent;
+
+  @override
+  double get maxExtent => expandedExtent;
+
+  @override
+  OverScrollHeaderStretchConfiguration get stretchConfiguration =>
+      OverScrollHeaderStretchConfiguration();
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final range = expandedExtent - collapsedExtent;
+    final t = range <= 0 ? 0.0 : (1 - shrinkOffset / range).clamp(0.0, 1.0);
+    return headerBuilder(context, t);
+  }
+
+  @override
+  bool shouldRebuild(covariant _ProfileHeaderDelegate oldDelegate) => true;
 }
 
 class _SettingsItem {
