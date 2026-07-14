@@ -8,6 +8,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
+import 'shared_content.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -59,6 +60,10 @@ class CachedChat {
   final Set<String> options;
   final int? owner;
   final Set<int> admins;
+  final int? pinnedMsgId;
+  final String? pinnedMsgText;
+  final int? pinnedMsgTime;
+  final bool pinnedMsgIsPreview;
 
   CachedChat({
     required this.id,
@@ -83,6 +88,10 @@ class CachedChat {
     this.options = const {},
     this.owner,
     this.admins = const {},
+    this.pinnedMsgId,
+    this.pinnedMsgText,
+    this.pinnedMsgTime,
+    this.pinnedMsgIsPreview = false,
   }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
            ? lastMsgText.replaceAll('\n', ' ')
            : lastMsgText;
@@ -109,6 +118,15 @@ class CachedChat {
   }
 
   bool iAmAdmin(int myId) => owner == myId || admins.contains(myId);
+
+  bool get hasPinnedMessage => pinnedMsgId != null;
+
+  bool get isGroupChat => type == 'CHAT' || type == 'GROUP';
+
+  bool canPinMessages(int myId) {
+    if (!isGroupChat) return false;
+    return iAmAdmin(myId) || options.contains('ALL_CAN_PIN_MESSAGE');
+  }
 
   bool get isMuted {
     if (dontDisturbUntil == ChatsModule.muteOff) return false;
@@ -141,6 +159,10 @@ class CachedChat {
     options: _decodeOptions(row['options']),
     owner: row['owner'] as int?,
     admins: _decodeAdmins(row['admins']),
+    pinnedMsgId: row['pinned_msg_id'] as int?,
+    pinnedMsgText: row['pinned_msg_text'] as String?,
+    pinnedMsgTime: row['pinned_msg_time'] as int?,
+    pinnedMsgIsPreview: (row['pinned_msg_is_preview'] as int? ?? 0) == 1,
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
@@ -182,6 +204,10 @@ class CachedChat {
     'options': options.isEmpty ? null : options.join(','),
     'owner': owner,
     'admins': admins.isEmpty ? null : admins.join(','),
+    'pinned_msg_id': pinnedMsgId,
+    'pinned_msg_text': pinnedMsgText,
+    'pinned_msg_time': pinnedMsgTime,
+    'pinned_msg_is_preview': pinnedMsgIsPreview ? 1 : 0,
   };
 
   static const Object _keep = Object();
@@ -207,6 +233,10 @@ class CachedChat {
     Set<String>? options,
     Object? owner = _keep,
     Set<int>? admins,
+    Object? pinnedMsgId = _keep,
+    Object? pinnedMsgText = _keep,
+    Object? pinnedMsgTime = _keep,
+    bool? pinnedMsgIsPreview,
   }) {
     return CachedChat(
       id: id,
@@ -243,6 +273,16 @@ class CachedChat {
       options: options ?? this.options,
       owner: identical(owner, _keep) ? this.owner : owner as int?,
       admins: admins ?? this.admins,
+      pinnedMsgId: identical(pinnedMsgId, _keep)
+          ? this.pinnedMsgId
+          : pinnedMsgId as int?,
+      pinnedMsgText: identical(pinnedMsgText, _keep)
+          ? this.pinnedMsgText
+          : pinnedMsgText as String?,
+      pinnedMsgTime: identical(pinnedMsgTime, _keep)
+          ? this.pinnedMsgTime
+          : pinnedMsgTime as int?,
+      pinnedMsgIsPreview: pinnedMsgIsPreview ?? this.pinnedMsgIsPreview,
     );
   }
 }
@@ -333,6 +373,8 @@ class ChatsModule {
   final _messageEventsController = StreamController<MessageEvent>.broadcast();
   Stream<MessageEvent> get messageEvents => _messageEventsController.stream;
 
+  int? _paginatedAccountId;
+
   void emitMessageSent(int chatId, String tempId, CachedMessage message) {
     _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
   }
@@ -366,6 +408,40 @@ class ChatsModule {
     _bump();
   }
 
+  Future<void> markReadUpTo(
+    Api api,
+    int accountId,
+    int chatId,
+    String messageId,
+    int mark, {
+    required int remaining,
+  }) async {
+    final msgIdNum = int.tryParse(messageId);
+    if (msgIdNum != null && !KometSettings.antiRead.value) {
+      try {
+        await api.sendRequest(Opcode.chatMark, {
+          'type': 'READ_MESSAGE',
+          'chatId': chatId,
+          'messageId': msgIdNum,
+          'mark': mark,
+        });
+      } catch (_) {}
+    }
+
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final cached = CachedChat.fromDbRow(rows.first);
+    final next = remaining < 0 ? 0 : remaining;
+    final currentMark = cached.participants[accountId] ?? 0;
+    final nextMark = mark > currentMark ? mark : currentMark;
+    if (cached.unreadCount == next && nextMark == currentMark) return;
+    final participants = Map<int, int>.from(cached.participants)
+      ..[accountId] = nextMark;
+    final updated = cached.copyWith(unreadCount: next, participants: participants);
+    await AppDatabase.saveChats([updated.toDbRow()]);
+    _bump();
+  }
+
   Future<int?> markUnread(Api api, int accountId, int chatId, int mark) async {
     int? unread;
     try {
@@ -381,11 +457,11 @@ class ChatsModule {
     }
     if (unread == null) return null;
 
-    await _updateChat(
-      accountId,
-      chatId,
-      (chat) => chat.copyWith(unreadCount: unread),
-    );
+    await _updateChat(accountId, chatId, (chat) {
+      final participants = Map<int, int>.from(chat.participants)
+        ..[accountId] = mark - 1;
+      return chat.copyWith(unreadCount: unread, participants: participants);
+    });
     return unread;
   }
 
@@ -485,6 +561,7 @@ class ChatsModule {
     ContactInfoFetch.clear();
     PresenceFetch.clear();
     ChatInfoFetch.clear();
+    SharedContentModule.clearPhotoIndex();
   }
 
   void _enqueueGlobalPush(Packet packet) {
@@ -700,8 +777,43 @@ class ChatsModule {
     }
     if (unread != null) newRow['unread_count'] = unread;
 
+    final pinned = _extractPinnedMessage(msg);
+    if (pinned != null) {
+      newRow['pinned_msg_id'] = pinned.id;
+      newRow['pinned_msg_text'] = pinned.text;
+      newRow['pinned_msg_time'] = pinned.time;
+      newRow['pinned_msg_is_preview'] = pinned.isPreview ? 1 : 0;
+    }
+
     await AppDatabase.saveChats([newRow]);
     _bump();
+  }
+
+  ({int? id, String? text, int? time, bool isPreview})? _extractPinnedMessage(
+    Map msg,
+  ) {
+    final attaches = msg['attaches'];
+    if (attaches is! List) return null;
+    for (final a in attaches.whereType<Map>()) {
+      if ((a['_type'] as String?) != 'CONTROL') continue;
+      final event = a['event']?.toString();
+      if (event != 'pin' && event != 'unpin') continue;
+      final pinned = a['pinnedMessage'];
+      if (event == 'unpin' || pinned is! Map) {
+        return (id: null, text: null, time: null, isPreview: false);
+      }
+      final rawId = pinned['id'];
+      final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+      if (id == null) return null;
+      final preview = pinnedMessagePreview(pinned.cast<dynamic, dynamic>());
+      return (
+        id: id,
+        text: preview.text,
+        time: pinned['time'] as int?,
+        isPreview: preview.isPreview,
+      );
+    }
+    return null;
   }
 
   Future<void> _reconcileLastMessage(
@@ -996,7 +1108,7 @@ class ChatsModule {
       return parsed;
     }
     final row = parsed.toDbRow();
-    row['in_list'] = inList ? 1 : 0;
+    row['in_list'] = !inList ? 0 : (chat['status'] == 'HIDDEN' ? 2 : 1);
     await AppDatabase.saveChats([row]);
     _bump();
     return parsed;
@@ -1028,44 +1140,109 @@ class ChatsModule {
           ? data['presence'] as Map
           : {};
       PresenceFetch.primeAll(presenceMap);
-      final cachedAt = DateTime.now().millisecondsSinceEpoch;
 
-      final existingRows = await AppDatabase.loadChats(accountId);
-      final existing = {
-        for (final row in existingRows)
-          row['id'] as int: CachedChat.fromDbRow(row),
-      };
-
-      final rows = chats
-          .whereType<Map>()
-          .map(
-            (c) => parseChatRow(
-              c.cast<dynamic, dynamic>(),
-              accountId,
-              currentUserId,
-              contactsMap,
-              chatsConfig,
-              presenceMap,
-              existing,
-              cachedAt,
-            ),
-          )
-          .whereType<CachedChat>()
-          .map((c) => c.toDbRow()..['in_list'] = 1)
-          .toList();
-
-      if (rows.isNotEmpty) {
-        await AppDatabase.saveChats(rows);
-        _bump();
-      }
+      await _persistChatMaps(
+        chats,
+        accountId,
+        currentUserId,
+        contactsMap: contactsMap,
+        chatsConfig: chatsConfig,
+        presenceMap: presenceMap,
+      );
     } catch (e) {
       logger.e("Ошибка при синке: $e");
     }
   }
 
-  Future<List<CachedChat>> getChats(int accountId) async {
+  Future<int> _persistChatMaps(
+    List<dynamic> chats,
+    int accountId,
+    int currentUserId, {
+    Map<int, Map<dynamic, dynamic>> contactsMap = const {},
+    Map<dynamic, dynamic> chatsConfig = const {},
+    Map<dynamic, dynamic> presenceMap = const {},
+  }) async {
+    final cachedAt = DateTime.now().millisecondsSinceEpoch;
+    final existingRows = await AppDatabase.loadChats(
+      accountId,
+      includeHidden: true,
+    );
+    final existing = {
+      for (final row in existingRows)
+        row['id'] as int: CachedChat.fromDbRow(row),
+    };
+
+    final rows = <Map<String, dynamic>>[];
+    for (final c in chats.whereType<Map>()) {
+      final map = c.cast<dynamic, dynamic>();
+      final parsed = parseChatRow(
+        map,
+        accountId,
+        currentUserId,
+        contactsMap,
+        chatsConfig,
+        presenceMap,
+        existing,
+        cachedAt,
+      );
+      if (parsed == null) continue;
+      final row = parsed.toDbRow();
+      row['in_list'] = map['status'] == 'HIDDEN' ? 2 : 1;
+      rows.add(row);
+    }
+
+    if (rows.isNotEmpty) {
+      await AppDatabase.saveChats(rows);
+      _bump();
+    }
+    return rows.length;
+  }
+
+  Future<void> paginateChats(
+    Api api,
+    int accountId,
+    int currentUserId,
+    Map<dynamic, dynamic> loginData,
+  ) async {
+    if (_paginatedAccountId == accountId) return;
+    _paginatedAccountId = accountId;
     try {
-      final rows = await AppDatabase.loadChats(accountId);
+      var marker = loginData['chatMarker'];
+      if (marker is! int || marker <= 0) return;
+
+      const count = 50;
+      var page = 0;
+      while (page < 200) {
+        page++;
+        final resp = await api.sendRequestMap(Opcode.chatsList, {
+          'marker': marker,
+          'count': count,
+        });
+        if (resp == null) break;
+        final chats = resp['chats'];
+        if (chats is! List || chats.isEmpty) break;
+
+        await _persistChatMaps(chats, accountId, currentUserId);
+
+        final next = resp['marker'];
+        if (next is! int || next == marker || chats.length < count) break;
+        marker = next;
+      }
+    } catch (e) {
+      _paginatedAccountId = null;
+      logger.w('Пагинация чатов: $e');
+    }
+  }
+
+  Future<List<CachedChat>> getChats(
+    int accountId, {
+    bool includeHidden = false,
+  }) async {
+    try {
+      final rows = await AppDatabase.loadChats(
+        accountId,
+        includeHidden: includeHidden,
+      );
       final chats = rows.map(CachedChat.fromDbRow).toList();
       return chats;
     } catch (e) {
@@ -1098,6 +1275,18 @@ class ChatsModule {
     final chats = payload?['chats'] as List?;
     if (chats == null || chats.isEmpty) return null;
     return Map<String, dynamic>.from(chats.first as Map);
+  }
+
+  Future<Map<int, int>> getReadMarks(Api api, int accountId, int chatId) async {
+    try {
+      final info = await getChatInfo(api, chatId);
+      final fresh = parseParticipants(info?['participants']);
+      if (fresh.isNotEmpty) return fresh;
+    } catch (e) {
+      logger.w('Не удалось получить отметки прочтения для $chatId: $e');
+    }
+    final rows = await getChat(accountId, chatId);
+    return rows.isEmpty ? const {} : rows.first.participants;
   }
 
   Future<dynamic> searchById(Api api, int userId) async {
@@ -1267,6 +1456,39 @@ class ChatsModule {
     if (accountId == null) return true;
     await _updateChat(accountId, chatId, (chat) => chat.copyWith(title: title));
     return true;
+  }
+
+  Future<String?> setPinnedMessage(
+    Api api, {
+    required int chatId,
+    required int? messageId,
+    bool notify = true,
+  }) async {
+    try {
+      final packet = await api.sendRequest(Opcode.chatUpdate, {
+        'chatId': chatId,
+        'notifyPin': notify,
+        'pinMessageId': messageId ?? 0,
+      });
+      if (!packet.isOk) {
+        return messageFromErrorPayload(packet.payload);
+      }
+      final data = packet.payload;
+      final chat = data is Map ? data['chat'] : null;
+      if (chat is Map) {
+        final accountId = await TokenStorage.getActiveAccountId();
+        if (accountId != null) {
+          await cacheServerChat(chat.cast<dynamic, dynamic>(), accountId);
+        }
+      }
+      return null;
+    } on PacketError catch (e) {
+      logger.w('setPinnedMessage $chatId: ${e.message}');
+      return e.message;
+    } catch (e) {
+      logger.w('setPinnedMessage $chatId: $e');
+      return 'Не удалось изменить закрепление';
+    }
   }
 
   Future<String?> togglePin(

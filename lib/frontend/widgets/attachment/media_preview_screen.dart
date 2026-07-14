@@ -10,6 +10,7 @@ import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 
 import '../../../core/config/app_colors.dart';
+import '../small_spinner.dart';
 
 const Color _kBar = Color(0xFF1E1E1E);
 
@@ -218,11 +219,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   Widget _buildImage() {
     final file = _workingFile;
     if (file == null) {
-      return const SizedBox(
-        width: 36,
-        height: 36,
-        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24),
-      );
+      return const SmallSpinner(size: 36, color: Colors.white24);
     }
     return Image.file(file, fit: BoxFit.contain, gaplessPlayback: true);
   }

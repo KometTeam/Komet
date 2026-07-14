@@ -91,15 +91,9 @@ class PrivacyModule extends AccountApiBase {
     }
   }
 
-  Future<void> unregisterPushToken(String pushToken) async {
+  Future<void> unregisterPushToken(String _) async {
     if (api.state != SessionState.online) return;
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) return;
-    final authToken = await TokenStorage.readToken(accountId);
-    if (authToken == null) return;
-    await api.sendRequest(Opcode.logout, <dynamic, dynamic>{
-      'token': authToken,
-      'pushToken': pushToken,
-    });
+    final packet = await api.sendRequest(Opcode.logout, <dynamic, dynamic>{});
+    throwIfPacketError(packet);
   }
 }

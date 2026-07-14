@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/utils/format.dart';
+import 'small_spinner.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final Map<String, String> sources;
@@ -133,11 +134,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       aspectRatio: c.value.aspectRatio,
                       child: VideoPlayer(c),
                     )
-                  : const CircularProgressIndicator(color: Colors.white),
+                  : const SmallSpinner(size: 36, color: Colors.white),
             ),
             if (buffering)
               const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+                child: SmallSpinner(size: 36, color: Colors.white),
               ),
             if (!_error)
               AnimatedOpacity(

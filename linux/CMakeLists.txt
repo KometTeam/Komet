@@ -2,6 +2,12 @@
 cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
+# Capture whether the install prefix is still CMake's default before any
+# add_subdirectory() runs. Third-party libraries (rlottie) call project()
+# again, which resets CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT to false and
+# would otherwise defeat the bundle-directory redirect below.
+set(RUNNER_PREFIX_IS_DEFAULT ${CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT})
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "Komet")
@@ -84,12 +90,15 @@ if(TARGET flutter_webrtc_plugin)
   target_compile_options(flutter_webrtc_plugin PRIVATE -include cstdint)
 endif()
 
+set(RLOTTIE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/rlottie_build")
+add_subdirectory("${RLOTTIE_DIR}" "${CMAKE_BINARY_DIR}/rlottie")
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
 # directory.
 set(BUILD_BUNDLE_DIR "${PROJECT_BINARY_DIR}/bundle")
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+if(RUNNER_PREFIX_IS_DEFAULT OR CMAKE_INSTALL_PREFIX STREQUAL "/usr/local")
   set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
 endif()
 
@@ -115,6 +124,10 @@ foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endforeach(bundled_library)
+
+install(FILES "$<TARGET_FILE:rlottie>"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
 
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")

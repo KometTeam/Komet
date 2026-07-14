@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/core/config/app_nav_pill_style.dart';
+import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
@@ -12,6 +15,8 @@ import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
 import 'package:komet/l10n/app_localizations.dart';
+
+import '../small_spinner.dart';
 
 const int _navItemCount = 5;
 
@@ -392,7 +397,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     double bottomReserve,
   ) {
     if (_loading) {
-      return Center(child: CircularProgressIndicator(color: cs.primary));
+      return Center(child: SmallSpinner(size: 36, color: cs.primary));
     }
     if (_permission == GalleryPermission.denied) {
       return _buildDenied(scrollController, cs, bottomReserve);
@@ -739,13 +744,32 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
             animation: _pageController,
             builder: (context, _) {
               final cs = Theme.of(context).colorScheme;
-              return SlidingPillNav(
-                items: navItems,
-                position: _currentPageT(),
-                geometry: geometry,
-                onTap: _onSectionTap,
-                backgroundColor: _composerColor(cs),
-                borderColor: _composerBorderColor(cs),
+              return ValueListenableBuilder<VisualStyle>(
+                valueListenable: AppVisualStyle.current,
+                builder: (context, style, _) =>
+                    ValueListenableBuilder<NavPillStyle>(
+                      valueListenable: AppNavPillStyle.current,
+                      builder: (context, navStyle, _) {
+                        final frost =
+                            style.glossyChrome &&
+                            NavPillMaterial.isFrost(navStyle);
+                        final liquid =
+                            style.glossyChrome &&
+                            NavPillMaterial.isLiquid(navStyle);
+                        return SlidingPillNav(
+                          items: navItems,
+                          position: _currentPageT(),
+                          geometry: geometry,
+                          onTap: _onSectionTap,
+                          backgroundColor: liquid
+                              ? null
+                              : (frost
+                                    ? AppFrost.navPillTint(cs)
+                                    : _composerColor(cs)),
+                          borderColor: _composerBorderColor(cs),
+                        );
+                      },
+                    ),
               );
             },
           ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
 import 'link_text.dart';
+import 'lottie_image.dart';
 
 class FormattedMessageText extends StatefulWidget {
   final String text;
@@ -122,6 +123,36 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
         quoteColor: quoteColor,
       );
       final content = widget.text.substring(segment.start, segment.end);
+      if (segment.animojiUrl != null) {
+        final fontSize = widget.style.fontSize ?? 16;
+        final box = fontSize * 1.5;
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: SizedBox(
+              width: box,
+              height: box,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Text(
+                    content,
+                    style: widget.style.copyWith(fontSize: fontSize * 1.15),
+                  ),
+                  LottieImage(
+                    lottieUrl: segment.animojiUrl,
+                    size: box,
+                    memCacheWidth: 120,
+                    shimmer: false,
+                    eager: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
       if (segment.url != null) {
         final url = segment.url!;
         final recognizer = TapGestureRecognizer()

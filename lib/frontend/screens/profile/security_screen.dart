@@ -12,6 +12,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
 import 'password_entry_screen.dart';
 
 class SecurityScreen extends StatefulWidget {
@@ -219,14 +220,7 @@ class _SecurityScreenState extends State<SecurityScreen>
           if (_isSaving)
             Padding(
               padding: const EdgeInsets.only(right: 16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: cs.primary,
-                ),
-              ),
+              child: SmallSpinner(size: 20, color: cs.primary),
             ),
         ],
       ),

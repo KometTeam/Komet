@@ -36,12 +36,12 @@ class AppIconConfig {
   static Future<void> apply(AppIcon icon) async {
     if (!isSupported) return;
     if (current.value == icon) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(prefKey, icon.id);
-    current.value = icon;
     await _channel.invokeMethod<void>('setAppIcon', {
       'name': icon.platformName,
     });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(prefKey, icon.id);
+    current.value = icon;
   }
 
   static AppIcon _parse(String? val) {

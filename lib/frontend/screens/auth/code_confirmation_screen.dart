@@ -11,6 +11,7 @@ import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
+import '../../widgets/small_spinner.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -525,14 +526,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                       borderRadius: BorderRadius.circular(50),
                     ),
                     child: recovering
-                        ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.onPrimaryContainer,
-                            ),
-                          )
+                        ? SmallSpinner(size: 24, color: cs.onPrimaryContainer)
                         : Icon(
                             Icons.arrow_forward,
                             color: _codeController.text.length == 6

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/utils/text_format.dart';
+import '../../models/animoji.dart';
+import 'lottie_image.dart';
 
 const List<TextFormat> composerFormats = [
   TextFormat.strong,
@@ -16,10 +18,113 @@ class _Interval {
   _Interval(this.start, this.end);
 }
 
+class _AnimojiEntity {
+  final int uid;
+  int offset;
+  final String emoji;
+  final String lottieUrl;
+  final int entityId;
+
+  _AnimojiEntity({
+    required this.uid,
+    required this.offset,
+    required this.emoji,
+    required this.lottieUrl,
+    required this.entityId,
+  });
+}
+
 class RichMessageController extends TextEditingController {
+  static const String _animojiPlaceholder = '￼';
+
   final Map<TextFormat, List<_Interval>> _intervals = {};
+  final List<_AnimojiEntity> _animoji = [];
+  int _entitySeq = 0;
 
   RichMessageController({super.text});
+
+  void insertAnimoji(Animoji animoji) {
+    final lottie = animoji.lottieUrl ?? animoji.lottiePlayUrl;
+    if (lottie == null || lottie.isEmpty) return;
+
+    final selection = value.selection;
+    final oldText = value.text;
+    final start = selection.isValid ? selection.start : oldText.length;
+    final end = selection.isValid ? selection.end : oldText.length;
+    final newText = oldText.replaceRange(start, end, _animojiPlaceholder);
+
+    value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: start + _animojiPlaceholder.length,
+      ),
+    );
+
+    _animoji.add(
+      _AnimojiEntity(
+        uid: _entitySeq++,
+        offset: start,
+        emoji: animoji.emoji,
+        lottieUrl: lottie,
+        entityId: animoji.id,
+      ),
+    );
+    _animoji.sort((a, b) => a.offset.compareTo(b.offset));
+    notifyListeners();
+  }
+
+  ({String text, List<Map<String, dynamic>> elements}) buildContent() {
+    final src = value.text;
+    if (_animoji.isEmpty) {
+      return (text: src, elements: elementsForSend());
+    }
+
+    final entities = [..._animoji]..sort((a, b) => a.offset.compareTo(b.offset));
+
+    final sb = StringBuffer();
+    var last = 0;
+    for (final e in entities) {
+      if (e.offset < last || e.offset >= src.length) continue;
+      sb.write(src.substring(last, e.offset));
+      sb.write(e.emoji);
+      last = e.offset + _animojiPlaceholder.length;
+    }
+    sb.write(src.substring(last));
+    final glyphText = sb.toString();
+
+    int glyphOffset(int p) {
+      var shift = 0;
+      for (final e in entities) {
+        if (e.offset < p && e.offset < src.length) {
+          shift += e.emoji.length - _animojiPlaceholder.length;
+        }
+      }
+      return p + shift;
+    }
+
+    final elements = <Map<String, dynamic>>[];
+    for (final e in entities) {
+      if (e.offset >= src.length) continue;
+      elements.add({
+        'type': 'ANIMOJI',
+        'from': glyphOffset(e.offset),
+        'length': e.emoji.length,
+        'entityId': e.entityId,
+        'attributes': {'animojiLottieUrl': e.lottieUrl},
+      });
+    }
+    for (final range in _toFormatRanges()) {
+      final from = glyphOffset(range.start);
+      final to = glyphOffset(range.end);
+      if (to <= from) continue;
+      elements.add({
+        'type': textFormatToServer(range.format),
+        'from': from,
+        'length': to - from,
+      });
+    }
+    return (text: glyphText, elements: elements);
+  }
 
   @override
   set value(TextEditingValue newValue) {
@@ -95,7 +200,7 @@ class RichMessageController extends TextEditingController {
   }
 
   void _remap(String oldText, String newText) {
-    if (_intervals.isEmpty) return;
+    if (_intervals.isEmpty && _animoji.isEmpty) return;
     final oldLen = oldText.length;
     final newLen = newText.length;
 
@@ -124,6 +229,15 @@ class RichMessageController extends TextEditingController {
       if (offset <= changeStart) return offset;
       if (offset >= oldChangeEnd) return offset + delta;
       return changeStart;
+    }
+
+    if (_animoji.isNotEmpty) {
+      _animoji.removeWhere(
+        (e) => e.offset >= changeStart && e.offset < oldChangeEnd,
+      );
+      for (final e in _animoji) {
+        if (e.offset >= oldChangeEnd) e.offset += delta;
+      }
     }
 
     final empty = <TextFormat>[];
@@ -204,26 +318,66 @@ class RichMessageController extends TextEditingController {
   }) {
     final baseStyle = style ?? const TextStyle();
     final content = text;
-    if (!hasFormatting || content.isEmpty) {
+    if ((!hasFormatting && _animoji.isEmpty) || content.isEmpty) {
       return TextSpan(style: baseStyle, text: content);
     }
 
     final ranges = _toFormatRanges();
-
     final baseColor = baseStyle.color;
     final quoteColor = baseColor?.withValues(alpha: 0.85);
     final segments = segmentizeFormats(content, ranges);
-    final spans = <InlineSpan>[
-      for (final segment in segments)
-        TextSpan(
-          text: content.substring(segment.start, segment.end),
-          style: applyTextFormats(
-            baseStyle,
-            segment.formats,
-            quoteColor: quoteColor,
+    final entityByOffset = {for (final e in _animoji) e.offset: e};
+    final box = (baseStyle.fontSize ?? 16) * 1.4;
+
+    final spans = <InlineSpan>[];
+    for (final segment in segments) {
+      final segStyle = applyTextFormats(
+        baseStyle,
+        segment.formats,
+        quoteColor: quoteColor,
+      );
+      var runStart = segment.start;
+      var i = segment.start;
+      while (i < segment.end) {
+        final entity = entityByOffset[i];
+        if (entity == null) {
+          i++;
+          continue;
+        }
+        if (runStart < i) {
+          spans.add(
+            TextSpan(text: content.substring(runStart, i), style: segStyle),
+          );
+        }
+        spans.add(_animojiSpan(entity, box));
+        i += _animojiPlaceholder.length;
+        runStart = i;
+      }
+      if (runStart < segment.end) {
+        spans.add(
+          TextSpan(
+            text: content.substring(runStart, segment.end),
+            style: segStyle,
           ),
-        ),
-    ];
+        );
+      }
+    }
     return TextSpan(style: baseStyle, children: spans);
+  }
+
+  WidgetSpan _animojiSpan(_AnimojiEntity entity, double box) {
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: SizedBox(
+        key: ValueKey('composer-animoji-${entity.uid}'),
+        width: box,
+        height: box,
+        child: LottieImage(
+          lottieUrl: entity.lottieUrl,
+          size: box,
+          memCacheWidth: 120,
+        ),
+      ),
+    );
   }
 }

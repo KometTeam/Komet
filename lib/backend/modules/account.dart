@@ -177,15 +177,25 @@ class AccountModule {
     final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
 
     final sessionToken = result.loginToken ?? result.registerToken;
-    final accountId = result.accountId;
+    final verifiedProfile = _profileFromVerifyPayload(result.payload);
+    final accountId = result.accountId ?? verifiedProfile?.id;
 
     if (sessionToken != null && accountId != null) {
+      if (result.loginToken != null && verifiedProfile != null) {
+        await AppDatabase.saveProfile(verifiedProfile, isActive: true);
+      }
       await TokenStorage.saveToken(sessionToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
       await SpoofingService.commitPendingSpoof(accountId);
     }
 
     return result;
+  }
+
+  ProfileData? _profileFromVerifyPayload(Map<dynamic, dynamic> payload) {
+    final profileMap = payload['profile'];
+    if (profileMap is! Map) return null;
+    return ProfileData.fromServerProfile(profileMap.cast<dynamic, dynamic>());
   }
 
   Future<int> completeRegistration({
@@ -396,10 +406,16 @@ class AccountModule {
   }
 
   Future<void> logout() async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    try {
+      await _logoutOnServer(accountId);
+    } on SessionExpiredException catch (e) {
+      logger.w('logout: сервер отклонил сессию: ${e.message}');
+    }
+    _loggedIn = false;
     try {
       await _api.disconnect();
     } catch (_) {}
-    final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
       await removeAccount(accountId);
     }
@@ -407,6 +423,33 @@ class AccountModule {
     TranscriptionCache.clear();
     ComplaintsModule.clear();
     chats.resetForAccountSwitch();
+  }
+
+  Future<void> _logoutOnServer(int? accountId) async {
+    await _ensureLogoutSession(accountId);
+    await _api.sendRequestOrThrow(Opcode.logout, <dynamic, dynamic>{});
+  }
+
+  Future<void> _ensureLogoutSession(int? accountId) async {
+    if (_api.state == SessionState.disconnected) {
+      await _api.connect();
+    }
+    if (_api.state != SessionState.online) {
+      await _api.stateStream
+          .firstWhere((state) => state == SessionState.online)
+          .timeout(const Duration(seconds: 20));
+    }
+    if (_loggedIn) return;
+    if (accountId == null) return;
+    final token = await TokenStorage.readToken(accountId);
+    if (token == null || token.isEmpty) {
+      throw StateError('logout: нет токена для серверного выхода');
+    }
+    await _api.sendRequestOrThrow(
+      Opcode.login,
+      buildLoginPayload(token, interactive: false),
+    );
+    _loggedIn = true;
   }
 
   Future<TwoFactorResult> checkPassword({
@@ -501,7 +544,8 @@ class AccountModule {
       payload['lastLogin'] = sync.lastLogin;
       if (sync.configHash != null) payload['configHash'] = sync.configHash;
     } else {
-      payload['presenceSync'] = 0;
+      payload['presenceSync'] = -1;
+      payload['chatsSync'] = -1;
     }
 
     return payload;
@@ -542,6 +586,13 @@ class AccountModule {
     await _saveSyncState(data, serverTime, profile.id);
     await ContactsModule.syncFromLoginPayload(data, profile.id);
     await chats.syncFromLoginPayload(data, profile.id, profile.id);
+    unawaited(chats.paginateChats(_api, profile.id, profile.id, data));
+
+    try {
+      await ContactsModule.syncFromServer(_api, profile.id);
+    } catch (e) {
+      logger.w('Контакты: $e');
+    }
 
     final config = data['config'];
     if (config is Map) {

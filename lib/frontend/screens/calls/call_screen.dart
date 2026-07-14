@@ -24,6 +24,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
 import 'komet_hub.dart';
 
 const Color _kEndRed = Color(0xFFE5484D);
@@ -1261,14 +1262,7 @@ class _CallButton extends StatelessWidget {
             depth: 9,
             child: Center(
               child: busy
-                  ? SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation(foreground),
-                      ),
-                    )
+                  ? SmallSpinner(size: 22, color: foreground)
                   : Icon(icon, color: foreground, size: 26, fill: 1),
             ),
           ),

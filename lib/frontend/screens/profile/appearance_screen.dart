@@ -10,12 +10,16 @@ import '../../../core/config/app_bubble_shape.dart';
 import '../../../core/config/app_pill_gradient.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_chat_chrome.dart';
+import '../../../core/config/app_composer_background.dart';
+import '../../../core/config/app_composer_style.dart';
+import '../../../core/config/app_nav_pill_style.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -119,11 +123,34 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             const SizedBox(height: 12),
             const _ChatChromeCard(),
             const SizedBox(height: 12),
+            const _ComposerBarCard(),
+            const SizedBox(height: 12),
+            const _NavPillStyleCard(),
+            const SizedBox(height: 12),
             const _GradientToggleCard(),
           ],
         ),
       ),
     );
+  }
+}
+
+void _applyVisualStyle(VisualStyle style) {
+  AppVisualStyle.save(style);
+  if (style == VisualStyle.liquidGlass) {
+    AppNavPillStyle.save(NavPillStyle.liquidGlass);
+    AppComposerBackground.save(ComposerBackground.liquidGlass);
+    AppChatChrome.save(ChatChromeStyle.liquidGlass);
+    return;
+  }
+  if (AppNavPillStyle.current.value == NavPillStyle.liquidGlass) {
+    AppNavPillStyle.save(NavPillStyle.frostBlur);
+  }
+  if (AppComposerBackground.current.value == ComposerBackground.liquidGlass) {
+    AppComposerBackground.save(ComposerBackground.frostBlur);
+  }
+  if (AppChatChrome.current.value == ChatChromeStyle.liquidGlass) {
+    AppChatChrome.save(ChatChromeStyle.transparent);
   }
 }
 
@@ -159,7 +186,12 @@ class _VisualStyleCard extends StatelessWidget {
           ValueListenableBuilder<VisualStyle>(
             valueListenable: AppVisualStyle.current,
             builder: (context, current, _) {
+              final selectable =
+                  current == VisualStyle.liquidGlass && !LiquidGlass.isSupported
+                  ? VisualStyle.glossy
+                  : current;
               return SegmentedButton<VisualStyle>(
+                showSelectedIcon: false,
                 segments: [
                   ButtonSegment(
                     value: VisualStyle.materialYou,
@@ -169,12 +201,17 @@ class _VisualStyleCard extends StatelessWidget {
                     value: VisualStyle.glossy,
                     label: Text(l10n.appearanceVisualStyleGlossy),
                   ),
+                  if (LiquidGlass.isSupported)
+                    ButtonSegment(
+                      value: VisualStyle.liquidGlass,
+                      label: Text(l10n.appearanceVisualStyleLiquidGlass),
+                    ),
                 ],
-                selected: {current},
+                selected: {selectable},
                 onSelectionChanged: (set) {
                   if (set.isNotEmpty) {
                     Haptics.selection();
-                    AppVisualStyle.save(set.first);
+                    _applyVisualStyle(set.first);
                   }
                 },
               );
@@ -218,26 +255,209 @@ class _ChatChromeCard extends StatelessWidget {
           ValueListenableBuilder<ChatChromeStyle>(
             valueListenable: AppChatChrome.current,
             builder: (context, current, _) {
-              return SegmentedButton<ChatChromeStyle>(
+              final selectable =
+                  current == ChatChromeStyle.liquidGlass &&
+                      !LiquidGlass.isSupported
+                  ? ChatChromeStyle.transparent
+                  : current;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<ChatChromeStyle>(
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment(
+                      value: ChatChromeStyle.color,
+                      label: Text(l10n.appearanceChatChromeColor),
+                    ),
+                    ButtonSegment(
+                      value: ChatChromeStyle.blur,
+                      label: Text(l10n.appearanceChatChromeBlur),
+                    ),
+                    ButtonSegment(
+                      value: ChatChromeStyle.none,
+                      label: Text(l10n.appearanceChatChromeNone),
+                    ),
+                    ButtonSegment(
+                      value: ChatChromeStyle.transparent,
+                      label: Text(l10n.appearanceChatChromeTransparent),
+                    ),
+                    if (LiquidGlass.isSupported)
+                      ButtonSegment(
+                        value: ChatChromeStyle.liquidGlass,
+                        label: Text(l10n.appearanceGlassMaterial),
+                      ),
+                  ],
+                  selected: {selectable},
+                  onSelectionChanged: (set) {
+                    if (set.isNotEmpty) {
+                      Haptics.selection();
+                      AppChatChrome.save(set.first);
+                    }
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerBarCard extends StatelessWidget {
+  const _ComposerBarCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.appearanceComposerTitle,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.appearanceComposerSubtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<ComposerStyle>(
+            valueListenable: AppComposerStyle.current,
+            builder: (context, current, _) {
+              return SegmentedButton<ComposerStyle>(
                 segments: [
                   ButtonSegment(
-                    value: ChatChromeStyle.color,
-                    label: Text(l10n.appearanceChatChromeColor),
+                    value: ComposerStyle.glossy,
+                    label: Text(l10n.appearanceVisualStyleGlossy),
                   ),
                   ButtonSegment(
-                    value: ChatChromeStyle.blur,
-                    label: Text(l10n.appearanceChatChromeBlur),
-                  ),
-                  ButtonSegment(
-                    value: ChatChromeStyle.none,
-                    label: Text(l10n.appearanceChatChromeNone),
+                    value: ComposerStyle.materialYou,
+                    label: Text(l10n.appearanceVisualStyleMaterialYou),
                   ),
                 ],
                 selected: {current},
                 onSelectionChanged: (set) {
                   if (set.isNotEmpty) {
                     Haptics.selection();
-                    AppChatChrome.save(set.first);
+                    AppComposerStyle.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          ValueListenableBuilder<ComposerBackground>(
+            valueListenable: AppComposerBackground.current,
+            builder: (context, current, _) {
+              final selectable =
+                  current == ComposerBackground.liquidGlass &&
+                      !LiquidGlass.isSupported
+                  ? ComposerBackground.frostBlur
+                  : current;
+              return SegmentedButton<ComposerBackground>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: ComposerBackground.standard,
+                    label: Text(l10n.appearanceComposerBackgroundStandard),
+                  ),
+                  ButtonSegment(
+                    value: ComposerBackground.frostBlur,
+                    label: Text(l10n.appearanceComposerBackgroundFrost),
+                  ),
+                  if (LiquidGlass.isSupported)
+                    ButtonSegment(
+                      value: ComposerBackground.liquidGlass,
+                      label: Text(l10n.appearanceGlassMaterial),
+                    ),
+                ],
+                selected: {selectable},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppComposerBackground.save(set.first);
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavPillStyleCard extends StatelessWidget {
+  const _NavPillStyleCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.appearanceNavPillTitle,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.appearanceNavPillSubtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<NavPillStyle>(
+            valueListenable: AppNavPillStyle.current,
+            builder: (context, current, _) {
+              final selectable =
+                  current == NavPillStyle.liquidGlass &&
+                      !LiquidGlass.isSupported
+                  ? NavPillStyle.frostBlur
+                  : current;
+              return SegmentedButton<NavPillStyle>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: NavPillStyle.glossy,
+                    label: Text(l10n.appearanceNavPillGlossy),
+                  ),
+                  ButtonSegment(
+                    value: NavPillStyle.frostBlur,
+                    label: Text(l10n.appearanceNavPillFrost),
+                  ),
+                  if (LiquidGlass.isSupported)
+                    ButtonSegment(
+                      value: NavPillStyle.liquidGlass,
+                      label: Text(l10n.appearanceGlassMaterial),
+                    ),
+                ],
+                selected: {selectable},
+                onSelectionChanged: (set) {
+                  if (set.isNotEmpty) {
+                    Haptics.selection();
+                    AppNavPillStyle.save(set.first);
                   }
                 },
               );
@@ -498,7 +718,12 @@ class _ColorPickerCard extends StatelessWidget {
     );
   }
 
-  Widget _buildBody(ColorScheme cs, AppLocalizations l10n, Color col, bool sys) {
+  Widget _buildBody(
+    ColorScheme cs,
+    AppLocalizations l10n,
+    Color col,
+    bool sys,
+  ) {
     final swatchColor = sys ? cs.primary : col;
 
     return GlossyPill(

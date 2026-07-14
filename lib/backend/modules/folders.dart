@@ -55,31 +55,69 @@ class FoldersModule {
     });
   }
 
-  static bool chatMatchesFolder(CachedChat chat, ChatFolder folder) {
-    if (folder.include != null && folder.include!.isNotEmpty) {
-      return folder.include!.contains(chat.id);
+  static const int filterUnread = 0;
+  static const int filterChannel = 2;
+  static const int filterGroup = 3;
+  static const int filterContact = 8;
+  static const int filterNotContact = 9;
+  static const int filterBot = 10;
+
+  static int? _filterCode(dynamic raw) {
+    if (raw is int) return raw;
+    if (raw is String) {
+      final n = int.tryParse(raw);
+      if (n != null) return n;
+      switch (raw) {
+        case 'UNREAD':
+          return filterUnread;
+        case 'CHANNEL':
+          return filterChannel;
+        case 'GROUP':
+        case 'CHAT':
+          return filterGroup;
+        case 'CONTACT':
+          return filterContact;
+        case 'NOT_CONTACT':
+          return filterNotContact;
+        case 'BOT':
+          return filterBot;
+      }
+    }
+    return null;
+  }
+
+  static bool chatMatchesFolder(
+    CachedChat chat,
+    ChatFolder folder, {
+    required int myId,
+    required Set<int> contactIds,
+  }) {
+    if (folder.include != null && folder.include!.contains(chat.id)) {
+      return true;
     }
     if (folder.filters.isEmpty) return false;
 
-    final hasContact = folder.filters.any(
-      (f) => f == 9 || f == '9' || f == 'CONTACT',
-    );
-    final hasNotContact = folder.filters.any(
-      (f) => f == 8 || f == '8' || f == 'NOT_CONTACT',
-    );
+    final isDialog = chat.type == 'DIALOG';
+    final isBot = isDialog && chat.options.contains('BOT');
+    final peerId = isDialog ? chat.id ^ myId : null;
+    final isSelf = peerId != null && peerId == myId;
+    final isContact =
+        isDialog && !isSelf && peerId != null && contactIds.contains(peerId);
 
-    if (hasContact && hasNotContact) {
-      if (chat.type != 'DIALOG') return false;
-      return true;
-    }
-
-    for (final filter in folder.filters) {
-      if (filter == 0 || filter == '0' || filter == 'UNREAD') {
-        if (chat.unreadCount > 0) return true;
-      } else if (filter == 9 || filter == '9' || filter == 'CONTACT') {
-        if (chat.type == 'DIALOG') return true;
-      } else if (filter == 8 || filter == '8' || filter == 'NOT_CONTACT') {
-        if (chat.type == 'CHAT' || chat.type == 'CHANNEL') return true;
+    for (final raw in folder.filters) {
+      switch (_filterCode(raw)) {
+        case filterUnread:
+          if (chat.unreadCount > 0) return true;
+        case filterChannel:
+          if (chat.type == 'CHANNEL') return true;
+        case filterGroup:
+          if (chat.type == 'CHAT' || chat.type == 'GROUP') return true;
+        case filterContact:
+          if (isDialog && !isBot && isContact) return true;
+        case filterNotContact:
+          if (isDialog && !isBot && !isSelf && !isContact) return true;
+        case filterBot:
+          if (isBot) return true;
       }
     }
     return false;

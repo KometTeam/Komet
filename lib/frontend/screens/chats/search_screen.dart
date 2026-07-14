@@ -10,8 +10,9 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/names.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_route.dart';
-import '../contacts/contact_profile_screen.dart';
+import '../contacts/open_contact_profile.dart';
 import 'chat_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -147,13 +148,12 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _openContact(Map<String, dynamic> row) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ContactProfileScreen(
-          contactId: row['id'] as int,
-          initialName: _contactName(row),
-          initialAvatarUrl: row['base_url'] as String?,
-        ),
+    unawaited(
+      openContactDialogProfile(
+        context,
+        contactId: row['id'] as int,
+        name: _contactName(row),
+        avatarUrl: row['base_url'] as String?,
       ),
     );
   }
@@ -166,13 +166,12 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _openPhoneResult(PhoneLookupResult result) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ContactProfileScreen(
-          contactId: result.id,
-          initialName: result.name,
-          initialAvatarUrl: result.avatarUrl,
-        ),
+    unawaited(
+      openContactDialogProfile(
+        context,
+        contactId: result.id,
+        name: result.name ?? 'User #${result.id}',
+        avatarUrl: result.avatarUrl,
       ),
     );
   }
@@ -234,7 +233,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
     if (!hasResults) {
       if (_loading) {
-        return const Center(child: CircularProgressIndicator());
+        return const Center(child: SmallSpinner(size: 36));
       }
       return _buildHint(cs, Symbols.search_off, 'Ничего не найдено');
     }

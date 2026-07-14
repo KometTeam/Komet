@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../models/attachment.dart';
-import '../../sticker_image.dart';
+import '../../lottie_image.dart';
 import 'bubble_context.dart';
 
 class StickerBubble extends StatelessWidget {
@@ -25,7 +25,7 @@ class StickerBubble extends StatelessWidget {
         SizedBox(
           width: 150,
           height: 150,
-          child: StickerImage(
+          child: LottieImage(
             url: staticUrl,
             lottieUrl: lottieUrl,
             size: 150,

@@ -8,6 +8,8 @@ class KometSettings {
   static const _kGhostMode = 'komet_ghost_mode';
   static const _kAntiRead = 'komet_anti_read';
   static const _kSelfOnlineCheck = 'komet_self_online_check';
+  static const _kHideAllChatsFolder = 'komet_hide_all_chats_folder';
+  static const _kShowHiddenChats = 'komet_show_hidden_chats';
 
   static final ValueNotifier<bool> viewDeleted = ValueNotifier(false);
   static final ValueNotifier<bool> viewRedacted = ValueNotifier(false);
@@ -15,6 +17,8 @@ class KometSettings {
   static final ValueNotifier<bool> ghostMode = ValueNotifier(false);
   static final ValueNotifier<bool> antiRead = ValueNotifier(false);
   static final ValueNotifier<bool> selfOnlineCheck = ValueNotifier(true);
+  static final ValueNotifier<bool> hideAllChatsFolder = ValueNotifier(false);
+  static final ValueNotifier<bool> showHiddenChats = ValueNotifier(false);
 
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -24,6 +28,8 @@ class KometSettings {
     ghostMode.value = prefs.getBool(_kGhostMode) ?? false;
     antiRead.value = prefs.getBool(_kAntiRead) ?? false;
     selfOnlineCheck.value = prefs.getBool(_kSelfOnlineCheck) ?? true;
+    hideAllChatsFolder.value = prefs.getBool(_kHideAllChatsFolder) ?? false;
+    showHiddenChats.value = prefs.getBool(_kShowHiddenChats) ?? false;
   }
 
   static Future<void> setViewDeleted(bool value) async {
@@ -60,5 +66,17 @@ class KometSettings {
     selfOnlineCheck.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kSelfOnlineCheck, value);
+  }
+
+  static Future<void> setHideAllChatsFolder(bool value) async {
+    hideAllChatsFolder.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kHideAllChatsFolder, value);
+  }
+
+  static Future<void> setShowHiddenChats(bool value) async {
+    showHiddenChats.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowHiddenChats, value);
   }
 }

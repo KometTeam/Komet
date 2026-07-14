@@ -6,8 +6,10 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/webapp.dart';
 import '../../../core/storage/spoofing_service.dart';
+import '../../../main.dart' show api;
 import '../../widgets/connection_status.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/webview_permission_prompt.dart';
 
 class WebAppScreen extends StatefulWidget {
@@ -63,7 +65,11 @@ class _WebAppScreenState extends State<WebAppScreen> {
       _launch = null;
     });
     try {
-      _userAgent = await SpoofingService.getWebViewUserAgent() ?? '';
+      // Тот же UA, что уходит в sessionInit (из handshake-устройства ядра),
+      // чтобы веб-аппы видели нативный клиент; фолбэк — браузерный UA спуфа.
+      _userAgent = api.session?.userAgent() ??
+          await SpoofingService.getWebViewUserAgent() ??
+          '';
       final launch = await widget.loader();
       if (!mounted) return;
       setState(() => _launch = launch);
@@ -132,7 +138,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
     }
     final launch = _launch;
     if (launch == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: SmallSpinner(size: 36));
     }
     return InAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(launch.url)),

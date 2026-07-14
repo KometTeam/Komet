@@ -14,6 +14,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/prompt_dialog.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/web_qr_login.dart';
 import 'web_qr_scan_screen.dart';
 
@@ -533,14 +534,10 @@ class _DevicesScreenState extends State<DevicesScreen>
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         child: isLoading
-                            ? SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: cs.onSurfaceVariant.withValues(
-                                    alpha: 0.5,
-                                  ),
+                            ? SmallSpinner(
+                                size: 14,
+                                color: cs.onSurfaceVariant.withValues(
+                                  alpha: 0.5,
                                 ),
                               )
                             : Icon(

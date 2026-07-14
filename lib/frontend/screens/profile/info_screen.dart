@@ -9,6 +9,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/small_spinner.dart';
 
 class InfoScreen extends StatefulWidget {
   const InfoScreen({super.key});
@@ -68,7 +69,7 @@ class _InfoScreenState extends State<InfoScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SmallSpinner(size: 36))
           : _info == null
           ? Center(
               child: Text(

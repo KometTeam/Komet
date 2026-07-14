@@ -405,7 +405,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
     final img = _image;
     if (img == null) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
+        child: SmallSpinner(size: 36, color: Colors.white),
       );
     }
     return LayoutBuilder(
@@ -2350,7 +2350,7 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
     final img = _image;
     if (img == null) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
+        child: SmallSpinner(size: 36, color: Colors.white),
       );
     }
     return LayoutBuilder(

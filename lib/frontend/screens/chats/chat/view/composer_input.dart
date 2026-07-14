@@ -6,17 +6,26 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/backend/modules/messages.dart';
+import 'package:komet/core/config/app_chat_chrome.dart';
 import 'package:komet/core/config/app_colors.dart';
+import 'package:komet/core/config/app_composer_background.dart';
+import 'package:komet/core/config/app_composer_style.dart';
+import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
+import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 
 class ComposerInputBar extends StatelessWidget {
   const ComposerInputBar({
     super.key,
     required this.chatType,
+    required this.chrome,
+    required this.style,
+    required this.background,
+    this.backdropKey,
     required this.attachAnim,
     required this.replyTo,
     required this.myId,
@@ -40,6 +49,10 @@ class ComposerInputBar extends StatelessWidget {
   });
 
   final String chatType;
+  final ChatChromeStyle chrome;
+  final ComposerStyle style;
+  final ComposerBackground background;
+  final BackdropKey? backdropKey;
   final Animation<double> attachAnim;
   final ValueListenable<CachedMessage?> replyTo;
   final int myId;
@@ -101,7 +114,7 @@ class ComposerInputBar extends StatelessWidget {
       );
     }
 
-    return SafeArea(
+    final bar = SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -121,18 +134,9 @@ class ComposerInputBar extends StatelessWidget {
                       minHeight: 54,
                       maxHeight: 180,
                     ),
-                    child: GlossyPill(
-                      color: Color.alphaBlend(
-                        cs.surfaceContainerHighest.withValues(alpha: 0.92),
-                        cs.surface,
-                      ),
-                      borderRadius: BorderRadius.circular(28),
-                      depth: 8,
-                      borderSide: BorderSide(
-                        color: cs.outlineVariant.withValues(alpha: 0.5),
-                        width: 0.5,
-                      ),
-                      child: Stack(
+                    child: _fieldSurface(
+                      cs,
+                      Stack(
                         alignment: Alignment.center,
                         children: [
                           AnimatedBuilder(
@@ -314,14 +318,16 @@ class ComposerInputBar extends StatelessWidget {
                                             builder: (context, videoMode, _) {
                                               final sendMode =
                                                   hasText || locked;
-                                              final pill = GlossyPill(
-                                                color: sendMode
+                                              final pill = _actionSurface(
+                                                color: _flat
+                                                    ? Colors.transparent
+                                                    : sendMode
                                                     ? cs.primary
                                                     : recording
                                                     ? cs.error
+                                                    : _frost
+                                                    ? AppFrost.inputTint(cs)
                                                     : cs.surfaceContainerHighest,
-                                                borderRadius:
-                                                    BorderRadius.circular(27),
                                                 onTap: hasText
                                                     ? onSendText
                                                     : locked
@@ -332,7 +338,6 @@ class ComposerInputBar extends StatelessWidget {
                                                 onLongPress: hasText
                                                     ? onScheduleMessage
                                                     : null,
-                                                depth: 8,
                                                 child: SizedBox(
                                                   width: 54,
                                                   height: 54,
@@ -343,7 +348,13 @@ class ComposerInputBar extends StatelessWidget {
                                                           : videoMode
                                                           ? Symbols.videocam
                                                           : Symbols.mic,
-                                                      color: sendMode
+                                                      color: _flat
+                                                          ? (sendMode
+                                                                ? cs.primary
+                                                                : recording
+                                                                ? cs.error
+                                                                : cs.onSurfaceVariant)
+                                                          : sendMode
                                                           ? cs.onPrimary
                                                           : recording
                                                           ? cs.onError
@@ -402,6 +413,78 @@ class ComposerInputBar extends StatelessWidget {
         ],
       ),
     );
+
+    return _barSurface(cs, bar);
+  }
+
+  bool get _flat => style == ComposerStyle.materialYou;
+
+  bool get _frost => ComposerMaterial.isFrost(background);
+
+  bool get _liquid => ComposerMaterial.isLiquid(background);
+
+  bool get _translucent => _frost || _liquid;
+
+  Widget _barSurface(ColorScheme cs, Widget child) {
+    if (!_flat || _translucent) return child;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(top: AppFrost.hairline(cs)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _fieldSurface(ColorScheme cs, Widget child) {
+    if (_flat) return child;
+    return GlossyPill(
+      color: _translucent
+          ? AppFrost.inputTint(cs)
+          : Color.alphaBlend(
+              cs.surfaceContainerHighest.withValues(alpha: 0.92),
+              cs.surface,
+            ),
+      blurSigma: _frost ? AppFrost.sigma : null,
+      liquid: _liquid,
+      backdropKey: backdropKey,
+      borderRadius: BorderRadius.circular(28),
+      depth: 8,
+      borderSide: BorderSide(
+        color: cs.outlineVariant.withValues(alpha: 0.5),
+        width: 0.5,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _actionSurface({
+    required Color color,
+    required Widget child,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  }) {
+    if (_flat) {
+      return Material(
+        color: color,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: onTap == null && onLongPress == null
+            ? child
+            : InkWell(onTap: onTap, onLongPress: onLongPress, child: child),
+      );
+    }
+    return GlossyPill(
+      color: color,
+      blurSigma: _frost ? AppFrost.sigma : null,
+      liquid: _liquid,
+      backdropKey: backdropKey,
+      borderRadius: BorderRadius.circular(27),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      depth: 8,
+      child: child,
+    );
   }
 
   Widget _replyPreview(ColorScheme cs) {
@@ -418,7 +501,7 @@ class ComposerInputBar extends StatelessWidget {
           attachments: reply.attachments,
         );
         final preview = info.previewText();
-        return Padding(
+        final row = Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
           child: Row(
             children: [
@@ -461,6 +544,15 @@ class ComposerInputBar extends StatelessWidget {
               ),
             ],
           ),
+        );
+        if (_flat && _translucent) return row;
+        if (!_translucent && chrome != ChatChromeStyle.transparent) return row;
+        return GlassSurface(
+          liquid: _liquid,
+          frostTint: AppFrost.panelTint(cs),
+          border: Border(top: AppFrost.hairline(cs)),
+          backdropKey: backdropKey,
+          child: row,
         );
       },
     );

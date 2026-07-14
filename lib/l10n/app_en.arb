@@ -183,11 +183,19 @@
   "registrationSubtitle": "Add your name and pick an avatar",
   "registrationChooseAvatar": "Choose an avatar",
   "msgActionsCopy": "Copy",
+  "msgActionsSelectAll": "Select all",
+  "emojiSearchHint": "Search emoji",
   "msgActionsEdit": "Edit",
   "msgActionsReply": "Reply",
   "msgActionsForward": "Forward",
   "msgActionsMarkUnread": "Mark as unread",
+  "msgActionsPin": "Pin",
+  "msgActionsUnpin": "Unpin",
+  "pinnedMessageTitle": "Pinned message",
   "msgActionsEditHistory": "Edit history",
+  "msgActionsReadBy": "Read by",
+  "msgActionsReadByEmpty": "Nobody has read it yet",
+  "msgActionsReadByUnknownUser": "User",
   "msgActionsReport": "Report",
   "msgActionsDelete": "Delete",
   "msgActionsCopied": "Copied",
@@ -282,11 +290,22 @@
   "appearanceVisualStyleSubtitle": "Material You or dimensional Glossy capsules",
   "appearanceVisualStyleMaterialYou": "Material You",
   "appearanceVisualStyleGlossy": "Glossy",
+  "appearanceVisualStyleLiquidGlass": "Liquid Glass",
+  "appearanceGlassMaterial": "Glass",
   "appearanceChatChromeTitle": "Chat screen elements",
   "appearanceChatChromeSubtitle": "Background of the top and bottom panels: color, blur, or transparent. With blur or transparency, messages scroll under the panels",
   "appearanceChatChromeColor": "Color",
   "appearanceChatChromeBlur": "Blur",
   "appearanceChatChromeNone": "None",
+  "appearanceChatChromeTransparent": "Frost blur",
+  "appearanceComposerTitle": "Input bar",
+  "appearanceComposerSubtitle": "Style and background of the message input bar",
+  "appearanceComposerBackgroundStandard": "Default",
+  "appearanceComposerBackgroundFrost": "Frost blur",
+  "appearanceNavPillTitle": "Switcher style",
+  "appearanceNavPillSubtitle": "Section switcher on the chats screen",
+  "appearanceNavPillGlossy": "Glossy",
+  "appearanceNavPillFrost": "G-FrostBlur",
   "appearanceGradientTitle": "Gradient",
   "appearanceGradientSubtitle": "Depth and highlights in Glossy capsules",
   "appearanceAccentColorTitle": "Accent color",
@@ -494,6 +513,58 @@
       }
     }
   },
+  "sharedMembersCount": "{count, plural, =1{1 member} other{{count} members}}",
+  "@sharedMembersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedLoadMore": "Show more",
+  "sharedGoToMessage": "Go to message",
+  "sharedDownload": "Download",
+  "photoViewerCounter": "Photo {index} of {total}",
+  "@photoViewerCounter": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "photoViewerSentToday": "{sender} • today at {time}",
+  "@photoViewerSentToday": {
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "photoViewerSentOn": "{sender} • {date} at {time}",
+  "@photoViewerSentOn": {
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "photoViewerSaveAs": "Save as…",
+  "photoViewerViewAll": "View all photos",
+  "photoViewerRotate": "Rotate",
+  "sharedCopyLink": "Copy link",
+  "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",
   "chatInfoBio": "About",
   "chatInfoInviteLink": "Invite link",

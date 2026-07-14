@@ -8,6 +8,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
+import '../../widgets/small_spinner.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -101,7 +102,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: SafeArea(
         top: false,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: SmallSpinner(size: 36))
             : ListView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),

@@ -8,6 +8,7 @@ import '../../../../core/config/komet_settings.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
+import '../../photo_viewer.dart';
 
 enum MessageType { text, attachment, voice, control }
 
@@ -62,6 +63,8 @@ class BubbleContext {
   final bool isMe;
   final int myId;
   final String chatType;
+  final int? chatId;
+  final PhotoViewerActions? photoActions;
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<List<double>>? uploadProgress;
@@ -79,6 +82,8 @@ class BubbleContext {
     required this.isMe,
     required this.myId,
     required this.chatType,
+    this.chatId,
+    this.photoActions,
     this.overrideStatus,
     this.otherReadTime,
     this.uploadProgress,
@@ -154,6 +159,10 @@ class BubbleContext {
             const SizedBox(width: 3),
             const Icon(Symbols.delete, size: 11, color: Colors.white),
           ],
+          if (isMe) ...[
+            const SizedBox(width: 3),
+            statusIcon(color: Colors.white, size: 12),
+          ],
         ],
       ),
     );
@@ -161,14 +170,17 @@ class BubbleContext {
 
   Widget deletedIcon() => Icon(Symbols.delete, size: 13, color: dim);
 
-  Widget statusIcon() {
+  Widget statusIcon({Color? color, double size = 14}) {
     final base = overrideStatus ?? message.status;
     final rt = otherReadTime;
-    if (rt == null) return _statusIconFor(base);
+    if (rt == null) return _statusIconFor(base, color: color, size: size);
     return ValueListenableBuilder<int>(
       valueListenable: rt,
-      builder: (context, readTime, _) =>
-          _statusIconFor(_readUpgradedStatus(base, readTime)),
+      builder: (context, readTime, _) => _statusIconFor(
+        _readUpgradedStatus(base, readTime),
+        color: color,
+        size: size,
+      ),
     );
   }
 
@@ -181,8 +193,8 @@ class BubbleContext {
     return base;
   }
 
-  Widget _statusIconFor(String? status) {
-    final v = messageStatusVisual(status, dimColor: dim);
-    return Icon(v.icon, size: 14, color: v.color);
+  Widget _statusIconFor(String? status, {Color? color, double size = 14}) {
+    final v = messageStatusVisual(status, dimColor: color ?? dim);
+    return Icon(v.icon, size: size, color: v.color);
   }
 }

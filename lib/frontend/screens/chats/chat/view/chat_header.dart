@@ -2,11 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/online_dot.dart';
 
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
+  final bool frosted;
+  final bool liquid;
+  final BackdropKey? backdropKey;
   final ColorScheme cs;
   final bool embedded;
   final int chatId;
@@ -28,6 +32,9 @@ class ChatHeaderRow extends StatelessWidget {
   const ChatHeaderRow({
     super.key,
     required this.glossy,
+    required this.frosted,
+    this.liquid = false,
+    this.backdropKey,
     required this.cs,
     required this.embedded,
     required this.chatId,
@@ -51,6 +58,10 @@ class ChatHeaderRow extends StatelessWidget {
   Widget build(BuildContext context) =>
       glossy ? _glossyRow(context) : _materialRow(context);
 
+  Color? get _pillColor => frosted || liquid ? AppFrost.pillTint(cs) : null;
+
+  double? get _pillBlur => frosted && !liquid ? AppFrost.sigma : null;
+
   Widget _glossyRow(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
@@ -62,6 +73,10 @@ class ChatHeaderRow extends StatelessWidget {
               width: 56,
               height: 56,
               child: GlossyPill(
+                color: _pillColor,
+                blurSigma: _pillBlur,
+                liquid: liquid,
+                backdropKey: backdropKey,
                 onTap: () {
                   if (embedded) {
                     onClose?.call();
@@ -83,6 +98,10 @@ class ChatHeaderRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: GlossyPill(
+              color: _pillColor,
+              blurSigma: _pillBlur,
+              liquid: liquid,
+              backdropKey: backdropKey,
               onTap: onOpenInfo,
               padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
               child: Row(
@@ -168,6 +187,10 @@ class ChatHeaderRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           GlossyPill(
+            color: _pillColor,
+            blurSigma: _pillBlur,
+            liquid: liquid,
+            backdropKey: backdropKey,
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: SizedBox(
               height: 56,

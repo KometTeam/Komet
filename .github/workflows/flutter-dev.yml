@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -26,6 +28,11 @@ jobs:
           flutter-version: '3.44.3'
           channel: 'stable'
           cache: true
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
 
       - name: Install dependencies
         run: flutter pub get

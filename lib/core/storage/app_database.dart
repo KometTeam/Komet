@@ -212,7 +212,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 17,
+      version: 19,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -295,6 +295,34 @@ class AppDatabase {
           await db.execute(_chatParticipantsSchema);
           await _createChatParticipantsIndex(db);
           await _backfillChatParticipants(db);
+        }
+        if (oldVersion < 18) {
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_id',
+            'INTEGER',
+          );
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_text',
+            'TEXT',
+          );
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_time',
+            'INTEGER',
+          );
+        }
+        if (oldVersion < 19) {
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'pinned_msg_is_preview',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
         }
       },
     );
@@ -444,6 +472,10 @@ class AppDatabase {
       owner           INTEGER,
       admins          TEXT,
       in_list         INTEGER NOT NULL DEFAULT 1,
+      pinned_msg_id   INTEGER,
+      pinned_msg_text TEXT,
+      pinned_msg_time INTEGER,
+      pinned_msg_is_preview INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -677,27 +709,41 @@ class AppDatabase {
     );
   }
 
-  static Future<List<Map<String, dynamic>>> loadChats(int accountId) async {
+  static Future<List<Map<String, dynamic>>> loadChats(
+    int accountId, {
+    bool includeHidden = false,
+  }) async {
     final db = await _instance;
     return db.query(
       'chats_cache',
-      where: 'account_id = ? AND in_list = 1',
+      where: includeHidden
+          ? 'account_id = ? AND in_list IN (1, 2)'
+          : 'account_id = ? AND in_list = 1',
       whereArgs: [accountId],
       orderBy: 'last_event_time DESC',
     );
   }
 
-  static Future<int> sumUnread(int accountId, {int? excludeChatId}) async {
+  static Future<int> sumUnread(
+    int accountId, {
+    int? excludeChatId,
+    Set<int>? excludeChatIds,
+  }) async {
     final db = await _instance;
-    final where = excludeChatId != null
-        ? 'account_id = ? AND in_list = 1 AND id != ?'
-        : 'account_id = ? AND in_list = 1';
-    final args = excludeChatId != null
-        ? [accountId, excludeChatId]
-        : [accountId];
+    final buffer = StringBuffer('account_id = ? AND in_list = 1');
+    final args = <Object?>[accountId];
+    if (excludeChatId != null) {
+      buffer.write(' AND id != ?');
+      args.add(excludeChatId);
+    }
+    if (excludeChatIds != null && excludeChatIds.isNotEmpty) {
+      final placeholders = List.filled(excludeChatIds.length, '?').join(', ');
+      buffer.write(' AND id NOT IN ($placeholders)');
+      args.addAll(excludeChatIds);
+    }
     final result = await db.rawQuery(
       'SELECT COALESCE(SUM(unread_count), 0) AS total '
-      'FROM chats_cache WHERE $where',
+      'FROM chats_cache WHERE $buffer',
       args,
     );
     return (result.first['total'] as int?) ?? 0;
@@ -880,6 +926,56 @@ class AppDatabase {
       orderBy: 'time DESC',
       limit: limit,
     );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessagesBetween(
+    int accountId,
+    int chatId, {
+    required int afterTime,
+    required int beforeTime,
+    int limit = 60,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: onlyVisible
+          ? 'account_id = ? AND chat_id = ? AND deleted = 0 '
+                'AND time > ? AND time < ?'
+          : 'account_id = ? AND chat_id = ? AND time > ? AND time < ?',
+      whereArgs: [accountId, chatId, afterTime, beforeTime],
+      orderBy: 'time ASC',
+      limit: limit,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessagesAround(
+    int accountId,
+    int chatId, {
+    required int centerTime,
+    int before = 40,
+    int after = 20,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    final base = onlyVisible
+        ? 'account_id = ? AND chat_id = ? AND deleted = 0'
+        : 'account_id = ? AND chat_id = ?';
+    final older = await db.query(
+      'messages',
+      where: '$base AND time <= ?',
+      whereArgs: [accountId, chatId, centerTime],
+      orderBy: 'time DESC',
+      limit: before,
+    );
+    final newer = await db.query(
+      'messages',
+      where: '$base AND time > ?',
+      whereArgs: [accountId, chatId, centerTime],
+      orderBy: 'time ASC',
+      limit: after,
+    );
+    return [...newer.reversed, ...older];
   }
 
   static Future<void> markMessageDeleted(

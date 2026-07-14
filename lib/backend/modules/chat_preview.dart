@@ -1,15 +1,14 @@
 import 'dart:convert';
 
 String? attachPreviewLabel(dynamic attaches) {
-  if (attaches is! List || attaches.isEmpty) return null;
-  final first = attaches.first;
-  if (first is! Map) return null;
+  final first = _firstPreviewAttach(attaches);
+  if (first == null) return null;
   final type = (first['_type'] as String? ?? '').toUpperCase();
   switch (type) {
     case 'PHOTO':
       return 'Фото';
     case 'VIDEO':
-      return 'Видео';
+      return _isVideoNote(first) ? 'Видео-сообщение' : 'Видео';
     case 'AUDIO':
       return 'Голосовое сообщение';
     case 'FILE':
@@ -52,6 +51,23 @@ String? attachPreviewLabel(dynamic attaches) {
   }
 }
 
+Map? _firstPreviewAttach(dynamic attaches) {
+  if (attaches is! List || attaches.isEmpty) return null;
+  for (final attach in attaches) {
+    if (attach is! Map) continue;
+    final type = (attach['_type'] as String? ?? '').toUpperCase();
+    if (type == 'INLINE_KEYBOARD') continue;
+    return attach;
+  }
+  return null;
+}
+
+bool _isVideoNote(Map attach) {
+  final raw = attach['videoType'];
+  if (raw is int) return raw == 1;
+  return raw?.toString() == '1';
+}
+
 String? _controlPreviewLabel(Map c) {
   final title = c['title']?.toString();
   if (title != null && title.isNotEmpty) return title;
@@ -88,6 +104,60 @@ String? messagePreviewText(Map msg) {
         : '↪ Пересланное сообщение';
   }
   return _bodyPreviewText(msg);
+}
+
+({String? text, bool isPreview}) pinnedMessagePreview(Map msg) {
+  final link = msg['link'];
+  if (link is Map && link['type']?.toString().toUpperCase() == 'FORWARD') {
+    final original = link['message'];
+    if (original is Map) {
+      final inner = pinnedMessagePreview(original);
+      return inner.text != null && inner.text!.isNotEmpty
+          ? (text: '↪ ${inner.text}', isPreview: inner.isPreview)
+          : (text: '↪ пересланное сообщение', isPreview: true);
+    }
+    return (text: '↪ пересланное сообщение', isPreview: true);
+  }
+  return _pinnedBodyPreview(msg);
+}
+
+({String? text, bool isPreview}) _pinnedBodyPreview(Map msg) {
+  final text = msg['text']?.toString();
+  if (text != null && text.isNotEmpty) return (text: text, isPreview: false);
+  final label = _pinnedAttachPreviewLabel(msg['attaches']);
+  return (text: label, isPreview: label != null);
+}
+
+String? _pinnedAttachPreviewLabel(dynamic attaches) {
+  final first = _firstPreviewAttach(attaches);
+  if (first == null) return null;
+  final type = (first['_type'] as String? ?? '').toUpperCase();
+  switch (type) {
+    case 'PHOTO':
+      return 'фото';
+    case 'VIDEO':
+      return _isVideoNote(first) ? 'кружок' : 'видео';
+    case 'AUDIO':
+      return 'голосовое сообщение';
+    case 'FILE':
+      return 'файл';
+    case 'STICKER':
+      return 'стикер';
+    case 'SHARE':
+      return 'ссылка';
+    case 'POLL':
+      return 'голосование';
+    case 'LOCATION':
+      return 'геопозиция';
+    case 'CONTACT':
+      return 'контакт';
+    case 'CALL':
+      return 'звонок';
+    case 'CONTROL':
+      return _controlPreviewLabel(first)?.toLowerCase();
+    default:
+      return 'вложение';
+  }
 }
 
 String? _bodyPreviewText(Map msg) {

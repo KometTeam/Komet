@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/primary_loading_button.dart';
+import '../../widgets/small_spinner.dart';
 
 class PasswordEntryScreen extends StatefulWidget {
   const PasswordEntryScreen({super.key});
@@ -142,7 +143,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: cs.surface,
-        body: Center(child: CircularProgressIndicator(color: cs.primary)),
+        body: Center(child: SmallSpinner(size: 36, color: cs.primary)),
       );
     }
 

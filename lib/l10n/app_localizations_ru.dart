@@ -528,6 +528,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsCopy => 'Копировать';
 
   @override
+  String get msgActionsSelectAll => 'Выбрать всё';
+
+  @override
+  String get emojiSearchHint => 'Поиск эмодзи';
+
+  @override
   String get msgActionsEdit => 'Изменить';
 
   @override
@@ -540,7 +546,25 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsMarkUnread => 'Непрочитанное';
 
   @override
+  String get msgActionsPin => 'Закрепить';
+
+  @override
+  String get msgActionsUnpin => 'Открепить';
+
+  @override
+  String get pinnedMessageTitle => 'Закреплённое сообщение';
+
+  @override
   String get msgActionsEditHistory => 'История изменений';
+
+  @override
+  String get msgActionsReadBy => 'Кем прочитано';
+
+  @override
+  String get msgActionsReadByEmpty => 'Пока никто не прочитал';
+
+  @override
+  String get msgActionsReadByUnknownUser => 'Пользователь';
 
   @override
   String get msgActionsReport => 'Пожаловаться';
@@ -738,6 +762,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceVisualStyleGlossy => 'Glossy';
 
   @override
+  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
+
+  @override
+  String get appearanceGlassMaterial => 'Стекло';
+
+  @override
   String get appearanceChatChromeTitle => 'Элементы экрана чата';
 
   @override
@@ -752,6 +782,34 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get appearanceChatChromeNone => 'Нет';
+
+  @override
+  String get appearanceChatChromeTransparent => 'Frost blur';
+
+  @override
+  String get appearanceComposerTitle => 'Вид панели ввода';
+
+  @override
+  String get appearanceComposerSubtitle => 'Стиль и фон панели ввода сообщений';
+
+  @override
+  String get appearanceComposerBackgroundStandard => 'Default';
+
+  @override
+  String get appearanceComposerBackgroundFrost => 'Frost blur';
+
+  @override
+  String get appearanceNavPillTitle => 'Вид переключателей';
+
+  @override
+  String get appearanceNavPillSubtitle =>
+      'Переключатель разделов на экране чатов';
+
+  @override
+  String get appearanceNavPillGlossy => 'Glossy';
+
+  @override
+  String get appearanceNavPillFrost => 'G-FrostBlur';
 
   @override
   String get appearanceGradientTitle => 'Градиент';
@@ -1239,6 +1297,58 @@ class AppLocalizationsRu extends AppLocalizations {
   String chatInfoOnlineOfTotal(String online, String total) {
     return '$online из $total в сети';
   }
+
+  @override
+  String sharedMembersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count участника',
+      many: '$count участников',
+      few: '$count участника',
+      one: '1 участник',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sharedLoadMore => 'Показать ещё';
+
+  @override
+  String get sharedGoToMessage => 'Перейти к сообщению';
+
+  @override
+  String get sharedDownload => 'Скачать';
+
+  @override
+  String photoViewerCounter(int index, int total) {
+    return 'Фото $index из $total';
+  }
+
+  @override
+  String photoViewerSentToday(String sender, String time) {
+    return '$sender • сегодня в $time';
+  }
+
+  @override
+  String photoViewerSentOn(String sender, String date, String time) {
+    return '$sender • $date в $time';
+  }
+
+  @override
+  String get photoViewerSaveAs => 'Сохранить как…';
+
+  @override
+  String get photoViewerViewAll => 'Все фото чата';
+
+  @override
+  String get photoViewerRotate => 'Повернуть';
+
+  @override
+  String get sharedCopyLink => 'Копировать ссылку';
+
+  @override
+  String get sharedLinkCopied => 'Ссылка скопирована';
 
   @override
   String get chatInfoActionLeave => 'Покинуть';

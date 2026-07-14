@@ -28,12 +28,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install create-dmg
         run: brew install create-dmg

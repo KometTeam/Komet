@@ -14,6 +14,7 @@ class StickerPanelController {
       duration: const Duration(milliseconds: 240),
       reverseDuration: const Duration(milliseconds: 200),
     );
+    anim.addStatusListener(_onAnimStatus);
     showPanel.addListener(_onToggle);
   }
 
@@ -21,10 +22,16 @@ class StickerPanelController {
 
   late final AnimationController anim;
   final ValueNotifier<bool> showPanel = ValueNotifier(false);
+  final ValueNotifier<bool> panelHold = ValueNotifier(true);
   double panelHeight = 300;
   Timer? _typingTimer;
 
   void hide() => showPanel.value = false;
+
+  void _onAnimStatus(AnimationStatus status) {
+    final held = status != AnimationStatus.completed;
+    if (panelHold.value != held) panelHold.value = held;
+  }
 
   void _onToggle() {
     if (showPanel.value) {
@@ -50,7 +57,9 @@ class StickerPanelController {
   void dispose() {
     _typingTimer?.cancel();
     showPanel.removeListener(_onToggle);
+    anim.removeStatusListener(_onAnimStatus);
     anim.dispose();
     showPanel.dispose();
+    panelHold.dispose();
   }
 }

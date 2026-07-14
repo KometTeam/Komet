@@ -43,6 +43,7 @@ CachedChat? parseChatRow(
     final muteFav = _resolveMuteAndFavorite(chatsConfig, id, existing);
     final presence = _resolvePresence(type, otherId, presenceMap);
     final adminsOwner = _resolveAdmins(chat);
+    final pinned = _resolvePinnedMessage(chat['pinnedMessage']);
 
     return CachedChat(
       id: id,
@@ -66,6 +67,10 @@ CachedChat? parseChatRow(
       options: titleIcon.options,
       owner: adminsOwner.owner,
       admins: adminsOwner.admins,
+      pinnedMsgId: pinned.id,
+      pinnedMsgText: pinned.text,
+      pinnedMsgTime: pinned.time,
+      pinnedMsgIsPreview: pinned.isPreview,
     );
   } catch (e) {
     logger.e("Ошибка при парсинге чата: $e");
@@ -127,6 +132,24 @@ _resolveLastMessage(dynamic lastMsg) {
     text: messagePreviewText(lastMsg),
     elements: messagePreviewElements(lastMsg),
     senderId: lastMsg['sender'] as int?,
+  );
+}
+
+({int? id, String? text, int? time, bool isPreview}) _resolvePinnedMessage(
+  dynamic pinned,
+) {
+  if (pinned is! Map) {
+    return (id: null, text: null, time: null, isPreview: false);
+  }
+  final rawId = pinned['id'];
+  final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+  if (id == null) return (id: null, text: null, time: null, isPreview: false);
+  final preview = pinnedMessagePreview(pinned);
+  return (
+    id: id,
+    text: preview.text,
+    time: pinned['time'] as int?,
+    isPreview: preview.isPreview,
   );
 }
 
@@ -270,6 +293,10 @@ bool sameChatContent(CachedChat a, CachedChat b) {
   if (a.title != b.title) return false;
   if (a.iconUrl != b.iconUrl) return false;
   if (a.owner != b.owner) return false;
+  if (a.pinnedMsgId != b.pinnedMsgId) return false;
+  if (a.pinnedMsgText != b.pinnedMsgText) return false;
+  if (a.pinnedMsgTime != b.pinnedMsgTime) return false;
+  if (a.pinnedMsgIsPreview != b.pinnedMsgIsPreview) return false;
   if (a.dontDisturbUntil != b.dontDisturbUntil) return false;
   if (a.favIndex != b.favIndex) return false;
   if (a.lastMsgId != b.lastMsgId) return false;

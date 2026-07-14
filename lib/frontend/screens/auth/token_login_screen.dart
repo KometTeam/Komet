@@ -8,6 +8,7 @@ import '../../../models/spoof_profile.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/small_spinner.dart';
 
 class TokenLoginScreen extends StatefulWidget {
   final int? returnToAccountId;
@@ -143,11 +144,7 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
             shape: const StadiumBorder(),
           ),
           child: _isLoading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SmallSpinner(size: 22)
               : Text(l10n.tokenLoginButton),
         ),
       ),

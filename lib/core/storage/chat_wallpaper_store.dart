@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import '../utils/logger.dart';
 import 'per_chat_json_store.dart';
 
+const int kGlobalWallpaperChatId = 0;
+
 enum ChatWallpaperKind { image, theme }
 
 @immutable

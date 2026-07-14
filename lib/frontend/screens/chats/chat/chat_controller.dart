@@ -10,9 +10,25 @@ import '../../../../core/storage/app_database.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../main.dart';
 
+class HistoryGap {
+  HistoryGap({
+    required this.edgeId,
+    required this.edgeTime,
+    required this.tailTime,
+  });
+
+  String edgeId;
+  int edgeTime;
+  final int tailTime;
+}
+
 class ChatController extends ChangeNotifier {
   static const int historyPageSize = 30;
   static const int historyInitialLimit = 50;
+  static const int jumpWindowBefore = 40;
+  static const int jumpWindowAfter = 20;
+  static const int historyWalkPageSize = 200;
+  static const int gapPageSize = 60;
 
   int chatId = 0;
   int myId = 0;
@@ -23,6 +39,11 @@ class ChatController extends ChangeNotifier {
   bool hasMoreHistory = true;
   bool isLoadingMore = false;
   bool historyKickedOff = false;
+  bool loadingGap = false;
+
+  final List<HistoryGap> gaps = [];
+
+  bool get hasGap => gaps.isNotEmpty;
 
   bool Function() isMounted = () => true;
 
@@ -93,20 +114,179 @@ class ChatController extends ChangeNotifier {
 
   Future<List<CachedMessage>> loadOlderFromDb(
     int beforeTime,
-    bool onlyVisible,
-  ) async {
+    bool onlyVisible, {
+    int? limit,
+  }) async {
     final rows = await AppDatabase.loadMessagesBefore(
       myId,
       chatId,
       beforeTime: beforeTime,
-      limit: historyPageSize,
+      limit: limit ?? historyPageSize,
       onlyVisible: onlyVisible,
     );
     return CachedMessage.fromDbRowsAsync(rows);
   }
 
+  Future<List<CachedMessage>> loadGapSliceFromDb(
+    int afterTime,
+    int beforeTime,
+    bool onlyVisible,
+  ) async {
+    final rows = await AppDatabase.loadMessagesBetween(
+      myId,
+      chatId,
+      afterTime: afterTime,
+      beforeTime: beforeTime,
+      limit: gapPageSize,
+      onlyVisible: onlyVisible,
+    );
+    return CachedMessage.fromDbRowsAsync(rows);
+  }
+
+  Future<List<CachedMessage>> loadWindowFromDb(
+    int centerTime,
+    bool onlyVisible,
+  ) async {
+    final rows = await AppDatabase.loadMessagesAround(
+      myId,
+      chatId,
+      centerTime: centerTime,
+      before: jumpWindowBefore,
+      after: jumpWindowAfter,
+      onlyVisible: onlyVisible,
+    );
+    return CachedMessage.fromDbRowsAsync(rows);
+  }
+
+  Future<bool> loadMessageWindow({
+    required String targetId,
+    required int targetTime,
+  }) async {
+    if (myId == 0 || targetTime <= 0) return false;
+    final onlyVisible = !KometSettings.viewDeleted.value;
+
+    var window = await loadWindowFromDb(targetTime, onlyVisible);
+    if (!isMounted()) return false;
+
+    if (!window.any((m) => m.id == targetId)) {
+      final fetched = await messagesModule.fetchHistory(
+        myId,
+        chatId,
+        fromTime: targetTime + 1,
+        forward: jumpWindowAfter,
+        backward: jumpWindowBefore + 1,
+      );
+      if (!isMounted()) return false;
+      if (fetched.isNotEmpty && KometSettings.viewDeleted.value) {
+        await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
+      }
+      window = await loadWindowFromDb(targetTime, onlyVisible);
+      if (!isMounted()) return false;
+    }
+
+    if (window.isEmpty) return false;
+
+    final oldestLoaded = messages.isEmpty ? 0 : messages.first.time;
+    final reachesLoaded =
+        messages.isEmpty || window.any((m) => m.time >= oldestLoaded);
+
+    mergeMessages(window);
+
+    if (reachesLoaded) {
+      persistSessionCache();
+    } else {
+      _markGapAfterWindow(window);
+    }
+    return messages.any((m) => m.id == targetId);
+  }
+
+  void _markGapAfterWindow(List<CachedMessage> window) {
+    var edge = window.first;
+    for (final m in window) {
+      if (m.time > edge.time) edge = m;
+    }
+    final idx = messages.indexWhere((m) => m.id == edge.id);
+    if (idx == -1 || idx + 1 >= messages.length) return;
+    final tailTime = messages[idx + 1].time;
+    gaps.removeWhere((g) => g.tailTime == tailTime);
+    gaps.add(
+      HistoryGap(edgeId: edge.id, edgeTime: edge.time, tailTime: tailTime),
+    );
+  }
+
+  void _closeGap(HistoryGap gap) {
+    gaps.remove(gap);
+    if (gaps.isEmpty) persistSessionCache();
+  }
+
+  Future<int> fillGapForward(HistoryGap gap) async {
+    if (loadingGap || myId == 0 || !gaps.contains(gap)) return 0;
+    if (gap.edgeTime <= 0 || gap.tailTime <= gap.edgeTime) {
+      _closeGap(gap);
+      return 0;
+    }
+
+    loadingGap = true;
+    try {
+      final onlyVisible = !KometSettings.viewDeleted.value;
+      var slice = await loadGapSliceFromDb(
+        gap.edgeTime,
+        gap.tailTime,
+        onlyVisible,
+      );
+      if (!isMounted()) return 0;
+
+      if (slice.length < gapPageSize) {
+        final fetched = await messagesModule.fetchHistory(
+          myId,
+          chatId,
+          fromTime: gap.edgeTime,
+          forward: gapPageSize,
+          backward: 0,
+        );
+        if (!isMounted()) return 0;
+        if (fetched.isNotEmpty && KometSettings.viewDeleted.value) {
+          await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
+        }
+        final refreshed = await loadGapSliceFromDb(
+          gap.edgeTime,
+          gap.tailTime,
+          onlyVisible,
+        );
+        if (!isMounted()) return 0;
+        if (refreshed.length <= slice.length) {
+          if (refreshed.isNotEmpty) mergeMessages(refreshed);
+          _closeGap(gap);
+          return refreshed.length;
+        }
+        slice = refreshed;
+      }
+
+      if (slice.isEmpty) {
+        _closeGap(gap);
+        return 0;
+      }
+
+      mergeMessages(slice);
+
+      var edge = slice.first;
+      for (final m in slice) {
+        if (m.time > edge.time) edge = m;
+      }
+      gap.edgeId = edge.id;
+      gap.edgeTime = edge.time;
+      if (edge.time >= gap.tailTime) _closeGap(gap);
+      return slice.length;
+    } catch (e) {
+      logger.e('Error filling history gap: $e');
+      return 0;
+    } finally {
+      loadingGap = false;
+    }
+  }
+
   void persistSessionCache() {
-    if (myId == 0 || messages.isEmpty) return;
+    if (myId == 0 || messages.isEmpty || hasGap) return;
     MessageSessionCache.save(
       myId,
       chatId,
@@ -119,29 +299,32 @@ class ChatController extends ChangeNotifier {
     required void Function() onLoadingStarted,
     required void Function(int added) onLoaded,
     required void Function(Object error) onError,
+    int? pageSize,
+    bool persist = true,
   }) async {
     if (isLoadingMore || !hasMoreHistory || messages.isEmpty) return;
     isLoadingMore = true;
     onLoadingStarted();
 
+    final size = pageSize ?? historyPageSize;
     final oldest = messages.first;
     final onlyVisible = !KometSettings.viewDeleted.value;
 
     try {
-      var older = await loadOlderFromDb(oldest.time, onlyVisible);
+      var older = await loadOlderFromDb(oldest.time, onlyVisible, limit: size);
 
-      if (older.length < historyPageSize) {
+      if (older.length < size) {
         final fetched = await messagesModule.fetchHistory(
           myId,
           chatId,
           fromTime: oldest.time,
-          count: historyPageSize,
+          count: size,
         );
         if (fetched.isNotEmpty) {
           if (KometSettings.viewDeleted.value) {
             await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
           }
-          older = await loadOlderFromDb(oldest.time, onlyVisible);
+          older = await loadOlderFromDb(oldest.time, onlyVisible, limit: size);
         }
       }
 
@@ -149,7 +332,7 @@ class ChatController extends ChangeNotifier {
       final added = prependOlder(older);
       isLoadingMore = false;
       if (added == 0) hasMoreHistory = false;
-      persistSessionCache();
+      if (persist) persistSessionCache();
       onLoaded(added);
     } catch (e) {
       logger.e('Error loading more history: $e');

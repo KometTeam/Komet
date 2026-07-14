@@ -6,6 +6,7 @@ import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../models/poll.dart';
 import 'custom_notification.dart';
+import 'small_spinner.dart';
 
 class PollView extends StatefulWidget {
   final int chatId;
@@ -222,14 +223,7 @@ class _PollViewState extends State<PollView>
                 ),
               ),
               if (_voting && !multiple)
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    color: widget.dimColor,
-                  ),
-                ),
+                SmallSpinner(size: 14, color: widget.dimColor),
             ],
           ),
         ),
@@ -253,14 +247,7 @@ class _PollViewState extends State<PollView>
             ),
           ),
           child: _voting
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: widget.accentColor,
-                  ),
-                )
+              ? SmallSpinner(size: 16, color: widget.accentColor)
               : const Text('Проголосовать'),
         ),
       ),
@@ -355,12 +342,14 @@ class _PollViewState extends State<PollView>
                 padding: const EdgeInsets.only(top: 6),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: fillFactor,
-                    minHeight: 6,
-                    backgroundColor: widget.dimColor.withValues(alpha: 0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      widget.accentColor,
+                  child: Container(
+                    height: 6,
+                    color: widget.dimColor.withValues(alpha: 0.2),
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: fillFactor.clamp(0.0, 1.0),
+                      heightFactor: 1,
+                      child: ColoredBox(color: widget.accentColor),
                     ),
                   ),
                 ),

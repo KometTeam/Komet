@@ -12,6 +12,7 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/chat_menu_overlay.dart';
+import '../../widgets/small_spinner.dart';
 import 'call_screen.dart';
 
 class CallsTab extends StatefulWidget {
@@ -421,7 +422,7 @@ class _CallsTabState extends State<CallsTab> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: SmallSpinner(size: 36))
                   : filteredCalls.isEmpty
                   ? Center(
                       child: Text(

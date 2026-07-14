@@ -1,7 +1,10 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../../core/config/app_pill_gradient.dart';
 import '../../core/config/app_visual_style.dart';
+import 'liquid_glass.dart';
 
 class _GlossyParts {
   final bool dark;
@@ -90,6 +93,9 @@ class GlossyPill extends StatelessWidget {
   final double depth;
   final bool elevated;
   final BorderSide? borderSide;
+  final double? blurSigma;
+  final bool liquid;
+  final BackdropKey? backdropKey;
 
   const GlossyPill({
     super.key,
@@ -102,8 +108,14 @@ class GlossyPill extends StatelessWidget {
     this.depth = 10,
     this.elevated = false,
     this.borderSide,
+    this.blurSigma,
+    this.liquid = false,
+    this.backdropKey,
   }) : borderRadius =
            borderRadius ?? const BorderRadius.all(Radius.circular(100));
+
+  double? _sigmaFor(Color base) =>
+      blurSigma != null && base.a < 1 ? blurSigma : null;
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +123,7 @@ class GlossyPill extends StatelessWidget {
       valueListenable: AppVisualStyle.current,
       builder: (context, style, _) {
         if (style == VisualStyle.materialYou) return _flat(context);
+        if (liquid && LiquidGlass.isSupported) return _liquid(context);
         return ValueListenableBuilder<bool>(
           valueListenable: AppPillGradient.current,
           builder: (context, gradient, _) => _glossy(context, gradient),
@@ -119,11 +132,41 @@ class GlossyPill extends StatelessWidget {
     );
   }
 
+  Widget _liquid(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final base = color ?? cs.surfaceContainerHigh;
+    final content = Padding(padding: padding, child: child);
+
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          border: GlossyDecor.rimBorder(base),
+          boxShadow: [GlossyDecor.dropShadow(base, depth)],
+        ),
+        child: LiquidGlassSurface(
+          borderRadius: borderRadius,
+          tint: Colors.transparent,
+          child: onTap == null && onLongPress == null
+              ? content
+              : Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    onTap: onTap,
+                    onLongPress: onLongPress,
+                    child: content,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
   Widget _flat(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final base = color ?? cs.surfaceContainerHigh;
     final content = Padding(padding: padding, child: child);
-    return Material(
+    final material = Material(
       color: base,
       elevation: elevated ? 3 : 0,
       shadowColor: Colors.black.withValues(alpha: 0.4),
@@ -137,12 +180,23 @@ class GlossyPill extends StatelessWidget {
           ? content
           : InkWell(onTap: onTap, onLongPress: onLongPress, child: content),
     );
+    final sigma = _sigmaFor(base);
+    if (sigma == null) return material;
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+        backdropGroupKey: backdropKey,
+        child: material,
+      ),
+    );
   }
 
   Widget _glossy(BuildContext context, bool gradient) {
     final cs = Theme.of(context).colorScheme;
     final base = color ?? cs.surfaceContainerHigh;
     final content = Padding(padding: padding, child: child);
+    final sigma = _sigmaFor(base);
 
     return RepaintBoundary(
       child: DecoratedBox(
@@ -158,6 +212,14 @@ class GlossyPill extends StatelessWidget {
           child: Stack(
             fit: StackFit.passthrough,
             children: [
+              if (sigma != null)
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                    backdropGroupKey: backdropKey,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
               if (gradient) ...[
                 Positioned.fill(
                   child: IgnorePointer(
