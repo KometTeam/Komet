@@ -266,7 +266,11 @@ class Api {
   }
 
   /// Отправляет запрос и ждёт ответ от сервера.
-  Future<Packet> sendRequest(int opcode, Map<dynamic, dynamic> payload) async {
+  Future<Packet> sendRequest(
+    int opcode,
+    Map<dynamic, dynamic> payload, {
+    bool silent = false,
+  }) async {
     final session = _session;
     if (session == null) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
@@ -296,7 +300,7 @@ class Api {
         throw ex;
       }
       final text = _serverErrorText(packet.payload);
-      if (text != null) _errorController.add(text);
+      if (text != null && !silent) _errorController.add(text);
       final err = PacketError(
         messageFromErrorPayload(packet.payload),
         errorKey: resp.errorKey,

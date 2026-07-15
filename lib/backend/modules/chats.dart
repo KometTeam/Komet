@@ -399,7 +399,7 @@ class ChatsModule {
           'chatId': chatId,
           'messageId': msgIdNum,
           'mark': mark,
-        });
+        }, silent: true);
       } catch (_) {}
     }
 
@@ -424,7 +424,7 @@ class ChatsModule {
           'chatId': chatId,
           'messageId': msgIdNum,
           'mark': mark,
-        });
+        }, silent: true);
       } catch (_) {}
     }
 
@@ -1348,10 +1348,34 @@ class ChatsModule {
       await api.sendRequest(Opcode.chatSubscribe, {
         'chatId': chatId,
         'subscribe': subscribe,
-      });
+      }, silent: true);
     } catch (e) {
       logger.w('subscribeChat failed: $e');
     }
+  }
+
+  Future<({CachedChat chat, int? subscribersCount})> joinChannel(
+    Api api,
+    String link,
+    int accountId,
+  ) async {
+    final packet = await api.sendRequest(Opcode.chatJoin, {
+      'link': link,
+    }, silent: true);
+    if (!packet.isOk) {
+      throw PacketError(messageFromErrorPayload(packet.payload));
+    }
+    final payload = packet.payload;
+    final chatMap = payload is Map ? payload['chat'] : null;
+    if (chatMap is! Map) {
+      throw const PacketError('Не удалось подписаться');
+    }
+    final cached = await cacheServerChat(chatMap, accountId);
+    if (cached == null) {
+      throw const PacketError('Не удалось подписаться');
+    }
+    final count = chatMap['participantsCount'];
+    return (chat: cached, subscribersCount: count is int ? count : null);
   }
 
   Future<bool> ensureChatCached(Api api, int accountId, int chatId) async {

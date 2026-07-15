@@ -435,6 +435,8 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _shimmerController;
   Timer? _shimmerStartTimer;
   bool _previewChat = false;
+  bool _subscribing = false;
+  String? _channelLink;
   bool _forwardRequestDone = false;
 
   final ChatController _chatController = ChatController();
@@ -642,6 +644,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (widget.chatType != 'CHAT' && widget.chatType != 'CHANNEL') return;
     final info = await chats.getChatInfo(api, widget.chatId);
     if (!mounted) return;
+    if (widget.chatType == 'CHANNEL') {
+      final link = info?['link'];
+      if (link is String && link.isNotEmpty) _channelLink = link;
+    }
     final count = info?['participantsCount'] as int?;
     if (count != null && count != _participantsCount) {
       _participantsCount = count;
@@ -2166,6 +2172,9 @@ class _ChatScreenState extends State<ChatScreen>
                     _formatContextMenu(_messageController, ctx, state),
                 isMuted: chat?.isMuted ?? false,
                 onToggleMute: _toggleChatMute,
+                channelSubscribed: !_previewChat,
+                channelSubscribing: _subscribing,
+                onSubscribe: _subscribeChannel,
               ),
               StickerPanelView(
                 stickers: _stickers,
@@ -2752,6 +2761,39 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       ],
     );
+  }
+
+  Future<void> _subscribeChannel() async {
+    if (_subscribing) return;
+    setState(() => _subscribing = true);
+    try {
+      var link = _channelLink;
+      if (link == null || link.isEmpty) {
+        final info = await chats.getChatInfo(api, widget.chatId);
+        link = info?['link'] as String?;
+      }
+      if (link == null || link.isEmpty) {
+        throw const PacketError('Не удалось получить ссылку канала');
+      }
+      final result = await chats.joinChannel(api, link, _myId);
+      if (!mounted) return;
+      setState(() {
+        _previewChat = false;
+        _subscribing = false;
+        chat = result.chat;
+        _participantsCount =
+            result.subscribersCount ?? ((_participantsCount ?? 0) + 1);
+      });
+      _recomputeHeaderStatus();
+      showCustomNotification(context, 'Вы подписались на канал');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subscribing = false);
+      showCustomNotification(
+        context,
+        e is PacketError ? e.message : 'Не удалось подписаться',
+      );
+    }
   }
 
   Future<void> _toggleChatMute() async {

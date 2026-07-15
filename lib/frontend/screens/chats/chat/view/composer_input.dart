@@ -46,6 +46,9 @@ class ComposerInputBar extends StatelessWidget {
     required this.contextMenuBuilder,
     required this.isMuted,
     required this.onToggleMute,
+    this.channelSubscribed = true,
+    this.channelSubscribing = false,
+    this.onSubscribe,
   });
 
   final String chatType;
@@ -73,6 +76,9 @@ class ComposerInputBar extends StatelessWidget {
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
   final bool isMuted;
   final VoidCallback onToggleMute;
+  final bool channelSubscribed;
+  final bool channelSubscribing;
+  final VoidCallback? onSubscribe;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +86,49 @@ class ComposerInputBar extends StatelessWidget {
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
 
     if (chatType == "CHANNEL") {
+      if (!channelSubscribed) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 8.0,
+            ),
+            child: GlossyPill(
+              onTap: channelSubscribing ? null : onSubscribe,
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(28),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              depth: 8,
+              borderSide: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: Center(
+                  child: channelSubscribing
+                      ? SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.onPrimary,
+                          ),
+                        )
+                      : Text(
+                          'Подписаться',
+                          style: TextStyle(
+                            color: cs.onPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
