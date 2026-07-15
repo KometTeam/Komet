@@ -54,6 +54,69 @@ class _RenderZeroIntrinsicWidth extends RenderProxyBox {
   double computeMaxIntrinsicWidth(double height) => 0;
 }
 
+/// Stacks an inline keyboard directly beneath a message bubble and forces the
+/// keyboard to take exactly the bubble's rendered width, so its buttons never
+/// grow wider than the post they belong to.
+class _BubbleWithKeyboard extends MultiChildRenderObjectWidget {
+  _BubbleWithKeyboard({required Widget bubble, required Widget keyboard})
+    : super(children: [bubble, keyboard]);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderBubbleWithKeyboard();
+}
+
+class _BubbleKeyboardParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderBubbleWithKeyboard extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _BubbleKeyboardParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _BubbleKeyboardParentData> {
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _BubbleKeyboardParentData) {
+      child.parentData = _BubbleKeyboardParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final RenderBox bubble = firstChild!;
+    final RenderBox keyboard = childAfter(bubble)!;
+
+    bubble.layout(constraints.loosen(), parentUsesSize: true);
+    final Size bubbleSize = bubble.size;
+    (bubble.parentData! as _BubbleKeyboardParentData).offset = Offset.zero;
+
+    keyboard.layout(
+      BoxConstraints.tightFor(width: bubbleSize.width).enforce(constraints),
+      parentUsesSize: true,
+    );
+    final Size keyboardSize = keyboard.size;
+    (keyboard.parentData! as _BubbleKeyboardParentData).offset = Offset(
+      0,
+      bubbleSize.height,
+    );
+
+    size = constraints.constrain(
+      Size(
+        math.max(bubbleSize.width, keyboardSize.width),
+        bubbleSize.height + keyboardSize.height,
+      ),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+}
+
 /// A [Wrap] that reports its single-line width as the max intrinsic width, so an
 /// enclosing [IntrinsicWidth] grows the bubble to fit the chips on one line
 /// instead of collapsing to the widest single chip (which makes them stack).
@@ -556,6 +619,47 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    final Widget bubbleBox = ListenableBuilder(
+      listenable: Listenable.merge([
+        AppBubbleShape.current,
+        AppBubbleBehavior.current,
+      ]),
+      builder: (context, child) => Container(
+        constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: noBubbleBackground
+              ? null
+              : _borderRadiusFor(
+                  AppBubbleShape.current.value,
+                  AppBubbleBehavior.current.value,
+                  shape,
+                  hasPhotoCap,
+                  hasMultiPhotos,
+                ),
+        ),
+        padding: padding,
+        child: child,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showSenderName)
+            _buildSenderHeader(cs, padding == EdgeInsets.zero),
+          withReply(
+            reactionsInside
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [bubbleContent, _reactionsBar(cs)],
+                  )
+                : bubbleContent,
+          ),
+        ],
+      ),
+    );
+
     return Padding(
       padding: EdgeInsets.only(
         left: 8,
@@ -583,51 +687,13 @@ class MessageBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                ListenableBuilder(
-                  listenable: Listenable.merge([
-                    AppBubbleShape.current,
-                    AppBubbleBehavior.current,
-                  ]),
-                  builder: (context, child) => Container(
-                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                    decoration: BoxDecoration(
-                      color: bubbleColor,
-                      borderRadius: noBubbleBackground
-                          ? null
-                          : _borderRadiusFor(
-                              AppBubbleShape.current.value,
-                              AppBubbleBehavior.current.value,
-                              shape,
-                              hasPhotoCap,
-                              hasMultiPhotos,
-                            ),
-                    ),
-                    padding: padding,
-                    child: child,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (showSenderName)
-                        _buildSenderHeader(cs, padding == EdgeInsets.zero),
-                      withReply(
-                        reactionsInside
-                            ? Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [bubbleContent, _reactionsBar(cs)],
-                              )
-                            : bubbleContent,
-                      ),
-                    ],
-                  ),
-                ),
                 if (keyboard != null)
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                    child: _buildInlineKeyboard(context, cs, keyboard),
-                  ),
+                  _BubbleWithKeyboard(
+                    bubble: bubbleBox,
+                    keyboard: _buildInlineKeyboard(context, cs, keyboard),
+                  )
+                else
+                  bubbleBox,
                 if (reactionsUnder) _reactionsBar(cs),
               ],
             ),
