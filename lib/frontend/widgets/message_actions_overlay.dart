@@ -113,6 +113,7 @@ void showMessageActions({
   Future<List<({int id, String title})>> Function()? loadReportReasons,
   Future<bool> Function(int reasonId)? onReport,
   VoidCallback? onDelete,
+  bool allowDelete = true,
   VoidCallback? onEdit,
   VoidCallback? onReply,
   VoidCallback? onForward,
@@ -151,6 +152,7 @@ void showMessageActions({
       loadReportReasons: loadReportReasons,
       onReport: onReport,
       onDelete: onDelete,
+      allowDelete: allowDelete,
       onEdit: onEdit,
       onReply: onReply,
       onForward: onForward,
@@ -186,6 +188,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
   final VoidCallback? onDelete;
+  final bool allowDelete;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
@@ -213,6 +216,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.loadReportReasons,
     this.onReport,
     this.onDelete,
+    this.allowDelete = true,
     this.onEdit,
     this.onReply,
     this.onForward,
@@ -525,12 +529,13 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           _showReportView,
           destructive: true,
         ),
-      _Action(
-        Symbols.delete,
-        l10n.msgActionsDelete,
-        _delete,
-        destructive: true,
-      ),
+      if (widget.allowDelete)
+        _Action(
+          Symbols.delete,
+          l10n.msgActionsDelete,
+          _delete,
+          destructive: true,
+        ),
     ];
   }
 

@@ -203,6 +203,8 @@ class MessageBubble extends StatelessWidget {
   final String? peerAvatarUrl;
   final ValueListenable<({String id, Offset pos})?>? textSelection;
   final VoidCallback? onExitTextSelection;
+  final String? commentsLabel;
+  final VoidCallback? onCommentsTap;
 
   const MessageBubble({
     super.key,
@@ -226,6 +228,8 @@ class MessageBubble extends StatelessWidget {
     this.peerAvatarUrl,
     this.textSelection,
     this.onExitTextSelection,
+    this.commentsLabel,
+    this.onCommentsTap,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -619,6 +623,29 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    final bool hasCommentsFooter = onCommentsTap != null;
+    final EdgeInsets containerPadding = hasCommentsFooter
+        ? EdgeInsets.zero
+        : padding;
+
+    final Widget innerContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showSenderName)
+          _buildSenderHeader(cs, padding == EdgeInsets.zero),
+        withReply(
+          reactionsInside
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [bubbleContent, _reactionsBar(cs)],
+                )
+              : bubbleContent,
+        ),
+      ],
+    );
+
     final Widget bubbleBox = ListenableBuilder(
       listenable: Listenable.merge([
         AppBubbleShape.current,
@@ -638,26 +665,24 @@ class MessageBubble extends StatelessWidget {
                   hasMultiPhotos,
                 ),
         ),
-        padding: padding,
+        padding: containerPadding,
         child: child,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (showSenderName)
-            _buildSenderHeader(cs, padding == EdgeInsets.zero),
-          withReply(
-            reactionsInside
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [bubbleContent, _reactionsBar(cs)],
-                  )
-                : bubbleContent,
-          ),
-        ],
-      ),
+      child: hasCommentsFooter
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: padding == EdgeInsets.zero
+                      ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
+                      : padding,
+                  child: innerContent,
+                ),
+                _buildCommentsFooter(cs),
+              ],
+            )
+          : innerContent,
     );
 
     return Padding(
@@ -696,6 +721,54 @@ class MessageBubble extends StatelessWidget {
                   bubbleBox,
                 if (reactionsUnder) _reactionsBar(cs),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommentsFooter(ColorScheme cs) {
+    final label = commentsLabel ?? 'Комментарии';
+    final accent = isMe ? cs.onPrimaryContainer : cs.primary;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onCommentsTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Divider(
+              height: 0.5,
+              thickness: 0.5,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.18),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 11,
+              ),
+              child: Row(
+                children: [
+                  Icon(Symbols.mode_comment, size: 19, color: accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Symbols.chevron_right,
+                    size: 20,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

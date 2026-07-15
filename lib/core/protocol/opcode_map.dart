@@ -124,6 +124,11 @@ abstract class Opcode {
   static const int linkInfo = 89; // Информация по ссылке / вход в канал
   static const int audioPlay = 301; // Воспроизведение аудио
 
+  // ── Comments (комментарии к постам каналов) ────────────────────────
+  // Загрузка/отправка/набор комментариев переиспользуют chatHistory (49),
+  // msgSend (64) и msgTyping (65) с добавленным полем postId.
+  static const int commentsInfo = 91; // Кол-во комментариев к постам (totalCount)
+
   // ── Sessions ───────────────────────────────────────────────────────
   static const int sessionsInfo = 96; // Запрос активных сессий
   static const int sessionsClose = 97; // Закрытие всех сессий
@@ -319,6 +324,7 @@ abstract class Opcode {
     fileDownload: 'FILE_DOWNLOAD',
     linkInfo: 'LINK_INFO',
     audioPlay: 'AUDIO_PLAY',
+    commentsInfo: 'COMMENTS_INFO',
     sessionsInfo: 'SESSIONS_INFO',
     sessionsClose: 'SESSIONS_CLOSE',
     phoneBindRequest: 'PHONE_BIND_REQUEST',

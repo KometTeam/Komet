@@ -50,6 +50,7 @@ import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/chats.dart';
+import 'backend/modules/comments.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
@@ -86,6 +87,7 @@ import 'frontend/widgets/theme_reveal.dart';
 final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
+final commentsModule = CommentsModule(api);
 final sharedContentModule = SharedContentModule(api);
 final pollsModule = PollsModule(api);
 final stickersModule = StickersModule(api);
@@ -183,6 +185,7 @@ void main(List<String> args) async {
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
+  commentsModule.attachPushHandlers(api);
   storiesModule.attach();
   unawaited(storiesModule.loadCache());
   unawaited(DeepLinkService.instance.init());

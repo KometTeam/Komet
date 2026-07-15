@@ -10,6 +10,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chat_preview.dart';
 import 'package:komet/backend/modules/chats.dart';
+import 'package:komet/backend/modules/comments.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/backend/modules/upload_notification_service.dart';
 import 'package:komet/core/media/gallery_source.dart';
@@ -201,6 +202,8 @@ class ChatScreen extends StatefulWidget {
   final ForwardRequest? forwardRequest;
   final String? initialMessageId;
   final int? initialMessageTime;
+  final String? commentPostId;
+  final CachedMessage? postMessage;
 
   const ChatScreen({
     super.key,
@@ -213,6 +216,8 @@ class ChatScreen extends StatefulWidget {
     this.forwardRequest,
     this.initialMessageId,
     this.initialMessageTime,
+    this.commentPostId,
+    this.postMessage,
   });
 
   @override
@@ -251,6 +256,13 @@ class _ChatScreenState extends State<ChatScreen>
   StreamSubscription<UploadEvent>? _uploadSub;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<MessageEvent>? _messageEventSub;
+  StreamSubscription<Map<String, CommentsInfo>>? _commentsInfoSub;
+  StreamSubscription<CommentAddedEvent>? _commentSub;
+  final Map<String, int> _commentCounts = {};
+  final Set<String> _commentCountsRequested = {};
+  bool get _commentsMode => widget.commentPostId != null;
+  bool _commentsLoadingMore = false;
+  bool _commentsHasMore = true;
   StreamSubscription<SessionState>? _connSub;
   final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers =
       {};
@@ -602,6 +614,16 @@ class _ChatScreenState extends State<ChatScreen>
     _messageEventSub = chats.messageEvents
         .where((e) => e.chatId == widget.chatId)
         .listen(_onMessageEvent);
+    if (_commentsMode) {
+      _commentSub = commentsModule.commentStream
+          .where(
+            (e) =>
+                e.chatId == widget.chatId && e.postId == widget.commentPostId,
+          )
+          .listen(_onLiveComment);
+    } else if (widget.chatType == 'CHANNEL') {
+      _commentsInfoSub = commentsModule.infoStream.listen(_onCommentsInfo);
+    }
     ChatActivityStore.instance
         .listenable(widget.chatId)
         .addListener(_recomputeHeaderStatus);
@@ -641,6 +663,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _loadParticipantsCount() async {
+    if (_commentsMode) return;
     if (widget.chatType != 'CHAT' && widget.chatType != 'CHANNEL') return;
     final info = await chats.getChatInfo(api, widget.chatId);
     if (!mounted) return;
@@ -682,6 +705,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (myName.isNotEmpty) ContactCache.put(p.id, myName);
       ContactCache.putAvatar(p.id, p.baseUrl);
     }
+    if (_commentsMode) return;
     _restoreDraft();
     unawaited(_loadPeerKind());
     unawaited(_loadWallpaper());
@@ -868,6 +892,15 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
     if (_positioningInFlight) return;
+    if (_commentsMode) {
+      _initialPositionDone = true;
+      _markPositioned();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      });
+      return;
+    }
     if (_messages.isEmpty) {
       if (!_hasMoreHistory) _markPositioned();
       return;
@@ -1023,6 +1056,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _updateReadMarker() {
+    if (_commentsMode) return;
     if (!mounted || _myId == 0 || _messages.isEmpty) return;
     if (_awaitingPosition || !_initialPositionDone) return;
     if (!_scrollController.hasClients) return;
@@ -1334,6 +1368,10 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       _myId = activeProfile?.id ?? 0;
     }
+    if (_commentsMode) {
+      await _loadCommentsHistory();
+      return;
+    }
     if (widget.chatType == 'DIALOG') {
       unawaited(_loadOtherPresence());
     }
@@ -1358,6 +1396,14 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_scrollController.hasClients) return;
     if (_historyAutoloadSuppressed) return;
     if (_isLoading) return;
+    if (_commentsMode) {
+      if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) return;
+      final pos = _scrollController.position;
+      if (pos.pixels - pos.minScrollExtent <= _historyPrefetchExtent) {
+        unawaited(_loadMoreComments());
+      }
+      return;
+    }
     _maybeFillGap();
     if (_isLoadingMore || !_hasMoreHistory) return;
     if (_messages.isEmpty) return;
@@ -1518,7 +1564,156 @@ class _ChatScreenState extends State<ChatScreen>
       _pruneReactionNotifiers();
       _chatController.persistSessionCache();
       _reapplyPinIfNeeded();
+      _requestCommentCounts();
     }
+  }
+
+  void _requestCommentCounts() {
+    if (_commentsMode) return;
+    if ((chat?.type ?? widget.chatType) != 'CHANNEL') return;
+    final pending = <String>[];
+    for (final m in _messages) {
+      if (m.isControl) continue;
+      if (_commentCountsRequested.contains(m.id)) continue;
+      _commentCountsRequested.add(m.id);
+      pending.add(m.id);
+    }
+    if (pending.isEmpty) return;
+    unawaited(
+      commentsModule.fetchInfo(
+        accountId: _myId,
+        chatId: widget.chatId,
+        postIds: pending,
+      ),
+    );
+  }
+
+  void _onCommentsInfo(Map<String, CommentsInfo> info) {
+    if (!mounted) return;
+    var changed = false;
+    for (final m in _messages) {
+      final count = info[m.id]?.totalCount;
+      if (count == null) continue;
+      if (_commentCounts[m.id] != count) {
+        _commentCounts[m.id] = count;
+        changed = true;
+      }
+    }
+    if (changed) setState(() {});
+  }
+
+  String _commentsLabelFor(String postId) {
+    final count = _commentCounts[postId];
+    if (count == null || count == 0) return 'Комментировать';
+    if (count == 1) return '1 комментарий';
+    if (count % 10 == 1 && count % 100 != 11) return '$count комментарий';
+    return '$count комментариев';
+  }
+
+  void _openComments(CachedMessage post) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          chatId: widget.chatId,
+          name: widget.name,
+          imageUrl: widget.imageUrl,
+          chatType: 'CHANNEL',
+          commentPostId: post.id,
+          postMessage: _stripInlineKeyboard(post),
+        ),
+      ),
+    );
+  }
+
+  CachedMessage _stripInlineKeyboard(CachedMessage post) {
+    final attaches = post.attachments;
+    if (attaches == null || attaches.isEmpty) return post;
+    final filtered = attaches
+        .where((a) => a.type != AttachmentType.inlineKeyboard)
+        .toList();
+    if (filtered.length == attaches.length) return post;
+    return post.copyWith(attachments: filtered);
+  }
+
+  Future<void> _loadCommentsHistory() async {
+    final post = widget.postMessage;
+    final loaded = await commentsModule.fetchHistory(
+      _myId,
+      widget.chatId,
+      widget.commentPostId!,
+      fromTime: post?.time ?? DateTime.now().millisecondsSinceEpoch,
+      forward: 30,
+      backward: 0,
+    );
+    if (!mounted) return;
+    final comments = [...loaded]..sort((a, b) => a.time.compareTo(b.time));
+    _messages = post != null ? [post, ...comments] : comments;
+    _commentsHasMore = comments.isNotEmpty;
+    _syncReactionNotifiersFromMessages();
+    unawaited(_resolveCommentNames(comments));
+    _bumpMessages();
+    setState(() {
+      _isLoading = false;
+      _onLoadingFinished();
+    });
+  }
+
+  Future<void> _loadMoreComments() async {
+    if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) return;
+    _commentsLoadingMore = true;
+    final newest = _messages.last;
+    try {
+      final more = await commentsModule.fetchHistory(
+        _myId,
+        widget.chatId,
+        widget.commentPostId!,
+        fromTime: newest.time,
+        forward: 30,
+        backward: 0,
+      );
+      if (!mounted) return;
+      final existing = _messages.map((m) => m.id).toSet();
+      final fresh = more.where((c) => !existing.contains(c.id)).toList();
+      if (fresh.isEmpty) {
+        _commentsHasMore = false;
+      } else {
+        _messages = [..._messages, ...fresh]
+          ..sort((a, b) => a.time.compareTo(b.time));
+        _syncReactionNotifiersFromMessages();
+        unawaited(_resolveCommentNames(fresh));
+        _bumpMessages();
+      }
+    } finally {
+      _commentsLoadingMore = false;
+    }
+  }
+
+  void _onLiveComment(CommentAddedEvent event) {
+    if (!mounted) return;
+    final comment = event.comment;
+    if (comment.senderId == _myId) return;
+    if (_messages.any((m) => m.id == comment.id)) return;
+    final nearBottom = _isNearListBottom();
+    _messages.add(comment);
+    _syncReactionNotifiersFromMessages();
+    _bumpMessages();
+    unawaited(_resolveCommentNames([comment]));
+    if (nearBottom) _scrollToBottom();
+  }
+
+  bool _isNearListBottom() {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.position.pixels <= _historyPrefetchExtent;
+  }
+
+  Future<void> _resolveCommentNames(List<CachedMessage> list) async {
+    final ids = list
+        .map((m) => m.senderId)
+        .where((id) => id != 0 && ContactCache.get(id) == null)
+        .toSet();
+    if (ids.isEmpty) return;
+    final resolved = await messagesModule.ensureContactNames(ids);
+    if (resolved && mounted) _bumpMessages();
   }
 
   void _syncReactionNotifiersFromMessages() {
@@ -1601,6 +1796,8 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadSub?.cancel();
     _pushSub?.cancel();
     _messageEventSub?.cancel();
+    _commentsInfoSub?.cancel();
+    _commentSub?.cancel();
     _connSub?.cancel();
     _voiceRec.dispose();
     _note.dispose();
@@ -1668,7 +1865,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _restoreDraft() {
-    if (_myId == 0 || _messageController.text.isNotEmpty) return;
+    if (_myId == 0 || _commentsMode || _messageController.text.isNotEmpty) {
+      return;
+    }
     final draft = DraftStore.instance.get(_myId, widget.chatId);
     if (draft == null || draft.isEmpty) return;
     _messageController.text = draft;
@@ -1678,7 +1877,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _saveDraft() {
-    if (_myId == 0) return;
+    if (_myId == 0 || _commentsMode) return;
     unawaited(
       DraftStore.instance.set(
         _myId,
@@ -2146,7 +2345,7 @@ class _ChatScreenState extends State<ChatScreen>
                 },
               ),
               ComposerInputBar(
-                chatType: widget.chatType,
+                chatType: _commentsMode ? 'CHAT' : widget.chatType,
                 chrome: _effectiveChrome,
                 style: AppComposerStyle.current.value,
                 background: AppComposerBackground.current.value,
@@ -2175,6 +2374,10 @@ class _ChatScreenState extends State<ChatScreen>
                 channelSubscribed: !_previewChat,
                 channelSubscribing: _subscribing,
                 onSubscribe: _subscribeChannel,
+                showStickerButton: !_commentsMode,
+                showAttachButton: !_commentsMode,
+                forceSend: _commentsMode,
+                hintText: _commentsMode ? 'Комментарий' : 'Message',
               ),
               StickerPanelView(
                 stickers: _stickers,
@@ -2502,6 +2705,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _onMessageEvent(MessageEvent event) {
     if (!mounted) return;
+    if (_commentsMode) return;
     switch (event) {
       case MessageAddedEvent(:final message):
         if (message.senderId == _myId) return;
@@ -2662,7 +2866,7 @@ class _ChatScreenState extends State<ChatScreen>
                             cs: cs,
                             embedded: widget.embedded,
                             chatId: widget.chatId,
-                            name: widget.name,
+                            name: _commentsMode ? 'Комментарии' : widget.name,
                             imageUrl: widget.imageUrl,
                             chatType: widget.chatType,
                             isOfficial: chat?.isOfficial ?? false,
@@ -2670,13 +2874,14 @@ class _ChatScreenState extends State<ChatScreen>
                             headerStatus: _headerStatusNotifier,
                             scheduledCount: _scheduledCount,
                             otherUnread: _otherUnread,
-                            showCall:
-                                widget.chatType == 'DIALOG' && !_peerIsBot,
+                            showCall: !_commentsMode &&
+                                widget.chatType == 'DIALOG' &&
+                                !_peerIsBot,
                             onClose: widget.onClose,
-                            onOpenInfo: _openChatInfo,
+                            onOpenInfo: _commentsMode ? () {} : _openChatInfo,
                             onOpenScheduled: _openScheduledMessages,
                             onCall: _startCall,
-                            onMenu: _openChatMenu,
+                            onMenu: _commentsMode ? (_) {} : _openChatMenu,
                           ),
                         ),
                       ),
@@ -3034,6 +3239,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _recomputeHeaderStatus() {
+    if (_commentsMode) {
+      _headerStatusNotifier.value = '';
+      return;
+    }
     _headerStatusNotifier.value = _headerStatus();
   }
 
@@ -3249,22 +3458,25 @@ class _ChatScreenState extends State<ChatScreen>
     _lastSentId = tempId;
     _messages.add(composed);
     _messageController.clear();
-    if (DraftStore.instance.get(_myId, widget.chatId) != null) {
+    if (!_commentsMode &&
+        DraftStore.instance.get(_myId, widget.chatId) != null) {
       unawaited(DraftStore.instance.clear(_myId, widget.chatId));
     }
     _bumpMessages();
-    unawaited(_persistOutgoing(composed));
-    unawaited(
-      chats.applyOutgoing(
-        _myId,
-        widget.chatId,
-        messageId: tempId,
-        time: now,
-        text: text,
-        status: composed.status ?? 'sending',
-        elements: elements,
-      ),
-    );
+    if (!_commentsMode) {
+      unawaited(_persistOutgoing(composed));
+      unawaited(
+        chats.applyOutgoing(
+          _myId,
+          widget.chatId,
+          messageId: tempId,
+          time: now,
+          text: text,
+          status: composed.status ?? 'sending',
+          elements: elements,
+        ),
+      );
+    }
 
     // Instant tactile "whoosh" the moment the message leaves the composer,
     // not after the network round-trip — feedback must feel immediate.
@@ -3276,13 +3488,22 @@ class _ChatScreenState extends State<ChatScreen>
     if (!online) return;
 
     try {
-      final actualId = await messagesModule.sendMessage(
-        _myId,
-        widget.chatId,
-        text,
-        replyToMessageId: replyId,
-        elements: elements,
-      );
+      final actualId = _commentsMode
+          ? await commentsModule.sendComment(
+              _myId,
+              widget.chatId,
+              widget.commentPostId!,
+              text,
+              replyToMessageId: replyId,
+              elements: elements,
+            )
+          : await messagesModule.sendMessage(
+              _myId,
+              widget.chatId,
+              text,
+              replyToMessageId: replyId,
+              elements: elements,
+            );
 
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
@@ -3298,21 +3519,23 @@ class _ChatScreenState extends State<ChatScreen>
         );
         _messages[index] = sent;
         _bumpMessages();
-        unawaited(_persistOutgoing(sent, removeId: tempId));
-        unawaited(
-          chats.applyOutgoing(
-            _myId,
-            widget.chatId,
-            messageId: sent.id,
-            time: now,
-            text: text,
-            status: 'sent',
-            elements: elements,
-          ),
-        );
+        if (!_commentsMode) {
+          unawaited(_persistOutgoing(sent, removeId: tempId));
+          unawaited(
+            chats.applyOutgoing(
+              _myId,
+              widget.chatId,
+              messageId: sent.id,
+              time: now,
+              text: text,
+              status: 'sent',
+              elements: elements,
+            ),
+          );
+        }
       }
 
-      if (chat == null) {
+      if (!_commentsMode && chat == null) {
         unawaited(
           chats.refreshChats(api, [widget.chatId]).then((list) {
             if (!mounted || list.isEmpty) return;
@@ -3337,18 +3560,20 @@ class _ChatScreenState extends State<ChatScreen>
         );
         _messages[index] = queued;
         _bumpMessages();
-        unawaited(_persistOutgoing(queued));
-        unawaited(
-          chats.applyOutgoing(
-            _myId,
-            widget.chatId,
-            messageId: tempId,
-            time: now,
-            text: text,
-            status: 'pending',
-            elements: elements,
-          ),
-        );
+        if (!_commentsMode) {
+          unawaited(_persistOutgoing(queued));
+          unawaited(
+            chats.applyOutgoing(
+              _myId,
+              widget.chatId,
+              messageId: tempId,
+              time: now,
+              text: text,
+              status: 'pending',
+              elements: elements,
+            ),
+          );
+        }
       }
     }
   }
@@ -4733,13 +4958,20 @@ class _ChatScreenState extends State<ChatScreen>
                                   ? _messages[msgIndex + 1]
                                   : null;
 
+                              final bool isChannelPost =
+                                  !_commentsMode &&
+                                  (chat?.type ?? widget.chatType) == 'CHANNEL' &&
+                                  !message.isControl;
+
                               final bubble = MessageBubble(
                                 message: message,
                                 isMe: isMe,
                                 myId: _myId,
                                 prevMessage: prevMessage,
                                 nextMessage: nextMessage,
-                                chatType: chat?.type ?? 'CHAT',
+                                chatType: _commentsMode
+                                    ? 'CHAT'
+                                    : (chat?.type ?? 'CHAT'),
                                 chatId: widget.chatId,
                                 photoActions: _photoActions,
                                 overrideStatus: _effectiveStatus(message),
@@ -4760,6 +4992,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 peerAvatarUrl: widget.imageUrl,
                                 textSelection: _textSelection,
                                 onExitTextSelection: _exitTextSelection,
+                                commentsLabel: isChannelPost
+                                    ? _commentsLabelFor(message.id)
+                                    : null,
+                                onCommentsTap: isChannelPost
+                                    ? () => _openComments(message)
+                                    : null,
                               );
 
                               final canReport = !isMe && !message.isControl;
@@ -6643,3 +6881,4 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     );
   }
 }
+

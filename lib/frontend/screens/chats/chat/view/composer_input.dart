@@ -49,6 +49,10 @@ class ComposerInputBar extends StatelessWidget {
     this.channelSubscribed = true,
     this.channelSubscribing = false,
     this.onSubscribe,
+    this.showStickerButton = true,
+    this.showAttachButton = true,
+    this.forceSend = false,
+    this.hintText = 'Message',
   });
 
   final String chatType;
@@ -79,6 +83,10 @@ class ComposerInputBar extends StatelessWidget {
   final bool channelSubscribed;
   final bool channelSubscribing;
   final VoidCallback? onSubscribe;
+  final bool showStickerButton;
+  final bool showAttachButton;
+  final bool forceSend;
+  final String hintText;
 
   @override
   Widget build(BuildContext context) {
@@ -207,17 +215,19 @@ class ComposerInputBar extends StatelessWidget {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: onToggleStickerPanel,
-                                    child: Icon(
-                                      Symbols.face,
-                                      color: mutedIcon,
-                                      size: 24,
-                                      weight: 400,
+                                  if (showStickerButton) ...[
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: onToggleStickerPanel,
+                                      child: Icon(
+                                        Symbols.face,
+                                        color: mutedIcon,
+                                        size: 24,
+                                        weight: 400,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
+                                    const SizedBox(width: 12),
+                                  ],
                                   Expanded(
                                     child: Focus(
                                       onKeyEvent: (node, event) {
@@ -245,7 +255,7 @@ class ComposerInputBar extends StatelessWidget {
                                             TextAlignVertical.center,
                                         contextMenuBuilder: contextMenuBuilder,
                                         decoration: InputDecoration(
-                                          hintText: 'Message',
+                                          hintText: hintText,
                                           hintStyle: TextStyle(
                                             color: cs.onSurfaceVariant,
                                             fontSize: 16,
@@ -260,14 +270,15 @@ class ComposerInputBar extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  _AttachButton(
-                                    hasText: hasText,
-                                    onOpen: onOpenAttach,
-                                    onLongOpen: onOpenAttachScheduled,
-                                    uploadStatus: uploadStatus,
-                                    mutedIcon: mutedIcon,
-                                    cs: cs,
-                                  ),
+                                  if (showAttachButton)
+                                    _AttachButton(
+                                      hasText: hasText,
+                                      onOpen: onOpenAttach,
+                                      onLongOpen: onOpenAttachScheduled,
+                                      uploadStatus: uploadStatus,
+                                      mutedIcon: mutedIcon,
+                                      cs: cs,
+                                    ),
                                 ],
                               ),
                             ),
@@ -366,7 +377,7 @@ class ComposerInputBar extends StatelessWidget {
                                             valueListenable: note.videoNoteMode,
                                             builder: (context, videoMode, _) {
                                               final sendMode =
-                                                  hasText || locked;
+                                                  hasText || locked || forceSend;
                                               final pill = _actionSurface(
                                                 color: _flat
                                                     ? Colors.transparent
@@ -377,14 +388,15 @@ class ComposerInputBar extends StatelessWidget {
                                                     : _frost
                                                     ? AppFrost.inputTint(cs)
                                                     : cs.surfaceContainerHighest,
-                                                onTap: hasText
+                                                onTap: (hasText || forceSend)
                                                     ? onSendText
                                                     : locked
                                                     ? () => voiceRec.stop(
                                                         cancel: false,
                                                       )
                                                     : null,
-                                                onLongPress: hasText
+                                                onLongPress:
+                                                    (hasText && !forceSend)
                                                     ? onScheduleMessage
                                                     : null,
                                                 child: SizedBox(
@@ -421,30 +433,32 @@ class ComposerInputBar extends StatelessWidget {
                                                     active:
                                                         recording && !locked,
                                                   );
+                                              final voiceEnabled =
+                                                  !sendMode && !forceSend;
                                               return GestureDetector(
-                                                onTap: sendMode
-                                                    ? null
-                                                    : note.toggleMode,
-                                                onLongPressStart: sendMode
-                                                    ? null
-                                                    : (_) => videoMode
+                                                onTap: voiceEnabled
+                                                    ? note.toggleMode
+                                                    : null,
+                                                onLongPressStart: voiceEnabled
+                                                    ? (_) => videoMode
                                                           ? note.start()
-                                                          : voiceRec.start(),
-                                                onLongPressMoveUpdate: sendMode
-                                                    ? null
-                                                    : (d) => videoMode
+                                                          : voiceRec.start()
+                                                    : null,
+                                                onLongPressMoveUpdate:
+                                                    voiceEnabled
+                                                    ? (d) => videoMode
                                                           ? note.handleDrag(
                                                               d.offsetFromOrigin,
                                                             )
                                                           : voiceRec.handleDrag(
                                                               d.offsetFromOrigin,
-                                                            ),
-                                                onLongPressEnd: sendMode
-                                                    ? null
-                                                    : (_) => videoMode
+                                                            )
+                                                    : null,
+                                                onLongPressEnd: voiceEnabled
+                                                    ? (_) => videoMode
                                                           ? note.handleEnd()
-                                                          : voiceRec
-                                                                .handleEnd(),
+                                                          : voiceRec.handleEnd()
+                                                    : null,
                                                 child: visual,
                                               );
                                             },

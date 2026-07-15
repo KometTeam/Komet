@@ -639,6 +639,15 @@ class ChatsModule {
     final msg = payload['message'];
     if (msg is! Map) return;
 
+    final msgLink = msg['link'];
+    final linkPostId = (msgLink is Map) ? msgLink['postId'] : null;
+    final payloadPostId = payload['postId'];
+    final isCommentPush =
+        payloadPostId is String ||
+        (linkPostId is String) ||
+        (msg['postId'] is String);
+    if (isCommentPush) return;
+
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
 
