@@ -191,6 +191,21 @@ class ContactsModule {
     await syncFromLoginPayload(map.cast<dynamic, dynamic>(), accountId);
   }
 
+  static Future<ProfileData?> fetchSelfProfile(Api api, int accountId) async {
+    final map = await api.sendRequestMap(Opcode.contactInfo, {
+      'contactIds': [accountId],
+    });
+    final contacts = map?['contacts'];
+    if (contacts is! List) return null;
+    for (final raw in contacts.whereType<Map>()) {
+      if (raw['id'] != accountId) continue;
+      final contact = raw.cast<dynamic, dynamic>();
+      _primeContactCache(contact);
+      return ProfileData.fromServerMap(contact);
+    }
+    return null;
+  }
+
   static void _primeContactCache(Map<dynamic, dynamic> contact) {
     final id = contact['id'];
     if (id is! int) return;

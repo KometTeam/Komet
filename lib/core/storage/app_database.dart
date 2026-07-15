@@ -36,6 +36,15 @@ class ProfileData {
     this.profileOptions,
   });
 
+  factory ProfileData.stub(int id) => ProfileData(
+    id: id,
+    firstName: '',
+    phone: 0,
+    country: '',
+    accountStatus: 0,
+    updateTime: 0,
+  );
+
   factory ProfileData.fromServerProfile(Map<dynamic, dynamic> profile) {
     final contact = profile['contact'];
     if (contact is! Map) {
@@ -70,7 +79,7 @@ class ProfileData {
       id: contact['id'] as int,
       firstName: firstName,
       lastName: lastName,
-      phone: contact['phone'] as int,
+      phone: (contact['phone'] as int?) ?? 0,
       photoId: contact['photoId'] as int?,
       baseUrl: contact['baseUrl'] as String?,
       baseRawUrl: contact['baseRawUrl'] as String?,

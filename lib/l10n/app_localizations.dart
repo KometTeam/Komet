@@ -4045,6 +4045,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t check for updates. Try again later'**
   String get updateCheckFailed;
+
+  /// No description provided for @profileResurrecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Oops! The server didn\'t send your profile. Trying to regenerate…'**
+  String get profileResurrecting;
+
+  /// No description provided for @profilePhoneRegenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t regenerate your phone number. Please sign in again and report the issue to the developers'**
+  String get profilePhoneRegenFailed;
 }
 
 class _AppLocalizationsDelegate

@@ -907,5 +907,7 @@
   "updateCheck": "Check for updates",
   "updateChecking": "Checking for updates…",
   "updateUpToDate": "You have the latest version",
-  "updateCheckFailed": "Couldn't check for updates. Try again later"
+  "updateCheckFailed": "Couldn't check for updates. Try again later",
+  "profileResurrecting": "Oops! The server didn't send your profile. Trying to regenerate…",
+  "profilePhoneRegenFailed": "Couldn't regenerate your phone number. Please sign in again and report the issue to the developers"
 }

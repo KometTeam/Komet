@@ -2097,4 +2097,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateCheckFailed =>
       'Couldn\'t check for updates. Try again later';
+
+  @override
+  String get profileResurrecting =>
+      'Oops! The server didn\'t send your profile. Trying to regenerate…';
+
+  @override
+  String get profilePhoneRegenFailed =>
+      'Couldn\'t regenerate your phone number. Please sign in again and report the issue to the developers';
 }

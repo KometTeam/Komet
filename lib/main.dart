@@ -339,6 +339,7 @@ class KometAppState extends State<KometApp>
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
   StreamSubscription<IncomingCall>? _callIncomingSub;
   StreamSubscription<String>? _serverErrorSub;
+  StreamSubscription<AccountNotice>? _accountNoticeSub;
   Timer? _scheduleTimer;
   String? _lastVpnNotice;
   DateTime _lastVpnNoticeAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -477,6 +478,18 @@ class KometAppState extends State<KometApp>
         showCustomNotificationOnOverlay(overlay, msg);
       }
     });
+
+    _accountNoticeSub = accountModule.noticeStream.listen((notice) {
+      final overlay = KometApp.navigatorKey.currentState?.overlay;
+      final ctx = KometApp.navigatorKey.currentContext;
+      if (overlay == null || ctx == null || !ctx.mounted) return;
+      final l10n = AppLocalizations.of(ctx);
+      if (l10n == null) return;
+      final message = switch (notice) {
+        AccountNotice.resurrectingProfile => l10n.profileResurrecting,
+      };
+      showCustomNotificationOnOverlay(overlay, message);
+    });
   }
 
   Future<void> _ensureFullScreenIntentPermission() async {
@@ -534,6 +547,7 @@ class KometAppState extends State<KometApp>
     _vpnBypassSub?.cancel();
     _callIncomingSub?.cancel();
     _serverErrorSub?.cancel();
+    _accountNoticeSub?.cancel();
     _scheduleTimer?.cancel();
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);

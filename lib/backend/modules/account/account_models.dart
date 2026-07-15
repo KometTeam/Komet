@@ -282,6 +282,8 @@ enum AuthRequestType {
 
 enum LoginStatus { idle, loading, success, error }
 
+enum AccountNotice { resurrectingProfile }
+
 class WrongDeviceTokenException implements Exception {
   const WrongDeviceTokenException();
   @override

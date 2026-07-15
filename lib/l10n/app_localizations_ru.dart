@@ -2108,4 +2108,12 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get updateCheckFailed =>
       'Не удалось проверить обновления. Повторите позже';
+
+  @override
+  String get profileResurrecting =>
+      'Упс! Сервер не прислал profile. Попробую регенерировать…';
+
+  @override
+  String get profilePhoneRegenFailed =>
+      'Не удалось регенерировать данные об номере. Перезайдите и сообщите об проблеме разработчикам';
 }
