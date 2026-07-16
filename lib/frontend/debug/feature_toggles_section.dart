@@ -1,19 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../backend/modules/contacts.dart';
 import '../../core/config/app_commands.dart';
 import '../../core/config/app_digital_id_mode.dart';
 import '../../core/config/app_link_preview.dart';
+import '../../core/config/app_phonebook_names.dart';
 import '../../core/config/app_pranks.dart';
 import '../../core/config/app_show_extra_info.dart';
 import '../../core/config/app_stories.dart';
 import '../../core/config/app_swipe_back_desktop.dart';
+import '../../core/contacts/device_contacts_service.dart';
 import '../screens/digital_id/digital_id_web_screen.dart';
 import '../widgets/custom_notification.dart';
 import 'debug_toggle_tile.dart';
 
 class DebugFeatureTogglesSection extends StatelessWidget {
   const DebugFeatureTogglesSection({super.key});
+
+  Future<void> _onPhonebookNamesChanged(
+    BuildContext context,
+    bool value,
+  ) async {
+    await AppPhonebookNames.save(value);
+    if (value) {
+      final ok = await DeviceContactsService.reload();
+      if (!ok && context.mounted) {
+        showCustomNotification(
+          context,
+          'Не удалось загрузить контакты телефона',
+        );
+      }
+    }
+    ContactsModule.revision.value++;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +140,19 @@ class DebugFeatureTogglesSection extends StatelessWidget {
             subtitle: (_) => 'Отображение ленты историй в списке чатов',
             valueListenable: AppStories.current,
             onChanged: AppStories.save,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: DebugToggleTile(
+            icon: Symbols.contacts,
+            title: 'Имена из телефонной книги',
+            subtitle: (v) => v
+                ? 'Имена собеседников показываются так, как записаны в '
+                      'телефонной книге устройства'
+                : 'Имена показываются так, как их прислал сервер',
+            valueListenable: AppPhonebookNames.current,
+            onChanged: (v) => _onPhonebookNamesChanged(context, v),
           ),
         ),
         Padding(

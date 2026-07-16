@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/contacts.dart';
+import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/names.dart';
@@ -128,11 +129,20 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   String _contactName(Map<String, dynamic> row) {
+    final id = row['id'];
+    if (id is int) {
+      final cached = ContactCache.get(id);
+      if (cached != null && cached.isNotEmpty) return cached;
+    }
     return displayName(
       row['first_name'],
       row['last_name'],
       fallback: '+${row['phone']}',
     );
+  }
+
+  String _phoneResultName(PhoneLookupResult result) {
+    return ContactCache.get(result.id) ?? result.name ?? 'User #${result.id}';
   }
 
   void _openChat(int chatId, String name, String? avatarUrl, String type) {
@@ -170,7 +180,7 @@ class _SearchScreenState extends State<SearchScreen> {
       openContactDialogProfile(
         context,
         contactId: result.id,
-        name: result.name ?? 'User #${result.id}',
+        name: _phoneResultName(result),
         avatarUrl: result.avatarUrl,
       ),
     );
@@ -245,7 +255,7 @@ class _SearchScreenState extends State<SearchScreen> {
         if (phoneResult != null) ...[
           _sectionHeader(cs, 'По номеру'),
           _ResultTile(
-            name: phoneResult.name ?? '',
+            name: _phoneResultName(phoneResult),
             imageUrl: phoneResult.avatarUrl,
             subtitle: query,
             onTap: () => _openPhoneResult(phoneResult),

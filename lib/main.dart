@@ -34,6 +34,8 @@ import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
 import 'core/config/app_commands.dart';
+import 'core/config/app_phonebook_names.dart';
+import 'core/contacts/device_contacts_service.dart';
 import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
 import 'core/config/app_pill_gradient.dart';
@@ -214,6 +216,7 @@ void main(List<String> args) async {
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
   final commandsFuture = AppCommands.load();
+  final phonebookNamesFuture = AppPhonebookNames.load();
   final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
@@ -269,11 +272,13 @@ void main(List<String> args) async {
     pranksFuture,
     storiesFuture,
     commandsFuture,
+    phonebookNamesFuture,
     linkPreviewFuture,
     cacheLimitFuture,
     digitalIdNativeFuture,
     showExtraInfoFuture,
   ]);
+  await DeviceContactsService.loadFromStartup();
   await trafficCaptureFuture;
   await debugLogFuture;
   runApp(

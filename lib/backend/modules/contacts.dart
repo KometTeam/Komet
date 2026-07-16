@@ -60,8 +60,14 @@ class PhoneLookupResult {
   final int id;
   final String? name;
   final String? avatarUrl;
+  final int phone;
 
-  const PhoneLookupResult({required this.id, this.name, this.avatarUrl});
+  const PhoneLookupResult({
+    required this.id,
+    this.name,
+    this.avatarUrl,
+    this.phone = 0,
+  });
 }
 
 class ContactPhotos {
@@ -88,6 +94,14 @@ class ContactsModule {
     final id = contact['id'];
     if (id is! int) return null;
 
+    primeContactCache(contact);
+
+    final payloadPhone = contact['phone'];
+    final resolvedPhone = payloadPhone is int && payloadPhone > 0
+        ? payloadPhone
+        : int.tryParse(normalized.substring(1)) ?? 0;
+    ContactCache.putPhone(id, resolvedPhone);
+
     String? name;
     final names = contact['names'];
     if (names is List) {
@@ -105,6 +119,7 @@ class ContactsModule {
       id: id,
       name: name,
       avatarUrl: contact['baseUrl'] as String?,
+      phone: resolvedPhone,
     );
   }
 
@@ -154,7 +169,7 @@ class ContactsModule {
       row['phone'] = phone;
     }
     await AppDatabase.saveContacts([row]);
-    if (contact != null) _primeContactCache(contact);
+    if (contact != null) primeContactCache(contact);
     revision.value++;
     return CachedContact.fromDbRow(row);
   }
@@ -171,7 +186,7 @@ class ContactsModule {
       final contact = raw.cast<dynamic, dynamic>();
       final row = _parseContact(contact, accountId);
       if (row != null) rows.add(row);
-      _primeContactCache(contact);
+      primeContactCache(contact);
     }
 
     if (rows.isNotEmpty) {
@@ -200,15 +215,18 @@ class ContactsModule {
     for (final raw in contacts.whereType<Map>()) {
       if (raw['id'] != accountId) continue;
       final contact = raw.cast<dynamic, dynamic>();
-      _primeContactCache(contact);
+      primeContactCache(contact);
       return ProfileData.fromServerMap(contact);
     }
     return null;
   }
 
-  static void _primeContactCache(Map<dynamic, dynamic> contact) {
+  static void primeContactCache(Map<dynamic, dynamic> contact) {
     final id = contact['id'];
     if (id is! int) return;
+
+    final phone = contact['phone'];
+    if (phone is int) ContactCache.putPhone(id, phone);
 
     final names = contact['names'];
     if (names is List && names.isNotEmpty) {
@@ -297,6 +315,7 @@ class ContactsModule {
   static Future<void> primeCacheFromDb(int accountId) async {
     final contacts = await getContacts(accountId);
     for (final c in contacts) {
+      ContactCache.putPhone(c.id, c.phone);
       final fullName = (c.lastName != null && c.lastName!.isNotEmpty)
           ? '${c.firstName} ${c.lastName}'
           : c.firstName;

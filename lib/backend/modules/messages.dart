@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../../core/config/komet_settings.dart';
+import '../../core/contacts/device_contacts_service.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -17,6 +18,7 @@ class ContactCache {
   static final Map<int, String> _nameCache = {};
   static final Map<int, String> _avatarCache = {};
   static final Map<int, Set<String>> _optionsCache = {};
+  static final Map<int, int> _phoneCache = {};
 
   static const _prefsKey = 'contact_cache_v1';
   static Timer? _saveTimer;
@@ -61,7 +63,18 @@ class ContactCache {
     _scheduleSave();
   }
 
-  static String? get(int id) => _nameCache[id];
+  static void putPhone(int id, int phone) {
+    if (phone > 0) _phoneCache[id] = phone;
+  }
+
+  static String? get(int id) {
+    final phone = _phoneCache[id];
+    if (phone != null) {
+      final book = DeviceContactsService.nameForPhone(phone);
+      if (book != null && book.isNotEmpty) return book;
+    }
+    return _nameCache[id];
+  }
   static String? getAvatar(int id) => _avatarCache[id];
   static Set<String>? getOptions(int id) => _optionsCache[id];
   static bool isOfficial(int id) =>
@@ -71,6 +84,7 @@ class ContactCache {
     _nameCache.clear();
     _avatarCache.clear();
     _optionsCache.clear();
+    _phoneCache.clear();
     _saveTimer?.cancel();
     _saveTimer = null;
     unawaited(_wipePersisted());
