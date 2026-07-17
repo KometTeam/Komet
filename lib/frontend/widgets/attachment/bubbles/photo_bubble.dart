@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -32,9 +33,42 @@ class PhotoBubble extends StatelessWidget {
 
   static double layoutWidth(List<PhotoAttachment> photos) {
     if (photos.length != 1) return BubbleContext.photoMaxSize;
-    return (photos.single.width?.toDouble() ?? 200).clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
+    return _displaySize(photos.single).width;
+  }
+
+  static Size _displaySize(PhotoAttachment photo) {
+    final width = photo.width?.toDouble() ?? 200;
+    final height = photo.height?.toDouble() ?? 200;
+
+    final downScale = math.min(
+      1.0,
+      math.min(
+        BubbleContext.photoMaxSize / width,
+        BubbleContext.photoMaxSize / height,
+      ),
+    );
+    var displayWidth = width * downScale;
+    var displayHeight = height * downScale;
+
+    final upScale = math.max(
+      1.0,
+      math.max(
+        BubbleContext.photoMinSize / displayWidth,
+        BubbleContext.photoMinSize / displayHeight,
+      ),
+    );
+    displayWidth *= upScale;
+    displayHeight *= upScale;
+
+    return Size(
+      displayWidth.clamp(
+        BubbleContext.photoMinSize,
+        BubbleContext.photoMaxSize,
+      ),
+      displayHeight.clamp(
+        BubbleContext.photoMinSize,
+        BubbleContext.photoMaxSize,
+      ),
     );
   }
 
@@ -86,6 +120,7 @@ class PhotoBubble extends StatelessWidget {
               padding: const EdgeInsets.only(
                 left: BubbleContext.captionPaddingHorizontal,
                 right: BubbleContext.captionPaddingRight,
+                top: BubbleContext.captionPaddingTop,
                 bottom: 6,
               ),
               child: Row(
@@ -110,6 +145,7 @@ class PhotoBubble extends StatelessWidget {
           padding: const EdgeInsets.only(
             left: BubbleContext.captionPaddingHorizontal,
             right: BubbleContext.captionPaddingRight,
+            top: BubbleContext.captionPaddingTop,
             bottom: 6,
           ),
           child: Row(
@@ -130,17 +166,9 @@ class PhotoBubble extends StatelessWidget {
     required bool hasCaption,
     required bool hasContentAbove,
   }) {
-    final width = photo.width?.toDouble() ?? 200;
-    final height = photo.height?.toDouble() ?? 200;
-
-    final constrainedWidth = width.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
-    final constrainedHeight = height.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
+    final size = _displaySize(photo);
+    final constrainedWidth = size.width;
+    final constrainedHeight = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
     final matchTop = hasCaption && !hasContentAbove;
