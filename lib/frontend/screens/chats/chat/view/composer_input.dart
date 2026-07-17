@@ -273,6 +273,8 @@ class ComposerInputBar extends StatelessWidget {
                                         ),
                                         maxLines: null,
                                         keyboardType: TextInputType.multiline,
+                                        textCapitalization:
+                                            TextCapitalization.sentences,
                                         textAlignVertical:
                                             TextAlignVertical.center,
                                         contextMenuBuilder: contextMenuBuilder,
