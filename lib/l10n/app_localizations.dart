@@ -4274,6 +4274,12 @@ abstract class AppLocalizations {
   /// **'Camera is coming soon'**
   String get attachSheetCameraComingSoon;
 
+  /// No description provided for @attachSheetCameraError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the camera'**
+  String get attachSheetCameraError;
+
   /// No description provided for @attachSheetSendFileTitle.
   ///
   /// In en, this message translates to:

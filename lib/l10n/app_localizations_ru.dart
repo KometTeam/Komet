@@ -2236,6 +2236,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get attachSheetCameraComingSoon => 'Камера скоро появится';
 
   @override
+  String get attachSheetCameraError => 'Не удалось открыть камеру';
+
+  @override
   String get attachSheetSendFileTitle => 'Отправить файл';
 
   @override
