@@ -2256,75 +2256,28 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _startEditMessage(CachedMessage message) async {
     final cs = Theme.of(context).colorScheme;
-    final controller = RichMessageController(text: message.text ?? '')
-      ..setFormatRanges(message.formatRanges);
 
-    final saved = await showModalBottomSheet<bool>(
+    final content = await showModalBottomSheet<
+      ({String text, List<Map<String, dynamic>> elements})
+    >(
       context: context,
       isScrollControlled: true,
       backgroundColor: cs.surfaceContainerHigh,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Изменить сообщение',
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              minLines: 1,
-              maxLines: 6,
-              style: TextStyle(color: cs.onSurface),
-              contextMenuBuilder: (ctx, state) =>
-                  _formatContextMenu(controller, ctx, state),
-              decoration: InputDecoration(
-                hintText: 'Текст сообщения',
-                filled: true,
-                fillColor: cs.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () => Navigator.of(sheetContext).pop(true),
-              child: const Text('Сохранить'),
-            ),
-          ],
-        ),
+      builder: (sheetContext) => _EditMessageSheet(
+        text: message.text ?? '',
+        formatRanges: message.formatRanges,
+        contextMenuBuilder: _formatContextMenu,
       ),
     );
 
-    if (saved != true || !mounted) {
-      controller.dispose();
-      return;
-    }
+    if (content == null || !mounted) return;
 
-    final content = controller.buildContent();
     final rawText = content.text;
     final newText = rawText.trim();
     final elements = _trimmedElements(content.elements, rawText, newText);
-    controller.dispose();
 
     final oldElements = serializeFormatElements(
       message.formatRanges.where((r) => composerFormats.contains(r.format)),
@@ -6598,6 +6551,95 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     return ValueListenableBuilder<int>(
       valueListenable: widget.host._messagesRev,
       builder: (context, _, _) => widget.host._buildMessagesListContent(),
+    );
+  }
+}
+
+class _EditMessageSheet extends StatefulWidget {
+  final String text;
+  final Iterable<FormatRange> formatRanges;
+  final Widget Function(
+    RichMessageController controller,
+    BuildContext context,
+    EditableTextState editableState,
+  )
+  contextMenuBuilder;
+
+  const _EditMessageSheet({
+    required this.text,
+    required this.formatRanges,
+    required this.contextMenuBuilder,
+  });
+
+  @override
+  State<_EditMessageSheet> createState() => _EditMessageSheetState();
+}
+
+class _EditMessageSheetState extends State<_EditMessageSheet> {
+  late final RichMessageController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = RichMessageController(text: widget.text)
+      ..setFormatRanges(widget.formatRanges);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Изменить сообщение',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Outfit',
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            minLines: 1,
+            maxLines: 6,
+            style: TextStyle(color: cs.onSurface),
+            contextMenuBuilder: (ctx, state) =>
+                widget.contextMenuBuilder(_controller, ctx, state),
+            decoration: InputDecoration(
+              hintText: 'Текст сообщения',
+              filled: true,
+              fillColor: cs.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(_controller.buildContent()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
     );
   }
 }
