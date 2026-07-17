@@ -230,7 +230,7 @@ class _MessageActionsLayer extends StatefulWidget {
 }
 
 class _MessageActionsLayerState extends State<_MessageActionsLayer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _animController;
   late final Animation<double> _animation;
   late final AnimationController _expandController;
