@@ -146,6 +146,7 @@ class VideoBubble extends StatelessWidget {
             padding: const EdgeInsets.only(
               left: BubbleContext.captionPaddingHorizontal,
               right: BubbleContext.captionPaddingRight,
+              top: BubbleContext.captionPaddingTop,
               bottom: 6,
             ),
             child: Row(

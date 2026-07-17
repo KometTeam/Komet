@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -52,12 +53,7 @@ class PhotoBubble extends StatelessWidget {
     }
 
     if (count == 1) {
-      final photo = photos[0];
-      final pw = photo.width?.toDouble() ?? 200;
-      final photoWidth = pw.clamp(
-        BubbleContext.photoMinSize,
-        BubbleContext.photoMaxSize,
-      );
+      final photoWidth = _displaySize(photos[0]).width;
 
       return SizedBox(
         width: photoWidth,
@@ -70,6 +66,7 @@ class PhotoBubble extends StatelessWidget {
               padding: const EdgeInsets.only(
                 left: BubbleContext.captionPaddingHorizontal,
                 right: BubbleContext.captionPaddingRight,
+                top: BubbleContext.captionPaddingTop,
                 bottom: 6,
               ),
               child: Row(
@@ -94,6 +91,7 @@ class PhotoBubble extends StatelessWidget {
           padding: const EdgeInsets.only(
             left: BubbleContext.captionPaddingHorizontal,
             right: BubbleContext.captionPaddingRight,
+            top: BubbleContext.captionPaddingTop,
             bottom: 6,
           ),
           child: Row(
@@ -108,18 +106,40 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildSinglePhoto(BubbleContext ctx, PhotoAttachment photo) {
+  Size _displaySize(PhotoAttachment photo) {
     final width = photo.width?.toDouble() ?? 200;
     final height = photo.height?.toDouble() ?? 200;
 
-    final constrainedWidth = width.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
+    final downScale = math.min(
+      1.0,
+      math.min(
+        BubbleContext.photoMaxSize / width,
+        BubbleContext.photoMaxSize / height,
+      ),
     );
-    final constrainedHeight = height.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
+    var displayWidth = width * downScale;
+    var displayHeight = height * downScale;
+
+    final upScale = math.max(
+      1.0,
+      math.max(
+        BubbleContext.photoMinSize / displayWidth,
+        BubbleContext.photoMinSize / displayHeight,
+      ),
     );
+    displayWidth *= upScale;
+    displayHeight *= upScale;
+
+    return Size(
+      displayWidth.clamp(BubbleContext.photoMinSize, BubbleContext.photoMaxSize),
+      displayHeight.clamp(BubbleContext.photoMinSize, BubbleContext.photoMaxSize),
+    );
+  }
+
+  Widget _buildSinglePhoto(BubbleContext ctx, PhotoAttachment photo) {
+    final size = _displaySize(photo);
+    final constrainedWidth = size.width;
+    final constrainedHeight = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
     final matchTop = ctx.hasPhotoWithCaption;

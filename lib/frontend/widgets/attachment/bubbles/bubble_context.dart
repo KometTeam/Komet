@@ -45,8 +45,9 @@ class BubbleContext {
   static const double photoMinSize = 100.0;
   static const double photoBorderRadius = 12.0;
   static const double bubbleBorderRadius = 20.0;
-  static const double captionPaddingHorizontal = 6.0;
-  static const double captionPaddingRight = 4.0;
+  static const double captionPaddingHorizontal = 10.0;
+  static const double captionPaddingRight = 6.0;
+  static const double captionPaddingTop = 6.0;
   static const double compactTimePadding = 8.0;
 
   final BuildContext context;
