@@ -6620,6 +6620,7 @@ class _EditMessageSheetState extends State<_EditMessageSheet> {
             autofocus: true,
             minLines: 1,
             maxLines: 6,
+            textCapitalization: TextCapitalization.sentences,
             style: TextStyle(color: cs.onSurface),
             contextMenuBuilder: (ctx, state) =>
                 widget.contextMenuBuilder(_controller, ctx, state),

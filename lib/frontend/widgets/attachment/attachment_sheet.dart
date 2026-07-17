@@ -799,6 +799,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                   controller: _captionCtrl,
                   style: TextStyle(color: cs.onSurface, fontSize: 15),
                   cursorColor: cs.primary,
+                  textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
                     isCollapsed: true,
                     border: InputBorder.none,
