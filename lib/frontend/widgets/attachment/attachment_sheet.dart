@@ -1,8 +1,11 @@
 import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_nav_pill_style.dart';
@@ -177,11 +180,17 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
-  void _onCameraTap() {
-    showCustomNotification(
-      context,
-      AppLocalizations.of(context)!.attachSheetCameraComingSoon,
-    );
+  Future<void> _onCameraTap() async {
+    final l10n = AppLocalizations.of(context)!;
+    XFile? shot;
+    try {
+      shot = await ImagePicker().pickImage(source: ImageSource.camera);
+    } catch (_) {
+      if (mounted) showCustomNotification(context, l10n.attachSheetCameraError);
+      return;
+    }
+    if (shot == null || !mounted) return;
+    _openPreview(CameraGalleryItem(File(shot.path)));
   }
 
   void _sendSelection({GalleryItem? fallback}) {
@@ -840,34 +849,156 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   }
 }
 
-class _CameraTile extends StatelessWidget {
+class _CameraTile extends StatefulWidget {
   final VoidCallback onTap;
   final ColorScheme cs;
 
   const _CameraTile({required this.onTap, required this.cs});
 
   @override
+  State<_CameraTile> createState() => _CameraTileState();
+}
+
+class _CameraTileState extends State<_CameraTile> with WidgetsBindingObserver {
+  CameraController? _controller;
+  bool _starting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _maybeStartPreview();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _maybeStartPreview();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _stopPreview();
+    }
+  }
+
+  Future<void> _maybeStartPreview() async {
+    if (_starting || _controller != null) return;
+    if (!(Platform.isAndroid || Platform.isIOS)) return;
+    if (!await Permission.camera.status.isGranted) return;
+    _starting = true;
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty || !mounted) return;
+      final back = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+      final controller = CameraController(
+        back,
+        ResolutionPreset.low,
+        enableAudio: false,
+      );
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() => _controller = controller);
+    } catch (_) {
+      // keep the fallback tile
+    } finally {
+      _starting = false;
+    }
+  }
+
+  void _stopPreview() {
+    final controller = _controller;
+    if (controller == null) return;
+    _controller = null;
+    controller.dispose();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cs = widget.cs;
+    final controller = _controller;
+    final hasPreview = controller != null && controller.value.isInitialized;
+
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        color: cs.surfaceContainerHighest,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Symbols.photo_camera,
-              size: 34,
-              color: cs.onSurface,
-              weight: 400,
+      onTap: widget.onTap,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasPreview)
+            _buildPreview(controller)
+          else
+            Container(color: cs.surfaceContainerHighest),
+          if (hasPreview)
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00000000), Color(0x66000000)],
+                ),
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              AppLocalizations.of(context)!.attachSheetCamera,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+          Align(
+            alignment: hasPreview ? Alignment.bottomLeft : Alignment.center,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: hasPreview
+                  ? const Icon(
+                      Symbols.photo_camera,
+                      size: 22,
+                      color: Colors.white,
+                      weight: 500,
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Symbols.photo_camera,
+                          size: 34,
+                          color: cs.onSurface,
+                          weight: 400,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          AppLocalizations.of(context)!.attachSheetCamera,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreview(CameraController controller) {
+    final size = controller.value.previewSize;
+    if (size == null) {
+      return Container(color: widget.cs.surfaceContainerHighest);
+    }
+    return ClipRect(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: size.height,
+          height: size.width,
+          child: CameraPreview(controller),
         ),
       ),
     );

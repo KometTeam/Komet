@@ -1877,6 +1877,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachSheetCameraComingSoon => 'Camera is coming soon';
 
   @override
+  String get attachSheetCameraError => 'Couldn\'t open the camera';
+
+  @override
   String get attachSheetSendFileTitle => 'Send a file';
 
   @override
