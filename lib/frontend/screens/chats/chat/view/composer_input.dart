@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'package:komet/backend/modules/messages.dart';
-import 'package:komet/core/config/app_chat_chrome.dart';
-import 'package:komet/core/config/app_colors.dart';
-import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
-import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
-import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
-import 'package:komet/frontend/widgets/glossy_pill.dart';
-import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:fuckmax/backend/modules/messages.dart';
+import 'package:fuckmax/core/config/app_chat_chrome.dart';
+import 'package:fuckmax/core/config/app_colors.dart';
+import 'package:fuckmax/frontend/screens/chats/chat/upload_status.dart';
+import 'package:fuckmax/frontend/screens/chats/chat/video_note_controller.dart';
+import 'package:fuckmax/frontend/screens/chats/chat/voice_record_controller.dart';
+import 'package:fuckmax/frontend/widgets/glossy_pill.dart';
+import 'package:fuckmax/frontend/widgets/rich_message_controller.dart';
 
 class ComposerInputBar extends StatelessWidget {
   const ComposerInputBar({

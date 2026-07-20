@@ -52,7 +52,7 @@ class DeepLinkService {
     final pending = _pending;
     if (pending == null || !_ready) return;
     if (api.state != SessionState.online) return;
-    final context = KometApp.navigatorKey.currentContext;
+    final context = FuckmaxApp.navigatorKey.currentContext;
     if (context == null) return;
 
     _pending = null;
@@ -68,7 +68,7 @@ class DeepLinkService {
       return null;
     }
 
-    if (scheme == 'komet' || scheme == 'max') {
+    if (scheme == 'fuckmax' || scheme == 'max') {
       final segments = <String>[
         if (uri.host.isNotEmpty && uri.host.toLowerCase() != 'max.ru') uri.host,
         ...uri.pathSegments,

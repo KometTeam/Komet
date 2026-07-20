@@ -47,12 +47,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/Komet-windows-x64.zip
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/Fuckmax-windows-x64.zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: komet-windows-x64
-          path: dist/Komet-windows-x64.zip
+          name: fuckmax-windows-x64
+          path: dist/Fuckmax-windows-x64.zip
           if-no-files-found: error
           retention-days: 30

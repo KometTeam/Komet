@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="Komet"
+APP_NAME="Fuckmax"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_PATH="$PROJECT_ROOT/build/macos/Build/Products/Release/$APP_NAME.app"
 

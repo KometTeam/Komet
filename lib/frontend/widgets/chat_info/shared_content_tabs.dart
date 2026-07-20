@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:komet/main.dart';
+import 'package:fuckmax/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:ogg_opus_player/ogg_opus_player.dart';
 
@@ -21,7 +21,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/attachment.dart';
 import '../../screens/chats/chat_screen.dart';
 import '../custom_notification.dart';
-import '../komet_avatar.dart';
+import '../fuckmax_avatar.dart';
 import '../photo_viewer.dart';
 import '../swipe_route.dart';
 import '../video_player_screen.dart';
@@ -415,7 +415,7 @@ class _CommonChatsTabState extends State<CommonChatsTab> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            KometAvatar(
+            FuckmaxAvatar(
               name: chat.title,
               imageUrl: chat.iconUrl,
               size: 46,

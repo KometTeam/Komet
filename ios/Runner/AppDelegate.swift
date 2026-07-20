@@ -12,7 +12,7 @@ import UIKit
     let controller = window?.rootViewController as? FlutterViewController
     if let messenger = controller?.binaryMessenger {
       let channel = FlutterMethodChannel(
-        name: "ru.komet.app/app_icon",
+        name: "ru.fuckmax.app/app_icon",
         binaryMessenger: messenger
       )
       channel.setMethodCallHandler { (call, result) in

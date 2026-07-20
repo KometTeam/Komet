@@ -268,7 +268,7 @@ class ContactsModule {
           firstName: '$first ${i + 1}',
           lastName: last,
           phone: 79000000000 + i,
-          baseUrl: 'https://i.pravatar.cc/150?u=komet_debug_$i',
+          baseUrl: 'https://i.pravatar.cc/150?u=fuckmax_debug_$i',
           updateTime: 1,
           options: i % 6 == 0 ? const {'OFFICIAL'} : const {},
         ),

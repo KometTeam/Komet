@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import 'package:komet/core/storage/chat_activity_store.dart';
-import 'package:komet/frontend/widgets/animated_text_swap.dart';
+import 'package:fuckmax/core/storage/chat_activity_store.dart';
+import 'package:fuckmax/frontend/widgets/animated_text_swap.dart';
 
 class AnimatedChatTile extends StatefulWidget {
   final Widget child;

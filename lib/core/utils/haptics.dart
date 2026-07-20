@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Centralized tactile feedback for Komet.
+/// Centralized tactile feedback for Fuckmax.
 ///
 /// Wraps Flutter's [HapticFeedback] so the whole app speaks one tactile
 /// "language": the same gesture always feels the same. Composite patterns

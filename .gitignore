@@ -136,7 +136,7 @@ agents.md
 .env
 .env.*
 # Локальные дампы трафика и скрипты анализа (содержат секреты)
-komet.txt
+fuckmax.txt
 original_app.txt
 fingerprint.py
 PCAPdroid_*.txt

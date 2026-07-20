@@ -1,4 +1,4 @@
-package ru.komet.app
+package ru.fuckmax.app
 
 object NfcExchange {
 

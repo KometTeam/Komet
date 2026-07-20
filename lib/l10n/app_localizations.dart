@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginTitle.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to Komet'**
+  /// **'Sign in to Fuckmax'**
   String get loginTitle;
 
   /// No description provided for @loginSubtitle.
@@ -1343,7 +1343,7 @@ abstract class AppLocalizations {
   /// No description provided for @devicesPromoTitle.
   ///
   /// In en, this message translates to:
-  /// **'Devices in KOMET'**
+  /// **'Devices in FUCKMAX'**
   String get devicesPromoTitle;
 
   /// No description provided for @devicesPromoSubtitle.
@@ -1652,11 +1652,11 @@ abstract class AppLocalizations {
   /// **'Not bad at all!'**
   String get appearancePreviewNotBad;
 
-  /// No description provided for @callKometDetectedNotification.
+  /// No description provided for @callFuckmaxDetectedNotification.
   ///
   /// In en, this message translates to:
-  /// **'This person uses Komet! :3'**
-  String get callKometDetectedNotification;
+  /// **'This person uses Fuckmax! :3'**
+  String get callFuckmaxDetectedNotification;
 
   /// No description provided for @callStatusConnecting.
   ///
@@ -1694,11 +1694,11 @@ abstract class AppLocalizations {
   /// **'Minimize'**
   String get callTooltipMinimize;
 
-  /// No description provided for @callTooltipKometHub.
+  /// No description provided for @callTooltipFuckmaxHub.
   ///
   /// In en, this message translates to:
-  /// **'Komet'**
-  String get callTooltipKometHub;
+  /// **'Fuckmax'**
+  String get callTooltipFuckmaxHub;
 
   /// No description provided for @callInfoTitle.
   ///
@@ -1979,7 +1979,7 @@ abstract class AppLocalizations {
   /// No description provided for @hubTitleMenu.
   ///
   /// In en, this message translates to:
-  /// **'Komet'**
+  /// **'Fuckmax'**
   String get hubTitleMenu;
 
   /// No description provided for @hubChatPageTitle.

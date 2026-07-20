@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_colors.dart';
-import '../../../../core/config/komet_settings.dart';
+import '../../../../core/config/fuckmax_settings.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
@@ -87,7 +87,7 @@ class BubbleContext {
   }) : dim = text.withValues(alpha: 0.7);
 
   String get clockText {
-    final full = KometSettings.fullTimestamp.value;
+    final full = FuckmaxSettings.fullTimestamp.value;
     final cached = _clockTextCache[message];
     if (cached != null && cached.full == full) return cached.text;
     final t = formatClock(

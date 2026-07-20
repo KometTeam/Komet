@@ -49,14 +49,14 @@ jobs:
         run: |
           mkdir -p dist build/ios/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
-          (cd build/ios && zip -qr ../../dist/Komet-ios-unsigned.ipa Payload)
+          (cd build/ios && zip -qr ../../dist/Fuckmax-ios-unsigned.ipa Payload)
           rm -rf build/ios/Payload
 
       - name: Upload unsigned iOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: komet-ios-unsigned
-          path: dist/Komet-ios-unsigned.ipa
+          name: fuckmax-ios-unsigned
+          path: dist/Fuckmax-ios-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
 
@@ -96,12 +96,12 @@ jobs:
         run: |
           mkdir -p dist build/ios/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
-          (cd build/ios && zip -qr ../../dist/Komet-ios-pseudosigned.ipa Payload)
+          (cd build/ios && zip -qr ../../dist/Fuckmax-ios-pseudosigned.ipa Payload)
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: komet-ios-pseudosigned
-          path: dist/Komet-ios-pseudosigned.ipa
+          name: fuckmax-ios-pseudosigned
+          path: dist/Fuckmax-ios-pseudosigned.ipa
           if-no-files-found: error
           retention-days: 30

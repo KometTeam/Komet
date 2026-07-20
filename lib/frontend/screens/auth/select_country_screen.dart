@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:komet/core/config/countries.dart';
-import 'package:komet/l10n/app_localizations.dart';
+import 'package:fuckmax/core/config/countries.dart';
+import 'package:fuckmax/l10n/app_localizations.dart';
 
 class SelectCountryScreen extends StatefulWidget {
   final CountryName selectedCountry;

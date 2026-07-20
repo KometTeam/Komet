@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:komet/core/storage/app_instance.dart';
-import 'package:komet/core/utils/logger.dart';
+import 'package:fuckmax/core/storage/app_instance.dart';
+import 'package:fuckmax/core/utils/logger.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactorySqflitePlugin;
@@ -194,11 +194,11 @@ class AppDatabase {
     if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) return;
     try {
       if (await File(target).exists()) return;
-      final legacy = File(join(await getDatabasesPath(), 'komet.db'));
+      final legacy = File(join(await getDatabasesPath(), 'fuckmax.db'));
       if (legacy.path == target) return;
       if (await legacy.exists()) {
         await legacy.copy(target);
-        logger.i('[db] перенёс komet.db -> $target');
+        logger.i('[db] перенёс fuckmax.db -> $target');
       }
     } catch (e) {
       logger.w('legacy db migration failed: $e');
@@ -208,7 +208,7 @@ class AppDatabase {
   static Future<Database> _open() async {
     final dbPath = await _databasesDir();
     await Directory(dbPath).create(recursive: true);
-    final target = join(dbPath, 'komet${AppInstance.suffix}.db');
+    final target = join(dbPath, 'fuckmax${AppInstance.suffix}.db');
     await _migrateLegacyDb(target);
     return openDatabase(
       target,

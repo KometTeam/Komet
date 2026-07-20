@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 /// Circular avatar: shows [imageUrl] when available, otherwise the first letter
 /// of [name] on a colored background. Falls back to the letter on image error.
-class KometAvatar extends StatelessWidget {
+class FuckmaxAvatar extends StatelessWidget {
   final String name;
   final String? imageUrl;
   final double size;
@@ -11,7 +11,7 @@ class KometAvatar extends StatelessWidget {
   final Color? foregroundColor;
   final double? fontSize;
 
-  const KometAvatar({
+  const FuckmaxAvatar({
     super.key,
     required this.name,
     required this.size,

@@ -7,7 +7,7 @@ import '../widgets/connection_status.dart';
 import 'debug_toggle_tile.dart';
 
 class DebugNetworkSection extends StatelessWidget {
-  final KometAppState? appState;
+  final FuckmaxAppState? appState;
 
   const DebugNetworkSection({super.key, required this.appState});
 

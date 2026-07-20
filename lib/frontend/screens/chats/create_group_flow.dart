@@ -11,7 +11,7 @@ import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/names.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
@@ -313,7 +313,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                         ),
                         child: Row(
                           children: [
-                            KometAvatar(
+                            FuckmaxAvatar(
                               name: c.firstName,
                               size: 40,
                               imageUrl: c.baseUrl,
@@ -530,7 +530,7 @@ class _SelectedChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            KometAvatar(
+            FuckmaxAvatar(
               name: contact.firstName,
               size: 24,
               imageUrl: contact.baseUrl,

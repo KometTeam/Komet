@@ -5,8 +5,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
-import 'package:komet/core/config/chat_wallpaper_themes.dart';
-import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import 'package:fuckmax/core/config/chat_wallpaper_themes.dart';
+import 'package:fuckmax/core/storage/chat_wallpaper_store.dart';
 
 class ChatWallpaperView extends StatelessWidget {
   final ChatWallpaper wallpaper;

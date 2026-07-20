@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/utils/haptics.dart';
 import '../../../models/story.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import 'story_owner_info.dart';
 
 /// Кольцо-превью истории владельца в шапке списка чатов.
@@ -95,7 +95,7 @@ class _StoryRingState extends State<StoryRing> {
                               color: cs.surface,
                             ),
                           ),
-                          KometAvatar(
+                          FuckmaxAvatar(
                             name: name == '…' ? '?' : name,
                             size: diameter,
                             imageUrl: info?.avatarUrl,
@@ -288,7 +288,7 @@ class _StorySelfTileState extends State<StorySelfTile> {
                           color: cs.surface,
                         ),
                       ),
-                      KometAvatar(
+                      FuckmaxAvatar(
                         name: widget.selfInfo?.name.isNotEmpty == true
                             ? widget.selfInfo!.name
                             : '+',
@@ -381,7 +381,7 @@ class FoldedStoryStack extends StatelessWidget {
                     width: 1.5,
                   ),
                 ),
-                child: KometAvatar(
+                child: FuckmaxAvatar(
                   name: info?.name.isNotEmpty == true ? info!.name : '?',
                   size: 28,
                   imageUrl: info?.avatarUrl,

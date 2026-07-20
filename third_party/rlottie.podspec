@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name             = 'rlottie'
   s.version          = '0.2.0'
-  s.summary          = 'Samsung rlottie native Lottie renderer for Komet.'
+  s.summary          = 'Samsung rlottie native Lottie renderer for Fuckmax.'
   s.description      = 'Compiles the Samsung/rlottie submodule sources into the app so the native animation engine can be reached via dart:ffi (DynamicLibrary.process()).'
   s.homepage         = 'https://github.com/Samsung/rlottie'
   s.license          = { :type => 'MIT', :file => 'rlottie/COPYING' }

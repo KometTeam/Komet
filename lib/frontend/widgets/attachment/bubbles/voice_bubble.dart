@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:ogg_opus_player/ogg_opus_player.dart';
-import 'package:komet/main.dart';
+import 'package:fuckmax/main.dart';
 
 import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_colors.dart';
-import '../../../../core/config/komet_settings.dart';
+import '../../../../core/config/fuckmax_settings.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../core/utils/media_cache.dart';
@@ -334,7 +334,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                 Text(
                   formatClock(
                     DateTime.fromMillisecondsSinceEpoch(widget.time),
-                    withSeconds: KometSettings.fullTimestamp.value,
+                    withSeconds: FuckmaxSettings.fullTimestamp.value,
                   ),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),
@@ -363,7 +363,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                 Text(
                   formatClock(
                     DateTime.fromMillisecondsSinceEpoch(widget.time),
-                    withSeconds: KometSettings.fullTimestamp.value,
+                    withSeconds: FuckmaxSettings.fullTimestamp.value,
                   ),
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.6),

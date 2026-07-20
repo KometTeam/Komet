@@ -106,7 +106,7 @@ class _ThemeModeCard extends StatelessWidget {
                       onTap: (position) {
                         if (current == item.mode) return;
                         Haptics.selection();
-                        KometApp.stateOf(
+                        FuckmaxApp.stateOf(
                           context,
                         )?.applyThemeModeWithReveal(item.mode, position);
                       },
@@ -207,7 +207,7 @@ class _AmoledCardState extends State<_AmoledCard> {
                   value: value,
                   onChanged: (v) {
                     Haptics.selection();
-                    KometApp.stateOf(
+                    FuckmaxApp.stateOf(
                       context,
                     )?.applyAmoledWithReveal(v, _lastPointerPosition);
                   },
@@ -270,7 +270,7 @@ class _ScheduleCard extends StatelessWidget {
                           time: schedule.darkStart,
                           enabled: enabled,
                           onPick: (picked) {
-                            KometApp.stateOf(context)?.applyThemeSchedule(
+                            FuckmaxApp.stateOf(context)?.applyThemeSchedule(
                               ThemeSchedule(
                                 darkStart: picked,
                                 darkEnd: schedule.darkEnd,
@@ -285,7 +285,7 @@ class _ScheduleCard extends StatelessWidget {
                           time: schedule.darkEnd,
                           enabled: enabled,
                           onPick: (picked) {
-                            KometApp.stateOf(context)?.applyThemeSchedule(
+                            FuckmaxApp.stateOf(context)?.applyThemeSchedule(
                               ThemeSchedule(
                                 darkStart: schedule.darkStart,
                                 darkEnd: picked,

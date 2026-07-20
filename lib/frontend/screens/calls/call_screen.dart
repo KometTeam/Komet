@@ -24,7 +24,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
-import 'komet_hub.dart';
+import 'fuckmax_hub.dart';
 
 const Color _kEndRed = Color(0xFFE5484D);
 const Color _kAcceptGreen = Color(0xFF2EC36B);
@@ -56,7 +56,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   StreamSubscription<CallSessionState>? _stateSub;
   StreamSubscription<void>? _canceledSub;
   StreamSubscription<void>? _infoSub;
-  StreamSubscription<void>? _kometSub;
+  StreamSubscription<void>? _fuckmaxSub;
   StreamSubscription<CallChatMessage>? _chatSub;
   StreamSubscription<MediaStream>? _remoteStreamSub;
   bool _chatOpen = false;
@@ -211,10 +211,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       setState(() {});
     });
     _remoteStreamSub = session.remoteStreamStream.listen(_attachStream);
-    _kometSub = session.peerKometDetected.listen((_) => _showKometBadge());
+    _fuckmaxSub = session.peerFuckmaxDetected.listen((_) => _showFuckmaxBadge());
     _chatSub = session.chatMessages.listen(_onChatMessage);
-    if (session.peerIsKomet) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showKometBadge());
+    if (session.peerIsFuckmax) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showFuckmaxBadge());
     }
     final existing = session.remoteStream;
     if (existing != null) _attachStream(existing);
@@ -222,10 +222,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _syncVideo();
   }
 
-  void _showKometBadge() {
+  void _showFuckmaxBadge() {
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    showCustomNotification(context, l10n.callKometDetectedNotification);
+    showCustomNotification(context, l10n.callFuckmaxDetectedNotification);
   }
 
   void _onChatMessage(CallChatMessage message) {
@@ -233,11 +233,11 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     showCustomNotification(context, message.text);
   }
 
-  Future<void> _openKometHub() async {
+  Future<void> _openFuckmaxHub() async {
     final session = _session;
     if (session == null) return;
     setState(() => _chatOpen = true);
-    await showKometHub(context, session: session, scheme: _darkScheme(context));
+    await showFuckmaxHub(context, session: session, scheme: _darkScheme(context));
     if (mounted) setState(() => _chatOpen = false);
   }
 
@@ -361,7 +361,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _stateSub?.cancel();
     _canceledSub?.cancel();
     _infoSub?.cancel();
-    _kometSub?.cancel();
+    _fuckmaxSub?.cancel();
     _chatSub?.cancel();
     _remoteStreamSub?.cancel();
     _dotsController.dispose();
@@ -876,10 +876,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_session?.peerIsKomet == true)
+                  if (_session?.peerIsFuckmax == true)
                     IconButton(
-                      onPressed: _openKometHub,
-                      tooltip: l10n.callTooltipKometHub,
+                      onPressed: _openFuckmaxHub,
+                      tooltip: l10n.callTooltipFuckmaxHub,
                       icon: Icon(
                         Symbols.auto_awesome,
                         color: cs.primary,

@@ -51,12 +51,12 @@ jobs:
       - name: Package Linux
         run: |
           mkdir -p dist
-          tar -C build/linux/x64/release/bundle -czf dist/Komet-linux-x64.tar.gz .
+          tar -C build/linux/x64/release/bundle -czf dist/Fuckmax-linux-x64.tar.gz .
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: komet-linux-x64
-          path: dist/Komet-linux-x64.tar.gz
+          name: fuckmax-linux-x64
+          path: dist/Fuckmax-linux-x64.tar.gz
           if-no-files-found: error
           retention-days: 30

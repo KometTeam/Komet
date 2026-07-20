@@ -64,68 +64,68 @@ jobs:
             echo "KEYSTORE_BASE64 secret not set — release will be debug-signed."
             exit 0
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/komet-release.jks
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/fuckmax-release.jks
           {
             echo "storePassword=$KEYSTORE_PASSWORD"
             echo "keyPassword=$KEY_PASSWORD"
             echo "keyAlias=$KEY_ALIAS"
-            echo "storeFile=komet-release.jks"
+            echo "storeFile=fuckmax-release.jks"
           } > android/key.properties
           echo "Release signing configured."
 
       - name: Build Universal APK
-        run: flutter build apk --release --flavor komet --obfuscate --split-debug-info=build/symbols
+        run: flutter build apk --release --flavor fuckmax --obfuscate --split-debug-info=build/symbols
 
       - name: Build Split APKs
-        run: flutter build apk --release --split-per-abi --flavor komet --obfuscate --split-debug-info=build/symbols
+        run: flutter build apk --release --split-per-abi --flavor fuckmax --obfuscate --split-debug-info=build/symbols
 
       - name: Upload Universal APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-universal
-          path: build/app/outputs/flutter-apk/app-komet-release.apk
+          name: fuckmax-android-universal
+          path: build/app/outputs/flutter-apk/app-fuckmax-release.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-arm64-v8a
-          path: build/app/outputs/flutter-apk/app-arm64-v8a-komet-release.apk
+          name: fuckmax-android-arm64-v8a
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-fuckmax-release.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload armeabi-v7a APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-armeabi-v7a
-          path: build/app/outputs/flutter-apk/app-armeabi-v7a-komet-release.apk
+          name: fuckmax-android-armeabi-v7a
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-fuckmax-release.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload x86_64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-x86_64
-          path: build/app/outputs/flutter-apk/app-x86_64-komet-release.apk
+          name: fuckmax-android-x86_64
+          path: build/app/outputs/flutter-apk/app-x86_64-fuckmax-release.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Build App Bundle
-        run: flutter build appbundle --release --flavor komet --obfuscate --split-debug-info=build/symbols
+        run: flutter build appbundle --release --flavor fuckmax --obfuscate --split-debug-info=build/symbols
 
       - name: Upload App Bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-aab
-          path: build/app/outputs/bundle/kometRelease/app-komet-release.aab
+          name: fuckmax-android-aab
+          path: build/app/outputs/bundle/fuckmaxRelease/app-fuckmax-release.aab
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload debug symbols
         uses: actions/upload-artifact@v4
         with:
-          name: komet-android-symbols
+          name: fuckmax-android-symbols
           path: build/symbols
           if-no-files-found: error
           retention-days: 90

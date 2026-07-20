@@ -22,7 +22,7 @@ Future<void> resetDigitalIdSession() async {
 const String _kBridge = r'''
 (function(){
   var sawOpenLink = false;
-  var DBG = !!window.__KOMET_DID_DEBUG;
+  var DBG = !!window.__FUCKMAX_DID_DEBUG;
   function log(m){ if (!DBG) return; try { console.log('[BRIDGE] ' + m); } catch(e){} }
   if (DBG) {
     try {
@@ -40,7 +40,7 @@ const String _kBridge = r'''
       };
     } catch(e){}
   }
-  function ssKey(k){ return 'komet_did_ss_' + k; }
+  function ssKey(k){ return 'fuckmax_did_ss_' + k; }
   function userId(){
     try {
       var h = decodeURIComponent(decodeURIComponent(location.hash || ''));
@@ -55,7 +55,7 @@ const String _kBridge = r'''
   }
   try {
     var uid = userId();
-    if (localStorage.getItem('komet_did_owner') !== uid) {
+    if (localStorage.getItem('fuckmax_did_owner') !== uid) {
       try { localStorage.clear(); } catch(e){}
       try { sessionStorage.clear(); } catch(e){}
       try {
@@ -65,7 +65,7 @@ const String _kBridge = r'''
           });
         }
       } catch(e){}
-      localStorage.setItem('komet_did_owner', uid);
+      localStorage.setItem('fuckmax_did_owner', uid);
     }
   } catch(e){}
   function reply(type, data){
@@ -75,7 +75,7 @@ const String _kBridge = r'''
   }
   function bioToken(){
     try {
-      var k = 'komet_did_bio_token';
+      var k = 'fuckmax_did_bio_token';
       var v = localStorage.getItem(k);
       if (!v) {
         v = '';
@@ -83,10 +83,10 @@ const String _kBridge = r'''
         localStorage.setItem(k, v);
       }
       return v;
-    } catch(e){ return 'komet-did-fallback-token'; }
+    } catch(e){ return 'fuckmax-did-fallback-token'; }
   }
   function tokenSaved(){
-    try { return !!localStorage.getItem('komet_did_bio_token'); } catch(e){ return false; }
+    try { return !!localStorage.getItem('fuckmax_did_bio_token'); } catch(e){ return false; }
   }
   function handle(type, dataStr){
     var data = {};
@@ -100,7 +100,7 @@ const String _kBridge = r'''
           access_requested: tokenSaved(), accessRequested: tokenSaved(),
           access_granted: tokenSaved(), accessGranted: tokenSaved(),
           token_saved: tokenSaved(), tokenSaved: tokenSaved(),
-          device_id: 'komet-device', deviceId: 'komet-device',
+          device_id: 'fuckmax-device', deviceId: 'fuckmax-device',
           type: 'face', biometricType: 'face'
         });
         return;
@@ -169,7 +169,7 @@ class DigitalIdWebScreen extends StatelessWidget {
       loader: () => webAppModule.fetchDigitalId(),
       extraUserScripts: [
         UserScript(
-          source: 'window.__KOMET_DID_DEBUG=$kDebugMode;',
+          source: 'window.__FUCKMAX_DID_DEBUG=$kDebugMode;',
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
         UserScript(
@@ -188,14 +188,14 @@ class DigitalIdWebScreen extends StatelessWidget {
       },
       onConsoleMessage: kDebugMode
           ? (controller, consoleMessage) {
-              debugPrint('[KOMET-DID] ${consoleMessage.message}');
+              debugPrint('[FUCKMAX-DID] ${consoleMessage.message}');
             }
           : null,
       onLoadStart: kDebugMode
           ? (controller, url) {
               final u = url?.toString() ?? '';
               debugPrint(
-                '[KOMET-DID] loadStart: ${u.length > 160 ? u.substring(0, 160) : u}',
+                '[FUCKMAX-DID] loadStart: ${u.length > 160 ? u.substring(0, 160) : u}',
               );
             }
           : null,
@@ -205,7 +205,7 @@ class DigitalIdWebScreen extends StatelessWidget {
         final scheme = uri?.scheme ?? '';
         if (kDebugMode) {
           debugPrint(
-            '[KOMET-DID] nav: ${url.length > 140 ? url.substring(0, 140) : url}',
+            '[FUCKMAX-DID] nav: ${url.length > 140 ? url.substring(0, 140) : url}',
           );
         }
         final isCallback =

@@ -46,7 +46,7 @@ jobs:
       - name: Upload macOS DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: komet-macos
+          name: fuckmax-macos
           path: dist/*.dmg
           if-no-files-found: error
           retention-days: 30

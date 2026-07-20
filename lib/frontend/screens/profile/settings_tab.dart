@@ -5,7 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/cache/self_presence.dart';
 import '../../../core/config/app_colors.dart';
-import '../../../core/config/komet_settings.dart';
+import '../../../core/config/fuckmax_settings.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
@@ -14,7 +14,7 @@ import '../../../main.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/info_action_sheet.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/custom_notification.dart';
@@ -31,7 +31,7 @@ import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
 import 'edit_profile_screen.dart';
 import 'info_screen.dart';
-import 'komet_settings_screen.dart';
+import 'fuckmax_settings_screen.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
@@ -57,7 +57,7 @@ class _SettingsTabState extends State<SettingsTab> {
     super.initState();
     _loadProfile();
     _loadAppVersion();
-    final appState = KometApp.stateOf(context);
+    final appState = FuckmaxApp.stateOf(context);
     if (appState != null) {
       _profileUpdateSub = appState.profileUpdateStream.listen((_) {
         if (mounted) _loadProfile();
@@ -198,7 +198,7 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   Future<void> _doLogout() async {
-    final navState = KometApp.navigatorKey.currentState;
+    final navState = FuckmaxApp.navigatorKey.currentState;
     try {
       await accountModule.logout();
     } catch (e) {
@@ -445,17 +445,17 @@ class _SettingsTabState extends State<SettingsTab> {
                   items: [
                     _SettingsItem(
                       leading: Image.asset(
-                        'assets/komet.png',
+                        'assets/fuckmax.png',
                         width: 22,
                         height: 22,
                         color: cs.onSurfaceVariant,
                       ),
-                      label: 'Komet',
+                      label: 'Fuckmax',
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const KometSettingsScreen(),
+                            builder: (context) => const FuckmaxSettingsScreen(),
                           ),
                         );
                       },
@@ -565,7 +565,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   width: 2.5,
                 ),
               ),
-              child: KometAvatar(
+              child: FuckmaxAvatar(
                 name: name,
                 imageUrl: _profile?.baseUrl,
                 size: 88,
@@ -632,7 +632,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Widget _buildOnlineStatus(ColorScheme cs) {
     return ValueListenableBuilder<bool>(
-      valueListenable: KometSettings.selfOnlineCheck,
+      valueListenable: FuckmaxSettings.selfOnlineCheck,
       builder: (context, enabled, _) {
         if (!enabled) return const SizedBox.shrink();
         return Padding(

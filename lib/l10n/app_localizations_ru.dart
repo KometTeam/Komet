@@ -9,7 +9,7 @@ class AppLocalizationsRu extends AppLocalizations {
   AppLocalizationsRu([String locale = 'ru']) : super(locale);
 
   @override
-  String get loginTitle => 'Войдите в Komet';
+  String get loginTitle => 'Войдите в Fuckmax';
 
   @override
   String get loginSubtitle =>
@@ -663,7 +663,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get devicesTitle => 'Устройства';
 
   @override
-  String get devicesPromoTitle => 'Устройства в KOMET';
+  String get devicesPromoTitle => 'Устройства в FUCKMAX';
 
   @override
   String get devicesPromoSubtitle => 'Кто имеет доступ к вашему аккаунту?';
@@ -828,8 +828,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearancePreviewNotBad => 'Вполне неплохо!';
 
   @override
-  String get callKometDetectedNotification =>
-      'Этот человек использует Komet! :3';
+  String get callFuckmaxDetectedNotification =>
+      'Этот человек использует Fuckmax! :3';
 
   @override
   String get callStatusConnecting => 'Соединение';
@@ -850,7 +850,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callTooltipMinimize => 'Свернуть';
 
   @override
-  String get callTooltipKometHub => 'Komet';
+  String get callTooltipFuckmaxHub => 'Fuckmax';
 
   @override
   String get callInfoTitle => 'О звонке';
@@ -993,7 +993,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callInfoNoDataYet => 'Данные появятся после соединения…';
 
   @override
-  String get hubTitleMenu => 'Komet';
+  String get hubTitleMenu => 'Fuckmax';
 
   @override
   String get hubChatPageTitle => 'Анонимный чат';

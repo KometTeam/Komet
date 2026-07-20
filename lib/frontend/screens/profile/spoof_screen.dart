@@ -373,7 +373,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       }
       await api.connect();
       if (mounted) {
-        final navState = KometApp.navigatorKey.currentState;
+        final navState = FuckmaxApp.navigatorKey.currentState;
         if (navState != null) {
           await navState.pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const LoginScreen()),

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "ru.komet" "\0"
-            VALUE "FileDescription", "Komet" "\0"
+            VALUE "CompanyName", "ru.fuckmax" "\0"
+            VALUE "FileDescription", "Fuckmax" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "Komet" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 ru.komet. All rights reserved." "\0"
-            VALUE "OriginalFilename", "Komet.exe" "\0"
-            VALUE "ProductName", "Komet" "\0"
+            VALUE "InternalName", "Fuckmax" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 ru.fuckmax. All rights reserved." "\0"
+            VALUE "OriginalFilename", "Fuckmax.exe" "\0"
+            VALUE "ProductName", "Fuckmax" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

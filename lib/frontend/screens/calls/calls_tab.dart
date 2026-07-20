@@ -8,7 +8,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../backend/modules/calls.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/chat_menu_overlay.dart';
@@ -169,7 +169,7 @@ class _CallsTabState extends State<CallsTab> {
                         color: cs.onPrimaryContainer,
                         size: 26,
                       )
-                    : KometAvatar(
+                    : FuckmaxAvatar(
                         name: call.name,
                         imageUrl: call.avatarUrl,
                         size: 48,

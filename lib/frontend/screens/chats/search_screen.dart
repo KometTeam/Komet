@@ -9,7 +9,7 @@ import '../../../backend/modules/contacts.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/names.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/swipe_route.dart';
 import '../contacts/contact_profile_screen.dart';
 import 'chat_screen.dart';
@@ -356,7 +356,7 @@ class _ResultTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(
           children: [
-            KometAvatar(name: name, size: 48, imageUrl: imageUrl),
+            FuckmaxAvatar(name: name, size: 48, imageUrl: imageUrl),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

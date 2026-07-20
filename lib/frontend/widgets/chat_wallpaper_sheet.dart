@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'package:komet/core/config/chat_wallpaper_themes.dart';
-import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import 'package:fuckmax/core/config/chat_wallpaper_themes.dart';
+import 'package:fuckmax/core/storage/chat_wallpaper_store.dart';
 
 enum WallpaperPickType { none, theme, gallery }
 

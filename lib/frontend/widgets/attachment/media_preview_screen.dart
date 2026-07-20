@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'package:komet/core/media/gallery_source.dart';
-import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
-import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:fuckmax/core/media/gallery_source.dart';
+import 'package:fuckmax/frontend/widgets/attachment/photo_editor.dart';
+import 'package:fuckmax/frontend/widgets/custom_notification.dart';
 
 import '../../../core/config/app_colors.dart';
 

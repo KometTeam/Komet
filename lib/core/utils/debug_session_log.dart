@@ -285,7 +285,7 @@ class DebugSessionLog {
     if (totalEntries == 0 && totalLogs == 0) return null;
 
     final buffer = StringBuffer();
-    buffer.writeln('Komet — отладочный лог');
+    buffer.writeln('Fuckmax — отладочный лог');
     if (endpoint != null) buffer.writeln('Сервер: $endpoint');
     buffer.writeln('Экспортирован: ${DateTime.now().toIso8601String()}');
     buffer.writeln('Заходов в приложение: ${lastN.length}');

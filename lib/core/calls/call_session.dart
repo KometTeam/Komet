@@ -91,10 +91,10 @@ class CallSession {
   static const int _speakHoldTicks = 3;
 
   RTCDataChannel? _probeChannel;
-  bool _peerIsKomet = false;
+  bool _peerIsFuckmax = false;
 
-  static const String _probeQuestion = 'AreYouKomet?';
-  static const String _probeAnswer = 'YesImKomet😎';
+  static const String _probeQuestion = 'AreYouFuckmax?';
+  static const String _probeAnswer = 'YesImFuckmax😎';
 
   final List<CallChatMessage> _chat = [];
   final _chatController = StreamController<CallChatMessage>.broadcast();
@@ -127,7 +127,7 @@ class CallSession {
   final _state = StreamController<CallSessionState>.broadcast();
   final _remoteStream = StreamController<MediaStream>.broadcast();
   final _info = StreamController<void>.broadcast();
-  final _kometDetected = StreamController<void>.broadcast();
+  final _fuckmaxDetected = StreamController<void>.broadcast();
 
   Stream<CallSessionState> get stateStream => _state.stream;
   Stream<MediaStream> get remoteStreamStream => _remoteStream.stream;
@@ -135,8 +135,8 @@ class CallSession {
 
   Stream<void> get infoUpdates => _info.stream;
 
-  Stream<void> get peerKometDetected => _kometDetected.stream;
-  bool get peerIsKomet => _peerIsKomet;
+  Stream<void> get peerFuckmaxDetected => _fuckmaxDetected.stream;
+  bool get peerIsFuckmax => _peerIsFuckmax;
 
   bool get isMuted => _muted;
   bool get peerMuted => _peerMuted;
@@ -512,7 +512,7 @@ class CallSession {
       init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
     );
 
-    await _setupKometProbe(pc);
+    await _setupFuckmaxProbe(pc);
 
     if (_isDesktop) await _preferVp8Codecs(pc);
 
@@ -569,11 +569,11 @@ class CallSession {
     }
   }
 
-  Future<void> _setupKometProbe(RTCPeerConnection pc) async {
+  Future<void> _setupFuckmaxProbe(RTCPeerConnection pc) async {
     if (_topology == 'SERVER') return;
     try {
       final channel = await pc.createDataChannel(
-        'komet',
+        'fuckmax',
         RTCDataChannelInit()..ordered = true,
       );
       _probeChannel = channel;
@@ -613,7 +613,7 @@ class CallSession {
     if (text == _probeQuestion) {
       _sendProbe(channel, _probeAnswer);
     } else if (text == _probeAnswer) {
-      _markPeerKomet();
+      _markPeerFuckmax();
     }
   }
 
@@ -659,11 +659,11 @@ class CallSession {
     if (!_chatController.isClosed) _chatController.add(message);
   }
 
-  void _markPeerKomet() {
-    if (_peerIsKomet) return;
-    _peerIsKomet = true;
-    logger.t('[call] peer is Komet');
-    if (!_kometDetected.isClosed) _kometDetected.add(null);
+  void _markPeerFuckmax() {
+    if (_peerIsFuckmax) return;
+    _peerIsFuckmax = true;
+    logger.t('[call] peer is Fuckmax');
+    if (!_fuckmaxDetected.isClosed) _fuckmaxDetected.add(null);
     _notifyInfo();
   }
 
@@ -835,7 +835,7 @@ class CallSession {
   Future<void> _pushRemoteTrack(MediaStreamTrack track) async {
     var stream = _remoteStreamRef;
     if (stream == null) {
-      stream = await createLocalMediaStream('komet_remote');
+      stream = await createLocalMediaStream('fuckmax_remote');
       _ownRemoteStream = true;
     }
     _remoteStreamRef = stream;
@@ -1150,7 +1150,7 @@ class CallSession {
     if (!_state.isClosed) await _state.close();
     if (!_remoteStream.isClosed) await _remoteStream.close();
     if (!_info.isClosed) await _info.close();
-    if (!_kometDetected.isClosed) await _kometDetected.close();
+    if (!_fuckmaxDetected.isClosed) await _fuckmaxDetected.close();
     if (!_chatController.isClosed) await _chatController.close();
     if (!_gameController.isClosed) await _gameController.close();
   }

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import '../../../../core/config/komet_settings.dart';
+import '../../../../core/config/fuckmax_settings.dart';
 
 class StickerPanelController {
   StickerPanelController({
@@ -50,7 +50,7 @@ class StickerPanelController {
   }
 
   void _sendTyping() {
-    if (KometSettings.ghostMode.value) return;
+    if (FuckmaxSettings.ghostMode.value) return;
     onSendTyping();
   }
 
