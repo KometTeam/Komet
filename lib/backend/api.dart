@@ -369,7 +369,7 @@ class Api {
     String deviceType = 'ANDROID';
     String osVersion = '';
     String deviceName = 'Unknown';
-    String architecture = 'arm64';
+    String architecture = 'arm64-v8a';
     String appVersion = SpoofingService.hardcodedAppVersion;
     int buildNumber = SpoofingService.hardcodedBuildNumber;
     String screen = '420dpi 420dpi 1080x2340';
@@ -390,7 +390,6 @@ class Api {
     if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
       osVersion = linuxInfo.name;
-      architecture = _archFromPlatformVersion();
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       osVersion = iosInfo.systemVersion;
@@ -399,11 +398,9 @@ class Api {
       final androidInfo = await deviceInfo.androidInfo;
       osVersion = 'Android ${androidInfo.version.release}';
       deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
-      architecture = androidInfo.supportedAbis.first;
     } else if (Platform.isWindows) {
       final windowsInfo = await deviceInfo.windowsInfo;
       osVersion = windowsInfo.productName;
-      architecture = _archFromPlatformVersion();
     }
 
     final spoofed = await SpoofingService.getSpoofedSessionData(
@@ -676,11 +673,6 @@ class Api {
         SelfPresence.markOfflineFromPing();
       }
     }
-  }
-
-  static String _archFromPlatformVersion() {
-    final v = Platform.version;
-    return v.substring(v.indexOf('_') + 1, v.length - 1);
   }
 
   static String? _serverErrorText(dynamic payload) {
