@@ -453,6 +453,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatInfoComments => 'comments:';
 
   @override
+  String get commentsWrite => 'Comment';
+
+  @override
+  String get commentsTitle => 'Comments';
+
+  @override
+  String commentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count comments',
+      one: '1 comment',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get chatInfoAplus => 'approved by Roskomnadzor:';
 
   @override

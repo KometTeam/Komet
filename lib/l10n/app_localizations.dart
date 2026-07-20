@@ -950,6 +950,24 @@ abstract class AppLocalizations {
   /// **'comments:'**
   String get chatInfoComments;
 
+  /// No description provided for @commentsWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get commentsWrite;
+
+  /// No description provided for @commentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments'**
+  String get commentsTitle;
+
+  /// No description provided for @commentsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 comment} other{{count} comments}}'**
+  String commentsCount(int count);
+
   /// No description provided for @chatInfoAplus.
   ///
   /// In en, this message translates to:

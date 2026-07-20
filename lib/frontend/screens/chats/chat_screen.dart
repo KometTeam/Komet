@@ -735,6 +735,7 @@ class _ChatScreenState extends State<ChatScreen>
         _messagesRev.value++;
       });
       _syncReactionNotifiersFromMessages();
+      _requestCommentCounts();
       _revealOrHoldInitial();
       return;
     }
@@ -754,6 +755,7 @@ class _ChatScreenState extends State<ChatScreen>
         _messages = first;
         _messagesRev.value++;
       });
+      _requestCommentCounts();
       _revealOrHoldInitial();
     }
   }
@@ -1550,6 +1552,7 @@ class _ChatScreenState extends State<ChatScreen>
     bool markLoaded = false,
   }) {
     final changed = _chatController.mergeMessages(decodedDesc);
+    _requestCommentCounts();
 
     if (!changed && !markLoaded) return;
 
@@ -1564,7 +1567,6 @@ class _ChatScreenState extends State<ChatScreen>
       _pruneReactionNotifiers();
       _chatController.persistSessionCache();
       _reapplyPinIfNeeded();
-      _requestCommentCounts();
     }
   }
 
@@ -1603,26 +1605,33 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   String _commentsLabelFor(String postId) {
+    final l10n = AppLocalizations.of(context)!;
     final count = _commentCounts[postId];
-    if (count == null || count == 0) return 'Комментировать';
-    if (count == 1) return '1 комментарий';
-    if (count % 10 == 1 && count % 100 != 11) return '$count комментарий';
-    return '$count комментариев';
+    if (count == null || count == 0) return l10n.commentsWrite;
+    return l10n.commentsCount(count);
   }
 
   void _openComments(CachedMessage post) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          chatId: widget.chatId,
-          name: widget.name,
-          imageUrl: widget.imageUrl,
-          chatType: 'CHANNEL',
-          commentPostId: post.id,
-          postMessage: _stripInlineKeyboard(post),
-        ),
-      ),
-    );
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => ChatScreen(
+              chatId: widget.chatId,
+              name: widget.name,
+              imageUrl: widget.imageUrl,
+              chatType: 'CHANNEL',
+              commentPostId: post.id,
+              postMessage: _stripInlineKeyboard(post),
+            ),
+          ),
+        )
+        .then((_) => _refreshCommentCount(post.id));
+  }
+
+  void _refreshCommentCount(String postId) {
+    if (!mounted) return;
+    _commentCountsRequested.remove(postId);
+    _requestCommentCounts();
   }
 
   CachedMessage _stripInlineKeyboard(CachedMessage post) {
@@ -2866,7 +2875,9 @@ class _ChatScreenState extends State<ChatScreen>
                             cs: cs,
                             embedded: widget.embedded,
                             chatId: widget.chatId,
-                            name: _commentsMode ? 'Комментарии' : widget.name,
+                            name: _commentsMode
+                                ? AppLocalizations.of(context)!.commentsTitle
+                                : widget.name,
                             imageUrl: widget.imageUrl,
                             chatType: widget.chatType,
                             isOfficial: chat?.isOfficial ?? false,
@@ -4962,6 +4973,9 @@ class _ChatScreenState extends State<ChatScreen>
                                   !_commentsMode &&
                                   (chat?.type ?? widget.chatType) == 'CHANNEL' &&
                                   !message.isControl;
+                              final bool isCommentedPost =
+                                  _commentsMode &&
+                                  message.id == widget.commentPostId;
 
                               final bubble = MessageBubble(
                                 message: message,
@@ -4990,6 +5004,12 @@ class _ChatScreenState extends State<ChatScreen>
                                           _reactToMessage(message, emoji),
                                 peerName: widget.name,
                                 peerAvatarUrl: widget.imageUrl,
+                                senderNameOverride: isCommentedPost
+                                    ? widget.name
+                                    : null,
+                                senderAvatarOverride: isCommentedPost
+                                    ? widget.imageUrl
+                                    : null,
                                 textSelection: _textSelection,
                                 onExitTextSelection: _exitTextSelection,
                                 commentsLabel: isChannelPost

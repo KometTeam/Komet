@@ -158,6 +158,16 @@
   "chatInfoLink": "link:",
   "chatInfoOfficial": "official:",
   "chatInfoComments": "comments:",
+  "commentsWrite": "Comment",
+  "commentsTitle": "Comments",
+  "commentsCount": "{count, plural, =1{1 comment} other{{count} comments}}",
+  "@commentsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "chatInfoAplus": "approved by Roskomnadzor:",
   "chatInfoSignAdmin": "admin signature:",
   "chatInfoLastChanged": "last changed:",

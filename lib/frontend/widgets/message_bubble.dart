@@ -201,6 +201,8 @@ class MessageBubble extends StatelessWidget {
   final void Function(String emoji)? onReactionTap;
   final String? peerName;
   final String? peerAvatarUrl;
+  final String? senderNameOverride;
+  final String? senderAvatarOverride;
   final ValueListenable<({String id, Offset pos})?>? textSelection;
   final VoidCallback? onExitTextSelection;
   final String? commentsLabel;
@@ -226,6 +228,8 @@ class MessageBubble extends StatelessWidget {
     this.onReactionTap,
     this.peerName,
     this.peerAvatarUrl,
+    this.senderNameOverride,
+    this.senderAvatarOverride,
     this.textSelection,
     this.onExitTextSelection,
     this.commentsLabel,
@@ -448,7 +452,7 @@ class MessageBubble extends StatelessWidget {
       _senderPalette[id.abs() % _senderPalette.length];
 
   Widget _buildSenderHeader(ColorScheme cs, bool needsInset) {
-    final name = ContactCache.get(message.senderId);
+    final name = senderNameOverride ?? ContactCache.get(message.senderId);
     if (name == null || name.isEmpty) return const SizedBox.shrink();
     final header = Padding(
       padding: needsInset
@@ -476,8 +480,9 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildLeadingAvatar(ColorScheme cs) {
-    final senderAvatar = ContactCache.getAvatar(message.senderId);
-    final displaySender = ContactCache.get(message.senderId);
+    final senderAvatar =
+        senderAvatarOverride ?? ContactCache.getAvatar(message.senderId);
+    final displaySender = senderNameOverride ?? ContactCache.get(message.senderId);
     final Widget avatar;
     if (senderAvatar != null && senderAvatar.isNotEmpty) {
       avatar = CircleAvatar(

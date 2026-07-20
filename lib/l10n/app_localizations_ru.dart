@@ -456,6 +456,25 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatInfoComments => 'комментарии:';
 
   @override
+  String get commentsWrite => 'Комментировать';
+
+  @override
+  String get commentsTitle => 'Комментарии';
+
+  @override
+  String commentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count комментария',
+      many: '$count комментариев',
+      few: '$count комментария',
+      one: '$count комментарий',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get chatInfoAplus => 'подтверждён Роскомнадзором:';
 
   @override
