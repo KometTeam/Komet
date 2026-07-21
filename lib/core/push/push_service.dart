@@ -17,7 +17,7 @@ import '../storage/app_instance.dart';
 import '../storage/token_storage.dart';
 import '../utils/logger.dart';
 
-const _channelId = 'komet_messages';
+const _channelId = 'fuckmax_messages';
 const _channelName = 'Сообщения';
 const _prefsTokenKey = 'fcm_push_token';
 
@@ -126,7 +126,7 @@ Future<void> _handleReply(String payloadJson, String text) async {
   } else {
     await plugin.show(
       id: notifId,
-      title: 'Komet',
+      title: 'Fuckmax',
       body: 'Не удалось отправить ответ',
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(

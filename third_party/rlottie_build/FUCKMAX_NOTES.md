@@ -1,8 +1,8 @@
-# rlottie integration (Komet)
+# rlottie integration (Fuckmax)
 
 `third_party/rlottie` is a **git submodule** pinned to Samsung/rlottie
 `f487eff2f8086b84ae1c7faa0418abec909e874b`. This directory (`rlottie_build/`)
-holds Komet's build glue that lives *outside* the submodule (we can't commit into
+holds Fuckmax's build glue that lives *outside* the submodule (we can't commit into
 upstream's tree).
 
 After cloning or pulling, initialize the submodule:

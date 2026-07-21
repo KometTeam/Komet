@@ -1,7 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:komet/main.dart';
+import 'package:fuckmax/main.dart';
 
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';

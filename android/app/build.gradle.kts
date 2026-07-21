@@ -17,7 +17,7 @@ if (hasReleaseSigning) {
 }
 
 android {
-    namespace = "ru.komet.app"
+    namespace = "ru.fuckmax.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -32,7 +32,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ru.komet.app"
+        applicationId = "ru.fuckmax.app"
         minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -54,10 +54,10 @@ android {
     flavorDimensions += "distribution"
 
     productFlavors {
-        create("komet") {
+        create("fuckmax") {
             dimension = "distribution"
             isDefault = true
-            applicationId = "ru.komet.app"
+            applicationId = "ru.fuckmax.app"
         }
         create("oneme") {
             dimension = "distribution"

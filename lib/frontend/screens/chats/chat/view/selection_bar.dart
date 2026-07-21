@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:komet/backend/modules/messages.dart';
-import 'package:komet/frontend/widgets/glossy_pill.dart';
+import 'package:fuckmax/backend/modules/messages.dart';
+import 'package:fuckmax/frontend/widgets/glossy_pill.dart';
 
 class SelectionTopBar extends StatelessWidget {
   final ColorScheme cs;

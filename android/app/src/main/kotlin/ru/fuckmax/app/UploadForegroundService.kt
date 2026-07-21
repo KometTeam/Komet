@@ -1,4 +1,4 @@
-package ru.komet.app
+package ru.fuckmax.app
 
 import android.app.*
 import android.content.Intent
@@ -10,11 +10,11 @@ import androidx.core.app.NotificationCompat
 class UploadForegroundService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "komet_upload"
+        const val CHANNEL_ID = "fuckmax_upload"
         const val NOTIFICATION_ID = 9001
-        const val ACTION_START  = "ru.komet.app.UPLOAD_START"
-        const val ACTION_UPDATE = "ru.komet.app.UPLOAD_UPDATE"
-        const val ACTION_STOP   = "ru.komet.app.UPLOAD_STOP"
+        const val ACTION_START  = "ru.fuckmax.app.UPLOAD_START"
+        const val ACTION_UPDATE = "ru.fuckmax.app.UPLOAD_UPDATE"
+        const val ACTION_STOP   = "ru.fuckmax.app.UPLOAD_STOP"
         const val EXTRA_FILENAME = "filename"
         const val EXTRA_PROGRESS = "progress"   // 0-100
         const val EXTRA_SPEED    = "speed"      // bytes/sec (Long)

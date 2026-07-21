@@ -1,4 +1,4 @@
-package ru.komet.app
+package ru.fuckmax.app
 
 import android.Manifest
 import android.app.KeyguardManager
@@ -51,7 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : FlutterActivity() {
 
-    private val channelName = "ru.komet.app/vpn_bypass"
+    private val channelName = "ru.fuckmax.app/vpn_bypass"
     private val iconPackage = MainActivity::class.java.name.substringBeforeLast('.')
     private val iconComponents = mapOf(
         "MainActivity" to "$iconPackage.MainActivity",
@@ -79,7 +79,7 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val LOG_TAG = "VpnBypass"
         const val NFC_TAG = "NfcExchange"
-        const val CALL_ENGINE_ID = "komet_call_engine"
+        const val CALL_ENGINE_ID = "fuckmax_call_engine"
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
@@ -115,7 +115,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/nfc",
+            "ru.fuckmax.app/nfc",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "status" -> result.success(nfcStatus())
@@ -139,7 +139,7 @@ class MainActivity : FlutterActivity() {
 
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/nfc_events",
+            "ru.fuckmax.app/nfc_events",
         ).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                 nfcEvents = events
@@ -164,7 +164,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/app_icon",
+            "ru.fuckmax.app/app_icon",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "setAppIcon" -> {
@@ -186,7 +186,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/upload_service",
+            "ru.fuckmax.app/upload_service",
         ).setMethodCallHandler { call, result ->
             val ctx = this
             when (call.method) {
@@ -228,7 +228,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/video_note",
+            "ru.fuckmax.app/video_note",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "init" -> {
@@ -253,7 +253,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/video",
+            "ru.fuckmax.app/video",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "cropSquare" -> {
@@ -272,7 +272,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/calls",
+            "ru.fuckmax.app/calls",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "consumeInitialCall" -> {
@@ -314,7 +314,7 @@ class MainActivity : FlutterActivity() {
                                 ),
                             )
                         } catch (e: Exception) {
-                            Log.w("KometFcm", "open FSI settings failed: ${e.message}")
+                            Log.w("FuckmaxFcm", "open FSI settings failed: ${e.message}")
                         }
                     }
                     result.success(null)
@@ -325,7 +325,7 @@ class MainActivity : FlutterActivity() {
 
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "ru.komet.app/calls_events",
+            "ru.fuckmax.app/calls_events",
         ).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                 CallEvents.sink = events
@@ -663,7 +663,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         if (CallState.inCall && isFinishing) {
-            Log.d("KometFcm", "task removed during call, caching engine")
+            Log.d("FuckmaxFcm", "task removed during call, caching engine")
             flutterEngine?.let { FlutterEngineCache.getInstance().put(CALL_ENGINE_ID, it) }
         }
         super.onDestroy()

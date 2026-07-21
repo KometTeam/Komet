@@ -38,7 +38,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
-      final seed = KometApp.stateOf(context)?.accentSeed.value;
+      final seed = FuckmaxApp.stateOf(context)?.accentSeed.value;
       _isSystem.value = seed == null;
       _color.value = seed ?? _fallback;
     }
@@ -56,7 +56,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
     _color.value = color;
     _isSystem.value = false;
     _debounce.run(() {
-      if (mounted) KometApp.stateOf(context)?.applyAccentColor(color);
+      if (mounted) FuckmaxApp.stateOf(context)?.applyAccentColor(color);
     });
   }
 
@@ -65,7 +65,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
     _debounce.cancel();
     _isSystem.value = true;
     _color.value = _fallback;
-    KometApp.stateOf(context)?.applyAccentColor(null);
+    FuckmaxApp.stateOf(context)?.applyAccentColor(null);
   }
 
   void _toggleAccentExpanded() {

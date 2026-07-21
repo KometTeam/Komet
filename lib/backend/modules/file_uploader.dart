@@ -216,7 +216,7 @@ class FileUploader {
       (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
 
   String _multipartBoundary() =>
-      '----KometBoundary${DateTime.now().microsecondsSinceEpoch}';
+      '----FuckmaxBoundary${DateTime.now().microsecondsSinceEpoch}';
 
   Map<String, String> _buildUploadHeaders(
     Uri uri,

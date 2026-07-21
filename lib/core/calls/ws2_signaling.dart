@@ -29,7 +29,7 @@ class Ws2Config {
     ConversationParams params, {
     required String conversationId,
     String capabilities = _defaultCapabilities,
-    String device = 'Komet',
+    String device = 'Fuckmax',
     String osVersion = '36',
   }) {
     final userId =
@@ -56,7 +56,7 @@ class Ws2Config {
     String endpoint, {
     required int userId,
     String capabilities = _defaultCapabilities,
-    String device = 'Komet',
+    String device = 'Fuckmax',
   }) {
     final base = Uri.parse(endpoint);
     final uri = base.replace(queryParameters: {

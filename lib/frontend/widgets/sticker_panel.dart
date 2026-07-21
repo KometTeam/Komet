@@ -69,7 +69,7 @@ class _StickerPanelState extends State<StickerPanel>
   static const double _toggleBarHeight = 48;
   static const int _modeEmoji = 0;
   static const int _modeStickers = 1;
-  static const String _modePrefKey = 'komet_panel_mode';
+  static const String _modePrefKey = 'fuckmax_panel_mode';
   static int _persistedMode = _modeStickers;
   static bool _persistedModeLoaded = false;
 

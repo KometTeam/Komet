@@ -4,14 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'package:komet/core/media/gallery_source.dart';
-import 'package:komet/core/utils/format.dart';
-import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
-import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
-import 'package:komet/frontend/widgets/custom_notification.dart';
-import 'package:komet/frontend/widgets/sheet_helpers.dart';
-import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
-import 'package:komet/l10n/app_localizations.dart';
+import 'package:fuckmax/core/media/gallery_source.dart';
+import 'package:fuckmax/core/utils/format.dart';
+import 'package:fuckmax/frontend/widgets/attachment/media_preview_screen.dart';
+import 'package:fuckmax/frontend/widgets/attachment/photo_editor.dart';
+import 'package:fuckmax/frontend/widgets/custom_notification.dart';
+import 'package:fuckmax/frontend/widgets/sheet_helpers.dart';
+import 'package:fuckmax/frontend/widgets/sliding_pill_nav.dart';
+import 'package:fuckmax/l10n/app_localizations.dart';
 
 const int _navItemCount = 5;
 

@@ -8,19 +8,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:komet/backend/modules/chat_preview.dart';
-import 'package:komet/backend/modules/chats.dart';
-import 'package:komet/backend/modules/file_uploader.dart';
-import 'package:komet/backend/modules/upload_notification_service.dart';
-import 'package:komet/core/media/gallery_source.dart';
-import 'package:komet/core/utils/format.dart';
-import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
-import 'package:komet/frontend/screens/contacts/contact_profile_screen.dart';
-import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
-import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
-import 'package:komet/frontend/widgets/animated_text_swap.dart';
-import 'package:komet/frontend/widgets/custom_notification.dart';
-import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
+import 'package:fuckmax/backend/modules/chat_preview.dart';
+import 'package:fuckmax/backend/modules/chats.dart';
+import 'package:fuckmax/backend/modules/file_uploader.dart';
+import 'package:fuckmax/backend/modules/upload_notification_service.dart';
+import 'package:fuckmax/core/media/gallery_source.dart';
+import 'package:fuckmax/core/utils/format.dart';
+import 'package:fuckmax/frontend/screens/chats/chat_info_screen.dart';
+import 'package:fuckmax/frontend/screens/contacts/contact_profile_screen.dart';
+import 'package:fuckmax/frontend/screens/chats/chat_list_screen.dart';
+import 'package:fuckmax/frontend/screens/chats/poll_create_screen.dart';
+import 'package:fuckmax/frontend/widgets/animated_text_swap.dart';
+import 'package:fuckmax/frontend/widgets/custom_notification.dart';
+import 'package:fuckmax/frontend/widgets/chat_menu_overlay.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
 import '../../../l10n/app_localizations.dart';
@@ -68,7 +68,7 @@ import 'chat/view/shimmer_loading.dart';
 import '../../../core/config/app_commands.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_chat_chrome.dart';
-import '../../../core/config/komet_settings.dart';
+import '../../../core/config/fuckmax_settings.dart';
 import '../../../models/attachment.dart';
 import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
@@ -652,7 +652,7 @@ class _ChatScreenState extends State<ChatScreen>
       _myId,
       widget.chatId,
       limit: 20,
-      onlyVisible: !KometSettings.viewDeleted.value,
+      onlyVisible: !FuckmaxSettings.viewDeleted.value,
     );
     if (!mounted) return;
     if (firstRows.isNotEmpty) {
@@ -2057,7 +2057,7 @@ class _ChatScreenState extends State<ChatScreen>
     final idx = _messages.indexWhere((m) => m.id == message.id);
     if (idx != -1) {
       final old = _messages[idx];
-      final newHistory = KometSettings.viewRedacted.value
+      final newHistory = FuckmaxSettings.viewRedacted.value
           ? CachedMessage.appendEditHistory(
               old.editHistory,
               old.text,
@@ -2700,7 +2700,7 @@ class _ChatScreenState extends State<ChatScreen>
         _myId,
         widget.chatId,
       );
-      if (KometSettings.viewDeleted.value) {
+      if (FuckmaxSettings.viewDeleted.value) {
         await chats.reconcileDeletedFromFetch(
           _myId,
           widget.chatId,
@@ -2711,7 +2711,7 @@ class _ChatScreenState extends State<ChatScreen>
         _myId,
         widget.chatId,
         limit: 100,
-        onlyVisible: !KometSettings.viewDeleted.value,
+        onlyVisible: !FuckmaxSettings.viewDeleted.value,
       );
       final decoded = await CachedMessage.fromDbRowsAsync(rows);
       if (mounted) _applyMergedMessages(decoded);

@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/messages.dart';
 import '../../../../core/cache/message_session_cache.dart';
-import '../../../../core/config/komet_settings.dart';
+import '../../../../core/config/fuckmax_settings.dart';
 import '../../../../core/storage/app_database.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../main.dart';
@@ -125,7 +125,7 @@ class ChatController extends ChangeNotifier {
     onLoadingStarted();
 
     final oldest = messages.first;
-    final onlyVisible = !KometSettings.viewDeleted.value;
+    final onlyVisible = !FuckmaxSettings.viewDeleted.value;
 
     try {
       var older = await loadOlderFromDb(oldest.time, onlyVisible);
@@ -138,7 +138,7 @@ class ChatController extends ChangeNotifier {
           count: historyPageSize,
         );
         if (fetched.isNotEmpty) {
-          if (KometSettings.viewDeleted.value) {
+          if (FuckmaxSettings.viewDeleted.value) {
             await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
           }
           older = await loadOlderFromDb(oldest.time, onlyVisible);
@@ -164,7 +164,7 @@ class ChatController extends ChangeNotifier {
     required void Function() onPreview,
     required void Function() onSenderNames,
   }) async {
-    final onlyVisible = !KometSettings.viewDeleted.value;
+    final onlyVisible = !FuckmaxSettings.viewDeleted.value;
     final fullDecoded = await loadInitialFromDb(onlyVisible: onlyVisible);
     if (isMounted()) {
       onApplyMerged(fullDecoded);
@@ -187,7 +187,7 @@ class ChatController extends ChangeNotifier {
       }
       final serverMessages = await messagesModule.fetchHistory(myId, chatId);
       chats.markHistoryFetched(chatId);
-      if (KometSettings.viewDeleted.value) {
+      if (FuckmaxSettings.viewDeleted.value) {
         await chats.reconcileDeletedFromFetch(myId, chatId, serverMessages);
       }
       final updatedDecoded = await loadInitialFromDb(onlyVisible: onlyVisible);

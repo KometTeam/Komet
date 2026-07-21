@@ -3,14 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'package:komet/core/config/app_animations.dart';
-import 'package:komet/core/config/app_chat_chrome.dart';
-import 'package:komet/core/utils/format.dart';
-import 'package:komet/frontend/widgets/animated_lottie_icon.dart';
-import 'package:komet/frontend/widgets/glossy_pill.dart';
-import 'package:komet/frontend/widgets/komet_avatar.dart';
-import 'package:komet/frontend/screens/chats/chat/chat_search_controller.dart';
-import 'package:komet/frontend/screens/chats/chat/message_search_result.dart';
+import 'package:fuckmax/core/config/app_animations.dart';
+import 'package:fuckmax/core/config/app_chat_chrome.dart';
+import 'package:fuckmax/core/utils/format.dart';
+import 'package:fuckmax/frontend/widgets/animated_lottie_icon.dart';
+import 'package:fuckmax/frontend/widgets/glossy_pill.dart';
+import 'package:fuckmax/frontend/widgets/fuckmax_avatar.dart';
+import 'package:fuckmax/frontend/screens/chats/chat/chat_search_controller.dart';
+import 'package:fuckmax/frontend/screens/chats/chat/message_search_result.dart';
 
 class SearchTopBar extends StatelessWidget {
   const SearchTopBar({
@@ -212,7 +212,7 @@ class SearchOverlay extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            KometAvatar(
+            FuckmaxAvatar(
               name: name,
               imageUrl: senderAvatar(r.senderId),
               size: 44,

@@ -14,7 +14,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/contact_info.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 
 enum _Stage {
   checking,
@@ -383,7 +383,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
                   ),
                 );
               },
-              child: KometAvatar(
+              child: FuckmaxAvatar(
                 name: _peerName(),
                 imageUrl: _peerInfo?.avatarUrl,
                 size: 92,

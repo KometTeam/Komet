@@ -26,7 +26,7 @@ Future<File?> rasterPictureToJpegFile(
   final out = File(
     p.join(
       dir.path,
-      'komet_${prefix}_${DateTime.now().microsecondsSinceEpoch}.jpg',
+      'fuckmax_${prefix}_${DateTime.now().microsecondsSinceEpoch}.jpg',
     ),
   );
   await out.writeAsBytes(jpeg);

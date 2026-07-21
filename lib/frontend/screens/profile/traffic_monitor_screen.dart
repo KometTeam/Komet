@@ -64,11 +64,11 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
       final json = _monitor.buildExport();
       final dir = await getTemporaryDirectory();
       final stamp = formatFileStamp(DateTime.now());
-      final file = File('${dir.path}/komet_traffic_$stamp.json');
+      final file = File('${dir.path}/fuckmax_traffic_$stamp.json');
       await file.writeAsString(json);
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Komet traffic capture',
+        subject: 'Fuckmax traffic capture',
         sharePositionOrigin: box == null
             ? null
             : box.localToGlobal(Offset.zero) & box.size,

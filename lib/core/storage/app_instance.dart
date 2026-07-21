@@ -1,7 +1,7 @@
 class AppInstance {
   AppInstance._();
 
-  static const String id = String.fromEnvironment('KOMET_INSTANCE');
+  static const String id = String.fromEnvironment('FUCKMAX_INSTANCE');
 
   static bool get isNamed => id.isNotEmpty;
 

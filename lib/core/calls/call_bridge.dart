@@ -11,8 +11,8 @@ class CallBridge {
   CallBridge._();
   static final CallBridge instance = CallBridge._();
 
-  static const _method = MethodChannel('ru.komet.app/calls');
-  static const _events = EventChannel('ru.komet.app/calls_events');
+  static const _method = MethodChannel('ru.fuckmax.app/calls');
+  static const _events = EventChannel('ru.fuckmax.app/calls_events');
 
   bool _started = false;
 

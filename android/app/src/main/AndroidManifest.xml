@@ -28,15 +28,15 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
     <application
-        android:label="Komet"
+        android:label="Fuckmax"
         android:name="${applicationName}"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher">
         <activity
-            android:name="ru.komet.app.MainActivity"
+            android:name="ru.fuckmax.app.MainActivity"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
-            android:label="Komet"
+            android:label="Fuckmax"
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
@@ -68,17 +68,17 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="komet"/>
+                <data android:scheme="fuckmax"/>
                 <data android:scheme="max"/>
             </intent-filter>
         </activity>
         <activity-alias
-            android:name="ru.komet.app.MinimalIcon"
+            android:name="ru.fuckmax.app.MinimalIcon"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_minimal"
-            android:label="Komet"
-            android:targetActivity="ru.komet.app.MainActivity">
+            android:label="Fuckmax"
+            android:targetActivity="ru.fuckmax.app.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -99,10 +99,10 @@
             </intent-filter>
             <meta-data
                 android:name="android.nfc.cardemulation.host_apdu_service"
-                android:resource="@xml/komet_nfc_apdu"/>
+                android:resource="@xml/fuckmax_nfc_apdu"/>
         </service>
         <service
-            android:name=".KometFcmService"
+            android:name=".FuckmaxFcmService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
@@ -126,7 +126,7 @@
             android:value="2" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="komet_messages" />
+            android:value="fuckmax_messages" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

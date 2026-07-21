@@ -7,8 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'package:komet/core/media/raster.dart';
-import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:fuckmax/core/media/raster.dart';
+import 'package:fuckmax/frontend/widgets/custom_notification.dart';
 
 import '../../../core/config/app_colors.dart';
 import '../../../l10n/app_localizations.dart';

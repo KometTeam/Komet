@@ -12,7 +12,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../main.dart' show storiesModule;
 import '../../../models/story.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import 'story_owner_info.dart';
 
 const _quickReactions = ['❤️', '🔥', '😍', '👏', '😂', '😮'];
@@ -561,7 +561,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   width: 1.6,
                 ),
               ),
-              child: KometAvatar(
+              child: FuckmaxAvatar(
                 name: info?.name.isNotEmpty == true ? info!.name : '?',
                 size: 34,
                 imageUrl: info?.avatarUrl,
@@ -1069,7 +1069,7 @@ class _OwnerCover extends StatelessWidget {
           builder: (context, info) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              KometAvatar(
+              FuckmaxAvatar(
                 name: info?.name.isNotEmpty == true ? info!.name : '?',
                 size: 92,
                 imageUrl: info?.avatarUrl,

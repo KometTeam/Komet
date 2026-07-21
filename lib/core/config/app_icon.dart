@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppIcon {
-  defaultIcon('default', 'Default', 'assets/komet_icon.png', 'MainActivity'),
+  defaultIcon('default', 'Default', 'assets/fuckmax_icon.png', 'MainActivity'),
   minimal('minimal', 'Minimal', 'assets/meteor_icon.png', 'MinimalIcon');
 
   final String id;
@@ -18,7 +18,7 @@ enum AppIcon {
 
 class AppIconConfig {
   static const prefKey = 'app_icon';
-  static const _channel = MethodChannel('ru.komet.app/app_icon');
+  static const _channel = MethodChannel('ru.fuckmax.app/app_icon');
 
   static final ValueNotifier<AppIcon> current = ValueNotifier(
     AppIcon.defaultIcon,

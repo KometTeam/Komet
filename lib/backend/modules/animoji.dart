@@ -19,7 +19,7 @@ class AnimojiModule {
     '😍',
   ];
 
-  static const String _recentsKey = 'komet_recent_animoji';
+  static const String _recentsKey = 'fuckmax_recent_animoji';
   static const int _maxRecents = 24;
 
   final Map<int, Animoji> _byId = {};

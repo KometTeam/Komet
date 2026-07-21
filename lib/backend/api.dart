@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
 import '../core/config/countries.dart';
-import '../core/config/komet_settings.dart';
+import '../core/config/fuckmax_settings.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
@@ -541,7 +541,7 @@ class Api {
     final epoch = _sessionEpoch;
     try {
       await sendRequest(Opcode.ping, {
-        'interactive': !KometSettings.ghostMode.value,
+        'interactive': !FuckmaxSettings.ghostMode.value,
       }).timeout(const Duration(seconds: 6));
     } catch (_) {
       if (_sessionEpoch != epoch || _sessionState != SessionState.online) {
@@ -586,9 +586,9 @@ class Api {
 
   void _startPinging() {
     _pingTimer?.cancel();
-    sendPing(interactive: !KometSettings.ghostMode.value);
+    sendPing(interactive: !FuckmaxSettings.ghostMode.value);
     _pingTimer = Timer.periodic(ServerConfig.pingInterval, (_) {
-      sendPing(interactive: !KometSettings.ghostMode.value);
+      sendPing(interactive: !FuckmaxSettings.ghostMode.value);
     });
   }
 

@@ -3,13 +3,13 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../widgets/connection_status.dart';
 
-import '../../../core/config/komet_settings.dart';
+import '../../../core/config/fuckmax_settings.dart';
 import '../../../main.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 
-class KometSettingsScreen extends StatelessWidget {
-  const KometSettingsScreen({super.key});
+class FuckmaxSettingsScreen extends StatelessWidget {
+  const FuckmaxSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +18,7 @@ class KometSettingsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: 'Komet',
+        titleText: 'Fuckmax',
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
@@ -35,33 +35,33 @@ class KometSettingsScreen extends StatelessWidget {
             SettingsCard(
               children: [
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.viewDeleted,
+                  valueListenable: FuckmaxSettings.viewDeleted,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.delete_history,
                     label: 'View deleted message',
                     subtitle: 'Показывать удалённые сообщения',
                     value: value,
-                    onChanged: KometSettings.setViewDeleted,
+                    onChanged: FuckmaxSettings.setViewDeleted,
                   ),
                 ),
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.viewRedacted,
+                  valueListenable: FuckmaxSettings.viewRedacted,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.history_edu,
                     label: 'View redacted message history',
                     subtitle: 'Показывать историю у редактированных сообщений',
                     value: value,
-                    onChanged: KometSettings.setViewRedacted,
+                    onChanged: FuckmaxSettings.setViewRedacted,
                   ),
                 ),
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.fullTimestamp,
+                  valueListenable: FuckmaxSettings.fullTimestamp,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.schedule,
                     label: 'View full timestamp',
                     subtitle: 'Показывать время в секундах у сообщений',
                     value: value,
-                    onChanged: KometSettings.setFullTimestamp,
+                    onChanged: FuckmaxSettings.setFullTimestamp,
                   ),
                 ),
               ],
@@ -75,7 +75,7 @@ class KometSettingsScreen extends StatelessWidget {
             SettingsCard(
               children: [
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.hideAllChatsFolder,
+                  valueListenable: FuckmaxSettings.hideAllChatsFolder,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.folder_off,
                     label: 'Hide "All" folder',
@@ -83,11 +83,11 @@ class KometSettingsScreen extends StatelessWidget {
                         'Скрыть папку «Все», когда есть другие папки. '
                         'Чаты сортируются только по вашим папкам',
                     value: value,
-                    onChanged: KometSettings.setHideAllChatsFolder,
+                    onChanged: FuckmaxSettings.setHideAllChatsFolder,
                   ),
                 ),
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.showHiddenChats,
+                  valueListenable: FuckmaxSettings.showHiddenChats,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.visibility_lock,
                     label: 'Show hidden chats',
@@ -95,7 +95,7 @@ class KometSettingsScreen extends StatelessWidget {
                         'Показывать скрытые чаты (например, от групповых '
                         'звонков), которые обычно не отображаются в списке',
                     value: value,
-                    onChanged: KometSettings.setShowHiddenChats,
+                    onChanged: FuckmaxSettings.setShowHiddenChats,
                   ),
                 ),
               ],
@@ -109,7 +109,7 @@ class KometSettingsScreen extends StatelessWidget {
             SettingsCard(
               children: [
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.ghostMode,
+                  valueListenable: FuckmaxSettings.ghostMode,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.visibility_off,
                     label: 'Ghost Mode',
@@ -119,17 +119,17 @@ class KometSettingsScreen extends StatelessWidget {
                   ),
                 ),
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.antiRead,
+                  valueListenable: FuckmaxSettings.antiRead,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.mark_chat_read,
                     label: 'Anti read',
                     subtitle: 'Нечиталка сообщений',
                     value: value,
-                    onChanged: KometSettings.setAntiRead,
+                    onChanged: FuckmaxSettings.setAntiRead,
                   ),
                 ),
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.selfOnlineCheck,
+                  valueListenable: FuckmaxSettings.selfOnlineCheck,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.radar,
                     label: 'Self Online Check',
@@ -137,7 +137,7 @@ class KometSettingsScreen extends StatelessWidget {
                         'Каждые ~10 секунд сверяет, когда вы были онлайн. '
                         'Полезно для проверки ghost mode',
                     value: value,
-                    onChanged: KometSettings.setSelfOnlineCheck,
+                    onChanged: FuckmaxSettings.setSelfOnlineCheck,
                   ),
                 ),
               ],
@@ -149,7 +149,7 @@ class KometSettingsScreen extends StatelessWidget {
   }
 
   Future<void> _setGhostMode(bool value) async {
-    await KometSettings.setGhostMode(value);
+    await FuckmaxSettings.setGhostMode(value);
     api.sendPing(interactive: !value);
   }
 }

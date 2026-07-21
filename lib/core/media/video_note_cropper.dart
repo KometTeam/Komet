@@ -9,7 +9,7 @@ import '../utils/logger.dart';
 /// заполняет квадрат и обрезает лишнее по бокам). На других платформах
 /// возвращает `null` (кружки там не записываются).
 class VideoNoteCropper {
-  static const _channel = MethodChannel('ru.komet.app/video');
+  static const _channel = MethodChannel('ru.fuckmax.app/video');
 
   static Future<String?> cropSquare(String input, {int size = 480}) async {
     if (!Platform.isAndroid) return null;

@@ -10,7 +10,7 @@ import '../../../models/contact_info.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/swipe_route.dart';
 import '../chats/chat_screen.dart';
@@ -154,7 +154,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
                     name: _displayName(),
                     currentAvatarUrl: _avatarUrl(),
                   ),
-                  child: KometAvatar(
+                  child: FuckmaxAvatar(
                     name: _displayName(),
                     imageUrl: _avatarUrl(),
                     size: 96,

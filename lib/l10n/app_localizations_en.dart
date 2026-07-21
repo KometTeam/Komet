@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get loginTitle => 'Sign in to Komet';
+  String get loginTitle => 'Sign in to Fuckmax';
 
   @override
   String get loginSubtitle =>
@@ -660,7 +660,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get devicesTitle => 'Devices';
 
   @override
-  String get devicesPromoTitle => 'Devices in KOMET';
+  String get devicesPromoTitle => 'Devices in FUCKMAX';
 
   @override
   String get devicesPromoSubtitle => 'Who has access to your account?';
@@ -826,7 +826,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearancePreviewNotBad => 'Not bad at all!';
 
   @override
-  String get callKometDetectedNotification => 'This person uses Komet! :3';
+  String get callFuckmaxDetectedNotification => 'This person uses Fuckmax! :3';
 
   @override
   String get callStatusConnecting => 'Connecting';
@@ -847,7 +847,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callTooltipMinimize => 'Minimize';
 
   @override
-  String get callTooltipKometHub => 'Komet';
+  String get callTooltipFuckmaxHub => 'Fuckmax';
 
   @override
   String get callInfoTitle => 'About call';
@@ -990,7 +990,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callInfoNoDataYet => 'Data will appear after connecting…';
 
   @override
-  String get hubTitleMenu => 'Komet';
+  String get hubTitleMenu => 'Fuckmax';
 
   @override
   String get hubChatPageTitle => 'Anonymous chat';

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:komet/l10n/app_localizations.dart';
+import 'package:fuckmax/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';

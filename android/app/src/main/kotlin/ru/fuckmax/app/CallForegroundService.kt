@@ -1,4 +1,4 @@
-package ru.komet.app
+package ru.fuckmax.app
 
 import android.app.Service
 import android.content.Context
@@ -18,8 +18,8 @@ object CallState {
 class CallForegroundService : Service() {
 
     companion object {
-        const val ACTION_START = "ru.komet.app.CALL_ONGOING_START"
-        const val ACTION_STOP = "ru.komet.app.CALL_ONGOING_STOP"
+        const val ACTION_START = "ru.fuckmax.app.CALL_ONGOING_START"
+        const val ACTION_STOP = "ru.fuckmax.app.CALL_ONGOING_STOP"
         const val ONGOING_ID = 424243
 
         fun start(ctx: Context, caller: String) {
@@ -35,7 +35,7 @@ class CallForegroundService : Service() {
                     ctx.startService(intent)
                 }
             } catch (e: Exception) {
-                Log.w("KometFcm", "ongoing FGS start failed: ${e.message}")
+                Log.w("FuckmaxFcm", "ongoing FGS start failed: ${e.message}")
             }
         }
 
@@ -111,7 +111,7 @@ class CallForegroundService : Service() {
                 startForeground(ONGOING_ID, notif)
             }
         } catch (e: Exception) {
-            Log.w("KometFcm", "startForeground(mic) failed: ${e.message}")
+            Log.w("FuckmaxFcm", "startForeground(mic) failed: ${e.message}")
             stopSelf()
         }
     }

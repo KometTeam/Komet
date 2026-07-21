@@ -3,9 +3,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:komet/core/config/countries.dart';
-import 'package:komet/l10n/app_localizations.dart';
-import 'package:komet/l10n/terms_of_service.dart';
+import 'package:fuckmax/core/config/countries.dart';
+import 'package:fuckmax/l10n/app_localizations.dart';
+import 'package:fuckmax/l10n/terms_of_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'token_login_screen.dart';
@@ -203,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    KometApp.stateOf(
+                    FuckmaxApp.stateOf(
                       appContext,
                     )?.applyLocale(const Locale('ru'));
                   },
@@ -219,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    KometApp.stateOf(
+                    FuckmaxApp.stateOf(
                       appContext,
                     )?.applyLocale(const Locale('en'));
                   },
@@ -792,7 +792,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   behavior: HitTestBehavior.opaque,
                                   onTap: _onLogoTap,
                                   child: Image.asset(
-                                    'assets/komet.png',
+                                    'assets/fuckmax.png',
                                     height: 80,
                                     color: cs.onSurface,
                                   ),

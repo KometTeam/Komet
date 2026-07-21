@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komet/core/media/rlottie/rlottie_engine.dart';
+import 'package:fuckmax/core/media/rlottie/rlottie_engine.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

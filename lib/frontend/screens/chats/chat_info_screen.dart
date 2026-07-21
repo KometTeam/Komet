@@ -1,7 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:komet/main.dart';
+import 'package:fuckmax/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
@@ -15,7 +15,7 @@ import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
 
@@ -1227,7 +1227,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _avatar() {
-    final avatar = KometAvatar(
+    final avatar = FuckmaxAvatar(
       name: widget.name,
       imageUrl: widget.imageUrl,
       size: 96,

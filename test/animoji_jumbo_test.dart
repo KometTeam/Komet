@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:komet/core/utils/text_format.dart';
+import 'package:fuckmax/core/utils/text_format.dart';
 
 FormatRange _animoji(int start, int length, String url) => FormatRange(
   format: TextFormat.animoji,

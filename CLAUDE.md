@@ -4,20 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Komet is a cross-platform Flutter messaging client (Android, iOS, macOS, Windows, Linux, Web) that communicates via a custom packet-based protocol with MessagePack serialization and Zstd compression.
+Fuckmax is a cross-platform Flutter messaging client (Android, iOS, macOS, Windows, Linux, Web) that communicates via a custom packet-based protocol with MessagePack serialization and Zstd compression.
 
 ## Commands
 
 ```bash
 flutter pub get          # install dependencies
 flutter analyze          # lint / static analysis
-flutter run              # run on connected device (default: komet flavor)
+flutter run              # run on connected device (default: fuckmax flavor)
 flutter run --flavor oneme -t lib/main.dart  # run oneme flavor (FCM)
 
 # Android builds (release builds use obfuscation; keep symbols to de-obfuscate crashes)
-flutter build apk --release --flavor komet --obfuscate --split-debug-info=build/symbols
-flutter build apk --release --split-per-abi --flavor komet --obfuscate --split-debug-info=build/symbols
-flutter build appbundle --release --flavor komet --obfuscate --split-debug-info=build/symbols
+flutter build apk --release --flavor fuckmax --obfuscate --split-debug-info=build/symbols
+flutter build apk --release --split-per-abi --flavor fuckmax --obfuscate --split-debug-info=build/symbols
+flutter build appbundle --release --flavor fuckmax --obfuscate --split-debug-info=build/symbols
 
 # Other platforms
 flutter build ios --release --no-codesign
@@ -33,10 +33,10 @@ Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
 | Flavor | App ID | Notes |
 |--------|--------|-------|
-| `komet` | `ru.komet.app` | Default, no FCM |
+| `fuckmax` | `ru.fuckmax.app` | Default, no FCM |
 | `oneme` | `ru.oneme.app` | FCM push notifications via Firebase |
 
-Flavor-specific Android resources live in `android/app/src/komet/` and `android/app/src/oneme/`.
+Flavor-specific Android resources live in `android/app/src/fuckmax/` and `android/app/src/oneme/`.
 
 ## Architecture
 
@@ -80,5 +80,5 @@ Four GitHub Actions workflows in `.github/workflows/`:
 
 - `flutter-dev.yml` — PR lint + Android build for dev branch
 - `flutter-main.yml` — PR lint + all-platform builds for main branch  
-- `build-android.yml` — production APKs + AAB (`komet` flavor), triggered on push to main
+- `build-android.yml` — production APKs + AAB (`fuckmax` flavor), triggered on push to main
 - `build-android-fcm.yml` — production APKs + AAB (`oneme` flavor with FCM), triggered on push to main

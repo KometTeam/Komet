@@ -6,7 +6,7 @@ import 'package:logger/logger.dart';
 import 'debug_session_log.dart';
 
 Level _minimumLogLevel() {
-  const raw = String.fromEnvironment('KOMET_LOG_LEVEL', defaultValue: '');
+  const raw = String.fromEnvironment('FUCKMAX_LOG_LEVEL', defaultValue: '');
   switch (raw.toLowerCase()) {
     case 'trace':
       return Level.trace;
@@ -42,7 +42,7 @@ LogFilter _logFilter() {
 final logger = Logger(
   filter: _logFilter(),
   level: _minimumLogLevel(),
-  printer: KometLogPrinter(),
+  printer: FuckmaxLogPrinter(),
   output: MultiOutput([ConsoleOutput(), DebugSessionLogOutput()]),
 );
 
@@ -115,8 +115,8 @@ AnsiColor _levelColor(Level level) {
   return AnsiColor.fg(AnsiColor.grey(0.5));
 }
 
-class KometLogPrinter extends LogPrinter {
-  KometLogPrinter({this.colors = true});
+class FuckmaxLogPrinter extends LogPrinter {
+  FuckmaxLogPrinter({this.colors = true});
 
   final bool colors;
 

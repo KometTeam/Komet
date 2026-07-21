@@ -1,6 +1,6 @@
 {
   "@@locale": "en",
-  "loginTitle": "Sign in to Komet",
+  "loginTitle": "Sign in to Fuckmax",
   "loginSubtitle": "Check your country code and enter your\nphone number.",
   "loginCountry": "Country",
   "loginPhoneNumber": "Phone number",
@@ -259,7 +259,7 @@
     }
   },
   "devicesTitle": "Devices",
-  "devicesPromoTitle": "Devices in KOMET",
+  "devicesPromoTitle": "Devices in FUCKMAX",
   "devicesPromoSubtitle": "Who has access to your account?",
   "devicesScanQrButton": "Scan QR",
   "devicesCurrentSuffix": " (current)",
@@ -312,14 +312,14 @@
   "appearancePreviewHmm": "hmm...",
   "appearancePreviewNotBad": "Not bad at all!",
 
-  "callKometDetectedNotification": "This person uses Komet! :3",
+  "callFuckmaxDetectedNotification": "This person uses Fuckmax! :3",
   "callStatusConnecting": "Connecting",
   "callGroupConnecting": "Connecting…",
   "callGroupWaitingParticipants": "Waiting for participants…",
   "callParticipantYou": "You",
   "callParticipantFallback": "Participant",
   "callTooltipMinimize": "Minimize",
-  "callTooltipKometHub": "Komet",
+  "callTooltipFuckmaxHub": "Fuckmax",
   "callInfoTitle": "About call",
   "callPeerMicOff": "Microphone off",
   "callPeerCameraOn": "Camera on",
@@ -374,7 +374,7 @@
   "callBadgeAnimoji": "Animoji",
   "callInfoNoDataYet": "Data will appear after connecting…",
 
-  "hubTitleMenu": "Komet",
+  "hubTitleMenu": "Fuckmax",
   "hubChatPageTitle": "Anonymous chat",
   "hubGamesTitle": "Games",
   "hubCheckersTitle": "Checkers",

@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:komet/l10n/app_localizations.dart';
+import 'package:fuckmax/l10n/app_localizations.dart';
 
 import '../../../backend/modules/account.dart';
 import '../../../main.dart';

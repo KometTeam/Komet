@@ -8,7 +8,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/haptics.dart';
 import 'animated_overlay_popup.dart';
-import 'komet_avatar.dart';
+import 'fuckmax_avatar.dart';
 
 class AccountSwitcherController extends ChangeNotifier {
   Offset? pointer;
@@ -354,7 +354,7 @@ class _AccountRow extends StatelessWidget {
                         )
                       : null,
                 ),
-                child: KometAvatar(
+                child: FuckmaxAvatar(
                   name: fullName,
                   imageUrl: profile.baseUrl,
                   size: 36,

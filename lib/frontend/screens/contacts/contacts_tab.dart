@@ -8,7 +8,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../main.dart';
 import '../../../models/contact_info.dart';
-import '../../widgets/komet_avatar.dart';
+import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../chats/chat_info_screen.dart';
@@ -163,7 +163,7 @@ class _ContactsTabState extends State<ContactsTab> {
                     width: 1,
                   ),
                 ),
-                child: KometAvatar(
+                child: FuckmaxAvatar(
                   name: nameToDisplay,
                   imageUrl: contact.baseUrl,
                   size: 48,

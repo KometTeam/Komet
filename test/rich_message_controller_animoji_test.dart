@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:komet/frontend/widgets/rich_message_controller.dart';
-import 'package:komet/models/animoji.dart';
+import 'package:fuckmax/frontend/widgets/rich_message_controller.dart';
+import 'package:fuckmax/models/animoji.dart';
 
 Animoji _a(int id, String emoji, String lottie) =>
     Animoji(id: id, emoji: emoji, lottieUrl: lottie);

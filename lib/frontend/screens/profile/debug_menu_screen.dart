@@ -77,7 +77,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
       return;
     }
     final bytes = Uint8List.fromList(utf8.encode(content));
-    final fileName = 'komet_debug_${formatFileStamp(DateTime.now())}.txt';
+    final fileName = 'fuckmax_debug_${formatFileStamp(DateTime.now())}.txt';
     final isMobile = Platform.isAndroid || Platform.isIOS;
     try {
       final path = await FilePicker.platform.saveFile(
@@ -237,7 +237,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final appState = KometApp.stateOf(context);
+    final appState = FuckmaxApp.stateOf(context);
 
     return Scaffold(
       backgroundColor: cs.surface,

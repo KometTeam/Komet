@@ -2,7 +2,7 @@ import 'dart:async';
 
 import '../../core/cache/info_cache.dart';
 import '../../core/cache/self_presence.dart';
-import '../../core/config/komet_settings.dart';
+import '../../core/config/fuckmax_settings.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
@@ -40,7 +40,7 @@ class SelfCheckService {
   Future<void> _check() async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return;
-    if (!KometSettings.selfOnlineCheck.value) return;
+    if (!FuckmaxSettings.selfOnlineCheck.value) return;
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
     final presence = await PresenceFetch.get(accountId, forceRefresh: true);

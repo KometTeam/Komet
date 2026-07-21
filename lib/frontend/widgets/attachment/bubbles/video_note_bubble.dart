@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
-import 'package:komet/main.dart';
+import 'package:fuckmax/main.dart';
 
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';

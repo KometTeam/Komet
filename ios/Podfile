@@ -7,7 +7,7 @@ ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 require 'json'
 
 # Firebase is Android-only: FCM is used solely by the `oneme` flavor, and on
-# iOS there is a single `ru.komet.app` bundle that never initialises push.
+# iOS there is a single `ru.fuckmax.app` bundle that never initialises push.
 # Keep the Firebase SDK out of the iOS build entirely so iOS is not forced up
 # to the iOS 15 deployment target that firebase_core's podspec requires.
 FIREBASE_IOS_PLUGINS = %w[firebase_core firebase_messaging].freeze

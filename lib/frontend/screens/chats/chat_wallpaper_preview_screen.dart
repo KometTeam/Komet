@@ -4,8 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'package:komet/core/storage/chat_wallpaper_store.dart';
-import 'package:komet/frontend/widgets/chat_wallpaper_view.dart';
+import 'package:fuckmax/core/storage/chat_wallpaper_store.dart';
+import 'package:fuckmax/frontend/widgets/chat_wallpaper_view.dart';
 
 class ChatWallpaperPreviewScreen extends StatefulWidget {
   final Uint8List imageBytes;

@@ -1,4 +1,4 @@
-package ru.komet.app
+package ru.fuckmax.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -24,23 +24,23 @@ import com.google.firebase.messaging.RemoteMessage
 import org.json.JSONArray
 import org.json.JSONObject
 
-class KometFcmService : FirebaseMessagingService() {
+class FuckmaxFcmService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        Log.d("KometFcm", "onMessageReceived type=${data["type"]} keys=${data.keys}")
+        Log.d("FuckmaxFcm", "onMessageReceived type=${data["type"]} keys=${data.keys}")
         if (data.isEmpty()) return
-        KometNotifier(applicationContext).handle(data)
+        FuckmaxNotifier(applicationContext).handle(data)
     }
 }
 
-class KometNotifier(private val ctx: Context) {
+class FuckmaxNotifier(private val ctx: Context) {
 
     companion object {
-        private const val CHANNEL_ID = "komet_messages"
+        private const val CHANNEL_ID = "fuckmax_messages"
         private const val CHANNEL_NAME = "Сообщения"
-        private const val GROUP_KEY = "komet_messages_group"
+        private const val GROUP_KEY = "fuckmax_messages_group"
         private const val SUMMARY_ID = 424200
-        private const val PREFS = "komet_push"
+        private const val PREFS = "fuckmax_push"
         private const val FLN_RECEIVER =
             "com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
         private const val FLN_ACTION_TAPPED =
@@ -188,7 +188,7 @@ class KometNotifier(private val ctx: Context) {
             .setWhen(ts)
             .setShowWhen(true)
             .setNumber(entries.size)
-            .setContentTitle("Komet")
+            .setContentTitle("Fuckmax")
             .setContentText(boldLine(senderName, text))
             .setStyle(inbox)
             .build()
@@ -242,7 +242,7 @@ class KometNotifier(private val ctx: Context) {
             val intent = (ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
                 ?: Intent(Intent.ACTION_VIEW)).apply {
                 action = Intent.ACTION_VIEW
-                putExtra("komet_chat", chatId)
+                putExtra("fuckmax_chat", chatId)
             }
             val shortcut = ShortcutInfoCompat.Builder(ctx, id)
                 .setShortLabel(title)
@@ -253,14 +253,14 @@ class KometNotifier(private val ctx: Context) {
                 .build()
             ShortcutManagerCompat.pushDynamicShortcut(ctx, shortcut)
         } catch (e: Exception) {
-            Log.w("KometFcm", "shortcut push failed: $e")
+            Log.w("FuckmaxFcm", "shortcut push failed: $e")
         }
     }
 
     private fun openIntent(notifId: Int, chatId: Long): PendingIntent? {
         val launch = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName) ?: return null
         launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        launch.putExtra("komet_chat", chatId)
+        launch.putExtra("fuckmax_chat", chatId)
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         return PendingIntent.getActivity(ctx, notifId, launch, flags)
     }

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 class UploadNotificationService {
-  static const _ch = MethodChannel('ru.komet.app/upload_service');
+  static const _ch = MethodChannel('ru.fuckmax.app/upload_service');
 
   static Future<void> start(String filename) async {
     if (!Platform.isAndroid) return;
