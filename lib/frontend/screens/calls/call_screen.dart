@@ -22,7 +22,7 @@ import '../../../core/calls/call_session.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'fuckmax_hub.dart';
 
@@ -559,7 +559,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     final showVideo =
         !p.isSelf && (p.videoEnabled || p.screenSharing) && _tileVideoReady;
 
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
@@ -940,7 +940,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   }
 
   Widget _statePill(ColorScheme cs, IconData icon, String label) {
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(100),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -1254,7 +1254,7 @@ class _CallButton extends StatelessWidget {
         SizedBox(
           width: 62,
           height: 62,
-          child: GlossyPill(
+          child: LiquidGlassPill(
             color: background,
             borderRadius: BorderRadius.circular(31),
             onTap: busy ? null : onTap,

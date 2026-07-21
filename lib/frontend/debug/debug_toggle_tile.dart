@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../widgets/glossy_pill.dart';
+import '../widgets/liquid_glass_pill.dart';
 
 class DebugToggleTile extends StatelessWidget {
   final IconData icon;
@@ -26,7 +26,7 @@ class DebugToggleTile extends StatelessWidget {
       valueListenable: valueListenable,
       builder: (context, value, _) {
         final resolvedSubtitle = subtitle?.call(value);
-        return GlossyPill(
+        return LiquidGlassPill(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(20),
           depth: 6,

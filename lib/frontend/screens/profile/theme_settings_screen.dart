@@ -9,7 +9,7 @@ import '../../../core/config/app_theme_schedule.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/settings_radio_tile.dart';
 
 class ThemeSettingsScreen extends StatelessWidget {
@@ -71,7 +71,7 @@ class _ThemeModeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
@@ -171,7 +171,7 @@ class _AmoledCardState extends State<_AmoledCard> {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (e) => _lastPointerPosition = e.position,
-      child: GlossyPill(
+      child: LiquidGlassPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(28),
         padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
@@ -235,7 +235,7 @@ class _ScheduleCard extends StatelessWidget {
         return AnimatedOpacity(
           opacity: enabled ? 1 : 0.5,
           duration: const Duration(milliseconds: 200),
-          child: GlossyPill(
+          child: LiquidGlassPill(
             color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(28),
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -324,7 +324,7 @@ class _TimeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(16),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),

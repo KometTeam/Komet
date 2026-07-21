@@ -741,13 +741,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get appearanceVisualStyleSubtitle =>
-      'Material You или объёмные Glossy-капсулы';
+      'Material You или объёмные Liquid Glass-капсулы';
 
   @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
 
   @override
-  String get appearanceVisualStyleGlossy => 'Glossy';
+  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
 
   @override
   String get appearanceChatChromeTitle => 'Элементы экрана чата';
@@ -772,7 +772,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceGradientTitle => 'Градиент';
 
   @override
-  String get appearanceGradientSubtitle => 'Объём и блики в Glossy-капсулах';
+  String get appearanceGradientSubtitle => 'Объём и блики в Liquid Glass-капсулах';
 
   @override
   String get appearanceAccentColorTitle => 'Акцентный цвет';

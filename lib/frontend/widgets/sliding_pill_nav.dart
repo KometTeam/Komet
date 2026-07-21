@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/config/app_pill_gradient.dart';
 import '../../core/config/app_visual_style.dart';
 import 'animated_lottie_icon.dart';
-import 'glossy_pill.dart';
+import 'liquid_glass_pill.dart';
 
 class PillNavItem {
   final IconData icon;
@@ -84,13 +84,13 @@ class SlidingPillNav extends StatelessWidget {
     return ValueListenableBuilder<VisualStyle>(
       valueListenable: AppVisualStyle.current,
       builder: (context, style, _) {
-        if (style != VisualStyle.glossy) {
-          return _buildNav(context, glossy: false, gradient: false);
+        if (style != VisualStyle.liquidGlass) {
+          return _buildNav(context, liquidGlass: false, gradient: false);
         }
         return ValueListenableBuilder<bool>(
           valueListenable: AppPillGradient.current,
           builder: (context, gradient, _) =>
-              _buildNav(context, glossy: true, gradient: gradient),
+              _buildNav(context, liquidGlass: true, gradient: gradient),
         );
       },
     );
@@ -98,23 +98,23 @@ class SlidingPillNav extends StatelessWidget {
 
   Widget _buildNav(
     BuildContext context, {
-    required bool glossy,
+    required bool liquidGlass,
     required bool gradient,
   }) {
     final cs = Theme.of(context).colorScheme;
     final visualSel = position.round().clamp(0, items.length - 1);
     final base = backgroundColor ?? cs.surfaceContainerHigh;
-    final useGradient = glossy && gradient;
+    final useGradient = liquidGlass && gradient;
 
     return Container(
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
         color: useGradient ? null : base,
-        gradient: useGradient ? GlossyDecor.fillGradient(base) : null,
+        gradient: useGradient ? LiquidGlassDecor.fillGradient(base) : null,
         borderRadius: BorderRadius.circular(34),
-        border: glossy
-            ? GlossyDecor.rimBorder(base)
+        border: liquidGlass
+            ? LiquidGlassDecor.rimBorder(base)
             : (borderColor != null
                   ? Border.all(color: borderColor!, width: 0.5)
                   : null),
@@ -136,7 +136,7 @@ class SlidingPillNav extends StatelessWidget {
                   borderRadius: BorderRadius.circular(34),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      gradient: GlossyDecor.topSheen(base),
+                      gradient: LiquidGlassDecor.topSheen(base),
                     ),
                   ),
                 ),

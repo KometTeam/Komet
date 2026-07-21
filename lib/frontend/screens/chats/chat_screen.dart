@@ -433,8 +433,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   static const double _avgMessageHeight = 72.0;
   static const double _historyPrefetchExtent = _avgMessageHeight * 8;
-  static const double _glossyHeaderHeight = 76.0;
-  static const double _glossySearchHeight = 58.0;
+  static const double _liquidGlassHeaderHeight = 76.0;
+  static const double _liquidGlassSearchHeight = 58.0;
   bool get _isLoadingMore => _chatController.isLoadingMore;
   set _isLoadingMore(bool v) => _chatController.isLoadingMore = v;
   bool get _hasMoreHistory => _chatController.hasMoreHistory;
@@ -2276,15 +2276,15 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   PreferredSizeWidget _buildAppBar(ColorScheme cs) {
-    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    final liquidGlass = AppVisualStyle.current.value == VisualStyle.liquidGlass;
     final searchT = Curves.easeOut.transform(_searchAnim.value.clamp(0.0, 1.0));
-    final height = glossy
-        ? ui.lerpDouble(_glossyHeaderHeight, _glossySearchHeight, searchT)!
+    final height = liquidGlass
+        ? ui.lerpDouble(_liquidGlassHeaderHeight, _liquidGlassSearchHeight, searchT)!
         : kToolbarHeight;
     final chrome = _effectiveChrome;
     return AppBar(
       backgroundColor: chrome == ChatChromeStyle.color
-          ? (glossy ? Colors.transparent : cs.surfaceContainerHigh)
+          ? (liquidGlass ? Colors.transparent : cs.surfaceContainerHigh)
           : Colors.transparent,
       flexibleSpace: chrome == ChatChromeStyle.blur
           ? _FrostedPanel(
@@ -2297,7 +2297,7 @@ class _ChatScreenState extends State<ChatScreen>
               ),
               child: const SizedBox.expand(),
             )
-          : (chrome == ChatChromeStyle.none && !glossy)
+          : (chrome == ChatChromeStyle.none && !liquidGlass)
           ? IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -2315,7 +2315,7 @@ class _ChatScreenState extends State<ChatScreen>
                 child: const SizedBox.expand(),
               ),
             )
-          : (chrome == ChatChromeStyle.transparent && !glossy)
+          : (chrome == ChatChromeStyle.transparent && !liquidGlass)
           ? IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -2366,7 +2366,7 @@ class _ChatScreenState extends State<ChatScreen>
                         child: Transform.translate(
                           offset: Offset(0, -height * 0.4 * t),
                           child: ChatHeaderRow(
-                            glossy: glossy,
+                            liquidGlass: liquidGlass,
                             cs: cs,
                             embedded: widget.embedded,
                             chatId: widget.chatId,
@@ -2424,7 +2424,7 @@ class _ChatScreenState extends State<ChatScreen>
                           child: SelectionTopBar(
                             cs: cs,
                             selected: selected,
-                            glossy: glossy,
+                            liquidGlass: liquidGlass,
                             copyMsg: _singleCopyableText(selected),
                             editMsg: _singleEditable(selected),
                             onClear: _clearSelection,
@@ -2442,7 +2442,7 @@ class _ChatScreenState extends State<ChatScreen>
                         opacity: s,
                         child: SearchTopBar(
                           cs: cs,
-                          glossy: glossy,
+                          liquidGlass: liquidGlass,
                           search: _search,
                           focusNode: _searchFocusNode,
                           onClose: _closeSearch,
@@ -4064,9 +4064,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   double _pinnedBannerTop() {
-    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    final liquidGlass = AppVisualStyle.current.value == VisualStyle.liquidGlass;
     return MediaQuery.paddingOf(context).top +
-        (glossy ? _glossyHeaderHeight : kToolbarHeight);
+        (liquidGlass ? _liquidGlassHeaderHeight : kToolbarHeight);
   }
 
   void _resetPinnedBannerHeight() {
@@ -4162,10 +4162,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (height != null) {
       resolved = height;
     } else {
-      final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+      final liquidGlass = AppVisualStyle.current.value == VisualStyle.liquidGlass;
       resolved =
           MediaQuery.paddingOf(context).top +
-          (glossy ? _glossyHeaderHeight : kToolbarHeight);
+          (liquidGlass ? _liquidGlassHeaderHeight : kToolbarHeight);
     }
     return IgnorePointer(
       child: Container(
@@ -4216,15 +4216,15 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   double _floatingDateTop(double pinnedHeight) {
-    final glossy = AppVisualStyle.current.value == VisualStyle.glossy;
+    final liquidGlass = AppVisualStyle.current.value == VisualStyle.liquidGlass;
     if (AppChatChrome.current.value == ChatChromeStyle.color) {
-      return glossy ? 2 : 4;
+      return liquidGlass ? 2 : 4;
     }
     if (chat?.hasPinnedMessage == true && pinnedHeight > 0) {
       return _pinnedBannerTop() + pinnedHeight + 2;
     }
     return MediaQuery.paddingOf(context).top +
-        (glossy ? _glossyHeaderHeight : kToolbarHeight) +
+        (liquidGlass ? _liquidGlassHeaderHeight : kToolbarHeight) +
         2;
   }
 

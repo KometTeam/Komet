@@ -7,7 +7,7 @@ import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/section_header.dart';
 
 class InfoScreen extends StatefulWidget {
@@ -175,7 +175,7 @@ class _InfoScreenState extends State<InfoScreen> {
   Widget _buildRow(String key, String label, String value, ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 1),
-      child: GlossyPill(
+      child: LiquidGlassPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -214,7 +214,7 @@ class _InfoScreenState extends State<InfoScreen> {
 
   Widget _buildListRow(List? items, ColorScheme cs) {
     if (items == null || items.isEmpty) {
-      return GlossyPill(
+      return LiquidGlassPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -222,7 +222,7 @@ class _InfoScreenState extends State<InfoScreen> {
         child: Text('-', style: TextStyle(color: cs.onSurfaceVariant)),
       );
     }
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(12),
       padding: const EdgeInsets.all(16),

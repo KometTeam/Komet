@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'glossy_pill.dart';
+import 'liquid_glass_pill.dart';
 
 class SettingsCard extends StatelessWidget {
   final List<Widget> children;
@@ -11,7 +11,7 @@ class SettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,

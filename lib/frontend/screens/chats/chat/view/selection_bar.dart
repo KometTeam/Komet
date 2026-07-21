@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:fuckmax/backend/modules/messages.dart';
-import 'package:fuckmax/frontend/widgets/glossy_pill.dart';
+import 'package:fuckmax/frontend/widgets/liquid_glass_pill.dart';
 
 class SelectionTopBar extends StatelessWidget {
   final ColorScheme cs;
   final Set<String> selected;
-  final bool glossy;
+  final bool liquidGlass;
   final CachedMessage? copyMsg;
   final CachedMessage? editMsg;
   final VoidCallback onClear;
@@ -18,7 +18,7 @@ class SelectionTopBar extends StatelessWidget {
     super.key,
     required this.cs,
     required this.selected,
-    required this.glossy,
+    required this.liquidGlass,
     required this.copyMsg,
     required this.editMsg,
     required this.onClear,
@@ -32,7 +32,7 @@ class SelectionTopBar extends StatelessWidget {
     final count = selected.length;
     final label = 'Выбрано $count';
 
-    if (!glossy) {
+    if (!liquidGlass) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(
@@ -86,7 +86,7 @@ class SelectionTopBar extends StatelessWidget {
           SizedBox(
             width: 56,
             height: 56,
-            child: GlossyPill(
+            child: LiquidGlassPill(
               onTap: onClear,
               child: Center(
                 child: Icon(
@@ -100,7 +100,7 @@ class SelectionTopBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: GlossyPill(
+            child: LiquidGlassPill(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: SizedBox(
                 height: 56,
@@ -122,7 +122,7 @@ class SelectionTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          GlossyPill(
+          LiquidGlassPill(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: SizedBox(
               height: 56,
@@ -211,7 +211,7 @@ class SelectionBottomBar extends StatelessWidget {
       ),
     );
     final iconWidget = Icon(icon, color: cs.onSurface, size: 22, weight: 500);
-    return GlossyPill(
+    return LiquidGlassPill(
       onTap: onTap,
       color: Color.alphaBlend(
         cs.surfaceContainerHighest.withValues(alpha: 0.92),

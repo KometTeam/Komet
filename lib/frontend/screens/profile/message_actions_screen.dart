@@ -5,7 +5,7 @@ import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/utils/haptics.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/settings_radio_tile.dart';
 
 class MessageActionsScreen extends StatelessWidget {
@@ -53,7 +53,7 @@ class _StyleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),

@@ -11,7 +11,7 @@ import 'package:fuckmax/core/config/app_colors.dart';
 import 'package:fuckmax/frontend/screens/chats/chat/upload_status.dart';
 import 'package:fuckmax/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:fuckmax/frontend/screens/chats/chat/voice_record_controller.dart';
-import 'package:fuckmax/frontend/widgets/glossy_pill.dart';
+import 'package:fuckmax/frontend/widgets/liquid_glass_pill.dart';
 import 'package:fuckmax/frontend/widgets/rich_message_controller.dart';
 
 class ComposerInputBar extends StatelessWidget {
@@ -73,7 +73,7 @@ class ComposerInputBar extends StatelessWidget {
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-          child: GlossyPill(
+          child: LiquidGlassPill(
             onTap: onToggleMute,
             color: Color.alphaBlend(
               cs.surfaceContainerHighest.withValues(alpha: 0.92),
@@ -124,7 +124,7 @@ class ComposerInputBar extends StatelessWidget {
                       minHeight: 54,
                       maxHeight: 180,
                     ),
-                    child: GlossyPill(
+                    child: LiquidGlassPill(
                       color: Color.alphaBlend(
                         cs.surfaceContainerHighest.withValues(alpha: 0.92),
                         cs.surface,
@@ -317,7 +317,7 @@ class ComposerInputBar extends StatelessWidget {
                                             builder: (context, videoMode, _) {
                                               final sendMode =
                                                   hasText || locked;
-                                              final pill = GlossyPill(
+                                              final pill = LiquidGlassPill(
                                                 color: sendMode
                                                     ? cs.primary
                                                     : recording

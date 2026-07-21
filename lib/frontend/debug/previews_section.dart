@@ -3,7 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/storage/app_database.dart';
 import '../screens/calls/call_screen.dart';
-import '../widgets/glossy_pill.dart';
+import '../widgets/liquid_glass_pill.dart';
 import '../widgets/login_success_screen.dart';
 
 class DebugPreviewsSection extends StatelessWidget {
@@ -95,7 +95,7 @@ class DebugPreviewsSection extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: GlossyPill(
+          child: LiquidGlassPill(
             color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(20),
             depth: 6,

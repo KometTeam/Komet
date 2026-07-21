@@ -16,7 +16,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 
 enum _EnvState { loading, notConfigured, ready }
@@ -678,7 +678,7 @@ class _CornerAction extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: GlossyPill(
+        child: LiquidGlassPill(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(16),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -872,7 +872,7 @@ class _CloudFileCard extends StatelessWidget {
       onTap: onTap,
       child: AspectRatio(
         aspectRatio: 1.0,
-        child: GlossyPill(
+        child: LiquidGlassPill(
           color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
           depth: 6,

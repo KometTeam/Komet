@@ -7,7 +7,7 @@ import 'package:fuckmax/core/config/app_animations.dart';
 import 'package:fuckmax/core/config/app_chat_chrome.dart';
 import 'package:fuckmax/core/utils/format.dart';
 import 'package:fuckmax/frontend/widgets/animated_lottie_icon.dart';
-import 'package:fuckmax/frontend/widgets/glossy_pill.dart';
+import 'package:fuckmax/frontend/widgets/liquid_glass_pill.dart';
 import 'package:fuckmax/frontend/widgets/fuckmax_avatar.dart';
 import 'package:fuckmax/frontend/screens/chats/chat/chat_search_controller.dart';
 import 'package:fuckmax/frontend/screens/chats/chat/message_search_result.dart';
@@ -16,14 +16,14 @@ class SearchTopBar extends StatelessWidget {
   const SearchTopBar({
     super.key,
     required this.cs,
-    required this.glossy,
+    required this.liquidGlass,
     required this.search,
     required this.focusNode,
     required this.onClose,
   });
 
   final ColorScheme cs;
-  final bool glossy;
+  final bool liquidGlass;
   final ChatSearchController search;
   final FocusNode focusNode;
   final VoidCallback onClose;
@@ -53,7 +53,7 @@ class SearchTopBar extends StatelessWidget {
     final backBtn = IconButton(
       icon: Icon(
         Symbols.arrow_back,
-        weight: glossy ? 500 : 400,
+        weight: liquidGlass ? 500 : 400,
         color: cs.onSurface,
       ),
       onPressed: onClose,
@@ -69,7 +69,7 @@ class SearchTopBar extends StatelessWidget {
       onPressed: () => search.submit(search.searchController.text),
     );
 
-    if (!glossy) {
+    if (!liquidGlass) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(
@@ -84,7 +84,7 @@ class SearchTopBar extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-      child: GlossyPill(
+      child: LiquidGlassPill(
         padding: const EdgeInsets.symmetric(horizontal: 2),
         child: SizedBox(
           height: 44,

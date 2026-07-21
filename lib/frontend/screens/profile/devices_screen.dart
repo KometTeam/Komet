@@ -12,7 +12,7 @@ import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show SessionInfo;
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/prompt_dialog.dart';
 import '../../widgets/web_qr_login.dart';
 import 'web_qr_scan_screen.dart';
@@ -234,7 +234,7 @@ class _DevicesScreenState extends State<DevicesScreen>
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GlossyPill(
+      child: LiquidGlassPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(24),
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
@@ -305,7 +305,7 @@ class _DevicesScreenState extends State<DevicesScreen>
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GlossyPill(
+      child: LiquidGlassPill(
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(24),
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -562,7 +562,7 @@ class _DevicesScreenState extends State<DevicesScreen>
             child: isExpanded && details != null
                 ? Padding(
                     padding: const EdgeInsets.only(top: 12),
-                    child: GlossyPill(
+                    child: LiquidGlassPill(
                       color: cs.onSurface.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(12),
                       padding: const EdgeInsets.all(12),

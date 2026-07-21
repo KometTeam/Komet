@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:fuckmax/frontend/widgets/glossy_pill.dart';
+import 'package:fuckmax/frontend/widgets/liquid_glass_pill.dart';
 import 'package:fuckmax/frontend/widgets/online_dot.dart';
 
 class ChatHeaderRow extends StatelessWidget {
-  final bool glossy;
+  final bool liquidGlass;
   final ColorScheme cs;
   final bool embedded;
   final int chatId;
@@ -27,7 +27,7 @@ class ChatHeaderRow extends StatelessWidget {
 
   const ChatHeaderRow({
     super.key,
-    required this.glossy,
+    required this.liquidGlass,
     required this.cs,
     required this.embedded,
     required this.chatId,
@@ -49,9 +49,9 @@ class ChatHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      glossy ? _glossyRow(context) : _materialRow(context);
+      liquidGlass ? _liquidGlassRow(context) : _materialRow(context);
 
-  Widget _glossyRow(BuildContext context) {
+  Widget _liquidGlassRow(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       child: Row(
@@ -61,7 +61,7 @@ class ChatHeaderRow extends StatelessWidget {
             SizedBox(
               width: 56,
               height: 56,
-              child: GlossyPill(
+              child: LiquidGlassPill(
                 onTap: () {
                   if (embedded) {
                     onClose?.call();
@@ -82,7 +82,7 @@ class ChatHeaderRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: GlossyPill(
+            child: LiquidGlassPill(
               onTap: onOpenInfo,
               padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
               child: Row(
@@ -167,7 +167,7 @@ class ChatHeaderRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          GlossyPill(
+          LiquidGlassPill(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: SizedBox(
               height: 56,

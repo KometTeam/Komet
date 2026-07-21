@@ -509,7 +509,7 @@ class _RemovableCallEntryState extends State<_RemovableCallEntry>
   Widget build(BuildContext context) {
     return SizeTransition(
       sizeFactor: _animation,
-      alignment: Alignment.topCenter,
+      axisAlignment: -1.0,
       child: FadeTransition(opacity: _animation, child: widget.child),
     );
   }

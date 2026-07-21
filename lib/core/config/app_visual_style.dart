@@ -2,14 +2,14 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
-enum VisualStyle { materialYou, glossy }
+enum VisualStyle { liquidGlass }
 
 class AppVisualStyle {
   static const prefKey = 'app_visual_style';
 
   static final _setting = PersistedEnum<VisualStyle>(
     prefKey: prefKey,
-    defaultValue: VisualStyle.materialYou,
+    defaultValue: VisualStyle.liquidGlass,
     encode: _encode,
     decode: _parse,
   );
@@ -23,5 +23,5 @@ class AppVisualStyle {
   static String _encode(VisualStyle value) => value.name;
 
   static VisualStyle _parse(String? val) =>
-      enumFromName(VisualStyle.values, val, VisualStyle.materialYou);
+      VisualStyle.liquidGlass;
 }

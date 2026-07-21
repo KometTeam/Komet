@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../widgets/custom_notification.dart';
-import '../widgets/glossy_pill.dart';
+import '../widgets/liquid_glass_pill.dart';
 
 class DebugIdSearchSection extends StatelessWidget {
   final TextEditingController idController;
@@ -27,7 +27,7 @@ class DebugIdSearchSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,

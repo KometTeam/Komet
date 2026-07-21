@@ -738,13 +738,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceVisualStyleSubtitle =>
-      'Material You or dimensional Glossy capsules';
+      'Material You or dimensional Liquid Glass capsules';
 
   @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
 
   @override
-  String get appearanceVisualStyleGlossy => 'Glossy';
+  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
 
   @override
   String get appearanceChatChromeTitle => 'Chat screen elements';
@@ -770,7 +770,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceGradientSubtitle =>
-      'Depth and highlights in Glossy capsules';
+      'Depth and highlights in Liquid Glass capsules';
 
   @override
   String get appearanceAccentColorTitle => 'Accent color';

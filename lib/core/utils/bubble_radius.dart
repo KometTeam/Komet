@@ -38,7 +38,28 @@ BorderRadius computeBubbleRadius({
     );
   }
 
-  final base = style == BubbleStyle.desktop ? _small : _big;
+
+  if (style == BubbleStyle.iMessage) {
+    if (isSingle || isBottom) {
+      return BorderRadius.only(
+        topLeft: _big,
+        topRight: _big,
+        bottomLeft: isMe ? _big : _small,
+        bottomRight: isMe ? _small : _big,
+      );
+    } else {
+      // Middle or Top messages (no tail)
+      return BorderRadius.only(
+        topLeft: _big,
+        topRight: _big,
+        bottomLeft: _big,
+        bottomRight: _big,
+      );
+    }
+  }
+
+  final base = _big;
+
   Radius tl = base, tr = base, bl = base, br = base;
 
   if (behavior == BubbleBehavior.immutable || isSingle) {

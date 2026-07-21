@@ -1487,7 +1487,7 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceVisualStyleSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Material You or dimensional Glossy capsules'**
+  /// **'Material You or dimensional Liquid Glass capsules'**
   String get appearanceVisualStyleSubtitle;
 
   /// No description provided for @appearanceVisualStyleMaterialYou.
@@ -1496,11 +1496,11 @@ abstract class AppLocalizations {
   /// **'Material You'**
   String get appearanceVisualStyleMaterialYou;
 
-  /// No description provided for @appearanceVisualStyleGlossy.
+  /// No description provided for @appearanceVisualStyleLiquidGlass.
   ///
   /// In en, this message translates to:
-  /// **'Glossy'**
-  String get appearanceVisualStyleGlossy;
+  /// **'Liquid Glass'**
+  String get appearanceVisualStyleLiquidGlass;
 
   /// No description provided for @appearanceChatChromeTitle.
   ///
@@ -1547,7 +1547,7 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceGradientSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Depth and highlights in Glossy capsules'**
+  /// **'Depth and highlights in Liquid Glass capsules'**
   String get appearanceGradientSubtitle;
 
   /// No description provided for @appearanceAccentColorTitle.

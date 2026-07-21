@@ -9,7 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/contact_info.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/swipe_route.dart';
@@ -229,7 +229,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
           Expanded(
             child: GestureDetector(
               onTap: actions[i].onTap,
-              child: GlossyPill(
+              child: LiquidGlassPill(
                 color: cs.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(14),
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -358,7 +358,7 @@ class _ContactProfileScreenState extends State<ContactProfileScreen> {
 
     if (rows.isEmpty) return const SizedBox.shrink();
 
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

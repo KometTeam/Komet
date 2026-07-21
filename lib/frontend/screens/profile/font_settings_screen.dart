@@ -9,7 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/prompt_dialog.dart';
 
 class FontSettingsScreen extends StatefulWidget {
@@ -198,7 +198,7 @@ class _PreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.all(24),
@@ -337,7 +337,7 @@ class _FontSizeControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDefault = (scale - AppFonts.defaultScale).abs() < 0.001;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),

@@ -5,7 +5,7 @@ import '../../../backend/modules/account.dart' show TwoFactorDetails;
 import '../../../core/storage/app_database.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/primary_loading_button.dart';
 
 class PasswordEntryScreen extends StatefulWidget {
@@ -203,7 +203,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
 
   Widget _buildSetupSection(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
@@ -235,7 +235,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
 
   Widget _buildPasswordGate(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.all(20),
@@ -306,7 +306,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        GlossyPill(
+        LiquidGlassPill(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(20),
           padding: const EdgeInsets.all(20),
@@ -367,7 +367,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        GlossyPill(
+        LiquidGlassPill(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(20),
           depth: 6,

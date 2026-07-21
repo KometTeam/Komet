@@ -12,7 +12,7 @@ import 'create_group_flow.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
@@ -1401,7 +1401,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                       context,
                                       (_) => const SearchScreen(),
                                     ),
-                              child: GlossyPill(
+                              child: LiquidGlassPill(
                                 color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(50),
                                 padding: const EdgeInsets.symmetric(
@@ -2020,7 +2020,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           Positioned(
                             right: 20,
                             bottom: bottomInset + 90,
-                            child: GlossyPill(
+                            child: LiquidGlassPill(
                               onTap: _toggleFab,
                               color: cs.primaryContainer,
                               borderRadius: BorderRadius.circular(28),
@@ -2347,7 +2347,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           );
         }
       },
-      child: GlossyPill(
+      child: LiquidGlassPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -2809,7 +2809,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: 220,
-      child: GlossyPill(
+      child: LiquidGlassPill(
         onTap: onTap,
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(100),

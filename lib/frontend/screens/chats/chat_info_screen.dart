@@ -14,7 +14,7 @@ import '../../../models/contact_info.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/fuckmax_avatar.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
@@ -427,7 +427,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     VoidCallback? onTap,
   ]) {
     return Expanded(
-      child: GlossyPill(
+      child: LiquidGlassPill(
         onTap: onTap,
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
@@ -509,7 +509,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     String value, {
     bool isLink = false,
   }) {
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
@@ -540,7 +540,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _linkCard(ColorScheme cs, String link) {
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
@@ -574,7 +574,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     const int collapsedLines = 3;
     final isLong = desc.length > 120;
 
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.all(16),
@@ -831,7 +831,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _buildInfoRowsCard(ColorScheme cs) {
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
@@ -841,7 +841,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _infoCard(ColorScheme cs, String label, String value) {
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),

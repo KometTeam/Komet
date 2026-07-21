@@ -4,7 +4,7 @@ import '../../widgets/connection_status.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/utils/haptics.dart';
 import '../../widgets/confirm_dialog.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 
 class PerformanceScreen extends StatefulWidget {
   const PerformanceScreen({super.key});
@@ -103,7 +103,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: [
-            GlossyPill(
+            LiquidGlassPill(
               color: cs.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(28),
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),

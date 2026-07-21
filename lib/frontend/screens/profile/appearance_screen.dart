@@ -8,14 +8,14 @@ import '../../widgets/connection_status.dart';
 import '../../../core/config/app_bubble_behavior.dart';
 import '../../../core/config/app_bubble_shape.dart';
 import '../../../core/config/app_pill_gradient.dart';
-import '../../../core/config/app_visual_style.dart';
+
 import '../../../core/config/app_chat_chrome.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -73,10 +73,6 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
     setState(() => _accentExpanded = !_accentExpanded);
   }
 
-  void _onStyleChanged(BubbleStyle style) {
-    Haptics.selection();
-    AppBubbleShape.save(style);
-  }
 
   void _onBehaviorChanged(BubbleBehavior behavior) {
     Haptics.selection();
@@ -111,11 +107,9 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               onReset: _resetToSystem,
             ),
             const SizedBox(height: 12),
-            _BubbleShapeCard(onChanged: _onStyleChanged),
             const SizedBox(height: 12),
             _BubbleBehaviorCard(onChanged: _onBehaviorChanged),
             const SizedBox(height: 12),
-            const _VisualStyleCard(),
             const SizedBox(height: 12),
             const _ChatChromeCard(),
             const SizedBox(height: 12),
@@ -127,64 +121,6 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   }
 }
 
-class _VisualStyleCard extends StatelessWidget {
-  const _VisualStyleCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.appearanceVisualStyleTitle,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.appearanceVisualStyleSubtitle,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<VisualStyle>(
-            valueListenable: AppVisualStyle.current,
-            builder: (context, current, _) {
-              return SegmentedButton<VisualStyle>(
-                segments: [
-                  ButtonSegment(
-                    value: VisualStyle.materialYou,
-                    label: Text(l10n.appearanceVisualStyleMaterialYou),
-                  ),
-                  ButtonSegment(
-                    value: VisualStyle.glossy,
-                    label: Text(l10n.appearanceVisualStyleGlossy),
-                  ),
-                ],
-                selected: {current},
-                onSelectionChanged: (set) {
-                  if (set.isNotEmpty) {
-                    Haptics.selection();
-                    AppVisualStyle.save(set.first);
-                  }
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _ChatChromeCard extends StatelessWidget {
   const _ChatChromeCard();
@@ -193,7 +129,7 @@ class _ChatChromeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -260,7 +196,7 @@ class _GradientToggleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
@@ -404,7 +340,7 @@ class _ChatPreview extends StatelessWidget {
       builder: (context, _) {
         final style = AppBubbleShape.current.value;
         final behavior = AppBubbleBehavior.current.value;
-        return GlossyPill(
+        return LiquidGlassPill(
           color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(28),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -505,7 +441,7 @@ class _ColorPickerCard extends StatelessWidget {
   Widget _buildBody(ColorScheme cs, AppLocalizations l10n, Color col, bool sys) {
     final swatchColor = sys ? cs.primary : col;
 
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       depth: 6,
@@ -620,66 +556,6 @@ class _ColorPickerCard extends StatelessWidget {
   }
 }
 
-class _BubbleShapeCard extends StatelessWidget {
-  final ValueChanged<BubbleStyle> onChanged;
-
-  const _BubbleShapeCard({required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.appearanceBubbleShapeTitle,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.appearanceBubbleShapeSubtitle,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<BubbleStyle>(
-            valueListenable: AppBubbleShape.current,
-            builder: (context, current, _) {
-              return SegmentedButton<BubbleStyle>(
-                segments: [
-                  ButtonSegment(
-                    value: BubbleStyle.mobile,
-                    label: Text(l10n.appearanceBubbleShapeMobile),
-                    icon: const Icon(Symbols.smartphone),
-                  ),
-                  ButtonSegment(
-                    value: BubbleStyle.desktop,
-                    label: Text(l10n.appearanceBubbleShapeDesktop),
-                    icon: const Icon(Symbols.desktop_windows),
-                  ),
-                ],
-                selected: {current},
-                onSelectionChanged: (set) {
-                  if (set.isNotEmpty) onChanged(set.first);
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _BubbleBehaviorCard extends StatelessWidget {
   final ValueChanged<BubbleBehavior> onChanged;
@@ -691,7 +567,7 @@ class _BubbleBehaviorCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
 
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),

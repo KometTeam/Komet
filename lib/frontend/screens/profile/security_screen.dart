@@ -10,7 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
-import '../../widgets/glossy_pill.dart';
+import '../../widgets/liquid_glass_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'password_entry_screen.dart';
 
@@ -250,7 +250,7 @@ class _SecurityScreenState extends State<SecurityScreen>
 
   Widget _buildTopSection(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
@@ -351,7 +351,7 @@ class _SecurityScreenState extends State<SecurityScreen>
   Widget _buildPrivacySettings(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final isSafeMode = _privacyConfig?.safeMode ?? false;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
@@ -713,7 +713,7 @@ class _SecurityScreenState extends State<SecurityScreen>
     final unsafeFiles = _privacyConfig?.unsafeFiles ?? true;
     final audioTranscription =
         _privacyConfig?.audioTranscriptionEnabled ?? true;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
@@ -783,7 +783,7 @@ class _SecurityScreenState extends State<SecurityScreen>
   Widget _buildBlacklistSection(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final count = _blockedContacts.length;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,

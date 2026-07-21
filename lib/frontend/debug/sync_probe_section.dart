@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../main.dart';
-import '../widgets/glossy_pill.dart';
+import '../widgets/liquid_glass_pill.dart';
 
 class DebugSyncProbeSection extends StatefulWidget {
   const DebugSyncProbeSection({super.key});
@@ -85,7 +85,7 @@ class _DebugSyncProbeSectionState extends State<DebugSyncProbeSection> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
+    return LiquidGlassPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(20),
       depth: 6,
