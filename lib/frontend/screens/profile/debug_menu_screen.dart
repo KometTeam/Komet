@@ -14,6 +14,7 @@ import '../../debug/feature_toggles_section.dart';
 import '../../debug/header_section.dart';
 import '../../debug/id_search_section.dart';
 import '../../debug/log_export.dart';
+import '../../debug/lottie_polygon_section.dart';
 import '../../debug/network_section.dart';
 import '../../debug/previews_section.dart';
 import '../../debug/quick_actions_section.dart';
@@ -221,6 +222,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                 onExportLog: () => exportDebugLog(context),
               ),
             ),
+            const SliverToBoxAdapter(child: DebugLottiePolygonSection()),
             SliverToBoxAdapter(child: DebugNetworkSection(appState: appState)),
             const SliverToBoxAdapter(child: DebugFeatureTogglesSection()),
             SliverToBoxAdapter(
