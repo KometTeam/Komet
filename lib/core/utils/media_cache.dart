@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -18,6 +19,8 @@ class MediaCache {
   static Directory? _dir;
   static int? _cachedSize;
   static final Map<String, Future<File?>> _inFlight = {};
+  static final Set<String> _present = {};
+  static final Map<String, ValueNotifier<bool>> _presence = {};
 
   static Future<Directory> _cacheDir() async {
     final cached = _dir;
@@ -49,8 +52,10 @@ class MediaCache {
       try {
         await file.setLastModified(DateTime.now());
       } catch (_) {}
+      _markPresent(name, true);
       return file;
     }
+    _markPresent(name, false);
     return null;
   }
 
@@ -103,6 +108,7 @@ class MediaCache {
       }
       await sink.close();
       await part.rename(file.path);
+      _markPresent(name, true);
       final known = _cachedSize;
       if (known != null) {
         try {
@@ -161,6 +167,10 @@ class MediaCache {
       }
     }
     _cachedSize = 0;
+    _present.clear();
+    for (final notifier in _presence.values) {
+      notifier.value = false;
+    }
     return freed;
   }
 
@@ -195,9 +205,33 @@ class MediaCache {
       try {
         total -= await file.length();
         await file.delete();
+        _markAbsentByBasename(p.basename(file.path));
       } catch (_) {}
     }
     _cachedSize = total;
+  }
+
+  /// Реактивный флаг наличия файла [name] в кэше (для UI-иконки «скачано»).
+  static ValueListenable<bool> presence(String name) {
+    final key = _sanitize(name);
+    return _presence.putIfAbsent(key, () {
+      final notifier = ValueNotifier(_present.contains(key));
+      if (!notifier.value) existing(name).ignore();
+      return notifier;
+    });
+  }
+
+  static void _markPresent(String name, bool present) {
+    final key = _sanitize(name);
+    final changed = present ? _present.add(key) : _present.remove(key);
+    if (!changed) return;
+    _presence[key]?.value = present;
+  }
+
+  static void _markAbsentByBasename(String basename) {
+    if (_present.remove(basename)) {
+      _presence[basename]?.value = false;
+    }
   }
 
   static String _sanitize(String name) {

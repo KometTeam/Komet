@@ -1786,9 +1786,10 @@ class MessagesModule {
   }) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {
-        'messageId': int.tryParse(messageId) ?? 0,
-        'chatId': chatId,
         'fileId': fileId,
+        'chatId': chatId,
+        'messageId': int.tryParse(messageId) ?? 0,
+        'itemType': 'REGULAR',
       });
 
       if (!response.isOk) return null;

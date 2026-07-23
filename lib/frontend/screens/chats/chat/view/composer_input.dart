@@ -53,6 +53,7 @@ class ComposerInputBar extends StatelessWidget {
     this.showAttachButton = true,
     this.forceSend = false,
     this.hintText = 'Message',
+    this.bottomSafe = true,
   });
 
   final String chatType;
@@ -87,6 +88,7 @@ class ComposerInputBar extends StatelessWidget {
   final bool showAttachButton;
   final bool forceSend;
   final String hintText;
+  final bool bottomSafe;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +174,7 @@ class ComposerInputBar extends StatelessWidget {
     }
 
     final bar = SafeArea(
+      bottom: bottomSafe,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

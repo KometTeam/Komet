@@ -5,6 +5,7 @@ import 'package:komet/main.dart';
 
 import '../../../../core/utils/download_progress.dart';
 import '../../../../core/utils/file_download.dart';
+import '../../../../core/utils/media_cache.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../models/attachment.dart';
@@ -113,38 +114,49 @@ class FileBubble extends StatelessWidget {
               ValueListenableBuilder<double?>(
                 valueListenable: MediaDownloadProgress.notifier(cacheName),
                 builder: (context, progress, _) {
-                  final downloading = progress != null;
-                  return GestureDetector(
-                    onTap: downloading
-                        ? null
-                        : () => _downloadFile(ctx.context, file, name),
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: isMe
-                            ? ctx.systemTint
-                            : ctx.cs.surfaceContainerHighest,
-                        shape: BoxShape.circle,
+                  final iconColor = isMe
+                      ? ctx.cs.onPrimaryContainer
+                      : ctx.cs.primary;
+                  Widget circle(Widget child, VoidCallback? onTap) {
+                    return GestureDetector(
+                      onTap: onTap,
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? ctx.systemTint
+                              : ctx.cs.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                        ),
+                        child: child,
                       ),
-                      child: downloading
-                          ? Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                value: progress > 0 ? progress : null,
-                                color: isMe
-                                    ? ctx.cs.onPrimaryContainer
-                                    : ctx.cs.primary,
-                              ),
-                            )
-                          : Icon(
-                              Symbols.download,
-                              color: isMe
-                                  ? ctx.cs.onPrimaryContainer
-                                  : ctx.cs.primary,
-                              size: 18,
-                            ),
+                    );
+                  }
+
+                  if (progress != null) {
+                    return circle(
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value: progress > 0 ? progress : null,
+                          color: iconColor,
+                        ),
+                      ),
+                      null,
+                    );
+                  }
+
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: MediaCache.presence(cacheName),
+                    builder: (context, cached, _) => circle(
+                      Icon(
+                        cached ? Symbols.check : Symbols.download,
+                        color: iconColor,
+                        size: 18,
+                      ),
+                      () => _downloadFile(ctx.context, file, name),
                     ),
                   );
                 },
@@ -171,8 +183,9 @@ class FileBubble extends StatelessWidget {
     Haptics.tap();
 
     final cacheName = '${fileId}_$name';
+    final cached = (await MediaCache.existing(cacheName)) != null;
 
-    MediaDownloadProgress.set(cacheName, 0);
+    if (!cached) MediaDownloadProgress.set(cacheName, 0);
     final result = await openCachedFile(
       cacheName,
       () => messagesModule.getFileUrl(
@@ -182,7 +195,7 @@ class FileBubble extends StatelessWidget {
       ),
       onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
     );
-    MediaDownloadProgress.set(cacheName, null);
+    if (!cached) MediaDownloadProgress.set(cacheName, null);
     if (!context.mounted) return;
     if (!result.ok) {
       showCustomNotification(

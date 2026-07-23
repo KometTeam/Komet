@@ -2353,9 +2353,12 @@ class _ChatScreenState extends State<ChatScreen>
                   );
                 },
               ),
-              ComposerInputBar(
-                chatType: _commentsMode ? 'CHAT' : widget.chatType,
-                chrome: _effectiveChrome,
+              AnimatedBuilder(
+                animation: _stickers.anim,
+                builder: (context, _) => ComposerInputBar(
+                  bottomSafe: _stickers.anim.value == 0,
+                  chatType: _commentsMode ? 'CHAT' : widget.chatType,
+                  chrome: _effectiveChrome,
                 style: AppComposerStyle.current.value,
                 background: AppComposerBackground.current.value,
                 backdropKey: _pillBackdrop,
@@ -2385,8 +2388,9 @@ class _ChatScreenState extends State<ChatScreen>
                 onSubscribe: _subscribeChannel,
                 showStickerButton: !_commentsMode,
                 showAttachButton: !_commentsMode,
-                forceSend: _commentsMode,
-                hintText: _commentsMode ? 'Комментарий' : 'Message',
+                  forceSend: _commentsMode,
+                  hintText: _commentsMode ? 'Комментарий' : 'Message',
+                ),
               ),
               StickerPanelView(
                 stickers: _stickers,
