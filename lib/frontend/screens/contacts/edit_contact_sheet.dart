@@ -1,8 +1,7 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
+import 'package:komet/frontend/screens/contacts/contact_sheet_common.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -31,33 +30,16 @@ Future<EditContactResult?> showEditContactSheet(
   required String onemeFirst,
   required String onemeLast,
 }) {
-  return showGeneralDialog<EditContactResult>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withValues(alpha: 0.28),
-    transitionDuration: const Duration(milliseconds: 260),
-    pageBuilder: (_, _, _) => const SizedBox.shrink(),
-    transitionBuilder: (_, anim, _, _) {
-      final t = Curves.easeOutCubic.transform(anim.value);
-      return BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14 * t, sigmaY: 14 * t),
-        child: Opacity(
-          opacity: anim.value,
-          child: Transform.scale(
-            scale: 0.94 + 0.06 * t,
-            child: _EditContactCard(
-              contactId: contactId,
-              avatarUrl: avatarUrl,
-              customFirst: customFirst,
-              customLast: customLast,
-              onemeFirst: onemeFirst,
-              onemeLast: onemeLast,
-            ),
-          ),
-        ),
-      );
-    },
+  return showBlurredCard<EditContactResult>(
+    context,
+    (_) => _EditContactCard(
+      contactId: contactId,
+      avatarUrl: avatarUrl,
+      customFirst: customFirst,
+      customLast: customLast,
+      onemeFirst: onemeFirst,
+      onemeLast: onemeLast,
+    ),
   );
 }
 
@@ -223,7 +205,7 @@ class _EditContactCardState extends State<_EditContactCard> {
                     controller: _firstCtrl,
                     hint: l10n.editContactFirstName,
                   ),
-                  _divider(cs),
+                  contactSheetDivider(cs),
                   _inputRow(
                     cs,
                     controller: _lastCtrl,
@@ -341,6 +323,4 @@ class _EditContactCardState extends State<_EditContactCard> {
     );
   }
 
-  Widget _divider(ColorScheme cs) =>
-      Divider(height: 1, thickness: 0.5, color: cs.outlineVariant);
 }

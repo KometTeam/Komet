@@ -417,6 +417,11 @@ class ContactsModule {
     return rows.map(CachedContact.fromDbRow).toList();
   }
 
+  static Future<CachedContact?> getContact(int accountId, int id) async {
+    final row = await AppDatabase.loadContact(accountId, id);
+    return row == null ? null : CachedContact.fromDbRow(row);
+  }
+
   static const List<String> _debugFirstNames = [
     'Алиса', 'Борис', 'Вера', 'Глеб', 'Дарья', 'Егор', 'Жанна', 'Захар',
     'Ирина', 'Кирилл', 'Лия', 'Максим', 'Нина', 'Олег', 'Полина', 'Роман',

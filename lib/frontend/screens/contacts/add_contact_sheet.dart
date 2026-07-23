@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,32 +5,16 @@ import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/core/config/countries.dart';
 import 'package:komet/frontend/screens/auth/phone_input_formatter.dart';
 import 'package:komet/frontend/screens/auth/select_country_screen.dart';
+import 'package:komet/frontend/screens/contacts/contact_sheet_common.dart';
 import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart';
 
 Future<void> showAddContactSheet(BuildContext context) {
-  return showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withValues(alpha: 0.28),
-    transitionDuration: const Duration(milliseconds: 260),
-    pageBuilder: (_, _, _) => const SizedBox.shrink(),
-    transitionBuilder: (dialogContext, anim, _, _) {
-      final t = Curves.easeOutCubic.transform(anim.value);
-      return BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14 * t, sigmaY: 14 * t),
-        child: Opacity(
-          opacity: anim.value,
-          child: Transform.scale(
-            scale: 0.94 + 0.06 * t,
-            child: _AddContactCard(hostContext: context),
-          ),
-        ),
-      );
-    },
+  return showBlurredCard<void>(
+    context,
+    (host) => _AddContactCard(hostContext: host),
   );
 }
 
@@ -181,19 +163,19 @@ class _AddContactCardState extends State<_AddContactCard> {
           ),
           const SizedBox(height: 20),
           _buildPhoneRow(cs),
-          _divider(cs),
+          contactSheetDivider(cs),
           _buildTextRow(
             cs,
             controller: _firstCtrl,
             hint: l10n.addContactFirstName,
           ),
-          _divider(cs),
+          contactSheetDivider(cs),
           _buildTextRow(
             cs,
             controller: _lastCtrl,
             hint: l10n.addContactLastName,
           ),
-          _divider(cs),
+          contactSheetDivider(cs),
           _buildSaveButton(cs, l10n),
         ],
       ),
@@ -214,7 +196,7 @@ class _AddContactCardState extends State<_AddContactCard> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _flagEmoji(_country.code),
+                    contactFlagEmoji(_country.code),
                     style: const TextStyle(fontSize: 22),
                   ),
                   const SizedBox(width: 6),
@@ -358,16 +340,4 @@ class _AddContactCardState extends State<_AddContactCard> {
     );
   }
 
-  Widget _divider(ColorScheme cs) =>
-      Divider(height: 1, thickness: 0.5, color: cs.outlineVariant);
-
-  static String _flagEmoji(String code) {
-    if (code.length != 2) return '🏳️';
-    final upper = code.toUpperCase();
-    final a = upper.codeUnitAt(0);
-    final b = upper.codeUnitAt(1);
-    if (a < 65 || a > 90 || b < 65 || b > 90) return '🏳️';
-    return String.fromCharCode(0x1F1E6 + (a - 65)) +
-        String.fromCharCode(0x1F1E6 + (b - 65));
-  }
 }

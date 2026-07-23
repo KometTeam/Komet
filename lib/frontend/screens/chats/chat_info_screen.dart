@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../contacts/edit_contact_sheet.dart';
+import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
 import '../../../core/config/app_show_extra_info.dart';
@@ -78,10 +79,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   String _selectedTab = '';
   bool _descExpanded = false;
   bool _showRealName = false;
-  String? _nameOverride;
 
   int? _otherId;
   ContactInfo? _contactData;
+  CachedContact? _localContact;
   int? _seenTime;
   bool _isOnline = false;
   int _presenceStatus = 0;
@@ -187,6 +188,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       }
 
       if (_otherId != null) {
+        _localContact = await ContactsModule.getContact(_myId, _otherId!);
         final contact = await ContactInfoFetch.get(_otherId!);
         if (contact != null) {
           _contactData = contact;
@@ -322,11 +324,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     return null;
   }
 
-  bool get _isContact => _nameEntry('CUSTOM') != null;
+  bool get _isContact => _localContact != null;
 
   String _joinName(String first, String last) => last.trim().isEmpty
       ? first.trim()
       : '${first.trim()} ${last.trim()}';
+
+  String get _customName {
+    final c = _localContact;
+    if (c != null) return _joinName(c.firstName, c.lastName ?? '');
+    return widget.name;
+  }
 
   Widget _buildMoreButton(ColorScheme cs) {
     final canEdit = widget.chatType == 'DIALOG' && _isContact;
@@ -358,17 +366,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Future<void> _openEdit() async {
-    final custom = _nameEntry('CUSTOM');
     final oneme = _nameEntry('ONEME');
+    final local = _localContact;
     final peerId = _otherId ?? widget.dialogPeerId ?? 0;
     if (peerId == 0) return;
 
     final result = await showEditContactSheet(
       context,
       contactId: peerId,
-      avatarUrl: _contactData?.avatarUrl ?? widget.imageUrl,
-      customFirst: custom?.firstName ?? '',
-      customLast: custom?.lastName ?? '',
+      avatarUrl: _contactData?.avatarUrl ?? local?.baseUrl ?? widget.imageUrl,
+      customFirst: local?.firstName ?? '',
+      customLast: local?.lastName ?? '',
       onemeFirst: oneme?.firstName ?? '',
       onemeLast: oneme?.lastName ?? '',
     );
@@ -376,31 +384,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
     switch (result.action) {
       case EditContactAction.updated:
-        _applyUpdatedNames(result.firstName, result.lastName);
+        final fresh = await ContactsModule.getContact(_myId, peerId);
+        if (!mounted) return;
+        setState(() {
+          _localContact = fresh;
+          _showRealName = false;
+        });
       case EditContactAction.removed:
         Navigator.of(context).pop();
     }
-  }
-
-  void _applyUpdatedNames(String first, String last) {
-    final data = _contactData;
-    final newCustom = ContactName(
-      type: 'CUSTOM',
-      name: first,
-      firstName: first,
-      lastName: last,
-    );
-    final others = data == null
-        ? <ContactName>[]
-        : data.names.where((n) => n.type != 'CUSTOM').toList();
-    setState(() {
-      _contactData = ContactInfo(
-        raw: data?.raw ?? const <String, dynamic>{},
-        names: [newCustom, ...others],
-      );
-      _nameOverride = _joinName(first, last);
-      _showRealName = false;
-    });
   }
 
   String? get _realName {
@@ -426,7 +418,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       fontSize: 22,
       fontWeight: FontWeight.w700,
     );
-    final custom = _nameOverride ?? widget.name;
+    final custom = _customName;
     final real = _realName;
     final hasToggle =
         widget.chatType == 'DIALOG' && real != null && real != custom;
