@@ -919,5 +919,20 @@
   "updateUpToDate": "You have the latest version",
   "updateCheckFailed": "Couldn't check for updates. Try again later",
   "profileResurrecting": "Oops! The server didn't send your profile. Trying to regenerate…",
-  "profilePhoneRegenFailed": "Couldn't regenerate your phone number. Please sign in again and report the issue to the developers"
+  "profilePhoneRegenFailed": "Couldn't regenerate your phone number. Please sign in again and report the issue to the developers",
+  "addContactTitle": "Add contact",
+  "addContactFirstName": "First name",
+  "addContactLastName": "Last name (optional)",
+  "addContactSave": "Save contact",
+  "addContactNotFound": "{phone} not found",
+  "@addContactNotFound": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "addContactNotFoundSubtitle": "This number isn't on the app yet",
+  "addContactSearchOther": "Search for other number",
+  "addContactError": "Couldn't add contact"
 }

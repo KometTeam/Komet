@@ -694,5 +694,20 @@
   "updateUpToDate": "Установлена актуальная версия",
   "updateCheckFailed": "Не удалось проверить обновления. Повторите позже",
   "profileResurrecting": "Упс! Сервер не прислал profile. Попробую регенерировать…",
-  "profilePhoneRegenFailed": "Не удалось регенерировать данные об номере. Перезайдите и сообщите об проблеме разработчикам"
+  "profilePhoneRegenFailed": "Не удалось регенерировать данные об номере. Перезайдите и сообщите об проблеме разработчикам",
+  "addContactTitle": "Новый контакт",
+  "addContactFirstName": "Имя",
+  "addContactLastName": "Фамилия (необязательно)",
+  "addContactSave": "Сохранить контакт",
+  "addContactNotFound": "{phone} не найден",
+  "@addContactNotFound": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "addContactNotFoundSubtitle": "Этого номера пока нет в приложении",
+  "addContactSearchOther": "Искать другой номер",
+  "addContactError": "Не удалось добавить контакт"
 }

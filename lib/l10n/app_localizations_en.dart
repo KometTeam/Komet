@@ -2122,4 +2122,30 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get profilePhoneRegenFailed =>
       'Couldn\'t regenerate your phone number. Please sign in again and report the issue to the developers';
+
+  @override
+  String get addContactTitle => 'Add contact';
+
+  @override
+  String get addContactFirstName => 'First name';
+
+  @override
+  String get addContactLastName => 'Last name (optional)';
+
+  @override
+  String get addContactSave => 'Save contact';
+
+  @override
+  String addContactNotFound(String phone) {
+    return '$phone not found';
+  }
+
+  @override
+  String get addContactNotFoundSubtitle => 'This number isn\'t on the app yet';
+
+  @override
+  String get addContactSearchOther => 'Search for other number';
+
+  @override
+  String get addContactError => 'Couldn\'t add contact';
 }

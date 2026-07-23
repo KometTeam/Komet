@@ -59,6 +59,7 @@ abstract class Opcode {
   static const int contactMutual = 38; // Общие контакты
   static const int contactPhotos = 39; // Фото контакта
   static const int contactSort = 40; // Сортировка контактов
+  static const int contactAddByPhone = 41; // Добавление контакта по номеру
   static const int contactVerify = 42; // Верификация контакта
   static const int removeContactPhoto = 43; // Удаление фото контакта
   static const int contactInfoByPhone = 46; // Поиск контакта по номеру
@@ -270,6 +271,7 @@ abstract class Opcode {
     contactMutual: 'CONTACT_MUTUAL',
     contactPhotos: 'CONTACT_PHOTOS',
     contactSort: 'CONTACT_SORT',
+    contactAddByPhone: 'CONTACT_ADD_BY_PHONE',
     contactVerify: 'CONTACT_VERIFY',
     removeContactPhoto: 'REMOVE_CONTACT_PHOTO',
     contactInfoByPhone: 'CONTACT_INFO_BY_PHONE',

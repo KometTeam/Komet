@@ -2135,4 +2135,30 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get profilePhoneRegenFailed =>
       'Не удалось регенерировать данные об номере. Перезайдите и сообщите об проблеме разработчикам';
+
+  @override
+  String get addContactTitle => 'Новый контакт';
+
+  @override
+  String get addContactFirstName => 'Имя';
+
+  @override
+  String get addContactLastName => 'Фамилия (необязательно)';
+
+  @override
+  String get addContactSave => 'Сохранить контакт';
+
+  @override
+  String addContactNotFound(String phone) {
+    return '$phone не найден';
+  }
+
+  @override
+  String get addContactNotFoundSubtitle => 'Этого номера пока нет в приложении';
+
+  @override
+  String get addContactSearchOther => 'Искать другой номер';
+
+  @override
+  String get addContactError => 'Не удалось добавить контакт';
 }

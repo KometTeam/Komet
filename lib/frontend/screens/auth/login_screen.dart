@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'token_login_screen.dart';
 import 'select_country_screen.dart';
+import 'phone_input_formatter.dart';
 import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
 import '../profile/spoof_screen.dart';
@@ -873,7 +874,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     keyboardType: TextInputType.phone,
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
-                                      _PhoneInputFormatter(_selectedCountry),
+                                      PhoneInputFormatter(_selectedCountry),
                                     ],
                                     style: TextStyle(
                                       color: cs.onSurface,
@@ -1068,60 +1069,3 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _PhoneInputFormatter extends TextInputFormatter {
-  final CountryName country;
-  _PhoneInputFormatter(this.country);
-
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    var text = newValue.text.replaceAll(RegExp(r'\D'), '');
-
-    if (newValue.text.length < oldValue.text.length) {
-      final oldDigits = oldValue.text.replaceAll(RegExp(r'\D'), '');
-      if (text.length == oldDigits.length && text.isNotEmpty) {
-        text = text.substring(0, text.length - 1);
-      }
-    }
-
-    if (text.length > country.phoneDigits) {
-      text = text.substring(0, country.phoneDigits);
-    }
-
-    final buffer = StringBuffer();
-    int digitIdx = 0;
-
-    for (int i = 0; i < country.phoneGroupSizes.length; i++) {
-      if (digitIdx >= text.length) break;
-
-      buffer.write(country.phoneGroupSeparators[i]);
-
-      final groupSize = country.phoneGroupSizes[i];
-      final remainingDigits = text.length - digitIdx;
-      final digitsToTake = remainingDigits < groupSize
-          ? remainingDigits
-          : groupSize;
-
-      buffer.write(text.substring(digitIdx, digitIdx + digitsToTake));
-      digitIdx += digitsToTake;
-
-      if (digitIdx == text.length &&
-          i < country.phoneGroupSeparators.length - 1) {}
-    }
-
-    if (digitIdx == text.length && text.length == country.phoneDigits) {
-      if (country.phoneGroupSeparators.length >
-          country.phoneGroupSizes.length) {
-        buffer.write(country.phoneGroupSeparators.last);
-      }
-    }
-
-    final formattedText = buffer.toString();
-    return TextEditingValue(
-      text: formattedText,
-      selection: TextSelection.collapsed(offset: formattedText.length),
-    );
-  }
-}

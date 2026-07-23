@@ -4075,6 +4075,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t regenerate your phone number. Please sign in again and report the issue to the developers'**
   String get profilePhoneRegenFailed;
+
+  /// No description provided for @addContactTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get addContactTitle;
+
+  /// No description provided for @addContactFirstName.
+  ///
+  /// In en, this message translates to:
+  /// **'First name'**
+  String get addContactFirstName;
+
+  /// No description provided for @addContactLastName.
+  ///
+  /// In en, this message translates to:
+  /// **'Last name (optional)'**
+  String get addContactLastName;
+
+  /// No description provided for @addContactSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save contact'**
+  String get addContactSave;
+
+  /// No description provided for @addContactNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'{phone} not found'**
+  String addContactNotFound(String phone);
+
+  /// No description provided for @addContactNotFoundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This number isn\'t on the app yet'**
+  String get addContactNotFoundSubtitle;
+
+  /// No description provided for @addContactSearchOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for other number'**
+  String get addContactSearchOther;
+
+  /// No description provided for @addContactError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add contact'**
+  String get addContactError;
 }
 
 class _AppLocalizationsDelegate

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/config/debug_test.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
@@ -77,6 +78,15 @@ class ContactPhotos {
   const ContactPhotos({required this.urls, required this.total});
 
   static const empty = ContactPhotos(urls: [], total: 0);
+}
+
+enum AddContactStatus { added, notFound, error }
+
+class AddContactResult {
+  final AddContactStatus status;
+  final CachedContact? contact;
+
+  const AddContactResult(this.status, {this.contact});
 }
 
 class ContactsModule {
@@ -174,6 +184,63 @@ class ContactsModule {
     return CachedContact.fromDbRow(row);
   }
 
+  static Future<AddContactResult> addContactByPhone(
+    Api api, {
+    required String phone,
+    required String firstName,
+    String lastName = '',
+  }) async {
+    final normalized = _normalizePhone(phone);
+    if (normalized == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final Packet resp;
+    try {
+      resp = await api.sendRequest(Opcode.contactAddByPhone, {
+        'phone': normalized,
+        'firstName': firstName,
+        'lastName': lastName,
+      }, silent: true);
+    } on PacketError catch (e) {
+      final key = e.errorKey ?? '';
+      final notFound =
+          key == 'user.not.found' ||
+          e.message.toLowerCase().contains('not found');
+      return AddContactResult(
+        notFound ? AddContactStatus.notFound : AddContactStatus.error,
+      );
+    } catch (_) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final data = resp.payload;
+    final contact = (data is Map && data['contact'] is Map)
+        ? (data['contact'] as Map).cast<dynamic, dynamic>()
+        : null;
+    if (contact == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final row = _parseContact(contact, profile.id);
+    if (row == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    await AppDatabase.saveContacts([row]);
+    primeContactCache(contact);
+    revision.value++;
+    return AddContactResult(
+      AddContactStatus.added,
+      contact: CachedContact.fromDbRow(row),
+    );
+  }
+
   static Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
     int accountId,
@@ -230,11 +297,8 @@ class ContactsModule {
 
     final names = contact['names'];
     if (names is List && names.isNotEmpty) {
-      final nameRaw = names.firstWhere(
-        (n) => n is Map && n['type'] == 'ONEME',
-        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
-      );
-      if (nameRaw is Map) {
+      final nameRaw = _preferredNameEntry(names);
+      if (nameRaw != null) {
         final firstName = (nameRaw['firstName'] as String?) ?? '';
         final lastName = nameRaw['lastName'] as String?;
         final fullName = (lastName != null && lastName.isNotEmpty)
@@ -326,6 +390,19 @@ class ContactsModule {
     }
   }
 
+  static Map? _preferredNameEntry(List names) {
+    Map? oneme;
+    Map? any;
+    for (final n in names) {
+      if (n is! Map) continue;
+      any ??= n;
+      final type = n['type'];
+      if (type == 'CUSTOM') return n;
+      if (type == 'ONEME') oneme ??= n;
+    }
+    return oneme ?? any;
+  }
+
   static Map<String, dynamic>? _parseContact(
     Map<dynamic, dynamic> contact,
     int accountId,
@@ -338,14 +415,10 @@ class ContactsModule {
 
     final names = contact['names'];
     if (names is List && names.isNotEmpty) {
-      final nameRaw = names.firstWhere(
-        (n) => n is Map && n['type'] == 'ONEME',
-        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
-      );
-      if (nameRaw is! Map) return null;
-      final name = nameRaw;
-      firstName = (name['firstName'] as String?) ?? '';
-      lastName = name['lastName'] as String?;
+      final nameRaw = _preferredNameEntry(names);
+      if (nameRaw == null) return null;
+      firstName = (nameRaw['firstName'] as String?) ?? '';
+      lastName = nameRaw['lastName'] as String?;
     }
 
     final optionsRaw = contact['options'];
