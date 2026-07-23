@@ -27,6 +27,7 @@ import '../../../main.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
+import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/animoji.dart';
 import '../../../models/animoji.dart';
 import '../../../backend/modules/complaints.dart';
@@ -632,6 +633,7 @@ class _ChatScreenState extends State<ChatScreen>
     });
     debugForceOffline.addListener(_recomputeHeaderStatus);
     PresenceFetch.revision.addListener(_onPresenceChanged);
+    ContactsModule.revision.addListener(_onContactsChanged);
     _floatingDateAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -987,7 +989,7 @@ class _ChatScreenState extends State<ChatScreen>
       MaterialPageRoute(
         builder: (_) => ChatInfoScreen(
           chatId: widget.chatId,
-          name: widget.name,
+          name: _headerName(),
           imageUrl: widget.imageUrl,
           chatType: widget.chatType,
           initialTab: initialTab,
@@ -1823,6 +1825,7 @@ class _ChatScreenState extends State<ChatScreen>
         .listenable(widget.chatId)
         .removeListener(_recomputeHeaderStatus);
     PresenceFetch.revision.removeListener(_onPresenceChanged);
+    ContactsModule.revision.removeListener(_onContactsChanged);
     if (_wallpaperListening) {
       ChatWallpaperStore.instance.revision.removeListener(
         _applyEffectiveWallpaper,
@@ -2794,6 +2797,22 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  void _onContactsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  String _headerName() {
+    if (_commentsMode) return AppLocalizations.of(context)!.commentsTitle;
+    if (widget.chatType == 'DIALOG') {
+      final otherId = _resolveOtherId();
+      if (otherId != null) {
+        final cached = ContactCache.get(otherId);
+        if (cached != null && cached.isNotEmpty) return cached;
+      }
+    }
+    return widget.name;
+  }
+
   PreferredSizeWidget _buildAppBar(ColorScheme cs) {
     final glossy = AppVisualStyle.current.value.glossyChrome;
     final searchT = Curves.easeOut.transform(_searchAnim.value.clamp(0.0, 1.0));
@@ -2879,9 +2898,7 @@ class _ChatScreenState extends State<ChatScreen>
                             cs: cs,
                             embedded: widget.embedded,
                             chatId: widget.chatId,
-                            name: _commentsMode
-                                ? AppLocalizations.of(context)!.commentsTitle
-                                : widget.name,
+                            name: _headerName(),
                             imageUrl: widget.imageUrl,
                             chatType: widget.chatType,
                             isOfficial: chat?.isOfficial ?? false,

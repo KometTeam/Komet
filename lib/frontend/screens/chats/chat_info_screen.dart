@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../contacts/edit_contact_sheet.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
 import '../../../core/config/app_show_extra_info.dart';
@@ -77,6 +78,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   String _selectedTab = '';
   bool _descExpanded = false;
   bool _showRealName = false;
+  String? _nameOverride;
 
   int? _otherId;
   ContactInfo? _contactData;
@@ -275,12 +277,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             icon: Icon(Icons.arrow_back, color: cs.onSurface),
             onPressed: () => Navigator.pop(context),
           ),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.more_vert, color: cs.onSurface),
-              onPressed: () {},
-            ),
-          ],
+          actions: [_buildMoreButton(cs)],
         ),
         SliverToBoxAdapter(child: _buildBody(cs)),
       ],
@@ -316,6 +313,96 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
+  ContactName? _nameEntry(String type) {
+    final data = _contactData;
+    if (data == null) return null;
+    for (final n in data.names) {
+      if (n.type == type) return n;
+    }
+    return null;
+  }
+
+  bool get _isContact => _nameEntry('CUSTOM') != null;
+
+  String _joinName(String first, String last) => last.trim().isEmpty
+      ? first.trim()
+      : '${first.trim()} ${last.trim()}';
+
+  Widget _buildMoreButton(ColorScheme cs) {
+    final canEdit = widget.chatType == 'DIALOG' && _isContact;
+    if (!canEdit) {
+      return IconButton(
+        icon: Icon(Icons.more_vert, color: cs.onSurface),
+        onPressed: () {},
+      );
+    }
+    final l10n = AppLocalizations.of(context)!;
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: cs.onSurface),
+      onSelected: (v) {
+        if (v == 'edit') _openEdit();
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Symbols.edit, size: 20, color: cs.onSurface),
+              const SizedBox(width: 12),
+              Text(l10n.editContactMenu),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openEdit() async {
+    final custom = _nameEntry('CUSTOM');
+    final oneme = _nameEntry('ONEME');
+    final peerId = _otherId ?? widget.dialogPeerId ?? 0;
+    if (peerId == 0) return;
+
+    final result = await showEditContactSheet(
+      context,
+      contactId: peerId,
+      avatarUrl: _contactData?.avatarUrl ?? widget.imageUrl,
+      customFirst: custom?.firstName ?? '',
+      customLast: custom?.lastName ?? '',
+      onemeFirst: oneme?.firstName ?? '',
+      onemeLast: oneme?.lastName ?? '',
+    );
+    if (!mounted || result == null) return;
+
+    switch (result.action) {
+      case EditContactAction.updated:
+        _applyUpdatedNames(result.firstName, result.lastName);
+      case EditContactAction.removed:
+        Navigator.of(context).pop();
+    }
+  }
+
+  void _applyUpdatedNames(String first, String last) {
+    final data = _contactData;
+    final newCustom = ContactName(
+      type: 'CUSTOM',
+      name: first,
+      firstName: first,
+      lastName: last,
+    );
+    final others = data == null
+        ? <ContactName>[]
+        : data.names.where((n) => n.type != 'CUSTOM').toList();
+    setState(() {
+      _contactData = ContactInfo(
+        raw: data?.raw ?? const <String, dynamic>{},
+        names: [newCustom, ...others],
+      );
+      _nameOverride = _joinName(first, last);
+      _showRealName = false;
+    });
+  }
+
   String? get _realName {
     final data = _contactData;
     if (data == null) return null;
@@ -339,19 +426,20 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       fontSize: 22,
       fontWeight: FontWeight.w700,
     );
+    final custom = _nameOverride ?? widget.name;
     final real = _realName;
     final hasToggle =
-        widget.chatType == 'DIALOG' && real != null && real != widget.name;
+        widget.chatType == 'DIALOG' && real != null && real != custom;
 
     final nameSwap = AnimatedTextSwap(
       showAlternate: _showRealName,
       alignment: Alignment.center,
       alternate: Text(
-        real ?? widget.name,
+        real ?? custom,
         style: nameStyle,
         textAlign: TextAlign.center,
       ),
-      child: Text(widget.name, style: nameStyle, textAlign: TextAlign.center),
+      child: Text(custom, style: nameStyle, textAlign: TextAlign.center),
     );
 
     if (!hasToggle) return nameSwap;

@@ -109,6 +109,10 @@ class ContactInfoFetch {
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 
+  static void putContact(int id, Map<dynamic, dynamic> contact) {
+    _cache.putValue(id, ContactInfo.fromMap(Map<String, dynamic>.from(contact)));
+  }
+
   static Future<ContactInfo?> _fetch(int id) async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return null;

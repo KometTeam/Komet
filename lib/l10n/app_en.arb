@@ -934,5 +934,15 @@
   },
   "addContactNotFoundSubtitle": "This number isn't on the app yet",
   "addContactSearchOther": "Search for other number",
-  "addContactError": "Couldn't add contact"
+  "addContactError": "Couldn't add contact",
+  "editContactMenu": "Edit contact",
+  "editContactTitle": "Edit contact",
+  "editContactFirstName": "First name",
+  "editContactLastName": "Last name",
+  "editContactSave": "Save",
+  "editContactDelete": "Delete contact",
+  "editContactDeleteConfirmTitle": "Delete contact?",
+  "editContactDeleteConfirmBody": "This contact will be removed from your list.",
+  "editContactDeleteCancel": "Cancel",
+  "editContactError": "Couldn't save changes"
 }

@@ -583,6 +583,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
     KometSettings.showHiddenChats.addListener(_requestReload);
+    ContactsModule.revision.addListener(_requestReload);
     _maybeLoadStories();
     _typingSub = api.pushStream
         .where((p) => p.opcode == Opcode.notifTyping)
@@ -1228,6 +1229,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     KometSettings.showHiddenChats.removeListener(_requestReload);
+    ContactsModule.revision.removeListener(_requestReload);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _typingSub?.cancel();

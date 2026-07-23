@@ -883,6 +883,15 @@ class AppDatabase {
     );
   }
 
+  static Future<void> deleteContact(int accountId, int id) async {
+    final db = await _instance;
+    await db.delete(
+      'contacts',
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, id],
+    );
+  }
+
   static Future<void> saveMessages(List<Map<String, dynamic>> rows) async {
     final db = await _instance;
     await db.transaction((txn) async {

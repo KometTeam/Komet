@@ -2161,4 +2161,35 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get addContactError => 'Не удалось добавить контакт';
+
+  @override
+  String get editContactMenu => 'Редактировать контакт';
+
+  @override
+  String get editContactTitle => 'Редактировать контакт';
+
+  @override
+  String get editContactFirstName => 'Имя';
+
+  @override
+  String get editContactLastName => 'Фамилия';
+
+  @override
+  String get editContactSave => 'Сохранить';
+
+  @override
+  String get editContactDelete => 'Удалить контакт';
+
+  @override
+  String get editContactDeleteConfirmTitle => 'Удалить контакт?';
+
+  @override
+  String get editContactDeleteConfirmBody =>
+      'Контакт будет удалён из вашего списка.';
+
+  @override
+  String get editContactDeleteCancel => 'Отмена';
+
+  @override
+  String get editContactError => 'Не удалось сохранить изменения';
 }

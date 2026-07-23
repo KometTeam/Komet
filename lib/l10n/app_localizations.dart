@@ -4123,6 +4123,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t add contact'**
   String get addContactError;
+
+  /// No description provided for @editContactMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit contact'**
+  String get editContactMenu;
+
+  /// No description provided for @editContactTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit contact'**
+  String get editContactTitle;
+
+  /// No description provided for @editContactFirstName.
+  ///
+  /// In en, this message translates to:
+  /// **'First name'**
+  String get editContactFirstName;
+
+  /// No description provided for @editContactLastName.
+  ///
+  /// In en, this message translates to:
+  /// **'Last name'**
+  String get editContactLastName;
+
+  /// No description provided for @editContactSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get editContactSave;
+
+  /// No description provided for @editContactDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete contact'**
+  String get editContactDelete;
+
+  /// No description provided for @editContactDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete contact?'**
+  String get editContactDeleteConfirmTitle;
+
+  /// No description provided for @editContactDeleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This contact will be removed from your list.'**
+  String get editContactDeleteConfirmBody;
+
+  /// No description provided for @editContactDeleteCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get editContactDeleteCancel;
+
+  /// No description provided for @editContactError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save changes'**
+  String get editContactError;
 }
 
 class _AppLocalizationsDelegate

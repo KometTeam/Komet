@@ -709,5 +709,15 @@
   },
   "addContactNotFoundSubtitle": "Этого номера пока нет в приложении",
   "addContactSearchOther": "Искать другой номер",
-  "addContactError": "Не удалось добавить контакт"
+  "addContactError": "Не удалось добавить контакт",
+  "editContactMenu": "Редактировать контакт",
+  "editContactTitle": "Редактировать контакт",
+  "editContactFirstName": "Имя",
+  "editContactLastName": "Фамилия",
+  "editContactSave": "Сохранить",
+  "editContactDelete": "Удалить контакт",
+  "editContactDeleteConfirmTitle": "Удалить контакт?",
+  "editContactDeleteConfirmBody": "Контакт будет удалён из вашего списка.",
+  "editContactDeleteCancel": "Отмена",
+  "editContactError": "Не удалось сохранить изменения"
 }

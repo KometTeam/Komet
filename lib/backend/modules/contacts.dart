@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/cache/info_cache.dart';
 import '../../core/config/debug_test.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
+import '../../models/contact_info.dart';
 import '../api.dart';
 import 'messages.dart';
 
@@ -239,6 +241,82 @@ class ContactsModule {
       AddContactStatus.added,
       contact: CachedContact.fromDbRow(row),
     );
+  }
+
+  static Future<CachedContact?> updateContact(
+    Api api, {
+    required int contactId,
+    required String firstName,
+    required String lastName,
+  }) async {
+    final Packet resp;
+    try {
+      resp = await api.sendRequest(Opcode.contactUpdate, {
+        'contactId': contactId,
+        'action': 'UPDATE',
+        'firstName': firstName,
+        'lastName': lastName,
+      });
+    } catch (_) {
+      return null;
+    }
+
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile == null) return null;
+
+    final data = resp.payload;
+    final contact = (data is Map && data['contact'] is Map)
+        ? (data['contact'] as Map).cast<dynamic, dynamic>()
+        : null;
+    if (contact == null) return null;
+
+    final row = _parseContact(contact, profile.id);
+    if (row == null) return null;
+
+    await AppDatabase.saveContacts([row]);
+    primeContactCache(contact);
+    ContactInfoFetch.putContact(contactId, contact);
+    revision.value++;
+    return CachedContact.fromDbRow(row);
+  }
+
+  static Future<bool> removeContact(Api api, int contactId) async {
+    try {
+      await api.sendRequest(Opcode.contactUpdate, {
+        'contactId': contactId,
+        'action': 'REMOVE',
+      });
+    } catch (_) {
+      return false;
+    }
+
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile != null) {
+      await AppDatabase.deleteContact(profile.id, contactId);
+    }
+
+    ContactCache.remove(contactId);
+
+    ContactInfo? info = ContactInfoFetch.peek(contactId);
+    if (info == null) {
+      ContactInfoFetch.invalidate(contactId);
+      info = await ContactInfoFetch.get(contactId, forceRefresh: true);
+    }
+
+    final rawNames = info?.raw['names'];
+    if (info != null && rawNames is List) {
+      final stripped = rawNames
+          .where((n) => !(n is Map && n['type'] == 'CUSTOM'))
+          .toList();
+      final newRaw = Map<String, dynamic>.from(info.raw)..['names'] = stripped;
+      ContactInfoFetch.putContact(contactId, newRaw);
+      primeContactCache(newRaw);
+    } else {
+      ContactInfoFetch.invalidate(contactId);
+    }
+
+    revision.value++;
+    return true;
   }
 
   static Future<void> syncFromLoginPayload(

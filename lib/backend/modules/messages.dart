@@ -80,6 +80,14 @@ class ContactCache {
   static bool isOfficial(int id) =>
       _optionsCache[id]?.contains('OFFICIAL') ?? false;
 
+  static void remove(int id) {
+    _nameCache.remove(id);
+    _avatarCache.remove(id);
+    _optionsCache.remove(id);
+    _phoneCache.remove(id);
+    _scheduleSave();
+  }
+
   static void clear() {
     _nameCache.clear();
     _avatarCache.clear();

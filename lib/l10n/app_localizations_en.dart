@@ -2148,4 +2148,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addContactError => 'Couldn\'t add contact';
+
+  @override
+  String get editContactMenu => 'Edit contact';
+
+  @override
+  String get editContactTitle => 'Edit contact';
+
+  @override
+  String get editContactFirstName => 'First name';
+
+  @override
+  String get editContactLastName => 'Last name';
+
+  @override
+  String get editContactSave => 'Save';
+
+  @override
+  String get editContactDelete => 'Delete contact';
+
+  @override
+  String get editContactDeleteConfirmTitle => 'Delete contact?';
+
+  @override
+  String get editContactDeleteConfirmBody =>
+      'This contact will be removed from your list.';
+
+  @override
+  String get editContactDeleteCancel => 'Cancel';
+
+  @override
+  String get editContactError => 'Couldn\'t save changes';
 }
