@@ -54,55 +54,85 @@ class _RenderZeroIntrinsicWidth extends RenderProxyBox {
   double computeMaxIntrinsicWidth(double height) => 0;
 }
 
-/// Stacks an inline keyboard directly beneath a message bubble and forces the
-/// keyboard to take exactly the bubble's rendered width, so its buttons never
-/// grow wider than the post they belong to.
-class _BubbleWithKeyboard extends MultiChildRenderObjectWidget {
-  _BubbleWithKeyboard({required Widget bubble, required Widget keyboard})
-    : super(children: [bubble, keyboard]);
+/// Stacks [bottom] directly beneath [top] and forces [bottom] to take exactly
+/// [top]'s rendered width. Used to keep an inline keyboard and a comments footer
+/// pinned to their post's natural width instead of stretching to the bubble max
+/// — the latter would otherwise inflate a narrow post (single photo, link
+/// preview) to the full bubble width.
+class _StackMatchTopWidth extends MultiChildRenderObjectWidget {
+  _StackMatchTopWidth({
+    required Widget top,
+    required Widget bottom,
+    this.growForBottom = false,
+  }) : super(children: [top, bottom]);
+
+  final bool growForBottom;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderBubbleWithKeyboard();
+      _RenderStackMatchTopWidth(growForBottom);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderStackMatchTopWidth renderObject,
+  ) {
+    renderObject.growForBottom = growForBottom;
+  }
 }
 
-class _BubbleKeyboardParentData extends ContainerBoxParentData<RenderBox> {}
+class _StackMatchTopWidthParentData extends ContainerBoxParentData<RenderBox> {}
 
-class _RenderBubbleWithKeyboard extends RenderBox
+class _RenderStackMatchTopWidth extends RenderBox
     with
-        ContainerRenderObjectMixin<RenderBox, _BubbleKeyboardParentData>,
-        RenderBoxContainerDefaultsMixin<RenderBox, _BubbleKeyboardParentData> {
+        ContainerRenderObjectMixin<RenderBox, _StackMatchTopWidthParentData>,
+        RenderBoxContainerDefaultsMixin<
+          RenderBox,
+          _StackMatchTopWidthParentData
+        > {
+  _RenderStackMatchTopWidth(this._growForBottom);
+
+  bool _growForBottom;
+  set growForBottom(bool value) {
+    if (value == _growForBottom) return;
+    _growForBottom = value;
+    markNeedsLayout();
+  }
+
   @override
   void setupParentData(RenderBox child) {
-    if (child.parentData is! _BubbleKeyboardParentData) {
-      child.parentData = _BubbleKeyboardParentData();
+    if (child.parentData is! _StackMatchTopWidthParentData) {
+      child.parentData = _StackMatchTopWidthParentData();
     }
   }
 
   @override
   void performLayout() {
-    final RenderBox bubble = firstChild!;
-    final RenderBox keyboard = childAfter(bubble)!;
+    final RenderBox top = firstChild!;
+    final RenderBox bottom = childAfter(top)!;
 
-    bubble.layout(constraints.loosen(), parentUsesSize: true);
-    final Size bubbleSize = bubble.size;
-    (bubble.parentData! as _BubbleKeyboardParentData).offset = Offset.zero;
+    top.layout(constraints.loosen(), parentUsesSize: true);
+    final Size topSize = top.size;
+    (top.parentData! as _StackMatchTopWidthParentData).offset = Offset.zero;
 
-    keyboard.layout(
-      BoxConstraints.tightFor(width: bubbleSize.width).enforce(constraints),
+    double width = topSize.width;
+    if (_growForBottom) {
+      width = math.max(width, bottom.getMaxIntrinsicWidth(double.infinity));
+    }
+    width = constraints.constrainWidth(width);
+
+    bottom.layout(
+      BoxConstraints.tightFor(width: width).enforce(constraints),
       parentUsesSize: true,
     );
-    final Size keyboardSize = keyboard.size;
-    (keyboard.parentData! as _BubbleKeyboardParentData).offset = Offset(
+    final Size bottomSize = bottom.size;
+    (bottom.parentData! as _StackMatchTopWidthParentData).offset = Offset(
       0,
-      bubbleSize.height,
+      topSize.height,
     );
 
     size = constraints.constrain(
-      Size(
-        math.max(bubbleSize.width, keyboardSize.width),
-        bubbleSize.height + keyboardSize.height,
-      ),
+      Size(math.max(width, topSize.width), topSize.height + bottomSize.height),
     );
   }
 
@@ -674,18 +704,10 @@ class MessageBubble extends StatelessWidget {
         child: child,
       ),
       child: hasCommentsFooter
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: padding == EdgeInsets.zero
-                      ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
-                      : padding,
-                  child: innerContent,
-                ),
-                _buildCommentsFooter(cs),
-              ],
+          ? _StackMatchTopWidth(
+              growForBottom: true,
+              top: Padding(padding: padding, child: innerContent),
+              bottom: _buildCommentsFooter(cs),
             )
           : innerContent,
     );
@@ -718,9 +740,9 @@ class MessageBubble extends StatelessWidget {
                   : CrossAxisAlignment.start,
               children: [
                 if (keyboard != null)
-                  _BubbleWithKeyboard(
-                    bubble: bubbleBox,
-                    keyboard: _buildInlineKeyboard(context, cs, keyboard),
+                  _StackMatchTopWidth(
+                    top: bubbleBox,
+                    bottom: _buildInlineKeyboard(context, cs, keyboard),
                   )
                 else
                   bubbleBox,
