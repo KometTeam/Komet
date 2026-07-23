@@ -11,6 +11,7 @@ import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
 import '../../../models/contact_info.dart';
+import '../../widgets/animated_text_swap.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
@@ -75,6 +76,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   ChatInfo? _chatInfo;
   String _selectedTab = '';
   bool _descExpanded = false;
+  bool _showRealName = false;
 
   int? _otherId;
   ContactInfo? _contactData;
@@ -294,15 +296,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           const SizedBox(height: 4),
           _avatar(),
           const SizedBox(height: 14),
-          Text(
-            widget.name,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
-            textAlign: TextAlign.center,
-          ),
+          _buildNameRow(cs),
           const SizedBox(height: 4),
           Text(
             _subtitle(),
@@ -319,6 +313,69 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+
+  String? get _realName {
+    final data = _contactData;
+    if (data == null) return null;
+    for (final n in data.names) {
+      if (n.type == 'ONEME') {
+        final combined = [n.firstName, n.lastName]
+            .where((s) => s != null && s.trim().isNotEmpty)
+            .map((s) => s!.trim())
+            .join(' ');
+        if (combined.isNotEmpty) return combined;
+        final label = n.label;
+        if (label != null && label.isNotEmpty) return label;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildNameRow(ColorScheme cs) {
+    final nameStyle = TextStyle(
+      color: cs.onSurface,
+      fontSize: 22,
+      fontWeight: FontWeight.w700,
+    );
+    final real = _realName;
+    final hasToggle =
+        widget.chatType == 'DIALOG' && real != null && real != widget.name;
+
+    final nameSwap = AnimatedTextSwap(
+      showAlternate: _showRealName,
+      alignment: Alignment.center,
+      alternate: Text(
+        real ?? widget.name,
+        style: nameStyle,
+        textAlign: TextAlign.center,
+      ),
+      child: Text(widget.name, style: nameStyle, textAlign: TextAlign.center),
+    );
+
+    if (!hasToggle) return nameSwap;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(width: 36),
+        Flexible(child: nameSwap),
+        SizedBox(
+          width: 36,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            iconSize: 20,
+            color: _showRealName ? cs.primary : cs.onSurfaceVariant,
+            icon: Icon(
+              _showRealName ? Symbols.visibility : Symbols.visibility_off,
+            ),
+            tooltip: real,
+            onPressed: () => setState(() => _showRealName = !_showRealName),
+          ),
+        ),
+      ],
     );
   }
 
