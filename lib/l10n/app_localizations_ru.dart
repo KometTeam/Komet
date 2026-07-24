@@ -94,7 +94,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get tokenLoginNote =>
-      'Вход по токену работает только со спуфом. Укажите данные устройства, к которому привязан токен, иначе аккаунт могут заблокировать.';
+      'Вход по токену работает только со спуфом. Укажите данные устройства, к которому привязан токен, в противном случае он может быть отозван.';
 
   @override
   String get tokenLoginButton => 'Войти';
@@ -141,7 +141,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get codeConfirmation2faWarning =>
-      'MAX может требовать 2FA на вашем аккаунте для входа. Если вы не получили код — установите 2FA с клиента, на котором вы авторизованы.';
+      'По умолчанию код приходит в МАХ. Если код не приходит по SMS - не заходите в Komet/MAX 30 минут, и попробуйте заново.';
 
   @override
   String get proxySettingsTitle => 'Прокси';
@@ -191,7 +191,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofEnableSubtitleOff =>
-      'Выключена — используется реальное устройство';
+      'Выключена. Используется реальное устройство';
 
   @override
   String get spoofInfoHint =>
@@ -208,11 +208,11 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofMethodPartialDescription =>
-      'Рекомендуемый метод. Используются случайные данные, но ваш реальный часовой пояс и локаль для большей правдоподобности.';
+      'Рекомендуемый метод. Используются случайные данные, но ваш реальный часовой пояс и локаль остаются настоящими для правдоподобности.';
 
   @override
   String get spoofMethodFullDescription =>
-      'Все данные, включая часовой пояс и локаль, генерируются случайно. Использование этого метода на ваш страх и риск!';
+      'Все данные генерируются случайно. Будьте осторожны.';
 
   @override
   String get spoofDeviceTypeTitle => 'Тип устройства';
@@ -286,7 +286,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get spoofButtonApply => 'Применить';
 
   @override
-  String get spoofDialogUnsureTitle => 'Ты уверен?';
+  String get spoofDialogUnsureTitle => 'Уверен?';
 
   @override
   String get spoofDialogUnsureContent =>
@@ -305,15 +305,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get spoofDialogApplyContent => 'Нужно перезайти в приложение, ок?';
 
   @override
-  String get spoofDialogApplyWarning =>
-      'Ваш спуф изменится сразу. Но из-за особенностей МАХ, для того что-бы это стало заметно, вы должны перелогиниться в аккаунт';
+  String get spoofDialogApplyWarning => 'Ваш спуф изменится сразу. 😜';
 
   @override
   String get spoofDialogReloginTitle => 'Готово!';
 
   @override
   String get spoofDialogReloginContent =>
-      'Из-за особенности МАХ, ваш спуф изменён, но видны изменения будут только при перезаходе в аккаунт.';
+      'Ваш спуф изменён, но в списке устройств видны изменения только при перезаходе в аккаунт.';
 
   @override
   String get spoofDialogReloginWarning => 'Перезайти сейчас?';
@@ -617,7 +616,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsFkmAlreadyHasFcm => 'А зачем? У тебя уже FCM.';
 
   @override
-  String get notificationsFkmDownloadFcm => 'Скачай лучше FCM-версию.';
+  String get notificationsFkmDownloadFcm =>
+      'Установите FCM версию с официального источника';
 
   @override
   String get notificationsTitle => 'Уведомления';
@@ -694,7 +694,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get devicesTitle => 'Устройства';
 
   @override
-  String get devicesPromoTitle => 'Устройства в KOMET';
+  String get devicesPromoTitle => 'Устройства в Komet';
 
   @override
   String get devicesPromoSubtitle => 'Кто имеет доступ к вашему аккаунту?';
@@ -791,7 +791,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get appearanceChatChromeSubtitle =>
-      'Фон панелей сверху и снизу: цвет, размытие или прозрачно. При размытии и прозрачности сообщения заходят под панели';
+      'Фон панелей ввода и верхнего бара';
 
   @override
   String get appearanceChatChromeColor => 'Цвет';
@@ -894,10 +894,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Этот человек использует Komet! :3';
 
   @override
-  String get callStatusConnecting => 'Соединение';
+  String get callStatusConnecting => 'Соединение...';
 
   @override
-  String get callGroupConnecting => 'Соединение…';
+  String get callGroupConnecting => 'Соединение...';
 
   @override
   String get callGroupWaitingParticipants => 'Ожидание участников…';
@@ -1076,7 +1076,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get hubGamesTileSubtitle => 'Сыграть с собеседником';
 
   @override
-  String get hubCheckersTileSubtitle => 'Русские шашки';
+  String get hubCheckersTileSubtitle => 'Шашки';
 
   @override
   String get hubMoreSoonTitle => 'Скоро ещё…';
@@ -1388,10 +1388,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatInfoAddMember => 'Добавить участника';
 
   @override
-  String get chatInfoRoleOwner => 'владелец';
+  String get chatInfoRoleOwner => 'Владелец';
 
   @override
-  String get chatInfoRoleAdmin => 'Адмін';
+  String get chatInfoRoleAdmin => 'Админ';
 
   @override
   String get chatInfoNoData => 'Нет данных';
@@ -1610,7 +1610,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get passwordEntryMismatchError => 'Пароли не совпадают';
 
   @override
-  String get passwordEntryInvalidEmailError => 'Введите корректный email';
+  String get passwordEntryInvalidEmailError => 'Введите нормальный email';
 
   @override
   String get passwordEntryInvalidCodeError => 'Введите 6-значный код';
@@ -1702,7 +1702,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get passwordEntryRemoveWarning =>
-      'Внимание! После удаления пароля защита вашего аккаунта ослабнет.';
+      'После удаления пароля ваш аккаунт будет менее защищен. Уверены?';
 
   @override
   String get cloudStorageNoActiveProfile => 'Нет активного профиля';

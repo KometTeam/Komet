@@ -1297,7 +1297,17 @@ class MessageBubble extends StatelessWidget {
     );
     final hasReactions = reactionChips.isNotEmpty;
 
-    final textStyle = TextStyle(color: ctx.text, fontSize: 16, height: 1.3);
+    final activeFontFamily =
+        Theme.of(ctx.context).textTheme.bodyLarge?.fontFamily;
+    final textStyle = TextStyle(
+      color: ctx.text,
+      fontSize: 16,
+      height: 1.3,
+      fontFamily: activeFontFamily,
+      fontVariations: activeFontFamily == 'Inter'
+          ? const [FontVariation('wght', 300)]
+          : null,
+    );
     final ranges = message.formatRanges;
     final baseTextWidget = isForwarded
         ? _buildForwardedInlineText(ctx, forwarded)
