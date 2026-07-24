@@ -19,6 +19,41 @@ class WebAppLaunch {
   const WebAppLaunch({required this.url});
 }
 
+class ExternalCallbackResult {
+  final int botId;
+  final String? startParam;
+
+  const ExternalCallbackResult({required this.botId, this.startParam});
+
+  static ExternalCallbackResult? fromPayload(dynamic payload) {
+    final data = _findResponseMap(payload);
+    if (data == null) return null;
+    final botId = _asInt(data['botId'] ?? data['bot_id']);
+    if (botId == null) return null;
+    final startParam = data['startParam'] ?? data['start_param'];
+    return ExternalCallbackResult(
+      botId: botId,
+      startParam: startParam?.toString(),
+    );
+  }
+
+  static Map? _findResponseMap(dynamic value) {
+    if (value is! Map) return null;
+    if (value.containsKey('botId') || value.containsKey('bot_id')) return value;
+    for (final key in const ['data', 'result', 'response']) {
+      final nested = _findResponseMap(value[key]);
+      if (nested != null) return nested;
+    }
+    return null;
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+}
+
 class WebAppModule {
   final Api _api;
 
@@ -66,6 +101,26 @@ class WebAppModule {
       );
     }
     return fetchLaunch(botId);
+  }
+
+  Future<WebAppLaunch> handleExternalCallback(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.queryParameters['externalCallback'] != '1') {
+      throw const WebAppUnavailable('Некорректный callback Цифрового ID');
+    }
+    if (_api.state != SessionState.online) {
+      throw const WebAppUnavailable('Нет соединения с сервером');
+    }
+    final packet = await _api.sendRequest(Opcode.externalCallback, {
+      'url': url,
+    });
+    final result = ExternalCallbackResult.fromPayload(packet.payload);
+    if (result == null) {
+      throw const WebAppUnavailable(
+        'Сервер не вернул данные для завершения Цифрового ID',
+      );
+    }
+    return fetchLaunch(result.botId, startParam: result.startParam);
   }
 
   Future<int?> _resolveEntryApp(String key) async {

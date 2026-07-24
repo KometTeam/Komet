@@ -7,7 +7,7 @@ import '../../../backend/modules/digital_id.dart';
 import '../../../backend/modules/webapp.dart';
 import '../../../core/utils/webview_support.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../main.dart' show digitalIdModule;
+import '../../../main.dart' show digitalIdModule, webAppModule;
 import '../../../models/digital_id.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
@@ -123,9 +123,13 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           builder: (context) => WebAppScreen(
             title: AppLocalizations.of(context)!.digitalIdGosuslugiTitle,
             loader: () async => WebAppLaunch(url: link.url),
+            onExternalCallback: webAppModule.handleExternalCallback,
+            closeAfterExternalCallback: true,
           ),
         ),
       );
+      if (!mounted) return;
+      await digitalIdModule.loadDocuments(createIfMissing: true);
       if (!mounted) return;
       await _load();
     } on DigitalIdException catch (e) {
