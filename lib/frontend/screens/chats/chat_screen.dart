@@ -14,6 +14,7 @@ import 'package:komet/backend/modules/comments.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/backend/modules/upload_notification_service.dart';
 import 'package:komet/core/media/gallery_source.dart';
+import 'package:komet/core/media/image_optimizer.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
@@ -3766,6 +3767,7 @@ class _ChatScreenState extends State<ChatScreen>
     },
     postMessage: _postCommandMessage,
     updateMessage: _updateCommandMessage,
+    sendPhotos: _sendPhotos,
   );
 
   Future<void> _scheduleMessage() async {
@@ -5566,7 +5568,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (photos.isEmpty) return;
 
-    final files = <File>[];
+    final jobs = <({File file, GalleryItem? item})>[];
     final attachments = <PhotoAttachment>[];
     for (final photo in photos) {
       final edited = photo.editedFile;
@@ -5576,17 +5578,17 @@ class _ChatScreenState extends State<ChatScreen>
       final dim = edited != null
           ? await imageFileDimensions(edited)
           : await photo.item.dimensions();
-      files.add(file);
+      jobs.add((file: file, item: edited == null ? photo.item : null));
       attachments.add(
         PhotoAttachment(localPath: file.path, width: dim?.$1, height: dim?.$2),
       );
     }
-    if (files.isEmpty || !mounted) return;
+    if (jobs.isEmpty || !mounted) return;
 
     final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
     final progress = ValueNotifier<List<double>>(
-      List<double>.filled(files.length, 0),
+      List<double>.filled(jobs.length, 0),
     );
     _photoUploadProgress[tempId] = progress;
 
@@ -5608,7 +5610,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     try {
-      final tokens = await _uploadPhotos(files, progress);
+      final tokens = await _uploadPhotos(jobs, progress);
       if (!mounted) {
         _disposePhotoProgress(tempId);
         return;
@@ -5618,7 +5620,7 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
 
-      progress.value = List<double>.filled(files.length, 1);
+      progress.value = List<double>.filled(jobs.length, 1);
 
       final serverMsg = await messagesModule.sendPhotoMessage(
         widget.chatId,
@@ -5782,21 +5784,23 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (photos.isEmpty) return;
 
-    final files = <File>[];
+    final jobs = <({File file, GalleryItem? item})>[];
     for (final photo in photos) {
       final edited = photo.editedFile;
       final file =
           edited ?? photo.item.localFile ?? await photo.item.originFile();
-      if (file != null) files.add(file);
+      if (file != null) {
+        jobs.add((file: file, item: edited == null ? photo.item : null));
+      }
     }
-    if (files.isEmpty || !mounted) return;
+    if (jobs.isEmpty || !mounted) return;
 
     showCustomNotification(context, 'Загрузка…');
     final progress = ValueNotifier<List<double>>(
-      List<double>.filled(files.length, 0),
+      List<double>.filled(jobs.length, 0),
     );
     try {
-      final tokens = await _uploadPhotos(files, progress);
+      final tokens = await _uploadPhotos(jobs, progress);
       if (!mounted) return;
       if (tokens.any((t) => t == null)) {
         showCustomNotification(context, 'Не удалось загрузить фото');
@@ -5968,18 +5972,18 @@ class _ChatScreenState extends State<ChatScreen>
   static const int _photoUploadAttempts = 3;
 
   Future<List<String?>> _uploadPhotos(
-    List<File> files,
+    List<({File file, GalleryItem? item})> jobs,
     ValueNotifier<List<double>> progress,
   ) async {
-    final tokens = List<String?>.filled(files.length, null);
+    final tokens = List<String?>.filled(jobs.length, null);
     var nextIndex = 0;
     var failed = false;
 
     Future<void> worker() async {
       while (!failed) {
         final i = nextIndex++;
-        if (i >= files.length) return;
-        final token = await _uploadOnePhoto(files[i], i, progress);
+        if (i >= jobs.length) return;
+        final token = await _uploadOnePhoto(jobs[i], i, progress);
         if (token == null) {
           failed = true;
           return;
@@ -5988,16 +5992,23 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    final workerCount = math.min(_photoUploadConcurrency, files.length);
+    final workerCount = math.min(_photoUploadConcurrency, jobs.length);
     await Future.wait(List.generate(workerCount, (_) => worker()));
     return tokens;
   }
 
   Future<String?> _uploadOnePhoto(
-    File file,
+    ({File file, GalleryItem? item}) job,
     int index,
     ValueNotifier<List<double>> progress,
   ) async {
+    File file;
+    try {
+      file = await optimizePhotoForUpload(job.file, item: job.item);
+    } catch (e) {
+      logger.w('optimize photo: $e');
+      file = job.file;
+    }
     for (var attempt = 0; attempt < _photoUploadAttempts; attempt++) {
       if (attempt > 0) {
         await Future.delayed(Duration(seconds: attempt));
