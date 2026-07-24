@@ -23,6 +23,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import android.util.Range
 import android.util.Size
 import android.view.Surface
 import androidx.core.content.ContextCompat
@@ -35,22 +36,32 @@ import java.nio.FloatBuffer
 
 // Нативная запись видео-кружка через GL-конвейер: камера выдаёт стандартный
 // кадр в SurfaceTexture (OES), шейдер кропает по центру в квадрат и рендерит
-// одновременно в превью (Flutter Texture) и в MediaRecorder (480×480, H.264,
+// одновременно в превью (Flutter Texture) и в MediaRecorder (квадрат, H.264,
 // framework MediaMuxer). Так делает официальный клиент через CameraX — выход
 // проходит серверный валидатор (media3-перекод его НЕ проходит).
+// По умолчанию 480×480@30 как у официального клиента; размер и fps
+// настраиваются из дев-меню.
 class VideoNoteRecorder(
     private val context: Context,
     private val textureRegistry: TextureRegistry,
+    requestedEdge: Int = 480,
+    requestedFps: Int = 30,
 ) {
     private val tag = "VideoNoteRecorder"
-    private val edge = 480
-    private val bitrate = 1_024_000
-    private val fps = 30
+    private val edge = requestedEdge.coerceIn(240, 1080)
+    private val fps = requestedFps.coerceIn(24, 60)
+    // 1 Мбит/с — базовый битрейт официального клиента для 480×480@30;
+    // масштабируем по площади кадра и частоте.
+    private val bitrate =
+        (1_024_000L * edge * edge / (480L * 480L) * fps / 30L).toInt()
 
     private var cameraId = ""
     private var lensFacing = CameraCharacteristics.LENS_FACING_FRONT
     private var sensorOrientation = 270
     private var camSize = Size(1280, 720)
+    private var fpsRange: Range<Int>? = null
+    private var hasOis = false
+    private var hasEis = false
 
     private var cameraDevice: CameraDevice? = null
     private var session: CameraCaptureSession? = null
@@ -95,29 +106,60 @@ class VideoNoteRecorder(
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP,
                 )
                 camSize = pickCamSize(map)
+                fpsRange = pickFpsRange(
+                    ch.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES),
+                )
+                hasOis = ch.get(
+                    CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION,
+                )?.contains(
+                    CameraCharacteristics.LENS_OPTICAL_STABILIZATION_MODE_ON,
+                ) == true
+                hasEis = ch.get(
+                    CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES,
+                )?.contains(
+                    CameraCharacteristics.CONTROL_VIDEO_STABILIZATION_MODE_ON,
+                ) == true
                 return true
             }
         }
         return false
     }
 
-    // Поддерживаемый камерой размер вывода (для SurfaceTexture), близкий к 720p.
+    // Поддерживаемый камерой размер вывода (для SurfaceTexture): короткая
+    // сторона не меньше edge, целимся в ближайший 16:9 (720p для 480/720,
+    // 1080p для 1080).
     private fun pickCamSize(map: StreamConfigurationMap?): Size {
+        val targetShort = maxOf(720, edge)
+        val targetLong = targetShort * 16 / 9
+        val fallback = Size(targetLong, targetShort)
         val sizes = map?.getOutputSizes(SurfaceTexture::class.java)
-            ?: return Size(1280, 720)
-        var best = sizes.firstOrNull() ?: Size(1280, 720)
+            ?: return fallback
+        var best = sizes.firstOrNull() ?: fallback
         var bestScore = Int.MAX_VALUE
         for (s in sizes) {
             val longSide = maxOf(s.width, s.height)
             val shortSide = minOf(s.width, s.height)
             if (shortSide < edge) continue
-            val score = kotlin.math.abs(longSide - 1280) + kotlin.math.abs(shortSide - 720)
+            val score = kotlin.math.abs(longSide - targetLong) +
+                kotlin.math.abs(shortSide - targetShort)
             if (score < bestScore) {
                 bestScore = score
                 best = s
             }
         }
         return best
+    }
+
+    // Диапазон AE под запрошенный fps: предпочитаем фиксированный [fps, fps],
+    // иначе самый узкий диапазон, включающий fps; если 60 недоступно —
+    // максимально быстрый из имеющихся.
+    private fun pickFpsRange(ranges: Array<Range<Int>>?): Range<Int>? {
+        if (ranges == null || ranges.isEmpty()) return null
+        val covering = ranges.filter { it.lower <= fps && fps <= it.upper }
+        if (covering.isNotEmpty()) {
+            return covering.minByOrNull { (it.upper - it.lower) * 1000 + (fps - it.lower) }
+        }
+        return ranges.maxByOrNull { it.upper * 1000 - (it.upper - it.lower) }
     }
 
     fun init(facingFront: Boolean, rawResult: MethodChannel.Result) {
@@ -213,7 +255,7 @@ class VideoNoteRecorder(
             recordWindow?.let { w ->
                 w.makeCurrent()
                 GLES20.glViewport(0, 0, edge, edge)
-                prog.draw(oesTexId, stMatrix, camSize, lensFacing, false)
+                prog.draw(oesTexId, stMatrix, camSize, lensFacing, true)
                 w.setPresentationTime(System.nanoTime())
                 w.swap()
             }
@@ -252,8 +294,28 @@ class VideoNoteRecorder(
                 session = s
                 val req = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
                 req.addTarget(camSurface)
+                fpsRange?.let {
+                    req.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it)
+                }
+                // Оптическая стабилизация, если линза умеет; иначе электронная.
+                // Обе сразу включать нельзя — на многих устройствах конфликтуют.
+                if (hasOis) {
+                    req.set(
+                        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON,
+                    )
+                } else if (hasEis) {
+                    req.set(
+                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON,
+                    )
+                }
                 s.setRepeatingRequest(req.build(), null, camHandler)
-                Log.i(tag, "preview session configured")
+                Log.i(
+                    tag,
+                    "preview session configured fpsRange=$fpsRange " +
+                        "ois=$hasOis eis=$hasEis",
+                )
                 result.success(mapOf("textureId" to textureId, "size" to edge))
             }
         } catch (e: Exception) {
@@ -283,7 +345,7 @@ class VideoNoteRecorder(
             try {
                 rec.setVideoEncodingProfileLevel(
                     android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileHigh,
-                    android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel3,
+                    avcLevel(),
                 )
             } catch (e: Exception) {
                 Log.w(tag, "profile level: ${e.message}")
@@ -293,6 +355,56 @@ class VideoNoteRecorder(
         rec.prepare()
         recorder = rec
         recorderSurface = rec.surface
+    }
+
+    // Минимальный уровень AVC, вмещающий выбранные размер и fps
+    // (Level 3 — как у официального клиента для 480@30).
+    private fun avcLevel(): Int {
+        return when {
+            edge <= 480 && fps <= 30 ->
+                android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel3
+            edge <= 720 && fps <= 30 ->
+                android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel31
+            edge <= 720 ->
+                android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel32
+            fps <= 30 ->
+                android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel4
+            else ->
+                android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel42
+        }
+    }
+
+    // Смена камеры на лету (в т.ч. во время записи): GL-конвейер и
+    // MediaRecorder не трогаем, пересоздаются только CameraDevice и сессия —
+    // кадры новой камеры продолжают приходить в тот же SurfaceTexture.
+    fun switchCamera(rawResult: MethodChannel.Result) {
+        val result = OnceResult(rawResult)
+        if (cameraDevice == null || !glReady) {
+            result.error("NOT_READY", "camera not initialized", null); return
+        }
+        val newFacing = if (lensFacing == CameraCharacteristics.LENS_FACING_FRONT) {
+            CameraCharacteristics.LENS_FACING_BACK
+        } else {
+            CameraCharacteristics.LENS_FACING_FRONT
+        }
+        try { session?.close() } catch (_: Exception) {}
+        session = null
+        try { cameraDevice?.close() } catch (_: Exception) {}
+        cameraDevice = null
+        if (!selectCamera(newFacing)) {
+            result.error("NO_CAMERA", "no camera for facing $newFacing", null)
+            return
+        }
+        val entry = flutterEntry
+        if (entry == null) {
+            result.error("NOT_READY", "texture released", null)
+            return
+        }
+        glHandler?.post {
+            camTexture?.setDefaultBufferSize(camSize.width, camSize.height)
+        }
+        Log.i(tag, "switching camera to $cameraId facing=$lensFacing cam=$camSize")
+        openCamera(result, entry.id())
     }
 
     fun start(result: MethodChannel.Result) {

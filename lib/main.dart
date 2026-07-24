@@ -38,6 +38,7 @@ import 'core/config/app_phonebook_names.dart';
 import 'core/contacts/device_contacts_service.dart';
 import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
+import 'core/config/app_video_note_quality.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
 import 'core/config/app_chat_chrome.dart';
@@ -219,6 +220,9 @@ void main(List<String> args) async {
   final phonebookNamesFuture = AppPhonebookNames.load();
   final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
+  final videoNoteResolutionFuture = AppVideoNoteResolution.load();
+  final videoNoteFpsFuture = AppVideoNoteFps.load();
+  final videoNoteRearCameraFuture = AppVideoNoteRearCamera.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
   final showExtraInfoFuture = AppShowExtraInfo.load();
   final trafficCaptureFuture = TrafficMonitor.instance.load();
@@ -275,6 +279,9 @@ void main(List<String> args) async {
     phonebookNamesFuture,
     linkPreviewFuture,
     cacheLimitFuture,
+    videoNoteResolutionFuture,
+    videoNoteFpsFuture,
+    videoNoteRearCameraFuture,
     digitalIdNativeFuture,
     showExtraInfoFuture,
   ]);

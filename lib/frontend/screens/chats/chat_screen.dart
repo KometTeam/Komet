@@ -5423,9 +5423,18 @@ class _ChatScreenState extends State<ChatScreen>
         unawaited(_persistOutgoing(real, removeId: tempId));
       }
       _disposePhotoProgress(tempId);
-    } catch (_) {
+    } catch (e) {
+      logger.w('sendVideoNote failed: $e');
       if (mounted) {
         _failPhotoMessage(tempId);
+        final reason = e is PacketError
+            ? '${e.errorKey ?? ''} ${e.message}'.trim()
+            : e is Exception && e.toString().contains('send_failed')
+            ? 'сервер не обработал видео'
+            : e is Exception && e.toString().contains('upload_failed')
+            ? 'загрузка отклонена'
+            : e.toString();
+        showCustomNotification(context, 'Кружок не отправлен: $reason');
       } else {
         _disposePhotoProgress(tempId);
       }

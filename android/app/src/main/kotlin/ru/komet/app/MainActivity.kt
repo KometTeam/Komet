@@ -233,12 +233,21 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "init" -> {
                     val front = call.argument<Boolean>("front") ?: true
-                    val rec = VideoNoteRecorder(applicationContext, flutterEngine.renderer)
+                    val size = call.argument<Int>("size") ?: 480
+                    val fps = call.argument<Int>("fps") ?: 30
+                    val rec = VideoNoteRecorder(
+                        applicationContext,
+                        flutterEngine.renderer,
+                        size,
+                        fps,
+                    )
                     noteRecorder?.dispose()
                     noteRecorder = rec
                     rec.init(front, result)
                 }
                 "start" -> noteRecorder?.start(result)
+                    ?: result.error("NOT_READY", "recorder not initialized", null)
+                "switch" -> noteRecorder?.switchCamera(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "stop" -> noteRecorder?.stop(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)

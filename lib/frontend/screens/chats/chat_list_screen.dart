@@ -2325,27 +2325,29 @@ class _ChatListScreenState extends State<ChatListScreen>
       onSend: (photos, caption) async {
         if (photos.isEmpty) return;
         final picked = photos.first;
-        if (picked.item.isVideo) {
-          if (mounted) {
-            showCustomNotification(
-              context,
-              'Видео в историях пока не поддерживается',
-            );
-          }
-          return;
-        }
+        final isVideo = picked.item.isVideo;
         final file =
             picked.editedFile ??
             picked.item.localFile ??
             await picked.item.originFile();
         if (file == null) {
           if (mounted) {
-            showCustomNotification(context, 'Не удалось открыть фото');
+            showCustomNotification(
+              context,
+              isVideo ? 'Не удалось открыть видео' : 'Не удалось открыть фото',
+            );
           }
           return;
         }
         if (!mounted) return;
-        pushSwipeable(context, (_) => StoryComposerScreen(file: file));
+        pushSwipeable(
+          context,
+          (_) => StoryComposerScreen(
+            file: file,
+            isVideo: isVideo,
+            durationMs: picked.item.duration?.inMilliseconds,
+          ),
+        );
       },
     );
   }

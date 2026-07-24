@@ -1329,8 +1329,11 @@ class MessagesModule {
     );
   }
 
-  Future<String?> requestPhotoUploadUrl() async {
-    final response = await _api.sendRequest(Opcode.photoUpload, {'count': 1});
+  Future<String?> requestPhotoUploadUrl({int? type}) async {
+    final response = await _api.sendRequest(Opcode.photoUpload, {
+      'type': ?type,
+      'count': 1,
+    });
     if (!response.isOk) return null;
     final data = response.payload;
     if (data is! Map) return null;
@@ -1371,10 +1374,10 @@ class MessagesModule {
     );
   }
 
-  Future<VideoUploadInfo?> requestVideoUploadUrl() async {
+  Future<VideoUploadInfo?> requestVideoUploadUrl({int type = 0}) async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 0,
-      'type': 0,
+      'type': type,
       'count': 1,
     });
     if (!response.isOk) return null;

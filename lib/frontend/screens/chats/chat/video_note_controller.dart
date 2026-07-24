@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/config/app_video_note_quality.dart';
 import '../../../../core/media/native_video_note_recorder.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
@@ -35,6 +36,10 @@ class VideoNoteController {
   Timer? _timer;
   bool _cancelled = false;
   bool _stopRequested = false;
+  bool? _frontOverride;
+  bool _switchingCamera = false;
+
+  bool get _front => _frontOverride ?? !AppVideoNoteRearCamera.current.value;
   OverlayEntry? _overlay;
 
   ValueListenable<bool> get videoNoteMode => _videoNoteMode;
@@ -59,7 +64,11 @@ class VideoNoteController {
       return;
     }
     try {
-      final ok = await _rec.init();
+      final ok = await _rec.init(
+        front: _front,
+        size: AppVideoNoteResolution.current.value,
+        fps: AppVideoNoteFps.current.value,
+      );
       if (!ok) {
         if (isMounted()) {
           showCustomNotification(contextOf(), 'Камера недоступна');
@@ -124,6 +133,20 @@ class VideoNoteController {
     }
   }
 
+  Future<void> flipCamera() async {
+    if (!_camReady.value || _switchingCamera) return;
+    _switchingCamera = true;
+    try {
+      final ok = await _rec.switchCamera();
+      if (ok) {
+        _frontOverride = !_front;
+        Haptics.tap();
+      }
+    } finally {
+      _switchingCamera = false;
+    }
+  }
+
   void handleDrag(Offset offsetFromOrigin) {
     if (!_isRecording.value) return;
     final drag = (-offsetFromOrigin.dx / VoiceRecordController.cancelThreshold)
@@ -164,7 +187,7 @@ class VideoNoteController {
       return;
     }
 
-    // Файл уже квадратный 480×480 (нативная запись) — шлём как есть.
+    // Файл уже квадратный (нативная запись) — шлём как есть.
     await onRecorded(File(path), elapsed);
   }
 
@@ -174,14 +197,15 @@ class VideoNoteController {
       builder: (context) {
         final texId = _textureId.value;
         return Positioned.fill(
-          child: IgnorePointer(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.55),
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipOval(
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.55),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: flipCamera,
+                  child: ClipOval(
                     child: SizedBox(
                       width: 260,
                       height: 260,
@@ -190,31 +214,36 @@ class VideoNoteController {
                           : Container(color: Colors.black),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  ValueListenableBuilder<int>(
-                    valueListenable: _elapsedMs,
-                    builder: (context, ms, _) => Text(
-                      formatElapsed(ms),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontFeatures: [ui.FontFeature.tabularFigures()],
-                      ),
+                ),
+                const SizedBox(height: 20),
+                ValueListenableBuilder<int>(
+                  valueListenable: _elapsedMs,
+                  builder: (context, ms, _) => Text(
+                    formatElapsed(ms),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontFeatures: [ui.FontFeature.tabularFigures()],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  ValueListenableBuilder<double>(
-                    valueListenable: _cancelDrag,
-                    builder: (context, drag, _) => Opacity(
-                      opacity: (0.5 + drag * 0.5).clamp(0.0, 1.0),
-                      child: const Text(
-                        '‹ влево — отмена',
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
+                ),
+                const SizedBox(height: 8),
+                ValueListenableBuilder<double>(
+                  valueListenable: _cancelDrag,
+                  builder: (context, drag, _) => Opacity(
+                    opacity: (0.5 + drag * 0.5).clamp(0.0, 1.0),
+                    child: const Text(
+                      '‹ влево — отмена',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'тап по кружку — сменить камеру',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
             ),
           ),
         );

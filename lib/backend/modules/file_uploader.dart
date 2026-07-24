@@ -198,6 +198,12 @@ class FileUploader {
       final respBody = utf8.decode(result.body, allowMalformed: true);
       final hasError =
           respBody.contains('error_msg') || respBody.contains('error_code');
+      if (result.status != 200 || hasError) {
+        logger.w(
+          'uploadMediaFile rejected: status=${result.status} '
+          'body=${respBody.length > 500 ? respBody.substring(0, 500) : respBody}',
+        );
+      }
       return result.status == 200 && !hasError;
     } catch (e) {
       logger.w('uploadMediaFile: $e');
@@ -290,6 +296,80 @@ class FileUploader {
       logger.w('uploadVideoFile: $e');
       return false;
     }
+  }
+
+  /// Загрузка видео для истории. В отличие от чата (чанковый `uploadVideoPath`
+  /// с GET-handshake), story-эндпоинт `su.oneme.ru/uploadVideo` ждёт **один POST
+  /// на весь файл** (как у оригинального клиента) и возвращает медиа-токен в теле
+  /// ответа — `[{"token":"..."}]`. Именно этот токен идёт в `media.token`
+  /// STORIES_SEND, а не токен из ответа VIDEO_UPLOAD.
+  Future<({bool ok, String? token})> uploadVideoWithToken(
+    Uri uri,
+    File file, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final session = api.session;
+    if (session == null) return (ok: false, token: null);
+    try {
+      final result = await _consume(
+        session.uploadFilePath(
+          url: uri.toString(),
+          path: file.path,
+          filename: _syntheticFilename(),
+          contentType: 'application/octet-stream',
+          connection: 'close',
+        ),
+        onProgress: onProgress,
+      );
+      if (result.error != null || result.status != 200) {
+        logger.w(
+          'uploadVideoWithToken: status=${result.status} error=${result.error}',
+        );
+        return (ok: false, token: null);
+      }
+      final token = _parseVideoToken(
+        utf8.decode(result.body, allowMalformed: true),
+      );
+      return (ok: true, token: token);
+    } catch (e) {
+      logger.w('uploadVideoWithToken: $e');
+      return (ok: false, token: null);
+    }
+  }
+
+  String? _parseVideoToken(String body) {
+    try {
+      final json = jsonDecode(body);
+      // Сервер отвечает массивом: [{"token":"..."}]
+      if (json is List) {
+        for (final v in json) {
+          if (v is Map) {
+            final token = v['token'];
+            if (token is String && token.isNotEmpty) return token;
+          }
+        }
+      }
+      if (json is Map) {
+        for (final key in const ['videos', 'video', 'photos']) {
+          final node = json[key];
+          if (node is Map) {
+            for (final v in node.values) {
+              if (v is Map) {
+                final token = v['token'];
+                if (token is String && token.isNotEmpty) return token;
+              }
+            }
+          }
+        }
+        for (final key in const ['token', 'videoToken', 'photoToken']) {
+          final t = json[key];
+          if (t is String && t.isNotEmpty) return t;
+        }
+      }
+    } catch (e) {
+      logger.w('parseVideoToken: $e');
+    }
+    return null;
   }
 
   /// Прогоняет стрим ядра до конца, форвардит прогресс, отдаёт итог.

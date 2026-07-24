@@ -10,9 +10,11 @@ import '../../core/config/app_pranks.dart';
 import '../../core/config/app_show_extra_info.dart';
 import '../../core/config/app_stories.dart';
 import '../../core/config/app_swipe_back_desktop.dart';
+import '../../core/config/app_video_note_quality.dart';
 import '../../core/contacts/device_contacts_service.dart';
 import '../screens/digital_id/digital_id_web_screen.dart';
 import '../widgets/custom_notification.dart';
+import '../widgets/sheet_helpers.dart';
 import 'debug_toggle_tile.dart';
 
 class DebugFeatureTogglesSection extends StatelessWidget {
@@ -33,6 +35,86 @@ class DebugFeatureTogglesSection extends StatelessWidget {
       }
     }
     ContactsModule.revision.value++;
+  }
+
+  void _pickVideoNoteQuality(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: kSheetShape,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Качество записи кружков',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Разрешение',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+              ),
+            ),
+            for (final preset in AppVideoNoteResolution.presets)
+              ValueListenableBuilder<int>(
+                valueListenable: AppVideoNoteResolution.current,
+                builder: (context, value, _) => ListTile(
+                  title: Text(
+                    '$preset×$preset',
+                    style: TextStyle(color: cs.onSurface, fontSize: 16),
+                  ),
+                  trailing: value == preset
+                      ? Icon(Symbols.check, color: cs.primary)
+                      : null,
+                  onTap: () => AppVideoNoteResolution.save(preset),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Частота кадров',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+              ),
+            ),
+            for (final preset in AppVideoNoteFps.presets)
+              ValueListenableBuilder<int>(
+                valueListenable: AppVideoNoteFps.current,
+                builder: (context, value, _) => ListTile(
+                  title: Text(
+                    '$preset fps',
+                    style: TextStyle(color: cs.onSurface, fontSize: 16),
+                  ),
+                  trailing: value == preset
+                      ? Icon(Symbols.check, color: cs.primary)
+                      : null,
+                  onTap: () => AppVideoNoteFps.save(preset),
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -140,6 +222,76 @@ class DebugFeatureTogglesSection extends StatelessWidget {
             subtitle: (_) => 'Отображение ленты историй в списке чатов',
             valueListenable: AppStories.current,
             onChanged: AppStories.save,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Material(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => _pickVideoNoteQuality(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 17,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Symbols.video_camera_front,
+                      color: cs.onSurfaceVariant,
+                      size: 22,
+                      weight: 400,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Качество записи кружков',
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          ValueListenableBuilder<int>(
+                            valueListenable: AppVideoNoteResolution.current,
+                            builder: (context, res, _) =>
+                                ValueListenableBuilder<int>(
+                                  valueListenable: AppVideoNoteFps.current,
+                                  builder: (context, fps, _) => Text(
+                                    '$res×$res • $fps fps (только Android)',
+                                    style: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: DebugToggleTile(
+            icon: Symbols.flip_camera_android,
+            title: 'Кружки с задней камеры',
+            subtitle: (v) => v
+                ? 'Запись кружка начинается с задней камеры'
+                : 'Запись кружка начинается с фронтальной камеры',
+            valueListenable: AppVideoNoteRearCamera.current,
+            onChanged: AppVideoNoteRearCamera.save,
           ),
         ),
         Padding(
