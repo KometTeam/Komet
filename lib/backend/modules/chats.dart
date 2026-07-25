@@ -1265,6 +1265,7 @@ class ChatsModule {
         if (next is! int || next == marker || chats.length < count) break;
         marker = next;
       }
+      await applyFavorites(accountId);
     } catch (e) {
       _paginatedAccountId = null;
       logger.w('Пагинация чатов: $e');
@@ -1610,6 +1611,40 @@ class ChatsModule {
     } catch (e) {
       logger.w('togglePin: $e');
       return 'Не удалось изменить закрепление';
+    }
+  }
+
+  Future<void> applyFavorites(int accountId) async {
+    try {
+      final folders = await FoldersModule.loadFolders(accountId);
+      if (folders.isEmpty) return;
+      final allFolder = folders.firstWhere(
+        FoldersModule.isAllChatsFolder,
+        orElse: () => folders.first,
+      );
+      final favorites = allFolder.favorites ?? const <int>[];
+      final favIndexById = <int, int>{};
+      for (var i = 0; i < favorites.length; i++) {
+        favIndexById[favorites[i]] = i + 1;
+      }
+
+      final rows = await AppDatabase.loadChats(accountId, includeHidden: true);
+      final updates = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final id = row['id'] as int;
+        final current = (row['fav_index'] as int?) ?? 0;
+        final next = favIndexById[id] ?? 0;
+        if (current == next) continue;
+        final newRow = Map<String, dynamic>.from(row);
+        newRow['fav_index'] = next;
+        updates.add(newRow);
+      }
+      if (updates.isNotEmpty) {
+        await AppDatabase.saveChats(updates);
+        _bump();
+      }
+    } catch (e) {
+      logger.w('applyFavorites: $e');
     }
   }
 

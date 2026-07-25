@@ -608,6 +608,7 @@ class AccountModule {
     } catch (e) {
       logger.w('Папки чатов: $e');
     }
+    await chats.applyFavorites(profile.id);
 
     try {
       await _saveLoginInfo(data, profile.id);
