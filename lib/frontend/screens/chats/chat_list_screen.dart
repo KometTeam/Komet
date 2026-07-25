@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
+import 'create_channel_flow.dart';
 import 'create_group_flow.dart';
 import '../contacts/add_contact_sheet.dart';
 import '../../widgets/adaptive_shell.dart';
@@ -2838,7 +2839,14 @@ class _ChatListScreenState extends State<ChatListScreen>
           },
         ),
         const SizedBox(height: 4),
-        _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
+        _buildFabMenuItem(
+          Symbols.campaign,
+          'Создать канал',
+          onTap: () {
+            _toggleFab();
+            showCreateChannelFlow(context);
+          },
+        ),
         const SizedBox(height: 4),
         _buildFabMenuItem(
           Symbols.person_add,

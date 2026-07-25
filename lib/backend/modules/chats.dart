@@ -1435,6 +1435,33 @@ class ChatsModule {
     required String title,
     required List<int> userIds,
     bool notify = true,
+  }) => _createChat(
+    api,
+    chatType: 'CHAT',
+    title: title,
+    userIds: userIds,
+    notify: notify,
+  );
+
+  Future<CachedChat?> createChannel(
+    Api api, {
+    required String title,
+    List<int> userIds = const [],
+    bool notify = true,
+  }) => _createChat(
+    api,
+    chatType: 'CHANNEL',
+    title: title,
+    userIds: userIds,
+    notify: notify,
+  );
+
+  Future<CachedChat?> _createChat(
+    Api api, {
+    required String chatType,
+    required String title,
+    required List<int> userIds,
+    required bool notify,
   }) async {
     final payload = {
       'message': {
@@ -1443,7 +1470,7 @@ class ChatsModule {
           {
             '_type': 'CONTROL',
             'event': 'new',
-            'chatType': 'CHAT',
+            'chatType': chatType,
             'title': title,
             'userIds': userIds,
           },
@@ -1453,22 +1480,22 @@ class ChatsModule {
     };
     final packet = await api.sendRequest(Opcode.msgSend, payload);
     if (!packet.isOk) {
-      logger.w('createGroupChat: server error payload=${packet.payload}');
+      logger.w('_createChat($chatType): server error payload=${packet.payload}');
       return null;
     }
     final data = packet.payload;
     if (data is! Map) {
-      logger.w('createGroupChat: payload is not a Map: $data');
+      logger.w('_createChat($chatType): payload is not a Map: $data');
       return null;
     }
     final chat = data['chat'];
     if (chat is! Map) {
-      logger.w('createGroupChat: response has no chat field: $data');
+      logger.w('_createChat($chatType): response has no chat field: $data');
       return null;
     }
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) {
-      logger.w('createGroupChat: no active account id');
+      logger.w('_createChat($chatType): no active account id');
       return null;
     }
     return cacheServerChat(chat, accountId);
