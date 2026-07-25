@@ -42,6 +42,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.onOpenAttachScheduled,
     required this.onSendHistory,
     required this.onCancelReply,
+    this.onPickReplyChat,
     required this.formatElapsed,
     required this.contextMenuBuilder,
     required this.isMuted,
@@ -77,6 +78,7 @@ class ComposerInputBar extends StatelessWidget {
   final VoidCallback onOpenAttachScheduled;
   final Future<void> Function(FileHistoryEntry entry) onSendHistory;
   final VoidCallback onCancelReply;
+  final VoidCallback? onPickReplyChat;
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
   final bool isMuted;
@@ -380,7 +382,9 @@ class ComposerInputBar extends StatelessWidget {
                                             valueListenable: note.videoNoteMode,
                                             builder: (context, videoMode, _) {
                                               final sendMode =
-                                                  hasText || locked || forceSend;
+                                                  hasText ||
+                                                  locked ||
+                                                  forceSend;
                                               final pill = _actionSurface(
                                                 color: _flat
                                                     ? Colors.transparent
@@ -553,6 +557,16 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
+  Widget _replyIconButton(ColorScheme cs) {
+    final icon = Icon(Symbols.reply, size: 20, color: cs.primary);
+    if (onPickReplyChat == null) return icon;
+    return InkWell(
+      onTap: onPickReplyChat,
+      customBorder: const CircleBorder(),
+      child: Padding(padding: const EdgeInsets.all(4), child: icon),
+    );
+  }
+
   Widget _replyPreview(ColorScheme cs) {
     return ValueListenableBuilder<CachedMessage?>(
       valueListenable: replyTo,
@@ -571,7 +585,7 @@ class ComposerInputBar extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
           child: Row(
             children: [
-              Icon(Symbols.reply, size: 20, color: cs.primary),
+              _replyIconButton(cs),
               const SizedBox(width: 10),
               Container(width: 2, height: 34, color: cs.primary),
               const SizedBox(width: 10),

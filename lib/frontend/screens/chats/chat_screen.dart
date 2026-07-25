@@ -194,6 +194,13 @@ class ForwardRequest {
   const ForwardRequest({required this.sourceChatId, required this.optimistic});
 }
 
+class ReplyRequest {
+  final int sourceChatId;
+  final CachedMessage message;
+
+  const ReplyRequest({required this.sourceChatId, required this.message});
+}
+
 class ChatScreen extends StatefulWidget {
   final int chatId;
   final String name;
@@ -202,6 +209,7 @@ class ChatScreen extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
   final ForwardRequest? forwardRequest;
+  final ReplyRequest? replyRequest;
   final String? initialMessageId;
   final int? initialMessageTime;
   final String? commentPostId;
@@ -216,6 +224,7 @@ class ChatScreen extends StatefulWidget {
     this.embedded = false,
     this.onClose,
     this.forwardRequest,
+    this.replyRequest,
     this.initialMessageId,
     this.initialMessageTime,
     this.commentPostId,
@@ -420,6 +429,8 @@ class _ChatScreenState extends State<ChatScreen>
   int? _participantsCount;
 
   final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
+  static const bool _crossChatReplySupported = false;
+  int? _replySourceChatId;
   final ValueNotifier<String?> _highlightMessageId = ValueNotifier(null);
   Timer? _highlightTimer;
   final ValueNotifier<double?> _jumpCacheExtent = ValueNotifier<double?>(null);
@@ -605,6 +616,13 @@ class _ChatScreenState extends State<ChatScreen>
       chatId: widget.chatId,
       isMounted: () => mounted,
     );
+    final incomingReply = widget.replyRequest;
+    if (incomingReply != null) {
+      _replyTo.value = incomingReply.message;
+      _replySourceChatId = incomingReply.sourceChatId == widget.chatId
+          ? null
+          : incomingReply.sourceChatId;
+    }
     _pushSub = api.pushStream
         .where(
           (p) =>
@@ -2363,35 +2381,38 @@ class _ChatScreenState extends State<ChatScreen>
                   bottomSafe: _stickers.anim.value == 0,
                   chatType: _commentsMode ? 'CHAT' : widget.chatType,
                   chrome: _effectiveChrome,
-                style: AppComposerStyle.current.value,
-                background: AppComposerBackground.current.value,
-                backdropKey: _pillBackdrop,
-                attachAnim: _attachAnim,
-                replyTo: _replyTo,
-                myId: _myId,
-                hasText: _hasText,
-                uploadStatus: _uploadStatus,
-                messageController: _messageController,
-                messageFocusNode: _messageFocusNode,
-                voiceRec: _voiceRec,
-                note: _note,
-                onToggleStickerPanel: _toggleStickerPanel,
-                onSendText: _sendMessage,
-                onScheduleMessage: _scheduleMessage,
-                onOpenAttach: _openAttachmentSheet,
-                onOpenAttachScheduled: _openAttachmentSheetScheduled,
-                onSendHistory: _sendHistoryFile,
-                onCancelReply: _cancelReply,
-                formatElapsed: formatVoiceElapsed,
-                contextMenuBuilder: (ctx, state) =>
-                    _formatContextMenu(_messageController, ctx, state),
-                isMuted: chat?.isMuted ?? false,
-                onToggleMute: _toggleChatMute,
-                channelSubscribed: !_previewChat,
-                channelSubscribing: _subscribing,
-                onSubscribe: _subscribeChannel,
-                showStickerButton: !_commentsMode,
-                showAttachButton: !_commentsMode,
+                  style: AppComposerStyle.current.value,
+                  background: AppComposerBackground.current.value,
+                  backdropKey: _pillBackdrop,
+                  attachAnim: _attachAnim,
+                  replyTo: _replyTo,
+                  myId: _myId,
+                  hasText: _hasText,
+                  uploadStatus: _uploadStatus,
+                  messageController: _messageController,
+                  messageFocusNode: _messageFocusNode,
+                  voiceRec: _voiceRec,
+                  note: _note,
+                  onToggleStickerPanel: _toggleStickerPanel,
+                  onSendText: _sendMessage,
+                  onScheduleMessage: _scheduleMessage,
+                  onOpenAttach: _openAttachmentSheet,
+                  onOpenAttachScheduled: _openAttachmentSheetScheduled,
+                  onSendHistory: _sendHistoryFile,
+                  onCancelReply: _cancelReply,
+                  onPickReplyChat: _commentsMode || !_crossChatReplySupported
+                      ? null
+                      : () => unawaited(_pickReplyChat()),
+                  formatElapsed: formatVoiceElapsed,
+                  contextMenuBuilder: (ctx, state) =>
+                      _formatContextMenu(_messageController, ctx, state),
+                  isMuted: chat?.isMuted ?? false,
+                  onToggleMute: _toggleChatMute,
+                  channelSubscribed: !_previewChat,
+                  channelSubscribing: _subscribing,
+                  onSubscribe: _subscribeChannel,
+                  showStickerButton: !_commentsMode,
+                  showAttachButton: !_commentsMode,
                   forceSend: _commentsMode,
                   hintText: _commentsMode ? 'Комментарий' : 'Message',
                 ),
@@ -3452,12 +3473,13 @@ class _ChatScreenState extends State<ChatScreen>
 
     final reply = _replyTo.value;
     final int? replyId = reply == null ? null : int.tryParse(reply.id);
+    final int? replySourceChatId = replyId == null ? null : _replySourceChatId;
     Map<String, dynamic>? replyPayload;
     if (reply != null && replyId != null) {
       replyPayload = {
         'link': {
           'type': 'REPLY',
-          'chatId': widget.chatId,
+          'chatId': replySourceChatId ?? widget.chatId,
           'message': {
             'id': replyId,
             'sender': reply.senderId,
@@ -3469,6 +3491,7 @@ class _ChatScreenState extends State<ChatScreen>
       };
     }
     _replyTo.value = null;
+    _replySourceChatId = null;
 
     final elements = _trimmedElements(content.elements, rawText, text);
     final Map<String, dynamic>? composedPayload =
@@ -3535,6 +3558,7 @@ class _ChatScreenState extends State<ChatScreen>
               widget.chatId,
               text,
               replyToMessageId: replyId,
+              replySourceChatId: replySourceChatId,
               elements: elements,
             );
 
@@ -3579,6 +3603,20 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     } catch (e) {
+      if (replySourceChatId != null) {
+        logger.w('Cross-chat reply rejected: $e');
+        final index = _messages.indexWhere((m) => m.id == tempId);
+        if (index != -1 && mounted) {
+          _messages.removeAt(index);
+          _bumpMessages();
+        }
+        unawaited(AppDatabase.deleteMessage(_myId, widget.chatId, tempId));
+        if (mounted) {
+          Haptics.error();
+          showCustomNotification(context, e.toString());
+        }
+        return;
+      }
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
         final queued = CachedMessage(
@@ -4046,11 +4084,45 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _startReply(CachedMessage message) {
     _replyTo.value = message;
+    _replySourceChatId = null;
     _messageFocusNode.requestFocus();
   }
 
   void _cancelReply() {
     _replyTo.value = null;
+    _replySourceChatId = null;
+  }
+
+  Future<void> _pickReplyChat() async {
+    final reply = _replyTo.value;
+    if (reply == null) return;
+    if (reply.id.startsWith('temp_')) {
+      showCustomNotification(context, 'Сообщение ещё не отправлено');
+      return;
+    }
+
+    final sourceChatId = _replySourceChatId ?? widget.chatId;
+    final target = await openForwardScreen(context: context);
+    if (target == null || !mounted) return;
+
+    if (target.chatId == widget.chatId) {
+      _replySourceChatId = sourceChatId == widget.chatId ? null : sourceChatId;
+      _messageFocusNode.requestFocus();
+      return;
+    }
+
+    await chats.ensureChatCached(api, _myId, target.chatId);
+    if (!mounted) return;
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: target.chatId,
+        name: target.name,
+        imageUrl: target.imageUrl,
+        chatType: target.chatType,
+        replyRequest: ReplyRequest(sourceChatId: sourceChatId, message: reply),
+      ),
+    );
   }
 
   void _openSenderProfile(int senderId) {

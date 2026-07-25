@@ -75,6 +75,7 @@ class ContactCache {
     }
     return _nameCache[id];
   }
+
   static String? getAvatar(int id) => _avatarCache[id];
   static Set<String>? getOptions(int id) => _optionsCache[id];
   static bool isOfficial(int id) =>
@@ -764,6 +765,7 @@ class MessagesModule {
     bool notify = true,
     int? scheduledTime,
     int? replyToMessageId,
+    int? replySourceChatId,
     List<Map<String, dynamic>> elements = const [],
   }) async {
     final message = <String, dynamic>{
@@ -775,7 +777,7 @@ class MessagesModule {
     if (replyToMessageId != null) {
       message['link'] = {
         'type': 'REPLY',
-        'chatId': chatId,
+        'chatId': replySourceChatId ?? chatId,
         'messageId': replyToMessageId,
       };
     }
@@ -788,6 +790,23 @@ class MessagesModule {
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     return _sendAndExtractMessageId(payload, 'Ошибка отправки');
+  }
+
+  Future<Packet> sendControlMessage(
+    int chatId,
+    Map<String, dynamic> control, {
+    bool notify = true,
+  }) {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'text': '',
+        'attaches': [control],
+      },
+      'notify': notify,
+    };
+    return _api.sendRequest(Opcode.msgSend, payload);
   }
 
   Future<String> _sendAndExtractMessageId(
@@ -1190,7 +1209,11 @@ class MessagesModule {
   ) async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
-    final existing = await AppDatabase.loadMessage(accountId, chatId, messageId);
+    final existing = await AppDatabase.loadMessage(
+      accountId,
+      chatId,
+      messageId,
+    );
     if (existing == null) return;
 
     Map<String, dynamic> payloadMap;
