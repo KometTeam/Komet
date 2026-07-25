@@ -69,5 +69,10 @@ class ContactInfo {
 
   bool get isBot => options.contains('BOT');
 
+  bool get isDeleted {
+    final status = raw['accountStatus'];
+    return status is int && status != 0;
+  }
+
   int? get id => raw['id'] as int?;
 }

@@ -20,24 +20,39 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/swipe_route.dart';
+import '../../../backend/modules/chats.dart';
+import '../contacts/open_contact_profile.dart';
 import 'chat_screen.dart';
+import 'group_invite_sheets.dart';
 
 class _MemberInfo {
   final int id;
+  final String? name;
+  final String? avatarUrl;
   final bool isAdmin;
   final bool isOwner;
   final bool isMe;
+  final String? alias;
   final int? seenTime;
-  final bool isOnline;
+  final int presenceStatus;
+  final bool blocked;
+  final bool isContact;
 
   const _MemberInfo({
     required this.id,
+    this.name,
+    this.avatarUrl,
     required this.isAdmin,
     required this.isOwner,
     required this.isMe,
+    this.alias,
     this.seenTime,
-    required this.isOnline,
+    required this.presenceStatus,
+    this.blocked = false,
+    this.isContact = false,
   });
+
+  bool get isOnline => presenceStatus == 1;
 }
 
 enum ChatInfoTab { media }
@@ -88,8 +103,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   int _presenceStatus = 0;
   bool _isBot = false;
 
-  List<_MemberInfo> _members = [];
-  int _onlineCount = 0;
+  final List<_MemberInfo> _members = [];
+  final List<_MemberInfo> _owners = [];
+  final List<_MemberInfo> _admins = [];
+  final List<_MemberInfo> _contactMembers = [];
+  final List<_MemberInfo> _otherMembers = [];
+  final Set<int> _seenMemberIds = {};
+  Set<int> _contactIds = {};
+  int _memberMarker = 0;
+  bool _membersLoading = false;
+  bool _membersEnd = false;
 
   int _mediaChatId = 0;
   String? _anchorMsgId;
@@ -97,6 +120,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   @override
   void initState() {
     super.initState();
+    _bodyScrollController.addListener(_onBodyScroll);
     _load();
   }
 
@@ -207,34 +231,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       setState(() => _isLoading = false);
       return;
     } else if (widget.chatType == 'CHAT') {
-      final chatInfo = _chatInfo!;
-      final memberIds = chatInfo.participantIds;
-
-      Map<int, Map<String, dynamic>> presenceMap = {};
-      if (memberIds.isNotEmpty) {
-        presenceMap = await PresenceFetch.getMany(memberIds);
-      }
-
-      _onlineCount = 0;
-      _members = memberIds.map((id) {
-        final pres = presenceMap[id];
-        final online = (pres?['status'] as int?) == 1;
-        if (online) _onlineCount++;
-        return _MemberInfo(
-          id: id,
-          isAdmin: chatInfo.isAdmin(id),
-          isOwner: chatInfo.isOwner(id),
-          isMe: id == _myId,
-          seenTime: pres?['seen'] as int?,
-          isOnline: online,
-        );
-      }).toList();
-
-      _members.sort((a, b) {
-        if (a.isMe != b.isMe) return a.isMe ? -1 : 1;
-        if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
-        return (b.seenTime ?? 0).compareTo(a.seenTime ?? 0);
-      });
+      _contactIds = (await AppDatabase.loadContactIds(_myId)).toSet();
+      await _loadLeaders();
+      await _fetchMembersPage(initial: true);
     }
 
     if (mounted) {
@@ -251,6 +250,177 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     if (widget.initialTab != ChatInfoTab.media) return null;
     final media = AppLocalizations.of(context)!.chatInfoTabMedia;
     return _tabs.contains(media) ? media : null;
+  }
+
+  _MemberInfo _memberFrom(ChatMemberEntry e) => _MemberInfo(
+    id: e.id,
+    name: e.name,
+    avatarUrl: e.avatarUrl,
+    isAdmin: _chatInfo?.isAdmin(e.id) ?? false,
+    isOwner: _chatInfo?.isOwner(e.id) ?? false,
+    isMe: e.id == _myId,
+    alias: _chatInfo?.adminAlias(e.id),
+    seenTime: e.seenTime,
+    presenceStatus: e.presenceStatus,
+    blocked: e.blocked,
+    isContact: _contactIds.contains(e.id),
+  );
+
+  Future<void> _loadLeaders() async {
+    final info = _chatInfo;
+    if (info == null) return;
+
+    final owner = info.owner;
+    final leaderIds = <int>[
+      if (owner != null && owner != 0) owner,
+      for (final a in info.adminIds)
+        if (a != owner) a,
+    ];
+    if (leaderIds.isEmpty) return;
+
+    final contacts = await ContactInfoFetch.getMany(leaderIds);
+    final presence = await PresenceFetch.getMany(leaderIds);
+    if (!mounted) return;
+
+    for (final id in leaderIds) {
+      if (!_seenMemberIds.add(id)) continue;
+      final c = contacts[id];
+      final pres = presence[id];
+      _addMember(
+        _MemberInfo(
+          id: id,
+          name: c?.displayName ?? ContactCache.get(id),
+          avatarUrl: c?.avatarUrl ?? ContactCache.getAvatar(id),
+          isAdmin: info.isAdmin(id),
+          isOwner: info.isOwner(id),
+          isMe: id == _myId,
+          alias: info.adminAlias(id),
+          seenTime: pres?['seen'] as int?,
+          presenceStatus: (pres?['status'] as int?) ?? 0,
+          blocked: c?.isDeleted ?? false,
+          isContact: _contactIds.contains(id),
+        ),
+      );
+    }
+    _rebuildMembers();
+  }
+
+  int _memberRank(_MemberInfo m) {
+    if (m.isOwner) return 0;
+    if (m.isAdmin) return 1;
+    if (m.isContact) return 2;
+    return 3;
+  }
+
+  void _addMember(_MemberInfo m) {
+    switch (_memberRank(m)) {
+      case 0:
+        _owners.add(m);
+      case 1:
+        _admins.add(m);
+      case 2:
+        _contactMembers.add(m);
+      default:
+        _otherMembers.add(m);
+    }
+  }
+
+  void _rebuildMembers() {
+    _members
+      ..clear()
+      ..addAll(_owners)
+      ..addAll(_admins)
+      ..addAll(_contactMembers)
+      ..addAll(_otherMembers);
+  }
+
+  Future<void> _fetchMembersPage({bool initial = false}) async {
+    if (_membersLoading || _membersEnd) return;
+    _membersLoading = true;
+    if (!initial && mounted) setState(() {});
+
+    final page = await chats.getChatMembers(
+      api,
+      widget.chatId,
+      marker: _memberMarker,
+    );
+    _membersLoading = false;
+    if (!mounted) return;
+
+    if (page == null) {
+      if (!initial) setState(() {});
+      return;
+    }
+
+    var added = 0;
+    for (final e in page.members) {
+      if (_seenMemberIds.add(e.id)) {
+        _addMember(_memberFrom(e));
+        added++;
+      }
+    }
+    if (added > 0) _rebuildMembers();
+
+    final total = _chatInfo?.participantsCount;
+    if (page.members.isEmpty ||
+        added == 0 ||
+        page.marker == _memberMarker ||
+        (total != null && _members.length >= total)) {
+      _membersEnd = true;
+    }
+    _memberMarker = page.marker;
+
+    if (!initial) setState(() {});
+  }
+
+  void _onBodyScroll() {
+    if (!mounted || widget.chatType != 'CHAT') return;
+    if (_membersLoading || _membersEnd) return;
+    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers) return;
+    final pos = _bodyScrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 400) {
+      _fetchMembersPage();
+    }
+  }
+
+  String? get _inviteLink {
+    final link = _chatInfo?.link;
+    return (link != null && link.isNotEmpty) ? link : null;
+  }
+
+  Future<void> _openAddMembers() async {
+    final exclude = {_myId, ..._members.map((m) => m.id)};
+    final added = await showAddMembersSheet(
+      context,
+      chatId: widget.chatId,
+      excludeIds: exclude,
+    );
+    if (added == true && mounted) await _refreshMembers();
+  }
+
+  void _openInviteLink(String link) {
+    showInviteLinkSheet(
+      context,
+      link: link,
+      title: widget.name,
+      avatarUrl: widget.imageUrl,
+    );
+  }
+
+  Future<void> _refreshMembers() async {
+    _contactMembers.clear();
+    _otherMembers.clear();
+    _seenMemberIds
+      ..clear()
+      ..addAll(_owners.map((m) => m.id))
+      ..addAll(_admins.map((m) => m.id));
+    _memberMarker = 0;
+    _membersEnd = false;
+    _membersLoading = false;
+    _rebuildMembers();
+    if (mounted) setState(() {});
+    await _fetchMembersPage(initial: true);
+    if (mounted) setState(() {});
   }
 
   @override
@@ -325,6 +495,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   bool get _isContact => _localContact != null;
+
+  bool get _peerDeleted => _contactData?.isDeleted ?? false;
 
   String _joinName(String first, String last) => last.trim().isEmpty
       ? first.trim()
@@ -420,8 +592,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
     final custom = _customName;
     final real = _realName;
-    final hasToggle =
-        widget.chatType == 'DIALOG' && real != null && real != custom;
+    final hasToggle = _isContact && real != null && real != custom;
 
     final nameSwap = AnimatedTextSwap(
       showAlternate: _showRealName,
@@ -463,6 +634,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final l10n = AppLocalizations.of(context)!;
     switch (widget.chatType) {
       case 'DIALOG':
+        if (_peerDeleted) return l10n.chatInfoMemberDeleted;
         if (_isBot) return l10n.contactProfileBot;
         if (_isOnline) return l10n.contactProfileOnline;
         if (_presenceStatus == 2 || _presenceStatus == 3) return l10n.contactProfileRecentlyActive;
@@ -472,9 +644,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         return '';
       case 'CHAT':
         final total = _chatInfo?.participantsCount ?? _members.length;
-        if (_onlineCount > 0) {
-          return l10n.chatInfoOnlineOfTotal('$_onlineCount', '$total');
-        }
         return '$total ${pluralRu(total, 'участник', 'участника', 'участников')}';
       case 'CHANNEL':
         final count = _chatInfo?.participantsCount ?? 0;
@@ -1026,9 +1195,60 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       ),
       child: Column(
         children: [
-          _memberAction(cs, Icons.person_add, l10n.chatInfoAddMember, () {}),
+          _memberAction(
+            cs,
+            Icons.person_add,
+            l10n.chatInfoAddMember,
+            _openAddMembers,
+          ),
+          if (_inviteLink != null) ...[
+            _listDivider(cs),
+            _memberAction(
+              cs,
+              Icons.link,
+              l10n.chatInfoInviteByLink,
+              () => _openInviteLink(_inviteLink!),
+            ),
+          ],
           ..._members.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
+          if (_membersLoading || !_membersEnd) ...[
+            _listDivider(cs),
+            _membersFooter(cs),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _membersFooter(ColorScheme cs) {
+    if (_membersLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    final l10n = AppLocalizations.of(context)!;
+    return InkWell(
+      onTap: () => _fetchMembersPage(),
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(Icons.expand_more, color: cs.primary, size: 26),
+            const SizedBox(width: 14),
+            Text(
+              l10n.chatInfoShowMore,
+              style: TextStyle(color: cs.primary, fontSize: 16),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1065,16 +1285,21 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   Widget _memberTile(ColorScheme cs, _MemberInfo member) {
     final l10n = AppLocalizations.of(context)!;
     final name =
+        member.name ??
         ContactCache.get(member.id) ??
         (member.isMe ? l10n.callParticipantYou : '${member.id}');
-    final avatar = ContactCache.getAvatar(member.id);
+    final avatar = member.avatarUrl ?? ContactCache.getAvatar(member.id);
 
     final String sublabel;
-    if (member.isMe) {
+    if (member.blocked) {
+      sublabel = l10n.chatInfoMemberDeleted;
+    } else if (member.isMe) {
       sublabel = l10n.callParticipantYou;
-    } else if (member.isOnline) {
+    } else if (member.presenceStatus == 1) {
       sublabel = l10n.contactProfileOnline;
-    } else if (member.seenTime != null) {
+    } else if (member.presenceStatus == 2 || member.presenceStatus == 3) {
+      sublabel = l10n.contactProfileRecentlyActive;
+    } else if (member.seenTime != null && member.seenTime! > 0) {
       sublabel = formatLastSeen(member.seenTime!);
     } else {
       sublabel = l10n.contactProfileRecentlyActive;
@@ -1084,57 +1309,95 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         ? l10n.chatInfoRoleOwner
         : (member.isAdmin ? l10n.chatInfoRoleAdmin : null);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          (avatar != null && avatar.isNotEmpty)
-              ? CircleAvatar(
-                  radius: 22,
-                  backgroundImage: CachedNetworkImageProvider(
-                    avatar,
-                    maxWidth: 144,
-                    maxHeight: 144,
-                  ),
-                  backgroundColor: cs.primaryContainer,
-                )
-              : CircleAvatar(
-                  radius: 22,
-                  backgroundColor: cs.primaryContainer,
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+    return InkWell(
+      onTap: member.isMe
+          ? null
+          : () => openContactDialogProfile(
+              context,
+              contactId: member.id,
+              name: name,
+              avatarUrl: avatar,
+            ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            if (member.blocked)
+              _ghostAvatar()
+            else if (avatar != null && avatar.isNotEmpty)
+              CircleAvatar(
+                radius: 22,
+                backgroundImage: CachedNetworkImageProvider(
+                  avatar,
+                  maxWidth: 144,
+                  maxHeight: 144,
+                ),
+                backgroundColor: cs.primaryContainer,
+              )
+            else
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: cs.primaryContainer,
+                child: Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                  style: TextStyle(color: cs.onPrimaryContainer, fontSize: 16),
+                ),
+              ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
                     style: TextStyle(
-                      color: cs.onPrimaryContainer,
-                      fontSize: 16,
+                      color: cs.onSurface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
+                  Text(
+                    sublabel,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   ),
-                ),
-                Text(
-                  sublabel,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (roleLabel != null)
-            Text(
-              roleLabel,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-            ),
-        ],
+            if (member.alias != null)
+              _memberTag(cs, member.alias!)
+            else if (roleLabel != null)
+              Text(
+                roleLabel,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ghostAvatar({double radius = 22, double fontSize = 24}) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFFD4D4D4),
+      child: Text('👻', style: TextStyle(fontSize: fontSize)),
+    );
+  }
+
+  Widget _memberTag(ColorScheme cs, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: cs.onPrimaryContainer,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -1374,6 +1637,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _avatar() {
+    if (_peerDeleted) return _ghostAvatar(radius: 48, fontSize: 52);
     final avatar = KometAvatar(
       name: widget.name,
       imageUrl: widget.imageUrl,

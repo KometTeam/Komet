@@ -1394,6 +1394,31 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatInfoRoleAdmin => 'Админ';
 
   @override
+  String get chatInfoMemberDeleted => 'Аккаунт удалён';
+
+  @override
+  String get chatInfoInviteByLink => 'Пригласить по ссылке';
+
+  @override
+  String get chatInfoInviteLinkHint =>
+      'Вы можете пригласить любого человека по этой ссылке';
+
+  @override
+  String get chatInfoAddMembersAction => 'Добавить';
+
+  @override
+  String get chatInfoMembersSearchHint => 'Поиск';
+
+  @override
+  String get chatInfoAddMembersEmpty => 'Некого добавить';
+
+  @override
+  String get chatInfoMembersAdded => 'Участники добавлены';
+
+  @override
+  String get chatInfoAddMembersError => 'Не удалось добавить участников';
+
+  @override
   String get chatInfoNoData => 'Нет данных';
 
   @override

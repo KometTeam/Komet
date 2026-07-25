@@ -883,6 +883,17 @@ class AppDatabase {
     );
   }
 
+  static Future<List<int>> loadContactIds(int accountId) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'contacts',
+      columns: ['id'],
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+    return [for (final r in rows) r['id'] as int];
+  }
+
   static Future<Map<String, dynamic>?> loadContact(
     int accountId,
     int id,

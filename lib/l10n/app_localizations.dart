@@ -2696,6 +2696,54 @@ abstract class AppLocalizations {
   /// **'Admin'**
   String get chatInfoRoleAdmin;
 
+  /// No description provided for @chatInfoMemberDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Account deleted'**
+  String get chatInfoMemberDeleted;
+
+  /// No description provided for @chatInfoInviteByLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite via link'**
+  String get chatInfoInviteByLink;
+
+  /// No description provided for @chatInfoInviteLinkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can invite anyone with this link'**
+  String get chatInfoInviteLinkHint;
+
+  /// No description provided for @chatInfoAddMembersAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get chatInfoAddMembersAction;
+
+  /// No description provided for @chatInfoMembersSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get chatInfoMembersSearchHint;
+
+  /// No description provided for @chatInfoAddMembersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No one to add'**
+  String get chatInfoAddMembersEmpty;
+
+  /// No description provided for @chatInfoMembersAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Members added'**
+  String get chatInfoMembersAdded;
+
+  /// No description provided for @chatInfoAddMembersError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add members'**
+  String get chatInfoAddMembersError;
+
   /// No description provided for @chatInfoNoData.
   ///
   /// In en, this message translates to:

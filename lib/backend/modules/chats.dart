@@ -13,6 +13,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
+import '../../models/contact_info.dart';
 import '../api.dart';
 import 'chat_parsing.dart';
 import 'chat_preview.dart';
@@ -301,6 +302,33 @@ class ChatSearchHit {
     this.avatarUrl,
     this.subtitle,
   });
+}
+
+class ChatMemberEntry {
+  final int id;
+  final String? name;
+  final String? avatarUrl;
+  final int? seenTime;
+  final int presenceStatus;
+  final bool blocked;
+
+  const ChatMemberEntry({
+    required this.id,
+    this.name,
+    this.avatarUrl,
+    this.seenTime,
+    required this.presenceStatus,
+    this.blocked = false,
+  });
+
+  bool get isOnline => presenceStatus == 1;
+}
+
+class ChatMembersPage {
+  final List<ChatMemberEntry> members;
+  final int marker;
+
+  const ChatMembersPage({required this.members, required this.marker});
 }
 
 class MessageSearchHit {
@@ -1683,6 +1711,119 @@ class ChatsModule {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<bool> addMembers(
+    Api api, {
+    required int chatId,
+    required List<int> userIds,
+    bool showHistory = true,
+  }) async {
+    if (userIds.isEmpty) return false;
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': userIds,
+        'showHistory': showHistory,
+        'operation': 'add',
+      });
+      if (!packet.isOk) {
+        logger.w('addMembers $chatId: ${messageFromErrorPayload(packet.payload)}');
+        return false;
+      }
+      final data = packet.payload;
+      final chat = data is Map ? data['chat'] : null;
+      if (chat is Map) {
+        final accountId = await TokenStorage.getActiveAccountId();
+        if (accountId != null) {
+          await cacheServerChat(chat.cast<dynamic, dynamic>(), accountId);
+        }
+      }
+      return true;
+    } on PacketError catch (e) {
+      logger.w('addMembers $chatId: ${e.message}');
+      return false;
+    } catch (e) {
+      logger.w('addMembers $chatId: $e');
+      return false;
+    }
+  }
+
+  Future<ChatMembersPage?> getChatMembers(
+    Api api,
+    int chatId, {
+    int marker = 0,
+    int count = 50,
+  }) async {
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembers, {
+        'type': 'MEMBER',
+        'marker': marker,
+        'chatId': chatId,
+        'count': count,
+      });
+      if (!packet.isOk) return null;
+      final payload = packet.payload;
+      if (payload is! Map) return null;
+
+      final entries = <ChatMemberEntry>[];
+      final presenceById = <int, Map<String, dynamic>>{};
+      final rawMembers = payload['members'];
+      if (rawMembers is List) {
+        for (final m in rawMembers.whereType<Map>()) {
+          final contact = m['contact'];
+          if (contact is! Map) continue;
+          final id = contact['id'];
+          if (id is! int) continue;
+
+          final info = ContactInfo.fromMap(Map<String, dynamic>.from(contact));
+          final name = info.displayName;
+          if (name != null && name.isNotEmpty) ContactCache.put(id, name);
+          final avatar = info.avatarUrl;
+          if (avatar != null && avatar.isNotEmpty) {
+            ContactCache.putAvatar(id, avatar);
+          }
+          final phone = contact['phone'];
+          if (phone is int && phone > 0) ContactCache.putPhone(id, phone);
+          ContactInfoFetch.putContact(id, contact.cast<dynamic, dynamic>());
+
+          final presence = m['presence'];
+          var status = 0;
+          int? seen;
+          if (presence is Map) {
+            final p = Map<String, dynamic>.from(presence);
+            presenceById[id] = p;
+            status = (p['status'] as int?) ?? 0;
+            final s = p['seen'];
+            seen = s is int ? s : null;
+          }
+
+          entries.add(
+            ChatMemberEntry(
+              id: id,
+              name: name,
+              avatarUrl: avatar,
+              seenTime: seen,
+              presenceStatus: status,
+              blocked: info.isDeleted,
+            ),
+          );
+        }
+      }
+      if (presenceById.isNotEmpty) PresenceFetch.primeAll(presenceById);
+
+      final next = payload['marker'];
+      return ChatMembersPage(
+        members: entries,
+        marker: next is int ? next : marker,
+      );
+    } on PacketError catch (e) {
+      logger.w('getChatMembers $chatId: ${e.message}');
+      return null;
+    } catch (e) {
+      logger.w('getChatMembers $chatId: $e');
+      return null;
     }
   }
 

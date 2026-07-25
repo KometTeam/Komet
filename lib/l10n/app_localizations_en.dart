@@ -1386,6 +1386,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatInfoRoleAdmin => 'Admin';
 
   @override
+  String get chatInfoMemberDeleted => 'Account deleted';
+
+  @override
+  String get chatInfoInviteByLink => 'Invite via link';
+
+  @override
+  String get chatInfoInviteLinkHint => 'You can invite anyone with this link';
+
+  @override
+  String get chatInfoAddMembersAction => 'Add';
+
+  @override
+  String get chatInfoMembersSearchHint => 'Search';
+
+  @override
+  String get chatInfoAddMembersEmpty => 'No one to add';
+
+  @override
+  String get chatInfoMembersAdded => 'Members added';
+
+  @override
+  String get chatInfoAddMembersError => 'Couldn\'t add members';
+
+  @override
   String get chatInfoNoData => 'No data';
 
   @override
