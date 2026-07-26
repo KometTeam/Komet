@@ -10,6 +10,7 @@ import '../../../core/calls/call_controller.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/chat_menu_overlay.dart';
 import '../../widgets/small_spinner.dart';
@@ -22,7 +23,7 @@ class CallsTab extends StatefulWidget {
   State<CallsTab> createState() => _CallsTabState();
 }
 
-class _CallsTabState extends State<CallsTab> {
+class _CallsTabState extends State<CallsTab> with ReloadOnReconnect {
   List<CallLogEntry> _calls = [];
   final Set<String> _removing = {};
   bool _isLoading = true;
@@ -49,6 +50,11 @@ class _CallsTabState extends State<CallsTab> {
   void dispose() {
     _loginSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void reloadAfterReconnect() {
+    if (accountModule.isLoggedIn) _loadHistory();
   }
 
   Future<void> _loadHistory() async {

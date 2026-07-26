@@ -17,6 +17,8 @@ import '../../widgets/animated_text_swap.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/formatted_message_text.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/swipe_route.dart';
@@ -83,7 +85,8 @@ class ChatInfoScreen extends StatefulWidget {
   State<ChatInfoScreen> createState() => _ChatInfoScreenState();
 }
 
-class _ChatInfoScreenState extends State<ChatInfoScreen> {
+class _ChatInfoScreenState extends State<ChatInfoScreen>
+    with ReloadOnReconnect {
   final _tabScrollController = ScrollController();
   final _bodyScrollController = ScrollController();
 
@@ -174,6 +177,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         return [if (showInfo) 'Info'];
     }
   }
+
+  @override
+  void reloadAfterReconnect() => _load();
 
   Future<void> _load() async {
     final profile = await AppDatabase.loadActiveProfile();
@@ -789,7 +795,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             : int.tryParse(phone?.toString() ?? '');
         if (phoneInt != null && phoneInt > 0) {
           items.add(
-            _simpleInfoCard(cs, l10n.loginPhoneNumber, formatPhone(phoneInt)!),
+            _simpleInfoCard(
+              cs,
+              l10n.loginPhoneNumber,
+              formatPhone(phoneInt)!,
+              entities: true,
+            ),
           );
         }
         final bio =
@@ -797,7 +808,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             (_contactData?.raw['about'] as String?);
         if (bio != null && bio.isNotEmpty) {
           if (items.isNotEmpty) items.add(const SizedBox(height: 8));
-          items.add(_simpleInfoCard(cs, l10n.chatInfoBio, bio));
+          items.add(_simpleInfoCard(cs, l10n.chatInfoBio, bio, entities: true));
         }
       }
     } else if (widget.chatType == 'CHANNEL') {
@@ -824,6 +835,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     String label,
     String value, {
     bool isLink = false,
+    bool entities = false,
   }) {
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -840,14 +852,26 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                color: isLink ? cs.primary : cs.onSurface,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+            if (entities)
+              FormattedMessageText(
+                text: value,
+                ranges: const [],
+                entityMode: TextEntityMode.copy,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              )
+            else
+              Text(
+                value,
+                style: TextStyle(
+                  color: isLink ? cs.primary : cs.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -905,8 +929,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 4),
-            Text(
-              desc,
+            FormattedMessageText(
+              text: desc,
+              ranges: const [],
+              entityMode: TextEntityMode.copy,
               style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
               maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
               overflow: (_descExpanded || !isLong)

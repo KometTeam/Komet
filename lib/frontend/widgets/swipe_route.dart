@@ -3,7 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 
-import 'rightward_drag_recognizer.dart';
+import 'directional_drag_recognizer.dart';
 
 class SwipeRoute<T> extends PageRoute<T> {
   SwipeRoute({

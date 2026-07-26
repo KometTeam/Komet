@@ -16,11 +16,17 @@ class ContactName {
   String? get label {
     final n = name;
     if (n != null && n.trim().isNotEmpty) return n.trim();
+    return fullName;
+  }
+
+  String? get fullName {
     final combined = [firstName, lastName]
         .where((s) => s != null && s.trim().isNotEmpty)
         .map((s) => s!.trim())
         .join(' ');
-    return combined.isEmpty ? null : combined;
+    if (combined.isNotEmpty) return combined;
+    final n = name;
+    return (n != null && n.trim().isNotEmpty) ? n.trim() : null;
   }
 }
 
@@ -50,6 +56,23 @@ class ContactInfo {
       if (n.type == 'ONEME') return label;
     }
     return firstLabel;
+  }
+
+  String? get customFullName => _fullNameOfType('CUSTOM');
+
+  String? get onemeFullName => _fullNameOfType('ONEME');
+
+  String? get fullName => customFullName ?? onemeFullName ?? displayName;
+
+  bool get isSavedContact => customFullName != null;
+
+  String? _fullNameOfType(String type) {
+    for (final n in names) {
+      if (n.type != type) continue;
+      final full = n.fullName;
+      if (full != null) return full;
+    }
+    return null;
   }
 
   String? get firstName {

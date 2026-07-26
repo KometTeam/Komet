@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show digitalIdModule, webAppModule;
 import '../../../models/digital_id.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/small_spinner.dart';
@@ -41,7 +42,8 @@ class DigitalIdScreen extends StatefulWidget {
   State<DigitalIdScreen> createState() => _DigitalIdScreenState();
 }
 
-class _DigitalIdScreenState extends State<DigitalIdScreen> {
+class _DigitalIdScreenState extends State<DigitalIdScreen>
+    with ReloadOnReconnect {
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -55,6 +57,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     super.initState();
     _load();
   }
+
+  @override
+  void reloadAfterReconnect() => _load();
 
   Future<void> _load() async {
     setState(() {

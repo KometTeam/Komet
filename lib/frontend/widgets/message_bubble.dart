@@ -27,6 +27,7 @@ import 'attachment/bubbles/bubble_context.dart';
 import 'attachment/bubbles/poll_bubble.dart';
 import 'attachment/bubbles/share_bubble.dart';
 import 'attachment/bubbles/call_bubble.dart';
+import 'attachment/bubbles/control_bubble.dart';
 import 'attachment/bubbles/location_bubble.dart';
 import 'attachment/bubbles/contact_bubble.dart';
 import 'attachment/bubbles/sticker_bubble.dart';
@@ -281,6 +282,14 @@ class MessageBubble extends StatelessWidget {
     final hasCaption = message.text != null && message.text!.isNotEmpty;
     return photoCount >= 2 && !hasCaption;
   }
+
+  bool get _showsSenderName =>
+      !isMe &&
+      chatType == "CHAT" &&
+      prevMessage?.senderId != message.senderId;
+
+  bool get _stretchesTextRow =>
+      message.replyInfo != null || _showsSenderName;
 
   BubbleShape _computeShape() {
     if (message.isControl) return BubbleShape.singleMiddle;
@@ -589,10 +598,7 @@ class MessageBubble extends StatelessWidget {
         showAvatarSlot &&
         chatType == "CHAT" &&
         nextMessage?.senderId != message.senderId;
-    final showSenderName =
-        showAvatarSlot &&
-        chatType == "CHAT" &&
-        prevMessage?.senderId != message.senderId;
+    final showSenderName = _showsSenderName;
 
     final maxBubbleWidth = math.min(MediaQuery.sizeOf(context).width * 0.75, 560.0);
     final keyboard = _inlineKeyboard;
@@ -635,51 +641,60 @@ class MessageBubble extends StatelessWidget {
     final reactionsInside = contentType != MessageType.text && !reactionsUnder;
 
     final reply = message.replyInfo;
-    Widget withReply(Widget content) {
-      if (reply == null) return content;
-      final quote = _buildReplyQuote(context, cs, textColor, reply);
-      if (contentType != MessageType.text || jumboAnimoji != null) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [quote, const SizedBox(height: 4), content],
-        );
-      }
-      return IntrinsicWidth(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _ZeroIntrinsicWidth(child: quote),
-            const SizedBox(height: 4),
-            content,
-          ],
-        ),
-      );
-    }
 
     final bool hasCommentsFooter = onCommentsTap != null;
     final EdgeInsets containerPadding = hasCommentsFooter
         ? EdgeInsets.zero
         : padding;
 
-    final Widget innerContent = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (showSenderName)
-          _buildSenderHeader(cs, padding == EdgeInsets.zero),
-        withReply(
-          reactionsInside
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [bubbleContent, _reactionsBar(cs)],
-                )
-              : bubbleContent,
-        ),
-      ],
-    );
+    final Widget contentWithReactions = reactionsInside
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [bubbleContent, _reactionsBar(cs)],
+          )
+        : bubbleContent;
+
+    final Widget? senderHeader = showSenderName
+        ? _buildSenderHeader(cs, padding == EdgeInsets.zero)
+        : null;
+
+    final Widget innerContent =
+        contentType == MessageType.text &&
+            jumboAnimoji == null &&
+            _stretchesTextRow
+        ? IntrinsicWidth(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (senderHeader != null)
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: senderHeader,
+                  ),
+                if (reply != null) ...[
+                  _ZeroIntrinsicWidth(
+                    child: _buildReplyQuote(context, cs, textColor, reply),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                contentWithReactions,
+              ],
+            ),
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ?senderHeader,
+              if (reply != null) ...[
+                _buildReplyQuote(context, cs, textColor, reply),
+                const SizedBox(height: 4),
+              ],
+              contentWithReactions,
+            ],
+          );
 
     final Widget bubbleBox = ListenableBuilder(
       listenable: Listenable.merge([
@@ -1199,66 +1214,12 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildControlContent(ColorScheme cs) {
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final control = attachments.first;
-    if (control is! ControlAttachment) return const SizedBox.shrink();
-
-    String? text;
-    switch (control.event) {
-      case 'system':
-        text = control.title;
-        break;
-      case 'new':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} создал(а) чат';
-        break;
-      case 'add':
-        final names = (control.userIds ?? [])
-            .map((id) => ContactCache.get(id) ?? 'Пользователь')
-            .join(', ');
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} добавил(а) $names';
-        break;
-      case 'leave':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} покинул(а) чат';
-        break;
-      case 'joinByLink':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} присоединился(-ась) к чату';
-        break;
-      case 'pin':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} закрепил(а) сообщение';
-        break;
-      default:
-        text = control.title;
-    }
-
-    if (text == null || text.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: cs.onSurfaceVariant,
-          fontSize: 12,
-          fontStyle: FontStyle.italic,
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
+  Widget _buildControlContent(ColorScheme cs) => ControlBubble(
+    key: ValueKey('control_${message.id}'),
+    message: message,
+    cs: cs,
+    onUserTap: onAvatarTap,
+  );
 
   Widget _wrapSelectable(Widget textWidget) {
     final listenable = textSelection;
@@ -1366,7 +1327,9 @@ class MessageBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Flexible(child: textWidget),
+            _stretchesTextRow
+                ? Expanded(child: textWidget)
+                : Flexible(child: textWidget),
             const SizedBox(width: 8),
             Padding(
               padding: const EdgeInsets.only(bottom: 2),

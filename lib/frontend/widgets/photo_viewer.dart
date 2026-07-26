@@ -121,7 +121,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   void initState() {
     super.initState();
     _items = _localItems();
-    _index = widget.initialIndex.clamp(0, _items.length - 1);
+    _index = (_items.length - 1 - widget.initialIndex).clamp(
+      0,
+      _items.length - 1,
+    );
     _controller = PageController(initialPage: _index);
     unawaited(_loadFeed());
   }
@@ -135,7 +138,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   List<_ViewerPhoto> _localItems() {
     final message = widget.message;
     return [
-      for (var i = 0; i < widget.photos.length; i++)
+      for (var i = widget.photos.length - 1; i >= 0; i--)
         _ViewerPhoto(
           id: _localId(widget.photos[i], message, i),
           photo: widget.photos[i],
@@ -145,6 +148,23 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           caption: message?.text,
         ),
     ];
+  }
+
+  List<_ViewerPhoto> _feedItems(List<SharedMediaItem> items) {
+    final out = <_ViewerPhoto>[];
+    var start = 0;
+    while (start < items.length) {
+      var end = start;
+      while (end + 1 < items.length &&
+          items[end + 1].messageId == items[start].messageId) {
+        end++;
+      }
+      for (var i = end; i >= start; i--) {
+        out.add(_ViewerPhoto.fromFeed(items[i]));
+      }
+      start = end + 1;
+    }
+    return out;
   }
 
   String _localId(PhotoAttachment photo, CachedMessage? message, int at) {
@@ -182,7 +202,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       return;
     }
 
-    final items = feed.items.map(_ViewerPhoto.fromFeed).toList();
+    final items = _feedItems(feed.items);
     final at = items.indexWhere((i) => i.id == key);
     if (at == -1) {
       setState(() => _feedFailed = true);
@@ -224,7 +244,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       );
       if (!mounted) return;
 
-      final items = feed.items.map(_ViewerPhoto.fromFeed).toList();
+      final items = _feedItems(feed.items);
       final at = items.indexWhere((i) => i.id == _current.id);
       if (at == -1) {
         setState(() {
@@ -413,8 +433,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       backgroundColor: Colors.black,
       body: CallbackShortcuts(
         bindings: {
-          const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _step(-1),
-          const SingleActivator(LogicalKeyboardKey.arrowRight): () => _step(1),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _step(1),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () => _step(-1),
         },
         child: Focus(
           autofocus: true,
@@ -424,6 +444,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                 child: PageView.builder(
                   key: ValueKey(_pager),
                   controller: _controller,
+                  reverse: true,
                   itemCount: _items.length,
                   onPageChanged: _onPageChanged,
                   itemBuilder: (_, i) => GestureDetector(
@@ -451,15 +472,18 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                     curve: Curves.easeOut,
                     child: Stack(
                       children: [
-                        if (_index > 0)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: _arrow(Symbols.chevron_left, () => _step(-1)),
-                          ),
                         if (_index < _items.length - 1)
                           Align(
+                            alignment: Alignment.centerLeft,
+                            child: _arrow(Symbols.chevron_left, () => _step(1)),
+                          ),
+                        if (_index > 0)
+                          Align(
                             alignment: Alignment.centerRight,
-                            child: _arrow(Symbols.chevron_right, () => _step(1)),
+                            child: _arrow(
+                              Symbols.chevron_right,
+                              () => _step(-1),
+                            ),
                           ),
                         Positioned(
                           top: padding.top + 8,

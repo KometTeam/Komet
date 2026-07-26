@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
@@ -23,7 +24,7 @@ class SecurityScreen extends StatefulWidget {
 }
 
 class _SecurityScreenState extends State<SecurityScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReloadOnReconnect {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _is2faEnabled = false;
@@ -46,6 +47,9 @@ class _SecurityScreenState extends State<SecurityScreen>
     _shimmerController.dispose();
     super.dispose();
   }
+
+  @override
+  void reloadAfterReconnect() => _loadData();
 
   Future<void> _loadData() async {
     try {

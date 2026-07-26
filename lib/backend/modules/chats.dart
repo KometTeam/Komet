@@ -307,18 +307,22 @@ class ChatSearchHit {
 class ChatMemberEntry {
   final int id;
   final String? name;
+  final String? fullName;
   final String? avatarUrl;
   final int? seenTime;
   final int presenceStatus;
   final bool blocked;
+  final bool isContact;
 
   const ChatMemberEntry({
     required this.id,
     this.name,
+    this.fullName,
     this.avatarUrl,
     this.seenTime,
     required this.presenceStatus,
     this.blocked = false,
+    this.isContact = false,
   });
 
   bool get isOnline => presenceStatus == 1;
@@ -1865,10 +1869,12 @@ class ChatsModule {
             ChatMemberEntry(
               id: id,
               name: name,
+              fullName: info.fullName,
               avatarUrl: avatar,
               seenTime: seen,
               presenceStatus: status,
               blocked: info.isDeleted,
+              isContact: info.isSavedContact,
             ),
           );
         }

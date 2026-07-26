@@ -23,6 +23,7 @@ import '../../screens/chats/chat_screen.dart';
 import '../custom_notification.dart';
 import '../komet_avatar.dart';
 import '../photo_viewer.dart';
+import '../reload_on_reconnect.dart';
 import '../small_spinner.dart';
 import '../swipe_route.dart';
 import '../video_player_screen.dart';
@@ -312,7 +313,8 @@ class CommonChatsTab extends StatefulWidget {
   State<CommonChatsTab> createState() => _CommonChatsTabState();
 }
 
-class _CommonChatsTabState extends State<CommonChatsTab> {
+class _CommonChatsTabState extends State<CommonChatsTab>
+    with ReloadOnReconnect {
   bool _loading = true;
   List<CommonChatEntry> _chats = const [];
   Map<int, int> _onlineByChat = const {};
@@ -322,6 +324,9 @@ class _CommonChatsTabState extends State<CommonChatsTab> {
     super.initState();
     _load();
   }
+
+  @override
+  void reloadAfterReconnect() => _load();
 
   Future<void> _load() async {
     final chats = await sharedContentModule.fetchCommonChats(widget.userId);
@@ -474,7 +479,8 @@ class SharedMediaTab extends StatefulWidget {
   State<SharedMediaTab> createState() => _SharedMediaTabState();
 }
 
-class _SharedMediaTabState extends State<SharedMediaTab> {
+class _SharedMediaTabState extends State<SharedMediaTab>
+    with ReloadOnReconnect {
   static const int _pageSize = 60;
 
   bool _loading = true;
@@ -506,6 +512,9 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
       _loadMore();
     }
   }
+
+  @override
+  void reloadAfterReconnect() => _load(widget.anchorMessageId, initial: true);
 
   Future<void> _load(String anchor, {required bool initial}) async {
     final page = await sharedContentModule.fetchMedia(

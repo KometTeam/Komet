@@ -65,6 +65,8 @@ import 'chat/view/search_view.dart';
 import 'chat/view/composer_input.dart';
 import 'chat/view/sticker_panel_view.dart';
 import 'chat/view/command_panel_view.dart';
+import 'chat/view/mention_panel_view.dart';
+import 'chat/mention_panel_controller.dart';
 import 'chat/view/selection_bar.dart';
 import 'chat/view/chat_header.dart';
 import 'chat/view/shimmer_loading.dart';
@@ -93,6 +95,8 @@ import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/directional_drag_recognizer.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
 import '../../widgets/chat_wallpaper_view.dart';
@@ -236,7 +240,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver, ReloadOnReconnect {
   final RichMessageController _messageController = RichMessageController();
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
@@ -454,6 +458,7 @@ class _ChatScreenState extends State<ChatScreen>
   int _tempIdCounter = 0;
   late final AnimationController _attachAnim;
   late final CommandPanelController _commandPanel;
+  late final MentionPanelController _mentionPanel;
 
   String _nextTempId() =>
       'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
@@ -602,6 +607,14 @@ class _ChatScreenState extends State<ChatScreen>
       textOf: () => _messageController.text,
       onSelected: _onCommandSelected,
     );
+    _mentionPanel = MentionPanelController(
+      vsync: this,
+      chatId: widget.chatId,
+      enabled: _mentionsAvailable,
+      selfId: () => _myId,
+      valueOf: () => _messageController.value,
+      onSelected: _onMentionSelected,
+    );
     _selectionAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
@@ -681,6 +694,13 @@ class _ChatScreenState extends State<ChatScreen>
     );
     unawaited(_loadParticipantsCount());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
+  }
+
+  @override
+  void reloadAfterReconnect() {
+    if (!_historyKickedOff) return;
+    unawaited(_loadHistory());
+    unawaited(_loadParticipantsCount());
   }
 
   Future<void> _loadParticipantsCount() async {
@@ -1857,6 +1877,7 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadStatus.dispose();
     _attachAnim.dispose();
     _commandPanel.dispose();
+    _mentionPanel.dispose();
     _selectionAnim.dispose();
     _searchAnim.dispose();
     _searchFocusNode.dispose();
@@ -1884,6 +1905,21 @@ class _ChatScreenState extends State<ChatScreen>
       _hasText.value = newHasText;
     }
     _commandPanel.update();
+    _mentionPanel.update();
+  }
+
+  bool _mentionsAvailable() =>
+      !_commentsMode && (chat?.type ?? widget.chatType) == 'CHAT';
+
+  void _onMentionSelected(MentionCandidate candidate, MentionQuery query) {
+    _messageController.insertMention(
+      userId: candidate.id,
+      name: candidate.name,
+      start: query.start,
+      end: query.end,
+    );
+    _mentionPanel.update();
+    _messageFocusNode.requestFocus();
   }
 
   void _onCommandSelected(SlashCommand c) {
@@ -3371,6 +3407,8 @@ class _ChatScreenState extends State<ChatScreen>
         return 'Ссылка';
       case TextFormat.animoji:
         return 'Animoji';
+      case TextFormat.userMention:
+        return 'Упоминание';
     }
   }
 
@@ -4794,7 +4832,13 @@ class _ChatScreenState extends State<ChatScreen>
                   left: 0,
                   right: 0,
                   bottom: frosted ? height : 0,
-                  child: CommandPanelView(commandPanel: _commandPanel),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MentionPanelView(mentionPanel: _mentionPanel),
+                      CommandPanelView(commandPanel: _commandPanel),
+                    ],
+                  ),
                 ),
               ),
               if (frosted)
@@ -4884,7 +4928,13 @@ class _ChatScreenState extends State<ChatScreen>
             left: 0,
             right: 0,
             bottom: height,
-            child: CommandPanelView(commandPanel: _commandPanel),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                MentionPanelView(mentionPanel: _mentionPanel),
+                CommandPanelView(commandPanel: _commandPanel),
+              ],
+            ),
           ),
         ),
         Positioned(
@@ -6346,6 +6396,12 @@ class _SwipeToReplyState extends State<_SwipeToReply>
 
   void _onDragEnd(DragEndDetails d) {
     if (_triggered) widget.onReply();
+    _settle();
+  }
+
+  void _onDragCancel() => _settle();
+
+  void _settle() {
     _triggered = false;
     _springFrom = _dragX;
     _springBack.forward(from: 0);
@@ -6355,10 +6411,20 @@ class _SwipeToReplyState extends State<_SwipeToReply>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final progress = (-_dragX / _triggerThreshold).clamp(0.0, 1.0);
-    return GestureDetector(
+    return RawGestureDetector(
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: _onDragUpdate,
-      onHorizontalDragEnd: _onDragEnd,
+      gestures: <Type, GestureRecognizerFactory>{
+        LeftwardDragRecognizer:
+            GestureRecognizerFactoryWithHandlers<LeftwardDragRecognizer>(
+              () => LeftwardDragRecognizer(debugOwner: this),
+              (instance) {
+                instance
+                  ..onUpdate = _onDragUpdate
+                  ..onEnd = _onDragEnd
+                  ..onCancel = _onDragCancel;
+              },
+            ),
+      },
       child: Stack(
         alignment: Alignment.centerRight,
         children: [

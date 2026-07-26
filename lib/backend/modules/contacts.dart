@@ -94,12 +94,21 @@ class AddContactResult {
 class ContactsModule {
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
-  static Future<PhoneLookupResult?> findByPhone(Api api, String phone) async {
+  static Future<PhoneLookupResult?> findByPhone(
+    Api api,
+    String phone, {
+    bool silent = false,
+  }) async {
     final normalized = _normalizePhone(phone);
     if (normalized == null) return null;
-    final packet = await api.sendRequest(Opcode.contactInfoByPhone, {
-      'phone': normalized,
-    });
+    final Packet packet;
+    try {
+      packet = await api.sendRequest(Opcode.contactInfoByPhone, {
+        'phone': normalized,
+      }, silent: silent);
+    } on PacketError {
+      return null;
+    }
     if (packet.isError) return null;
     final contact = (packet.payload as Map?)?['contact'];
     if (contact is! Map) return null;

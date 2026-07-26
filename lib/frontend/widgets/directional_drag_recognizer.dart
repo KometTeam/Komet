@@ -1,12 +1,18 @@
 import 'package:flutter/gestures.dart';
 
-class RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
-  RightwardDragRecognizer({super.debugOwner}) {
+class DirectionalDragRecognizer extends HorizontalDragGestureRecognizer {
+  DirectionalDragRecognizer({
+    required this.direction,
+    this.minAcceptDistance = 20.0,
+    this.minAcceptVelocity,
+    super.debugOwner,
+  }) {
     onlyAcceptDragOnThreshold = true;
   }
 
-  static const double _kMinAcceptVelocity = 700.0;
-  static const double _kMinAcceptDistance = 20.0;
+  final double direction;
+  final double minAcceptDistance;
+  final double? minAcceptVelocity;
 
   final Map<int, Offset> _initialPositions = {};
   final Map<int, VelocityTracker> _velocityTrackers = {};
@@ -30,7 +36,7 @@ class RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
       );
       final initial = _initialPositions[event.pointer];
       if (initial != null) {
-        final dx = event.position.dx - initial.dx;
+        final dx = (event.position.dx - initial.dx) * direction;
         _currentDeltaX[event.pointer] = dx;
         if (dx < -kTouchSlop) {
           stopTrackingPointer(event.pointer);
@@ -57,10 +63,13 @@ class RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
     for (final dx in _currentDeltaX.values) {
       if (dx > maxDx) maxDx = dx;
     }
-    if (maxDx < _kMinAcceptDistance) return false;
+    if (maxDx < minAcceptDistance) return false;
+
+    final minVelocity = minAcceptVelocity;
+    if (minVelocity == null) return true;
     for (final tracker in _velocityTrackers.values) {
-      final vx = tracker.getVelocity().pixelsPerSecond.dx;
-      if (vx >= _kMinAcceptVelocity) return true;
+      final vx = tracker.getVelocity().pixelsPerSecond.dx * direction;
+      if (vx >= minVelocity) return true;
     }
     return false;
   }
@@ -82,4 +91,13 @@ class RightwardDragRecognizer extends HorizontalDragGestureRecognizer {
     _cleanup(pointer);
     super.rejectGesture(pointer);
   }
+}
+
+class RightwardDragRecognizer extends DirectionalDragRecognizer {
+  RightwardDragRecognizer({super.debugOwner})
+    : super(direction: 1, minAcceptVelocity: 700);
+}
+
+class LeftwardDragRecognizer extends DirectionalDragRecognizer {
+  LeftwardDragRecognizer({super.debugOwner}) : super(direction: -1);
 }
