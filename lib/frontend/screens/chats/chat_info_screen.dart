@@ -21,6 +21,7 @@ import '../../widgets/formatted_message_text.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
 import '../../../backend/modules/chats.dart';
 import '../contacts/open_contact_profile.dart';
@@ -67,6 +68,7 @@ class ChatInfoScreen extends StatefulWidget {
 
   final int? dialogPeerId;
   final ChatInfoTab? initialTab;
+  final Object? heroTag;
 
   final void Function(String messageId, int time)? onJumpToMessage;
 
@@ -78,6 +80,7 @@ class ChatInfoScreen extends StatefulWidget {
     required this.chatType,
     this.dialogPeerId,
     this.initialTab,
+    this.heroTag,
     this.onJumpToMessage,
   });
 
@@ -382,7 +385,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   void _onBodyScroll() {
     if (!mounted || widget.chatType != 'CHAT') return;
     if (_membersLoading || _membersEnd) return;
-    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers) return;
+    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers)
+      return;
     final pos = _bodyScrollController.position;
     if (pos.pixels >= pos.maxScrollExtent - 400) {
       _fetchMembersPage();
@@ -437,9 +441,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       backgroundColor: cs.surface,
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: const ConnectionSpinner(),
-      body: SafeArea(
-        child: _isLoading ? _buildShimmer(cs) : _buildScrollBody(cs),
-      ),
+      body: SafeArea(child: _buildScrollBody(cs)),
     );
   }
 
@@ -473,19 +475,23 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           const SizedBox(height: 14),
           _buildNameRow(cs),
           const SizedBox(height: 4),
-          Text(
-            _subtitle(),
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          _buildActions(cs),
-          const SizedBox(height: 16),
-          _buildPersistentInfo(cs),
-          _buildTabBar(cs),
-          const SizedBox(height: 12),
-          _buildTabContent(cs),
-          const SizedBox(height: 40),
+          if (_isLoading)
+            ..._loadingBlocks(cs)
+          else ...[
+            Text(
+              _subtitle(),
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            _buildActions(cs),
+            const SizedBox(height: 16),
+            _buildPersistentInfo(cs),
+            _buildTabBar(cs),
+            const SizedBox(height: 12),
+            _buildTabContent(cs),
+            const SizedBox(height: 40),
+          ],
         ],
       ),
     );
@@ -504,9 +510,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   bool get _peerDeleted => _contactData?.isDeleted ?? false;
 
-  String _joinName(String first, String last) => last.trim().isEmpty
-      ? first.trim()
-      : '${first.trim()} ${last.trim()}';
+  String _joinName(String first, String last) =>
+      last.trim().isEmpty ? first.trim() : '${first.trim()} ${last.trim()}';
 
   String get _customName {
     final c = _localContact;
@@ -595,42 +600,53 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       color: cs.onSurface,
       fontSize: 22,
       fontWeight: FontWeight.w700,
+      fontFamily: 'Outfit',
     );
     final custom = _customName;
     final real = _realName;
     final hasToggle = _isContact && real != null && real != custom;
 
-    final nameSwap = AnimatedTextSwap(
-      showAlternate: _showRealName,
-      alignment: Alignment.center,
-      alternate: Text(
-        real ?? custom,
-        style: nameStyle,
-        textAlign: TextAlign.center,
-      ),
-      child: Text(custom, style: nameStyle, textAlign: TextAlign.center),
-    );
-
-    if (!hasToggle) return nameSwap;
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const SizedBox(width: 36),
-        Flexible(child: nameSwap),
+        Flexible(
+          child: ProfileHeroName(
+            tag: widget.heroTag,
+            text: custom,
+            style: nameStyle,
+            child: AnimatedTextSwap(
+              showAlternate: _showRealName,
+              alignment: Alignment.center,
+              alternate: Text(
+                real ?? custom,
+                style: nameStyle,
+                textAlign: TextAlign.center,
+              ),
+              child: Text(
+                custom,
+                style: nameStyle,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
         SizedBox(
           width: 36,
-          child: IconButton(
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-            iconSize: 20,
-            color: _showRealName ? cs.primary : cs.onSurfaceVariant,
-            icon: Icon(
-              _showRealName ? Symbols.visibility : Symbols.visibility_off,
-            ),
-            tooltip: real,
-            onPressed: () => setState(() => _showRealName = !_showRealName),
-          ),
+          child: hasToggle
+              ? IconButton(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  color: _showRealName ? cs.primary : cs.onSurfaceVariant,
+                  icon: Icon(
+                    _showRealName ? Symbols.visibility : Symbols.visibility_off,
+                  ),
+                  tooltip: real,
+                  onPressed: () =>
+                      setState(() => _showRealName = !_showRealName),
+                )
+              : null,
         ),
       ],
     );
@@ -643,7 +659,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         if (_peerDeleted) return l10n.chatInfoMemberDeleted;
         if (_isBot) return l10n.contactProfileBot;
         if (_isOnline) return l10n.contactProfileOnline;
-        if (_presenceStatus == 2 || _presenceStatus == 3) return l10n.contactProfileRecentlyActive;
+        if (_presenceStatus == 2 || _presenceStatus == 3)
+          return l10n.contactProfileRecentlyActive;
         if (_seenTime != null && _seenTime! > 0) {
           return formatLastSeen(_seenTime!);
         }
@@ -1663,27 +1680,36 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _avatar() {
-    if (_peerDeleted) return _ghostAvatar(radius: 48, fontSize: 52);
-    final avatar = KometAvatar(
-      name: widget.name,
-      imageUrl: widget.imageUrl,
-      size: 96,
-      fontSize: 36,
-    );
+    const size = 96.0;
     final peerId = widget.chatType == 'DIALOG' ? _otherId : null;
-    if (peerId == null || widget.imageUrl.isEmpty) return avatar;
-    return GestureDetector(
-      onTap: () => AvatarHistoryScreen.open(
-        context,
-        contactId: peerId,
-        name: widget.name,
-        currentAvatarUrl: widget.imageUrl,
+    final hasHistory =
+        peerId != null && widget.imageUrl.isNotEmpty && !_peerDeleted;
+    return ProfileHeroAvatar(
+      tag: widget.heroTag,
+      size: size,
+      child: GestureDetector(
+        onTap: hasHistory
+            ? () => AvatarHistoryScreen.open(
+                context,
+                contactId: peerId,
+                name: widget.name,
+                currentAvatarUrl: widget.imageUrl,
+              )
+            : null,
+        child: _peerDeleted
+            ? _ghostAvatar(radius: size / 2, fontSize: 52)
+            : KometAvatar(
+                name: widget.name,
+                imageUrl: widget.imageUrl,
+                size: size,
+                fontSize: 36,
+                fadeIn: false,
+              ),
       ),
-      child: avatar,
     );
   }
 
-  Widget _buildShimmer(ColorScheme cs) {
+  List<Widget> _loadingBlocks(ColorScheme cs) {
     Widget block(double w, double h, {double r = 8}) => Container(
       width: w,
       height: h,
@@ -1693,21 +1719,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       ),
     );
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
-      children: [
-        Center(child: block(96, 96, r: 48)),
-        const SizedBox(height: 14),
-        Center(child: block(160, 22, r: 8)),
-        const SizedBox(height: 8),
-        Center(child: block(110, 16, r: 6)),
-        const SizedBox(height: 24),
-        Center(child: block(240, 54, r: 14)),
-        const SizedBox(height: 16),
-        block(double.infinity, 36, r: 20),
-        const SizedBox(height: 12),
-        block(double.infinity, 120, r: 14),
-      ],
-    );
+    return [
+      const SizedBox(height: 4),
+      block(110, 16, r: 6),
+      const SizedBox(height: 24),
+      block(240, 54, r: 14),
+      const SizedBox(height: 16),
+      block(double.infinity, 36, r: 20),
+      const SizedBox(height: 12),
+      block(double.infinity, 120, r: 14),
+    ];
   }
 }

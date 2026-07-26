@@ -19,6 +19,7 @@ import '../../core/utils/media_saver.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../models/attachment.dart';
+import 'attachment/photo_hero.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
 import 'small_spinner.dart';
@@ -79,6 +80,7 @@ class PhotoViewerScreen extends StatefulWidget {
   final int? chatId;
   final CachedMessage? message;
   final PhotoViewerActions? actions;
+  final PhotoHeroController? hero;
 
   /// The opened item is a file attachment rendered as an image, so the counter
   /// reads "FILE of N" — it has no position within the chat's photo feed.
@@ -91,6 +93,7 @@ class PhotoViewerScreen extends StatefulWidget {
     this.chatId,
     this.message,
     this.actions,
+    this.hero,
     this.isFile = false,
   });
 
@@ -100,6 +103,7 @@ class PhotoViewerScreen extends StatefulWidget {
       chatId = null,
       message = null,
       actions = null,
+      hero = null,
       isFile = false;
 
   @override
@@ -123,21 +127,36 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   int _total = 0;
   bool _saving = false;
 
+  late final String _heroId;
+  final TransformationController _heroTransform = TransformationController();
+
   @override
   void initState() {
     super.initState();
+    _heroTransform.addListener(_syncHero);
     _items = _localItems();
     _index = (_items.length - 1 - widget.initialIndex).clamp(
       0,
       _items.length - 1,
     );
+    _heroId = _items[_index].id;
     _controller = PageController(initialPage: _index);
     unawaited(_loadFeed());
+  }
+
+  void _syncHero() {
+    final hero = widget.hero;
+    if (hero == null) return;
+    hero.enabled =
+        _current.id == _heroId &&
+        (_quarterTurns[_heroId] ?? 0) == 0 &&
+        _heroTransform.value.getMaxScaleOnAxis() <= 1.01;
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _heroTransform.dispose();
     super.dispose();
   }
 
@@ -234,6 +253,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       }
     });
 
+    _syncHero();
+
     if (movesPage) {
       WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
     }
@@ -278,6 +299,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
   void _onPageChanged(int index) {
     setState(() => _index = index);
+    _syncHero();
     if (index >= _items.length - _prefetchThreshold) unawaited(_loadMore());
   }
 
@@ -295,6 +317,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     setState(() {
       _quarterTurns[_current.id] = ((_quarterTurns[_current.id] ?? 0) + 1) % 4;
     });
+    _syncHero();
   }
 
   void _toggleChrome() => setState(() => _chromeVisible = !_chromeVisible);
@@ -453,20 +476,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                   reverse: true,
                   itemCount: _items.length,
                   onPageChanged: _onPageChanged,
-                  itemBuilder: (_, i) => GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _toggleChrome,
-                    child: InteractiveViewer(
-                      minScale: 1,
-                      maxScale: 5,
-                      child: Center(
-                        child: RotatedBox(
-                          quarterTurns: _quarterTurns[_items[i].id] ?? 0,
-                          child: _buildImage(_items[i].photo),
-                        ),
-                      ),
-                    ),
-                  ),
+                  itemBuilder: (_, i) => _buildPage(i),
                 ),
               ),
               Positioned.fill(
@@ -534,6 +544,26 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildPage(int i) {
+    final isHero = widget.hero != null && _items[i].id == _heroId;
+    final page = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggleChrome,
+      child: InteractiveViewer(
+        minScale: 1,
+        maxScale: 5,
+        transformationController: isHero ? _heroTransform : null,
+        child: Center(
+          child: RotatedBox(
+            quarterTurns: _quarterTurns[_items[i].id] ?? 0,
+            child: _buildImage(_items[i].photo),
+          ),
+        ),
+      ),
+    );
+    return isHero ? PhotoHeroTarget(child: page) : page;
   }
 
   Widget _arrow(IconData icon, VoidCallback onTap) {

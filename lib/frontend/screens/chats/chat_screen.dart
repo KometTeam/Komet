@@ -266,6 +266,7 @@ class _ChatScreenState extends State<ChatScreen>
   int _readMarkTime = 0;
   Timer? _readMarkTimer;
   final GlobalKey _listKey = GlobalKey();
+  final Object _profileHeroTag = UniqueKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
   bool _encryptionEnabled = false;
@@ -1038,6 +1039,7 @@ class _ChatScreenState extends State<ChatScreen>
           name: _headerName(),
           imageUrl: widget.imageUrl,
           chatType: widget.chatType,
+          heroTag: _profileHeroTag,
           initialTab: initialTab,
           onJumpToMessage: (chatRoute == null || widget.embedded)
               ? null
@@ -2966,6 +2968,7 @@ class _ChatScreenState extends State<ChatScreen>
                             cs: cs,
                             embedded: widget.embedded,
                             chatId: widget.chatId,
+                            heroTag: _profileHeroTag,
                             name: _headerName(),
                             imageUrl: widget.imageUrl,
                             chatType: widget.chatType,

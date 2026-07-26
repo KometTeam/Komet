@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../models/attachment.dart';
 import '../../photo_viewer.dart';
+import '../photo_hero.dart';
 import 'bubble_context.dart';
 
 class PhotoBubble extends StatelessWidget {
@@ -133,13 +134,17 @@ class PhotoBubble extends StatelessWidget {
         ? (ctx.isMe ? _smallRadius : _bigRadius)
         : _smallRadius;
 
+    final radius = BorderRadius.only(
+      topLeft: topR,
+      topRight: topR,
+      bottomLeft: bottomL,
+      bottomRight: bottomR,
+    );
+    final memWidth = (constrainedWidth * dpr).round();
+    final memHeight = (constrainedHeight * dpr).round();
+
     return ClipRRect(
-      borderRadius: BorderRadius.only(
-        topLeft: topR,
-        topRight: topR,
-        bottomLeft: bottomL,
-        bottomRight: bottomR,
-      ),
+      borderRadius: radius,
       child: Stack(
         children: [
           _buildPhotoImage(
@@ -147,16 +152,25 @@ class PhotoBubble extends StatelessWidget {
             photo,
             constrainedWidth,
             constrainedHeight,
-            memWidth: (constrainedWidth * dpr).round(),
-            memHeight: (constrainedHeight * dpr).round(),
+            memWidth: memWidth,
+            memHeight: memHeight,
           ),
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, 0),
           if (ctx.uploadProgress == null)
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openPhotoViewer(ctx.context, 0),
+              child: Builder(
+                builder: (tileContext) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openPhotoViewer(
+                    ctx.context,
+                    0,
+                    tileContext: tileContext,
+                    radius: radius,
+                    memWidth: memWidth,
+                    memHeight: memHeight,
+                  ),
+                ),
               ),
             ),
         ],
@@ -350,13 +364,26 @@ class PhotoBubble extends StatelessWidget {
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, index),
           if (ctx.uploadProgress == null)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openPhotoViewer(ctx.context, index),
-              ),
-            ),
+            _buildTileTapTarget(ctx, index, cachePx),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTileTapTarget(BubbleContext ctx, int index, int cachePx) {
+    return Positioned.fill(
+      child: Builder(
+        builder: (tileContext) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openPhotoViewer(
+            ctx.context,
+            index,
+            tileContext: tileContext,
+            radius: BorderRadius.zero,
+            memWidth: cachePx,
+            memHeight: cachePx,
+          ),
+        ),
       ),
     );
   }
@@ -402,12 +429,7 @@ class PhotoBubble extends StatelessWidget {
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, index),
           if (ctx.uploadProgress == null)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openPhotoViewer(ctx.context, index),
-              ),
-            ),
+            _buildTileTapTarget(ctx, index, cachePx),
         ],
       ),
     );
@@ -437,16 +459,60 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  void _openPhotoViewer(BuildContext context, int index) {
+  static ImageProvider? _photoProvider(
+    PhotoAttachment photo, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final localPath = photo.localPath;
+    if (localPath != null) {
+      return ResizeImage.resizeIfNeeded(
+        memWidth,
+        null,
+        FileImage(File(localPath)),
+      );
+    }
+    final url = photo.baseUrl ?? '';
+    if (url.isEmpty) return null;
+    return ResizeImage.resizeIfNeeded(
+      memWidth,
+      memHeight,
+      CachedNetworkImageProvider(url),
+    );
+  }
+
+  static Size? _photoSize(PhotoAttachment photo) {
+    final width = photo.width ?? 0;
+    final height = photo.height ?? 0;
+    if (width <= 0 || height <= 0) return null;
+    return Size(width.toDouble(), height.toDouble());
+  }
+
+  void _openPhotoViewer(
+    BuildContext context,
+    int index, {
+    required BuildContext tileContext,
+    required BorderRadius radius,
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final photo = photos[index];
+    final hero = PhotoHeroController(
+      origin: () => photoHeroRectOf(tileContext),
+      image: _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
+      size: _photoSize(photo),
+      radius: radius,
+    );
     Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
+      PhotoHeroRoute<void>(
+        hero: hero,
         builder: (_) => PhotoViewerScreen(
           photos: photos,
           initialIndex: index,
           chatId: ctx.chatId,
           message: ctx.message,
           actions: ctx.photoActions,
+          hero: hero,
         ),
       ),
     );
