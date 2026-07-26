@@ -11,6 +11,8 @@ import '../../backend/modules/messages.dart';
 import '../screens/webapp/web_app_screen.dart';
 import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
+import '../../core/crypto/message_decryption_cache.dart';
+import 'decrypted_text.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
@@ -1237,7 +1239,18 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildTextContent(BubbleContext ctx) {
+  Widget _buildTextContent(BubbleContext ctx) => DecryptedContent(
+    accountId: message.accountId,
+    chatId: message.chatId,
+    messageId: message.id,
+    cipherText: message.text ?? '',
+    builder: (decryption) => _buildTextContentBody(ctx, decryption),
+  );
+
+  Widget _buildTextContentBody(
+    BubbleContext ctx,
+    MessageDecryption? decryption,
+  ) {
     final attachments = message.attachments;
     final isForwardedContact =
         attachments != null &&
@@ -1267,20 +1280,43 @@ class MessageBubble extends StatelessWidget {
           : null,
     );
     final ranges = message.formatRanges;
-    final baseTextWidget = isForwarded
-        ? _buildForwardedInlineText(ctx, forwarded)
-        : (FormattedMessageText.isFormatted(message.text, ranges)
-              ? FormattedMessageText(
-                  text: message.text!,
-                  ranges: ranges,
-                  style: textStyle,
-                )
-              : Text(message.text ?? '', style: textStyle));
+    final decryptedText = decryption?.plaintext;
+    final Widget baseTextWidget;
+    if (decryption?.state == MessageDecryptionState.wrongKey) {
+      baseTextWidget = Text(
+        'неверный ключ',
+        style: textStyle.copyWith(
+          color: ctx.cs.error,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    } else if (decryptedText != null) {
+      baseTextWidget = Text(decryptedText, style: textStyle);
+    } else if (isForwarded) {
+      baseTextWidget = _buildForwardedInlineText(ctx, forwarded);
+    } else if (FormattedMessageText.isFormatted(message.text, ranges)) {
+      baseTextWidget = FormattedMessageText(
+        text: message.text!,
+        ranges: ranges,
+        style: textStyle,
+      );
+    } else {
+      baseTextWidget = Text(message.text ?? '', style: textStyle);
+    }
     final textWidget = _wrapSelectable(baseTextWidget);
 
-    final metaWidget = Text(
-      message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
-      style: TextStyle(color: ctx.dim, fontSize: 10),
+    final metaWidget = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (decryption?.isDecrypted ?? false) ...[
+          Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
+          const SizedBox(width: 3),
+        ],
+        Text(
+          message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
+          style: TextStyle(color: ctx.dim, fontSize: 10),
+        ),
+      ],
     );
 
     if (hasReactions) {
@@ -1353,7 +1389,8 @@ class MessageBubble extends StatelessWidget {
     final name = reply.senderId == myId
         ? 'Вы'
         : (ContactCache.get(reply.senderId) ?? 'Сообщение');
-    final preview = reply.previewText();
+    final rawPreview = reply.previewText();
+    final quotedId = reply.messageId;
 
     final quote = Container(
       padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
@@ -1376,14 +1413,28 @@ class MessageBubble extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (preview.isNotEmpty)
-            Text(
-              preview,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: textColor.withValues(alpha: 0.85),
-                fontSize: 13,
+          if (rawPreview.isNotEmpty)
+            DecryptedContent(
+              accountId: message.accountId,
+              chatId: message.chatId,
+              messageId: quotedId ?? '',
+              cipherText: quotedId == null ? '' : rawPreview,
+              builder: (decryption) => Text(
+                decryption?.state == MessageDecryptionState.wrongKey
+                    ? 'неверный ключ'
+                    : (decryption?.plaintext ?? rawPreview),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: decryption?.state == MessageDecryptionState.wrongKey
+                      ? cs.error
+                      : textColor.withValues(alpha: 0.85),
+                  fontSize: 13,
+                  fontStyle:
+                      decryption?.state == MessageDecryptionState.wrongKey
+                      ? FontStyle.italic
+                      : null,
+                ),
               ),
             ),
         ],

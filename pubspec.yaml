@@ -40,6 +40,12 @@ dependencies:
   kolibri:
     path: third_party/kolibri/kolibri-dart
 
+  # Rust message-encryption core — Argon2id + ChaCha20-Poly1305, output encoded
+  # as lowercase Cyrillic base32. Separate from kolibri: that is vendored
+  # transport, this is Komet's own crypto.
+  komet_crypto:
+    path: native/komet_crypto
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   crypto: ^3.0.7
@@ -93,6 +99,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Needed by test/chat_crypto_roundtrip_test.dart to open the built
+  # komet_crypto shared library directly.
+  flutter_rust_bridge: 2.12.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

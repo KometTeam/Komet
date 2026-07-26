@@ -545,6 +545,14 @@
       }
     }
   },
+  "photoViewerCounterFile": "FILE of {total}",
+  "@photoViewerCounterFile": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "photoViewerSentToday": "{sender} • today at {time}",
   "@photoViewerSentToday": {
     "placeholders": {

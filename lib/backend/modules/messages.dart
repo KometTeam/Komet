@@ -1314,7 +1314,10 @@ class MessagesModule {
     );
   }
 
-  Future<bool> sendFileMessage(
+  /// Returns the server-assigned message id, or null on failure. The id is
+  /// required to later resolve a download URL — a message still carrying its
+  /// local temp id resolves to messageId 0 and the server rejects it.
+  Future<String?> sendFileMessage(
     int chatId,
     int fileId, {
     String? token,
@@ -1343,12 +1346,12 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    return _sendWithNotReadyRetry<bool>(
+    return _sendWithNotReadyRetry<String?>(
       payload: payload,
       maxAttempts: maxAttempts,
       retryDelay: retryDelay,
-      onResult: (response) => response.isOk,
-      onExhausted: false,
+      onResult: (response) => _sentMessageMap(response)?['id']?.toString(),
+      onExhausted: null,
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/frontend/widgets/encryption_lock_badge.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/online_dot.dart';
 
@@ -18,6 +19,7 @@ class ChatHeaderRow extends StatelessWidget {
   final String imageUrl;
   final String chatType;
   final bool isOfficial;
+  final bool encrypted;
   final int myId;
   final ValueListenable<String> headerStatus;
   final ValueListenable<int> scheduledCount;
@@ -42,6 +44,7 @@ class ChatHeaderRow extends StatelessWidget {
     required this.imageUrl,
     required this.chatType,
     required this.isOfficial,
+    this.encrypted = false,
     required this.myId,
     required this.headerStatus,
     required this.scheduledCount,
@@ -373,6 +376,7 @@ class ChatHeaderRow extends StatelessWidget {
     final otherId = chatId ^ myId;
     final showDot = chatType == 'DIALOG' && myId != 0 && otherId > 0;
     return Stack(
+      clipBehavior: Clip.none,
       children: [
         avatar,
         if (showDot)
@@ -384,6 +388,12 @@ class ChatHeaderRow extends StatelessWidget {
               borderColor: cs.surface,
               size: dotSize,
             ),
+          ),
+        if (encrypted)
+          Positioned(
+            left: -2,
+            bottom: -2,
+            child: EncryptionLockBadge(size: dotSize + 4),
           ),
       ],
     );

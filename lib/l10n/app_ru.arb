@@ -441,6 +441,7 @@
   "sharedGoToMessage": "Перейти к сообщению",
   "sharedDownload": "Скачать",
   "photoViewerCounter": "Фото {index} из {total}",
+  "photoViewerCounterFile": "ФАЙЛ из {total}",
   "photoViewerSentToday": "{sender} • сегодня в {time}",
   "photoViewerSentOn": "{sender} • {date} в {time}",
   "photoViewerSaveAs": "Сохранить как…",

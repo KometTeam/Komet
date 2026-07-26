@@ -1345,6 +1345,11 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String photoViewerCounterFile(int total) {
+    return 'ФАЙЛ из $total';
+  }
+
+  @override
   String photoViewerSentToday(String sender, String time) {
     return '$sender • сегодня в $time';
   }

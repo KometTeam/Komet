@@ -922,8 +922,8 @@ class _FileRow extends StatelessWidget {
         fileId: fileId,
       ),
       onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
+      onReady: () => MediaDownloadProgress.set(cacheName, null),
     );
-    MediaDownloadProgress.set(cacheName, null);
 
     if (!context.mounted) return;
     if (!result.ok) {

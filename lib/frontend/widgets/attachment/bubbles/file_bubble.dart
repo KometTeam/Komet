@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -8,8 +10,11 @@ import '../../../../core/utils/file_download.dart';
 import '../../../../core/utils/media_cache.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
+import '../../../../core/crypto/chat_crypto_service.dart';
+import '../../../../core/crypto/encrypted_photo.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
+import '../../photo_viewer.dart';
 import 'bubble_context.dart';
 
 class FileBubble extends StatelessWidget {
@@ -167,7 +172,86 @@ class FileBubble extends StatelessWidget {
         ],
       ),
     );
-    return fill ? inner : IntrinsicWidth(child: inner);
+    final body = fill ? inner : IntrinsicWidth(child: inner);
+    if (!_isViewableImage(name)) return body;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openInViewer(ctx.context, name, cacheName),
+      child: body,
+    );
+  }
+
+  static bool _isViewableImage(String name) =>
+      name.toLowerCase().endsWith('.png');
+
+  Future<void> _openInViewer(
+    BuildContext context,
+    String name,
+    String cacheName,
+  ) async {
+    final fileId = file.fileId;
+    if (fileId == null) return;
+    Haptics.tap();
+
+    final wasCached = (await MediaCache.existing(cacheName)) != null;
+    if (!wasCached) MediaDownloadProgress.set(cacheName, 0);
+    File? local;
+    try {
+      final url = await messagesModule.getFileUrl(
+        messageId: ctx.message.id,
+        chatId: ctx.message.chatId,
+        fileId: fileId,
+      );
+      if (url != null && url.isNotEmpty) {
+        local = await MediaCache.getOrDownload(
+          cacheName,
+          url,
+          onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
+        );
+      }
+    } finally {
+      if (!wasCached) MediaDownloadProgress.set(cacheName, null);
+    }
+
+    if (!context.mounted) return;
+    if (local == null) {
+      showCustomNotification(context, 'Не удалось загрузить файл');
+      return;
+    }
+
+    final shown = await _decryptIfNeeded(local, cacheName);
+    if (!context.mounted) return;
+    if (shown == null) {
+      showCustomNotification(context, 'Неверный ключ');
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PhotoViewerScreen(
+          photos: [PhotoAttachment(localPath: shown.path)],
+          chatId: ctx.message.chatId,
+          message: ctx.message,
+          isFile: true,
+        ),
+      ),
+    );
+  }
+
+  Future<File?> _decryptIfNeeded(File local, String cacheName) async {
+    final accountId = ctx.message.accountId;
+    final chatId = ctx.message.chatId;
+    if (!ChatCryptoService.instance.isEnabled(accountId, chatId)) return local;
+    if (!await ChatCryptoService.instance.looksEncryptedImage(local.path)) {
+      return local;
+    }
+    final result = await openEncryptedPhoto(
+      accountId: accountId,
+      chatId: chatId,
+      encrypted: local,
+      cacheName: cacheName,
+    );
+    return result.file;
   }
 
   Future<void> _downloadFile(
@@ -194,8 +278,10 @@ class FileBubble extends StatelessWidget {
         fileId: fileId,
       ),
       onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
+      onReady: () {
+        if (!cached) MediaDownloadProgress.set(cacheName, null);
+      },
     );
-    if (!cached) MediaDownloadProgress.set(cacheName, null);
     if (!context.mounted) return;
     if (!result.ok) {
       showCustomNotification(

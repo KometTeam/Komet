@@ -12,6 +12,9 @@ import 'create_channel_flow.dart';
 import 'create_group_flow.dart';
 import '../contacts/add_contact_sheet.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../../core/crypto/message_decryption_cache.dart';
+import '../../widgets/decrypted_text.dart';
+import '../../widgets/encryption_lock_badge.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
@@ -52,6 +55,7 @@ import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
+import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../main.dart'
@@ -579,6 +583,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     });
     chats.chatsChanged.addListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
+    ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
@@ -622,6 +627,10 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   void _onArchivedChanged() {
     if (mounted) _requestReload();
+  }
+
+  void _onEncryptionChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onStoriesEnabledChanged() {
@@ -1225,6 +1234,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _settleTimer?.cancel();
     chats.chatsChanged.removeListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
+    ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
@@ -1645,6 +1655,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                         messageRanges: isPlaceholder
                             ? const []
                             : chat.lastMsgFormatRanges,
+                        previewMessageId: isPlaceholder ? null : chat.lastMsgId,
+                        previewCipherText: isPlaceholder
+                            ? null
+                            : chat.lastMsgTextOneLine,
                       ),
                     );
                   } else {
@@ -1654,6 +1668,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         : null;
 
                     String fullMsg = "";
+                    String senderPrefix = "";
                     List<FormatRange> messageRanges = const [];
                     if (isPlaceholder) {
                       fullMsg = 'зайдите в чат для подгрузки';
@@ -1661,6 +1676,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       var prefixLen = 0;
                       if (sender?.isNotEmpty == true && chat.id != 0) {
                         final prefix = "$sender: ";
+                        senderPrefix = prefix;
                         fullMsg += prefix;
                         prefixLen = prefix.length;
                       }
@@ -1702,6 +1718,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ownStatus: _ownStatusFor(chat, isPlaceholder),
                         ownRead: chat.lastMsgReadByOthers,
                         messageRanges: messageRanges,
+                        previewMessageId: isPlaceholder ? null : chat.lastMsgId,
+                        previewPrefix: senderPrefix,
+                        previewCipherText: isPlaceholder
+                            ? null
+                            : chat.lastMsgText,
                       ),
                     );
                   }
@@ -2550,19 +2571,55 @@ class _ChatListScreenState extends State<ChatListScreen>
     String? ownStatus,
     bool ownRead = false,
     List<FormatRange> messageRanges = const [],
+    int? previewMessageId,
+    String previewPrefix = '',
+    String? previewCipherText,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
+    final isEncrypted = ChatEncryptionStore.instance.isEnabled(
+      _profile?.id ?? 0,
+      int.tryParse(id) ?? 0,
+    );
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
-    final Widget messageLine = _buildPreviewLine(
-      cs,
-      message,
-      messageRanges,
-      draft,
-      messageItalic,
-    );
+    final canDecryptPreview =
+        isEncrypted &&
+        draft == null &&
+        previewMessageId != null &&
+        (previewCipherText?.isNotEmpty ?? false);
+    final Widget messageLine = canDecryptPreview
+        ? DecryptedContent(
+            accountId: _profile?.id ?? 0,
+            chatId: int.tryParse(id) ?? 0,
+            messageId: previewMessageId.toString(),
+            cipherText: previewCipherText!,
+            builder: (decryption) => switch (decryption?.state) {
+              null => _buildPreviewLine(
+                cs,
+                message,
+                messageRanges,
+                draft,
+                messageItalic,
+              ),
+              MessageDecryptionState.wrongKey => _buildPreviewLine(
+                cs,
+                '$previewPrefix' 'неверный ключ',
+                const [],
+                draft,
+                true,
+              ),
+              MessageDecryptionState.decrypted => _buildPreviewLine(
+                cs,
+                '$previewPrefix${decryption!.plaintext}',
+                const [],
+                draft,
+                messageItalic,
+              ),
+            },
+          )
+        : _buildPreviewLine(cs, message, messageRanges, draft, messageItalic);
 
     final Widget avatarCircle = CircleAvatar(
       radius: 24,
@@ -2645,8 +2702,15 @@ class _ChatListScreenState extends State<ChatListScreen>
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     avatarCircle,
+                    if (isEncrypted)
+                      const Positioned(
+                        left: -2,
+                        bottom: -2,
+                        child: EncryptionLockBadge(size: 18),
+                      ),
                     if (isSelected)
                       Positioned(
                         right: -2,

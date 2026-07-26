@@ -288,8 +288,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _SendByIdSheet(
         onSend: (id) async {
-          final ok = await messagesModule.sendFileMessage(chatId, id);
-          if (!ok) return false;
+          final sentId = await messagesModule.sendFileMessage(chatId, id);
+          if (sentId == null) return false;
           final newest = await CloudStorageModule.fetchLatestFile(
             messagesModule,
             accountId,

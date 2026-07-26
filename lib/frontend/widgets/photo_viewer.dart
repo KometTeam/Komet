@@ -80,6 +80,10 @@ class PhotoViewerScreen extends StatefulWidget {
   final CachedMessage? message;
   final PhotoViewerActions? actions;
 
+  /// The opened item is a file attachment rendered as an image, so the counter
+  /// reads "FILE of N" — it has no position within the chat's photo feed.
+  final bool isFile;
+
   const PhotoViewerScreen({
     super.key,
     required this.photos,
@@ -87,6 +91,7 @@ class PhotoViewerScreen extends StatefulWidget {
     this.chatId,
     this.message,
     this.actions,
+    this.isFile = false,
   });
 
   PhotoViewerScreen.single(String baseUrl, {super.key})
@@ -94,7 +99,8 @@ class PhotoViewerScreen extends StatefulWidget {
       initialIndex = 0,
       chatId = null,
       message = null,
-      actions = null;
+      actions = null,
+      isFile = false;
 
   @override
   State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
@@ -632,7 +638,9 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       children: [
         if (_feedLoaded)
           Text(
-            l10n.photoViewerCounter(_total - _index, _total),
+            widget.isFile
+                ? l10n.photoViewerCounterFile(_total)
+                : l10n.photoViewerCounter(_total - _index, _total),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,

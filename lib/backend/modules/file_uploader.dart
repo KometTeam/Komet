@@ -26,12 +26,18 @@ class UploadDone extends UploadEvent {
   final String? url;
   final String filename;
   final int size;
+
+  /// Server-assigned message id. Without it the optimistic message keeps its
+  /// local temp id and download URLs cannot be resolved until a restart.
+  final String? messageId;
+
   const UploadDone({
     required this.fileId,
     required this.filename,
     required this.size,
     this.token,
     this.url,
+    this.messageId,
   });
 }
 
@@ -139,14 +145,14 @@ class FileUploader {
           return;
         }
 
-        final ok = await messages.sendFileMessage(
+        final messageId = await messages.sendFileMessage(
           chatId,
           info.fileId,
           token: info.token,
           scheduledTime: scheduledTime,
         );
         if (cancelled) return;
-        if (!ok) {
+        if (messageId == null) {
           ctrl.add(const UploadError('send_failed'));
           return;
         }
@@ -158,6 +164,7 @@ class FileUploader {
             url: info.url,
             filename: filename,
             size: totalSize,
+            messageId: messageId,
           ),
         );
       } catch (e) {

@@ -40,6 +40,10 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
+import '../../../core/crypto/chat_crypto_service.dart';
+import '../../../core/crypto/encrypted_photo.dart';
+import '../../../core/crypto/message_decryption_cache.dart';
+import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
@@ -103,6 +107,7 @@ import '../../widgets/chat_wallpaper_view.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/liquid_glass.dart';
 import 'scheduled_messages_screen.dart';
+import 'chat_encryption_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 
 class _DateSeparatorItem {
@@ -263,6 +268,7 @@ class _ChatScreenState extends State<ChatScreen>
   final GlobalKey _listKey = GlobalKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
+  bool _encryptionEnabled = false;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
   late final StickerPanelController _stickers;
   final ValueNotifier<UploadStatus> _uploadStatus = ValueNotifier(
@@ -750,6 +756,7 @@ class _ChatScreenState extends State<ChatScreen>
     _restoreDraft();
     unawaited(_loadPeerKind());
     unawaited(_loadWallpaper());
+    unawaited(_loadEncryption());
     unawaited(_refreshBadge());
 
     try {
@@ -1870,6 +1877,9 @@ class _ChatScreenState extends State<ChatScreen>
         _applyEffectiveWallpaper,
       );
     }
+    if (_encryptionListening) {
+      ChatEncryptionStore.instance.revision.removeListener(_applyEncryption);
+    }
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
     _chatController.dispose();
@@ -2960,6 +2970,7 @@ class _ChatScreenState extends State<ChatScreen>
                             imageUrl: widget.imageUrl,
                             chatType: widget.chatType,
                             isOfficial: chat?.isOfficial ?? false,
+                            encrypted: _encryptionEnabled,
                             myId: _myId,
                             headerStatus: _headerStatusNotifier,
                             scheduledCount: _scheduledCount,
@@ -3050,6 +3061,11 @@ class _ChatScreenState extends State<ChatScreen>
           onTap: _clearHistory,
         ),
         ChatMenuItem(
+          icon: _encryptionEnabled ? Symbols.lock : Symbols.lock_open,
+          label: 'Шифрование сообщений',
+          onTap: _openEncryptionSettings,
+        ),
+        ChatMenuItem(
           icon: Symbols.delete,
           label: 'Удалить чат',
           onTap: _deleteChat,
@@ -3111,6 +3127,43 @@ class _ChatScreenState extends State<ChatScreen>
       context,
       muted ? 'Уведомления включены' : 'Уведомления отключены',
     );
+  }
+
+  bool _encryptionListening = false;
+
+  Future<void> _loadEncryption() async {
+    await ChatEncryptionStore.instance.load();
+    if (!mounted) return;
+    if (!_encryptionListening) {
+      _encryptionListening = true;
+      ChatEncryptionStore.instance.revision.addListener(_applyEncryption);
+    }
+    _applyEncryption();
+  }
+
+  void _applyEncryption() {
+    if (!mounted) return;
+    final enabled = ChatEncryptionStore.instance.isEnabled(
+      _myId,
+      widget.chatId,
+    );
+    if (enabled != _encryptionEnabled) {
+      setState(() => _encryptionEnabled = enabled);
+    }
+    if (enabled && _myId != 0) {
+      unawaited(ChatCryptoService.instance.warmKey(_myId, widget.chatId));
+    }
+  }
+
+  Future<void> _openEncryptionSettings() async {
+    if (_myId == 0) return;
+    await pushSwipeable(
+      context,
+      (context) =>
+          ChatEncryptionScreen(accountId: _myId, chatId: widget.chatId),
+    );
+    if (!mounted) return;
+    _applyEncryption();
   }
 
   bool _wallpaperListening = false;
@@ -3482,6 +3535,36 @@ class _ChatScreenState extends State<ChatScreen>
     return result;
   }
 
+  Future<String?> _encryptOutgoing(String text) async {
+    if (!_encryptionEnabled || _myId == 0) return text;
+    final result = await ChatCryptoService.instance.encrypt(
+      _myId,
+      widget.chatId,
+      text,
+    );
+    if (result.isOk) {
+      if (result.text!.length > kMaxEncryptedMessageLength) {
+        if (mounted) {
+          showCustomNotification(
+            context,
+            'Слишком длинное сообщение. Разделите на несколько',
+          );
+        }
+        return null;
+      }
+      return result.text;
+    }
+    if (mounted) {
+      showCustomNotification(
+        context,
+        result.failure == CryptoFailure.noKey
+            ? 'Не задан ключ шифрования'
+            : 'Не удалось зашифровать сообщение',
+      );
+    }
+    return null;
+  }
+
   Future<void> _sendMessage() async {
     final content = _messageController.buildContent();
     final rawText = content.text;
@@ -3504,6 +3587,10 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
     }
+
+    final wireText = await _encryptOutgoing(text);
+    if (wireText == null || !mounted) return;
+    final encrypted = wireText != text;
 
     final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -3531,7 +3618,9 @@ class _ChatScreenState extends State<ChatScreen>
     _replyTo.value = null;
     _replySourceChatId = null;
 
-    final elements = _trimmedElements(content.elements, rawText, text);
+    final elements = encrypted
+        ? const <Map<String, dynamic>>[]
+        : _trimmedElements(content.elements, rawText, text);
     final Map<String, dynamic>? composedPayload =
         (replyPayload == null && elements.isEmpty)
         ? null
@@ -3542,11 +3631,12 @@ class _ChatScreenState extends State<ChatScreen>
       accountId: _myId,
       chatId: widget.chatId,
       senderId: _myId,
-      text: text,
+      text: wireText,
       time: now,
       status: online ? 'sending' : 'pending',
       payload: composedPayload,
     );
+    if (encrypted) MessageDecryptionCache.instance.seed(tempId, text);
 
     _hasText.value = false;
     _lastSentId = tempId;
@@ -3565,7 +3655,7 @@ class _ChatScreenState extends State<ChatScreen>
           widget.chatId,
           messageId: tempId,
           time: now,
-          text: text,
+          text: wireText,
           status: composed.status ?? 'sending',
           elements: elements,
         ),
@@ -3587,14 +3677,14 @@ class _ChatScreenState extends State<ChatScreen>
               _myId,
               widget.chatId,
               widget.commentPostId!,
-              text,
+              wireText,
               replyToMessageId: replyId,
               elements: elements,
             )
           : await messagesModule.sendMessage(
               _myId,
               widget.chatId,
-              text,
+              wireText,
               replyToMessageId: replyId,
               replySourceChatId: replySourceChatId,
               elements: elements,
@@ -3607,11 +3697,14 @@ class _ChatScreenState extends State<ChatScreen>
           accountId: _myId,
           chatId: widget.chatId,
           senderId: _myId,
-          text: text,
+          text: wireText,
           time: now,
           status: 'sent',
           payload: composedPayload,
         );
+        if (encrypted) {
+          MessageDecryptionCache.instance.adopt(tempId, sent.id);
+        }
         _messages[index] = sent;
         _bumpMessages();
         if (!_commentsMode) {
@@ -3622,7 +3715,7 @@ class _ChatScreenState extends State<ChatScreen>
               widget.chatId,
               messageId: sent.id,
               time: now,
-              text: text,
+              text: wireText,
               status: 'sent',
               elements: elements,
             ),
@@ -5591,13 +5684,14 @@ class _ChatScreenState extends State<ChatScreen>
     String tempId,
     String status, {
     FileAttachment? attachment,
+    String? realId,
   }) {
     if (!mounted) return;
     final idx = _messages.indexWhere((m) => m.id == tempId);
     if (idx == -1) return;
     final old = _messages[idx];
     _messages[idx] = CachedMessage(
-      id: tempId,
+      id: realId != null && realId.isNotEmpty ? realId : tempId,
       accountId: old.accountId,
       chatId: old.chatId,
       senderId: old.senderId,
@@ -5621,12 +5715,16 @@ class _ChatScreenState extends State<ChatScreen>
     );
     _showAttachmentPanel.value = false;
     try {
-      final ok = await messagesModule.sendFileMessage(
+      final realId = await messagesModule.sendFileMessage(
         widget.chatId,
         entry.fileId,
         token: entry.token,
       );
-      _updateFileMessageStatus(tempId, ok ? 'sent' : 'error');
+      _updateFileMessageStatus(
+        tempId,
+        realId != null ? 'sent' : 'error',
+        realId: realId,
+      );
     } catch (_) {
       _updateFileMessageStatus(tempId, 'error');
     }
@@ -5635,13 +5733,14 @@ class _ChatScreenState extends State<ChatScreen>
   Future<bool> _sendFileById(int fileId) async {
     final tempId = _addOptimisticFileMessage(FileAttachment(fileId: fileId));
     try {
-      final ok = await messagesModule.sendFileMessage(widget.chatId, fileId);
+      final realId = await messagesModule.sendFileMessage(widget.chatId, fileId);
+      final ok = realId != null;
       if (!mounted) return ok;
       if (ok) {
         FileHistoryCache.add(
           FileHistoryEntry(fileId: fileId, sentAt: DateTime.now()),
         );
-        _updateFileMessageStatus(tempId, 'sent');
+        _updateFileMessageStatus(tempId, 'sent', realId: realId);
         _showAttachmentPanel.value = false;
       } else {
         _updateFileMessageStatus(tempId, 'error');
@@ -5675,11 +5774,17 @@ class _ChatScreenState extends State<ChatScreen>
           ? _sendPhotos
           : (picked, caption) =>
                 _sendScheduledPhotos(picked, caption, scheduledTime),
-      onPickFile: scheduledTime == null
-          ? _pickAndUploadFile
-          : () => _pickAndUploadFile(scheduledTime: scheduledTime),
-      onShareLocation: _shareLocation,
-      onCreatePoll: _createPoll,
+      onPickFile: _encryptionEnabled
+          ? () => _refuseUnencrypted('Файлы')
+          : (scheduledTime == null
+                ? _pickAndUploadFile
+                : () => _pickAndUploadFile(scheduledTime: scheduledTime)),
+      onShareLocation: _encryptionEnabled
+          ? () => _refuseUnencrypted('Геолокацию')
+          : _shareLocation,
+      onCreatePoll: _encryptionEnabled
+          ? () => _refuseUnencrypted('Опросы')
+          : _createPoll,
     );
     if (!mounted || !hadKeyboard) return;
     _messageFocusNode.requestFocus();
@@ -5689,6 +5794,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _sendPhotos(List<PickedPhoto> picked, String caption) async {
     if (_myId == 0) return;
+    if (_encryptionEnabled) return _sendEncryptedPhotos(picked, caption);
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
     if (photos.isEmpty && videos.isEmpty) return;
@@ -6208,11 +6314,88 @@ class _ChatScreenState extends State<ChatScreen>
     _photoUploadProgress.remove(tempId)?.dispose();
   }
 
+  void _refuseUnencrypted(String what) {
+    if (!mounted) return;
+    _showAttachmentPanel.value = false;
+    showCustomNotification(context, '$what пока нельзя зашифровать');
+  }
+
+  Future<void> _sendEncryptedPhotos(
+    List<PickedPhoto> picked,
+    String caption,
+  ) async {
+    final photos = picked.where((ph) => !ph.item.isVideo).toList();
+    if (photos.length != picked.length && mounted) {
+      showCustomNotification(context, 'Видео пока нельзя зашифровать');
+    }
+    if (photos.isEmpty) return;
+
+    for (final photo in photos) {
+      final source =
+          photo.editedFile ??
+          photo.item.localFile ??
+          await photo.item.originFile();
+      if (source == null || !mounted) continue;
+
+      _showAttachmentPanel.value = false;
+      _uploadStatus.value = const UploadStatus(active: true);
+      final stamp = DateTime.now().microsecondsSinceEpoch.toString();
+      final prepared = await prepareEncryptedPhoto(
+        accountId: _myId,
+        chatId: widget.chatId,
+        source: source,
+        stamp: stamp,
+      );
+      if (!mounted) return;
+      if (!prepared.isOk) {
+        _uploadStatus.value = const UploadStatus();
+        showCustomNotification(
+          context,
+          prepared.failure == CryptoFailure.noKey
+              ? 'Не задан ключ шифрования'
+              : 'Не удалось зашифровать фото',
+        );
+        return;
+      }
+
+      final encrypted = prepared.file!;
+      await _uploadAsFile(
+        source: encrypted,
+        filename: 'photo_$stamp$kEncryptedPhotoExtension',
+        size: await encrypted.length(),
+      );
+      if (!mounted) return;
+    }
+
+    if (caption.isNotEmpty) {
+      final wire = await _encryptOutgoing(caption);
+      if (wire != null && mounted) {
+        await messagesModule.sendMessage(_myId, widget.chatId, wire);
+      }
+    }
+  }
+
   Future<void> _pickAndUploadFile({int? scheduledTime}) async {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.path == null) return;
+    final picked = result.files.first;
+    if (picked.path == null) return;
+    await _uploadAsFile(
+      source: File(picked.path!),
+      filename: picked.name,
+      size: picked.size,
+      scheduledTime: scheduledTime,
+    );
+  }
+
+  Future<void> _uploadAsFile({
+    required File source,
+    required String filename,
+    required int size,
+    int? scheduledTime,
+  }) async {
+    final file = (name: filename, size: size);
+    final done = Completer<void>();
 
     _showAttachmentPanel.value = false;
     _uploadStatus.value = UploadStatus(active: true, total: file.size);
@@ -6237,7 +6420,7 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadSub = fileUploader
         .upload(
           chatId: widget.chatId,
-          file: File(file.path!),
+          file: source,
           filename: file.name,
           totalSize: file.size,
           scheduledTime: scheduledTime,
@@ -6269,7 +6452,12 @@ class _ChatScreenState extends State<ChatScreen>
                     speedBps: notifSpeedBps,
                   );
                 }
-              case UploadDone(:final fileId, :final token, :final url):
+              case UploadDone(
+                :final fileId,
+                :final token,
+                :final url,
+                :final messageId,
+              ):
                 stopNotif();
                 FileHistoryCache.add(
                   FileHistoryEntry(
@@ -6292,6 +6480,7 @@ class _ChatScreenState extends State<ChatScreen>
                   _updateFileMessageStatus(
                     tempId!,
                     'sent',
+                    realId: messageId,
                     attachment: FileAttachment(
                       fileId: fileId,
                       fileToken: token,
@@ -6326,6 +6515,7 @@ class _ChatScreenState extends State<ChatScreen>
             }
             _uploadStatus.value = const UploadStatus();
             _uploadSub = null;
+            if (!done.isCompleted) done.complete();
           },
           onError: (Object e) {
             if (!mounted) return;
@@ -6334,8 +6524,10 @@ class _ChatScreenState extends State<ChatScreen>
             if (tempId != null) _updateFileMessageStatus(tempId, 'error');
             _uploadStatus.value = const UploadStatus();
             _uploadSub = null;
+            if (!done.isCompleted) done.complete();
           },
         );
+    return done.future;
   }
 }
 

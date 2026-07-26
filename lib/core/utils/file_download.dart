@@ -15,17 +15,29 @@ class FileDownloadResult {
 /// [cacheName] — стабильное имя в кэше (например, `<fileId>_имя.ext`).
 /// [resolveUrl] вызывается лениво — только если файла ещё нет в кэше,
 /// чтобы не дёргать сервер за временной ссылкой повторно.
+/// [onReady] вызывается как только файл лежит на диске — до открытия во
+/// внешнем приложении, которое может не возвращать управление, пока его не
+/// закроют. Без этого индикатор загрузки висел бы всё это время.
 Future<FileDownloadResult> openCachedFile(
   String cacheName,
   Future<String?> Function() resolveUrl, {
   void Function(double progress)? onProgress,
+  void Function()? onReady,
 }) async {
+  var readyFired = false;
+  void ready() {
+    if (readyFired) return;
+    readyFired = true;
+    onReady?.call();
+  }
+
   try {
     var file = await MediaCache.existing(cacheName);
 
     if (file == null) {
       final url = await resolveUrl();
       if (url == null || url.isEmpty) {
+        ready();
         return const FileDownloadResult(ok: false, error: 'нет ссылки');
       }
       file = await MediaCache.getOrDownload(
@@ -34,10 +46,12 @@ Future<FileDownloadResult> openCachedFile(
         onProgress: onProgress,
       );
       if (file == null) {
+        ready();
         return const FileDownloadResult(ok: false, error: 'ошибка загрузки');
       }
     }
 
+    ready();
     final opened = await OpenFilex.open(file.path);
     return FileDownloadResult(
       ok: opened.type == ResultType.done,
@@ -45,6 +59,7 @@ Future<FileDownloadResult> openCachedFile(
       error: opened.type == ResultType.done ? null : opened.message,
     );
   } catch (e) {
+    ready();
     return FileDownloadResult(ok: false, error: e.toString());
   }
 }

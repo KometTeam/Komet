@@ -2606,6 +2606,12 @@ abstract class AppLocalizations {
   /// **'Photo {index} of {total}'**
   String photoViewerCounter(int index, int total);
 
+  /// No description provided for @photoViewerCounterFile.
+  ///
+  /// In en, this message translates to:
+  /// **'FILE of {total}'**
+  String photoViewerCounterFile(int total);
+
   /// No description provided for @photoViewerSentToday.
   ///
   /// In en, this message translates to:
