@@ -1957,6 +1957,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachSheetSectionInProgress => 'Section under development';
 
   @override
+  String get attachSheetContact => 'Contact';
+
+  @override
+  String get attachSheetContactSearchHint => 'Search contacts';
+
+  @override
+  String get attachSheetNoContacts => 'You have no contacts yet';
+
+  @override
+  String get attachSheetNoContactsFound => 'No contacts found';
+
+  @override
   String get attachSheetNoGalleryAccessTitle => 'No access to the gallery';
 
   @override

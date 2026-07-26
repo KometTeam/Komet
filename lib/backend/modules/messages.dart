@@ -1613,6 +1613,26 @@ class MessagesModule {
     return _sentMessageMap(response);
   }
 
+  Future<Map<String, dynamic>?> sendContactMessage(
+    int chatId,
+    int contactId, {
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {'_type': 'CONTACT', 'contactId': contactId},
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    return _sentMessageMap(response);
+  }
+
   static const int _pollAnonymousFlag = 4;
   static const int _pollMultipleFlag = 1;
 

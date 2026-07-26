@@ -5785,6 +5785,9 @@ class _ChatScreenState extends State<ChatScreen>
       onCreatePoll: _encryptionEnabled
           ? () => _refuseUnencrypted('Опросы')
           : _createPoll,
+      onSendContact: _encryptionEnabled
+          ? (_) => _refuseUnencrypted('Контакты')
+          : _sendContact,
     );
     if (!mounted || !hadKeyboard) return;
     _messageFocusNode.requestFocus();
@@ -6188,6 +6191,22 @@ class _ChatScreenState extends State<ChatScreen>
         showCustomNotification(context, 'Не удалось получить геопозицию');
       return null;
     }
+  }
+
+  Future<void> _sendContact(CachedContact contact) async {
+    final last = contact.lastName;
+    final fullName = (last != null && last.isNotEmpty)
+        ? '${contact.firstName} $last'
+        : contact.firstName;
+    await _sendAttachMessage([
+      ContactAttachment(
+        contactId: contact.id,
+        firstName: contact.firstName,
+        lastName: last,
+        name: fullName,
+        photoUrl: contact.baseUrl,
+      ),
+    ], () => messagesModule.sendContactMessage(widget.chatId, contact.id));
   }
 
   Future<void> _createPoll() async {

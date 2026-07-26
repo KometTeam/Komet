@@ -1971,6 +1971,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get attachSheetSectionInProgress => 'Раздел в разработке';
 
   @override
+  String get attachSheetContact => 'Контакт';
+
+  @override
+  String get attachSheetContactSearchHint => 'Поиск по контактам';
+
+  @override
+  String get attachSheetNoContacts => 'У вас пока нет контактов';
+
+  @override
+  String get attachSheetNoContactsFound => 'Контакты не найдены';
+
+  @override
   String get attachSheetNoGalleryAccessTitle => 'Нет доступа к галерее';
 
   @override

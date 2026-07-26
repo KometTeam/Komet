@@ -3764,6 +3764,30 @@ abstract class AppLocalizations {
   /// **'Section under development'**
   String get attachSheetSectionInProgress;
 
+  /// No description provided for @attachSheetContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get attachSheetContact;
+
+  /// No description provided for @attachSheetContactSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search contacts'**
+  String get attachSheetContactSearchHint;
+
+  /// No description provided for @attachSheetNoContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no contacts yet'**
+  String get attachSheetNoContacts;
+
+  /// No description provided for @attachSheetNoContactsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts found'**
+  String get attachSheetNoContactsFound;
+
   /// No description provided for @attachSheetNoGalleryAccessTitle.
   ///
   /// In en, this message translates to:

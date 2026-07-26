@@ -4,11 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_nav_pill_style.dart';
 import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
+import 'package:komet/frontend/widgets/attachment/contact_picker_page.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
@@ -25,7 +27,7 @@ List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
   PillNavItem(icon: Symbols.description, label: l10n.scheduledAttachFile),
   PillNavItem(icon: Symbols.location_on, label: l10n.scheduledAttachLocation),
   PillNavItem(icon: Symbols.bar_chart, label: l10n.attachSheetPoll),
-  PillNavItem(icon: Symbols.person, label: l10n.nfcPeerFirstNameFallback),
+  PillNavItem(icon: Symbols.person, label: l10n.attachSheetContact),
 ];
 
 Future<void> showAttachmentSheet(
@@ -35,6 +37,7 @@ Future<void> showAttachmentSheet(
   VoidCallback? onPickFile,
   VoidCallback? onShareLocation,
   VoidCallback? onCreatePoll,
+  ValueChanged<CachedContact>? onSendContact,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -48,6 +51,7 @@ Future<void> showAttachmentSheet(
       onPickFile: onPickFile,
       onShareLocation: onShareLocation,
       onCreatePoll: onCreatePoll,
+      onSendContact: onSendContact,
     ),
   );
 }
@@ -58,6 +62,7 @@ class AttachmentSheet extends StatefulWidget {
   final VoidCallback? onPickFile;
   final VoidCallback? onShareLocation;
   final VoidCallback? onCreatePoll;
+  final ValueChanged<CachedContact>? onSendContact;
 
   const AttachmentSheet({
     super.key,
@@ -66,6 +71,7 @@ class AttachmentSheet extends StatefulWidget {
     this.onPickFile,
     this.onShareLocation,
     this.onCreatePoll,
+    this.onSendContact,
   });
 
   @override
@@ -327,8 +333,17 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           buttonLabel: l10n.attachSheetCreatePoll,
           onTap: widget.onCreatePoll,
         ),
-        _buildPlaceholderPage(cs, bottomReserve),
+        _buildContactPage(cs, bottomReserve),
       ],
+    );
+  }
+
+  Widget _buildContactPage(ColorScheme cs, double bottomReserve) {
+    final onSendContact = widget.onSendContact;
+    if (onSendContact == null) return _buildPlaceholderPage(cs, bottomReserve);
+    return ContactPickerPage(
+      bottomReserve: bottomReserve,
+      onPick: onSendContact,
     );
   }
 

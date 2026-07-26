@@ -35,8 +35,7 @@ dependencies:
   intl: any
 
   # Rust networking core (kolibri) — FFI plugin, replaces the Dart transport.
-  # DEV: local path for fast iteration; re-pin to third_party/kolibri submodule
-  # (path: third_party/kolibri/kolibri-dart) before merge.
+  # Pinned to the third_party/kolibri submodule.
   kolibri:
     path: third_party/kolibri/kolibri-dart
 
