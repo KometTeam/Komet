@@ -35,6 +35,56 @@ CachedMessage _message({
       : null,
 );
 
+Future<void> _pumpColumn(
+  WidgetTester tester,
+  List<CachedMessage> messages, {
+  required String chatType,
+  double textScale = 1,
+}) async {
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 2.5;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      locale: const Locale('ru'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < messages.length; i++)
+                MessageBubble(
+                  key: ValueKey('bubble$i'),
+                  message: messages[i],
+                  prevMessage: i > 0 ? messages[i - 1] : null,
+                  nextMessage: i < messages.length - 1 ? messages[i + 1] : null,
+                  isMe: false,
+                  myId: _me,
+                  chatType: chatType,
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
+Rect _bubbleRect(WidgetTester tester, int index, String text) {
+  final label = find.descendant(
+    of: find.byKey(ValueKey('bubble$index')),
+    matching: find.text(text),
+  );
+  final box = find.ancestor(of: label, matching: find.byType(Container)).first;
+  return tester.getTopLeft(box) & tester.getSize(box);
+}
+
 Future<void> _pumpBubble(WidgetTester tester, CachedMessage message) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.5;
@@ -101,6 +151,36 @@ void main() {
     expect(quote.right, greaterThan(label.right));
     expect(quote.right, closeTo(header.right, 1));
     expect(clock.right, closeTo(header.right, 1));
+  });
+
+  testWidgets('grouped bubbles keep the same gap with and without avatars', (
+    tester,
+  ) async {
+    final stream = [
+      for (var i = 0; i < 4; i++)
+        CachedMessage(
+          id: '$i',
+          accountId: _me,
+          chatId: 2,
+          senderId: 404,
+          text: 'm$i',
+          time: DateTime(2026, 1, 1, 12, 54).millisecondsSinceEpoch + i * 1000,
+          status: 'sent',
+        ),
+    ];
+
+    double gapAt(WidgetTester tester, int index) =>
+        _bubbleRect(tester, index + 1, 'm${index + 1}').top -
+        _bubbleRect(tester, index, 'm$index').bottom;
+
+    await _pumpColumn(tester, stream, chatType: 'DIALOG', textScale: 0.35);
+    final dialogGaps = [for (var i = 0; i < 3; i++) gapAt(tester, i)];
+
+    await _pumpColumn(tester, stream, chatType: 'CHAT', textScale: 0.35);
+    final groupGaps = [for (var i = 0; i < 3; i++) gapAt(tester, i)];
+
+    expect(dialogGaps, everyElement(2.0));
+    expect(groupGaps, dialogGaps);
   });
 
   testWidgets('a bubble without a header or reply still hugs its text', (

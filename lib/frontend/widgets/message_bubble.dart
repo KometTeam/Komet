@@ -745,10 +745,7 @@ class MessageBubble extends StatelessWidget {
             if (showAvatar)
               _buildLeadingAvatar(cs)
             else if (showAvatarSlot && chatType == "CHAT")
-              const CircleAvatar(
-                radius: 15,
-                backgroundColor: Color(0x00000000),
-              ),
+              const SizedBox(width: 30),
             Column(
               crossAxisAlignment: isMe
                   ? CrossAxisAlignment.end

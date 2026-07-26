@@ -598,6 +598,7 @@ class AccountModule {
         profile.id,
         config.cast<dynamic, dynamic>(),
       );
+      await chats.applyFavorites(profile.id);
       final userConfig = config['user'];
       if (userConfig is Map) {
         await AppDatabase.savePrivacyConfig(profile.id, jsonEncode(userConfig));

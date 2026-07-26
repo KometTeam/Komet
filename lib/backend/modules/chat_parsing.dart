@@ -163,13 +163,14 @@ _resolveLastMessage(dynamic lastMsg) {
   Map<int, CachedChat> existing,
 ) {
   final config = chatsConfig[id.toString()] ?? chatsConfig[id];
+  final ex = existing[id];
   if (config is Map) {
+    final configFav = config['favIndex'] as int?;
     return (
-      favIndex: config['favIndex'] as int?,
+      favIndex: (configFav != null && configFav > 0) ? configFav : ex?.favIndex,
       dontDisturbUntil: (config['dontDisturbUntil'] as int?) ?? 0,
     );
   }
-  final ex = existing[id];
   if (ex != null) {
     return (favIndex: ex.favIndex, dontDisturbUntil: ex.dontDisturbUntil);
   }
