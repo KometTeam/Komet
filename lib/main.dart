@@ -100,6 +100,7 @@ final webAppModule = WebAppModule(api);
 final digitalIdModule = DigitalIdModule(webAppModule);
 final fileUploader = FileUploader(api: api, messages: messagesModule);
 final storiesModule = StoriesModule(api);
+final bannersModule = accountModule.banners;
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 

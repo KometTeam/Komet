@@ -70,6 +70,25 @@ class AnimojiModule {
     return list.length <= 6 ? list : list.sublist(0, 6);
   }
 
+  Animoji? cached(int id) => _byId[id];
+
+  Future<Animoji?> fetchById(int id) async {
+    final known = _byId[id];
+    if (known != null) return known;
+    final map = await _api.sendRequestMap(Opcode.assetsGetByIds, {
+      'type': 'ANIMOJI',
+      'ids': [id],
+    });
+    final list = map?['animojis'];
+    if (list is! List) return null;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final animoji = Animoji.fromMap(e);
+      if (animoji != null) _byId[animoji.id] = animoji;
+    }
+    return _byId[id];
+  }
+
   Future<void> ensureLoaded() {
     return _loading ??= _load().catchError((Object e) {
       _loading = null;

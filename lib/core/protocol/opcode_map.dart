@@ -196,6 +196,7 @@ abstract class Opcode {
   static const int profileDeleteTime = 200; // Таймер удаления профиля
   static const int authQrApprove = 290; // Подтверждение QR-входа
   static const int chatSuggest = 300; // Предложения чатов
+  static const int bannersSync = 302; // Синхронизация баннеров (informer)
 
   // ── Polls ──────────────────────────────────────────────────────────
   static const int sendVote = 304; // Голосование
@@ -378,6 +379,7 @@ abstract class Opcode {
     profileDeleteTime: 'PROFILE_DELETE_TIME',
     authQrApprove: 'AUTH_QR_APPROVE',
     chatSuggest: 'CHAT_SUGGEST',
+    bannersSync: 'BANNERS_SYNC',
     sendVote: 'SEND_VOTE',
     votersListByAnswer: 'VOTERS_LIST_BY_ANSWER',
     getPollUpdates: 'GET_POLL_UPDATES',

@@ -11,6 +11,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
+import 'banners.dart';
 import 'chats.dart';
 import 'complaints.dart';
 import 'contacts.dart';
@@ -41,6 +42,7 @@ class AccountModule {
   late final PrivacyModule _privacy = PrivacyModule(_api);
   late final ProfileModule _profile = ProfileModule(_api);
   late final TwoFactorModule _twoFactor = TwoFactorModule(_api, _profile);
+  late final BannersModule banners = BannersModule(_api);
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
   final _noticeController = StreamController<AccountNotice>.broadcast();
   bool _loggedIn = false;
@@ -331,6 +333,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
 
     logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
@@ -345,6 +348,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
 
     await _api.connect();
@@ -376,6 +380,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
 
@@ -426,6 +431,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
   }
 
@@ -610,6 +616,12 @@ class AccountModule {
       logger.w('Папки чатов: $e');
     }
     await chats.applyFavorites(profile.id);
+
+    try {
+      await banners.initFromLogin(profile.id, data);
+    } catch (e) {
+      logger.w('Баннеры: $e');
+    }
 
     try {
       await _saveLoginInfo(data, profile.id);
