@@ -7,7 +7,7 @@ import 'package:komet/frontend/widgets/message_bubble.dart';
 import 'package:komet/frontend/widgets/text_entity_actions.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
-const String _sample = '+79231234567 тест 2200123456789019 @GroupGuardBot';
+const String _sample = '+70001234567 тест 2200123456789019 @ExampleBot';
 
 CachedMessage _message(String text) => CachedMessage(
   id: '1',
@@ -67,9 +67,9 @@ void main() {
     );
 
     final accent = ThemeData().colorScheme.primary;
-    final phone = _spanWithText(tester, '+79231234567');
+    final phone = _spanWithText(tester, '+70001234567');
     final card = _spanWithText(tester, '2200123456789019');
-    final mention = _spanWithText(tester, '@GroupGuardBot');
+    final mention = _spanWithText(tester, '@ExampleBot');
     final plain = _spanWithText(tester, ' тест ');
 
     expect(phone?.style?.color, accent);
@@ -90,12 +90,12 @@ void main() {
       accountId: 1,
       chatId: 2,
       senderId: 1,
-      text: '@GroupGuardBot test',
+      text: '@ExampleBot test',
       time: DateTime(2026, 1, 1, 5, 46).millisecondsSinceEpoch,
       status: 'sent',
       payload: const {
         'elements': [
-          {'entityName': 'GroupGuardBot', 'type': 'USER_MENTION', 'length': 14},
+          {'entityName': 'ExampleBot', 'type': 'USER_MENTION', 'length': 11},
         ],
       },
     );
@@ -105,7 +105,7 @@ void main() {
       MessageBubble(message: message, isMe: false, myId: 1, chatType: 'DIALOG'),
     );
 
-    final mention = _spanWithText(tester, '@GroupGuardBot');
+    final mention = _spanWithText(tester, '@ExampleBot');
     expect(mention?.style?.color, ThemeData().colorScheme.primary);
     expect(mention?.recognizer, isA<TapGestureRecognizer>());
   });
@@ -122,7 +122,7 @@ void main() {
     );
 
     expect(
-      _spanWithText(tester, '+79231234567')?.recognizer,
+      _spanWithText(tester, '+70001234567')?.recognizer,
       isA<TapGestureRecognizer>(),
     );
     expect(

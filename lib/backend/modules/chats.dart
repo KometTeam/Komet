@@ -37,6 +37,20 @@ Map<int, int> parseParticipants(dynamic raw) {
   return {};
 }
 
+/// Server message ids carry their timestamp in the high bits: the low 16 bits
+/// are an intra-millisecond sequence number.
+int messageIdToTime(int messageId) => messageId >> 16;
+
+bool messageMentionsUser(Map<dynamic, dynamic> message, int userId) {
+  final elements = message['elements'];
+  if (elements is! List) return false;
+  for (final element in elements.whereType<Map>()) {
+    if (element['type']?.toString() != 'USER_MENTION') continue;
+    if (element['entityId'] == userId) return true;
+  }
+  return false;
+}
+
 class CachedChat {
   final int id;
   final int accountId;
@@ -65,6 +79,7 @@ class CachedChat {
   final String? pinnedMsgText;
   final int? pinnedMsgTime;
   final bool pinnedMsgIsPreview;
+  final int? lastMentionMsgId;
 
   CachedChat({
     required this.id,
@@ -93,6 +108,7 @@ class CachedChat {
     this.pinnedMsgText,
     this.pinnedMsgTime,
     this.pinnedMsgIsPreview = false,
+    this.lastMentionMsgId,
   }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
            ? lastMsgText.replaceAll('\n', ' ')
            : lastMsgText;
@@ -137,6 +153,12 @@ class CachedChat {
 
   bool get isLastMsgDeleted => lastMsgText == ChatsModule.lastMsgPlaceholder;
 
+  bool get hasUnreadMention {
+    final mentionId = lastMentionMsgId;
+    if (mentionId == null || mentionId <= 0) return false;
+    return messageIdToTime(mentionId) > (participants[accountId] ?? 0);
+  }
+
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
     accountId: row['account_id'] as int,
@@ -164,6 +186,7 @@ class CachedChat {
     pinnedMsgText: row['pinned_msg_text'] as String?,
     pinnedMsgTime: row['pinned_msg_time'] as int?,
     pinnedMsgIsPreview: (row['pinned_msg_is_preview'] as int? ?? 0) == 1,
+    lastMentionMsgId: row['last_mention_msg_id'] as int?,
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
@@ -209,6 +232,7 @@ class CachedChat {
     'pinned_msg_text': pinnedMsgText,
     'pinned_msg_time': pinnedMsgTime,
     'pinned_msg_is_preview': pinnedMsgIsPreview ? 1 : 0,
+    'last_mention_msg_id': lastMentionMsgId,
   };
 
   static const Object _keep = Object();
@@ -238,6 +262,7 @@ class CachedChat {
     Object? pinnedMsgText = _keep,
     Object? pinnedMsgTime = _keep,
     bool? pinnedMsgIsPreview,
+    Object? lastMentionMsgId = _keep,
   }) {
     return CachedChat(
       id: id,
@@ -284,6 +309,9 @@ class CachedChat {
           ? this.pinnedMsgTime
           : pinnedMsgTime as int?,
       pinnedMsgIsPreview: pinnedMsgIsPreview ?? this.pinnedMsgIsPreview,
+      lastMentionMsgId: identical(lastMentionMsgId, _keep)
+          ? this.lastMentionMsgId
+          : lastMentionMsgId as int?,
     );
   }
 }
@@ -435,8 +463,12 @@ class ChatsModule {
       } catch (_) {}
     }
 
-    row['unread_count'] = 0;
-    await AppDatabase.saveChats([row]);
+    final cached = CachedChat.fromDbRow(row);
+    final currentMark = cached.participants[accountId] ?? 0;
+    final participants = Map<int, int>.from(cached.participants)
+      ..[accountId] = mark > currentMark ? mark : currentMark;
+    final updated = cached.copyWith(unreadCount: 0, participants: participants);
+    await AppDatabase.saveChats([updated.toDbRow()]);
     _bump();
   }
 
@@ -817,6 +849,13 @@ class ChatsModule {
       newRow['last_msg_status'] = 'sent';
     }
     if (unread != null) newRow['unread_count'] = unread;
+
+    if (msgIdInt != null &&
+        status != 'REMOVED' &&
+        senderId != accountId &&
+        messageMentionsUser(msg, accountId)) {
+      newRow['last_mention_msg_id'] = msgIdInt;
+    }
 
     final pinned = _extractPinnedMessage(msg);
     if (pinned != null) {

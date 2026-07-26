@@ -26,7 +26,7 @@ CachedMessage _message({
             'message': {
               'id': '9',
               'sender': _me,
-              'text': 'Алексей Поляков написал очень длинный ответ',
+              'text': 'Пётр Синицын написал очень длинный ответ',
               'time': 0,
               'attaches': [],
             },
@@ -68,14 +68,14 @@ Rect _rectOf(WidgetTester tester, Finder finder) {
 }
 
 void main() {
-  setUp(() => ContactCache.put(_peer, 'Алексей Поляков123'));
+  setUp(() => ContactCache.put(_peer, 'Пётр Синицын'));
 
   testWidgets('a long sender name pushes the clock to the bubble edge', (
     tester,
   ) async {
     await _pumpBubble(tester, _message(text: 'нет'));
 
-    final header = _rectOf(tester, find.text('Алексей Поляков123'));
+    final header = _rectOf(tester, find.text('Пётр Синицын'));
     final clock = _rectOf(tester, find.textContaining('05:46'));
     final body = _rectOf(tester, find.text('нет'));
 
@@ -88,7 +88,7 @@ void main() {
   ) async {
     await _pumpBubble(tester, _message(text: 'нет', withReply: true));
 
-    final header = _rectOf(tester, find.text('Алексей Поляков123'));
+    final header = _rectOf(tester, find.text('Пётр Синицын'));
     final label = _rectOf(tester, find.text('Вы'));
     final quote = _rectOf(
       tester,

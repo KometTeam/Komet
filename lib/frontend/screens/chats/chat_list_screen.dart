@@ -1633,6 +1633,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         avatar ?? "",
                         presenceUserId: secondId,
                         unreadCount: chat.unreadCount,
+                        hasMention: chat.hasUnreadMention,
                         isMuted: chat.isMuted,
                         isVerified: isVerified,
                         isPinned: isPinned,
@@ -1691,6 +1692,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ? chat.iconUrl!
                             : '',
                         unreadCount: chat.unreadCount,
+                        hasMention: chat.hasUnreadMention,
                         isMuted: chat.isMuted,
                         isVerified: chat.isOfficial,
                         isPinned: isPinned,
@@ -2508,6 +2510,27 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Widget _countBadge(ColorScheme cs, String label, {required bool muted}) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: muted ? cs.surfaceContainerHighest : cs.primary,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: muted ? cs.outline : cs.onPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          height: 1.1,
+        ),
+      ),
+    );
+  }
+
   Widget _buildChatItem(
     String id,
     String name,
@@ -2517,6 +2540,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     int presenceUserId = 0,
     bool isRead = false,
     int unreadCount = 0,
+    bool hasMention = false,
     bool isMuted = false,
     bool isVerified = false,
     bool isPinned = false,
@@ -2737,29 +2761,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                               ),
                               ?statusIcon,
                               const SizedBox(width: 8),
+                              if (hasMention) ...[
+                                _countBadge(cs, '@', muted: isMuted),
+                                const SizedBox(width: 4),
+                              ],
                               if (unreadCount > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isMuted
-                                        ? cs.surfaceContainerHighest
-                                        : cs.primary,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    unreadCount.toString(),
-                                    style: TextStyle(
-                                      color: isMuted
-                                          ? cs.outline
-                                          : cs.onPrimary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.1,
-                                    ),
-                                  ),
+                                _countBadge(
+                                  cs,
+                                  unreadCount.toString(),
+                                  muted: isMuted,
                                 )
                               else if (isRead)
                                 Icon(

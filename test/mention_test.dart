@@ -44,8 +44,8 @@ void main() {
       );
       final query = mentionQueryAt(c.text, 3)!;
       c.insertMention(
-        userId: 3079465,
-        name: 'Алексей Поляков',
+        userId: 555001,
+        name: 'Пётр Синицын',
         start: query.start,
         end: query.end,
       );
@@ -55,9 +55,9 @@ void main() {
       );
 
       final content = c.buildContent();
-      expect(content.text, 'Алексей Поляков test');
+      expect(content.text, 'Пётр Синицын test');
       expect(content.elements, [
-        {'type': 'USER_MENTION', 'from': 0, 'length': 15, 'entityId': 3079465},
+        {'type': 'USER_MENTION', 'from': 0, 'length': 12, 'entityId': 555001},
       ]);
     });
 
@@ -139,21 +139,21 @@ void main() {
     test('a non-contact falls back to the ONEME name', () {
       final contact = info([
         {
-          'name': 'Алексей',
-          'firstName': 'Алексей',
-          'lastName': 'Поляков',
+          'name': 'Пётр',
+          'firstName': 'Пётр',
+          'lastName': 'Синицын',
           'type': 'ONEME',
         },
       ]);
 
-      expect(contact.fullName, 'Алексей Поляков');
+      expect(contact.fullName, 'Пётр Синицын');
       expect(contact.isSavedContact, isFalse);
     });
 
     test('a custom name wins over the oneme one', () {
       final contact = info([
         {'firstName': 'Лёша', 'lastName': 'сосед', 'type': 'CUSTOM'},
-        {'firstName': 'Алексей', 'lastName': 'Поляков', 'type': 'ONEME'},
+        {'firstName': 'Пётр', 'lastName': 'Синицын', 'type': 'ONEME'},
       ]);
 
       expect(contact.fullName, 'Лёша сосед');
@@ -163,24 +163,24 @@ void main() {
   group('parseFormatElements', () {
     test('reads a server USER_MENTION without an explicit from', () {
       final ranges = parseFormatElements([
-        {'entityId': 3079465, 'type': 'USER_MENTION', 'length': 15},
+        {'entityId': 555001, 'type': 'USER_MENTION', 'length': 12},
       ]);
       expect(ranges.single.format, TextFormat.userMention);
       expect(ranges.single.start, 0);
-      expect(ranges.single.length, 15);
-      expect(ranges.single.entityId, 3079465);
+      expect(ranges.single.length, 12);
+      expect(ranges.single.entityId, 555001);
     });
 
     test('segmentizeFormats carries the mention id onto its segment', () {
-      final segments = segmentizeFormats('Алексей Поляков test', const [
+      final segments = segmentizeFormats('Пётр Синицын test', const [
         FormatRange(
           format: TextFormat.userMention,
           start: 0,
-          length: 15,
-          entityId: 3079465,
+          length: 12,
+          entityId: 555001,
         ),
       ]);
-      expect(segments.first.mentionId, 3079465);
+      expect(segments.first.mentionId, 555001);
       expect(segments.last.mentionId, isNull);
     });
   });

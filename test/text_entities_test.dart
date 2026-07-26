@@ -4,27 +4,27 @@ import 'package:komet/core/utils/text_entities.dart';
 void main() {
   group('detectTextEntities', () {
     test('finds a phone and a card in one message', () {
-      final found = detectTextEntities('+79231234567 тест 2200123456789019');
+      final found = detectTextEntities('+70001234567 тест 2200123456789019');
 
       expect(found, hasLength(2));
       expect(found.first.kind, TextEntityKind.phone);
-      expect(found.first.value, '+79231234567');
+      expect(found.first.value, '+70001234567');
       expect(found.last.kind, TextEntityKind.card);
       expect(found.last.value, '2200123456789019');
     });
 
     test('finds a bare russian phone and a spaced card', () {
-      final found = detectTextEntities('89231234567 и 2200 1234 5678 9019');
+      final found = detectTextEntities('80001234567 и 2200 1234 5678 9019');
       expect(found.map((e) => e.kind), [
         TextEntityKind.phone,
         TextEntityKind.card,
       ]);
-      expect(found.first.value, '+89231234567');
+      expect(found.first.value, '+80001234567');
       expect(found.last.value, '2200123456789019');
     });
 
     test('ignores digits that are not a valid card', () {
-      expect(detectTextEntities('116984447620359334'), isEmpty);
+      expect(detectTextEntities('111411200327680777'), isEmpty);
       expect(detectTextEntities('2200123456789018'), isEmpty);
       expect(detectTextEntities('1234567890123456'), isEmpty);
     });
@@ -34,23 +34,23 @@ void main() {
     });
 
     test('finds a nickname but not an email', () {
-      final found = detectTextEntities('привет @GroupGuardBot и mail@ya.ru');
+      final found = detectTextEntities('привет @ExampleBot и mail@ya.ru');
       expect(found, hasLength(1));
       expect(found.single.kind, TextEntityKind.mention);
-      expect(found.single.value, 'GroupGuardBot');
+      expect(found.single.value, 'ExampleBot');
       expect(found.single.start, 7);
-      expect(found.single.end, 21);
+      expect(found.single.end, 18);
     });
 
     test('finds a formatted profile phone', () {
-      final found = detectTextEntities('+7 (923) 123-45-67');
+      final found = detectTextEntities('+7 (000) 123-45-67');
       expect(found, hasLength(1));
       expect(found.single.kind, TextEntityKind.phone);
-      expect(found.single.value, '+79231234567');
+      expect(found.single.value, '+70001234567');
     });
 
     test('skips ranges that are already claimed', () {
-      const text = 'https://max.ru/GroupGuardBot';
+      const text = 'https://max.ru/ExampleBot';
       expect(
         detectTextEntities(text, skip: [(start: 0, end: text.length)]),
         isEmpty,

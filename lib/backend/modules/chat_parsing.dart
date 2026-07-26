@@ -44,6 +44,9 @@ CachedChat? parseChatRow(
     final presence = _resolvePresence(type, otherId, presenceMap);
     final adminsOwner = _resolveAdmins(chat);
     final pinned = _resolvePinnedMessage(chat['pinnedMessage']);
+    final mentionId = int.tryParse(
+      chat['lastMentionMessageId']?.toString() ?? '',
+    );
 
     return CachedChat(
       id: id,
@@ -71,6 +74,7 @@ CachedChat? parseChatRow(
       pinnedMsgText: pinned.text,
       pinnedMsgTime: pinned.time,
       pinnedMsgIsPreview: pinned.isPreview,
+      lastMentionMsgId: mentionId ?? existing[id]?.lastMentionMsgId,
     );
   } catch (e) {
     logger.e("Ошибка при парсинге чата: $e");
