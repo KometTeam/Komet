@@ -2251,4 +2251,53 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get editContactError => 'Не удалось сохранить изменения';
+
+  @override
+  String get downloadsTitle => 'Недавние загрузки';
+
+  @override
+  String get downloadsTooltip => 'Загрузки';
+
+  @override
+  String get downloadsSettings => 'Настройки';
+
+  @override
+  String get downloadsEmpty => 'Скачанные файлы появятся здесь';
+
+  @override
+  String get downloadsUnknownSource => 'Источник неизвестен';
+
+  @override
+  String get downloadsPhoto => 'Фото';
+
+  @override
+  String get downloadsVideo => 'Видео';
+
+  @override
+  String get downloadsGif => 'GIF';
+
+  @override
+  String get downloadsAudio => 'Аудио';
+
+  @override
+  String get downloadsFile => 'Файл';
+
+  @override
+  String get downloadsOpenFailed => 'Не удалось открыть файл';
+
+  @override
+  String get downloadsClearHistory => 'Очистить историю загрузок';
+
+  @override
+  String get downloadsClearTitle => 'Очистить историю загрузок?';
+
+  @override
+  String get downloadsClearBody =>
+      'Файлы останутся на устройстве, но этот список будет очищен.';
+
+  @override
+  String get downloadsClearConfirm => 'Очистить';
+
+  @override
+  String get downloadsHistoryCleared => 'История загрузок очищена';
 }

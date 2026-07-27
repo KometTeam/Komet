@@ -737,5 +737,21 @@
   "editContactDeleteConfirmTitle": "Удалить контакт?",
   "editContactDeleteConfirmBody": "Контакт будет удалён из вашего списка.",
   "editContactDeleteCancel": "Отмена",
-  "editContactError": "Не удалось сохранить изменения"
+  "editContactError": "Не удалось сохранить изменения",
+  "downloadsTitle": "Недавние загрузки",
+  "downloadsTooltip": "Загрузки",
+  "downloadsSettings": "Настройки",
+  "downloadsEmpty": "Скачанные файлы появятся здесь",
+  "downloadsUnknownSource": "Источник неизвестен",
+  "downloadsPhoto": "Фото",
+  "downloadsVideo": "Видео",
+  "downloadsGif": "GIF",
+  "downloadsAudio": "Аудио",
+  "downloadsFile": "Файл",
+  "downloadsOpenFailed": "Не удалось открыть файл",
+  "downloadsClearHistory": "Очистить историю загрузок",
+  "downloadsClearTitle": "Очистить историю загрузок?",
+  "downloadsClearBody": "Файлы останутся на устройстве, но этот список будет очищен.",
+  "downloadsClearConfirm": "Очистить",
+  "downloadsHistoryCleared": "История загрузок очищена"
 }

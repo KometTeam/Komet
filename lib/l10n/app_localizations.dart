@@ -4291,6 +4291,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t save changes'**
   String get editContactError;
+
+  /// No description provided for @downloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent downloads'**
+  String get downloadsTitle;
+
+  /// No description provided for @downloadsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get downloadsTooltip;
+
+  /// No description provided for @downloadsSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get downloadsSettings;
+
+  /// No description provided for @downloadsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded files will appear here'**
+  String get downloadsEmpty;
+
+  /// No description provided for @downloadsUnknownSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown source'**
+  String get downloadsUnknownSource;
+
+  /// No description provided for @downloadsPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get downloadsPhoto;
+
+  /// No description provided for @downloadsVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get downloadsVideo;
+
+  /// No description provided for @downloadsGif.
+  ///
+  /// In en, this message translates to:
+  /// **'GIF'**
+  String get downloadsGif;
+
+  /// No description provided for @downloadsAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get downloadsAudio;
+
+  /// No description provided for @downloadsFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get downloadsFile;
+
+  /// No description provided for @downloadsOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the file'**
+  String get downloadsOpenFailed;
+
+  /// No description provided for @downloadsClearHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear download history'**
+  String get downloadsClearHistory;
+
+  /// No description provided for @downloadsClearTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear download history?'**
+  String get downloadsClearTitle;
+
+  /// No description provided for @downloadsClearBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The files will stay on the device, but this list will be cleared.'**
+  String get downloadsClearBody;
+
+  /// No description provided for @downloadsClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get downloadsClearConfirm;
+
+  /// No description provided for @downloadsHistoryCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Download history cleared'**
+  String get downloadsHistoryCleared;
 }
 
 class _AppLocalizationsDelegate

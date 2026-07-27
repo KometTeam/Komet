@@ -2237,4 +2237,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editContactError => 'Couldn\'t save changes';
+
+  @override
+  String get downloadsTitle => 'Recent downloads';
+
+  @override
+  String get downloadsTooltip => 'Downloads';
+
+  @override
+  String get downloadsSettings => 'Settings';
+
+  @override
+  String get downloadsEmpty => 'Downloaded files will appear here';
+
+  @override
+  String get downloadsUnknownSource => 'Unknown source';
+
+  @override
+  String get downloadsPhoto => 'Photo';
+
+  @override
+  String get downloadsVideo => 'Video';
+
+  @override
+  String get downloadsGif => 'GIF';
+
+  @override
+  String get downloadsAudio => 'Audio';
+
+  @override
+  String get downloadsFile => 'File';
+
+  @override
+  String get downloadsOpenFailed => 'Couldn\'t open the file';
+
+  @override
+  String get downloadsClearHistory => 'Clear download history';
+
+  @override
+  String get downloadsClearTitle => 'Clear download history?';
+
+  @override
+  String get downloadsClearBody =>
+      'The files will stay on the device, but this list will be cleared.';
+
+  @override
+  String get downloadsClearConfirm => 'Clear';
+
+  @override
+  String get downloadsHistoryCleared => 'Download history cleared';
 }

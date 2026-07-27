@@ -66,6 +66,7 @@ void main() {
     expect(find.text('00:12'), findsOneWidget);
     expect(find.byKey(const ValueKey('video-play-toggle')), findsOneWidget);
     expect(find.byKey(const ValueKey('video-settings')), findsOneWidget);
+    expect(find.byKey(const ValueKey('downloads-button')), findsNothing);
     expect(find.byIcon(Symbols.rotate_90_degrees_ccw), findsOneWidget);
     expect(find.byIcon(Symbols.download), findsNothing);
     expect(find.byType(GlassSurface), findsOneWidget);

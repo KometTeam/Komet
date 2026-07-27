@@ -3,8 +3,6 @@ import 'dart:collection';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -14,9 +12,11 @@ import '../../backend/modules/messages.dart';
 import '../../backend/modules/shared_content.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/config/app_frost.dart';
+import '../../core/utils/download_history.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/media_cache.dart';
 import '../../core/utils/media_saver.dart';
+import '../../core/utils/save_file_as.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../models/attachment.dart';
@@ -456,6 +456,45 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   String _cacheNameFor(PhotoAttachment photo, String url) =>
       'photo_${photo.photoId ?? (url.hashCode & 0x7fffffff)}.jpg';
 
+  String _downloadSource(_ViewerMedia item) {
+    final sourceName = widget.sourceName?.trim();
+    if (sourceName != null && sourceName.isNotEmpty) return sourceName;
+    return ContactCache.get(item.senderId) ?? '';
+  }
+
+  DownloadMetadata _photoDownload(
+    _ViewerMedia item,
+    PhotoAttachment photo,
+    String cacheName,
+  ) => DownloadMetadata(
+    cacheName: cacheName,
+    kind: DownloadKind.photo,
+    sourceName: _downloadSource(item),
+    thumbnailUrl: photo.baseUrl ?? photo.previewData,
+    expectedSize: photo.size ?? 0,
+    chatId: widget.chatId,
+    messageId: item.messageId.isEmpty ? null : item.messageId,
+    messageTime: item.time,
+  );
+
+  String _videoCacheName(_ViewerMedia item, VideoAttachment video) =>
+      'video_${video.videoId ?? item.messageId}.mp4';
+
+  DownloadMetadata _videoDownload(
+    _ViewerMedia item,
+    VideoAttachment video,
+    String cacheName,
+  ) => DownloadMetadata(
+    cacheName: cacheName,
+    kind: DownloadKind.video,
+    sourceName: _downloadSource(item),
+    thumbnailUrl: video.thumbnail ?? video.baseUrl ?? video.previewData,
+    expectedSize: video.size ?? 0,
+    chatId: widget.chatId,
+    messageId: item.messageId.isEmpty ? null : item.messageId,
+    messageTime: item.time,
+  );
+
   Future<File?> _fileFor(PhotoAttachment photo) async {
     final localPath = photo.localPath;
     if (localPath != null) {
@@ -467,12 +506,25 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     return MediaCache.getOrDownload(_cacheNameFor(photo, url), url);
   }
 
+  Future<File?> _videoFileFor(_ViewerMedia item) async {
+    final video = item.video;
+    if (video == null) return null;
+    final sources = await _loadVideoSources(item);
+    if (sources.isEmpty) return null;
+    final sessionQuality = _videoSessions[item.id]?.quality;
+    final url = sessionQuality != null
+        ? sources[sessionQuality] ?? sources.values.first
+        : sources.values.first;
+    return MediaCache.getOrDownload(_videoCacheName(item, video), url);
+  }
+
   Future<void> _save() async {
     final photo = _current.photo;
     if (photo == null || _saving) return;
     setState(() => _saving = true);
     final localPath = photo.localPath;
     final url = photo.baseUrl ?? '';
+    final cacheName = _cacheNameFor(photo, url);
 
     final MediaSaveResult result;
     if (localPath != null) {
@@ -481,10 +533,11 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       result = const MediaSaveResult(ok: false, error: 'нет ссылки');
     } else {
       result = await saveMediaFile(
-        cacheName: _cacheNameFor(photo, url),
+        cacheName: cacheName,
         resolveUrl: () async => url,
         saveName: 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
         kind: SaveMediaKind.image,
+        download: _photoDownload(_current, photo, cacheName),
       );
     }
 
@@ -504,35 +557,59 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   Future<void> _saveAs() async {
-    final photo = _current.photo;
-    if (photo == null) {
-      showCustomNotification(context, 'Сохранение видео появится позже');
-      return;
-    }
-    final file = await _fileFor(photo);
-    if (!mounted) return;
-    if (file == null) {
-      showCustomNotification(context, 'Не удалось загрузить фото');
-      return;
-    }
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final item = _current;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      File? file;
+      DownloadMetadata? download;
+      String saveName;
 
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
+      final photo = item.photo;
+      final video = item.video;
+      if (photo != null) {
+        file = await _fileFor(photo);
+        final url = photo.baseUrl ?? '';
+        final cacheName = _cacheNameFor(photo, url);
+        if (url.isNotEmpty) download = _photoDownload(item, photo, cacheName);
+        saveName = 'IMG_$now.jpg';
+      } else if (video != null) {
+        file = await _videoFileFor(item);
+        final cacheName = _videoCacheName(item, video);
+        download = _videoDownload(item, video, cacheName);
+        saveName = 'VID_$now.mp4';
+      } else {
+        file = null;
+        saveName = 'media_$now';
+      }
 
-    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-    final path = await FilePicker.platform.saveFile(
-      dialogTitle: AppLocalizations.of(context)!.photoViewerSaveAs,
-      fileName: 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      type: FileType.any,
-      bytes: isMobile ? bytes : null,
-    );
-    if (path == null || !mounted) return;
-
-    if (!isMobile) {
-      await File(path).writeAsBytes(bytes);
       if (!mounted) return;
+      if (file == null) {
+        showCustomNotification(context, 'Не удалось загрузить медиа');
+        return;
+      }
+      final result = await saveFileAs(
+        source: file,
+        fileName: saveName,
+        dialogTitle: AppLocalizations.of(context)!.photoViewerSaveAs,
+      );
+      if (!mounted || result.cancelled) return;
+      if (!result.saved) {
+        showCustomNotification(context, 'Не удалось сохранить файл');
+        return;
+      }
+      if (download != null) {
+        try {
+          await DownloadHistory.record(download, file);
+        } catch (_) {}
+      }
+      if (mounted) showCustomNotification(context, 'Файл сохранён');
+    } catch (_) {
+      if (mounted) showCustomNotification(context, 'Не удалось сохранить файл');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    showCustomNotification(context, 'Файл сохранён');
   }
 
   void _openMenu(BuildContext anchorContext) {

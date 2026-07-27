@@ -979,5 +979,21 @@
   "editContactDeleteConfirmTitle": "Delete contact?",
   "editContactDeleteConfirmBody": "This contact will be removed from your list.",
   "editContactDeleteCancel": "Cancel",
-  "editContactError": "Couldn't save changes"
+  "editContactError": "Couldn't save changes",
+  "downloadsTitle": "Recent downloads",
+  "downloadsTooltip": "Downloads",
+  "downloadsSettings": "Settings",
+  "downloadsEmpty": "Downloaded files will appear here",
+  "downloadsUnknownSource": "Unknown source",
+  "downloadsPhoto": "Photo",
+  "downloadsVideo": "Video",
+  "downloadsGif": "GIF",
+  "downloadsAudio": "Audio",
+  "downloadsFile": "File",
+  "downloadsOpenFailed": "Couldn't open the file",
+  "downloadsClearHistory": "Clear download history",
+  "downloadsClearTitle": "Clear download history?",
+  "downloadsClearBody": "The files will stay on the device, but this list will be cleared.",
+  "downloadsClearConfirm": "Clear",
+  "downloadsHistoryCleared": "Download history cleared"
 }

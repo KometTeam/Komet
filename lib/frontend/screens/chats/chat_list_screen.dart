@@ -24,7 +24,9 @@ import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/formatted_message_text.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/download_history.dart';
 import '../../../core/utils/text_format.dart';
+import '../../../l10n/app_localizations.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -65,6 +67,7 @@ import '../stories/story_composer_screen.dart';
 import '../stories/story_owner_info.dart';
 import '../stories/story_ring.dart';
 import '../stories/story_viewer_screen.dart';
+import '../downloads_screen.dart';
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -1340,64 +1343,94 @@ class _ChatListScreenState extends State<ChatListScreen>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Row(
-                                  children: [
-                                    if (AppStories.current.value &&
-                                        _pullRatio < 0.8 &&
-                                        storiesModule.hasAny)
-                                      Opacity(
-                                        opacity: 1.0 - _pullRatio,
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () => _openStories(0),
-                                          child: Container(
-                                            width: 50 * (1.0 - _pullRatio),
-                                            height: 32,
-                                            margin: const EdgeInsets.only(
-                                              right: 8,
-                                            ),
-                                            child: FoldedStoryStack(
-                                              previews: storiesModule.previews,
-                                              opacity: 1.0 - _pullRatio,
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      if (AppStories.current.value &&
+                                          _pullRatio < 0.8 &&
+                                          storiesModule.hasAny)
+                                        Opacity(
+                                          opacity: 1.0 - _pullRatio,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () => _openStories(0),
+                                            child: Container(
+                                              width: 50 * (1.0 - _pullRatio),
+                                              height: 32,
+                                              margin: const EdgeInsets.only(
+                                                right: 8,
+                                              ),
+                                              child: FoldedStoryStack(
+                                                previews:
+                                                    storiesModule.previews,
+                                                opacity: 1.0 - _pullRatio,
+                                              ),
                                             ),
                                           ),
                                         ),
+                                      Flexible(
+                                        child: Text(
+                                          connectionStatusLabel(
+                                                _sessionState,
+                                              ) ??
+                                              (_profile?.firstName ?? 'Чат'),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: cs.onSurface,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w600,
+                                            fontFamily: 'Outfit',
+                                          ),
+                                        ),
                                       ),
-                                    Text(
-                                      connectionStatusLabel(_sessionState) ??
-                                          (_profile?.firstName ?? 'Чат'),
-                                      style: TextStyle(
-                                        color: cs.onSurface,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w600,
-                                        fontFamily: 'Outfit',
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                                PopupMenuButton<int>(
-                                  icon: Icon(
-                                    Symbols.more_vert,
-                                    color: cs.outline,
-                                    weight: 400,
-                                  ),
-                                  offset: const Offset(0, 48),
-                                  elevation: 4,
-                                  color: cs.surfaceContainerHigh,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  onSelected: _onOverflowMenuSelected,
-                                  itemBuilder: (context) => [
-                                    _buildPopupMenuItem(
-                                      1,
-                                      'Избранное',
-                                      Symbols.bookmark,
-                                    ),
-                                    _buildPopupMenuItem(
-                                      2,
-                                      'Прочитать всё',
-                                      Symbols.done_all,
+                                const SizedBox(width: 4),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (!widget.forwardMode &&
+                                        !widget.archiveMode)
+                                      IconButton(
+                                        key: const ValueKey('downloads-button'),
+                                        tooltip: AppLocalizations.of(
+                                          context,
+                                        )!.downloadsTooltip,
+                                        icon: Icon(
+                                          Symbols.download_for_offline,
+                                          color: cs.outline,
+                                          weight: 400,
+                                        ),
+                                        onPressed: () =>
+                                            unawaited(_openDownloads()),
+                                      ),
+                                    PopupMenuButton<int>(
+                                      icon: Icon(
+                                        Symbols.more_vert,
+                                        color: cs.outline,
+                                        weight: 400,
+                                      ),
+                                      offset: const Offset(0, 48),
+                                      elevation: 4,
+                                      color: cs.surfaceContainerHigh,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      onSelected: _onOverflowMenuSelected,
+                                      itemBuilder: (context) => [
+                                        _buildPopupMenuItem(
+                                          1,
+                                          'Избранное',
+                                          Symbols.bookmark,
+                                        ),
+                                        _buildPopupMenuItem(
+                                          2,
+                                          'Прочитать всё',
+                                          Symbols.done_all,
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -2605,7 +2638,8 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
               MessageDecryptionState.wrongKey => _buildPreviewLine(
                 cs,
-                '$previewPrefix' 'неверный ключ',
+                '$previewPrefix'
+                'неверный ключ',
                 const [],
                 draft,
                 true,
@@ -2969,6 +3003,63 @@ class _ChatListScreenState extends State<ChatListScreen>
       case 2:
         unawaited(_markAllChatsRead());
     }
+  }
+
+  Future<void> _openDownloads() async {
+    final record = await pushSwipeable<DownloadRecord>(
+      context,
+      (_) => const DownloadsScreen(),
+    );
+    if (record == null || !mounted) return;
+    await _openDownloadedMessage(record);
+  }
+
+  Future<void> _openDownloadedMessage(DownloadRecord record) async {
+    final chatId = record.chatId;
+    final messageId = record.messageId;
+    if (chatId == null || messageId == null || messageId.isEmpty) return;
+    final profile = _profile ?? await AppDatabase.loadActiveProfile();
+    if (profile == null || !mounted) return;
+
+    CachedChat? chat;
+    for (final item in _chats) {
+      if (item.id == chatId) {
+        chat = item;
+        break;
+      }
+    }
+    if (chat == null) {
+      await chats.ensureChatCached(api, profile.id, chatId);
+      final cached = await chats.getChat(profile.id, chatId);
+      if (cached.isNotEmpty) chat = cached.first;
+    }
+    if (!mounted) return;
+
+    final selection = DesktopChatSelection(
+      chatId: chatId,
+      name:
+          chat?.title ??
+          (record.sourceName.trim().isEmpty ? 'Чат' : record.sourceName.trim()),
+      imageUrl: chat?.iconUrl ?? '',
+      chatType: chat?.type ?? 'CHAT',
+      initialMessageId: messageId,
+      initialMessageTime: record.messageTime,
+    );
+    if (widget.onChatSelected != null) {
+      widget.onChatSelected!(selection);
+      return;
+    }
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: selection.chatId,
+        name: selection.name,
+        imageUrl: selection.imageUrl,
+        chatType: selection.chatType,
+        initialMessageId: selection.initialMessageId,
+        initialMessageTime: selection.initialMessageTime,
+      ),
+    );
   }
 
   void _openSavedMessages() {

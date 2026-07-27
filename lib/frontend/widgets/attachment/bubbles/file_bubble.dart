@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/main.dart';
 
 import '../../../../core/utils/download_progress.dart';
+import '../../../../core/utils/download_history.dart';
 import '../../../../core/utils/file_download.dart';
 import '../../../../core/utils/media_cache.dart';
 import '../../../../core/utils/format.dart';
@@ -219,6 +220,27 @@ class FileBubble extends StatelessWidget {
       return;
     }
 
+    final kind = downloadKindForName(name);
+    try {
+      await DownloadHistory.record(
+        DownloadMetadata(
+          cacheName: cacheName,
+          name: kind == DownloadKind.file ? name : '',
+          kind: kind,
+          sourceName: ctx.chatName ?? '',
+          thumbnailUrl:
+              file.preview?.baseUrl ??
+              file.preview?.previewData ??
+              file.previewData,
+          expectedSize: file.size ?? 0,
+          chatId: ctx.message.chatId,
+          messageId: ctx.message.id,
+          messageTime: ctx.message.time,
+        ),
+        local,
+      );
+    } catch (_) {}
+
     final shown = await _decryptIfNeeded(local, cacheName);
     if (!context.mounted) return;
     if (shown == null) {
@@ -268,6 +290,7 @@ class FileBubble extends StatelessWidget {
 
     final cacheName = '${fileId}_$name';
     final cached = (await MediaCache.existing(cacheName)) != null;
+    final kind = downloadKindForName(name);
 
     if (!cached) MediaDownloadProgress.set(cacheName, 0);
     final result = await openCachedFile(
@@ -281,6 +304,20 @@ class FileBubble extends StatelessWidget {
       onReady: () {
         if (!cached) MediaDownloadProgress.set(cacheName, null);
       },
+      download: DownloadMetadata(
+        cacheName: cacheName,
+        name: kind == DownloadKind.file ? name : '',
+        kind: kind,
+        sourceName: ctx.chatName ?? '',
+        thumbnailUrl:
+            file.preview?.baseUrl ??
+            file.preview?.previewData ??
+            file.previewData,
+        expectedSize: file.size ?? 0,
+        chatId: ctx.message.chatId,
+        messageId: ctx.message.id,
+        messageTime: ctx.message.time,
+      ),
     );
     if (!context.mounted) return;
     if (!result.ok) {

@@ -1,5 +1,6 @@
 import 'package:open_filex/open_filex.dart';
 
+import 'download_history.dart';
 import 'media_cache.dart';
 
 class FileDownloadResult {
@@ -23,6 +24,7 @@ Future<FileDownloadResult> openCachedFile(
   Future<String?> Function() resolveUrl, {
   void Function(double progress)? onProgress,
   void Function()? onReady,
+  DownloadMetadata? download,
 }) async {
   var readyFired = false;
   void ready() {
@@ -52,6 +54,11 @@ Future<FileDownloadResult> openCachedFile(
     }
 
     ready();
+    if (download != null) {
+      try {
+        await DownloadHistory.record(download, file);
+      } catch (_) {}
+    }
     final opened = await OpenFilex.open(file.path);
     return FileDownloadResult(
       ok: opened.type == ResultType.done,

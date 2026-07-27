@@ -42,6 +42,15 @@ class MediaCache {
     return File(p.join(dir.path, _sanitize(name)));
   }
 
+  static Future<List<File>> files() async {
+    final dir = await _cacheDir();
+    final files = <File>[];
+    await for (final entity in dir.list()) {
+      if (entity is File && !entity.path.endsWith('.part')) files.add(entity);
+    }
+    return files;
+  }
+
   /// Существует ли непустой кэш-файл [name].
   ///
   /// При попадании обновляет mtime файла — это делает вытеснение LRU
