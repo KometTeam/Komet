@@ -230,6 +230,7 @@ class MessageBubble extends StatelessWidget {
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
+  final ForwardedSourceTap? onForwardedSourceTap;
   final void Function(StickerAttachment sticker)? onStickerTap;
   final void Function(String emoji)? onReactionTap;
   final String? peerName;
@@ -257,6 +258,7 @@ class MessageBubble extends StatelessWidget {
     this.uploadProgress,
     this.onReplyTap,
     this.onAvatarTap,
+    this.onForwardedSourceTap,
     this.onStickerTap,
     this.onReactionTap,
     this.peerName,
@@ -628,6 +630,7 @@ class MessageBubble extends StatelessWidget {
       otherReadTime: otherReadTime,
       uploadProgress: uploadProgress,
       onStickerTap: onStickerTap,
+      onForwardedSourceTap: onForwardedSourceTap,
       reactionInfo: _resolveReactionInfo(),
     );
 
@@ -1457,14 +1460,6 @@ class MessageBubble extends StatelessWidget {
     BubbleContext ctx,
     ForwardedMessageAttachment forwarded,
   ) {
-    final headerColor = ctx.dim;
-    final displaySender =
-        forwarded.originalSenderName ??
-        ContactCache.get(forwarded.originalSenderId) ??
-        forwarded.originalSenderId.toString();
-    final senderAvatar =
-        forwarded.originalSenderAvatar ??
-        ContactCache.getAvatar(forwarded.originalSenderId);
     final origText = forwarded.originalText;
     final hasOrigText = origText != null && origText.isNotEmpty;
 
@@ -1472,49 +1467,14 @@ class MessageBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Symbols.forward, size: 14, color: headerColor),
-            const SizedBox(width: 4),
-            if (senderAvatar != null && senderAvatar.isNotEmpty)
-              CircleAvatar(
-                radius: 10,
-                backgroundImage: CachedNetworkImageProvider(
-                  senderAvatar,
-                  maxWidth: 96,
-                  maxHeight: 96,
-                ),
-                backgroundColor: ctx.cs.primaryContainer,
-              )
-            else
-              CircleAvatar(
-                radius: 10,
-                backgroundColor: ctx.cs.primaryContainer,
-                child: Text(
-                  displaySender.isNotEmpty
-                      ? displaySender[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: ctx.cs.onPrimaryContainer,
-                  ),
-                ),
-              ),
-            const SizedBox(width: 6),
-            Text(
-              displaySender,
-              style: TextStyle(
-                color: headerColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        ForwardedHeader(
+          ctx: ctx,
+          forwarded: forwarded,
+          padding: EdgeInsets.zero,
         ),
         if (hasOrigText) ...[
           const SizedBox(height: 2),
-          Text(origText, style: TextStyle(color: ctx.text, fontSize: 14)),
+          buildForwardedMessageText(ctx, forwarded),
         ] else ...[
           const SizedBox(height: 2),
           Text(

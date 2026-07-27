@@ -21,18 +21,42 @@ class PhotoBubble extends StatelessWidget {
 
   final BubbleContext ctx;
   final List<PhotoAttachment> photos;
+  final Widget? caption;
+  final bool hasContentAbove;
 
-  const PhotoBubble({super.key, required this.ctx, required this.photos});
+  const PhotoBubble({
+    super.key,
+    required this.ctx,
+    required this.photos,
+    this.caption,
+    this.hasContentAbove = false,
+  });
+
+  static double layoutWidth(List<PhotoAttachment> photos) {
+    if (photos.length != 1) return BubbleContext.photoMaxSize;
+    return (photos.single.width?.toDouble() ?? 200).clamp(
+      BubbleContext.photoMinSize,
+      BubbleContext.photoMaxSize,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final message = ctx.message;
-    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final hasMessageCaption = message.text != null && message.text!.isNotEmpty;
+    final resolvedCaption =
+        caption ?? (hasMessageCaption ? ctx.caption() : null);
+    final hasCaption = resolvedCaption != null;
     final count = photos.length;
 
     Widget photosWidget;
     if (count == 1) {
-      photosWidget = _buildSinglePhoto(ctx, photos[0]);
+      photosWidget = _buildSinglePhoto(
+        ctx,
+        photos[0],
+        hasCaption: hasCaption,
+        hasContentAbove: hasContentAbove,
+      );
     } else if (count == 2) {
       photosWidget = _buildTwoPhotos(ctx, photos[0], photos[1]);
     } else {
@@ -53,15 +77,8 @@ class PhotoBubble extends StatelessWidget {
     }
 
     if (count == 1) {
-      final photo = photos[0];
-      final pw = photo.width?.toDouble() ?? 200;
-      final photoWidth = pw.clamp(
-        BubbleContext.photoMinSize,
-        BubbleContext.photoMaxSize,
-      );
-
       return SizedBox(
-        width: photoWidth,
+        width: layoutWidth(photos),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,7 +93,7 @@ class PhotoBubble extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Expanded(child: ctx.caption()),
+                  Expanded(child: resolvedCaption),
                   ctx.meta(),
                 ],
               ),
@@ -100,7 +117,7 @@ class PhotoBubble extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(child: ctx.caption()),
+              Expanded(child: resolvedCaption),
               ctx.meta(),
             ],
           ),
@@ -109,7 +126,12 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildSinglePhoto(BubbleContext ctx, PhotoAttachment photo) {
+  Widget _buildSinglePhoto(
+    BubbleContext ctx,
+    PhotoAttachment photo, {
+    required bool hasCaption,
+    required bool hasContentAbove,
+  }) {
     final width = photo.width?.toDouble() ?? 200;
     final height = photo.height?.toDouble() ?? 200;
 
@@ -123,8 +145,8 @@ class PhotoBubble extends StatelessWidget {
     );
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
-    final matchTop = ctx.hasPhotoWithCaption;
-    final matchBottom = !ctx.hasPhotoWithCaption;
+    final matchTop = hasCaption && !hasContentAbove;
+    final matchBottom = !hasCaption;
 
     final topR = matchTop ? _bigRadius : _photoRadius;
     final bottomL = matchBottom

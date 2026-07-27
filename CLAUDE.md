@@ -68,6 +68,7 @@ Incoming packets: transport → dispatcher → backend module → state → UI r
 - **Use `showCustomNotification(context, 'text')`** for all user-facing notifications — never use SnackBars.
 - When a fix can be done quickly with a hack or properly with a rewrite, **choose the proper rewrite**.
 - Quality over quantity.
+- **Never leave real data in test files**, including existing message contents or real IDs captured from requests. Use synthetic fixtures instead.
 
 ## Localization
 

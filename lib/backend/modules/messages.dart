@@ -903,23 +903,41 @@ class MessagesModule {
     required String tempId,
     required int time,
     required String status,
+    String? sourceChatName,
+    String? sourceChatIconUrl,
+    String? sourceChatType,
   }) {
     final srcPayload = source.payload;
     final srcLink = srcPayload?['link'];
+    final isForwardedSource =
+        srcLink is Map &&
+        srcLink['type']?.toString().toUpperCase() == 'FORWARD' &&
+        srcLink['message'] is Map;
     Map<String, dynamic> originalMsg;
-    if (srcLink is Map &&
-        srcLink['type'] == 'FORWARD' &&
-        srcLink['message'] is Map) {
+    if (isForwardedSource) {
       originalMsg = Map<String, dynamic>.from(srcLink['message'] as Map);
     } else {
+      final originalType = srcPayload?['type']?.toString() ?? sourceChatType;
       originalMsg = {
         'id': int.tryParse(source.id) ?? source.id,
+        'type': ?originalType,
         'sender': source.senderId,
         'time': source.time,
         'text': source.text,
         'attaches': (srcPayload?['attaches'] as List?) ?? const [],
+        'elements': (srcPayload?['elements'] as List?) ?? const [],
       };
     }
+    final isChannelSource =
+        originalMsg['type']?.toString().toUpperCase() == 'CHANNEL';
+    final rawChannelName = isForwardedSource
+        ? srcLink['chatName']
+        : sourceChatName;
+    final rawChannelIconUrl = isForwardedSource
+        ? srcLink['chatIconUrl']
+        : sourceChatIconUrl;
+    final channelName = rawChannelName?.toString().trim();
+    final channelIconUrl = rawChannelIconUrl?.toString().trim();
     final payload = <String, dynamic>{
       'elements': const [],
       'attaches': const [],
@@ -928,6 +946,12 @@ class MessagesModule {
         'chatId': sourceChatId,
         'messageId': int.tryParse(source.id) ?? source.id,
         'message': originalMsg,
+        if (isChannelSource && channelName != null && channelName.isNotEmpty)
+          'chatName': channelName,
+        if (isChannelSource &&
+            channelIconUrl != null &&
+            channelIconUrl.isNotEmpty)
+          'chatIconUrl': channelIconUrl,
       },
     };
     return CachedMessage(

@@ -2236,6 +2236,9 @@ class _ChatScreenState extends State<ChatScreen>
         tempId: _nextTempId(),
         time: now + i,
         status: 'sending',
+        sourceChatName: widget.name,
+        sourceChatIconUrl: widget.imageUrl,
+        sourceChatType: widget.chatType,
       );
       optimistic.add(msg);
       _messages.add(msg);
@@ -2280,6 +2283,9 @@ class _ChatScreenState extends State<ChatScreen>
         tempId: _nextTempId(),
         time: now + i,
         status: 'sending',
+        sourceChatName: widget.name,
+        sourceChatIconUrl: widget.imageUrl,
+        sourceChatType: widget.chatType,
       );
       optimistic.add(msg);
       await AppDatabase.saveMessages([msg.toDbRow()]);
@@ -3447,6 +3453,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   static String _formatLabel(TextFormat format) {
     switch (format) {
+      case TextFormat.heading:
+        return 'Заголовок';
       case TextFormat.strong:
         return 'Жирный';
       case TextFormat.emphasized:
@@ -4021,7 +4029,8 @@ class _ChatScreenState extends State<ChatScreen>
       if (msg.attachments != null) {
         for (final a in msg.attachments!) {
           if (a is ForwardedMessageAttachment) {
-            if (a.originalSenderName == null &&
+            if (a.originalSenderId != 0 &&
+                a.originalSenderName == null &&
                 ContactCache.get(a.originalSenderId) == null) {
               forwardIds.add(a.originalSenderId);
             }
@@ -4057,10 +4066,12 @@ class _ChatScreenState extends State<ChatScreen>
             originalSenderId: a.originalSenderId,
             originalSenderName: r.name,
             originalSenderAvatar: r.avatar,
+            originalType: a.originalType,
             originalMessageId: a.originalMessageId,
             originalTime: a.originalTime,
             originalText: a.originalText,
             originalChatId: a.originalChatId,
+            originalFormatRanges: a.originalFormatRanges,
             originalAttachments: a.originalAttachments,
             originalContact: a.originalContact,
           );
@@ -4267,6 +4278,61 @@ class _ChatScreenState extends State<ChatScreen>
         contactId: senderId,
         name: ContactCache.get(senderId) ?? 'User #$senderId',
         avatarUrl: ContactCache.getAvatar(senderId),
+      ),
+    );
+  }
+
+  void _openForwardedSource(ForwardedMessageAttachment forwarded) {
+    if (forwarded.isChannel) {
+      unawaited(_openForwardedChannel(forwarded));
+      return;
+    }
+    final senderId = forwarded.originalSenderId;
+    if (senderId == 0 || senderId == _myId) return;
+    unawaited(
+      openContactDialogProfile(
+        context,
+        contactId: senderId,
+        name:
+            forwarded.originalSenderName ??
+            ContactCache.get(senderId) ??
+            'User #$senderId',
+        avatarUrl:
+            forwarded.originalSenderAvatar ?? ContactCache.getAvatar(senderId),
+      ),
+    );
+  }
+
+  Future<void> _openForwardedChannel(
+    ForwardedMessageAttachment forwarded,
+  ) async {
+    final sourceChatId = forwarded.originalChatId;
+    if (sourceChatId == null) {
+      showCustomNotification(context, 'Канал недоступен');
+      return;
+    }
+    final sourceMessageId = forwarded.originalMessageId;
+    if (sourceChatId == widget.chatId) {
+      if (sourceMessageId == null) return;
+      _beginTargetNavigation();
+      await _runGoToMessage(sourceMessageId, forwarded.originalTime ?? 0);
+      return;
+    }
+
+    await chats.ensureChatCached(api, _myId, sourceChatId);
+    if (!mounted) return;
+    final cached = await chats.getChat(_myId, sourceChatId);
+    if (!mounted) return;
+    final channel = cached.isEmpty ? null : cached.first;
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: sourceChatId,
+        name: channel?.title ?? forwarded.originalSenderName ?? 'Канал',
+        imageUrl: channel?.iconUrl ?? forwarded.originalSenderAvatar ?? '',
+        chatType: channel?.type ?? 'CHANNEL',
+        initialMessageId: sourceMessageId,
+        initialMessageTime: forwarded.originalTime,
       ),
     );
   }
@@ -5238,6 +5304,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 onReplyTap: (id) =>
                                     _jumpToMessage(id, fromId: message.id),
                                 onAvatarTap: _openSenderProfile,
+                                onForwardedSourceTap: _openForwardedSource,
                                 onStickerTap: _openStickerPack,
                                 onReactionTap: message.isControl
                                     ? null

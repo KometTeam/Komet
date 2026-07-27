@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../core/utils/parse.dart';
+import '../core/utils/text_format.dart';
 
 enum AttachmentType {
   photo,
@@ -677,10 +678,12 @@ class ForwardedMessageAttachment extends MessageAttachment {
   final int originalSenderId;
   final String? originalSenderName;
   final String? originalSenderAvatar;
+  final String? originalType;
   final String? originalMessageId;
   final int? originalTime;
   final String? originalText;
   final int? originalChatId;
+  final List<FormatRange> originalFormatRanges;
   final List<MessageAttachment>? originalAttachments;
   final ContactAttachment? originalContact;
 
@@ -688,13 +691,17 @@ class ForwardedMessageAttachment extends MessageAttachment {
     required this.originalSenderId,
     this.originalSenderName,
     this.originalSenderAvatar,
+    this.originalType,
     this.originalMessageId,
     this.originalTime,
     this.originalText,
     this.originalChatId,
+    this.originalFormatRanges = const [],
     this.originalAttachments,
     this.originalContact,
   }) : super(type: AttachmentType.forward);
+
+  bool get isChannel => originalType == 'CHANNEL';
 
   factory ForwardedMessageAttachment.fromMap(Map<String, dynamic> map) {
     final linkRaw = map['link'];
@@ -736,12 +743,27 @@ class ForwardedMessageAttachment extends MessageAttachment {
       }
     }
 
+    final originalType = message?['type']?.toString().toUpperCase();
+    final isChannel = originalType == 'CHANNEL';
+    final channelName = link?['chatName']?.toString().trim();
+    final channelAvatar = link?['chatIconUrl']?.toString().trim();
+
     return ForwardedMessageAttachment(
-      originalSenderId: (message?['sender'] as int?) ?? 0,
+      originalSenderId: parseIntOrNull(message?['sender']) ?? 0,
+      originalSenderName:
+          isChannel && channelName != null && channelName.isNotEmpty
+          ? channelName
+          : null,
+      originalSenderAvatar:
+          isChannel && channelAvatar != null && channelAvatar.isNotEmpty
+          ? channelAvatar
+          : null,
+      originalType: originalType,
       originalMessageId: message?['id']?.toString(),
-      originalTime: message?['time'] as int?,
-      originalText: message?['text'] as String?,
-      originalChatId: link?['chatId'] as int?,
+      originalTime: parseIntOrNull(message?['time']),
+      originalText: message?['text']?.toString(),
+      originalChatId: parseIntOrNull(link?['chatId']),
+      originalFormatRanges: parseFormatElements(message?['elements']),
       originalAttachments: originalAttaches,
       originalContact: originalContact,
     );
@@ -753,10 +775,12 @@ class ForwardedMessageAttachment extends MessageAttachment {
     'originalSenderId': originalSenderId,
     'originalSenderName': originalSenderName,
     'originalSenderAvatar': originalSenderAvatar,
+    'originalType': originalType,
     'originalMessageId': originalMessageId,
     'originalTime': originalTime,
     'originalText': originalText,
     'originalChatId': originalChatId,
+    'originalElements': serializeFormatElements(originalFormatRanges),
   };
 }
 

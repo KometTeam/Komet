@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 enum TextFormat {
+  heading,
   strong,
   emphasized,
   underline,
@@ -13,6 +14,7 @@ enum TextFormat {
 }
 
 const Map<TextFormat, String> _formatToServer = {
+  TextFormat.heading: 'HEADING',
   TextFormat.strong: 'STRONG',
   TextFormat.emphasized: 'EMPHASIZED',
   TextFormat.underline: 'UNDERLINE',
@@ -249,9 +251,13 @@ TextStyle applyTextFormats(
       formats.contains(TextFormat.quote);
 
   final isMention = formats.contains(TextFormat.userMention);
+  final isHeading = formats.contains(TextFormat.heading);
 
   return base.copyWith(
-    fontWeight: formats.contains(TextFormat.strong) ? FontWeight.w700 : null,
+    fontSize: isHeading ? (base.fontSize ?? 16) * 1.08 : null,
+    fontWeight: formats.contains(TextFormat.strong) || isHeading
+        ? FontWeight.w700
+        : null,
     fontStyle: isItalic ? FontStyle.italic : null,
     fontFamily: formats.contains(TextFormat.monospaced) ? 'monospace' : null,
     color: isMention
