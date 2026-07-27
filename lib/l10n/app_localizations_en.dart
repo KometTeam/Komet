@@ -2208,6 +2208,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addContactError => 'Couldn\'t add contact';
 
   @override
+  String get contactBubbleNew => 'New contact';
+
+  @override
+  String get contactBubbleAlreadyAdded => 'Already in your contacts';
+
+  @override
+  String get contactBubbleOpenProfile => 'Open profile';
+
+  @override
   String get editContactMenu => 'Edit contact';
 
   @override

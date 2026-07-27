@@ -261,6 +261,8 @@ class ForwardedContactBubble extends StatelessWidget {
           name: contact.name,
           photoUrl: contact.photoUrl ?? contact.baseUrl,
           phoneNumber: contact.phoneNumber,
+          contactId: contact.contactId,
+          userId: contact.userId,
         ),
       ],
     );

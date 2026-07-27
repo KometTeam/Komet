@@ -2222,6 +2222,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get addContactError => 'Не удалось добавить контакт';
 
   @override
+  String get contactBubbleNew => 'Новый контакт';
+
+  @override
+  String get contactBubbleAlreadyAdded => 'Уже твой контакт';
+
+  @override
+  String get contactBubbleOpenProfile => 'Открыть профиль';
+
+  @override
   String get editContactMenu => 'Редактировать контакт';
 
   @override

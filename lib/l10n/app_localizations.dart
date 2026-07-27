@@ -4232,6 +4232,24 @@ abstract class AppLocalizations {
   /// **'Couldn\'t add contact'**
   String get addContactError;
 
+  /// No description provided for @contactBubbleNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New contact'**
+  String get contactBubbleNew;
+
+  /// No description provided for @contactBubbleAlreadyAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Already in your contacts'**
+  String get contactBubbleAlreadyAdded;
+
+  /// No description provided for @contactBubbleOpenProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Open profile'**
+  String get contactBubbleOpenProfile;
+
   /// No description provided for @editContactMenu.
   ///
   /// In en, this message translates to:
