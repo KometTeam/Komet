@@ -14,6 +14,7 @@ import '../../core/config/app_bubble_shape.dart';
 import '../../core/crypto/message_decryption_cache.dart';
 import 'decrypted_text.dart';
 import '../../core/utils/bubble_radius.dart';
+import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
@@ -23,6 +24,7 @@ import 'formatted_message_text.dart';
 import 'photo_viewer.dart';
 import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
+import '../../models/animoji.dart';
 import '../../models/reaction_info.dart';
 import 'attachment/bubbles/voice_bubble.dart';
 import 'attachment/bubbles/bubble_context.dart';
@@ -40,6 +42,20 @@ import 'attachment/bubbles/forwarded_bubble.dart';
 import 'lottie_image.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
+
+class ReactionAnimationEvent {
+  final String messageId;
+  final String emoji;
+  final int token;
+
+  const ReactionAnimationEvent({
+    required this.messageId,
+    required this.emoji,
+    required this.token,
+  });
+}
+
+typedef ReactionAnimojiResolver = Animoji? Function(String emoji);
 
 class _ZeroIntrinsicWidth extends SingleChildRenderObjectWidget {
   const _ZeroIntrinsicWidth({required Widget super.child});
@@ -205,6 +221,163 @@ class _RenderReactionsWrap extends RenderWrap {
   }
 }
 
+class _ReactionAnimojiGlyph extends StatefulWidget {
+  final String messageId;
+  final String emoji;
+  final Animoji animoji;
+  final ValueListenable<ReactionAnimationEvent?>? animation;
+
+  const _ReactionAnimojiGlyph({
+    super.key,
+    required this.messageId,
+    required this.emoji,
+    required this.animoji,
+    this.animation,
+  });
+
+  @override
+  State<_ReactionAnimojiGlyph> createState() => _ReactionAnimojiGlyphState();
+}
+
+class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
+  static const double _size = 18;
+  static const double _effectSize = _size * 2;
+
+  int? _playingToken;
+  bool _bodyPlaying = false;
+  bool _effectPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.animation?.addListener(_onAnimation);
+  }
+
+  @override
+  void didUpdateWidget(_ReactionAnimojiGlyph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.animation, widget.animation)) {
+      oldWidget.animation?.removeListener(_onAnimation);
+      widget.animation?.addListener(_onAnimation);
+    }
+    if (oldWidget.messageId != widget.messageId ||
+        EmojiKeywordIndex.normalize(oldWidget.emoji) !=
+            EmojiKeywordIndex.normalize(widget.emoji)) {
+      _playingToken = null;
+      _bodyPlaying = false;
+      _effectPlaying = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.animation?.removeListener(_onAnimation);
+    super.dispose();
+  }
+
+  void _onAnimation() {
+    final event = widget.animation?.value;
+    if (event == null ||
+        event.messageId != widget.messageId ||
+        EmojiKeywordIndex.normalize(event.emoji) !=
+            EmojiKeywordIndex.normalize(widget.emoji) ||
+        event.token == _playingToken) {
+      return;
+    }
+    final bodyUrl = widget.animoji.lottieUrl;
+    final effectUrl = widget.animoji.lottiePlayUrl;
+    setState(() {
+      _playingToken = event.token;
+      _bodyPlaying = bodyUrl != null && bodyUrl.isNotEmpty;
+      _effectPlaying = effectUrl != null && effectUrl.isNotEmpty;
+    });
+  }
+
+  void _onBodyCompleted() {
+    if (!mounted) return;
+    setState(() {
+      _bodyPlaying = false;
+      if (!_effectPlaying) _playingToken = null;
+    });
+  }
+
+  void _onEffectCompleted() {
+    if (!mounted) return;
+    setState(() {
+      _effectPlaying = false;
+      if (!_bodyPlaying) _playingToken = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final staticUrl = widget.animoji.iconUrl;
+    final bodyAnimationUrl = widget.animoji.lottieUrl;
+    final effectAnimationUrl = widget.animoji.lottiePlayUrl;
+    final Widget body;
+    if (_bodyPlaying) {
+      body = LottieImage(
+        key: ValueKey(('body', _playingToken)),
+        url: staticUrl,
+        lottieUrl: bodyAnimationUrl,
+        size: _size,
+        memCacheWidth: 64,
+        shimmer: false,
+        eager: true,
+        repeat: false,
+        onCompleted: _onBodyCompleted,
+      );
+    } else if (staticUrl != null && staticUrl.isNotEmpty) {
+      body = LottieImage(
+        url: staticUrl,
+        size: _size,
+        memCacheWidth: 64,
+        shimmer: false,
+      );
+    } else if (bodyAnimationUrl != null && bodyAnimationUrl.isNotEmpty) {
+      body = LottieImage(
+        lottieUrl: bodyAnimationUrl,
+        size: _size,
+        memCacheWidth: 64,
+        shimmer: false,
+        animate: false,
+        repeat: false,
+      );
+    } else {
+      body = Text(widget.emoji, style: const TextStyle(fontSize: 13));
+    }
+
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          body,
+          if (_effectPlaying)
+            Positioned(
+              left: -(_effectSize - _size) / 2,
+              top: -(_effectSize - _size) / 2,
+              width: _effectSize,
+              height: _effectSize,
+              child: LottieImage(
+                key: ValueKey(('effect', _playingToken)),
+                lottieUrl: effectAnimationUrl,
+                size: _effectSize,
+                memCacheWidth: 128,
+                shimmer: false,
+                eager: true,
+                repeat: false,
+                onCompleted: _onEffectCompleted,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class MessageBubble extends StatelessWidget {
   static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
   static const BorderRadius _reactionChipRadius = BorderRadius.all(
@@ -227,6 +400,8 @@ class MessageBubble extends StatelessWidget {
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
+  final ValueListenable<ReactionAnimationEvent?>? reactionAnimation;
+  final ReactionAnimojiResolver? reactionAnimojiResolver;
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
@@ -255,6 +430,8 @@ class MessageBubble extends StatelessWidget {
     this.overrideStatus,
     this.otherReadTime,
     this.reactionsListenable,
+    this.reactionAnimation,
+    this.reactionAnimojiResolver,
     this.uploadProgress,
     this.onReplyTap,
     this.onAvatarTap,
@@ -1159,7 +1336,16 @@ class MessageBubble extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(c.reaction, style: const TextStyle(fontSize: 13)),
+            if (_resolveReactionAnimoji(c.reaction) case final animoji?)
+              _ReactionAnimojiGlyph(
+                key: ValueKey((message.id, c.reaction)),
+                messageId: message.id,
+                emoji: c.reaction,
+                animoji: animoji,
+                animation: reactionAnimation,
+              )
+            else
+              Text(c.reaction, style: const TextStyle(fontSize: 13)),
             if (c.count > 1) ...[
               const SizedBox(width: 3),
               Text(
@@ -1189,6 +1375,9 @@ class MessageBubble extends StatelessWidget {
     }
     return chips;
   }
+
+  Animoji? _resolveReactionAnimoji(String emoji) =>
+      reactionAnimojiResolver?.call(emoji) ?? animojiModule.findByEmoji(emoji);
 
   Widget _reactionAvatar(ColorScheme cs, String? url, String? name) {
     const double diameter = 17;

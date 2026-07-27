@@ -288,6 +288,9 @@ class _ChatScreenState extends State<ChatScreen>
   StreamSubscription<SessionState>? _connSub;
   final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers =
       {};
+  final ValueNotifier<ReactionAnimationEvent?> _reactionAnimation =
+      ValueNotifier(null);
+  int _reactionAnimationToken = 0;
   final Map<String, ValueNotifier<List<double>>> _photoUploadProgress = {};
   final ValueNotifier<int> _scheduledCount = ValueNotifier(0);
 
@@ -354,6 +357,20 @@ class _ChatScreenState extends State<ChatScreen>
     }
     notifier.value = result.info;
     _applyReactionInfoToMessage(message.id, result.info);
+    final appliedReaction = result.info?['yourReaction']?.toString();
+    if (!isToggleOff &&
+        appliedReaction != null &&
+        EmojiKeywordIndex.normalize(appliedReaction) ==
+            EmojiKeywordIndex.normalize(emoji)) {
+      final event = ReactionAnimationEvent(
+        messageId: message.id,
+        emoji: appliedReaction,
+        token: ++_reactionAnimationToken,
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _reactionAnimation.value = event;
+      });
+    }
   }
 
   void _applyReactionInfoToMessage(
@@ -563,9 +580,10 @@ class _ChatScreenState extends State<ChatScreen>
     );
     final px = ((44.0 * dpr).clamp(96.0, 512.0) / 32).ceil() * 32;
     for (final a in animojiModule.quickAnimojis) {
-      final url = a.lottieUrl;
-      if (url != null && url.isNotEmpty) {
-        unawaited(RlottieEngine.instance.prewarm(url, px));
+      for (final url in [a.lottieUrl, a.lottiePlayUrl]) {
+        if (url != null && url.isNotEmpty) {
+          unawaited(RlottieEngine.instance.prewarm(url, px));
+        }
       }
     }
   }
@@ -579,7 +597,10 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(
       animojiModule
           .ensureLoaded()
-          .then((_) => _prewarmQuickReactions())
+          .then((_) {
+            _prewarmQuickReactions();
+            if (mounted) _bumpMessages();
+          })
           .catchError((_) {}),
     );
     WidgetsBinding.instance.addObserver(this);
@@ -1865,6 +1886,7 @@ class _ChatScreenState extends State<ChatScreen>
       n.dispose();
     }
     _reactionNotifiers.clear();
+    _reactionAnimation.dispose();
     for (final n in _photoUploadProgress.values) {
       n.dispose();
     }
@@ -5300,6 +5322,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 reactionsListenable: _reactionNotifierFor(
                                   message,
                                 ),
+                                reactionAnimation: _reactionAnimation,
                                 uploadProgress: _photoProgressFor(message),
                                 onReplyTap: (id) =>
                                     _jumpToMessage(id, fromId: message.id),
@@ -7361,4 +7384,3 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     );
   }
 }
-
