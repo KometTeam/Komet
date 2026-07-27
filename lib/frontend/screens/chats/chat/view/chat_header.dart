@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/frontend/widgets/encryption_lock_badge.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/online_dot.dart';
+import 'package:komet/frontend/widgets/profile_hero.dart';
 
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
@@ -14,10 +16,12 @@ class ChatHeaderRow extends StatelessWidget {
   final ColorScheme cs;
   final bool embedded;
   final int chatId;
+  final Object heroTag;
   final String name;
   final String imageUrl;
   final String chatType;
   final bool isOfficial;
+  final bool encrypted;
   final int myId;
   final ValueListenable<String> headerStatus;
   final ValueListenable<int> scheduledCount;
@@ -38,10 +42,12 @@ class ChatHeaderRow extends StatelessWidget {
     required this.cs,
     required this.embedded,
     required this.chatId,
+    required this.heroTag,
     required this.name,
     required this.imageUrl,
     required this.chatType,
     required this.isOfficial,
+    this.encrypted = false,
     required this.myId,
     required this.headerStatus,
     required this.scheduledCount,
@@ -63,6 +69,12 @@ class ChatHeaderRow extends StatelessWidget {
   double? get _pillBlur => frosted && !liquid ? AppFrost.sigma : null;
 
   Widget _glossyRow(BuildContext context) {
+    final nameStyle = TextStyle(
+      color: cs.onSurface,
+      fontSize: 17,
+      fontWeight: FontWeight.w600,
+      fontFamily: 'Outfit',
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       child: Row(
@@ -108,28 +120,32 @@ class ChatHeaderRow extends StatelessWidget {
                 children: [
                   _withOnlineDot(
                     cs,
-                    imageUrl.isNotEmpty
-                        ? CircleAvatar(
-                            radius: 22,
-                            backgroundImage: CachedNetworkImageProvider(
-                              imageUrl,
-                              maxWidth: 144,
-                              maxHeight: 144,
-                            ),
-                          )
-                        : CircleAvatar(
-                            radius: 22,
-                            backgroundColor: cs.primaryContainer,
-                            child: Text(
-                              name.isNotEmpty ? name[0].toUpperCase() : '?',
-                              style: TextStyle(
-                                color: cs.onPrimaryContainer,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Outfit',
+                    ProfileHeroAvatar(
+                      tag: heroTag,
+                      size: 44,
+                      child: imageUrl.isNotEmpty
+                          ? CircleAvatar(
+                              radius: 22,
+                              backgroundImage: CachedNetworkImageProvider(
+                                imageUrl,
+                                maxWidth: 144,
+                                maxHeight: 144,
+                              ),
+                            )
+                          : CircleAvatar(
+                              radius: 22,
+                              backgroundColor: cs.primaryContainer,
+                              child: Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                style: TextStyle(
+                                  color: cs.onPrimaryContainer,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Outfit',
+                                ),
                               ),
                             ),
-                          ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -141,16 +157,16 @@ class ChatHeaderRow extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Flexible(
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  color: cs.onSurface,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Outfit',
+                              child: ProfileHeroName(
+                                tag: heroTag,
+                                text: name,
+                                style: nameStyle,
+                                child: Text(
+                                  name,
+                                  style: nameStyle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (isOfficial) ...[
@@ -239,6 +255,12 @@ class ChatHeaderRow extends StatelessWidget {
   }
 
   Widget _materialRow(BuildContext context) {
+    final nameStyle = TextStyle(
+      color: cs.onSurface,
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      fontFamily: 'Outfit',
+    );
     return Row(
       children: [
         _backWithBadge(
@@ -265,26 +287,30 @@ class ChatHeaderRow extends StatelessWidget {
               children: [
                 _withOnlineDot(
                   cs,
-                  imageUrl.isNotEmpty
-                      ? CircleAvatar(
-                          radius: 18,
-                          backgroundImage: CachedNetworkImageProvider(
-                            imageUrl,
-                            maxWidth: 144,
-                            maxHeight: 144,
-                          ),
-                        )
-                      : CircleAvatar(
-                          radius: 18,
-                          backgroundColor: cs.primaryContainer,
-                          child: Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : '?',
-                            style: TextStyle(
-                              color: cs.onPrimaryContainer,
-                              fontSize: 12,
+                  ProfileHeroAvatar(
+                    tag: heroTag,
+                    size: 36,
+                    child: imageUrl.isNotEmpty
+                        ? CircleAvatar(
+                            radius: 18,
+                            backgroundImage: CachedNetworkImageProvider(
+                              imageUrl,
+                              maxWidth: 144,
+                              maxHeight: 144,
+                            ),
+                          )
+                        : CircleAvatar(
+                            radius: 18,
+                            backgroundColor: cs.primaryContainer,
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                              style: TextStyle(
+                                color: cs.onPrimaryContainer,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                        ),
+                  ),
                   dotSize: 11,
                 ),
                 const SizedBox(width: 12),
@@ -297,16 +323,16 @@ class ChatHeaderRow extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Flexible(
-                            child: Text(
-                              name,
-                              style: TextStyle(
-                                color: cs.onSurface,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Outfit',
+                            child: ProfileHeroName(
+                              tag: heroTag,
+                              text: name,
+                              style: nameStyle,
+                              child: Text(
+                                name,
+                                style: nameStyle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (isOfficial) ...[
@@ -373,6 +399,7 @@ class ChatHeaderRow extends StatelessWidget {
     final otherId = chatId ^ myId;
     final showDot = chatType == 'DIALOG' && myId != 0 && otherId > 0;
     return Stack(
+      clipBehavior: Clip.none,
       children: [
         avatar,
         if (showDot)
@@ -384,6 +411,12 @@ class ChatHeaderRow extends StatelessWidget {
               borderColor: cs.surface,
               size: dotSize,
             ),
+          ),
+        if (encrypted)
+          Positioned(
+            left: -2,
+            bottom: -2,
+            child: EncryptionLockBadge(size: dotSize + 4),
           ),
       ],
     );

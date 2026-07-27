@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../../core/config/komet_settings.dart';
+import '../../core/contacts/device_contacts_service.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -17,6 +18,7 @@ class ContactCache {
   static final Map<int, String> _nameCache = {};
   static final Map<int, String> _avatarCache = {};
   static final Map<int, Set<String>> _optionsCache = {};
+  static final Map<int, int> _phoneCache = {};
 
   static const _prefsKey = 'contact_cache_v1';
   static Timer? _saveTimer;
@@ -61,16 +63,37 @@ class ContactCache {
     _scheduleSave();
   }
 
-  static String? get(int id) => _nameCache[id];
+  static void putPhone(int id, int phone) {
+    if (phone > 0) _phoneCache[id] = phone;
+  }
+
+  static String? get(int id) {
+    final phone = _phoneCache[id];
+    if (phone != null) {
+      final book = DeviceContactsService.nameForPhone(phone);
+      if (book != null && book.isNotEmpty) return book;
+    }
+    return _nameCache[id];
+  }
+
   static String? getAvatar(int id) => _avatarCache[id];
   static Set<String>? getOptions(int id) => _optionsCache[id];
   static bool isOfficial(int id) =>
       _optionsCache[id]?.contains('OFFICIAL') ?? false;
 
+  static void remove(int id) {
+    _nameCache.remove(id);
+    _avatarCache.remove(id);
+    _optionsCache.remove(id);
+    _phoneCache.remove(id);
+    _scheduleSave();
+  }
+
   static void clear() {
     _nameCache.clear();
     _avatarCache.clear();
     _optionsCache.clear();
+    _phoneCache.clear();
     _saveTimer?.cancel();
     _saveTimer = null;
     unawaited(_wipePersisted());
@@ -742,6 +765,7 @@ class MessagesModule {
     bool notify = true,
     int? scheduledTime,
     int? replyToMessageId,
+    int? replySourceChatId,
     List<Map<String, dynamic>> elements = const [],
   }) async {
     final message = <String, dynamic>{
@@ -753,7 +777,7 @@ class MessagesModule {
     if (replyToMessageId != null) {
       message['link'] = {
         'type': 'REPLY',
-        'chatId': chatId,
+        'chatId': replySourceChatId ?? chatId,
         'messageId': replyToMessageId,
       };
     }
@@ -766,6 +790,23 @@ class MessagesModule {
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     return _sendAndExtractMessageId(payload, 'Ошибка отправки');
+  }
+
+  Future<Packet> sendControlMessage(
+    int chatId,
+    Map<String, dynamic> control, {
+    bool notify = true,
+  }) {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'text': '',
+        'attaches': [control],
+      },
+      'notify': notify,
+    };
+    return _api.sendRequest(Opcode.msgSend, payload);
   }
 
   Future<String> _sendAndExtractMessageId(
@@ -862,23 +903,41 @@ class MessagesModule {
     required String tempId,
     required int time,
     required String status,
+    String? sourceChatName,
+    String? sourceChatIconUrl,
+    String? sourceChatType,
   }) {
     final srcPayload = source.payload;
     final srcLink = srcPayload?['link'];
+    final isForwardedSource =
+        srcLink is Map &&
+        srcLink['type']?.toString().toUpperCase() == 'FORWARD' &&
+        srcLink['message'] is Map;
     Map<String, dynamic> originalMsg;
-    if (srcLink is Map &&
-        srcLink['type'] == 'FORWARD' &&
-        srcLink['message'] is Map) {
+    if (isForwardedSource) {
       originalMsg = Map<String, dynamic>.from(srcLink['message'] as Map);
     } else {
+      final originalType = srcPayload?['type']?.toString() ?? sourceChatType;
       originalMsg = {
         'id': int.tryParse(source.id) ?? source.id,
+        'type': ?originalType,
         'sender': source.senderId,
         'time': source.time,
         'text': source.text,
         'attaches': (srcPayload?['attaches'] as List?) ?? const [],
+        'elements': (srcPayload?['elements'] as List?) ?? const [],
       };
     }
+    final isChannelSource =
+        originalMsg['type']?.toString().toUpperCase() == 'CHANNEL';
+    final rawChannelName = isForwardedSource
+        ? srcLink['chatName']
+        : sourceChatName;
+    final rawChannelIconUrl = isForwardedSource
+        ? srcLink['chatIconUrl']
+        : sourceChatIconUrl;
+    final channelName = rawChannelName?.toString().trim();
+    final channelIconUrl = rawChannelIconUrl?.toString().trim();
     final payload = <String, dynamic>{
       'elements': const [],
       'attaches': const [],
@@ -887,6 +946,12 @@ class MessagesModule {
         'chatId': sourceChatId,
         'messageId': int.tryParse(source.id) ?? source.id,
         'message': originalMsg,
+        if (isChannelSource && channelName != null && channelName.isNotEmpty)
+          'chatName': channelName,
+        if (isChannelSource &&
+            channelIconUrl != null &&
+            channelIconUrl.isNotEmpty)
+          'chatIconUrl': channelIconUrl,
       },
     };
     return CachedMessage(
@@ -1168,7 +1233,11 @@ class MessagesModule {
   ) async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
-    final existing = await AppDatabase.loadMessage(accountId, chatId, messageId);
+    final existing = await AppDatabase.loadMessage(
+      accountId,
+      chatId,
+      messageId,
+    );
     if (existing == null) return;
 
     Map<String, dynamic> payloadMap;
@@ -1269,7 +1338,10 @@ class MessagesModule {
     );
   }
 
-  Future<bool> sendFileMessage(
+  /// Returns the server-assigned message id, or null on failure. The id is
+  /// required to later resolve a download URL — a message still carrying its
+  /// local temp id resolves to messageId 0 and the server rejects it.
+  Future<String?> sendFileMessage(
     int chatId,
     int fileId, {
     String? token,
@@ -1298,17 +1370,20 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    return _sendWithNotReadyRetry<bool>(
+    return _sendWithNotReadyRetry<String?>(
       payload: payload,
       maxAttempts: maxAttempts,
       retryDelay: retryDelay,
-      onResult: (response) => response.isOk,
-      onExhausted: false,
+      onResult: (response) => _sentMessageMap(response)?['id']?.toString(),
+      onExhausted: null,
     );
   }
 
-  Future<String?> requestPhotoUploadUrl() async {
-    final response = await _api.sendRequest(Opcode.photoUpload, {'count': 1});
+  Future<String?> requestPhotoUploadUrl({int? type}) async {
+    final response = await _api.sendRequest(Opcode.photoUpload, {
+      'type': ?type,
+      'count': 1,
+    });
     if (!response.isOk) return null;
     final data = response.payload;
     if (data is! Map) return null;
@@ -1349,10 +1424,10 @@ class MessagesModule {
     );
   }
 
-  Future<VideoUploadInfo?> requestVideoUploadUrl() async {
+  Future<VideoUploadInfo?> requestVideoUploadUrl({int type = 0}) async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 0,
-      'type': 0,
+      'type': type,
       'count': 1,
     });
     if (!response.isOk) return null;
@@ -1553,6 +1628,26 @@ class MessagesModule {
             'longitude': longitude,
             'zoom': zoom,
           },
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    return _sentMessageMap(response);
+  }
+
+  Future<Map<String, dynamic>?> sendContactMessage(
+    int chatId,
+    int contactId, {
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {'_type': 'CONTACT', 'contactId': contactId},
         ],
       },
       'notify': notify,
@@ -1772,9 +1867,10 @@ class MessagesModule {
   }) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {
-        'messageId': int.tryParse(messageId) ?? 0,
-        'chatId': chatId,
         'fileId': fileId,
+        'chatId': chatId,
+        'messageId': int.tryParse(messageId) ?? 0,
+        'itemType': 'REGULAR',
       });
 
       if (!response.isOk) return null;

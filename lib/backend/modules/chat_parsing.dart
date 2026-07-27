@@ -44,6 +44,9 @@ CachedChat? parseChatRow(
     final presence = _resolvePresence(type, otherId, presenceMap);
     final adminsOwner = _resolveAdmins(chat);
     final pinned = _resolvePinnedMessage(chat['pinnedMessage']);
+    final mentionId = int.tryParse(
+      chat['lastMentionMessageId']?.toString() ?? '',
+    );
 
     return CachedChat(
       id: id,
@@ -71,6 +74,7 @@ CachedChat? parseChatRow(
       pinnedMsgText: pinned.text,
       pinnedMsgTime: pinned.time,
       pinnedMsgIsPreview: pinned.isPreview,
+      lastMentionMsgId: mentionId ?? existing[id]?.lastMentionMsgId,
     );
   } catch (e) {
     logger.e("Ошибка при парсинге чата: $e");
@@ -159,13 +163,14 @@ _resolveLastMessage(dynamic lastMsg) {
   Map<int, CachedChat> existing,
 ) {
   final config = chatsConfig[id.toString()] ?? chatsConfig[id];
+  final ex = existing[id];
   if (config is Map) {
+    final configFav = config['favIndex'] as int?;
     return (
-      favIndex: config['favIndex'] as int?,
+      favIndex: (configFav != null && configFav > 0) ? configFav : ex?.favIndex,
       dontDisturbUntil: (config['dontDisturbUntil'] as int?) ?? 0,
     );
   }
-  final ex = existing[id];
   if (ex != null) {
     return (favIndex: ex.favIndex, dontDisturbUntil: ex.dontDisturbUntil);
   }

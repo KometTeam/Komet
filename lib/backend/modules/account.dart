@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import '../api.dart';
+import '../../core/config/debug_test.dart';
 import '../../core/config/komet_settings.dart';
 import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
@@ -10,6 +11,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
+import 'banners.dart';
 import 'chats.dart';
 import 'complaints.dart';
 import 'contacts.dart';
@@ -40,7 +42,9 @@ class AccountModule {
   late final PrivacyModule _privacy = PrivacyModule(_api);
   late final ProfileModule _profile = ProfileModule(_api);
   late final TwoFactorModule _twoFactor = TwoFactorModule(_api, _profile);
+  late final BannersModule banners = BannersModule(_api);
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
+  final _noticeController = StreamController<AccountNotice>.broadcast();
   bool _loggedIn = false;
 
   AccountModule(this._api) {
@@ -50,6 +54,8 @@ class AccountModule {
   }
 
   Stream<LoginStatus> get loginStatusStream => _loginStatusController.stream;
+
+  Stream<AccountNotice> get noticeStream => _noticeController.stream;
 
   /// `true`, только когда сервер считает сессию ONLINE — после успешного
   /// login (opcode 19), а не просто после хэндшейка (opcode 6).
@@ -327,6 +333,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
 
     logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
@@ -341,6 +348,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
 
     await _api.connect();
@@ -372,6 +380,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
 
@@ -422,6 +431,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    banners.clear();
     chats.resetForAccountSwitch();
   }
 
@@ -565,22 +575,16 @@ class AccountModule {
 
     ProfileData profile;
     final profileMap = data['profile'];
-    if (profileMap is Map) {
-      final contact = profileMap['contact'];
-      if (contact is! Map) {
-        throw Exception('login: отсутствует profile.contact в ответе');
-      }
+    if (!DebugTest.berserk &&
+        profileMap is Map &&
+        profileMap['contact'] is Map) {
       profile = ProfileData.fromServerProfile(
         profileMap.cast<dynamic, dynamic>(),
       );
-      await AppDatabase.saveProfile(profile, isActive: true);
     } else {
-      final cachedProfile = await AppDatabase.loadProfile(accountId);
-      if (cachedProfile == null) {
-        throw Exception('login: отсутствует profile в ответе');
-      }
-      profile = cachedProfile;
+      profile = await _resurrectProfile(accountId);
     }
+    await AppDatabase.saveProfile(profile, isActive: true);
     await AppDatabase.setActiveAccount(profile.id);
 
     await _saveSyncState(data, serverTime, profile.id);
@@ -600,6 +604,7 @@ class AccountModule {
         profile.id,
         config.cast<dynamic, dynamic>(),
       );
+      await chats.applyFavorites(profile.id);
       final userConfig = config['user'];
       if (userConfig is Map) {
         await AppDatabase.savePrivacyConfig(profile.id, jsonEncode(userConfig));
@@ -609,6 +614,13 @@ class AccountModule {
       await FoldersModule.syncFromServer(_api, profile.id);
     } catch (e) {
       logger.w('Папки чатов: $e');
+    }
+    await chats.applyFavorites(profile.id);
+
+    try {
+      await banners.initFromLogin(profile.id, data);
+    } catch (e) {
+      logger.w('Баннеры: $e');
     }
 
     try {
@@ -623,6 +635,31 @@ class AccountModule {
       serverTime: serverTime,
       raw: data,
     );
+  }
+
+  Future<ProfileData> _resurrectProfile(int accountId) async {
+    if (DebugTest.berserk) {
+      await AppDatabase.deleteAccount(accountId);
+      logger.w('login: [BERSERK] профиль удалён из БД, форсирую регенерацию (id=$accountId)');
+    } else {
+      final cached = await AppDatabase.loadProfile(accountId);
+      if (cached != null) return cached;
+    }
+
+    _noticeController.add(AccountNotice.resurrectingProfile);
+
+    try {
+      final fetched = await ContactsModule.fetchSelfProfile(_api, accountId);
+      if (fetched != null) {
+        logger.i('login: профиль восстановлен через CONTACT_INFO (id=$accountId)');
+        return fetched;
+      }
+    } catch (e) {
+      logger.w('login: восстановление профиля через CONTACT_INFO не удалось: $e');
+    }
+
+    logger.w('login: профиль недоступен, использую заглушку (id=$accountId)');
+    return ProfileData.stub(accountId);
   }
 
   Future<void> _saveSyncState(

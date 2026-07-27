@@ -59,6 +59,7 @@ abstract class Opcode {
   static const int contactMutual = 38; // Общие контакты
   static const int contactPhotos = 39; // Фото контакта
   static const int contactSort = 40; // Сортировка контактов
+  static const int contactAddByPhone = 41; // Добавление контакта по номеру
   static const int contactVerify = 42; // Верификация контакта
   static const int removeContactPhoto = 43; // Удаление фото контакта
   static const int contactInfoByPhone = 46; // Поиск контакта по номеру
@@ -123,6 +124,11 @@ abstract class Opcode {
   static const int fileDownload = 88; // Скачивание файла
   static const int linkInfo = 89; // Информация по ссылке / вход в канал
   static const int audioPlay = 301; // Воспроизведение аудио
+
+  // ── Comments (комментарии к постам каналов) ────────────────────────
+  // Загрузка/отправка/набор комментариев переиспользуют chatHistory (49),
+  // msgSend (64) и msgTyping (65) с добавленным полем postId.
+  static const int commentsInfo = 91; // Кол-во комментариев к постам (totalCount)
 
   // ── Sessions ───────────────────────────────────────────────────────
   static const int sessionsInfo = 96; // Запрос активных сессий
@@ -190,6 +196,7 @@ abstract class Opcode {
   static const int profileDeleteTime = 200; // Таймер удаления профиля
   static const int authQrApprove = 290; // Подтверждение QR-входа
   static const int chatSuggest = 300; // Предложения чатов
+  static const int bannersSync = 302; // Синхронизация баннеров (informer)
 
   // ── Polls ──────────────────────────────────────────────────────────
   static const int sendVote = 304; // Голосование
@@ -265,6 +272,7 @@ abstract class Opcode {
     contactMutual: 'CONTACT_MUTUAL',
     contactPhotos: 'CONTACT_PHOTOS',
     contactSort: 'CONTACT_SORT',
+    contactAddByPhone: 'CONTACT_ADD_BY_PHONE',
     contactVerify: 'CONTACT_VERIFY',
     removeContactPhoto: 'REMOVE_CONTACT_PHOTO',
     contactInfoByPhone: 'CONTACT_INFO_BY_PHONE',
@@ -319,6 +327,7 @@ abstract class Opcode {
     fileDownload: 'FILE_DOWNLOAD',
     linkInfo: 'LINK_INFO',
     audioPlay: 'AUDIO_PLAY',
+    commentsInfo: 'COMMENTS_INFO',
     sessionsInfo: 'SESSIONS_INFO',
     sessionsClose: 'SESSIONS_CLOSE',
     phoneBindRequest: 'PHONE_BIND_REQUEST',
@@ -370,6 +379,7 @@ abstract class Opcode {
     profileDeleteTime: 'PROFILE_DELETE_TIME',
     authQrApprove: 'AUTH_QR_APPROVE',
     chatSuggest: 'CHAT_SUGGEST',
+    bannersSync: 'BANNERS_SYNC',
     sendVote: 'SEND_VOTE',
     votersListByAnswer: 'VOTERS_LIST_BY_ANSWER',
     getPollUpdates: 'GET_POLL_UPDATES',

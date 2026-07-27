@@ -7,9 +7,10 @@ import '../../../backend/modules/digital_id.dart';
 import '../../../backend/modules/webapp.dart';
 import '../../../core/utils/webview_support.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../main.dart' show digitalIdModule;
+import '../../../main.dart' show digitalIdModule, webAppModule;
 import '../../../models/digital_id.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/small_spinner.dart';
@@ -41,7 +42,8 @@ class DigitalIdScreen extends StatefulWidget {
   State<DigitalIdScreen> createState() => _DigitalIdScreenState();
 }
 
-class _DigitalIdScreenState extends State<DigitalIdScreen> {
+class _DigitalIdScreenState extends State<DigitalIdScreen>
+    with ReloadOnReconnect {
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -55,6 +57,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     super.initState();
     _load();
   }
+
+  @override
+  void reloadAfterReconnect() => _load();
 
   Future<void> _load() async {
     setState(() {
@@ -123,9 +128,13 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           builder: (context) => WebAppScreen(
             title: AppLocalizations.of(context)!.digitalIdGosuslugiTitle,
             loader: () async => WebAppLaunch(url: link.url),
+            onExternalCallback: webAppModule.handleExternalCallback,
+            closeAfterExternalCallback: true,
           ),
         ),
       );
+      if (!mounted) return;
+      await digitalIdModule.loadDocuments(createIfMissing: true);
       if (!mounted) return;
       await _load();
     } on DigitalIdException catch (e) {

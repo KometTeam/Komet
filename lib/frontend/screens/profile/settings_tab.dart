@@ -340,7 +340,9 @@ class _SettingsTabState extends State<SettingsTab> {
 
     final String fullName =
         '${_profile!.firstName}${_profile!.lastName != null ? ' ${_profile!.lastName}' : ''}';
-    final String phone = '+${_profile!.phone}';
+    final String phone = _profile!.phone == 0
+        ? l10n.profilePhoneRegenFailed
+        : '+${_profile!.phone}';
 
     final size = MediaQuery.sizeOf(context);
     final topPad = MediaQuery.paddingOf(context).top;
@@ -672,6 +674,7 @@ class _SettingsTabState extends State<SettingsTab> {
   ) {
     final topPad = MediaQuery.paddingOf(context).top;
     final hasPhoto = (_profile?.baseUrl ?? '').isNotEmpty;
+    final phoneMissing = (_profile?.phone ?? 0) == 0;
     final pt = hasPhoto ? t : 0.0;
     if (pt > 0) _headerEverExpanded = true;
 
@@ -826,37 +829,57 @@ class _SettingsTabState extends State<SettingsTab> {
                     const SizedBox(height: 6),
                     _headerAligned(
                       pt,
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          GestureDetector(
-                            onTap: () => setState(
-                              () => _isPhoneVisible = !_isPhoneVisible,
-                            ),
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: _PhoneSpoiler(
-                                text: phone,
-                                isVisible: _isPhoneVisible,
+                      phoneMissing
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: Text(
+                                phone,
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: subColor,
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.5,
+                                  height: 1.3,
                                 ),
                               ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => setState(
+                                    () => _isPhoneVisible = !_isPhoneVisible,
+                                  ),
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: _PhoneSpoiler(
+                                      text: phone,
+                                      isVisible: _isPhoneVisible,
+                                      style: TextStyle(
+                                        color: subColor,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w400,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  _isPhoneVisible
+                                      ? Symbols.visibility
+                                      : Symbols.visibility_off,
+                                  size: 14,
+                                  color: Color.lerp(
+                                    cs.mutedText,
+                                    Colors.white70,
+                                    pt,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            _isPhoneVisible
-                                ? Symbols.visibility
-                                : Symbols.visibility_off,
-                            size: 14,
-                            color: Color.lerp(cs.mutedText, Colors.white70, pt),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),

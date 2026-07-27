@@ -8,8 +8,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
+import 'create_channel_flow.dart';
 import 'create_group_flow.dart';
+import '../contacts/add_contact_sheet.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../../core/crypto/message_decryption_cache.dart';
+import '../../widgets/decrypted_text.dart';
+import '../../widgets/encryption_lock_badge.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
@@ -19,7 +24,9 @@ import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/formatted_message_text.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/download_history.dart';
 import '../../../core/utils/text_format.dart';
+import '../../../l10n/app_localizations.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -50,6 +57,7 @@ import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
+import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../main.dart'
@@ -59,6 +67,7 @@ import '../stories/story_composer_screen.dart';
 import '../stories/story_owner_info.dart';
 import '../stories/story_ring.dart';
 import '../stories/story_viewer_screen.dart';
+import '../downloads_screen.dart';
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -577,11 +586,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     });
     chats.chatsChanged.addListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
+    ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
     KometSettings.showHiddenChats.addListener(_requestReload);
+    ContactsModule.revision.addListener(_requestReload);
     _maybeLoadStories();
     _typingSub = api.pushStream
         .where((p) => p.opcode == Opcode.notifTyping)
@@ -619,6 +630,10 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   void _onArchivedChanged() {
     if (mounted) _requestReload();
+  }
+
+  void _onEncryptionChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onStoriesEnabledChanged() {
@@ -1222,11 +1237,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     _settleTimer?.cancel();
     chats.chatsChanged.removeListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
+    ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     KometSettings.showHiddenChats.removeListener(_requestReload);
+    ContactsModule.revision.removeListener(_requestReload);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _typingSub?.cancel();
@@ -1326,64 +1343,94 @@ class _ChatListScreenState extends State<ChatListScreen>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Row(
-                                  children: [
-                                    if (AppStories.current.value &&
-                                        _pullRatio < 0.8 &&
-                                        storiesModule.hasAny)
-                                      Opacity(
-                                        opacity: 1.0 - _pullRatio,
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () => _openStories(0),
-                                          child: Container(
-                                            width: 50 * (1.0 - _pullRatio),
-                                            height: 32,
-                                            margin: const EdgeInsets.only(
-                                              right: 8,
-                                            ),
-                                            child: FoldedStoryStack(
-                                              previews: storiesModule.previews,
-                                              opacity: 1.0 - _pullRatio,
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      if (AppStories.current.value &&
+                                          _pullRatio < 0.8 &&
+                                          storiesModule.hasAny)
+                                        Opacity(
+                                          opacity: 1.0 - _pullRatio,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () => _openStories(0),
+                                            child: Container(
+                                              width: 50 * (1.0 - _pullRatio),
+                                              height: 32,
+                                              margin: const EdgeInsets.only(
+                                                right: 8,
+                                              ),
+                                              child: FoldedStoryStack(
+                                                previews:
+                                                    storiesModule.previews,
+                                                opacity: 1.0 - _pullRatio,
+                                              ),
                                             ),
                                           ),
                                         ),
+                                      Flexible(
+                                        child: Text(
+                                          connectionStatusLabel(
+                                                _sessionState,
+                                              ) ??
+                                              (_profile?.firstName ?? 'Чат'),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: cs.onSurface,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w600,
+                                            fontFamily: 'Outfit',
+                                          ),
+                                        ),
                                       ),
-                                    Text(
-                                      connectionStatusLabel(_sessionState) ??
-                                          (_profile?.firstName ?? 'Чат'),
-                                      style: TextStyle(
-                                        color: cs.onSurface,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w600,
-                                        fontFamily: 'Outfit',
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                                PopupMenuButton<int>(
-                                  icon: Icon(
-                                    Symbols.more_vert,
-                                    color: cs.outline,
-                                    weight: 400,
-                                  ),
-                                  offset: const Offset(0, 48),
-                                  elevation: 4,
-                                  color: cs.surfaceContainerHigh,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  onSelected: _onOverflowMenuSelected,
-                                  itemBuilder: (context) => [
-                                    _buildPopupMenuItem(
-                                      1,
-                                      'Избранное',
-                                      Symbols.bookmark,
-                                    ),
-                                    _buildPopupMenuItem(
-                                      2,
-                                      'Прочитать всё',
-                                      Symbols.done_all,
+                                const SizedBox(width: 4),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (!widget.forwardMode &&
+                                        !widget.archiveMode)
+                                      IconButton(
+                                        key: const ValueKey('downloads-button'),
+                                        tooltip: AppLocalizations.of(
+                                          context,
+                                        )!.downloadsTooltip,
+                                        icon: Icon(
+                                          Symbols.download_for_offline,
+                                          color: cs.outline,
+                                          weight: 400,
+                                        ),
+                                        onPressed: () =>
+                                            unawaited(_openDownloads()),
+                                      ),
+                                    PopupMenuButton<int>(
+                                      icon: Icon(
+                                        Symbols.more_vert,
+                                        color: cs.outline,
+                                        weight: 400,
+                                      ),
+                                      offset: const Offset(0, 48),
+                                      elevation: 4,
+                                      color: cs.surfaceContainerHigh,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      onSelected: _onOverflowMenuSelected,
+                                      itemBuilder: (context) => [
+                                        _buildPopupMenuItem(
+                                          1,
+                                          'Избранное',
+                                          Symbols.bookmark,
+                                        ),
+                                        _buildPopupMenuItem(
+                                          2,
+                                          'Прочитать всё',
+                                          Symbols.done_all,
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1629,6 +1676,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         avatar ?? "",
                         presenceUserId: secondId,
                         unreadCount: chat.unreadCount,
+                        hasMention: chat.hasUnreadMention,
                         isMuted: chat.isMuted,
                         isVerified: isVerified,
                         isPinned: isPinned,
@@ -1640,6 +1688,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                         messageRanges: isPlaceholder
                             ? const []
                             : chat.lastMsgFormatRanges,
+                        previewMessageId: isPlaceholder ? null : chat.lastMsgId,
+                        previewCipherText: isPlaceholder
+                            ? null
+                            : chat.lastMsgTextOneLine,
                       ),
                     );
                   } else {
@@ -1649,6 +1701,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         : null;
 
                     String fullMsg = "";
+                    String senderPrefix = "";
                     List<FormatRange> messageRanges = const [];
                     if (isPlaceholder) {
                       fullMsg = 'зайдите в чат для подгрузки';
@@ -1656,6 +1709,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       var prefixLen = 0;
                       if (sender?.isNotEmpty == true && chat.id != 0) {
                         final prefix = "$sender: ";
+                        senderPrefix = prefix;
                         fullMsg += prefix;
                         prefixLen = prefix.length;
                       }
@@ -1687,6 +1741,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ? chat.iconUrl!
                             : '',
                         unreadCount: chat.unreadCount,
+                        hasMention: chat.hasUnreadMention,
                         isMuted: chat.isMuted,
                         isVerified: chat.isOfficial,
                         isPinned: isPinned,
@@ -1696,6 +1751,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ownStatus: _ownStatusFor(chat, isPlaceholder),
                         ownRead: chat.lastMsgReadByOthers,
                         messageRanges: messageRanges,
+                        previewMessageId: isPlaceholder ? null : chat.lastMsgId,
+                        previewPrefix: senderPrefix,
+                        previewCipherText: isPlaceholder
+                            ? null
+                            : chat.lastMsgText,
                       ),
                     );
                   }
@@ -2322,27 +2382,29 @@ class _ChatListScreenState extends State<ChatListScreen>
       onSend: (photos, caption) async {
         if (photos.isEmpty) return;
         final picked = photos.first;
-        if (picked.item.isVideo) {
-          if (mounted) {
-            showCustomNotification(
-              context,
-              'Видео в историях пока не поддерживается',
-            );
-          }
-          return;
-        }
+        final isVideo = picked.item.isVideo;
         final file =
             picked.editedFile ??
             picked.item.localFile ??
             await picked.item.originFile();
         if (file == null) {
           if (mounted) {
-            showCustomNotification(context, 'Не удалось открыть фото');
+            showCustomNotification(
+              context,
+              isVideo ? 'Не удалось открыть видео' : 'Не удалось открыть фото',
+            );
           }
           return;
         }
         if (!mounted) return;
-        pushSwipeable(context, (_) => StoryComposerScreen(file: file));
+        pushSwipeable(
+          context,
+          (_) => StoryComposerScreen(
+            file: file,
+            isVideo: isVideo,
+            durationMs: picked.item.duration?.inMilliseconds,
+          ),
+        );
       },
     );
   }
@@ -2502,6 +2564,27 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Widget _countBadge(ColorScheme cs, String label, {required bool muted}) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: muted ? cs.surfaceContainerHighest : cs.primary,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: muted ? cs.outline : cs.onPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          height: 1.1,
+        ),
+      ),
+    );
+  }
+
   Widget _buildChatItem(
     String id,
     String name,
@@ -2511,6 +2594,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     int presenceUserId = 0,
     bool isRead = false,
     int unreadCount = 0,
+    bool hasMention = false,
     bool isMuted = false,
     bool isVerified = false,
     bool isPinned = false,
@@ -2520,19 +2604,56 @@ class _ChatListScreenState extends State<ChatListScreen>
     String? ownStatus,
     bool ownRead = false,
     List<FormatRange> messageRanges = const [],
+    int? previewMessageId,
+    String previewPrefix = '',
+    String? previewCipherText,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
+    final isEncrypted = ChatEncryptionStore.instance.isEnabled(
+      _profile?.id ?? 0,
+      int.tryParse(id) ?? 0,
+    );
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
-    final Widget messageLine = _buildPreviewLine(
-      cs,
-      message,
-      messageRanges,
-      draft,
-      messageItalic,
-    );
+    final canDecryptPreview =
+        isEncrypted &&
+        draft == null &&
+        previewMessageId != null &&
+        (previewCipherText?.isNotEmpty ?? false);
+    final Widget messageLine = canDecryptPreview
+        ? DecryptedContent(
+            accountId: _profile?.id ?? 0,
+            chatId: int.tryParse(id) ?? 0,
+            messageId: previewMessageId.toString(),
+            cipherText: previewCipherText!,
+            builder: (decryption) => switch (decryption?.state) {
+              null => _buildPreviewLine(
+                cs,
+                message,
+                messageRanges,
+                draft,
+                messageItalic,
+              ),
+              MessageDecryptionState.wrongKey => _buildPreviewLine(
+                cs,
+                '$previewPrefix'
+                'неверный ключ',
+                const [],
+                draft,
+                true,
+              ),
+              MessageDecryptionState.decrypted => _buildPreviewLine(
+                cs,
+                '$previewPrefix${decryption!.plaintext}',
+                const [],
+                draft,
+                messageItalic,
+              ),
+            },
+          )
+        : _buildPreviewLine(cs, message, messageRanges, draft, messageItalic);
 
     final Widget avatarCircle = CircleAvatar(
       radius: 24,
@@ -2615,8 +2736,15 @@ class _ChatListScreenState extends State<ChatListScreen>
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     avatarCircle,
+                    if (isEncrypted)
+                      const Positioned(
+                        left: -2,
+                        bottom: -2,
+                        child: EncryptionLockBadge(size: 18),
+                      ),
                     if (isSelected)
                       Positioned(
                         right: -2,
@@ -2731,29 +2859,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                               ),
                               ?statusIcon,
                               const SizedBox(width: 8),
+                              if (hasMention) ...[
+                                _countBadge(cs, '@', muted: isMuted),
+                                const SizedBox(width: 4),
+                              ],
                               if (unreadCount > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isMuted
-                                        ? cs.surfaceContainerHighest
-                                        : cs.primary,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    unreadCount.toString(),
-                                    style: TextStyle(
-                                      color: isMuted
-                                          ? cs.outline
-                                          : cs.onPrimary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.1,
-                                    ),
-                                  ),
+                                _countBadge(
+                                  cs,
+                                  unreadCount.toString(),
+                                  muted: isMuted,
                                 )
                               else if (isRead)
                                 Icon(
@@ -2833,9 +2947,23 @@ class _ChatListScreenState extends State<ChatListScreen>
           },
         ),
         const SizedBox(height: 4),
-        _buildFabMenuItem(Symbols.campaign, 'Создать канал'),
+        _buildFabMenuItem(
+          Symbols.campaign,
+          'Создать канал',
+          onTap: () {
+            _toggleFab();
+            showCreateChannelFlow(context);
+          },
+        ),
         const SizedBox(height: 4),
-        _buildFabMenuItem(Symbols.person_add, 'Создать контакт'),
+        _buildFabMenuItem(
+          Symbols.person_add,
+          'Создать контакт',
+          onTap: () {
+            _toggleFab();
+            showAddContactSheet(context);
+          },
+        ),
       ],
     );
   }
@@ -2875,6 +3003,63 @@ class _ChatListScreenState extends State<ChatListScreen>
       case 2:
         unawaited(_markAllChatsRead());
     }
+  }
+
+  Future<void> _openDownloads() async {
+    final record = await pushSwipeable<DownloadRecord>(
+      context,
+      (_) => const DownloadsScreen(),
+    );
+    if (record == null || !mounted) return;
+    await _openDownloadedMessage(record);
+  }
+
+  Future<void> _openDownloadedMessage(DownloadRecord record) async {
+    final chatId = record.chatId;
+    final messageId = record.messageId;
+    if (chatId == null || messageId == null || messageId.isEmpty) return;
+    final profile = _profile ?? await AppDatabase.loadActiveProfile();
+    if (profile == null || !mounted) return;
+
+    CachedChat? chat;
+    for (final item in _chats) {
+      if (item.id == chatId) {
+        chat = item;
+        break;
+      }
+    }
+    if (chat == null) {
+      await chats.ensureChatCached(api, profile.id, chatId);
+      final cached = await chats.getChat(profile.id, chatId);
+      if (cached.isNotEmpty) chat = cached.first;
+    }
+    if (!mounted) return;
+
+    final selection = DesktopChatSelection(
+      chatId: chatId,
+      name:
+          chat?.title ??
+          (record.sourceName.trim().isEmpty ? 'Чат' : record.sourceName.trim()),
+      imageUrl: chat?.iconUrl ?? '',
+      chatType: chat?.type ?? 'CHAT',
+      initialMessageId: messageId,
+      initialMessageTime: record.messageTime,
+    );
+    if (widget.onChatSelected != null) {
+      widget.onChatSelected!(selection);
+      return;
+    }
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: selection.chatId,
+        name: selection.name,
+        imageUrl: selection.imageUrl,
+        chatType: selection.chatType,
+        initialMessageId: selection.initialMessageId,
+        initialMessageTime: selection.initialMessageTime,
+      ),
+    );
   }
 
   void _openSavedMessages() {

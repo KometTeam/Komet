@@ -47,6 +47,7 @@ class OutboxService {
 
         final payload = pending.payload;
         final replyToMessageId = _replyIdFromPayload(payload);
+        final replySourceChatId = _replySourceChatIdFromPayload(payload);
         final elements = _elementsFromPayload(payload);
 
         try {
@@ -55,6 +56,7 @@ class OutboxService {
             pending.chatId,
             text,
             replyToMessageId: replyToMessageId,
+            replySourceChatId: replySourceChatId,
             elements: elements,
           );
           final sent = CachedMessage(
@@ -111,6 +113,17 @@ class OutboxService {
     final mid = link['messageId'];
     if (mid is int) return mid;
     if (mid != null) return int.tryParse(mid.toString());
+    return null;
+  }
+
+  int? _replySourceChatIdFromPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+    final link = payload['link'];
+    if (link is! Map) return null;
+    if ((link['type'] as String?)?.toUpperCase() != 'REPLY') return null;
+    final chatId = link['chatId'];
+    if (chatId is int) return chatId;
+    if (chatId != null) return int.tryParse(chatId.toString());
     return null;
   }
 

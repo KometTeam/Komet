@@ -19,6 +19,7 @@ import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
+import 'core/storage/chat_encryption_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_show_extra_info.dart';
@@ -34,8 +35,11 @@ import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
 import 'core/config/app_commands.dart';
+import 'core/config/app_phonebook_names.dart';
+import 'core/contacts/device_contacts_service.dart';
 import 'core/config/app_link_preview.dart';
 import 'core/config/app_media_cache.dart';
+import 'core/config/app_video_note_quality.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
 import 'core/config/app_chat_chrome.dart';
@@ -50,6 +54,7 @@ import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
 import 'backend/modules/account.dart';
 import 'backend/modules/chats.dart';
+import 'backend/modules/comments.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/file_uploader.dart';
 import 'backend/modules/messages.dart';
@@ -86,6 +91,7 @@ import 'frontend/widgets/theme_reveal.dart';
 final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
+final commentsModule = CommentsModule(api);
 final sharedContentModule = SharedContentModule(api);
 final pollsModule = PollsModule(api);
 final stickersModule = StickersModule(api);
@@ -94,6 +100,7 @@ final webAppModule = WebAppModule(api);
 final digitalIdModule = DigitalIdModule(webAppModule);
 final fileUploader = FileUploader(api: api, messages: messagesModule);
 final storiesModule = StoriesModule(api);
+final bannersModule = accountModule.banners;
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
@@ -183,6 +190,7 @@ void main(List<String> args) async {
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
+  commentsModule.attachPushHandlers(api);
   storiesModule.attach();
   unawaited(storiesModule.loadCache());
   unawaited(DeepLinkService.instance.init());
@@ -211,8 +219,12 @@ void main(List<String> args) async {
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
   final commandsFuture = AppCommands.load();
+  final phonebookNamesFuture = AppPhonebookNames.load();
   final linkPreviewFuture = AppLinkPreview.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
+  final videoNoteResolutionFuture = AppVideoNoteResolution.load();
+  final videoNoteFpsFuture = AppVideoNoteFps.load();
+  final videoNoteRearCameraFuture = AppVideoNoteRearCamera.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
   final showExtraInfoFuture = AppShowExtraInfo.load();
   final trafficCaptureFuture = TrafficMonitor.instance.load();
@@ -229,6 +241,7 @@ void main(List<String> args) async {
   await FileHistoryCache.load(prefs);
   await DraftStore.instance.load();
   await ArchivedChatsStore.instance.load();
+  await ChatEncryptionStore.instance.load();
   await KometSettings.load();
   if (KometSettings.ghostMode.value) SelfPresence.markOffline();
   await ContactCache.load();
@@ -266,11 +279,16 @@ void main(List<String> args) async {
     pranksFuture,
     storiesFuture,
     commandsFuture,
+    phonebookNamesFuture,
     linkPreviewFuture,
     cacheLimitFuture,
+    videoNoteResolutionFuture,
+    videoNoteFpsFuture,
+    videoNoteRearCameraFuture,
     digitalIdNativeFuture,
     showExtraInfoFuture,
   ]);
+  await DeviceContactsService.loadFromStartup();
   await trafficCaptureFuture;
   await debugLogFuture;
   runApp(
@@ -339,6 +357,7 @@ class KometAppState extends State<KometApp>
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
   StreamSubscription<IncomingCall>? _callIncomingSub;
   StreamSubscription<String>? _serverErrorSub;
+  StreamSubscription<AccountNotice>? _accountNoticeSub;
   Timer? _scheduleTimer;
   String? _lastVpnNotice;
   DateTime _lastVpnNoticeAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -477,6 +496,18 @@ class KometAppState extends State<KometApp>
         showCustomNotificationOnOverlay(overlay, msg);
       }
     });
+
+    _accountNoticeSub = accountModule.noticeStream.listen((notice) {
+      final overlay = KometApp.navigatorKey.currentState?.overlay;
+      final ctx = KometApp.navigatorKey.currentContext;
+      if (overlay == null || ctx == null || !ctx.mounted) return;
+      final l10n = AppLocalizations.of(ctx);
+      if (l10n == null) return;
+      final message = switch (notice) {
+        AccountNotice.resurrectingProfile => l10n.profileResurrecting,
+      };
+      showCustomNotificationOnOverlay(overlay, message);
+    });
   }
 
   Future<void> _ensureFullScreenIntentPermission() async {
@@ -534,6 +565,7 @@ class KometAppState extends State<KometApp>
     _vpnBypassSub?.cancel();
     _callIncomingSub?.cancel();
     _serverErrorSub?.cancel();
+    _accountNoticeSub?.cancel();
     _scheduleTimer?.cancel();
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);

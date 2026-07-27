@@ -950,6 +950,24 @@ abstract class AppLocalizations {
   /// **'comments:'**
   String get chatInfoComments;
 
+  /// No description provided for @commentsWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get commentsWrite;
+
+  /// No description provided for @commentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments'**
+  String get commentsTitle;
+
+  /// No description provided for @commentsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 comment} other{{count} comments}}'**
+  String commentsCount(int count);
+
   /// No description provided for @chatInfoAplus.
   ///
   /// In en, this message translates to:
@@ -2588,6 +2606,12 @@ abstract class AppLocalizations {
   /// **'Photo {index} of {total}'**
   String photoViewerCounter(int index, int total);
 
+  /// No description provided for @photoViewerCounterFile.
+  ///
+  /// In en, this message translates to:
+  /// **'FILE of {total}'**
+  String photoViewerCounterFile(int total);
+
   /// No description provided for @photoViewerSentToday.
   ///
   /// In en, this message translates to:
@@ -2617,6 +2641,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Rotate'**
   String get photoViewerRotate;
+
+  /// No description provided for @mediaViewerCounter.
+  ///
+  /// In en, this message translates to:
+  /// **'{index} of {total}'**
+  String mediaViewerCounter(int index, int total);
+
+  /// No description provided for @mediaViewerViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View all media'**
+  String get mediaViewerViewAll;
+
+  /// No description provided for @videoViewerSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get videoViewerSettings;
+
+  /// No description provided for @videoViewerSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get videoViewerSpeed;
+
+  /// No description provided for @videoViewerQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Quality'**
+  String get videoViewerQuality;
 
   /// No description provided for @sharedCopyLink.
   ///
@@ -2677,6 +2731,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Admin'**
   String get chatInfoRoleAdmin;
+
+  /// No description provided for @chatInfoMemberDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Account deleted'**
+  String get chatInfoMemberDeleted;
+
+  /// No description provided for @chatInfoInviteByLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite via link'**
+  String get chatInfoInviteByLink;
+
+  /// No description provided for @chatInfoInviteLinkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can invite anyone with this link'**
+  String get chatInfoInviteLinkHint;
+
+  /// No description provided for @chatInfoAddMembersAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get chatInfoAddMembersAction;
+
+  /// No description provided for @chatInfoMembersSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get chatInfoMembersSearchHint;
+
+  /// No description provided for @chatInfoAddMembersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No one to add'**
+  String get chatInfoAddMembersEmpty;
+
+  /// No description provided for @chatInfoMembersAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Members added'**
+  String get chatInfoMembersAdded;
+
+  /// No description provided for @chatInfoAddMembersError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add members'**
+  String get chatInfoAddMembersError;
 
   /// No description provided for @chatInfoNoData.
   ///
@@ -3692,6 +3794,30 @@ abstract class AppLocalizations {
   /// **'Section under development'**
   String get attachSheetSectionInProgress;
 
+  /// No description provided for @attachSheetContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get attachSheetContact;
+
+  /// No description provided for @attachSheetContactSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search contacts'**
+  String get attachSheetContactSearchHint;
+
+  /// No description provided for @attachSheetNoContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no contacts yet'**
+  String get attachSheetNoContacts;
+
+  /// No description provided for @attachSheetNoContactsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts found'**
+  String get attachSheetNoContactsFound;
+
   /// No description provided for @attachSheetNoGalleryAccessTitle.
   ///
   /// In en, this message translates to:
@@ -4045,6 +4171,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t check for updates. Try again later'**
   String get updateCheckFailed;
+
+  /// No description provided for @profileResurrecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Oops! The server didn\'t send your profile. Trying to regenerate…'**
+  String get profileResurrecting;
+
+  /// No description provided for @profilePhoneRegenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t regenerate your phone number. Please sign in again and report the issue to the developers'**
+  String get profilePhoneRegenFailed;
+
+  /// No description provided for @addContactTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get addContactTitle;
+
+  /// No description provided for @addContactFirstName.
+  ///
+  /// In en, this message translates to:
+  /// **'First name'**
+  String get addContactFirstName;
+
+  /// No description provided for @addContactLastName.
+  ///
+  /// In en, this message translates to:
+  /// **'Last name (optional)'**
+  String get addContactLastName;
+
+  /// No description provided for @addContactSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save contact'**
+  String get addContactSave;
+
+  /// No description provided for @addContactNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'{phone} not found'**
+  String addContactNotFound(String phone);
+
+  /// No description provided for @addContactNotFoundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This number isn\'t on the app yet'**
+  String get addContactNotFoundSubtitle;
+
+  /// No description provided for @addContactSearchOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for other number'**
+  String get addContactSearchOther;
+
+  /// No description provided for @addContactError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add contact'**
+  String get addContactError;
+
+  /// No description provided for @contactBubbleNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New contact'**
+  String get contactBubbleNew;
+
+  /// No description provided for @contactBubbleAlreadyAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Already in your contacts'**
+  String get contactBubbleAlreadyAdded;
+
+  /// No description provided for @contactBubbleOpenProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Open profile'**
+  String get contactBubbleOpenProfile;
+
+  /// No description provided for @editContactMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit contact'**
+  String get editContactMenu;
+
+  /// No description provided for @editContactTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit contact'**
+  String get editContactTitle;
+
+  /// No description provided for @editContactFirstName.
+  ///
+  /// In en, this message translates to:
+  /// **'First name'**
+  String get editContactFirstName;
+
+  /// No description provided for @editContactLastName.
+  ///
+  /// In en, this message translates to:
+  /// **'Last name'**
+  String get editContactLastName;
+
+  /// No description provided for @editContactSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get editContactSave;
+
+  /// No description provided for @editContactDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete contact'**
+  String get editContactDelete;
+
+  /// No description provided for @editContactDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete contact?'**
+  String get editContactDeleteConfirmTitle;
+
+  /// No description provided for @editContactDeleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This contact will be removed from your list.'**
+  String get editContactDeleteConfirmBody;
+
+  /// No description provided for @editContactDeleteCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get editContactDeleteCancel;
+
+  /// No description provided for @editContactError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save changes'**
+  String get editContactError;
+
+  /// No description provided for @downloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent downloads'**
+  String get downloadsTitle;
+
+  /// No description provided for @downloadsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get downloadsTooltip;
+
+  /// No description provided for @downloadsSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get downloadsSettings;
+
+  /// No description provided for @downloadsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded files will appear here'**
+  String get downloadsEmpty;
+
+  /// No description provided for @downloadsUnknownSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown source'**
+  String get downloadsUnknownSource;
+
+  /// No description provided for @downloadsPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get downloadsPhoto;
+
+  /// No description provided for @downloadsVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get downloadsVideo;
+
+  /// No description provided for @downloadsGif.
+  ///
+  /// In en, this message translates to:
+  /// **'GIF'**
+  String get downloadsGif;
+
+  /// No description provided for @downloadsAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get downloadsAudio;
+
+  /// No description provided for @downloadsFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get downloadsFile;
+
+  /// No description provided for @downloadsOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the file'**
+  String get downloadsOpenFailed;
+
+  /// No description provided for @downloadsClearHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear download history'**
+  String get downloadsClearHistory;
+
+  /// No description provided for @downloadsClearTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear download history?'**
+  String get downloadsClearTitle;
+
+  /// No description provided for @downloadsClearBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The files will stay on the device, but this list will be cleared.'**
+  String get downloadsClearBody;
+
+  /// No description provided for @downloadsClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get downloadsClearConfirm;
+
+  /// No description provided for @downloadsHistoryCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Download history cleared'**
+  String get downloadsHistoryCleared;
 }
 
 class _AppLocalizationsDelegate

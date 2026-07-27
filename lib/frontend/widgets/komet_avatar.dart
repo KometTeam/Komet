@@ -10,6 +10,7 @@ class KometAvatar extends StatelessWidget {
   final Color? backgroundColor;
   final Color? foregroundColor;
   final double? fontSize;
+  final bool fadeIn;
 
   const KometAvatar({
     super.key,
@@ -19,7 +20,11 @@ class KometAvatar extends StatelessWidget {
     this.backgroundColor,
     this.foregroundColor,
     this.fontSize,
+    this.fadeIn = true,
   });
+
+  static const _fadeInDuration = Duration(milliseconds: 500);
+  static const _fadeOutDuration = Duration(milliseconds: 1000);
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +55,8 @@ class KometAvatar extends StatelessWidget {
               fit: BoxFit.cover,
               memCacheWidth: cache,
               memCacheHeight: cache,
+              fadeInDuration: fadeIn ? _fadeInDuration : Duration.zero,
+              fadeOutDuration: fadeIn ? _fadeOutDuration : Duration.zero,
               errorWidget: (_, _, _) => placeholder,
             )
           : placeholder,

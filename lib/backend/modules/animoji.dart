@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/logger.dart';
 import '../../models/animoji.dart';
 
@@ -23,6 +24,7 @@ class AnimojiModule {
   static const int _maxRecents = 24;
 
   final Map<int, Animoji> _byId = {};
+  final Map<String, Animoji> _byEmoji = {};
   List<int> _orderedIds = [];
   List<int> _recentIds = [];
   bool _recentsLoaded = false;
@@ -50,7 +52,7 @@ class AnimojiModule {
 
   Future<void> noteUsed(Animoji animoji) async {
     await ensureRecentsLoaded();
-    _byId[animoji.id] = animoji;
+    _remember(animoji);
     _recentIds.remove(animoji.id);
     _recentIds.insert(0, animoji.id);
     if (_recentIds.length > _maxRecents) {
@@ -68,6 +70,28 @@ class AnimojiModule {
   List<Animoji> get quickAnimojis {
     final list = animojis;
     return list.length <= 6 ? list : list.sublist(0, 6);
+  }
+
+  Animoji? cached(int id) => _byId[id];
+
+  Animoji? findByEmoji(String emoji) =>
+      _byEmoji[EmojiKeywordIndex.normalize(emoji)];
+
+  Future<Animoji?> fetchById(int id) async {
+    final known = _byId[id];
+    if (known != null) return known;
+    final map = await _api.sendRequestMap(Opcode.assetsGetByIds, {
+      'type': 'ANIMOJI',
+      'ids': [id],
+    });
+    final list = map?['animojis'];
+    if (list is! List) return null;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final animoji = Animoji.fromMap(e);
+      if (animoji != null) _remember(animoji);
+    }
+    return _byId[id];
   }
 
   Future<void> ensureLoaded() {
@@ -133,12 +157,17 @@ class AnimojiModule {
       for (final e in list) {
         if (e is! Map) continue;
         final animoji = Animoji.fromMap(e);
-        if (animoji != null) _byId[animoji.id] = animoji;
+        if (animoji != null) _remember(animoji);
       }
     }
 
     _orderedIds = ids.where(_byId.containsKey).toList();
     logger.i('Анимодзи: ${_orderedIds.length} доступно для реакций');
+  }
+
+  void _remember(Animoji animoji) {
+    _byId[animoji.id] = animoji;
+    _byEmoji[EmojiKeywordIndex.normalize(animoji.emoji)] = animoji;
   }
 
   List<int> _dedup(List<int> ids) {

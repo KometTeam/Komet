@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/contacts.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/contacts/device_contacts_service.dart';
 import '../../../core/nfc/nfc_exchange_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
@@ -130,6 +131,11 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
 
   String _peerName() {
     final l10n = AppLocalizations.of(context)!;
+    final phone = _peerPhone;
+    if (phone != null) {
+      final book = DeviceContactsService.nameForPhone(phone);
+      if (book != null) return book;
+    }
     return _peerInfo?.displayName ??
         l10n.nfcPeerNameFallback('${_peerId ?? ''}');
   }

@@ -158,6 +158,16 @@
   "chatInfoLink": "link:",
   "chatInfoOfficial": "official:",
   "chatInfoComments": "comments:",
+  "commentsWrite": "Comment",
+  "commentsTitle": "Comments",
+  "commentsCount": "{count, plural, =1{1 comment} other{{count} comments}}",
+  "@commentsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "chatInfoAplus": "approved by Roskomnadzor:",
   "chatInfoSignAdmin": "admin signature:",
   "chatInfoLastChanged": "last changed:",
@@ -535,6 +545,14 @@
       }
     }
   },
+  "photoViewerCounterFile": "FILE of {total}",
+  "@photoViewerCounterFile": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "photoViewerSentToday": "{sender} • today at {time}",
   "@photoViewerSentToday": {
     "placeholders": {
@@ -563,6 +581,21 @@
   "photoViewerSaveAs": "Save as…",
   "photoViewerViewAll": "View all photos",
   "photoViewerRotate": "Rotate",
+  "mediaViewerCounter": "{index} of {total}",
+  "@mediaViewerCounter": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "mediaViewerViewAll": "View all media",
+  "videoViewerSettings": "Settings",
+  "videoViewerSpeed": "Speed",
+  "videoViewerQuality": "Quality",
   "sharedCopyLink": "Copy link",
   "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",
@@ -573,6 +606,14 @@
   "chatInfoAddMember": "Add member",
   "chatInfoRoleOwner": "owner",
   "chatInfoRoleAdmin": "Admin",
+  "chatInfoMemberDeleted": "Account deleted",
+  "chatInfoInviteByLink": "Invite via link",
+  "chatInfoInviteLinkHint": "You can invite anyone with this link",
+  "chatInfoAddMembersAction": "Add",
+  "chatInfoMembersSearchHint": "Search",
+  "chatInfoAddMembersEmpty": "No one to add",
+  "chatInfoMembersAdded": "Members added",
+  "chatInfoAddMembersError": "Couldn't add members",
   "chatInfoNoData": "No data",
   "chatInfoHideExtra": "Hide",
   "chatInfoShowMoreExtra": "Details",
@@ -821,6 +862,10 @@
   "attachSheetNoImagesFound": "No images found",
   "attachSheetLimitedAccessInfo": "Not all photos are accessible",
   "attachSheetSectionInProgress": "Section under development",
+  "attachSheetContact": "Contact",
+  "attachSheetContactSearchHint": "Search contacts",
+  "attachSheetNoContacts": "You have no contacts yet",
+  "attachSheetNoContactsFound": "No contacts found",
   "attachSheetNoGalleryAccessTitle": "No access to the gallery",
   "attachSheetNoGalleryAccessSubtitle": "Allow access to photos to pick them from here",
   "attachSheetAllow": "Allow",
@@ -907,5 +952,51 @@
   "updateCheck": "Check for updates",
   "updateChecking": "Checking for updates…",
   "updateUpToDate": "You have the latest version",
-  "updateCheckFailed": "Couldn't check for updates. Try again later"
+  "updateCheckFailed": "Couldn't check for updates. Try again later",
+  "profileResurrecting": "Oops! The server didn't send your profile. Trying to regenerate…",
+  "profilePhoneRegenFailed": "Couldn't regenerate your phone number. Please sign in again and report the issue to the developers",
+  "addContactTitle": "Add contact",
+  "addContactFirstName": "First name",
+  "addContactLastName": "Last name (optional)",
+  "addContactSave": "Save contact",
+  "addContactNotFound": "{phone} not found",
+  "@addContactNotFound": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "addContactNotFoundSubtitle": "This number isn't on the app yet",
+  "addContactSearchOther": "Search for other number",
+  "addContactError": "Couldn't add contact",
+  "contactBubbleNew": "New contact",
+  "contactBubbleAlreadyAdded": "Already in your contacts",
+  "contactBubbleOpenProfile": "Open profile",
+  "editContactMenu": "Edit contact",
+  "editContactTitle": "Edit contact",
+  "editContactFirstName": "First name",
+  "editContactLastName": "Last name",
+  "editContactSave": "Save",
+  "editContactDelete": "Delete contact",
+  "editContactDeleteConfirmTitle": "Delete contact?",
+  "editContactDeleteConfirmBody": "This contact will be removed from your list.",
+  "editContactDeleteCancel": "Cancel",
+  "editContactError": "Couldn't save changes",
+  "downloadsTitle": "Recent downloads",
+  "downloadsTooltip": "Downloads",
+  "downloadsSettings": "Settings",
+  "downloadsEmpty": "Downloaded files will appear here",
+  "downloadsUnknownSource": "Unknown source",
+  "downloadsPhoto": "Photo",
+  "downloadsVideo": "Video",
+  "downloadsGif": "GIF",
+  "downloadsAudio": "Audio",
+  "downloadsFile": "File",
+  "downloadsOpenFailed": "Couldn't open the file",
+  "downloadsClearHistory": "Clear download history",
+  "downloadsClearTitle": "Clear download history?",
+  "downloadsClearBody": "The files will stay on the device, but this list will be cleared.",
+  "downloadsClearConfirm": "Clear",
+  "downloadsHistoryCleared": "Download history cleared"
 }

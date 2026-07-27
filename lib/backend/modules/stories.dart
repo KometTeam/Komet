@@ -322,13 +322,45 @@ class StoriesModule {
   }
 
   /// Публикация фото-истории. [photoToken] — токен уже загруженного фото.
-  /// [settings]: 1 = видно всем, 2 = только контактам. [expiration] — TTL, сек.
+  /// [settings]: 1 = видно всем, 2 = только контактам. [expiration] — TTL, мс.
   /// Бросает [PacketError]/[TimeoutException] при ошибке сервера — чтобы UI
   /// показал реальную причину, а не общее «не удалось».
   Future<void> publishPhoto({
     required String photoToken,
     int settings = 1,
-    int expiration = 86400,
+    int expiration = 86400000,
+  }) {
+    return _publishMedia(
+      media: {'_type': 'PHOTO', 'photoToken': photoToken},
+      settings: settings,
+      expiration: expiration,
+    );
+  }
+
+  /// Публикация видео-истории. [videoToken] — токен уже загруженного видео
+  /// (`VideoUploadInfo.token`), [durationMs] — длительность ролика в мс.
+  Future<void> publishVideo({
+    required String videoToken,
+    int? durationMs,
+    int settings = 1,
+    int expiration = 86400000,
+  }) {
+    return _publishMedia(
+      media: {
+        '_type': 'VIDEO',
+        'videoType': 2,
+        'token': videoToken,
+        'duration': ?durationMs,
+      },
+      settings: settings,
+      expiration: expiration,
+    );
+  }
+
+  Future<void> _publishMedia({
+    required Map<String, dynamic> media,
+    required int settings,
+    required int expiration,
   }) async {
     if (_api.state != SessionState.online) {
       throw const PacketError('Нет соединения с сервером');
@@ -339,7 +371,7 @@ class StoriesModule {
         {
           'cid': cid,
           'settings': settings,
-          'media': {'_type': 'PHOTO', 'photoToken': photoToken},
+          'media': media,
           'expiration': expiration,
         },
       ],

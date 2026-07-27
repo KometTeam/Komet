@@ -4,13 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_nav_pill_style.dart';
 import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
+import 'package:komet/frontend/widgets/attachment/contact_picker_page.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
+import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -25,7 +28,7 @@ List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
   PillNavItem(icon: Symbols.description, label: l10n.scheduledAttachFile),
   PillNavItem(icon: Symbols.location_on, label: l10n.scheduledAttachLocation),
   PillNavItem(icon: Symbols.bar_chart, label: l10n.attachSheetPoll),
-  PillNavItem(icon: Symbols.person, label: l10n.nfcPeerFirstNameFallback),
+  PillNavItem(icon: Symbols.person, label: l10n.attachSheetContact),
 ];
 
 Future<void> showAttachmentSheet(
@@ -35,6 +38,7 @@ Future<void> showAttachmentSheet(
   VoidCallback? onPickFile,
   VoidCallback? onShareLocation,
   VoidCallback? onCreatePoll,
+  ValueChanged<CachedContact>? onSendContact,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -48,6 +52,7 @@ Future<void> showAttachmentSheet(
       onPickFile: onPickFile,
       onShareLocation: onShareLocation,
       onCreatePoll: onCreatePoll,
+      onSendContact: onSendContact,
     ),
   );
 }
@@ -58,6 +63,7 @@ class AttachmentSheet extends StatefulWidget {
   final VoidCallback? onPickFile;
   final VoidCallback? onShareLocation;
   final VoidCallback? onCreatePoll;
+  final ValueChanged<CachedContact>? onSendContact;
 
   const AttachmentSheet({
     super.key,
@@ -66,6 +72,7 @@ class AttachmentSheet extends StatefulWidget {
     this.onPickFile,
     this.onShareLocation,
     this.onCreatePoll,
+    this.onSendContact,
   });
 
   @override
@@ -78,6 +85,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
+  final Map<String, GlobalKey<_ThumbnailState>> _thumbKeys = {};
   final Map<String, PhotoEditState> _edits = {};
   final Set<String> _tempFiles = {};
   final Set<String> _sentFiles = {};
@@ -148,11 +156,21 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     _selected.value = next;
   }
 
+  GlobalKey<_ThumbnailState> _thumbKey(String id) =>
+      _thumbKeys.putIfAbsent(id, () => GlobalKey<_ThumbnailState>());
+
   void _openPreview(GalleryItem item) {
+    final thumbKey = _thumbKey(item.id);
+    final hero = PhotoHeroController(
+      origin: () => photoHeroRect(thumbKey),
+      image: thumbKey.currentState?.provider,
+    );
     Navigator.of(context).push(
-      MaterialPageRoute(
+      PhotoHeroRoute<void>(
+        hero: hero,
         builder: (_) => MediaPreviewScreen(
           item: item,
+          hero: hero,
           title: widget.title,
           selectedIds: _selected,
           onToggleSelection: () => _toggleSelection(item),
@@ -327,8 +345,17 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           buttonLabel: l10n.attachSheetCreatePoll,
           onTap: widget.onCreatePoll,
         ),
-        _buildPlaceholderPage(cs, bottomReserve),
+        _buildContactPage(cs, bottomReserve),
       ],
+    );
+  }
+
+  Widget _buildContactPage(ColorScheme cs, double bottomReserve) {
+    final onSendContact = widget.onSendContact;
+    if (onSendContact == null) return _buildPlaceholderPage(cs, bottomReserve);
+    return ContactPickerPage(
+      bottomReserve: bottomReserve,
+      onPick: onSendContact,
     );
   }
 
@@ -463,6 +490,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                   final item = gridPhotos[index];
                   return _GalleryTile(
                     key: ValueKey(item.id),
+                    thumbKey: _thumbKey(item.id),
                     item: item,
                     selectedIds: _selected,
                     onOpen: () => _openPreview(item),
@@ -486,6 +514,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       final item = photos[i];
       return _GalleryTile(
         key: ValueKey(item.id),
+        thumbKey: _thumbKey(item.id),
         item: item,
         selectedIds: _selected,
         onOpen: () => _openPreview(item),
@@ -874,6 +903,7 @@ class _CameraTile extends StatelessWidget {
 }
 
 class _GalleryTile extends StatefulWidget {
+  final GlobalKey<_ThumbnailState> thumbKey;
   final GalleryItem item;
   final ValueListenable<Set<String>> selectedIds;
   final VoidCallback onOpen;
@@ -883,6 +913,7 @@ class _GalleryTile extends StatefulWidget {
 
   const _GalleryTile({
     super.key,
+    required this.thumbKey,
     required this.item,
     required this.selectedIds,
     required this.onOpen,
@@ -929,6 +960,7 @@ class _GalleryTileState extends State<_GalleryTile> {
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
             child: _Thumbnail(
+              key: widget.thumbKey,
               item: item,
               editedFile: widget.editedFile,
               cs: widget.cs,
@@ -1024,7 +1056,12 @@ class _Thumbnail extends StatefulWidget {
   final File? editedFile;
   final ColorScheme cs;
 
-  const _Thumbnail({required this.item, this.editedFile, required this.cs});
+  const _Thumbnail({
+    super.key,
+    required this.item,
+    this.editedFile,
+    required this.cs,
+  });
 
   @override
   State<_Thumbnail> createState() => _ThumbnailState();
@@ -1032,50 +1069,53 @@ class _Thumbnail extends StatefulWidget {
 
 class _ThumbnailState extends State<_Thumbnail> {
   static const int _pixelSize = 320;
-  Future<Uint8List?>? _future;
+  ImageProvider? _provider;
+
+  ImageProvider? get provider => _provider;
 
   @override
   void initState() {
     super.initState();
-    if (widget.item.localFile == null) {
-      _future = widget.item.thumbnail(_pixelSize);
+    _resolveProvider();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Thumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.editedFile?.path != oldWidget.editedFile?.path ||
+        widget.item.id != oldWidget.item.id) {
+      setState(_resolveProvider);
     }
+  }
+
+  void _resolveProvider() {
+    final file = widget.editedFile ?? widget.item.localFile;
+    if (file != null) {
+      _provider = ResizeImage(
+        FileImage(file),
+        width: _pixelSize,
+        allowUpscaling: false,
+      );
+      return;
+    }
+    _provider = null;
+    final id = widget.item.id;
+    widget.item.thumbnail(_pixelSize).then((data) {
+      if (!mounted || data == null || widget.item.id != id) return;
+      if (widget.editedFile != null || widget.item.localFile != null) return;
+      setState(() => _provider = MemoryImage(data));
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final edited = widget.editedFile;
-    if (edited != null) {
-      return Image.file(
-        edited,
-        fit: BoxFit.cover,
-        cacheWidth: _pixelSize,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => _placeholder(),
-      );
-    }
-    final file = widget.item.localFile;
-    if (file != null) {
-      return Image.file(
-        file,
-        fit: BoxFit.cover,
-        cacheWidth: _pixelSize,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => _placeholder(),
-      );
-    }
-    return FutureBuilder<Uint8List?>(
-      future: _future,
-      builder: (context, snapshot) {
-        final data = snapshot.data;
-        if (data == null) return _placeholder();
-        return Image.memory(
-          data,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          errorBuilder: (_, _, _) => _placeholder(),
-        );
-      },
+    final provider = _provider;
+    if (provider == null) return _placeholder();
+    return Image(
+      image: provider,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => _placeholder(),
     );
   }
 

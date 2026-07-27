@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
+import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 
 import '../../../core/config/app_colors.dart';
@@ -16,6 +17,7 @@ const Color _kBar = Color(0xFF1E1E1E);
 
 class MediaPreviewScreen extends StatefulWidget {
   final GalleryItem item;
+  final PhotoHeroController hero;
   final String? title;
   final ValueListenable<Set<String>> selectedIds;
   final VoidCallback onToggleSelection;
@@ -29,6 +31,7 @@ class MediaPreviewScreen extends StatefulWidget {
   const MediaPreviewScreen({
     super.key,
     required this.item,
+    required this.hero,
     required this.selectedIds,
     required this.onToggleSelection,
     required this.onSend,
@@ -48,6 +51,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   late final TextEditingController _caption = TextEditingController(
     text: widget.initialCaption,
   );
+  final TransformationController _zoom = TransformationController();
   File? _workingFile;
   File? _cropSource;
   CropState? _cropState;
@@ -55,6 +59,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   @override
   void initState() {
     super.initState();
+    _zoom.addListener(_syncHero);
     _caption.addListener(() => widget.onCaptionChanged?.call(_caption.text));
     _cropState = widget.editState?.cropState;
     _cropSource = widget.editState?.cropSource;
@@ -64,19 +69,28 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   Future<void> _resolveWorkingFile() async {
     final initial = widget.editState?.working ?? widget.item.localFile;
     if (initial != null) {
-      _workingFile = initial;
+      _setWorkingFile(initial);
       return;
     }
     final file = await widget.item.originFile();
-    if (!mounted) return;
-    setState(() => _workingFile = file);
+    if (!mounted || file == null) return;
+    setState(() => _setWorkingFile(file));
+  }
+
+  void _setWorkingFile(File file) {
+    _workingFile = file;
+    widget.hero.image.value = FileImage(file);
   }
 
   @override
   void dispose() {
     _caption.dispose();
+    _zoom.dispose();
     super.dispose();
   }
+
+  void _syncHero() =>
+      widget.hero.enabled = _zoom.value.getMaxScaleOnAxis() <= 1.01;
 
   void _send() {
     Navigator.of(context).pop();
@@ -122,7 +136,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       final old = _workingFile;
       _cropState = result.state;
       widget.tempFiles.add(result.file.path);
-      setState(() => _workingFile = result.file);
+      setState(() => _setWorkingFile(result.file));
       _reportEdit();
       _disposeTemp(old, {result.file.path, _cropSource?.path ?? ''});
     }
@@ -146,7 +160,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       _cropSource = result;
       _cropState = null;
       widget.tempFiles.add(result.path);
-      setState(() => _workingFile = result);
+      setState(() => _setWorkingFile(result));
       _reportEdit();
       _disposeTemp(oldWorking, {result.path});
       _disposeTemp(oldCropSource, {result.path, oldWorking?.path ?? ''});
@@ -163,7 +177,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       _cropSource = result;
       _cropState = null;
       widget.tempFiles.add(result.path);
-      setState(() => _workingFile = result);
+      setState(() => _setWorkingFile(result));
       _reportEdit();
       _disposeTemp(oldWorking, {result.path});
       _disposeTemp(oldCropSource, {result.path, oldWorking?.path ?? ''});
@@ -202,11 +216,14 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Center(
-              child: InteractiveViewer(
-                minScale: 1,
-                maxScale: 4,
-                child: _buildImage(),
+            child: PhotoHeroTarget(
+              child: Center(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  transformationController: _zoom,
+                  child: _buildImage(),
+                ),
               ),
             ),
           ),
@@ -217,11 +234,19 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   }
 
   Widget _buildImage() {
-    final file = _workingFile;
-    if (file == null) {
-      return const SmallSpinner(size: 36, color: Colors.white24);
-    }
-    return Image.file(file, fit: BoxFit.contain, gaplessPlayback: true);
+    return ValueListenableBuilder<ImageProvider?>(
+      valueListenable: widget.hero.image,
+      builder: (context, provider, _) {
+        if (provider == null) {
+          return const SmallSpinner(size: 36, color: Colors.white24);
+        }
+        return Image(
+          image: provider,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        );
+      },
+    );
   }
 
   Widget _buildBottomBar() {

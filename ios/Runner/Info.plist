@@ -70,6 +70,8 @@
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Доступ к контактам нужен, чтобы показывать имена собеседников так, как они записаны в вашей телефонной книге.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

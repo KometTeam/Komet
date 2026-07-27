@@ -11,7 +11,10 @@ import '../../backend/modules/messages.dart';
 import '../screens/webapp/web_app_screen.dart';
 import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
+import '../../core/crypto/message_decryption_cache.dart';
+import 'decrypted_text.dart';
 import '../../core/utils/bubble_radius.dart';
+import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
@@ -21,12 +24,14 @@ import 'formatted_message_text.dart';
 import 'photo_viewer.dart';
 import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
+import '../../models/animoji.dart';
 import '../../models/reaction_info.dart';
 import 'attachment/bubbles/voice_bubble.dart';
 import 'attachment/bubbles/bubble_context.dart';
 import 'attachment/bubbles/poll_bubble.dart';
 import 'attachment/bubbles/share_bubble.dart';
 import 'attachment/bubbles/call_bubble.dart';
+import 'attachment/bubbles/control_bubble.dart';
 import 'attachment/bubbles/location_bubble.dart';
 import 'attachment/bubbles/contact_bubble.dart';
 import 'attachment/bubbles/sticker_bubble.dart';
@@ -37,6 +42,20 @@ import 'attachment/bubbles/forwarded_bubble.dart';
 import 'lottie_image.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
+
+class ReactionAnimationEvent {
+  final String messageId;
+  final String emoji;
+  final int token;
+
+  const ReactionAnimationEvent({
+    required this.messageId,
+    required this.emoji,
+    required this.token,
+  });
+}
+
+typedef ReactionAnimojiResolver = Animoji? Function(String emoji);
 
 class _ZeroIntrinsicWidth extends SingleChildRenderObjectWidget {
   const _ZeroIntrinsicWidth({required Widget super.child});
@@ -52,6 +71,99 @@ class _RenderZeroIntrinsicWidth extends RenderProxyBox {
 
   @override
   double computeMaxIntrinsicWidth(double height) => 0;
+}
+
+/// Stacks [bottom] directly beneath [top] and forces [bottom] to take exactly
+/// [top]'s rendered width. Used to keep an inline keyboard and a comments footer
+/// pinned to their post's natural width instead of stretching to the bubble max
+/// — the latter would otherwise inflate a narrow post (single photo, link
+/// preview) to the full bubble width.
+class _StackMatchTopWidth extends MultiChildRenderObjectWidget {
+  _StackMatchTopWidth({
+    required Widget top,
+    required Widget bottom,
+    this.growForBottom = false,
+  }) : super(children: [top, bottom]);
+
+  final bool growForBottom;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderStackMatchTopWidth(growForBottom);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderStackMatchTopWidth renderObject,
+  ) {
+    renderObject.growForBottom = growForBottom;
+  }
+}
+
+class _StackMatchTopWidthParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderStackMatchTopWidth extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _StackMatchTopWidthParentData>,
+        RenderBoxContainerDefaultsMixin<
+          RenderBox,
+          _StackMatchTopWidthParentData
+        > {
+  _RenderStackMatchTopWidth(this._growForBottom);
+
+  bool _growForBottom;
+  set growForBottom(bool value) {
+    if (value == _growForBottom) return;
+    _growForBottom = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _StackMatchTopWidthParentData) {
+      child.parentData = _StackMatchTopWidthParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final RenderBox top = firstChild!;
+    final RenderBox bottom = childAfter(top)!;
+
+    top.layout(constraints.loosen(), parentUsesSize: true);
+    final Size topSize = top.size;
+    (top.parentData! as _StackMatchTopWidthParentData).offset = Offset.zero;
+
+    double width = topSize.width;
+    if (_growForBottom) {
+      width = math.max(width, bottom.getMaxIntrinsicWidth(double.infinity));
+    }
+    width = constraints.constrainWidth(width);
+
+    bottom.layout(
+      BoxConstraints.tightFor(width: width).enforce(constraints),
+      parentUsesSize: true,
+    );
+    final Size bottomSize = bottom.size;
+    (bottom.parentData! as _StackMatchTopWidthParentData).offset = Offset(
+      0,
+      topSize.height,
+    );
+
+    size = constraints.constrain(
+      Size(math.max(width, topSize.width), topSize.height + bottomSize.height),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
 }
 
 /// A [Wrap] that reports its single-line width as the max intrinsic width, so an
@@ -109,6 +221,163 @@ class _RenderReactionsWrap extends RenderWrap {
   }
 }
 
+class _ReactionAnimojiGlyph extends StatefulWidget {
+  final String messageId;
+  final String emoji;
+  final Animoji animoji;
+  final ValueListenable<ReactionAnimationEvent?>? animation;
+
+  const _ReactionAnimojiGlyph({
+    super.key,
+    required this.messageId,
+    required this.emoji,
+    required this.animoji,
+    this.animation,
+  });
+
+  @override
+  State<_ReactionAnimojiGlyph> createState() => _ReactionAnimojiGlyphState();
+}
+
+class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
+  static const double _size = 18;
+  static const double _effectSize = _size * 2;
+
+  int? _playingToken;
+  bool _bodyPlaying = false;
+  bool _effectPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.animation?.addListener(_onAnimation);
+  }
+
+  @override
+  void didUpdateWidget(_ReactionAnimojiGlyph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.animation, widget.animation)) {
+      oldWidget.animation?.removeListener(_onAnimation);
+      widget.animation?.addListener(_onAnimation);
+    }
+    if (oldWidget.messageId != widget.messageId ||
+        EmojiKeywordIndex.normalize(oldWidget.emoji) !=
+            EmojiKeywordIndex.normalize(widget.emoji)) {
+      _playingToken = null;
+      _bodyPlaying = false;
+      _effectPlaying = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.animation?.removeListener(_onAnimation);
+    super.dispose();
+  }
+
+  void _onAnimation() {
+    final event = widget.animation?.value;
+    if (event == null ||
+        event.messageId != widget.messageId ||
+        EmojiKeywordIndex.normalize(event.emoji) !=
+            EmojiKeywordIndex.normalize(widget.emoji) ||
+        event.token == _playingToken) {
+      return;
+    }
+    final bodyUrl = widget.animoji.lottieUrl;
+    final effectUrl = widget.animoji.lottiePlayUrl;
+    setState(() {
+      _playingToken = event.token;
+      _bodyPlaying = bodyUrl != null && bodyUrl.isNotEmpty;
+      _effectPlaying = effectUrl != null && effectUrl.isNotEmpty;
+    });
+  }
+
+  void _onBodyCompleted() {
+    if (!mounted) return;
+    setState(() {
+      _bodyPlaying = false;
+      if (!_effectPlaying) _playingToken = null;
+    });
+  }
+
+  void _onEffectCompleted() {
+    if (!mounted) return;
+    setState(() {
+      _effectPlaying = false;
+      if (!_bodyPlaying) _playingToken = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final staticUrl = widget.animoji.iconUrl;
+    final bodyAnimationUrl = widget.animoji.lottieUrl;
+    final effectAnimationUrl = widget.animoji.lottiePlayUrl;
+    final Widget body;
+    if (_bodyPlaying) {
+      body = LottieImage(
+        key: ValueKey(('body', _playingToken)),
+        url: staticUrl,
+        lottieUrl: bodyAnimationUrl,
+        size: _size,
+        memCacheWidth: 64,
+        shimmer: false,
+        eager: true,
+        repeat: false,
+        onCompleted: _onBodyCompleted,
+      );
+    } else if (staticUrl != null && staticUrl.isNotEmpty) {
+      body = LottieImage(
+        url: staticUrl,
+        size: _size,
+        memCacheWidth: 64,
+        shimmer: false,
+      );
+    } else if (bodyAnimationUrl != null && bodyAnimationUrl.isNotEmpty) {
+      body = LottieImage(
+        lottieUrl: bodyAnimationUrl,
+        size: _size,
+        memCacheWidth: 64,
+        shimmer: false,
+        animate: false,
+        repeat: false,
+      );
+    } else {
+      body = Text(widget.emoji, style: const TextStyle(fontSize: 13));
+    }
+
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          body,
+          if (_effectPlaying)
+            Positioned(
+              left: -(_effectSize - _size) / 2,
+              top: -(_effectSize - _size) / 2,
+              width: _effectSize,
+              height: _effectSize,
+              child: LottieImage(
+                key: ValueKey(('effect', _playingToken)),
+                lottieUrl: effectAnimationUrl,
+                size: _effectSize,
+                memCacheWidth: 128,
+                shimmer: false,
+                eager: true,
+                repeat: false,
+                onCompleted: _onEffectCompleted,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class MessageBubble extends StatelessWidget {
   static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
   static const BorderRadius _reactionChipRadius = BorderRadius.all(
@@ -131,15 +400,22 @@ class MessageBubble extends StatelessWidget {
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
+  final ValueListenable<ReactionAnimationEvent?>? reactionAnimation;
+  final ReactionAnimojiResolver? reactionAnimojiResolver;
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
+  final ForwardedSourceTap? onForwardedSourceTap;
   final void Function(StickerAttachment sticker)? onStickerTap;
   final void Function(String emoji)? onReactionTap;
   final String? peerName;
   final String? peerAvatarUrl;
+  final String? senderNameOverride;
+  final String? senderAvatarOverride;
   final ValueListenable<({String id, Offset pos})?>? textSelection;
   final VoidCallback? onExitTextSelection;
+  final String? commentsLabel;
+  final VoidCallback? onCommentsTap;
 
   const MessageBubble({
     super.key,
@@ -154,15 +430,22 @@ class MessageBubble extends StatelessWidget {
     this.overrideStatus,
     this.otherReadTime,
     this.reactionsListenable,
+    this.reactionAnimation,
+    this.reactionAnimojiResolver,
     this.uploadProgress,
     this.onReplyTap,
     this.onAvatarTap,
+    this.onForwardedSourceTap,
     this.onStickerTap,
     this.onReactionTap,
     this.peerName,
     this.peerAvatarUrl,
+    this.senderNameOverride,
+    this.senderAvatarOverride,
     this.textSelection,
     this.onExitTextSelection,
+    this.commentsLabel,
+    this.onCommentsTap,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -180,6 +463,14 @@ class MessageBubble extends StatelessWidget {
     final hasCaption = message.text != null && message.text!.isNotEmpty;
     return photoCount >= 2 && !hasCaption;
   }
+
+  bool get _showsSenderName =>
+      !isMe &&
+      chatType == "CHAT" &&
+      prevMessage?.senderId != message.senderId;
+
+  bool get _stretchesTextRow =>
+      message.replyInfo != null || _showsSenderName;
 
   BubbleShape _computeShape() {
     if (message.isControl) return BubbleShape.singleMiddle;
@@ -381,7 +672,7 @@ class MessageBubble extends StatelessWidget {
       _senderPalette[id.abs() % _senderPalette.length];
 
   Widget _buildSenderHeader(ColorScheme cs, bool needsInset) {
-    final name = ContactCache.get(message.senderId);
+    final name = senderNameOverride ?? ContactCache.get(message.senderId);
     if (name == null || name.isEmpty) return const SizedBox.shrink();
     final header = Padding(
       padding: needsInset
@@ -409,8 +700,9 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildLeadingAvatar(ColorScheme cs) {
-    final senderAvatar = ContactCache.getAvatar(message.senderId);
-    final displaySender = ContactCache.get(message.senderId);
+    final senderAvatar =
+        senderAvatarOverride ?? ContactCache.getAvatar(message.senderId);
+    final displaySender = senderNameOverride ?? ContactCache.get(message.senderId);
     final Widget avatar;
     if (senderAvatar != null && senderAvatar.isNotEmpty) {
       avatar = CircleAvatar(
@@ -487,10 +779,7 @@ class MessageBubble extends StatelessWidget {
         showAvatarSlot &&
         chatType == "CHAT" &&
         nextMessage?.senderId != message.senderId;
-    final showSenderName =
-        showAvatarSlot &&
-        chatType == "CHAT" &&
-        prevMessage?.senderId != message.senderId;
+    final showSenderName = _showsSenderName;
 
     final maxBubbleWidth = math.min(MediaQuery.sizeOf(context).width * 0.75, 560.0);
     final keyboard = _inlineKeyboard;
@@ -513,11 +802,13 @@ class MessageBubble extends StatelessWidget {
       myId: myId,
       chatType: chatType,
       chatId: chatId,
+      chatName: peerName,
       photoActions: photoActions,
       overrideStatus: overrideStatus,
       otherReadTime: otherReadTime,
       uploadProgress: uploadProgress,
       onStickerTap: onStickerTap,
+      onForwardedSourceTap: onForwardedSourceTap,
       reactionInfo: _resolveReactionInfo(),
     );
 
@@ -533,28 +824,91 @@ class MessageBubble extends StatelessWidget {
     final reactionsInside = contentType != MessageType.text && !reactionsUnder;
 
     final reply = message.replyInfo;
-    Widget withReply(Widget content) {
-      if (reply == null) return content;
-      final quote = _buildReplyQuote(context, cs, textColor, reply);
-      if (contentType != MessageType.text || jumboAnimoji != null) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [quote, const SizedBox(height: 4), content],
-        );
-      }
-      return IntrinsicWidth(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _ZeroIntrinsicWidth(child: quote),
-            const SizedBox(height: 4),
-            content,
-          ],
+
+    final bool hasCommentsFooter = onCommentsTap != null;
+    final EdgeInsets containerPadding = hasCommentsFooter
+        ? EdgeInsets.zero
+        : padding;
+
+    final Widget contentWithReactions = reactionsInside
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [bubbleContent, _reactionsBar(cs)],
+          )
+        : bubbleContent;
+
+    final Widget? senderHeader = showSenderName
+        ? _buildSenderHeader(cs, padding == EdgeInsets.zero)
+        : null;
+
+    final Widget innerContent =
+        contentType == MessageType.text &&
+            jumboAnimoji == null &&
+            _stretchesTextRow
+        ? IntrinsicWidth(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (senderHeader != null)
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: senderHeader,
+                  ),
+                if (reply != null) ...[
+                  _ZeroIntrinsicWidth(
+                    child: _buildReplyQuote(context, cs, textColor, reply),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                contentWithReactions,
+              ],
+            ),
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ?senderHeader,
+              if (reply != null) ...[
+                _buildReplyQuote(context, cs, textColor, reply),
+                const SizedBox(height: 4),
+              ],
+              contentWithReactions,
+            ],
+          );
+
+    final Widget bubbleBox = ListenableBuilder(
+      listenable: Listenable.merge([
+        AppBubbleShape.current,
+        AppBubbleBehavior.current,
+      ]),
+      builder: (context, child) => Container(
+        constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: noBubbleBackground
+              ? null
+              : _borderRadiusFor(
+                  AppBubbleShape.current.value,
+                  AppBubbleBehavior.current.value,
+                  shape,
+                  hasPhotoCap,
+                  hasMultiPhotos,
+                ),
         ),
-      );
-    }
+        padding: containerPadding,
+        child: child,
+      ),
+      child: hasCommentsFooter
+          ? _StackMatchTopWidth(
+              growForBottom: true,
+              top: Padding(padding: padding, child: innerContent),
+              bottom: _buildCommentsFooter(cs),
+            )
+          : innerContent,
+    );
 
     return Padding(
       padding: EdgeInsets.only(
@@ -574,62 +928,69 @@ class MessageBubble extends StatelessWidget {
             if (showAvatar)
               _buildLeadingAvatar(cs)
             else if (showAvatarSlot && chatType == "CHAT")
-              const CircleAvatar(
-                radius: 15,
-                backgroundColor: Color(0x00000000),
-              ),
+              const SizedBox(width: 30),
             Column(
               crossAxisAlignment: isMe
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                ListenableBuilder(
-                  listenable: Listenable.merge([
-                    AppBubbleShape.current,
-                    AppBubbleBehavior.current,
-                  ]),
-                  builder: (context, child) => Container(
-                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                    decoration: BoxDecoration(
-                      color: bubbleColor,
-                      borderRadius: noBubbleBackground
-                          ? null
-                          : _borderRadiusFor(
-                              AppBubbleShape.current.value,
-                              AppBubbleBehavior.current.value,
-                              shape,
-                              hasPhotoCap,
-                              hasMultiPhotos,
-                            ),
-                    ),
-                    padding: padding,
-                    child: child,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (showSenderName)
-                        _buildSenderHeader(cs, padding == EdgeInsets.zero),
-                      withReply(
-                        reactionsInside
-                            ? Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [bubbleContent, _reactionsBar(cs)],
-                              )
-                            : bubbleContent,
-                      ),
-                    ],
-                  ),
-                ),
                 if (keyboard != null)
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                    child: _buildInlineKeyboard(context, cs, keyboard),
-                  ),
+                  _StackMatchTopWidth(
+                    top: bubbleBox,
+                    bottom: _buildInlineKeyboard(context, cs, keyboard),
+                  )
+                else
+                  bubbleBox,
                 if (reactionsUnder) _reactionsBar(cs),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommentsFooter(ColorScheme cs) {
+    final label = commentsLabel ?? 'Комментарии';
+    final accent = isMe ? cs.onPrimaryContainer : cs.primary;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onCommentsTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Divider(
+              height: 0.5,
+              thickness: 0.5,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.18),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 11,
+              ),
+              child: Row(
+                children: [
+                  Icon(Symbols.mode_comment, size: 19, color: accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Symbols.chevron_right,
+                    size: 20,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -976,7 +1337,16 @@ class MessageBubble extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(c.reaction, style: const TextStyle(fontSize: 13)),
+            if (_resolveReactionAnimoji(c.reaction) case final animoji?)
+              _ReactionAnimojiGlyph(
+                key: ValueKey((message.id, c.reaction)),
+                messageId: message.id,
+                emoji: c.reaction,
+                animoji: animoji,
+                animation: reactionAnimation,
+              )
+            else
+              Text(c.reaction, style: const TextStyle(fontSize: 13)),
             if (c.count > 1) ...[
               const SizedBox(width: 3),
               Text(
@@ -1007,6 +1377,9 @@ class MessageBubble extends StatelessWidget {
     return chips;
   }
 
+  Animoji? _resolveReactionAnimoji(String emoji) =>
+      reactionAnimojiResolver?.call(emoji) ?? animojiModule.findByEmoji(emoji);
+
   Widget _reactionAvatar(ColorScheme cs, String? url, String? name) {
     const double diameter = 17;
     if (url != null && url.isNotEmpty) {
@@ -1033,66 +1406,12 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildControlContent(ColorScheme cs) {
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final control = attachments.first;
-    if (control is! ControlAttachment) return const SizedBox.shrink();
-
-    String? text;
-    switch (control.event) {
-      case 'system':
-        text = control.title;
-        break;
-      case 'new':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} создал(а) чат';
-        break;
-      case 'add':
-        final names = (control.userIds ?? [])
-            .map((id) => ContactCache.get(id) ?? 'Пользователь')
-            .join(', ');
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} добавил(а) $names';
-        break;
-      case 'leave':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} покинул(а) чат';
-        break;
-      case 'joinByLink':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} присоединился(-ась) к чату';
-        break;
-      case 'pin':
-        text =
-            '${ContactCache.get(message.senderId) ?? 'Пользователь'} закрепил(а) сообщение';
-        break;
-      default:
-        text = control.title;
-    }
-
-    if (text == null || text.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: cs.onSurfaceVariant,
-          fontSize: 12,
-          fontStyle: FontStyle.italic,
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
+  Widget _buildControlContent(ColorScheme cs) => ControlBubble(
+    key: ValueKey('control_${message.id}'),
+    message: message,
+    cs: cs,
+    onUserTap: onAvatarTap,
+  );
 
   Widget _wrapSelectable(Widget textWidget) {
     final listenable = textSelection;
@@ -1113,7 +1432,18 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildTextContent(BubbleContext ctx) {
+  Widget _buildTextContent(BubbleContext ctx) => DecryptedContent(
+    accountId: message.accountId,
+    chatId: message.chatId,
+    messageId: message.id,
+    cipherText: message.text ?? '',
+    builder: (decryption) => _buildTextContentBody(ctx, decryption),
+  );
+
+  Widget _buildTextContentBody(
+    BubbleContext ctx,
+    MessageDecryption? decryption,
+  ) {
     final attachments = message.attachments;
     final isForwardedContact =
         attachments != null &&
@@ -1131,22 +1461,55 @@ class MessageBubble extends StatelessWidget {
     );
     final hasReactions = reactionChips.isNotEmpty;
 
-    final textStyle = TextStyle(color: ctx.text, fontSize: 16, height: 1.3);
+    final activeFontFamily =
+        Theme.of(ctx.context).textTheme.bodyLarge?.fontFamily;
+    final textStyle = TextStyle(
+      color: ctx.text,
+      fontSize: 16,
+      height: 1.3,
+      fontFamily: activeFontFamily,
+      fontVariations: activeFontFamily == 'Inter'
+          ? const [FontVariation('wght', 300)]
+          : null,
+    );
     final ranges = message.formatRanges;
-    final baseTextWidget = isForwarded
-        ? _buildForwardedInlineText(ctx, forwarded)
-        : (FormattedMessageText.isFormatted(message.text, ranges)
-              ? FormattedMessageText(
-                  text: message.text!,
-                  ranges: ranges,
-                  style: textStyle,
-                )
-              : Text(message.text ?? '', style: textStyle));
+    final decryptedText = decryption?.plaintext;
+    final Widget baseTextWidget;
+    if (decryption?.state == MessageDecryptionState.wrongKey) {
+      baseTextWidget = Text(
+        'неверный ключ',
+        style: textStyle.copyWith(
+          color: ctx.cs.error,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    } else if (decryptedText != null) {
+      baseTextWidget = Text(decryptedText, style: textStyle);
+    } else if (isForwarded) {
+      baseTextWidget = _buildForwardedInlineText(ctx, forwarded);
+    } else if (FormattedMessageText.isFormatted(message.text, ranges)) {
+      baseTextWidget = FormattedMessageText(
+        text: message.text!,
+        ranges: ranges,
+        style: textStyle,
+      );
+    } else {
+      baseTextWidget = Text(message.text ?? '', style: textStyle);
+    }
     final textWidget = _wrapSelectable(baseTextWidget);
 
-    final metaWidget = Text(
-      message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
-      style: TextStyle(color: ctx.dim, fontSize: 10),
+    final metaWidget = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (decryption?.isDecrypted ?? false) ...[
+          Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
+          const SizedBox(width: 3),
+        ],
+        Text(
+          message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
+          style: TextStyle(color: ctx.dim, fontSize: 10),
+        ),
+      ],
     );
 
     if (hasReactions) {
@@ -1190,7 +1553,9 @@ class MessageBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Flexible(child: textWidget),
+            _stretchesTextRow
+                ? Expanded(child: textWidget)
+                : Flexible(child: textWidget),
             const SizedBox(width: 8),
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
@@ -1217,7 +1582,8 @@ class MessageBubble extends StatelessWidget {
     final name = reply.senderId == myId
         ? 'Вы'
         : (ContactCache.get(reply.senderId) ?? 'Сообщение');
-    final preview = reply.previewText();
+    final rawPreview = reply.previewText();
+    final quotedId = reply.messageId;
 
     final quote = Container(
       padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
@@ -1240,14 +1606,28 @@ class MessageBubble extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (preview.isNotEmpty)
-            Text(
-              preview,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: textColor.withValues(alpha: 0.85),
-                fontSize: 13,
+          if (rawPreview.isNotEmpty)
+            DecryptedContent(
+              accountId: message.accountId,
+              chatId: message.chatId,
+              messageId: quotedId ?? '',
+              cipherText: quotedId == null ? '' : rawPreview,
+              builder: (decryption) => Text(
+                decryption?.state == MessageDecryptionState.wrongKey
+                    ? 'неверный ключ'
+                    : (decryption?.plaintext ?? rawPreview),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: decryption?.state == MessageDecryptionState.wrongKey
+                      ? cs.error
+                      : textColor.withValues(alpha: 0.85),
+                  fontSize: 13,
+                  fontStyle:
+                      decryption?.state == MessageDecryptionState.wrongKey
+                      ? FontStyle.italic
+                      : null,
+                ),
               ),
             ),
         ],
@@ -1270,14 +1650,6 @@ class MessageBubble extends StatelessWidget {
     BubbleContext ctx,
     ForwardedMessageAttachment forwarded,
   ) {
-    final headerColor = ctx.dim;
-    final displaySender =
-        forwarded.originalSenderName ??
-        ContactCache.get(forwarded.originalSenderId) ??
-        forwarded.originalSenderId.toString();
-    final senderAvatar =
-        forwarded.originalSenderAvatar ??
-        ContactCache.getAvatar(forwarded.originalSenderId);
     final origText = forwarded.originalText;
     final hasOrigText = origText != null && origText.isNotEmpty;
 
@@ -1285,49 +1657,14 @@ class MessageBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Symbols.forward, size: 14, color: headerColor),
-            const SizedBox(width: 4),
-            if (senderAvatar != null && senderAvatar.isNotEmpty)
-              CircleAvatar(
-                radius: 10,
-                backgroundImage: CachedNetworkImageProvider(
-                  senderAvatar,
-                  maxWidth: 96,
-                  maxHeight: 96,
-                ),
-                backgroundColor: ctx.cs.primaryContainer,
-              )
-            else
-              CircleAvatar(
-                radius: 10,
-                backgroundColor: ctx.cs.primaryContainer,
-                child: Text(
-                  displaySender.isNotEmpty
-                      ? displaySender[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: ctx.cs.onPrimaryContainer,
-                  ),
-                ),
-              ),
-            const SizedBox(width: 6),
-            Text(
-              displaySender,
-              style: TextStyle(
-                color: headerColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        ForwardedHeader(
+          ctx: ctx,
+          forwarded: forwarded,
+          padding: EdgeInsets.zero,
         ),
         if (hasOrigText) ...[
           const SizedBox(height: 2),
-          Text(origText, style: TextStyle(color: ctx.text, fontSize: 14)),
+          buildForwardedMessageText(ctx, forwarded),
         ] else ...[
           const SizedBox(height: 2),
           Text(

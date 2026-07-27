@@ -2,6 +2,7 @@ import 'anim_command.dart';
 import 'crush_command.dart';
 import 'epsh_files_command.dart';
 import 'info_command.dart';
+import 'send_control_command.dart';
 import 'slash_command.dart';
 import 'watching_command.dart';
 
@@ -20,6 +21,11 @@ const List<SlashCommand> kSlashCommands = [
     'Тест устойчивости веб клиента макса',
     run: runCrush,
     hidden: true,
+  ),
+  SlashCommand(
+    '/sendControlPayload',
+    'CONTROL в текущий чат: [event | json]',
+    run: runSendControl,
   ),
 ];
 

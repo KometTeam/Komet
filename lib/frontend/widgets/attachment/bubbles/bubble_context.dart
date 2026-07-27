@@ -14,6 +14,9 @@ enum MessageType { text, attachment, voice, control }
 
 enum BubbleShape { singleTop, singleBottom, singleMiddle, groupedMiddle }
 
+typedef ForwardedSourceTap =
+    void Function(ForwardedMessageAttachment forwarded);
+
 final Expando<({bool full, String text})> _clockTextCache = Expando();
 
 ({IconData icon, Color color}) messageStatusVisual(
@@ -64,11 +67,13 @@ class BubbleContext {
   final int myId;
   final String chatType;
   final int? chatId;
+  final String? chatName;
   final PhotoViewerActions? photoActions;
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(StickerAttachment sticker)? onStickerTap;
+  final ForwardedSourceTap? onForwardedSourceTap;
 
   BubbleContext({
     required this.context,
@@ -83,11 +88,13 @@ class BubbleContext {
     required this.myId,
     required this.chatType,
     this.chatId,
+    this.chatName,
     this.photoActions,
     this.overrideStatus,
     this.otherReadTime,
     this.uploadProgress,
     this.onStickerTap,
+    this.onForwardedSourceTap,
     this.reactionInfo,
   }) : dim = text.withValues(alpha: 0.7);
 

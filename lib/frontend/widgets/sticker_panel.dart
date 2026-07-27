@@ -253,15 +253,18 @@ class _StickerPanelState extends State<StickerPanel>
         liquid: false,
         frostTint: AppFrost.panelTint(cs),
         border: Border(top: AppFrost.hairline(cs)),
-        child: Column(
-          children: [
-            Expanded(
-              child: _mode == _modeEmoji && widget.onEmojiTap != null
-                  ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
-                  : _buildStickerBody(cs),
-            ),
-            if (widget.onEmojiTap != null) _buildToggleBar(cs),
-          ],
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Expanded(
+                child: _mode == _modeEmoji && widget.onEmojiTap != null
+                    ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
+                    : _buildStickerBody(cs),
+              ),
+              if (widget.onEmojiTap != null) _buildToggleBar(cs),
+            ],
+          ),
         ),
       ),
     );

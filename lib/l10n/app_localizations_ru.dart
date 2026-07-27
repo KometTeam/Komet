@@ -94,7 +94,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get tokenLoginNote =>
-      'Вход по токену работает только со спуфом. Укажите данные устройства, к которому привязан токен, иначе аккаунт могут заблокировать.';
+      'Вход по токену работает только со спуфом. Укажите данные устройства, к которому привязан токен, в противном случае он может быть отозван.';
 
   @override
   String get tokenLoginButton => 'Войти';
@@ -141,7 +141,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get codeConfirmation2faWarning =>
-      'MAX может требовать 2FA на вашем аккаунте для входа. Если вы не получили код — установите 2FA с клиента, на котором вы авторизованы.';
+      'По умолчанию код приходит в МАХ. Если код не приходит по SMS - не заходите в Komet/MAX 30 минут, и попробуйте заново.';
 
   @override
   String get proxySettingsTitle => 'Прокси';
@@ -191,7 +191,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofEnableSubtitleOff =>
-      'Выключена — используется реальное устройство';
+      'Выключена. Используется реальное устройство';
 
   @override
   String get spoofInfoHint =>
@@ -208,11 +208,11 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spoofMethodPartialDescription =>
-      'Рекомендуемый метод. Используются случайные данные, но ваш реальный часовой пояс и локаль для большей правдоподобности.';
+      'Рекомендуемый метод. Используются случайные данные, но ваш реальный часовой пояс и локаль остаются настоящими для правдоподобности.';
 
   @override
   String get spoofMethodFullDescription =>
-      'Все данные, включая часовой пояс и локаль, генерируются случайно. Использование этого метода на ваш страх и риск!';
+      'Все данные генерируются случайно. Будьте осторожны.';
 
   @override
   String get spoofDeviceTypeTitle => 'Тип устройства';
@@ -286,7 +286,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get spoofButtonApply => 'Применить';
 
   @override
-  String get spoofDialogUnsureTitle => 'Ты уверен?';
+  String get spoofDialogUnsureTitle => 'Уверен?';
 
   @override
   String get spoofDialogUnsureContent =>
@@ -305,15 +305,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get spoofDialogApplyContent => 'Нужно перезайти в приложение, ок?';
 
   @override
-  String get spoofDialogApplyWarning =>
-      'Ваш спуф изменится сразу. Но из-за особенностей МАХ, для того что-бы это стало заметно, вы должны перелогиниться в аккаунт';
+  String get spoofDialogApplyWarning => 'Ваш спуф изменится сразу. 😜';
 
   @override
   String get spoofDialogReloginTitle => 'Готово!';
 
   @override
   String get spoofDialogReloginContent =>
-      'Из-за особенности МАХ, ваш спуф изменён, но видны изменения будут только при перезаходе в аккаунт.';
+      'Ваш спуф изменён, но в списке устройств видны изменения только при перезаходе в аккаунт.';
 
   @override
   String get spoofDialogReloginWarning => 'Перезайти сейчас?';
@@ -454,6 +453,25 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatInfoComments => 'комментарии:';
+
+  @override
+  String get commentsWrite => 'Комментировать';
+
+  @override
+  String get commentsTitle => 'Комментарии';
+
+  @override
+  String commentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count комментария',
+      many: '$count комментариев',
+      few: '$count комментария',
+      one: '$count комментарий',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get chatInfoAplus => 'подтверждён Роскомнадзором:';
@@ -598,7 +616,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsFkmAlreadyHasFcm => 'А зачем? У тебя уже FCM.';
 
   @override
-  String get notificationsFkmDownloadFcm => 'Скачай лучше FCM-версию.';
+  String get notificationsFkmDownloadFcm =>
+      'Установите FCM версию с официального источника';
 
   @override
   String get notificationsTitle => 'Уведомления';
@@ -675,7 +694,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get devicesTitle => 'Устройства';
 
   @override
-  String get devicesPromoTitle => 'Устройства в KOMET';
+  String get devicesPromoTitle => 'Устройства в Komet';
 
   @override
   String get devicesPromoSubtitle => 'Кто имеет доступ к вашему аккаунту?';
@@ -772,7 +791,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get appearanceChatChromeSubtitle =>
-      'Фон панелей сверху и снизу: цвет, размытие или прозрачно. При размытии и прозрачности сообщения заходят под панели';
+      'Фон панелей ввода и верхнего бара';
 
   @override
   String get appearanceChatChromeColor => 'Цвет';
@@ -875,10 +894,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Этот человек использует Komet! :3';
 
   @override
-  String get callStatusConnecting => 'Соединение';
+  String get callStatusConnecting => 'Соединение...';
 
   @override
-  String get callGroupConnecting => 'Соединение…';
+  String get callGroupConnecting => 'Соединение...';
 
   @override
   String get callGroupWaitingParticipants => 'Ожидание участников…';
@@ -1057,7 +1076,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get hubGamesTileSubtitle => 'Сыграть с собеседником';
 
   @override
-  String get hubCheckersTileSubtitle => 'Русские шашки';
+  String get hubCheckersTileSubtitle => 'Шашки';
 
   @override
   String get hubMoreSoonTitle => 'Скоро ещё…';
@@ -1326,6 +1345,11 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String photoViewerCounterFile(int total) {
+    return 'ФАЙЛ из $total';
+  }
+
+  @override
   String photoViewerSentToday(String sender, String time) {
     return '$sender • сегодня в $time';
   }
@@ -1343,6 +1367,23 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get photoViewerRotate => 'Повернуть';
+
+  @override
+  String mediaViewerCounter(int index, int total) {
+    return '$index из $total';
+  }
+
+  @override
+  String get mediaViewerViewAll => 'Все медиа чата';
+
+  @override
+  String get videoViewerSettings => 'Настройки';
+
+  @override
+  String get videoViewerSpeed => 'Скорость';
+
+  @override
+  String get videoViewerQuality => 'Качество';
 
   @override
   String get sharedCopyLink => 'Копировать ссылку';
@@ -1369,10 +1410,35 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatInfoAddMember => 'Добавить участника';
 
   @override
-  String get chatInfoRoleOwner => 'владелец';
+  String get chatInfoRoleOwner => 'Владелец';
 
   @override
-  String get chatInfoRoleAdmin => 'Адмін';
+  String get chatInfoRoleAdmin => 'Админ';
+
+  @override
+  String get chatInfoMemberDeleted => 'Аккаунт удалён';
+
+  @override
+  String get chatInfoInviteByLink => 'Пригласить по ссылке';
+
+  @override
+  String get chatInfoInviteLinkHint =>
+      'Вы можете пригласить любого человека по этой ссылке';
+
+  @override
+  String get chatInfoAddMembersAction => 'Добавить';
+
+  @override
+  String get chatInfoMembersSearchHint => 'Поиск';
+
+  @override
+  String get chatInfoAddMembersEmpty => 'Некого добавить';
+
+  @override
+  String get chatInfoMembersAdded => 'Участники добавлены';
+
+  @override
+  String get chatInfoAddMembersError => 'Не удалось добавить участников';
 
   @override
   String get chatInfoNoData => 'Нет данных';
@@ -1591,7 +1657,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get passwordEntryMismatchError => 'Пароли не совпадают';
 
   @override
-  String get passwordEntryInvalidEmailError => 'Введите корректный email';
+  String get passwordEntryInvalidEmailError => 'Введите нормальный email';
 
   @override
   String get passwordEntryInvalidCodeError => 'Введите 6-значный код';
@@ -1683,7 +1749,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get passwordEntryRemoveWarning =>
-      'Внимание! После удаления пароля защита вашего аккаунта ослабнет.';
+      'После удаления пароля ваш аккаунт будет менее защищен. Уверены?';
 
   @override
   String get cloudStorageNoActiveProfile => 'Нет активного профиля';
@@ -1922,6 +1988,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get attachSheetSectionInProgress => 'Раздел в разработке';
 
   @override
+  String get attachSheetContact => 'Контакт';
+
+  @override
+  String get attachSheetContactSearchHint => 'Поиск по контактам';
+
+  @override
+  String get attachSheetNoContacts => 'У вас пока нет контактов';
+
+  @override
+  String get attachSheetNoContactsFound => 'Контакты не найдены';
+
+  @override
   String get attachSheetNoGalleryAccessTitle => 'Нет доступа к галерее';
 
   @override
@@ -2108,4 +2186,127 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get updateCheckFailed =>
       'Не удалось проверить обновления. Повторите позже';
+
+  @override
+  String get profileResurrecting =>
+      'Упс! Сервер не прислал profile. Попробую регенерировать…';
+
+  @override
+  String get profilePhoneRegenFailed =>
+      'Не удалось регенерировать данные об номере. Перезайдите и сообщите об проблеме разработчикам';
+
+  @override
+  String get addContactTitle => 'Новый контакт';
+
+  @override
+  String get addContactFirstName => 'Имя';
+
+  @override
+  String get addContactLastName => 'Фамилия (необязательно)';
+
+  @override
+  String get addContactSave => 'Сохранить контакт';
+
+  @override
+  String addContactNotFound(String phone) {
+    return '$phone не найден';
+  }
+
+  @override
+  String get addContactNotFoundSubtitle => 'Этого номера пока нет в приложении';
+
+  @override
+  String get addContactSearchOther => 'Искать другой номер';
+
+  @override
+  String get addContactError => 'Не удалось добавить контакт';
+
+  @override
+  String get contactBubbleNew => 'Новый контакт';
+
+  @override
+  String get contactBubbleAlreadyAdded => 'Уже твой контакт';
+
+  @override
+  String get contactBubbleOpenProfile => 'Открыть профиль';
+
+  @override
+  String get editContactMenu => 'Редактировать контакт';
+
+  @override
+  String get editContactTitle => 'Редактировать контакт';
+
+  @override
+  String get editContactFirstName => 'Имя';
+
+  @override
+  String get editContactLastName => 'Фамилия';
+
+  @override
+  String get editContactSave => 'Сохранить';
+
+  @override
+  String get editContactDelete => 'Удалить контакт';
+
+  @override
+  String get editContactDeleteConfirmTitle => 'Удалить контакт?';
+
+  @override
+  String get editContactDeleteConfirmBody =>
+      'Контакт будет удалён из вашего списка.';
+
+  @override
+  String get editContactDeleteCancel => 'Отмена';
+
+  @override
+  String get editContactError => 'Не удалось сохранить изменения';
+
+  @override
+  String get downloadsTitle => 'Недавние загрузки';
+
+  @override
+  String get downloadsTooltip => 'Загрузки';
+
+  @override
+  String get downloadsSettings => 'Настройки';
+
+  @override
+  String get downloadsEmpty => 'Скачанные файлы появятся здесь';
+
+  @override
+  String get downloadsUnknownSource => 'Источник неизвестен';
+
+  @override
+  String get downloadsPhoto => 'Фото';
+
+  @override
+  String get downloadsVideo => 'Видео';
+
+  @override
+  String get downloadsGif => 'GIF';
+
+  @override
+  String get downloadsAudio => 'Аудио';
+
+  @override
+  String get downloadsFile => 'Файл';
+
+  @override
+  String get downloadsOpenFailed => 'Не удалось открыть файл';
+
+  @override
+  String get downloadsClearHistory => 'Очистить историю загрузок';
+
+  @override
+  String get downloadsClearTitle => 'Очистить историю загрузок?';
+
+  @override
+  String get downloadsClearBody =>
+      'Файлы останутся на устройстве, но этот список будет очищен.';
+
+  @override
+  String get downloadsClearConfirm => 'Очистить';
+
+  @override
+  String get downloadsHistoryCleared => 'История загрузок очищена';
 }

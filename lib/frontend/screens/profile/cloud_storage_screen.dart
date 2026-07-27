@@ -15,6 +15,7 @@ import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -30,7 +31,7 @@ class CloudStorageScreen extends StatefulWidget {
 }
 
 class _CloudStorageScreenState extends State<CloudStorageScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReloadOnReconnect {
   static const _translateFactor = 0.7;
   static const _horizontalPadding = 32.0;
   static const _hintSidePadding = 35.0;
@@ -185,6 +186,17 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     }
   }
 
+  @override
+  void reloadAfterReconnect() {
+    final accountId = _accountId;
+    final groupId = _envGroupId;
+    if (accountId == null || groupId == null) {
+      _checkEnv();
+      return;
+    }
+    unawaited(_loadFiles(accountId, groupId));
+  }
+
   Future<void> _loadFiles(int accountId, int chatId) async {
     final files = await CloudStorageModule.fetchFiles(
       messagesModule,
@@ -276,8 +288,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _SendByIdSheet(
         onSend: (id) async {
-          final ok = await messagesModule.sendFileMessage(chatId, id);
-          if (!ok) return false;
+          final sentId = await messagesModule.sendFileMessage(chatId, id);
+          if (sentId == null) return false;
           final newest = await CloudStorageModule.fetchLatestFile(
             messagesModule,
             accountId,

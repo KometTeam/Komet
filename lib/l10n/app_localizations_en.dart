@@ -453,6 +453,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatInfoComments => 'comments:';
 
   @override
+  String get commentsWrite => 'Comment';
+
+  @override
+  String get commentsTitle => 'Comments';
+
+  @override
+  String commentsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count comments',
+      one: '1 comment',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get chatInfoAplus => 'approved by Roskomnadzor:';
 
   @override
@@ -1320,6 +1337,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String photoViewerCounterFile(int total) {
+    return 'FILE of $total';
+  }
+
+  @override
   String photoViewerSentToday(String sender, String time) {
     return '$sender • today at $time';
   }
@@ -1337,6 +1359,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photoViewerRotate => 'Rotate';
+
+  @override
+  String mediaViewerCounter(int index, int total) {
+    return '$index of $total';
+  }
+
+  @override
+  String get mediaViewerViewAll => 'View all media';
+
+  @override
+  String get videoViewerSettings => 'Settings';
+
+  @override
+  String get videoViewerSpeed => 'Speed';
+
+  @override
+  String get videoViewerQuality => 'Quality';
 
   @override
   String get sharedCopyLink => 'Copy link';
@@ -1367,6 +1406,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInfoRoleAdmin => 'Admin';
+
+  @override
+  String get chatInfoMemberDeleted => 'Account deleted';
+
+  @override
+  String get chatInfoInviteByLink => 'Invite via link';
+
+  @override
+  String get chatInfoInviteLinkHint => 'You can invite anyone with this link';
+
+  @override
+  String get chatInfoAddMembersAction => 'Add';
+
+  @override
+  String get chatInfoMembersSearchHint => 'Search';
+
+  @override
+  String get chatInfoAddMembersEmpty => 'No one to add';
+
+  @override
+  String get chatInfoMembersAdded => 'Members added';
+
+  @override
+  String get chatInfoAddMembersError => 'Couldn\'t add members';
 
   @override
   String get chatInfoNoData => 'No data';
@@ -1911,6 +1974,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachSheetSectionInProgress => 'Section under development';
 
   @override
+  String get attachSheetContact => 'Contact';
+
+  @override
+  String get attachSheetContactSearchHint => 'Search contacts';
+
+  @override
+  String get attachSheetNoContacts => 'You have no contacts yet';
+
+  @override
+  String get attachSheetNoContactsFound => 'No contacts found';
+
+  @override
   String get attachSheetNoGalleryAccessTitle => 'No access to the gallery';
 
   @override
@@ -2097,4 +2172,127 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateCheckFailed =>
       'Couldn\'t check for updates. Try again later';
+
+  @override
+  String get profileResurrecting =>
+      'Oops! The server didn\'t send your profile. Trying to regenerate…';
+
+  @override
+  String get profilePhoneRegenFailed =>
+      'Couldn\'t regenerate your phone number. Please sign in again and report the issue to the developers';
+
+  @override
+  String get addContactTitle => 'Add contact';
+
+  @override
+  String get addContactFirstName => 'First name';
+
+  @override
+  String get addContactLastName => 'Last name (optional)';
+
+  @override
+  String get addContactSave => 'Save contact';
+
+  @override
+  String addContactNotFound(String phone) {
+    return '$phone not found';
+  }
+
+  @override
+  String get addContactNotFoundSubtitle => 'This number isn\'t on the app yet';
+
+  @override
+  String get addContactSearchOther => 'Search for other number';
+
+  @override
+  String get addContactError => 'Couldn\'t add contact';
+
+  @override
+  String get contactBubbleNew => 'New contact';
+
+  @override
+  String get contactBubbleAlreadyAdded => 'Already in your contacts';
+
+  @override
+  String get contactBubbleOpenProfile => 'Open profile';
+
+  @override
+  String get editContactMenu => 'Edit contact';
+
+  @override
+  String get editContactTitle => 'Edit contact';
+
+  @override
+  String get editContactFirstName => 'First name';
+
+  @override
+  String get editContactLastName => 'Last name';
+
+  @override
+  String get editContactSave => 'Save';
+
+  @override
+  String get editContactDelete => 'Delete contact';
+
+  @override
+  String get editContactDeleteConfirmTitle => 'Delete contact?';
+
+  @override
+  String get editContactDeleteConfirmBody =>
+      'This contact will be removed from your list.';
+
+  @override
+  String get editContactDeleteCancel => 'Cancel';
+
+  @override
+  String get editContactError => 'Couldn\'t save changes';
+
+  @override
+  String get downloadsTitle => 'Recent downloads';
+
+  @override
+  String get downloadsTooltip => 'Downloads';
+
+  @override
+  String get downloadsSettings => 'Settings';
+
+  @override
+  String get downloadsEmpty => 'Downloaded files will appear here';
+
+  @override
+  String get downloadsUnknownSource => 'Unknown source';
+
+  @override
+  String get downloadsPhoto => 'Photo';
+
+  @override
+  String get downloadsVideo => 'Video';
+
+  @override
+  String get downloadsGif => 'GIF';
+
+  @override
+  String get downloadsAudio => 'Audio';
+
+  @override
+  String get downloadsFile => 'File';
+
+  @override
+  String get downloadsOpenFailed => 'Couldn\'t open the file';
+
+  @override
+  String get downloadsClearHistory => 'Clear download history';
+
+  @override
+  String get downloadsClearTitle => 'Clear download history?';
+
+  @override
+  String get downloadsClearBody =>
+      'The files will stay on the device, but this list will be cleared.';
+
+  @override
+  String get downloadsClearConfirm => 'Clear';
+
+  @override
+  String get downloadsHistoryCleared => 'Download history cleared';
 }

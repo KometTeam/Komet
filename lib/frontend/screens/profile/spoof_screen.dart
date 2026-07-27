@@ -214,13 +214,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _deviceNameController.text =
           '${androidInfo.manufacturer} ${androidInfo.model}';
       _osVersionController.text = 'Android ${androidInfo.version.release}';
-      _selectedArch = androidInfo.supportedAbis.isNotEmpty
-          ? androidInfo.supportedAbis.first
-          : 'arm64-v8a';
+      _selectedArch = 'arm64-v8a';
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       _selectedDeviceType = 'ANDROID';
-      _selectedArch = 'arm64';
+      _selectedArch = 'arm64-v8a';
       _deviceNameController.text = iosInfo.utsname.machine;
       _osVersionController.text = iosInfo.systemVersion;
     } else if (Platform.isLinux) {
@@ -274,7 +272,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _spoofingEnabled = true;
 
       _selectedDeviceType = preset.deviceType;
-      _selectedArch = preset.deviceType == 'IOS' ? 'arm64' : 'arm64-v8a';
+      _selectedArch = 'arm64-v8a';
       _buildNumberController.text = '$_hardcodedBuildNumber';
 
       if (_selectedMethod == SpoofingMethod.full) {

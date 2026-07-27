@@ -36,6 +36,15 @@ class ProfileData {
     this.profileOptions,
   });
 
+  factory ProfileData.stub(int id) => ProfileData(
+    id: id,
+    firstName: '',
+    phone: 0,
+    country: '',
+    accountStatus: 0,
+    updateTime: 0,
+  );
+
   factory ProfileData.fromServerProfile(Map<dynamic, dynamic> profile) {
     final contact = profile['contact'];
     if (contact is! Map) {
@@ -70,7 +79,7 @@ class ProfileData {
       id: contact['id'] as int,
       firstName: firstName,
       lastName: lastName,
-      phone: contact['phone'] as int,
+      phone: (contact['phone'] as int?) ?? 0,
       photoId: contact['photoId'] as int?,
       baseUrl: contact['baseUrl'] as String?,
       baseRawUrl: contact['baseRawUrl'] as String?,
@@ -212,7 +221,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 19,
+      version: 20,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -322,6 +331,14 @@ class AppDatabase {
             'chats_cache',
             'pinned_msg_is_preview',
             'INTEGER NOT NULL DEFAULT 0',
+          );
+        }
+        if (oldVersion < 20) {
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'last_mention_msg_id',
+            'INTEGER',
           );
         }
       },
@@ -476,6 +493,7 @@ class AppDatabase {
       pinned_msg_text TEXT,
       pinned_msg_time INTEGER,
       pinned_msg_is_preview INTEGER NOT NULL DEFAULT 0,
+      last_mention_msg_id INTEGER,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -871,6 +889,40 @@ class AppDatabase {
       'contacts',
       where: 'account_id = ?',
       whereArgs: [accountId],
+    );
+  }
+
+  static Future<List<int>> loadContactIds(int accountId) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'contacts',
+      columns: ['id'],
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+    return [for (final r in rows) r['id'] as int];
+  }
+
+  static Future<Map<String, dynamic>?> loadContact(
+    int accountId,
+    int id,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'contacts',
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  static Future<void> deleteContact(int accountId, int id) async {
+    final db = await _instance;
+    await db.delete(
+      'contacts',
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, id],
     );
   }
 

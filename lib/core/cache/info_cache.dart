@@ -109,6 +109,50 @@ class ContactInfoFetch {
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 
+  static void putContact(int id, Map<dynamic, dynamic> contact) {
+    _cache.putValue(id, ContactInfo.fromMap(Map<String, dynamic>.from(contact)));
+  }
+
+  static Future<Map<int, ContactInfo>> getMany(
+    List<int> ids, {
+    bool forceRefresh = false,
+  }) async {
+    final result = <int, ContactInfo>{};
+    final missing = <int>[];
+    for (final id in ids) {
+      if (!forceRefresh) {
+        final cached = _cache.peek(id);
+        if (cached != null) {
+          result[id] = cached;
+          continue;
+        }
+      }
+      missing.add(id);
+    }
+    if (missing.isEmpty) return result;
+
+    final api = _api;
+    if (api == null || api.state != SessionState.online) return result;
+    try {
+      final resp = await api.sendRequest(Opcode.contactInfo, {
+        'contactIds': missing,
+      });
+      final data = resp.payload;
+      final contacts = data is Map ? data['contacts'] : null;
+      if (contacts is List) {
+        final now = DateTime.now();
+        for (final c in contacts.whereType<Map>()) {
+          final id = c['id'];
+          if (id is! int) continue;
+          final info = ContactInfo.fromMap(Map<String, dynamic>.from(c));
+          _cache.putValue(id, info, at: now);
+          result[id] = info;
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
   static Future<ContactInfo?> _fetch(int id) async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return null;

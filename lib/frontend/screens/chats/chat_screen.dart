@@ -10,9 +10,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chat_preview.dart';
 import 'package:komet/backend/modules/chats.dart';
+import 'package:komet/backend/modules/comments.dart';
 import 'package:komet/backend/modules/file_uploader.dart';
 import 'package:komet/backend/modules/upload_notification_service.dart';
 import 'package:komet/core/media/gallery_source.dart';
+import 'package:komet/core/media/image_optimizer.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
@@ -26,6 +28,7 @@ import '../../../main.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../backend/api.dart';
 import '../../../backend/modules/messages.dart';
+import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/animoji.dart';
 import '../../../models/animoji.dart';
 import '../../../backend/modules/complaints.dart';
@@ -37,6 +40,10 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
+import '../../../core/crypto/chat_crypto_service.dart';
+import '../../../core/crypto/encrypted_photo.dart';
+import '../../../core/crypto/message_decryption_cache.dart';
+import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
@@ -62,6 +69,8 @@ import 'chat/view/search_view.dart';
 import 'chat/view/composer_input.dart';
 import 'chat/view/sticker_panel_view.dart';
 import 'chat/view/command_panel_view.dart';
+import 'chat/view/mention_panel_view.dart';
+import 'chat/mention_panel_controller.dart';
 import 'chat/view/selection_bar.dart';
 import 'chat/view/chat_header.dart';
 import 'chat/view/shimmer_loading.dart';
@@ -90,12 +99,15 @@ import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/directional_drag_recognizer.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
 import '../../widgets/chat_wallpaper_view.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/liquid_glass.dart';
 import 'scheduled_messages_screen.dart';
+import 'chat_encryption_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 
 class _DateSeparatorItem {
@@ -191,6 +203,13 @@ class ForwardRequest {
   const ForwardRequest({required this.sourceChatId, required this.optimistic});
 }
 
+class ReplyRequest {
+  final int sourceChatId;
+  final CachedMessage message;
+
+  const ReplyRequest({required this.sourceChatId, required this.message});
+}
+
 class ChatScreen extends StatefulWidget {
   final int chatId;
   final String name;
@@ -199,8 +218,11 @@ class ChatScreen extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
   final ForwardRequest? forwardRequest;
+  final ReplyRequest? replyRequest;
   final String? initialMessageId;
   final int? initialMessageTime;
+  final String? commentPostId;
+  final CachedMessage? postMessage;
 
   const ChatScreen({
     super.key,
@@ -211,8 +233,11 @@ class ChatScreen extends StatefulWidget {
     this.embedded = false,
     this.onClose,
     this.forwardRequest,
+    this.replyRequest,
     this.initialMessageId,
     this.initialMessageTime,
+    this.commentPostId,
+    this.postMessage,
   });
 
   @override
@@ -220,7 +245,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver, ReloadOnReconnect {
   final RichMessageController _messageController = RichMessageController();
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
@@ -241,8 +266,10 @@ class _ChatScreenState extends State<ChatScreen>
   int _readMarkTime = 0;
   Timer? _readMarkTimer;
   final GlobalKey _listKey = GlobalKey();
+  final Object _profileHeroTag = UniqueKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
+  bool _encryptionEnabled = false;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
   late final StickerPanelController _stickers;
   final ValueNotifier<UploadStatus> _uploadStatus = ValueNotifier(
@@ -251,9 +278,19 @@ class _ChatScreenState extends State<ChatScreen>
   StreamSubscription<UploadEvent>? _uploadSub;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<MessageEvent>? _messageEventSub;
+  StreamSubscription<Map<String, CommentsInfo>>? _commentsInfoSub;
+  StreamSubscription<CommentAddedEvent>? _commentSub;
+  final Map<String, int> _commentCounts = {};
+  final Set<String> _commentCountsRequested = {};
+  bool get _commentsMode => widget.commentPostId != null;
+  bool _commentsLoadingMore = false;
+  bool _commentsHasMore = true;
   StreamSubscription<SessionState>? _connSub;
   final Map<String, ValueNotifier<Map<String, dynamic>?>> _reactionNotifiers =
       {};
+  final ValueNotifier<ReactionAnimationEvent?> _reactionAnimation =
+      ValueNotifier(null);
+  int _reactionAnimationToken = 0;
   final Map<String, ValueNotifier<List<double>>> _photoUploadProgress = {};
   final ValueNotifier<int> _scheduledCount = ValueNotifier(0);
 
@@ -320,6 +357,20 @@ class _ChatScreenState extends State<ChatScreen>
     }
     notifier.value = result.info;
     _applyReactionInfoToMessage(message.id, result.info);
+    final appliedReaction = result.info?['yourReaction']?.toString();
+    if (!isToggleOff &&
+        appliedReaction != null &&
+        EmojiKeywordIndex.normalize(appliedReaction) ==
+            EmojiKeywordIndex.normalize(emoji)) {
+      final event = ReactionAnimationEvent(
+        messageId: message.id,
+        emoji: appliedReaction,
+        token: ++_reactionAnimationToken,
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _reactionAnimation.value = event;
+      });
+    }
   }
 
   void _applyReactionInfoToMessage(
@@ -406,6 +457,8 @@ class _ChatScreenState extends State<ChatScreen>
   int? _participantsCount;
 
   final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
+  static const bool _crossChatReplySupported = false;
+  int? _replySourceChatId;
   final ValueNotifier<String?> _highlightMessageId = ValueNotifier(null);
   Timer? _highlightTimer;
   final ValueNotifier<double?> _jumpCacheExtent = ValueNotifier<double?>(null);
@@ -429,12 +482,15 @@ class _ChatScreenState extends State<ChatScreen>
   int _tempIdCounter = 0;
   late final AnimationController _attachAnim;
   late final CommandPanelController _commandPanel;
+  late final MentionPanelController _mentionPanel;
 
   String _nextTempId() =>
       'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
   late AnimationController _shimmerController;
   Timer? _shimmerStartTimer;
   bool _previewChat = false;
+  bool _subscribing = false;
+  String? _channelLink;
   bool _forwardRequestDone = false;
 
   final ChatController _chatController = ChatController();
@@ -524,9 +580,10 @@ class _ChatScreenState extends State<ChatScreen>
     );
     final px = ((44.0 * dpr).clamp(96.0, 512.0) / 32).ceil() * 32;
     for (final a in animojiModule.quickAnimojis) {
-      final url = a.lottieUrl;
-      if (url != null && url.isNotEmpty) {
-        unawaited(RlottieEngine.instance.prewarm(url, px));
+      for (final url in [a.lottieUrl, a.lottiePlayUrl]) {
+        if (url != null && url.isNotEmpty) {
+          unawaited(RlottieEngine.instance.prewarm(url, px));
+        }
       }
     }
   }
@@ -540,7 +597,10 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(
       animojiModule
           .ensureLoaded()
-          .then((_) => _prewarmQuickReactions())
+          .then((_) {
+            _prewarmQuickReactions();
+            if (mounted) _bumpMessages();
+          })
           .catchError((_) {}),
     );
     WidgetsBinding.instance.addObserver(this);
@@ -575,6 +635,14 @@ class _ChatScreenState extends State<ChatScreen>
       textOf: () => _messageController.text,
       onSelected: _onCommandSelected,
     );
+    _mentionPanel = MentionPanelController(
+      vsync: this,
+      chatId: widget.chatId,
+      enabled: _mentionsAvailable,
+      selfId: () => _myId,
+      valueOf: () => _messageController.value,
+      onSelected: _onMentionSelected,
+    );
     _selectionAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
@@ -589,6 +657,13 @@ class _ChatScreenState extends State<ChatScreen>
       chatId: widget.chatId,
       isMounted: () => mounted,
     );
+    final incomingReply = widget.replyRequest;
+    if (incomingReply != null) {
+      _replyTo.value = incomingReply.message;
+      _replySourceChatId = incomingReply.sourceChatId == widget.chatId
+          ? null
+          : incomingReply.sourceChatId;
+    }
     _pushSub = api.pushStream
         .where(
           (p) =>
@@ -600,6 +675,16 @@ class _ChatScreenState extends State<ChatScreen>
     _messageEventSub = chats.messageEvents
         .where((e) => e.chatId == widget.chatId)
         .listen(_onMessageEvent);
+    if (_commentsMode) {
+      _commentSub = commentsModule.commentStream
+          .where(
+            (e) =>
+                e.chatId == widget.chatId && e.postId == widget.commentPostId,
+          )
+          .listen(_onLiveComment);
+    } else if (widget.chatType == 'CHANNEL') {
+      _commentsInfoSub = commentsModule.infoStream.listen(_onCommentsInfo);
+    }
     ChatActivityStore.instance
         .listenable(widget.chatId)
         .addListener(_recomputeHeaderStatus);
@@ -608,6 +693,7 @@ class _ChatScreenState extends State<ChatScreen>
     });
     debugForceOffline.addListener(_recomputeHeaderStatus);
     PresenceFetch.revision.addListener(_onPresenceChanged);
+    ContactsModule.revision.addListener(_onContactsChanged);
     _floatingDateAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -638,10 +724,22 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
   }
 
+  @override
+  void reloadAfterReconnect() {
+    if (!_historyKickedOff) return;
+    unawaited(_loadHistory());
+    unawaited(_loadParticipantsCount());
+  }
+
   Future<void> _loadParticipantsCount() async {
+    if (_commentsMode) return;
     if (widget.chatType != 'CHAT' && widget.chatType != 'CHANNEL') return;
     final info = await chats.getChatInfo(api, widget.chatId);
     if (!mounted) return;
+    if (widget.chatType == 'CHANNEL') {
+      final link = info?['link'];
+      if (link is String && link.isNotEmpty) _channelLink = link;
+    }
     final count = info?['participantsCount'] as int?;
     if (count != null && count != _participantsCount) {
       _participantsCount = count;
@@ -676,9 +774,11 @@ class _ChatScreenState extends State<ChatScreen>
       if (myName.isNotEmpty) ContactCache.put(p.id, myName);
       ContactCache.putAvatar(p.id, p.baseUrl);
     }
+    if (_commentsMode) return;
     _restoreDraft();
     unawaited(_loadPeerKind());
     unawaited(_loadWallpaper());
+    unawaited(_loadEncryption());
     unawaited(_refreshBadge());
 
     try {
@@ -705,6 +805,7 @@ class _ChatScreenState extends State<ChatScreen>
         _messagesRev.value++;
       });
       _syncReactionNotifiersFromMessages();
+      _requestCommentCounts();
       _revealOrHoldInitial();
       return;
     }
@@ -724,6 +825,7 @@ class _ChatScreenState extends State<ChatScreen>
         _messages = first;
         _messagesRev.value++;
       });
+      _requestCommentCounts();
       _revealOrHoldInitial();
     }
   }
@@ -862,6 +964,15 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
     if (_positioningInFlight) return;
+    if (_commentsMode) {
+      _initialPositionDone = true;
+      _markPositioned();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      });
+      return;
+    }
     if (_messages.isEmpty) {
       if (!_hasMoreHistory) _markPositioned();
       return;
@@ -946,9 +1057,10 @@ class _ChatScreenState extends State<ChatScreen>
       MaterialPageRoute(
         builder: (_) => ChatInfoScreen(
           chatId: widget.chatId,
-          name: widget.name,
+          name: _headerName(),
           imageUrl: widget.imageUrl,
           chatType: widget.chatType,
+          heroTag: _profileHeroTag,
           initialTab: initialTab,
           onJumpToMessage: (chatRoute == null || widget.embedded)
               ? null
@@ -966,7 +1078,7 @@ class _ChatScreenState extends State<ChatScreen>
     forward: _forwardMessageById,
     delete: (messageId, senderId) =>
         _confirmDeleteMessage(messageId, senderId == _myId),
-    viewAllPhotos: () => _openChatInfo(initialTab: ChatInfoTab.media),
+    viewAllMedia: () => _openChatInfo(initialTab: ChatInfoTab.media),
   );
 
   void _forwardMessageById(String messageId) {
@@ -1017,6 +1129,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _updateReadMarker() {
+    if (_commentsMode) return;
     if (!mounted || _myId == 0 || _messages.isEmpty) return;
     if (_awaitingPosition || !_initialPositionDone) return;
     if (!_scrollController.hasClients) return;
@@ -1328,6 +1441,10 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       _myId = activeProfile?.id ?? 0;
     }
+    if (_commentsMode) {
+      await _loadCommentsHistory();
+      return;
+    }
     if (widget.chatType == 'DIALOG') {
       unawaited(_loadOtherPresence());
     }
@@ -1352,6 +1469,14 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_scrollController.hasClients) return;
     if (_historyAutoloadSuppressed) return;
     if (_isLoading) return;
+    if (_commentsMode) {
+      if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) return;
+      final pos = _scrollController.position;
+      if (pos.pixels - pos.minScrollExtent <= _historyPrefetchExtent) {
+        unawaited(_loadMoreComments());
+      }
+      return;
+    }
     _maybeFillGap();
     if (_isLoadingMore || !_hasMoreHistory) return;
     if (_messages.isEmpty) return;
@@ -1498,6 +1623,7 @@ class _ChatScreenState extends State<ChatScreen>
     bool markLoaded = false,
   }) {
     final changed = _chatController.mergeMessages(decodedDesc);
+    _requestCommentCounts();
 
     if (!changed && !markLoaded) return;
 
@@ -1513,6 +1639,161 @@ class _ChatScreenState extends State<ChatScreen>
       _chatController.persistSessionCache();
       _reapplyPinIfNeeded();
     }
+  }
+
+  void _requestCommentCounts() {
+    if (_commentsMode) return;
+    if ((chat?.type ?? widget.chatType) != 'CHANNEL') return;
+    final pending = <String>[];
+    for (final m in _messages) {
+      if (m.isControl) continue;
+      if (_commentCountsRequested.contains(m.id)) continue;
+      _commentCountsRequested.add(m.id);
+      pending.add(m.id);
+    }
+    if (pending.isEmpty) return;
+    unawaited(
+      commentsModule.fetchInfo(
+        accountId: _myId,
+        chatId: widget.chatId,
+        postIds: pending,
+      ),
+    );
+  }
+
+  void _onCommentsInfo(Map<String, CommentsInfo> info) {
+    if (!mounted) return;
+    var changed = false;
+    for (final m in _messages) {
+      final count = info[m.id]?.totalCount;
+      if (count == null) continue;
+      if (_commentCounts[m.id] != count) {
+        _commentCounts[m.id] = count;
+        changed = true;
+      }
+    }
+    if (changed) setState(() {});
+  }
+
+  String _commentsLabelFor(String postId) {
+    final l10n = AppLocalizations.of(context)!;
+    final count = _commentCounts[postId];
+    if (count == null || count == 0) return l10n.commentsWrite;
+    return l10n.commentsCount(count);
+  }
+
+  void _openComments(CachedMessage post) {
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => ChatScreen(
+              chatId: widget.chatId,
+              name: widget.name,
+              imageUrl: widget.imageUrl,
+              chatType: 'CHANNEL',
+              commentPostId: post.id,
+              postMessage: _stripInlineKeyboard(post),
+            ),
+          ),
+        )
+        .then((_) => _refreshCommentCount(post.id));
+  }
+
+  void _refreshCommentCount(String postId) {
+    if (!mounted) return;
+    _commentCountsRequested.remove(postId);
+    _requestCommentCounts();
+  }
+
+  CachedMessage _stripInlineKeyboard(CachedMessage post) {
+    final attaches = post.attachments;
+    if (attaches == null || attaches.isEmpty) return post;
+    final filtered = attaches
+        .where((a) => a.type != AttachmentType.inlineKeyboard)
+        .toList();
+    if (filtered.length == attaches.length) return post;
+    return post.copyWith(attachments: filtered);
+  }
+
+  Future<void> _loadCommentsHistory() async {
+    final post = widget.postMessage;
+    final loaded = await commentsModule.fetchHistory(
+      _myId,
+      widget.chatId,
+      widget.commentPostId!,
+      fromTime: post?.time ?? DateTime.now().millisecondsSinceEpoch,
+      forward: 30,
+      backward: 0,
+    );
+    if (!mounted) return;
+    final comments = [...loaded]..sort((a, b) => a.time.compareTo(b.time));
+    _messages = post != null ? [post, ...comments] : comments;
+    _commentsHasMore = comments.isNotEmpty;
+    _syncReactionNotifiersFromMessages();
+    unawaited(_resolveCommentNames(comments));
+    _bumpMessages();
+    setState(() {
+      _isLoading = false;
+      _onLoadingFinished();
+    });
+  }
+
+  Future<void> _loadMoreComments() async {
+    if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) return;
+    _commentsLoadingMore = true;
+    final newest = _messages.last;
+    try {
+      final more = await commentsModule.fetchHistory(
+        _myId,
+        widget.chatId,
+        widget.commentPostId!,
+        fromTime: newest.time,
+        forward: 30,
+        backward: 0,
+      );
+      if (!mounted) return;
+      final existing = _messages.map((m) => m.id).toSet();
+      final fresh = more.where((c) => !existing.contains(c.id)).toList();
+      if (fresh.isEmpty) {
+        _commentsHasMore = false;
+      } else {
+        _messages = [..._messages, ...fresh]
+          ..sort((a, b) => a.time.compareTo(b.time));
+        _syncReactionNotifiersFromMessages();
+        unawaited(_resolveCommentNames(fresh));
+        _bumpMessages();
+      }
+    } finally {
+      _commentsLoadingMore = false;
+    }
+  }
+
+  void _onLiveComment(CommentAddedEvent event) {
+    if (!mounted) return;
+    final comment = event.comment;
+    if (comment.senderId == _myId) return;
+    if (_messages.any((m) => m.id == comment.id)) return;
+    final nearBottom = _isNearListBottom();
+    _messages.add(comment);
+    _syncReactionNotifiersFromMessages();
+    _bumpMessages();
+    unawaited(_resolveCommentNames([comment]));
+    if (nearBottom) _scrollToBottom();
+  }
+
+  bool _isNearListBottom() {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.position.pixels <= _historyPrefetchExtent;
+  }
+
+  Future<void> _resolveCommentNames(List<CachedMessage> list) async {
+    final ids = list
+        .map((m) => m.senderId)
+        .where((id) => id != 0 && ContactCache.get(id) == null)
+        .toSet();
+    if (ids.isEmpty) return;
+    final resolved = await messagesModule.ensureContactNames(ids);
+    if (resolved && mounted) _bumpMessages();
   }
 
   void _syncReactionNotifiersFromMessages() {
@@ -1595,6 +1876,8 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadSub?.cancel();
     _pushSub?.cancel();
     _messageEventSub?.cancel();
+    _commentsInfoSub?.cancel();
+    _commentSub?.cancel();
     _connSub?.cancel();
     _voiceRec.dispose();
     _note.dispose();
@@ -1603,6 +1886,7 @@ class _ChatScreenState extends State<ChatScreen>
       n.dispose();
     }
     _reactionNotifiers.clear();
+    _reactionAnimation.dispose();
     for (final n in _photoUploadProgress.values) {
       n.dispose();
     }
@@ -1611,10 +1895,14 @@ class _ChatScreenState extends State<ChatScreen>
         .listenable(widget.chatId)
         .removeListener(_recomputeHeaderStatus);
     PresenceFetch.revision.removeListener(_onPresenceChanged);
+    ContactsModule.revision.removeListener(_onContactsChanged);
     if (_wallpaperListening) {
       ChatWallpaperStore.instance.revision.removeListener(
         _applyEffectiveWallpaper,
       );
+    }
+    if (_encryptionListening) {
+      ChatEncryptionStore.instance.revision.removeListener(_applyEncryption);
     }
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
@@ -1623,6 +1911,7 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadStatus.dispose();
     _attachAnim.dispose();
     _commandPanel.dispose();
+    _mentionPanel.dispose();
     _selectionAnim.dispose();
     _searchAnim.dispose();
     _searchFocusNode.dispose();
@@ -1650,6 +1939,21 @@ class _ChatScreenState extends State<ChatScreen>
       _hasText.value = newHasText;
     }
     _commandPanel.update();
+    _mentionPanel.update();
+  }
+
+  bool _mentionsAvailable() =>
+      !_commentsMode && (chat?.type ?? widget.chatType) == 'CHAT';
+
+  void _onMentionSelected(MentionCandidate candidate, MentionQuery query) {
+    _messageController.insertMention(
+      userId: candidate.id,
+      name: candidate.name,
+      start: query.start,
+      end: query.end,
+    );
+    _mentionPanel.update();
+    _messageFocusNode.requestFocus();
   }
 
   void _onCommandSelected(SlashCommand c) {
@@ -1662,7 +1966,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _restoreDraft() {
-    if (_myId == 0 || _messageController.text.isNotEmpty) return;
+    if (_myId == 0 || _commentsMode || _messageController.text.isNotEmpty) {
+      return;
+    }
     final draft = DraftStore.instance.get(_myId, widget.chatId);
     if (draft == null || draft.isEmpty) return;
     _messageController.text = draft;
@@ -1672,7 +1978,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _saveDraft() {
-    if (_myId == 0) return;
+    if (_myId == 0 || _commentsMode) return;
     unawaited(
       DraftStore.instance.set(
         _myId,
@@ -1952,6 +2258,9 @@ class _ChatScreenState extends State<ChatScreen>
         tempId: _nextTempId(),
         time: now + i,
         status: 'sending',
+        sourceChatName: widget.name,
+        sourceChatIconUrl: widget.imageUrl,
+        sourceChatType: widget.chatType,
       );
       optimistic.add(msg);
       _messages.add(msg);
@@ -1996,6 +2305,9 @@ class _ChatScreenState extends State<ChatScreen>
         tempId: _nextTempId(),
         time: now + i,
         status: 'sending',
+        sourceChatName: widget.name,
+        sourceChatIconUrl: widget.imageUrl,
+        sourceChatType: widget.chatType,
       );
       optimistic.add(msg);
       await AppDatabase.saveMessages([msg.toDbRow()]);
@@ -2139,33 +2451,47 @@ class _ChatScreenState extends State<ChatScreen>
                   );
                 },
               ),
-              ComposerInputBar(
-                chatType: widget.chatType,
-                chrome: _effectiveChrome,
-                style: AppComposerStyle.current.value,
-                background: AppComposerBackground.current.value,
-                backdropKey: _pillBackdrop,
-                attachAnim: _attachAnim,
-                replyTo: _replyTo,
-                myId: _myId,
-                hasText: _hasText,
-                uploadStatus: _uploadStatus,
-                messageController: _messageController,
-                messageFocusNode: _messageFocusNode,
-                voiceRec: _voiceRec,
-                note: _note,
-                onToggleStickerPanel: _toggleStickerPanel,
-                onSendText: _sendMessage,
-                onScheduleMessage: _scheduleMessage,
-                onOpenAttach: _openAttachmentSheet,
-                onOpenAttachScheduled: _openAttachmentSheetScheduled,
-                onSendHistory: _sendHistoryFile,
-                onCancelReply: _cancelReply,
-                formatElapsed: formatVoiceElapsed,
-                contextMenuBuilder: (ctx, state) =>
-                    _formatContextMenu(_messageController, ctx, state),
-                isMuted: chat?.isMuted ?? false,
-                onToggleMute: _toggleChatMute,
+              AnimatedBuilder(
+                animation: _stickers.anim,
+                builder: (context, _) => ComposerInputBar(
+                  bottomSafe: _stickers.anim.value == 0,
+                  chatType: _commentsMode ? 'CHAT' : widget.chatType,
+                  chrome: _effectiveChrome,
+                  style: AppComposerStyle.current.value,
+                  background: AppComposerBackground.current.value,
+                  backdropKey: _pillBackdrop,
+                  attachAnim: _attachAnim,
+                  replyTo: _replyTo,
+                  myId: _myId,
+                  hasText: _hasText,
+                  uploadStatus: _uploadStatus,
+                  messageController: _messageController,
+                  messageFocusNode: _messageFocusNode,
+                  voiceRec: _voiceRec,
+                  note: _note,
+                  onToggleStickerPanel: _toggleStickerPanel,
+                  onSendText: _sendMessage,
+                  onScheduleMessage: _scheduleMessage,
+                  onOpenAttach: _openAttachmentSheet,
+                  onOpenAttachScheduled: _openAttachmentSheetScheduled,
+                  onSendHistory: _sendHistoryFile,
+                  onCancelReply: _cancelReply,
+                  onPickReplyChat: _commentsMode || !_crossChatReplySupported
+                      ? null
+                      : () => unawaited(_pickReplyChat()),
+                  formatElapsed: formatVoiceElapsed,
+                  contextMenuBuilder: (ctx, state) =>
+                      _formatContextMenu(_messageController, ctx, state),
+                  isMuted: chat?.isMuted ?? false,
+                  onToggleMute: _toggleChatMute,
+                  channelSubscribed: !_previewChat,
+                  channelSubscribing: _subscribing,
+                  onSubscribe: _subscribeChannel,
+                  showStickerButton: !_commentsMode,
+                  showAttachButton: !_commentsMode,
+                  forceSend: _commentsMode,
+                  hintText: _commentsMode ? 'Комментарий' : 'Message',
+                ),
               ),
               StickerPanelView(
                 stickers: _stickers,
@@ -2493,6 +2819,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _onMessageEvent(MessageEvent event) {
     if (!mounted) return;
+    if (_commentsMode) return;
     switch (event) {
       case MessageAddedEvent(:final message):
         if (message.senderId == _myId) return;
@@ -2566,6 +2893,22 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() {});
       _bumpMessages();
     }
+  }
+
+  void _onContactsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  String _headerName() {
+    if (_commentsMode) return AppLocalizations.of(context)!.commentsTitle;
+    if (widget.chatType == 'DIALOG') {
+      final otherId = _resolveOtherId();
+      if (otherId != null) {
+        final cached = ContactCache.get(otherId);
+        if (cached != null && cached.isNotEmpty) return cached;
+      }
+    }
+    return widget.name;
   }
 
   PreferredSizeWidget _buildAppBar(ColorScheme cs) {
@@ -2653,21 +2996,24 @@ class _ChatScreenState extends State<ChatScreen>
                             cs: cs,
                             embedded: widget.embedded,
                             chatId: widget.chatId,
-                            name: widget.name,
+                            heroTag: _profileHeroTag,
+                            name: _headerName(),
                             imageUrl: widget.imageUrl,
                             chatType: widget.chatType,
                             isOfficial: chat?.isOfficial ?? false,
+                            encrypted: _encryptionEnabled,
                             myId: _myId,
                             headerStatus: _headerStatusNotifier,
                             scheduledCount: _scheduledCount,
                             otherUnread: _otherUnread,
-                            showCall:
-                                widget.chatType == 'DIALOG' && !_peerIsBot,
+                            showCall: !_commentsMode &&
+                                widget.chatType == 'DIALOG' &&
+                                !_peerIsBot,
                             onClose: widget.onClose,
-                            onOpenInfo: _openChatInfo,
+                            onOpenInfo: _commentsMode ? () {} : _openChatInfo,
                             onOpenScheduled: _openScheduledMessages,
                             onCall: _startCall,
-                            onMenu: _openChatMenu,
+                            onMenu: _commentsMode ? (_) {} : _openChatMenu,
                           ),
                         ),
                       ),
@@ -2746,12 +3092,50 @@ class _ChatScreenState extends State<ChatScreen>
           onTap: _clearHistory,
         ),
         ChatMenuItem(
+          icon: _encryptionEnabled ? Symbols.lock : Symbols.lock_open,
+          label: 'Шифрование сообщений',
+          onTap: _openEncryptionSettings,
+        ),
+        ChatMenuItem(
           icon: Symbols.delete,
           label: 'Удалить чат',
           onTap: _deleteChat,
         ),
       ],
     );
+  }
+
+  Future<void> _subscribeChannel() async {
+    if (_subscribing) return;
+    setState(() => _subscribing = true);
+    try {
+      var link = _channelLink;
+      if (link == null || link.isEmpty) {
+        final info = await chats.getChatInfo(api, widget.chatId);
+        link = info?['link'] as String?;
+      }
+      if (link == null || link.isEmpty) {
+        throw const PacketError('Не удалось получить ссылку канала');
+      }
+      final result = await chats.joinChannel(api, link, _myId);
+      if (!mounted) return;
+      setState(() {
+        _previewChat = false;
+        _subscribing = false;
+        chat = result.chat;
+        _participantsCount =
+            result.subscribersCount ?? ((_participantsCount ?? 0) + 1);
+      });
+      _recomputeHeaderStatus();
+      showCustomNotification(context, 'Вы подписались на канал');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subscribing = false);
+      showCustomNotification(
+        context,
+        e is PacketError ? e.message : 'Не удалось подписаться',
+      );
+    }
   }
 
   Future<void> _toggleChatMute() async {
@@ -2774,6 +3158,43 @@ class _ChatScreenState extends State<ChatScreen>
       context,
       muted ? 'Уведомления включены' : 'Уведомления отключены',
     );
+  }
+
+  bool _encryptionListening = false;
+
+  Future<void> _loadEncryption() async {
+    await ChatEncryptionStore.instance.load();
+    if (!mounted) return;
+    if (!_encryptionListening) {
+      _encryptionListening = true;
+      ChatEncryptionStore.instance.revision.addListener(_applyEncryption);
+    }
+    _applyEncryption();
+  }
+
+  void _applyEncryption() {
+    if (!mounted) return;
+    final enabled = ChatEncryptionStore.instance.isEnabled(
+      _myId,
+      widget.chatId,
+    );
+    if (enabled != _encryptionEnabled) {
+      setState(() => _encryptionEnabled = enabled);
+    }
+    if (enabled && _myId != 0) {
+      unawaited(ChatCryptoService.instance.warmKey(_myId, widget.chatId));
+    }
+  }
+
+  Future<void> _openEncryptionSettings() async {
+    if (_myId == 0) return;
+    await pushSwipeable(
+      context,
+      (context) =>
+          ChatEncryptionScreen(accountId: _myId, chatId: widget.chatId),
+    );
+    if (!mounted) return;
+    _applyEncryption();
   }
 
   bool _wallpaperListening = false;
@@ -2992,6 +3413,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _recomputeHeaderStatus() {
+    if (_commentsMode) {
+      _headerStatusNotifier.value = '';
+      return;
+    }
     _headerStatusNotifier.value = _headerStatus();
   }
 
@@ -3050,6 +3475,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   static String _formatLabel(TextFormat format) {
     switch (format) {
+      case TextFormat.heading:
+        return 'Заголовок';
       case TextFormat.strong:
         return 'Жирный';
       case TextFormat.emphasized:
@@ -3066,6 +3493,8 @@ class _ChatScreenState extends State<ChatScreen>
         return 'Ссылка';
       case TextFormat.animoji:
         return 'Animoji';
+      case TextFormat.userMention:
+        return 'Упоминание';
     }
   }
 
@@ -3139,6 +3568,36 @@ class _ChatScreenState extends State<ChatScreen>
     return result;
   }
 
+  Future<String?> _encryptOutgoing(String text) async {
+    if (!_encryptionEnabled || _myId == 0) return text;
+    final result = await ChatCryptoService.instance.encrypt(
+      _myId,
+      widget.chatId,
+      text,
+    );
+    if (result.isOk) {
+      if (result.text!.length > kMaxEncryptedMessageLength) {
+        if (mounted) {
+          showCustomNotification(
+            context,
+            'Слишком длинное сообщение. Разделите на несколько',
+          );
+        }
+        return null;
+      }
+      return result.text;
+    }
+    if (mounted) {
+      showCustomNotification(
+        context,
+        result.failure == CryptoFailure.noKey
+            ? 'Не задан ключ шифрования'
+            : 'Не удалось зашифровать сообщение',
+      );
+    }
+    return null;
+  }
+
   Future<void> _sendMessage() async {
     final content = _messageController.buildContent();
     final rawText = content.text;
@@ -3162,18 +3621,23 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    final wireText = await _encryptOutgoing(text);
+    if (wireText == null || !mounted) return;
+    final encrypted = wireText != text;
+
     final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
     final online = api.state == SessionState.online;
 
     final reply = _replyTo.value;
     final int? replyId = reply == null ? null : int.tryParse(reply.id);
+    final int? replySourceChatId = replyId == null ? null : _replySourceChatId;
     Map<String, dynamic>? replyPayload;
     if (reply != null && replyId != null) {
       replyPayload = {
         'link': {
           'type': 'REPLY',
-          'chatId': widget.chatId,
+          'chatId': replySourceChatId ?? widget.chatId,
           'message': {
             'id': replyId,
             'sender': reply.senderId,
@@ -3185,8 +3649,11 @@ class _ChatScreenState extends State<ChatScreen>
       };
     }
     _replyTo.value = null;
+    _replySourceChatId = null;
 
-    final elements = _trimmedElements(content.elements, rawText, text);
+    final elements = encrypted
+        ? const <Map<String, dynamic>>[]
+        : _trimmedElements(content.elements, rawText, text);
     final Map<String, dynamic>? composedPayload =
         (replyPayload == null && elements.isEmpty)
         ? null
@@ -3197,32 +3664,36 @@ class _ChatScreenState extends State<ChatScreen>
       accountId: _myId,
       chatId: widget.chatId,
       senderId: _myId,
-      text: text,
+      text: wireText,
       time: now,
       status: online ? 'sending' : 'pending',
       payload: composedPayload,
     );
+    if (encrypted) MessageDecryptionCache.instance.seed(tempId, text);
 
     _hasText.value = false;
     _lastSentId = tempId;
     _messages.add(composed);
     _messageController.clear();
-    if (DraftStore.instance.get(_myId, widget.chatId) != null) {
+    if (!_commentsMode &&
+        DraftStore.instance.get(_myId, widget.chatId) != null) {
       unawaited(DraftStore.instance.clear(_myId, widget.chatId));
     }
     _bumpMessages();
-    unawaited(_persistOutgoing(composed));
-    unawaited(
-      chats.applyOutgoing(
-        _myId,
-        widget.chatId,
-        messageId: tempId,
-        time: now,
-        text: text,
-        status: composed.status ?? 'sending',
-        elements: elements,
-      ),
-    );
+    if (!_commentsMode) {
+      unawaited(_persistOutgoing(composed));
+      unawaited(
+        chats.applyOutgoing(
+          _myId,
+          widget.chatId,
+          messageId: tempId,
+          time: now,
+          text: wireText,
+          status: composed.status ?? 'sending',
+          elements: elements,
+        ),
+      );
+    }
 
     // Instant tactile "whoosh" the moment the message leaves the composer,
     // not after the network round-trip — feedback must feel immediate.
@@ -3234,13 +3705,23 @@ class _ChatScreenState extends State<ChatScreen>
     if (!online) return;
 
     try {
-      final actualId = await messagesModule.sendMessage(
-        _myId,
-        widget.chatId,
-        text,
-        replyToMessageId: replyId,
-        elements: elements,
-      );
+      final actualId = _commentsMode
+          ? await commentsModule.sendComment(
+              _myId,
+              widget.chatId,
+              widget.commentPostId!,
+              wireText,
+              replyToMessageId: replyId,
+              elements: elements,
+            )
+          : await messagesModule.sendMessage(
+              _myId,
+              widget.chatId,
+              wireText,
+              replyToMessageId: replyId,
+              replySourceChatId: replySourceChatId,
+              elements: elements,
+            );
 
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
@@ -3249,28 +3730,33 @@ class _ChatScreenState extends State<ChatScreen>
           accountId: _myId,
           chatId: widget.chatId,
           senderId: _myId,
-          text: text,
+          text: wireText,
           time: now,
           status: 'sent',
           payload: composedPayload,
         );
+        if (encrypted) {
+          MessageDecryptionCache.instance.adopt(tempId, sent.id);
+        }
         _messages[index] = sent;
         _bumpMessages();
-        unawaited(_persistOutgoing(sent, removeId: tempId));
-        unawaited(
-          chats.applyOutgoing(
-            _myId,
-            widget.chatId,
-            messageId: sent.id,
-            time: now,
-            text: text,
-            status: 'sent',
-            elements: elements,
-          ),
-        );
+        if (!_commentsMode) {
+          unawaited(_persistOutgoing(sent, removeId: tempId));
+          unawaited(
+            chats.applyOutgoing(
+              _myId,
+              widget.chatId,
+              messageId: sent.id,
+              time: now,
+              text: wireText,
+              status: 'sent',
+              elements: elements,
+            ),
+          );
+        }
       }
 
-      if (chat == null) {
+      if (!_commentsMode && chat == null) {
         unawaited(
           chats.refreshChats(api, [widget.chatId]).then((list) {
             if (!mounted || list.isEmpty) return;
@@ -3281,6 +3767,20 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     } catch (e) {
+      if (replySourceChatId != null) {
+        logger.w('Cross-chat reply rejected: $e');
+        final index = _messages.indexWhere((m) => m.id == tempId);
+        if (index != -1 && mounted) {
+          _messages.removeAt(index);
+          _bumpMessages();
+        }
+        unawaited(AppDatabase.deleteMessage(_myId, widget.chatId, tempId));
+        if (mounted) {
+          Haptics.error();
+          showCustomNotification(context, e.toString());
+        }
+        return;
+      }
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
         final queued = CachedMessage(
@@ -3295,18 +3795,20 @@ class _ChatScreenState extends State<ChatScreen>
         );
         _messages[index] = queued;
         _bumpMessages();
-        unawaited(_persistOutgoing(queued));
-        unawaited(
-          chats.applyOutgoing(
-            _myId,
-            widget.chatId,
-            messageId: tempId,
-            time: now,
-            text: text,
-            status: 'pending',
-            elements: elements,
-          ),
-        );
+        if (!_commentsMode) {
+          unawaited(_persistOutgoing(queued));
+          unawaited(
+            chats.applyOutgoing(
+              _myId,
+              widget.chatId,
+              messageId: tempId,
+              time: now,
+              text: text,
+              status: 'pending',
+              elements: elements,
+            ),
+          );
+        }
       }
     }
   }
@@ -3467,6 +3969,7 @@ class _ChatScreenState extends State<ChatScreen>
     },
     postMessage: _postCommandMessage,
     updateMessage: _updateCommandMessage,
+    sendPhotos: _sendPhotos,
   );
 
   Future<void> _scheduleMessage() async {
@@ -3548,7 +4051,8 @@ class _ChatScreenState extends State<ChatScreen>
       if (msg.attachments != null) {
         for (final a in msg.attachments!) {
           if (a is ForwardedMessageAttachment) {
-            if (a.originalSenderName == null &&
+            if (a.originalSenderId != 0 &&
+                a.originalSenderName == null &&
                 ContactCache.get(a.originalSenderId) == null) {
               forwardIds.add(a.originalSenderId);
             }
@@ -3584,10 +4088,12 @@ class _ChatScreenState extends State<ChatScreen>
             originalSenderId: a.originalSenderId,
             originalSenderName: r.name,
             originalSenderAvatar: r.avatar,
+            originalType: a.originalType,
             originalMessageId: a.originalMessageId,
             originalTime: a.originalTime,
             originalText: a.originalText,
             originalChatId: a.originalChatId,
+            originalFormatRanges: a.originalFormatRanges,
             originalAttachments: a.originalAttachments,
             originalContact: a.originalContact,
           );
@@ -3745,11 +4251,45 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _startReply(CachedMessage message) {
     _replyTo.value = message;
+    _replySourceChatId = null;
     _messageFocusNode.requestFocus();
   }
 
   void _cancelReply() {
     _replyTo.value = null;
+    _replySourceChatId = null;
+  }
+
+  Future<void> _pickReplyChat() async {
+    final reply = _replyTo.value;
+    if (reply == null) return;
+    if (reply.id.startsWith('temp_')) {
+      showCustomNotification(context, 'Сообщение ещё не отправлено');
+      return;
+    }
+
+    final sourceChatId = _replySourceChatId ?? widget.chatId;
+    final target = await openForwardScreen(context: context);
+    if (target == null || !mounted) return;
+
+    if (target.chatId == widget.chatId) {
+      _replySourceChatId = sourceChatId == widget.chatId ? null : sourceChatId;
+      _messageFocusNode.requestFocus();
+      return;
+    }
+
+    await chats.ensureChatCached(api, _myId, target.chatId);
+    if (!mounted) return;
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: target.chatId,
+        name: target.name,
+        imageUrl: target.imageUrl,
+        chatType: target.chatType,
+        replyRequest: ReplyRequest(sourceChatId: sourceChatId, message: reply),
+      ),
+    );
   }
 
   void _openSenderProfile(int senderId) {
@@ -3760,6 +4300,61 @@ class _ChatScreenState extends State<ChatScreen>
         contactId: senderId,
         name: ContactCache.get(senderId) ?? 'User #$senderId',
         avatarUrl: ContactCache.getAvatar(senderId),
+      ),
+    );
+  }
+
+  void _openForwardedSource(ForwardedMessageAttachment forwarded) {
+    if (forwarded.isChannel) {
+      unawaited(_openForwardedChannel(forwarded));
+      return;
+    }
+    final senderId = forwarded.originalSenderId;
+    if (senderId == 0 || senderId == _myId) return;
+    unawaited(
+      openContactDialogProfile(
+        context,
+        contactId: senderId,
+        name:
+            forwarded.originalSenderName ??
+            ContactCache.get(senderId) ??
+            'User #$senderId',
+        avatarUrl:
+            forwarded.originalSenderAvatar ?? ContactCache.getAvatar(senderId),
+      ),
+    );
+  }
+
+  Future<void> _openForwardedChannel(
+    ForwardedMessageAttachment forwarded,
+  ) async {
+    final sourceChatId = forwarded.originalChatId;
+    if (sourceChatId == null) {
+      showCustomNotification(context, 'Канал недоступен');
+      return;
+    }
+    final sourceMessageId = forwarded.originalMessageId;
+    if (sourceChatId == widget.chatId) {
+      if (sourceMessageId == null) return;
+      _beginTargetNavigation();
+      await _runGoToMessage(sourceMessageId, forwarded.originalTime ?? 0);
+      return;
+    }
+
+    await chats.ensureChatCached(api, _myId, sourceChatId);
+    if (!mounted) return;
+    final cached = await chats.getChat(_myId, sourceChatId);
+    if (!mounted) return;
+    final channel = cached.isEmpty ? null : cached.first;
+    pushSwipeable(
+      context,
+      (_) => ChatScreen(
+        chatId: sourceChatId,
+        name: channel?.title ?? forwarded.originalSenderName ?? 'Канал',
+        imageUrl: channel?.iconUrl ?? forwarded.originalSenderAvatar ?? '',
+        chatType: channel?.type ?? 'CHANNEL',
+        initialMessageId: sourceMessageId,
+        initialMessageTime: forwarded.originalTime,
       ),
     );
   }
@@ -4421,7 +5016,13 @@ class _ChatScreenState extends State<ChatScreen>
                   left: 0,
                   right: 0,
                   bottom: frosted ? height : 0,
-                  child: CommandPanelView(commandPanel: _commandPanel),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MentionPanelView(mentionPanel: _mentionPanel),
+                      CommandPanelView(commandPanel: _commandPanel),
+                    ],
+                  ),
                 ),
               ),
               if (frosted)
@@ -4511,7 +5112,13 @@ class _ChatScreenState extends State<ChatScreen>
             left: 0,
             right: 0,
             bottom: height,
-            child: CommandPanelView(commandPanel: _commandPanel),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                MentionPanelView(mentionPanel: _mentionPanel),
+                CommandPanelView(commandPanel: _commandPanel),
+              ],
+            ),
           ),
         ),
         Positioned(
@@ -4691,13 +5298,23 @@ class _ChatScreenState extends State<ChatScreen>
                                   ? _messages[msgIndex + 1]
                                   : null;
 
+                              final bool isChannelPost =
+                                  !_commentsMode &&
+                                  (chat?.type ?? widget.chatType) == 'CHANNEL' &&
+                                  !message.isControl;
+                              final bool isCommentedPost =
+                                  _commentsMode &&
+                                  message.id == widget.commentPostId;
+
                               final bubble = MessageBubble(
                                 message: message,
                                 isMe: isMe,
                                 myId: _myId,
                                 prevMessage: prevMessage,
                                 nextMessage: nextMessage,
-                                chatType: chat?.type ?? 'CHAT',
+                                chatType: _commentsMode
+                                    ? 'CHAT'
+                                    : (chat?.type ?? 'CHAT'),
                                 chatId: widget.chatId,
                                 photoActions: _photoActions,
                                 overrideStatus: _effectiveStatus(message),
@@ -4705,10 +5322,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 reactionsListenable: _reactionNotifierFor(
                                   message,
                                 ),
+                                reactionAnimation: _reactionAnimation,
                                 uploadProgress: _photoProgressFor(message),
                                 onReplyTap: (id) =>
                                     _jumpToMessage(id, fromId: message.id),
                                 onAvatarTap: _openSenderProfile,
+                                onForwardedSourceTap: _openForwardedSource,
                                 onStickerTap: _openStickerPack,
                                 onReactionTap: message.isControl
                                     ? null
@@ -4716,8 +5335,20 @@ class _ChatScreenState extends State<ChatScreen>
                                           _reactToMessage(message, emoji),
                                 peerName: widget.name,
                                 peerAvatarUrl: widget.imageUrl,
+                                senderNameOverride: isCommentedPost
+                                    ? widget.name
+                                    : null,
+                                senderAvatarOverride: isCommentedPost
+                                    ? widget.imageUrl
+                                    : null,
                                 textSelection: _textSelection,
                                 onExitTextSelection: _exitTextSelection,
+                                commentsLabel: isChannelPost
+                                    ? _commentsLabelFor(message.id)
+                                    : null,
+                                onCommentsTap: isChannelPost
+                                    ? () => _openComments(message)
+                                    : null,
                               );
 
                               final canReport = !isMe && !message.isControl;
@@ -5100,9 +5731,18 @@ class _ChatScreenState extends State<ChatScreen>
         unawaited(_persistOutgoing(real, removeId: tempId));
       }
       _disposePhotoProgress(tempId);
-    } catch (_) {
+    } catch (e) {
+      logger.w('sendVideoNote failed: $e');
       if (mounted) {
         _failPhotoMessage(tempId);
+        final reason = e is PacketError
+            ? '${e.errorKey ?? ''} ${e.message}'.trim()
+            : e is Exception && e.toString().contains('send_failed')
+            ? 'сервер не обработал видео'
+            : e is Exception && e.toString().contains('upload_failed')
+            ? 'загрузка отклонена'
+            : e.toString();
+        showCustomNotification(context, 'Кружок не отправлен: $reason');
       } else {
         _disposePhotoProgress(tempId);
       }
@@ -5137,13 +5777,14 @@ class _ChatScreenState extends State<ChatScreen>
     String tempId,
     String status, {
     FileAttachment? attachment,
+    String? realId,
   }) {
     if (!mounted) return;
     final idx = _messages.indexWhere((m) => m.id == tempId);
     if (idx == -1) return;
     final old = _messages[idx];
     _messages[idx] = CachedMessage(
-      id: tempId,
+      id: realId != null && realId.isNotEmpty ? realId : tempId,
       accountId: old.accountId,
       chatId: old.chatId,
       senderId: old.senderId,
@@ -5167,12 +5808,16 @@ class _ChatScreenState extends State<ChatScreen>
     );
     _showAttachmentPanel.value = false;
     try {
-      final ok = await messagesModule.sendFileMessage(
+      final realId = await messagesModule.sendFileMessage(
         widget.chatId,
         entry.fileId,
         token: entry.token,
       );
-      _updateFileMessageStatus(tempId, ok ? 'sent' : 'error');
+      _updateFileMessageStatus(
+        tempId,
+        realId != null ? 'sent' : 'error',
+        realId: realId,
+      );
     } catch (_) {
       _updateFileMessageStatus(tempId, 'error');
     }
@@ -5181,13 +5826,14 @@ class _ChatScreenState extends State<ChatScreen>
   Future<bool> _sendFileById(int fileId) async {
     final tempId = _addOptimisticFileMessage(FileAttachment(fileId: fileId));
     try {
-      final ok = await messagesModule.sendFileMessage(widget.chatId, fileId);
+      final realId = await messagesModule.sendFileMessage(widget.chatId, fileId);
+      final ok = realId != null;
       if (!mounted) return ok;
       if (ok) {
         FileHistoryCache.add(
           FileHistoryEntry(fileId: fileId, sentAt: DateTime.now()),
         );
-        _updateFileMessageStatus(tempId, 'sent');
+        _updateFileMessageStatus(tempId, 'sent', realId: realId);
         _showAttachmentPanel.value = false;
       } else {
         _updateFileMessageStatus(tempId, 'error');
@@ -5221,11 +5867,20 @@ class _ChatScreenState extends State<ChatScreen>
           ? _sendPhotos
           : (picked, caption) =>
                 _sendScheduledPhotos(picked, caption, scheduledTime),
-      onPickFile: scheduledTime == null
-          ? _pickAndUploadFile
-          : () => _pickAndUploadFile(scheduledTime: scheduledTime),
-      onShareLocation: _shareLocation,
-      onCreatePoll: _createPoll,
+      onPickFile: _encryptionEnabled
+          ? () => _refuseUnencrypted('Файлы')
+          : (scheduledTime == null
+                ? _pickAndUploadFile
+                : () => _pickAndUploadFile(scheduledTime: scheduledTime)),
+      onShareLocation: _encryptionEnabled
+          ? () => _refuseUnencrypted('Геолокацию')
+          : _shareLocation,
+      onCreatePoll: _encryptionEnabled
+          ? () => _refuseUnencrypted('Опросы')
+          : _createPoll,
+      onSendContact: _encryptionEnabled
+          ? (_) => _refuseUnencrypted('Контакты')
+          : _sendContact,
     );
     if (!mounted || !hadKeyboard) return;
     _messageFocusNode.requestFocus();
@@ -5235,6 +5890,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _sendPhotos(List<PickedPhoto> picked, String caption) async {
     if (_myId == 0) return;
+    if (_encryptionEnabled) return _sendEncryptedPhotos(picked, caption);
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
     if (photos.isEmpty && videos.isEmpty) return;
@@ -5245,7 +5901,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (photos.isEmpty) return;
 
-    final files = <File>[];
+    final jobs = <({File file, GalleryItem? item})>[];
     final attachments = <PhotoAttachment>[];
     for (final photo in photos) {
       final edited = photo.editedFile;
@@ -5255,17 +5911,17 @@ class _ChatScreenState extends State<ChatScreen>
       final dim = edited != null
           ? await imageFileDimensions(edited)
           : await photo.item.dimensions();
-      files.add(file);
+      jobs.add((file: file, item: edited == null ? photo.item : null));
       attachments.add(
         PhotoAttachment(localPath: file.path, width: dim?.$1, height: dim?.$2),
       );
     }
-    if (files.isEmpty || !mounted) return;
+    if (jobs.isEmpty || !mounted) return;
 
     final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
     final progress = ValueNotifier<List<double>>(
-      List<double>.filled(files.length, 0),
+      List<double>.filled(jobs.length, 0),
     );
     _photoUploadProgress[tempId] = progress;
 
@@ -5287,7 +5943,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     try {
-      final tokens = await _uploadPhotos(files, progress);
+      final tokens = await _uploadPhotos(jobs, progress);
       if (!mounted) {
         _disposePhotoProgress(tempId);
         return;
@@ -5297,7 +5953,7 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
 
-      progress.value = List<double>.filled(files.length, 1);
+      progress.value = List<double>.filled(jobs.length, 1);
 
       final serverMsg = await messagesModule.sendPhotoMessage(
         widget.chatId,
@@ -5461,21 +6117,23 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (photos.isEmpty) return;
 
-    final files = <File>[];
+    final jobs = <({File file, GalleryItem? item})>[];
     for (final photo in photos) {
       final edited = photo.editedFile;
       final file =
           edited ?? photo.item.localFile ?? await photo.item.originFile();
-      if (file != null) files.add(file);
+      if (file != null) {
+        jobs.add((file: file, item: edited == null ? photo.item : null));
+      }
     }
-    if (files.isEmpty || !mounted) return;
+    if (jobs.isEmpty || !mounted) return;
 
     showCustomNotification(context, 'Загрузка…');
     final progress = ValueNotifier<List<double>>(
-      List<double>.filled(files.length, 0),
+      List<double>.filled(jobs.length, 0),
     );
     try {
-      final tokens = await _uploadPhotos(files, progress);
+      final tokens = await _uploadPhotos(jobs, progress);
       if (!mounted) return;
       if (tokens.any((t) => t == null)) {
         showCustomNotification(context, 'Не удалось загрузить фото');
@@ -5628,6 +6286,22 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  Future<void> _sendContact(CachedContact contact) async {
+    final last = contact.lastName;
+    final fullName = (last != null && last.isNotEmpty)
+        ? '${contact.firstName} $last'
+        : contact.firstName;
+    await _sendAttachMessage([
+      ContactAttachment(
+        contactId: contact.id,
+        firstName: contact.firstName,
+        lastName: last,
+        name: fullName,
+        photoUrl: contact.baseUrl,
+      ),
+    ], () => messagesModule.sendContactMessage(widget.chatId, contact.id));
+  }
+
   Future<void> _createPoll() async {
     final draft = await showCreatePollSheet(context);
     if (draft == null || !mounted) return;
@@ -5647,18 +6321,18 @@ class _ChatScreenState extends State<ChatScreen>
   static const int _photoUploadAttempts = 3;
 
   Future<List<String?>> _uploadPhotos(
-    List<File> files,
+    List<({File file, GalleryItem? item})> jobs,
     ValueNotifier<List<double>> progress,
   ) async {
-    final tokens = List<String?>.filled(files.length, null);
+    final tokens = List<String?>.filled(jobs.length, null);
     var nextIndex = 0;
     var failed = false;
 
     Future<void> worker() async {
       while (!failed) {
         final i = nextIndex++;
-        if (i >= files.length) return;
-        final token = await _uploadOnePhoto(files[i], i, progress);
+        if (i >= jobs.length) return;
+        final token = await _uploadOnePhoto(jobs[i], i, progress);
         if (token == null) {
           failed = true;
           return;
@@ -5667,16 +6341,23 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    final workerCount = math.min(_photoUploadConcurrency, files.length);
+    final workerCount = math.min(_photoUploadConcurrency, jobs.length);
     await Future.wait(List.generate(workerCount, (_) => worker()));
     return tokens;
   }
 
   Future<String?> _uploadOnePhoto(
-    File file,
+    ({File file, GalleryItem? item}) job,
     int index,
     ValueNotifier<List<double>> progress,
   ) async {
+    File file;
+    try {
+      file = await optimizePhotoForUpload(job.file, item: job.item);
+    } catch (e) {
+      logger.w('optimize photo: $e');
+      file = job.file;
+    }
     for (var attempt = 0; attempt < _photoUploadAttempts; attempt++) {
       if (attempt > 0) {
         await Future.delayed(Duration(seconds: attempt));
@@ -5745,11 +6426,88 @@ class _ChatScreenState extends State<ChatScreen>
     _photoUploadProgress.remove(tempId)?.dispose();
   }
 
+  void _refuseUnencrypted(String what) {
+    if (!mounted) return;
+    _showAttachmentPanel.value = false;
+    showCustomNotification(context, '$what пока нельзя зашифровать');
+  }
+
+  Future<void> _sendEncryptedPhotos(
+    List<PickedPhoto> picked,
+    String caption,
+  ) async {
+    final photos = picked.where((ph) => !ph.item.isVideo).toList();
+    if (photos.length != picked.length && mounted) {
+      showCustomNotification(context, 'Видео пока нельзя зашифровать');
+    }
+    if (photos.isEmpty) return;
+
+    for (final photo in photos) {
+      final source =
+          photo.editedFile ??
+          photo.item.localFile ??
+          await photo.item.originFile();
+      if (source == null || !mounted) continue;
+
+      _showAttachmentPanel.value = false;
+      _uploadStatus.value = const UploadStatus(active: true);
+      final stamp = DateTime.now().microsecondsSinceEpoch.toString();
+      final prepared = await prepareEncryptedPhoto(
+        accountId: _myId,
+        chatId: widget.chatId,
+        source: source,
+        stamp: stamp,
+      );
+      if (!mounted) return;
+      if (!prepared.isOk) {
+        _uploadStatus.value = const UploadStatus();
+        showCustomNotification(
+          context,
+          prepared.failure == CryptoFailure.noKey
+              ? 'Не задан ключ шифрования'
+              : 'Не удалось зашифровать фото',
+        );
+        return;
+      }
+
+      final encrypted = prepared.file!;
+      await _uploadAsFile(
+        source: encrypted,
+        filename: 'photo_$stamp$kEncryptedPhotoExtension',
+        size: await encrypted.length(),
+      );
+      if (!mounted) return;
+    }
+
+    if (caption.isNotEmpty) {
+      final wire = await _encryptOutgoing(caption);
+      if (wire != null && mounted) {
+        await messagesModule.sendMessage(_myId, widget.chatId, wire);
+      }
+    }
+  }
+
   Future<void> _pickAndUploadFile({int? scheduledTime}) async {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.path == null) return;
+    final picked = result.files.first;
+    if (picked.path == null) return;
+    await _uploadAsFile(
+      source: File(picked.path!),
+      filename: picked.name,
+      size: picked.size,
+      scheduledTime: scheduledTime,
+    );
+  }
+
+  Future<void> _uploadAsFile({
+    required File source,
+    required String filename,
+    required int size,
+    int? scheduledTime,
+  }) async {
+    final file = (name: filename, size: size);
+    final done = Completer<void>();
 
     _showAttachmentPanel.value = false;
     _uploadStatus.value = UploadStatus(active: true, total: file.size);
@@ -5774,7 +6532,7 @@ class _ChatScreenState extends State<ChatScreen>
     _uploadSub = fileUploader
         .upload(
           chatId: widget.chatId,
-          file: File(file.path!),
+          file: source,
           filename: file.name,
           totalSize: file.size,
           scheduledTime: scheduledTime,
@@ -5806,7 +6564,12 @@ class _ChatScreenState extends State<ChatScreen>
                     speedBps: notifSpeedBps,
                   );
                 }
-              case UploadDone(:final fileId, :final token, :final url):
+              case UploadDone(
+                :final fileId,
+                :final token,
+                :final url,
+                :final messageId,
+              ):
                 stopNotif();
                 FileHistoryCache.add(
                   FileHistoryEntry(
@@ -5829,6 +6592,7 @@ class _ChatScreenState extends State<ChatScreen>
                   _updateFileMessageStatus(
                     tempId!,
                     'sent',
+                    realId: messageId,
                     attachment: FileAttachment(
                       fileId: fileId,
                       fileToken: token,
@@ -5863,6 +6627,7 @@ class _ChatScreenState extends State<ChatScreen>
             }
             _uploadStatus.value = const UploadStatus();
             _uploadSub = null;
+            if (!done.isCompleted) done.complete();
           },
           onError: (Object e) {
             if (!mounted) return;
@@ -5871,8 +6636,10 @@ class _ChatScreenState extends State<ChatScreen>
             if (tempId != null) _updateFileMessageStatus(tempId, 'error');
             _uploadStatus.value = const UploadStatus();
             _uploadSub = null;
+            if (!done.isCompleted) done.complete();
           },
         );
+    return done.future;
   }
 }
 
@@ -5933,6 +6700,12 @@ class _SwipeToReplyState extends State<_SwipeToReply>
 
   void _onDragEnd(DragEndDetails d) {
     if (_triggered) widget.onReply();
+    _settle();
+  }
+
+  void _onDragCancel() => _settle();
+
+  void _settle() {
     _triggered = false;
     _springFrom = _dragX;
     _springBack.forward(from: 0);
@@ -5942,10 +6715,20 @@ class _SwipeToReplyState extends State<_SwipeToReply>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final progress = (-_dragX / _triggerThreshold).clamp(0.0, 1.0);
-    return GestureDetector(
+    return RawGestureDetector(
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: _onDragUpdate,
-      onHorizontalDragEnd: _onDragEnd,
+      gestures: <Type, GestureRecognizerFactory>{
+        LeftwardDragRecognizer:
+            GestureRecognizerFactoryWithHandlers<LeftwardDragRecognizer>(
+              () => LeftwardDragRecognizer(debugOwner: this),
+              (instance) {
+                instance
+                  ..onUpdate = _onDragUpdate
+                  ..onEnd = _onDragEnd
+                  ..onCancel = _onDragCancel;
+              },
+            ),
+      },
       child: Stack(
         alignment: Alignment.centerRight,
         children: [

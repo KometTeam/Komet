@@ -1,4 +1,5 @@
 import '../../backend/modules/messages.dart';
+import '../../core/media/gallery_source.dart';
 
 const String kAntiFloodNotification =
     'Упс! МАХ сбросил соединение, кажется, тебе стоит немного помедлить с командами.';
@@ -15,6 +16,8 @@ class CommandContext {
   final void Function(String message, {Duration? duration}) notify;
   final Future<String> Function(String text) postMessage;
   final Future<void> Function(String id, String text) updateMessage;
+  final Future<void> Function(List<PickedPhoto> photos, String caption)
+  sendPhotos;
 
   const CommandContext({
     required this.accountId,
@@ -27,6 +30,7 @@ class CommandContext {
     required this.notify,
     required this.postMessage,
     required this.updateMessage,
+    required this.sendPhotos,
   });
 
   void notifyAntiFlood() =>

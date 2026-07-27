@@ -186,6 +186,7 @@ class DigitalIdWebScreen extends StatelessWidget {
           },
         );
       },
+      onExternalCallback: webAppModule.handleExternalCallback,
       onConsoleMessage: kDebugMode
           ? (controller, consoleMessage) {
               debugPrint('[KOMET-DID] ${consoleMessage.message}');
@@ -199,7 +200,7 @@ class DigitalIdWebScreen extends StatelessWidget {
               );
             }
           : null,
-      shouldOverrideUrlLoading: (controller, action, currentUrl) async {
+      shouldOverrideUrlLoading: (_, action, _) async {
         final uri = action.request.url;
         final url = uri?.toString() ?? '';
         final scheme = uri?.scheme ?? '';
@@ -208,19 +209,7 @@ class DigitalIdWebScreen extends StatelessWidget {
             '[KOMET-DID] nav: ${url.length > 140 ? url.substring(0, 140) : url}',
           );
         }
-        final isCallback =
-            url.contains('?externalCallback=') ||
-            url.contains('&externalCallback=');
-        if (isCallback || (scheme != 'http' && scheme != 'https')) {
-          final launchUrl = currentUrl ?? 'https://digital-id.max.ru';
-          final hashIdx = launchUrl.indexOf('#');
-          final base = hashIdx >= 0
-              ? launchUrl.substring(0, hashIdx)
-              : launchUrl;
-          final frag = hashIdx >= 0 ? launchUrl.substring(hashIdx) : '';
-          final query = uri?.query ?? '';
-          final target = query.isEmpty ? launchUrl : '$base?$query$frag';
-          controller.loadUrl(urlRequest: URLRequest(url: WebUri(target)));
+        if (scheme != 'http' && scheme != 'https') {
           return NavigationActionPolicy.CANCEL;
         }
         return NavigationActionPolicy.ALLOW;

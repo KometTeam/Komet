@@ -7,9 +7,11 @@ import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:ogg_opus_player/ogg_opus_player.dart';
 
-import '../../../backend/modules/messages.dart' show CachedMessage, ContactCache;
+import '../../../backend/modules/messages.dart'
+    show CachedMessage, ContactCache;
 import '../../../backend/modules/shared_content.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/utils/download_history.dart';
 import '../../../core/utils/download_progress.dart';
 import '../../../core/utils/file_download.dart';
 import '../../../core/utils/format.dart';
@@ -23,9 +25,9 @@ import '../../screens/chats/chat_screen.dart';
 import '../custom_notification.dart';
 import '../komet_avatar.dart';
 import '../photo_viewer.dart';
+import '../reload_on_reconnect.dart';
 import '../small_spinner.dart';
 import '../swipe_route.dart';
-import '../video_player_screen.dart';
 
 enum SharedContentKind { media, files, voice, links }
 
@@ -103,9 +105,7 @@ Widget _emptyState(ColorScheme cs, String label, IconData icon) {
 Widget _loadingState(ColorScheme cs) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 56),
-    child: Center(
-      child: SmallSpinner(size: 26, color: cs.primary),
-    ),
+    child: Center(child: SmallSpinner(size: 26, color: cs.primary)),
   );
 }
 
@@ -231,6 +231,7 @@ void _notifySave(BuildContext context, MediaSaveResult result) {
 Future<void> _downloadAttachment(
   BuildContext context,
   SharedMediaItem item,
+  String sourceName,
 ) async {
   final att = item.attachment;
   final now = DateTime.now().millisecondsSinceEpoch;
@@ -243,6 +244,16 @@ Future<void> _downloadAttachment(
       resolveUrl: () async => url,
       saveName: 'IMG_$now.jpg',
       kind: SaveMediaKind.image,
+      download: DownloadMetadata(
+        cacheName: 'photo_${att.photoId ?? url.hashCode}.jpg',
+        kind: DownloadKind.photo,
+        sourceName: sourceName,
+        thumbnailUrl: url,
+        expectedSize: att.size ?? 0,
+        chatId: item.chatId,
+        messageId: item.messageId,
+        messageTime: item.time,
+      ),
     );
     if (context.mounted) _notifySave(context, result);
     return;
@@ -262,6 +273,16 @@ Future<void> _downloadAttachment(
       },
       saveName: 'VID_$now.mp4',
       kind: SaveMediaKind.video,
+      download: DownloadMetadata(
+        cacheName: 'video_${att.videoId ?? item.messageId}.mp4',
+        kind: DownloadKind.video,
+        sourceName: sourceName,
+        thumbnailUrl: att.thumbnail ?? att.baseUrl ?? att.previewData,
+        expectedSize: att.size ?? 0,
+        chatId: item.chatId,
+        messageId: item.messageId,
+        messageTime: item.time,
+      ),
     );
     if (context.mounted) _notifySave(context, result);
     return;
@@ -271,6 +292,7 @@ Future<void> _downloadAttachment(
     final fileId = att.fileId;
     if (fileId == null) return;
     final name = att.name ?? 'file_$now';
+    final downloadKind = downloadKindForName(name);
     final result = await saveMediaFile(
       cacheName: '${fileId}_$name',
       resolveUrl: () => messagesModule.getFileUrl(
@@ -280,6 +302,18 @@ Future<void> _downloadAttachment(
       ),
       saveName: name,
       kind: SaveMediaKind.file,
+      download: DownloadMetadata(
+        cacheName: '${fileId}_$name',
+        name: downloadKind == DownloadKind.file ? name : '',
+        kind: downloadKind,
+        sourceName: sourceName,
+        thumbnailUrl:
+            att.preview?.baseUrl ?? att.preview?.previewData ?? att.previewData,
+        expectedSize: att.size ?? 0,
+        chatId: item.chatId,
+        messageId: item.messageId,
+        messageTime: item.time,
+      ),
     );
     if (context.mounted) _notifySave(context, result);
     return;
@@ -293,6 +327,15 @@ Future<void> _downloadAttachment(
       resolveUrl: () async => url,
       saveName: 'AUD_$now.ogg',
       kind: SaveMediaKind.file,
+      download: DownloadMetadata(
+        cacheName: '${att.audioId ?? item.messageId}.ogg',
+        kind: DownloadKind.audio,
+        sourceName: sourceName,
+        expectedSize: att.size ?? 0,
+        chatId: item.chatId,
+        messageId: item.messageId,
+        messageTime: item.time,
+      ),
     );
     if (context.mounted) _notifySave(context, result);
   }
@@ -312,7 +355,8 @@ class CommonChatsTab extends StatefulWidget {
   State<CommonChatsTab> createState() => _CommonChatsTabState();
 }
 
-class _CommonChatsTabState extends State<CommonChatsTab> {
+class _CommonChatsTabState extends State<CommonChatsTab>
+    with ReloadOnReconnect {
   bool _loading = true;
   List<CommonChatEntry> _chats = const [];
   Map<int, int> _onlineByChat = const {};
@@ -322,6 +366,9 @@ class _CommonChatsTabState extends State<CommonChatsTab> {
     super.initState();
     _load();
   }
+
+  @override
+  void reloadAfterReconnect() => _load();
 
   Future<void> _load() async {
     final chats = await sharedContentModule.fetchCommonChats(widget.userId);
@@ -452,6 +499,7 @@ class SharedMediaTab extends StatefulWidget {
   final int chatId;
   final String anchorMessageId;
   final int myId;
+  final String sourceName;
   final SharedContentKind kind;
   final String emptyLabel;
   final IconData emptyIcon;
@@ -463,6 +511,7 @@ class SharedMediaTab extends StatefulWidget {
     required this.chatId,
     required this.anchorMessageId,
     required this.myId,
+    required this.sourceName,
     required this.kind,
     required this.emptyLabel,
     required this.emptyIcon,
@@ -474,7 +523,8 @@ class SharedMediaTab extends StatefulWidget {
   State<SharedMediaTab> createState() => _SharedMediaTabState();
 }
 
-class _SharedMediaTabState extends State<SharedMediaTab> {
+class _SharedMediaTabState extends State<SharedMediaTab>
+    with ReloadOnReconnect {
   static const int _pageSize = 60;
 
   bool _loading = true;
@@ -506,6 +556,9 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
       _loadMore();
     }
   }
+
+  @override
+  void reloadAfterReconnect() => _load(widget.anchorMessageId, initial: true);
 
   Future<void> _load(String anchor, {required bool initial}) async {
     final page = await sharedContentModule.fetchMedia(
@@ -583,7 +636,13 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
           children.add(_mediaGrid(cs, group.items));
         case SharedContentKind.files:
           children.addAll(
-            group.items.map((i) => _FileRow(item: i, onGoTo: () => _goTo(i))),
+            group.items.map(
+              (i) => _FileRow(
+                item: i,
+                sourceName: widget.sourceName,
+                onGoTo: () => _goTo(i),
+              ),
+            ),
           );
         case SharedContentKind.voice:
           children.addAll(
@@ -591,6 +650,7 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
               (i) => _ProfileVoiceTile(
                 item: i,
                 senderName: _resolveName(i.senderId),
+                sourceName: widget.sourceName,
                 onGoTo: () => _goTo(i),
               ),
             ),
@@ -635,12 +695,12 @@ class _SharedMediaTabState extends State<SharedMediaTab> {
         crossAxisSpacing: 3,
       ),
       itemCount: items.length,
-      itemBuilder: (context, index) =>
-          _MediaTile(
-            item: items[index],
-            onGoTo: () => _goTo(items[index]),
-            onGoToMessage: widget.onGoToMessage,
-          ),
+      itemBuilder: (context, index) => _MediaTile(
+        item: items[index],
+        onGoTo: () => _goTo(items[index]),
+        onGoToMessage: widget.onGoToMessage,
+        sourceName: widget.sourceName,
+      ),
     );
   }
 }
@@ -649,11 +709,13 @@ class _MediaTile extends StatelessWidget {
   final SharedMediaItem item;
   final VoidCallback onGoTo;
   final void Function(String messageId, int time) onGoToMessage;
+  final String sourceName;
 
   const _MediaTile({
     required this.item,
     required this.onGoTo,
     required this.onGoToMessage,
+    required this.sourceName,
   });
 
   void _menu(BuildContext context) {
@@ -663,7 +725,7 @@ class _MediaTile extends StatelessWidget {
         onGoTo();
       }),
       _MenuAction(Symbols.download, l10n.sharedDownload, () async {
-        await _downloadAttachment(context, item);
+        await _downloadAttachment(context, item, sourceName);
       }),
     ]);
   }
@@ -749,7 +811,24 @@ class _MediaTile extends StatelessWidget {
         showCustomNotification(context, 'Не удалось загрузить видео');
         return;
       }
-      pushSwipeable(context, (_) => VideoPlayerScreen(sources: sources));
+      pushSwipeable(
+        context,
+        (_) => PhotoViewerScreen.video(
+          attachment: att,
+          initialVideoSources: sources,
+          chatId: item.chatId,
+          message: CachedMessage(
+            id: item.messageId,
+            accountId: 0,
+            chatId: item.chatId,
+            senderId: item.senderId,
+            text: item.text,
+            time: item.time,
+          ),
+          actions: PhotoViewerActions(goToMessage: onGoToMessage),
+          sourceName: sourceName,
+        ),
+      );
       return;
     }
     final url = att.baseUrl ?? att.previewData ?? '';
@@ -768,9 +847,11 @@ class _MediaTile extends StatelessWidget {
           accountId: 0,
           chatId: item.chatId,
           senderId: item.senderId,
+          text: item.text,
           time: item.time,
         ),
         actions: PhotoViewerActions(goToMessage: onGoToMessage),
+        sourceName: sourceName,
       ),
     );
   }
@@ -778,9 +859,14 @@ class _MediaTile extends StatelessWidget {
 
 class _FileRow extends StatelessWidget {
   final SharedMediaItem item;
+  final String sourceName;
   final VoidCallback onGoTo;
 
-  const _FileRow({required this.item, required this.onGoTo});
+  const _FileRow({
+    required this.item,
+    required this.sourceName,
+    required this.onGoTo,
+  });
 
   void _menu(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -789,7 +875,7 @@ class _FileRow extends StatelessWidget {
         onGoTo();
       }),
       _MenuAction(Symbols.download, l10n.sharedDownload, () async {
-        await _downloadAttachment(context, item);
+        await _downloadAttachment(context, item, sourceName);
       }),
     ]);
   }
@@ -913,8 +999,22 @@ class _FileRow extends StatelessWidget {
         fileId: fileId,
       ),
       onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
+      onReady: () => MediaDownloadProgress.set(cacheName, null),
+      download: DownloadMetadata(
+        cacheName: cacheName,
+        name: downloadKindForName(att.name ?? '') == DownloadKind.file
+            ? att.name ?? ''
+            : '',
+        kind: downloadKindForName(att.name ?? ''),
+        sourceName: sourceName,
+        thumbnailUrl:
+            att.preview?.baseUrl ?? att.preview?.previewData ?? att.previewData,
+        expectedSize: att.size ?? 0,
+        chatId: item.chatId,
+        messageId: item.messageId,
+        messageTime: item.time,
+      ),
     );
-    MediaDownloadProgress.set(cacheName, null);
 
     if (!context.mounted) return;
     if (!result.ok) {
@@ -1051,11 +1151,13 @@ class _LinkRow extends StatelessWidget {
 class _ProfileVoiceTile extends StatefulWidget {
   final SharedMediaItem item;
   final String senderName;
+  final String sourceName;
   final VoidCallback onGoTo;
 
   const _ProfileVoiceTile({
     required this.item,
     required this.senderName,
+    required this.sourceName,
     required this.onGoTo,
   });
 
@@ -1230,7 +1332,7 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
         widget.onGoTo();
       }),
       _MenuAction(Symbols.download, l10n.sharedDownload, () async {
-        await _downloadAttachment(context, widget.item);
+        await _downloadAttachment(context, widget.item, widget.sourceName);
       }),
     ]);
   }

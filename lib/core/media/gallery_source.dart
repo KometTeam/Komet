@@ -14,6 +14,12 @@ abstract class GalleryItem {
   Future<Uint8List?> thumbnail(int size);
   Future<File?> originFile();
   Future<(int, int)?> dimensions();
+  Future<Uint8List?> encodeForUpload({
+    required int maxDimension,
+    required int quality,
+  });
+
+  static GalleryItem fromFile(File file) => _FileGalleryItem(file);
 }
 
 class PickedPhoto {
@@ -110,6 +116,16 @@ class _AssetGalleryItem implements GalleryItem {
   Future<File?> originFile() => asset.file;
 
   @override
+  Future<Uint8List?> encodeForUpload({
+    required int maxDimension,
+    required int quality,
+  }) => asset.thumbnailDataWithSize(
+    ThumbnailSize(maxDimension, maxDimension),
+    format: ThumbnailFormat.jpeg,
+    quality: quality,
+  );
+
+  @override
   Future<(int, int)?> dimensions() async {
     if (asset.width > 0 && asset.height > 0) {
       return (asset.width, asset.height);
@@ -196,6 +212,12 @@ class _FileGalleryItem implements GalleryItem {
 
   @override
   Future<File?> originFile() async => file;
+
+  @override
+  Future<Uint8List?> encodeForUpload({
+    required int maxDimension,
+    required int quality,
+  }) async => null;
 
   @override
   Future<(int, int)?> dimensions() => imageFileDimensions(file);

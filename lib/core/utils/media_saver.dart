@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import 'download_history.dart';
 import 'media_cache.dart';
 
 class MediaSaveResult {
@@ -47,6 +48,7 @@ Future<MediaSaveResult> saveMediaFile({
   required Future<String?> Function() resolveUrl,
   required String saveName,
   required SaveMediaKind kind,
+  DownloadMetadata? download,
 }) async {
   try {
     var file = await MediaCache.existing(cacheName);
@@ -60,7 +62,13 @@ Future<MediaSaveResult> saveMediaFile({
     if (file == null) {
       return const MediaSaveResult(ok: false, error: 'не удалось загрузить');
     }
-    return _persist(file, saveName: saveName, kind: kind);
+    final result = await _persist(file, saveName: saveName, kind: kind);
+    if (result.ok && download != null) {
+      try {
+        await DownloadHistory.record(download, file);
+      } catch (_) {}
+    }
+    return result;
   } catch (e) {
     return MediaSaveResult(ok: false, error: e.toString());
   }

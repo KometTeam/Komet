@@ -13,6 +13,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
+import '../../models/contact_info.dart';
 import '../api.dart';
 import 'chat_parsing.dart';
 import 'chat_preview.dart';
@@ -34,6 +35,20 @@ Map<int, int> parseParticipants(dynamic raw) {
     logger.e('Failed to parse participants: $e');
   }
   return {};
+}
+
+/// Server message ids carry their timestamp in the high bits: the low 16 bits
+/// are an intra-millisecond sequence number.
+int messageIdToTime(int messageId) => messageId >> 16;
+
+bool messageMentionsUser(Map<dynamic, dynamic> message, int userId) {
+  final elements = message['elements'];
+  if (elements is! List) return false;
+  for (final element in elements.whereType<Map>()) {
+    if (element['type']?.toString() != 'USER_MENTION') continue;
+    if (element['entityId'] == userId) return true;
+  }
+  return false;
 }
 
 class CachedChat {
@@ -64,6 +79,7 @@ class CachedChat {
   final String? pinnedMsgText;
   final int? pinnedMsgTime;
   final bool pinnedMsgIsPreview;
+  final int? lastMentionMsgId;
 
   CachedChat({
     required this.id,
@@ -92,6 +108,7 @@ class CachedChat {
     this.pinnedMsgText,
     this.pinnedMsgTime,
     this.pinnedMsgIsPreview = false,
+    this.lastMentionMsgId,
   }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
            ? lastMsgText.replaceAll('\n', ' ')
            : lastMsgText;
@@ -136,6 +153,12 @@ class CachedChat {
 
   bool get isLastMsgDeleted => lastMsgText == ChatsModule.lastMsgPlaceholder;
 
+  bool get hasUnreadMention {
+    final mentionId = lastMentionMsgId;
+    if (mentionId == null || mentionId <= 0) return false;
+    return messageIdToTime(mentionId) > (participants[accountId] ?? 0);
+  }
+
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
     accountId: row['account_id'] as int,
@@ -163,6 +186,7 @@ class CachedChat {
     pinnedMsgText: row['pinned_msg_text'] as String?,
     pinnedMsgTime: row['pinned_msg_time'] as int?,
     pinnedMsgIsPreview: (row['pinned_msg_is_preview'] as int? ?? 0) == 1,
+    lastMentionMsgId: row['last_mention_msg_id'] as int?,
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
@@ -208,6 +232,7 @@ class CachedChat {
     'pinned_msg_text': pinnedMsgText,
     'pinned_msg_time': pinnedMsgTime,
     'pinned_msg_is_preview': pinnedMsgIsPreview ? 1 : 0,
+    'last_mention_msg_id': lastMentionMsgId,
   };
 
   static const Object _keep = Object();
@@ -237,6 +262,7 @@ class CachedChat {
     Object? pinnedMsgText = _keep,
     Object? pinnedMsgTime = _keep,
     bool? pinnedMsgIsPreview,
+    Object? lastMentionMsgId = _keep,
   }) {
     return CachedChat(
       id: id,
@@ -283,6 +309,9 @@ class CachedChat {
           ? this.pinnedMsgTime
           : pinnedMsgTime as int?,
       pinnedMsgIsPreview: pinnedMsgIsPreview ?? this.pinnedMsgIsPreview,
+      lastMentionMsgId: identical(lastMentionMsgId, _keep)
+          ? this.lastMentionMsgId
+          : lastMentionMsgId as int?,
     );
   }
 }
@@ -301,6 +330,37 @@ class ChatSearchHit {
     this.avatarUrl,
     this.subtitle,
   });
+}
+
+class ChatMemberEntry {
+  final int id;
+  final String? name;
+  final String? fullName;
+  final String? avatarUrl;
+  final int? seenTime;
+  final int presenceStatus;
+  final bool blocked;
+  final bool isContact;
+
+  const ChatMemberEntry({
+    required this.id,
+    this.name,
+    this.fullName,
+    this.avatarUrl,
+    this.seenTime,
+    required this.presenceStatus,
+    this.blocked = false,
+    this.isContact = false,
+  });
+
+  bool get isOnline => presenceStatus == 1;
+}
+
+class ChatMembersPage {
+  final List<ChatMemberEntry> members;
+  final int marker;
+
+  const ChatMembersPage({required this.members, required this.marker});
 }
 
 class MessageSearchHit {
@@ -399,12 +459,16 @@ class ChatsModule {
           'chatId': chatId,
           'messageId': msgIdNum,
           'mark': mark,
-        });
+        }, silent: true);
       } catch (_) {}
     }
 
-    row['unread_count'] = 0;
-    await AppDatabase.saveChats([row]);
+    final cached = CachedChat.fromDbRow(row);
+    final currentMark = cached.participants[accountId] ?? 0;
+    final participants = Map<int, int>.from(cached.participants)
+      ..[accountId] = mark > currentMark ? mark : currentMark;
+    final updated = cached.copyWith(unreadCount: 0, participants: participants);
+    await AppDatabase.saveChats([updated.toDbRow()]);
     _bump();
   }
 
@@ -424,7 +488,7 @@ class ChatsModule {
           'chatId': chatId,
           'messageId': msgIdNum,
           'mark': mark,
-        });
+        }, silent: true);
       } catch (_) {}
     }
 
@@ -561,7 +625,7 @@ class ChatsModule {
     ContactInfoFetch.clear();
     PresenceFetch.clear();
     ChatInfoFetch.clear();
-    SharedContentModule.clearPhotoIndex();
+    SharedContentModule.clearMediaIndex();
   }
 
   void _enqueueGlobalPush(Packet packet) {
@@ -638,6 +702,15 @@ class ChatsModule {
     if (chatId is! int) return;
     final msg = payload['message'];
     if (msg is! Map) return;
+
+    final msgLink = msg['link'];
+    final linkPostId = (msgLink is Map) ? msgLink['postId'] : null;
+    final payloadPostId = payload['postId'];
+    final isCommentPush =
+        payloadPostId is String ||
+        (linkPostId is String) ||
+        (msg['postId'] is String);
+    if (isCommentPush) return;
 
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
@@ -776,6 +849,13 @@ class ChatsModule {
       newRow['last_msg_status'] = 'sent';
     }
     if (unread != null) newRow['unread_count'] = unread;
+
+    if (msgIdInt != null &&
+        status != 'REMOVED' &&
+        senderId != accountId &&
+        messageMentionsUser(msg, accountId)) {
+      newRow['last_mention_msg_id'] = msgIdInt;
+    }
 
     final pinned = _extractPinnedMessage(msg);
     if (pinned != null) {
@@ -1228,6 +1308,7 @@ class ChatsModule {
         if (next is! int || next == marker || chats.length < count) break;
         marker = next;
       }
+      await applyFavorites(accountId);
     } catch (e) {
       _paginatedAccountId = null;
       logger.w('Пагинация чатов: $e');
@@ -1348,10 +1429,34 @@ class ChatsModule {
       await api.sendRequest(Opcode.chatSubscribe, {
         'chatId': chatId,
         'subscribe': subscribe,
-      });
+      }, silent: true);
     } catch (e) {
       logger.w('subscribeChat failed: $e');
     }
+  }
+
+  Future<({CachedChat chat, int? subscribersCount})> joinChannel(
+    Api api,
+    String link,
+    int accountId,
+  ) async {
+    final packet = await api.sendRequest(Opcode.chatJoin, {
+      'link': link,
+    }, silent: true);
+    if (!packet.isOk) {
+      throw PacketError(messageFromErrorPayload(packet.payload));
+    }
+    final payload = packet.payload;
+    final chatMap = payload is Map ? payload['chat'] : null;
+    if (chatMap is! Map) {
+      throw const PacketError('Не удалось подписаться');
+    }
+    final cached = await cacheServerChat(chatMap, accountId);
+    if (cached == null) {
+      throw const PacketError('Не удалось подписаться');
+    }
+    final count = chatMap['participantsCount'];
+    return (chat: cached, subscribersCount: count is int ? count : null);
   }
 
   Future<bool> ensureChatCached(Api api, int accountId, int chatId) async {
@@ -1373,6 +1478,33 @@ class ChatsModule {
     required String title,
     required List<int> userIds,
     bool notify = true,
+  }) => _createChat(
+    api,
+    chatType: 'CHAT',
+    title: title,
+    userIds: userIds,
+    notify: notify,
+  );
+
+  Future<CachedChat?> createChannel(
+    Api api, {
+    required String title,
+    List<int> userIds = const [],
+    bool notify = true,
+  }) => _createChat(
+    api,
+    chatType: 'CHANNEL',
+    title: title,
+    userIds: userIds,
+    notify: notify,
+  );
+
+  Future<CachedChat?> _createChat(
+    Api api, {
+    required String chatType,
+    required String title,
+    required List<int> userIds,
+    required bool notify,
   }) async {
     final payload = {
       'message': {
@@ -1381,7 +1513,7 @@ class ChatsModule {
           {
             '_type': 'CONTROL',
             'event': 'new',
-            'chatType': 'CHAT',
+            'chatType': chatType,
             'title': title,
             'userIds': userIds,
           },
@@ -1391,22 +1523,22 @@ class ChatsModule {
     };
     final packet = await api.sendRequest(Opcode.msgSend, payload);
     if (!packet.isOk) {
-      logger.w('createGroupChat: server error payload=${packet.payload}');
+      logger.w('_createChat($chatType): server error payload=${packet.payload}');
       return null;
     }
     final data = packet.payload;
     if (data is! Map) {
-      logger.w('createGroupChat: payload is not a Map: $data');
+      logger.w('_createChat($chatType): payload is not a Map: $data');
       return null;
     }
     final chat = data['chat'];
     if (chat is! Map) {
-      logger.w('createGroupChat: response has no chat field: $data');
+      logger.w('_createChat($chatType): response has no chat field: $data');
       return null;
     }
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) {
-      logger.w('createGroupChat: no active account id');
+      logger.w('_createChat($chatType): no active account id');
       return null;
     }
     return cacheServerChat(chat, accountId);
@@ -1552,6 +1684,40 @@ class ChatsModule {
     }
   }
 
+  Future<void> applyFavorites(int accountId) async {
+    try {
+      final folders = await FoldersModule.loadFolders(accountId);
+      if (folders.isEmpty) return;
+      final allFolder = folders.firstWhere(
+        FoldersModule.isAllChatsFolder,
+        orElse: () => folders.first,
+      );
+      final favorites = allFolder.favorites ?? const <int>[];
+      final favIndexById = <int, int>{};
+      for (var i = 0; i < favorites.length; i++) {
+        favIndexById[favorites[i]] = i + 1;
+      }
+
+      final rows = await AppDatabase.loadChats(accountId, includeHidden: true);
+      final updates = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final id = row['id'] as int;
+        final current = (row['fav_index'] as int?) ?? 0;
+        final next = favIndexById[id] ?? 0;
+        if (current == next) continue;
+        final newRow = Map<String, dynamic>.from(row);
+        newRow['fav_index'] = next;
+        updates.add(newRow);
+      }
+      if (updates.isNotEmpty) {
+        await AppDatabase.saveChats(updates);
+        _bump();
+      }
+    } catch (e) {
+      logger.w('applyFavorites: $e');
+    }
+  }
+
   Future<String?> setChatMute(
     Api api, {
     required int chatId,
@@ -1650,6 +1816,121 @@ class ChatsModule {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<bool> addMembers(
+    Api api, {
+    required int chatId,
+    required List<int> userIds,
+    bool showHistory = true,
+  }) async {
+    if (userIds.isEmpty) return false;
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': userIds,
+        'showHistory': showHistory,
+        'operation': 'add',
+      });
+      if (!packet.isOk) {
+        logger.w('addMembers $chatId: ${messageFromErrorPayload(packet.payload)}');
+        return false;
+      }
+      final data = packet.payload;
+      final chat = data is Map ? data['chat'] : null;
+      if (chat is Map) {
+        final accountId = await TokenStorage.getActiveAccountId();
+        if (accountId != null) {
+          await cacheServerChat(chat.cast<dynamic, dynamic>(), accountId);
+        }
+      }
+      return true;
+    } on PacketError catch (e) {
+      logger.w('addMembers $chatId: ${e.message}');
+      return false;
+    } catch (e) {
+      logger.w('addMembers $chatId: $e');
+      return false;
+    }
+  }
+
+  Future<ChatMembersPage?> getChatMembers(
+    Api api,
+    int chatId, {
+    int marker = 0,
+    int count = 50,
+  }) async {
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembers, {
+        'type': 'MEMBER',
+        'marker': marker,
+        'chatId': chatId,
+        'count': count,
+      });
+      if (!packet.isOk) return null;
+      final payload = packet.payload;
+      if (payload is! Map) return null;
+
+      final entries = <ChatMemberEntry>[];
+      final presenceById = <int, Map<String, dynamic>>{};
+      final rawMembers = payload['members'];
+      if (rawMembers is List) {
+        for (final m in rawMembers.whereType<Map>()) {
+          final contact = m['contact'];
+          if (contact is! Map) continue;
+          final id = contact['id'];
+          if (id is! int) continue;
+
+          final info = ContactInfo.fromMap(Map<String, dynamic>.from(contact));
+          final name = info.displayName;
+          if (name != null && name.isNotEmpty) ContactCache.put(id, name);
+          final avatar = info.avatarUrl;
+          if (avatar != null && avatar.isNotEmpty) {
+            ContactCache.putAvatar(id, avatar);
+          }
+          final phone = contact['phone'];
+          if (phone is int && phone > 0) ContactCache.putPhone(id, phone);
+          ContactInfoFetch.putContact(id, contact.cast<dynamic, dynamic>());
+
+          final presence = m['presence'];
+          var status = 0;
+          int? seen;
+          if (presence is Map) {
+            final p = Map<String, dynamic>.from(presence);
+            presenceById[id] = p;
+            status = (p['status'] as int?) ?? 0;
+            final s = p['seen'];
+            seen = s is int ? s : null;
+          }
+
+          entries.add(
+            ChatMemberEntry(
+              id: id,
+              name: name,
+              fullName: info.fullName,
+              avatarUrl: avatar,
+              seenTime: seen,
+              presenceStatus: status,
+              blocked: info.isDeleted,
+              isContact: info.isSavedContact,
+            ),
+          );
+        }
+      }
+      if (presenceById.isNotEmpty) PresenceFetch.primeAll(presenceById);
+
+      final next = payload['marker'];
+      return ChatMembersPage(
+        members: entries,
+        marker: next is int ? next : marker,
+      );
+    } on PacketError catch (e) {
+      logger.w('getChatMembers $chatId: ${e.message}');
+      return null;
+    } catch (e) {
+      logger.w('getChatMembers $chatId: $e');
+      return null;
     }
   }
 

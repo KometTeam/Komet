@@ -31,7 +31,9 @@ abstract class LinkModule {
   static Future<ResolvedLink?> resolve(Api api, String url) async {
     final Packet response;
     try {
-      response = await api.sendRequest(Opcode.linkInfo, {'link': url});
+      response = await api.sendRequest(Opcode.linkInfo, {
+        'link': url,
+      }, silent: true);
     } on TimeoutException {
       return const ResolvedLinkError('Превышено время ожидания');
     } on PacketError catch (e) {
