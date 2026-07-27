@@ -95,19 +95,19 @@ class CommonChatEntry {
   }
 }
 
-class ChatPhotoFeed {
+class ChatMediaFeed {
   final List<SharedMediaItem> items;
   final int total;
   final bool reachedEnd;
 
-  const ChatPhotoFeed({
+  const ChatMediaFeed({
     required this.items,
     required this.total,
     required this.reachedEnd,
   });
 }
 
-class _ChatPhotoIndex {
+class _ChatMediaIndex {
   final List<SharedMediaItem> items = [];
   final Set<String> seen = {};
   int total = 0;
@@ -116,62 +116,69 @@ class _ChatPhotoIndex {
   Future<void>? inFlight;
 }
 
-String photoDedupKey(String messageId, PhotoAttachment photo) =>
-    '$messageId:p${photo.photoId ?? photo.baseUrl}';
+String mediaDedupKey(String messageId, MessageAttachment attachment) {
+  if (attachment is PhotoAttachment) {
+    return '$messageId:p${attachment.photoId ?? attachment.baseUrl}';
+  }
+  if (attachment is VideoAttachment) {
+    return '$messageId:v${attachment.videoId ?? attachment.baseUrl}';
+  }
+  return '$messageId:${attachment.hashCode}';
+}
 
 class SharedContentModule {
-  static const int _photoIndexPageSize = 60;
-  static const int _photoIndexMaxPages = 40;
+  static const int _mediaIndexPageSize = 60;
+  static const int _mediaIndexMaxPages = 40;
 
-  static final Map<int, _ChatPhotoIndex> _photoIndexes = {};
+  static final Map<int, _ChatMediaIndex> _mediaIndexes = {};
 
   final Api _api;
 
   SharedContentModule(this._api);
 
-  static void clearPhotoIndex() => _photoIndexes.clear();
+  static void clearMediaIndex() => _mediaIndexes.clear();
 
-  Future<ChatPhotoFeed?> photoFeedFor({
+  Future<ChatMediaFeed?> mediaFeedFor({
     required int chatId,
-    required String photoKey,
+    required String mediaKey,
     required Future<String?> Function() resolveAnchor,
   }) async {
-    final index = _photoIndexes.putIfAbsent(chatId, _ChatPhotoIndex.new);
+    final index = _mediaIndexes.putIfAbsent(chatId, _ChatMediaIndex.new);
 
-    for (var page = 0; page < _photoIndexMaxPages; page++) {
-      if (index.seen.contains(photoKey)) return _snapshot(index);
+    for (var page = 0; page < _mediaIndexMaxPages; page++) {
+      if (index.seen.contains(mediaKey)) return _snapshot(index);
       if (index.reachedEnd) return null;
-      await _nextPhotoPage(chatId, index, resolveAnchor);
+      await _nextMediaPage(chatId, index, resolveAnchor);
     }
     return null;
   }
 
-  Future<ChatPhotoFeed> loadMorePhotos({
+  Future<ChatMediaFeed> loadMoreMedia({
     required int chatId,
     required Future<String?> Function() resolveAnchor,
   }) async {
-    final index = _photoIndexes.putIfAbsent(chatId, _ChatPhotoIndex.new);
+    final index = _mediaIndexes.putIfAbsent(chatId, _ChatMediaIndex.new);
     if (!index.reachedEnd) {
-      await _nextPhotoPage(chatId, index, resolveAnchor);
+      await _nextMediaPage(chatId, index, resolveAnchor);
     }
     return _snapshot(index);
   }
 
-  ChatPhotoFeed _snapshot(_ChatPhotoIndex index) {
+  ChatMediaFeed _snapshot(_ChatMediaIndex index) {
     final counted = index.items.length;
     final total = index.reachedEnd
         ? counted
         : (index.total > counted ? index.total : counted);
-    return ChatPhotoFeed(
+    return ChatMediaFeed(
       items: List.unmodifiable(index.items),
       total: total,
       reachedEnd: index.reachedEnd,
     );
   }
 
-  Future<void> _nextPhotoPage(
+  Future<void> _nextMediaPage(
     int chatId,
-    _ChatPhotoIndex index,
+    _ChatMediaIndex index,
     Future<String?> Function() resolveAnchor,
   ) async {
     final pending = index.inFlight;
@@ -179,7 +186,7 @@ class SharedContentModule {
       await pending;
       return;
     }
-    final task = _loadPhotoPage(chatId, index, resolveAnchor);
+    final task = _loadMediaPage(chatId, index, resolveAnchor);
     index.inFlight = task;
     try {
       await task;
@@ -188,15 +195,13 @@ class SharedContentModule {
     }
   }
 
-  Future<void> _loadPhotoPage(
+  Future<void> _loadMediaPage(
     int chatId,
-    _ChatPhotoIndex index,
+    _ChatMediaIndex index,
     Future<String?> Function() resolveAnchor,
   ) async {
     final initial = !index.started;
-    final anchor = initial
-        ? await resolveAnchor()
-        : index.items.last.messageId;
+    final anchor = initial ? await resolveAnchor() : index.items.last.messageId;
     if (anchor == null || anchor.isEmpty) {
       index.reachedEnd = true;
       return;
@@ -205,9 +210,9 @@ class SharedContentModule {
     final page = await fetchMedia(
       chatId: chatId,
       anchorMessageId: anchor,
-      attachTypes: const ['PHOTO'],
-      forward: initial ? _photoIndexPageSize : 0,
-      backward: _photoIndexPageSize,
+      attachTypes: const ['PHOTO', 'VIDEO'],
+      forward: initial ? _mediaIndexPageSize : 0,
+      backward: _mediaIndexPageSize,
     );
     index.started = true;
     if (page.total > index.total) index.total = page.total;

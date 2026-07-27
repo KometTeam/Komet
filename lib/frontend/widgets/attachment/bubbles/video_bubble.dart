@@ -7,7 +7,7 @@ import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
-import '../../video_player_screen.dart';
+import '../../photo_viewer.dart';
 import 'bubble_context.dart';
 import 'video_note_bubble.dart';
 
@@ -185,7 +185,14 @@ class VideoBubble extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => VideoPlayerScreen(sources: sources),
+        builder: (_) => PhotoViewerScreen.video(
+          attachment: video,
+          initialVideoSources: sources,
+          chatId: ctx.message.chatId,
+          message: ctx.message,
+          actions: ctx.photoActions,
+          sourceName: ctx.chatName,
+        ),
       ),
     );
   }

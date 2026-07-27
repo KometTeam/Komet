@@ -1361,6 +1361,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photoViewerRotate => 'Rotate';
 
   @override
+  String mediaViewerCounter(int index, int total) {
+    return '$index of $total';
+  }
+
+  @override
+  String get mediaViewerViewAll => 'View all media';
+
+  @override
+  String get videoViewerSettings => 'Settings';
+
+  @override
+  String get videoViewerSpeed => 'Speed';
+
+  @override
+  String get videoViewerQuality => 'Quality';
+
+  @override
   String get sharedCopyLink => 'Copy link';
 
   @override

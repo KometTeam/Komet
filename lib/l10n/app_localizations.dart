@@ -2642,6 +2642,36 @@ abstract class AppLocalizations {
   /// **'Rotate'**
   String get photoViewerRotate;
 
+  /// No description provided for @mediaViewerCounter.
+  ///
+  /// In en, this message translates to:
+  /// **'{index} of {total}'**
+  String mediaViewerCounter(int index, int total);
+
+  /// No description provided for @mediaViewerViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View all media'**
+  String get mediaViewerViewAll;
+
+  /// No description provided for @videoViewerSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get videoViewerSettings;
+
+  /// No description provided for @videoViewerSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get videoViewerSpeed;
+
+  /// No description provided for @videoViewerQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Quality'**
+  String get videoViewerQuality;
+
   /// No description provided for @sharedCopyLink.
   ///
   /// In en, this message translates to:

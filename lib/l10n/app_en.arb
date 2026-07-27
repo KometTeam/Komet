@@ -581,6 +581,21 @@
   "photoViewerSaveAs": "Save as…",
   "photoViewerViewAll": "View all photos",
   "photoViewerRotate": "Rotate",
+  "mediaViewerCounter": "{index} of {total}",
+  "@mediaViewerCounter": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "mediaViewerViewAll": "View all media",
+  "videoViewerSettings": "Settings",
+  "videoViewerSpeed": "Speed",
+  "videoViewerQuality": "Quality",
   "sharedCopyLink": "Copy link",
   "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",

@@ -67,6 +67,7 @@ class BubbleContext {
   final int myId;
   final String chatType;
   final int? chatId;
+  final String? chatName;
   final PhotoViewerActions? photoActions;
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
@@ -87,6 +88,7 @@ class BubbleContext {
     required this.myId,
     required this.chatType,
     this.chatId,
+    this.chatName,
     this.photoActions,
     this.overrideStatus,
     this.otherReadTime,

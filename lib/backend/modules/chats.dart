@@ -625,7 +625,7 @@ class ChatsModule {
     ContactInfoFetch.clear();
     PresenceFetch.clear();
     ChatInfoFetch.clear();
-    SharedContentModule.clearPhotoIndex();
+    SharedContentModule.clearMediaIndex();
   }
 
   void _enqueueGlobalPush(Packet packet) {

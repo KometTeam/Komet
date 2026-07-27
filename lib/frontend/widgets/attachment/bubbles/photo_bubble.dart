@@ -535,6 +535,7 @@ class PhotoBubble extends StatelessWidget {
           message: ctx.message,
           actions: ctx.photoActions,
           hero: hero,
+          sourceName: ctx.chatName,
         ),
       ),
     );

@@ -1078,7 +1078,7 @@ class _ChatScreenState extends State<ChatScreen>
     forward: _forwardMessageById,
     delete: (messageId, senderId) =>
         _confirmDeleteMessage(messageId, senderId == _myId),
-    viewAllPhotos: () => _openChatInfo(initialTab: ChatInfoTab.media),
+    viewAllMedia: () => _openChatInfo(initialTab: ChatInfoTab.media),
   );
 
   void _forwardMessageById(String messageId) {

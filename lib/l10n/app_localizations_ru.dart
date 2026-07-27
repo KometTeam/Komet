@@ -1369,6 +1369,23 @@ class AppLocalizationsRu extends AppLocalizations {
   String get photoViewerRotate => 'Повернуть';
 
   @override
+  String mediaViewerCounter(int index, int total) {
+    return '$index из $total';
+  }
+
+  @override
+  String get mediaViewerViewAll => 'Все медиа чата';
+
+  @override
+  String get videoViewerSettings => 'Настройки';
+
+  @override
+  String get videoViewerSpeed => 'Скорость';
+
+  @override
+  String get videoViewerQuality => 'Качество';
+
+  @override
   String get sharedCopyLink => 'Копировать ссылку';
 
   @override

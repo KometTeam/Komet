@@ -26,7 +26,6 @@ import '../photo_viewer.dart';
 import '../reload_on_reconnect.dart';
 import '../small_spinner.dart';
 import '../swipe_route.dart';
-import '../video_player_screen.dart';
 
 enum SharedContentKind { media, files, voice, links }
 
@@ -457,6 +456,7 @@ class SharedMediaTab extends StatefulWidget {
   final int chatId;
   final String anchorMessageId;
   final int myId;
+  final String sourceName;
   final SharedContentKind kind;
   final String emptyLabel;
   final IconData emptyIcon;
@@ -468,6 +468,7 @@ class SharedMediaTab extends StatefulWidget {
     required this.chatId,
     required this.anchorMessageId,
     required this.myId,
+    required this.sourceName,
     required this.kind,
     required this.emptyLabel,
     required this.emptyIcon,
@@ -649,6 +650,7 @@ class _SharedMediaTabState extends State<SharedMediaTab>
             item: items[index],
             onGoTo: () => _goTo(items[index]),
             onGoToMessage: widget.onGoToMessage,
+            sourceName: widget.sourceName,
           ),
     );
   }
@@ -658,11 +660,13 @@ class _MediaTile extends StatelessWidget {
   final SharedMediaItem item;
   final VoidCallback onGoTo;
   final void Function(String messageId, int time) onGoToMessage;
+  final String sourceName;
 
   const _MediaTile({
     required this.item,
     required this.onGoTo,
     required this.onGoToMessage,
+    required this.sourceName,
   });
 
   void _menu(BuildContext context) {
@@ -758,7 +762,24 @@ class _MediaTile extends StatelessWidget {
         showCustomNotification(context, 'Не удалось загрузить видео');
         return;
       }
-      pushSwipeable(context, (_) => VideoPlayerScreen(sources: sources));
+      pushSwipeable(
+        context,
+        (_) => PhotoViewerScreen.video(
+          attachment: att,
+          initialVideoSources: sources,
+          chatId: item.chatId,
+          message: CachedMessage(
+            id: item.messageId,
+            accountId: 0,
+            chatId: item.chatId,
+            senderId: item.senderId,
+            text: item.text,
+            time: item.time,
+          ),
+          actions: PhotoViewerActions(goToMessage: onGoToMessage),
+          sourceName: sourceName,
+        ),
+      );
       return;
     }
     final url = att.baseUrl ?? att.previewData ?? '';
@@ -777,9 +798,11 @@ class _MediaTile extends StatelessWidget {
           accountId: 0,
           chatId: item.chatId,
           senderId: item.senderId,
+          text: item.text,
           time: item.time,
         ),
         actions: PhotoViewerActions(goToMessage: onGoToMessage),
+        sourceName: sourceName,
       ),
     );
   }

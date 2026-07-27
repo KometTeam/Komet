@@ -1120,6 +1120,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       chatId: _mediaChatId,
       anchorMessageId: anchor,
       myId: _myId,
+      sourceName: widget.name,
       kind: kind,
       emptyLabel: emptyLabel,
       emptyIcon: emptyIcon,

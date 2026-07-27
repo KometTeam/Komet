@@ -802,6 +802,7 @@ class MessageBubble extends StatelessWidget {
       myId: myId,
       chatType: chatType,
       chatId: chatId,
+      chatName: peerName,
       photoActions: photoActions,
       overrideStatus: overrideStatus,
       otherReadTime: otherReadTime,
