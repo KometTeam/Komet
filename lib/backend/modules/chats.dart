@@ -1161,12 +1161,14 @@ class ChatsModule {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
     Map<int, CachedChat> existing = const {};
+    Map<String, dynamic>? existingRow;
     if (preloadedExisting != null) {
       existing = preloadedExisting;
     } else if (id is int) {
       final rows = await AppDatabase.loadChat(accountId, id);
       if (rows.isNotEmpty) {
-        existing = {id: CachedChat.fromDbRow(rows.first)};
+        existingRow = rows.first;
+        existing = {id: CachedChat.fromDbRow(existingRow)};
       }
     }
     final parsed = parseChatRow(
@@ -1184,11 +1186,14 @@ class ChatsModule {
       return null;
     }
     final ex = existing[parsed.id];
-    if (ex != null && sameChatContent(ex, parsed)) {
+    final listState = !inList ? 0 : (chat['status'] == 'HIDDEN' ? 2 : 1);
+    final membershipUnchanged =
+        existingRow == null || existingRow['in_list'] == listState;
+    if (ex != null && sameChatContent(ex, parsed) && membershipUnchanged) {
       return parsed;
     }
     final row = parsed.toDbRow();
-    row['in_list'] = !inList ? 0 : (chat['status'] == 'HIDDEN' ? 2 : 1);
+    row['in_list'] = listState;
     await AppDatabase.saveChats([row]);
     _bump();
     return parsed;

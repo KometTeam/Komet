@@ -727,6 +727,16 @@ class AppDatabase {
     );
   }
 
+  static bool chatRowIsInList(Map<String, dynamic> row) {
+    final value = row['in_list'];
+    return value is! int || value != 0;
+  }
+
+  static Future<bool> isChatInList(int accountId, int chatId) async {
+    final rows = await loadChat(accountId, chatId);
+    return rows.isNotEmpty && chatRowIsInList(rows.first);
+  }
+
   static Future<List<Map<String, dynamic>>> loadChats(
     int accountId, {
     bool includeHidden = false,

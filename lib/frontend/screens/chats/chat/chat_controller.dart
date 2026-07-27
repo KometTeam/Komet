@@ -348,6 +348,17 @@ class ChatController extends ChangeNotifier {
     required void Function() onSenderNames,
   }) async {
     final onlyVisible = !KometSettings.viewDeleted.value;
+    final cachedRows = await AppDatabase.loadChat(myId, chatId);
+    final preview =
+        cachedRows.isEmpty || !AppDatabase.chatRowIsInList(cachedRows.first);
+    if (preview) {
+      onPreview();
+      if (cachedRows.isEmpty) {
+        await chats.ensureChatCached(api, myId, chatId);
+      }
+      await chats.subscribeChat(api, chatId);
+    }
+
     final fullDecoded = await loadInitialFromDb(onlyVisible: onlyVisible);
     if (isMounted()) {
       onApplyMerged(fullDecoded);
@@ -362,12 +373,6 @@ class ChatController extends ChangeNotifier {
     }
 
     try {
-      final cachedRows = await AppDatabase.loadChat(myId, chatId);
-      if (cachedRows.isEmpty) {
-        onPreview();
-        await chats.ensureChatCached(api, myId, chatId);
-        await chats.subscribeChat(api, chatId);
-      }
       final serverMessages = await messagesModule.fetchHistory(myId, chatId);
       chats.markHistoryFetched(chatId);
       if (KometSettings.viewDeleted.value) {

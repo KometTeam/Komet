@@ -23,10 +23,14 @@ import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/formatted_message_text.dart';
+import '../../widgets/informer_banner_tile.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/download_history.dart';
+import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/text_format.dart';
+import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/informer_banner.dart';
 
 import '../calls/calls_tab.dart';
 import '../contacts/contacts_tab.dart';
@@ -61,8 +65,16 @@ import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../main.dart'
-    show accountModule, api, messagesModule, storiesModule, appRouteObserver;
+    show
+        accountModule,
+        animojiModule,
+        api,
+        appRouteObserver,
+        bannersModule,
+        messagesModule,
+        storiesModule;
 import '../../widgets/attachment/attachment_sheet.dart';
+import '../../widgets/update_dialog.dart';
 import '../stories/story_composer_screen.dart';
 import '../stories/story_owner_info.dart';
 import '../stories/story_ring.dart';
@@ -228,6 +240,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   StreamSubscription<LoginStatus>? _loginSub;
   StreamSubscription<Packet>? _typingSub;
   StreamSubscription<MessageEvent>? _typingMsgSub;
+  String? _presentedInformerId;
 
   Widget? _cachedChatsBody;
   Object? _chatsBodyCacheKey;
@@ -593,6 +606,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
     KometSettings.showHiddenChats.addListener(_requestReload);
     ContactsModule.revision.addListener(_requestReload);
+    bannersModule.activeBanner.addListener(_onActiveInformerChanged);
     _maybeLoadStories();
     _typingSub = api.pushStream
         .where((p) => p.opcode == Opcode.notifTyping)
@@ -719,6 +733,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         unawaited(_runReload());
       }
     });
+    _scheduleInformerPresentation();
   }
 
   void _requestReload() {
@@ -1244,6 +1259,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     KometSettings.showHiddenChats.removeListener(_requestReload);
     ContactsModule.revision.removeListener(_requestReload);
+    bannersModule.activeBanner.removeListener(_onActiveInformerChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
     _typingSub?.cancel();
@@ -1302,6 +1318,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _navPageAnimEnd = index.toDouble();
     setState(() => _currentNavIndex = index);
     _navPageAnimController.forward(from: 0);
+    if (index == 0) _scheduleInformerPresentation();
   }
 
   void _toggleFab() {
@@ -1314,6 +1331,115 @@ class _ChatListScreenState extends State<ChatListScreen>
         _fabController.reverse();
       }
     });
+  }
+
+  void _markInformerPresented(InformerBanner banner) {
+    if (widget.forwardMode || widget.archiveMode || _currentNavIndex != 0) {
+      return;
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
+    if (_presentedInformerId == banner.id) return;
+    if (bannersModule.activeBanner.value?.id != banner.id) return;
+    _presentedInformerId = banner.id;
+    unawaited(_persistInformerPresentation(banner));
+  }
+
+  Future<void> _persistInformerPresentation(InformerBanner banner) async {
+    try {
+      await bannersModule.markShown(banner);
+    } catch (_) {}
+  }
+
+  void _onActiveInformerChanged() {
+    if (bannersModule.activeBanner.value == null) {
+      _presentedInformerId = null;
+      return;
+    }
+    _scheduleInformerPresentation();
+  }
+
+  void _scheduleInformerPresentation() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final banner = bannersModule.activeBanner.value;
+      if (banner != null) _markInformerPresented(banner);
+    });
+  }
+
+  Future<void> _closeInformer(InformerBanner banner) async {
+    Haptics.tap();
+    try {
+      await bannersModule.close(banner);
+    } catch (_) {
+      bannersModule.refresh();
+    }
+  }
+
+  Future<void> _openInformer(InformerBanner banner) async {
+    Haptics.tap();
+    try {
+      await bannersModule.markClicked(banner);
+    } catch (_) {
+      bannersModule.refresh();
+    }
+    if (!mounted) return;
+
+    final url = banner.url?.trim();
+    if (url != null && url.isNotEmpty) {
+      await openExternalUrl(context, url);
+      return;
+    }
+    if (!banner.isUpdate) return;
+
+    final result = await UpdateChecker.checkNow();
+    if (!mounted) return;
+    switch (result.status) {
+      case UpdateCheckStatus.updateAvailable:
+        await showUpdateDialog(context, result.update!);
+        return;
+      case UpdateCheckStatus.upToDate:
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.updateUpToDate,
+        );
+        return;
+      case UpdateCheckStatus.failed:
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.updateCheckFailed,
+        );
+        return;
+    }
+  }
+
+  Widget _buildInformerBanner() {
+    return ValueListenableBuilder<InformerBanner?>(
+      valueListenable: bannersModule.activeBanner,
+      builder: (context, banner, _) {
+        return ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: banner == null
+                ? const SizedBox(width: double.infinity)
+                : InformerBannerTile(
+                    key: ValueKey(banner.id),
+                    banner: banner,
+                    animojiLoader: animojiModule.fetchById,
+                    onPresented: _markInformerPresented,
+                    onTap: banner.isClickable
+                        ? () => unawaited(_openInformer(banner))
+                        : null,
+                    onClose: banner.hidesCloseButton
+                        ? null
+                        : () => unawaited(_closeInformer(banner)),
+                  ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildPinnedChatsHeader(BuildContext context) {
@@ -1562,6 +1688,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       ),
               ),
             ),
+          if (!widget.forwardMode) _buildInformerBanner(),
         ],
       ),
     );
@@ -1898,6 +2025,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               _currentNavIndex = next;
               _navDragging = false;
             });
+            if (next == 0) _scheduleInformerPresentation();
           },
           onHorizontalDragCancel: () {
             if (!_navDragging) return;
