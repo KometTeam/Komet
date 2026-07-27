@@ -120,6 +120,7 @@ class BannersModule {
   }
 
   Future<void> markShown(InformerBanner banner) async {
+    if (_pinnedId == banner.id) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     final current = stateOf(banner.id);
     _showState[banner.id] = current.copyWith(

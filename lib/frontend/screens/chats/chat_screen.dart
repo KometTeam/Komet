@@ -215,6 +215,7 @@ class ChatScreen extends StatefulWidget {
   final String name;
   final String imageUrl;
   final String chatType;
+  final bool? channelSubscribed;
   final bool embedded;
   final VoidCallback? onClose;
   final ForwardRequest? forwardRequest;
@@ -230,6 +231,7 @@ class ChatScreen extends StatefulWidget {
     required this.name,
     required this.imageUrl,
     required this.chatType,
+    this.channelSubscribed,
     this.embedded = false,
     this.onClose,
     this.forwardRequest,
@@ -591,6 +593,7 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void initState() {
     super.initState();
+    _previewChat = widget.channelSubscribed == false;
     _chatController.chatId = widget.chatId;
     _chatController.isMounted = () => mounted;
     unawaited(PushService.clearChatNotification(widget.chatId));
@@ -785,8 +788,15 @@ class _ChatScreenState extends State<ChatScreen>
       final chatRows = await chats.getChat(_myId, widget.chatId);
       if (!mounted) return;
       if (chatRows.isNotEmpty) {
+        final channelSubscribed =
+            widget.chatType != 'CHANNEL' ||
+            await AppDatabase.isChatInList(_myId, widget.chatId);
+        if (!mounted) return;
         setState(() {
           chat = chatRows.first;
+          if (widget.chatType == 'CHANNEL') {
+            _previewChat = !channelSubscribed;
+          }
         });
         _bumpMessages();
         _seedPresenceFromChat();

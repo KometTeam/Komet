@@ -106,11 +106,7 @@ Future<void> _openResolvedChat(
 
   final profile = await AppDatabase.loadActiveProfile();
   final myId = profile?.id ?? 0;
-  final participants = chat['participants'];
-  final isMember =
-      myId != 0 &&
-      participants is Map &&
-      participants.containsKey(myId.toString());
+  var isMember = myId != 0 && await AppDatabase.isChatInList(myId, id);
 
   await chats.cacheServerChat(chat, myId, inList: isMember);
   if (!context.mounted) return;
@@ -130,12 +126,20 @@ Future<void> _openResolvedChat(
       if (context.mounted) showCustomNotification(context, error);
       return;
     }
+    isMember = true;
+    await chats.cacheServerChat(chat, myId, inList: true);
     if (!context.mounted) return;
   }
 
   pushSwipeable(
     context,
-    (_) => ChatScreen(chatId: id, name: title, imageUrl: icon, chatType: type),
+    (_) => ChatScreen(
+      chatId: id,
+      name: title,
+      imageUrl: icon,
+      chatType: type,
+      channelSubscribed: type == 'CHANNEL' ? isMember : null,
+    ),
   );
 }
 
