@@ -28,6 +28,7 @@ class ComposerInputBar extends StatelessWidget {
     this.backdropKey,
     required this.attachAnim,
     required this.replyTo,
+    required this.forwardMessages,
     required this.myId,
     required this.hasText,
     required this.uploadStatus,
@@ -42,6 +43,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.onOpenAttachScheduled,
     required this.onSendHistory,
     required this.onCancelReply,
+    required this.onCancelForward,
     this.onPickReplyChat,
     required this.formatElapsed,
     required this.contextMenuBuilder,
@@ -64,6 +66,7 @@ class ComposerInputBar extends StatelessWidget {
   final BackdropKey? backdropKey;
   final Animation<double> attachAnim;
   final ValueListenable<CachedMessage?> replyTo;
+  final ValueListenable<List<CachedMessage>> forwardMessages;
   final int myId;
   final ValueListenable<bool> hasText;
   final ValueListenable<UploadStatus> uploadStatus;
@@ -78,6 +81,7 @@ class ComposerInputBar extends StatelessWidget {
   final VoidCallback onOpenAttachScheduled;
   final Future<void> Function(FileHistoryEntry entry) onSendHistory;
   final VoidCallback onCancelReply;
+  final VoidCallback onCancelForward;
   final VoidCallback? onPickReplyChat;
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
@@ -94,10 +98,18 @@ class ComposerInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<CachedMessage>>(
+      valueListenable: forwardMessages,
+      builder: (context, forwards, _) => _build(context, forwards),
+    );
+  }
+
+  Widget _build(BuildContext context, List<CachedMessage> forwards) {
     final cs = Theme.of(context).colorScheme;
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
+    final hasForward = forwards.isNotEmpty;
 
-    if (chatType == "CHANNEL") {
+    if (chatType == "CHANNEL" && !hasForward) {
       if (!channelSubscribed) {
         return SafeArea(
           child: Padding(
@@ -180,7 +192,7 @@ class ComposerInputBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _replyPreview(cs),
+          _messagePreview(cs, forwards),
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 12.0,
@@ -242,7 +254,11 @@ class ComposerInputBar extends StatelessWidget {
                                             !HardwareKeyboard
                                                 .instance
                                                 .isShiftPressed) {
-                                          if (hasText.value) onSendText();
+                                          if (hasText.value ||
+                                              hasForward ||
+                                              forceSend) {
+                                            onSendText();
+                                          }
                                           return KeyEventResult.handled;
                                         }
                                         return KeyEventResult.ignored;
@@ -383,6 +399,7 @@ class ComposerInputBar extends StatelessWidget {
                                             builder: (context, videoMode, _) {
                                               final sendMode =
                                                   hasText ||
+                                                  hasForward ||
                                                   locked ||
                                                   forceSend;
                                               final pill = _actionSurface(
@@ -395,7 +412,10 @@ class ComposerInputBar extends StatelessWidget {
                                                     : _frost
                                                     ? AppFrost.inputTint(cs)
                                                     : cs.surfaceContainerHighest,
-                                                onTap: (hasText || forceSend)
+                                                onTap:
+                                                    (hasText ||
+                                                        hasForward ||
+                                                        forceSend)
                                                     ? onSendText
                                                     : locked
                                                     ? () => voiceRec.stop(
@@ -403,7 +423,9 @@ class ComposerInputBar extends StatelessWidget {
                                                       )
                                                     : null,
                                                 onLongPress:
-                                                    (hasText && !forceSend)
+                                                    (hasText &&
+                                                        !forceSend &&
+                                                        !hasForward)
                                                     ? onScheduleMessage
                                                     : null,
                                                 child: SizedBox(
@@ -567,6 +589,81 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
+  Widget _messagePreview(ColorScheme cs, List<CachedMessage> forwards) {
+    if (forwards.isNotEmpty) return _forwardPreview(cs, forwards);
+    return _replyPreview(cs);
+  }
+
+  Widget _forwardPreview(ColorScheme cs, List<CachedMessage> messages) {
+    final first = messages.first;
+    final senderName = ContactCache.get(first.senderId);
+    final info = ReplyInfo(
+      senderId: first.senderId,
+      text: first.text,
+      attachments: first.attachments,
+    );
+    final preview = info.previewText();
+    final title = messages.length == 1
+        ? first.senderId == myId
+              ? 'Пересылка от вас'
+              : senderName == null
+              ? 'Пересылка сообщения'
+              : 'Пересылка от $senderName'
+        : 'Пересылка: ${_forwardCount(messages.length)}';
+    final row = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+      child: Row(
+        children: [
+          Icon(Symbols.forward, size: 20, color: cs.primary),
+          const SizedBox(width: 10),
+          Container(width: 2, height: 34, color: cs.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (preview.isNotEmpty)
+                  Text(
+                    preview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Symbols.close, size: 20),
+            color: cs.onSurfaceVariant,
+            onPressed: onCancelForward,
+          ),
+        ],
+      ),
+    );
+    return _previewSurface(cs, row);
+  }
+
+  String _forwardCount(int count) {
+    final last = count % 10;
+    final lastTwo = count % 100;
+    if (last == 1 && lastTwo != 11) return '$count сообщение';
+    if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) {
+      return '$count сообщения';
+    }
+    return '$count сообщений';
+  }
+
   Widget _replyPreview(ColorScheme cs) {
     return ValueListenableBuilder<CachedMessage?>(
       valueListenable: replyTo,
@@ -625,16 +722,20 @@ class ComposerInputBar extends StatelessWidget {
             ],
           ),
         );
-        if (_flat && _translucent) return row;
-        if (!_translucent && chrome != ChatChromeStyle.transparent) return row;
-        return GlassSurface(
-          liquid: _liquid,
-          frostTint: AppFrost.panelTint(cs),
-          border: Border(top: AppFrost.hairline(cs)),
-          backdropKey: backdropKey,
-          child: row,
-        );
+        return _previewSurface(cs, row);
       },
+    );
+  }
+
+  Widget _previewSurface(ColorScheme cs, Widget child) {
+    if (_flat && _translucent) return child;
+    if (!_translucent && chrome != ChatChromeStyle.transparent) return child;
+    return GlassSurface(
+      liquid: _liquid,
+      frostTint: AppFrost.panelTint(cs),
+      border: Border(top: AppFrost.hairline(cs)),
+      backdropKey: backdropKey,
+      child: child,
     );
   }
 

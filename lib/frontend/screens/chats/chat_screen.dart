@@ -198,9 +198,26 @@ class _MeasureSizeState extends State<_MeasureSize> {
 
 class ForwardRequest {
   final int sourceChatId;
-  final List<CachedMessage> optimistic;
+  final String sourceChatName;
+  final String sourceChatIconUrl;
+  final String sourceChatType;
+  final List<CachedMessage> messages;
 
-  const ForwardRequest({required this.sourceChatId, required this.optimistic});
+  ForwardRequest({
+    required this.sourceChatId,
+    required this.sourceChatName,
+    required this.sourceChatIconUrl,
+    required this.sourceChatType,
+    required List<CachedMessage> messages,
+  }) : messages = List.unmodifiable(messages);
+
+  ForwardRequest withMessages(List<CachedMessage> value) => ForwardRequest(
+    sourceChatId: sourceChatId,
+    sourceChatName: sourceChatName,
+    sourceChatIconUrl: sourceChatIconUrl,
+    sourceChatType: sourceChatType,
+    messages: value,
+  );
 }
 
 class ReplyRequest {
@@ -459,8 +476,13 @@ class _ChatScreenState extends State<ChatScreen>
   int? _participantsCount;
 
   final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
+  final ValueNotifier<List<CachedMessage>> _pendingForwards = ValueNotifier(
+    const [],
+  );
   static const bool _crossChatReplySupported = false;
   int? _replySourceChatId;
+  ForwardRequest? _forwardRequest;
+  bool _forwardSending = false;
   final ValueNotifier<String?> _highlightMessageId = ValueNotifier(null);
   Timer? _highlightTimer;
   final ValueNotifier<double?> _jumpCacheExtent = ValueNotifier<double?>(null);
@@ -493,8 +515,6 @@ class _ChatScreenState extends State<ChatScreen>
   bool _previewChat = false;
   bool _subscribing = false;
   String? _channelLink;
-  bool _forwardRequestDone = false;
-
   final ChatController _chatController = ChatController();
 
   List<CachedMessage> get _messages => _chatController.messages;
@@ -667,6 +687,11 @@ class _ChatScreenState extends State<ChatScreen>
           ? null
           : incomingReply.sourceChatId;
     }
+    final incomingForward = widget.forwardRequest;
+    if (incomingForward != null) {
+      _forwardRequest = incomingForward;
+      _pendingForwards.value = incomingForward.messages;
+    }
     _pushSub = api.pushStream
         .where(
           (p) =>
@@ -718,11 +743,7 @@ class _ChatScreenState extends State<ChatScreen>
       reverseCurve: Curves.easeIn,
     );
 
-    unawaited(
-      _fastPreloadCache().then((_) {
-        if (mounted) unawaited(_runForwardRequest());
-      }),
-    );
+    unawaited(_fastPreloadCache());
     unawaited(_loadParticipantsCount());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
   }
@@ -1935,6 +1956,7 @@ class _ChatScreenState extends State<ChatScreen>
     _shimmerStartTimer?.cancel();
     _shimmerController.dispose();
     _replyTo.dispose();
+    _pendingForwards.dispose();
     _highlightTimer?.cancel();
     _highlightMessageId.dispose();
     _goToMessageSettleTimer?.cancel();
@@ -2213,7 +2235,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _forwardMessages(List<CachedMessage> msgs) async {
-    final forwardable = msgs.where((m) => !m.id.startsWith('temp_')).toList();
+    final forwardable = msgs
+        .where((message) => int.tryParse(message.id) != null)
+        .toList();
     if (forwardable.isEmpty) {
       showCustomNotification(context, 'Нечего пересылать');
       return;
@@ -2225,21 +2249,20 @@ class _ChatScreenState extends State<ChatScreen>
     );
     if (target == null || !mounted) return;
 
-    if (api.state != SessionState.online) {
-      showCustomNotification(context, 'Нет соединения');
-      return;
-    }
-
     final ordered = [...forwardable]..sort((a, b) => a.time.compareTo(b.time));
+    final request = ForwardRequest(
+      sourceChatId: widget.chatId,
+      sourceChatName: widget.name,
+      sourceChatIconUrl: widget.imageUrl,
+      sourceChatType: widget.chatType,
+      messages: ordered,
+    );
 
     if (target.chatId == widget.chatId) {
-      await _forwardIntoCurrentChat(ordered);
+      _setForwardRequest(request);
       return;
     }
 
-    final optimistic = await _seedForwardsToChat(target, ordered);
-    if (!mounted) return;
-    Haptics.send();
     pushSwipeable(
       context,
       (_) => ChatScreen(
@@ -2247,162 +2270,125 @@ class _ChatScreenState extends State<ChatScreen>
         name: target.name,
         imageUrl: target.imageUrl,
         chatType: target.chatType,
-        forwardRequest: ForwardRequest(
-          sourceChatId: widget.chatId,
-          optimistic: optimistic,
-        ),
+        forwardRequest: request,
       ),
     );
   }
 
-  Future<void> _forwardIntoCurrentChat(List<CachedMessage> sources) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final optimistic = <CachedMessage>[];
-    var i = 0;
-    for (final src in sources) {
-      final msg = MessagesModule.buildForwardMessage(
+  void _setForwardRequest(ForwardRequest request) {
+    _cancelReply();
+    _forwardRequest = request;
+    _pendingForwards.value = request.messages;
+  }
+
+  void _cancelForward() {
+    _forwardRequest = null;
+    _pendingForwards.value = const [];
+  }
+
+  Future<bool> _sendForwardRequest() async {
+    var request = _forwardRequest;
+    if (request == null) return true;
+    if (api.state != SessionState.online) {
+      showCustomNotification(context, 'Нет соединения');
+      return false;
+    }
+    Haptics.send();
+    while (request != null && request.messages.isNotEmpty) {
+      if (!identical(_forwardRequest, request)) return false;
+      final source = request.messages.first;
+      final optimistic = MessagesModule.buildForwardMessage(
         myId: _myId,
         targetChatId: widget.chatId,
-        sourceChatId: widget.chatId,
-        source: src,
+        sourceChatId: request.sourceChatId,
+        source: source,
         tempId: _nextTempId(),
-        time: now + i,
+        time: DateTime.now().millisecondsSinceEpoch,
         status: 'sending',
-        sourceChatName: widget.name,
-        sourceChatIconUrl: widget.imageUrl,
-        sourceChatType: widget.chatType,
+        sourceChatName: request.sourceChatName,
+        sourceChatIconUrl: request.sourceChatIconUrl,
+        sourceChatType: request.sourceChatType,
       );
-      optimistic.add(msg);
-      _messages.add(msg);
-      unawaited(_persistOutgoing(msg));
-      i++;
+      _messages.add(optimistic);
+      _bumpMessages();
+      _scrollToBottom();
+      await _syncForwardOutgoing(optimistic);
+      final sent = await _sendOneForward(optimistic, request.sourceChatId);
+      if (!sent || !mounted) return false;
+      if (!identical(_forwardRequest, request)) return false;
+      final remaining = request.messages.skip(1).toList(growable: false);
+      if (remaining.isEmpty) {
+        _cancelForward();
+        return true;
+      }
+      request = request.withMessages(remaining);
+      _forwardRequest = request;
+      _pendingForwards.value = request.messages;
     }
-    _bumpMessages();
-    Haptics.send();
-    _scrollToBottom();
-    if (optimistic.isNotEmpty) {
-      final last = optimistic.last;
-      unawaited(
-        chats.applyOutgoing(
-          _myId,
-          widget.chatId,
-          messageId: last.id,
-          time: last.time,
-          text: MessagesModule.forwardPreviewText(last),
-          status: 'sending',
-        ),
-      );
-    }
-    for (final opt in optimistic) {
-      await _sendOneForward(opt, widget.chatId);
-    }
+    _cancelForward();
+    return true;
   }
 
-  Future<List<CachedMessage>> _seedForwardsToChat(
-    ForwardTarget target,
-    List<CachedMessage> sources,
-  ) async {
-    await chats.ensureChatCached(api, _myId, target.chatId);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final optimistic = <CachedMessage>[];
-    var i = 0;
-    for (final src in sources) {
-      final msg = MessagesModule.buildForwardMessage(
-        myId: _myId,
-        targetChatId: target.chatId,
-        sourceChatId: widget.chatId,
-        source: src,
-        tempId: _nextTempId(),
-        time: now + i,
-        status: 'sending',
-        sourceChatName: widget.name,
-        sourceChatIconUrl: widget.imageUrl,
-        sourceChatType: widget.chatType,
-      );
-      optimistic.add(msg);
-      await AppDatabase.saveMessages([msg.toDbRow()]);
-      i++;
-    }
-    final cached = MessageSessionCache.get(_myId, target.chatId);
-    if (cached != null) {
-      MessageSessionCache.save(_myId, target.chatId, [
-        ...cached.messages,
-        ...optimistic,
-      ], reachedStart: cached.reachedStart);
-    }
-    if (optimistic.isNotEmpty) {
-      final last = optimistic.last;
-      unawaited(
-        chats.applyOutgoing(
-          _myId,
-          target.chatId,
-          messageId: last.id,
-          time: last.time,
-          text: MessagesModule.forwardPreviewText(last),
-          status: 'sending',
-        ),
-      );
-    }
-    return optimistic;
-  }
-
-  Future<void> _runForwardRequest() async {
-    final req = widget.forwardRequest;
-    if (req == null || _forwardRequestDone) return;
-    _forwardRequestDone = true;
-    for (final opt in req.optimistic) {
-      await _sendOneForward(opt, req.sourceChatId);
-    }
-  }
-
-  Future<void> _sendOneForward(
+  Future<bool> _sendOneForward(
     CachedMessage optimistic,
     int sourceChatId,
   ) async {
     final link = optimistic.payload?['link'];
     final rawWireId = link is Map ? link['messageId'] : null;
     final wireId = rawWireId is int ? rawWireId : null;
-    if (wireId == null) return;
+    if (wireId == null) return false;
     try {
       final realId = await messagesModule.forwardMessage(
         widget.chatId,
         sourceChatId,
         wireId,
       );
-      if (!mounted) return;
       final sent = MessagesModule.reidentifyMessage(
         optimistic,
         realId.isNotEmpty ? realId : optimistic.id,
         status: 'sent',
       );
-      final index = _messages.indexWhere((m) => m.id == optimistic.id);
-      if (index != -1) {
-        _messages[index] = sent;
-        _bumpMessages();
+      if (mounted) {
+        final index = _messages.indexWhere((m) => m.id == optimistic.id);
+        if (index != -1) {
+          _messages[index] = sent;
+          _bumpMessages();
+        }
       }
-      unawaited(_persistOutgoing(sent, removeId: optimistic.id));
-      unawaited(
-        chats.applyOutgoing(
-          _myId,
-          widget.chatId,
-          messageId: sent.id,
-          time: sent.time,
-          text: MessagesModule.forwardPreviewText(sent),
-          status: 'sent',
-        ),
-      );
+      await _syncForwardOutgoing(sent, removeId: optimistic.id);
+      return true;
     } catch (_) {
       final index = _messages.indexWhere((m) => m.id == optimistic.id);
       if (index != -1 && mounted) {
         _messages.removeAt(index);
         _bumpMessages();
       }
-      unawaited(AppDatabase.deleteMessage(_myId, widget.chatId, optimistic.id));
+      try {
+        await AppDatabase.deleteMessage(_myId, widget.chatId, optimistic.id);
+      } catch (_) {}
       if (mounted) {
         Haptics.error();
         showCustomNotification(context, 'Не удалось переслать');
       }
+      return false;
     }
+  }
+
+  Future<void> _syncForwardOutgoing(
+    CachedMessage message, {
+    String? removeId,
+  }) async {
+    await _persistOutgoing(message, removeId: removeId);
+    try {
+      await chats.applyOutgoing(
+        _myId,
+        widget.chatId,
+        messageId: message.id,
+        time: message.time,
+        text: MessagesModule.forwardPreviewText(message),
+        status: message.status ?? 'sending',
+      );
+    } catch (_) {}
   }
 
   Widget _buildComposerArea(BuildContext context) {
@@ -2472,6 +2458,7 @@ class _ChatScreenState extends State<ChatScreen>
                   backdropKey: _pillBackdrop,
                   attachAnim: _attachAnim,
                   replyTo: _replyTo,
+                  forwardMessages: _pendingForwards,
                   myId: _myId,
                   hasText: _hasText,
                   uploadStatus: _uploadStatus,
@@ -2486,6 +2473,7 @@ class _ChatScreenState extends State<ChatScreen>
                   onOpenAttachScheduled: _openAttachmentSheetScheduled,
                   onSendHistory: _sendHistoryFile,
                   onCancelReply: _cancelReply,
+                  onCancelForward: _cancelForward,
                   onPickReplyChat: _commentsMode || !_crossChatReplySupported
                       ? null
                       : () => unawaited(_pickReplyChat()),
@@ -3609,6 +3597,23 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _sendMessage() async {
+    if (_forwardRequest == null) {
+      await _sendTextMessage();
+      return;
+    }
+    if (_forwardSending || _myId == 0) return;
+    _forwardSending = true;
+    try {
+      final forwarded = await _sendForwardRequest();
+      if (!forwarded || !mounted) return;
+      if (_messageController.text.trim().isEmpty) return;
+      await _sendTextMessage();
+    } finally {
+      _forwardSending = false;
+    }
+  }
+
+  Future<void> _sendTextMessage() async {
     final content = _messageController.buildContent();
     final rawText = content.text;
     final text = rawText.trim();
@@ -4260,6 +4265,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _startReply(CachedMessage message) {
+    _cancelForward();
     _replyTo.value = message;
     _replySourceChatId = null;
     _messageFocusNode.requestFocus();
