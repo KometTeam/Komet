@@ -9,6 +9,8 @@ import 'chat_crypto_service.dart';
 
 const String kEncryptedPhotoExtension = '.png';
 
+String decryptedCacheName(String cacheName) => 'decrypted_$cacheName';
+
 class EncryptedPhotoResult {
   final File? file;
   final CryptoFailure? failure;
@@ -79,7 +81,7 @@ Future<EncryptedPhotoResult> openEncryptedPhoto({
   required File encrypted,
   required String cacheName,
 }) async {
-  final target = await MediaCache.fileFor('decrypted_$cacheName');
+  final target = await MediaCache.fileFor(decryptedCacheName(cacheName));
   if (await target.exists() && await target.length() > 0) {
     return EncryptedPhotoResult.ok(target);
   }
