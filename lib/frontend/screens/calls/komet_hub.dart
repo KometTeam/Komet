@@ -550,7 +550,9 @@ class _CheckersViewState extends State<_CheckersView> {
     final l10n = AppLocalizations.of(context)!;
     final w = _result;
     if (w != null) return w == _me ? l10n.hubCheckersWon : l10n.hubCheckersLost;
-    return _turn == _me ? l10n.hubCheckersYourMove : l10n.hubCheckersOpponentMove;
+    return _turn == _me
+        ? l10n.hubCheckersYourMove
+        : l10n.hubCheckersOpponentMove;
   }
 
   Widget _boardWidget(ColorScheme cs) {

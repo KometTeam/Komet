@@ -158,6 +158,27 @@ class CallController {
     return session;
   }
 
+  Future<({CallSession session, String? joinLink})> createGroupCall({
+    bool isVideo = false,
+  }) async {
+    if (_active != null) throw StateError('уже идёт звонок');
+    final out = await _calls!.startGroupCall(isVideo: isVideo);
+    final joinLink = await _calls!.createJoinLink(out.conversationId);
+    final config = Ws2Config.fromEndpoint(
+      out.endpoint,
+      userId: out.callsUserId,
+    );
+    final session = CallSession(
+      ws2Config: config,
+      role: CallRole.caller,
+      isGroup: true,
+    );
+    _bind(session);
+    await session.start();
+    CallBridge.instance.notifyAccepted();
+    return (session: session, joinLink: joinLink);
+  }
+
   Future<CallLinkPreview?> previewCallLink(String url) =>
       _calls!.resolveCallLink(url);
 
@@ -168,7 +189,11 @@ class CallController {
       params.endpoint,
       userId: params.callsUserId,
     );
-    final session = CallSession(ws2Config: config, role: CallRole.joiner);
+    final session = CallSession(
+      ws2Config: config,
+      role: CallRole.joiner,
+      isGroup: true,
+    );
     _bind(session);
     await session.start();
     CallBridge.instance.notifyAccepted();

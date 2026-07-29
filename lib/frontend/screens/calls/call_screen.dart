@@ -25,6 +25,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import 'call_participants_sheet.dart';
 import 'komet_hub.dart';
 
 const Color _kEndRed = Color(0xFFE5484D);
@@ -333,6 +334,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     await WidgetsBinding.instance.endOfFrame;
     try {
       await session.setVideoEnabled(!session.localVideo);
+    } catch (e) {
+      if (mounted) showCustomNotification(context, 'Камера недоступна: $e');
     } finally {
       _syncLocalPreview();
       if (mounted) setState(() => _videoBusy = false);
@@ -346,6 +349,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     await WidgetsBinding.instance.endOfFrame;
     try {
       await session.setScreenSharing(!session.localScreen);
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(context, 'Трансляция не запустилась: $e');
+      }
     } finally {
       _syncLocalPreview();
       if (mounted) setState(() => _videoBusy = false);
@@ -367,11 +374,38 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _remoteStreamSub?.cancel();
     _dotsController.dispose();
     _videoController.dispose();
-    _remoteRenderer.srcObject = null;
+    if (_rendererReady) _remoteRenderer.srcObject = null;
     _remoteRenderer.dispose();
-    _localRenderer.srcObject = null;
+    if (_localRendererReady) _localRenderer.srcObject = null;
     _localRenderer.dispose();
     super.dispose();
+  }
+
+  void _showParticipants() {
+    final session = _session;
+    if (session == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    showCallParticipantsSheet(
+      context,
+      session: session,
+      scheme: _darkScheme(context),
+      resolve: (p) {
+        if (p.isSelf) {
+          return CallParticipantView(
+            name: l10n.callParticipantYou,
+            avatarUrl: _avatarUrl,
+          );
+        }
+        final ext = p.externalId;
+        final info = ext != null ? _peerInfo[ext] : null;
+        return CallParticipantView(
+          name: info?.name?.isNotEmpty == true
+              ? info!.name!
+              : l10n.callParticipantFallback,
+          avatarUrl: info?.avatar,
+        );
+      },
+    );
   }
 
   void _showInfoSheet() {
@@ -520,9 +554,29 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+          InkWell(
+            onTap: count > 0 ? _showParticipants : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                  ),
+                  if (count > 0) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      Symbols.chevron_right,
+                      size: 16,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -927,7 +981,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     final session = _session;
     if (session == null) return null;
     final pills = <Widget>[
-      if (session.peerMuted) _statePill(cs, Symbols.mic_off, l10n.callPeerMicOff),
+      if (session.peerMuted)
+        _statePill(cs, Symbols.mic_off, l10n.callPeerMicOff),
       if (session.peerVideo)
         _statePill(cs, Symbols.videocam, l10n.callPeerCameraOn),
     ];
@@ -1346,7 +1401,10 @@ class _CallInfoSheet extends StatelessWidget {
     add(l10n.callInfoCountry, incoming?.country);
     final isContact = incoming?.isContact;
     if (isContact != null) {
-      add(l10n.callInfoInContacts, isContact ? l10n.callValueYes : l10n.callValueNo);
+      add(
+        l10n.callInfoInContacts,
+        isContact ? l10n.callValueYes : l10n.callValueNo,
+      );
     }
     add(l10n.callInfoPeerIp, info?.peerIp);
     add(l10n.callInfoPeerNetwork, info?.peerNetwork);
@@ -1378,9 +1436,7 @@ class _CallInfoSheet extends StatelessWidget {
     final vtracks = renderer.srcObject?.getVideoTracks().length ?? 0;
     add(
       l10n.callInfoVideoTrack,
-      vtracks > 0
-          ? l10n.callInfoVideoTrackPresent(vtracks)
-          : l10n.callValueNo,
+      vtracks > 0 ? l10n.callInfoVideoTrackPresent(vtracks) : l10n.callValueNo,
     );
     final w = renderer.value.width.toInt();
     final h = renderer.value.height.toInt();

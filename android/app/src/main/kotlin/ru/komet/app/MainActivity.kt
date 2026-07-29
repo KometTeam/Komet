@@ -296,6 +296,16 @@ class MainActivity : FlutterActivity() {
                     CallForegroundService.start(applicationContext, caller)
                     result.success(null)
                 }
+                "setScreenShare" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    val caller = call.argument<String>("caller") ?: "Звонок"
+                    CallForegroundService.setScreenShare(
+                        applicationContext,
+                        enabled,
+                        caller,
+                    )
+                    result.success(null)
+                }
                 "notifyEnded" -> {
                     CallRinger.stop()
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)

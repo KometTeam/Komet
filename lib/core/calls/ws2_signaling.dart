@@ -32,21 +32,22 @@ class Ws2Config {
     String device = 'Komet',
     String osVersion = '36',
   }) {
-    final userId =
-        int.tryParse((params.turnUser ?? '').split(':').last) ?? 0;
-    final uri = Uri.parse(params.wsEndpoint).replace(queryParameters: {
-      'userId': '$userId',
-      'entityType': 'USER',
-      'conversationId': conversationId,
-      'token': params.token,
-      'version': '5',
-      'capabilities': capabilities,
-      'device': device,
-      'platform': 'ANDROID',
-      'clientType': 'ONE_ME',
-      'appVersion': _appVersion,
-      'osVersion': osVersion,
-    });
+    final userId = int.tryParse((params.turnUser ?? '').split(':').last) ?? 0;
+    final uri = Uri.parse(params.wsEndpoint).replace(
+      queryParameters: {
+        'userId': '$userId',
+        'entityType': 'USER',
+        'conversationId': conversationId,
+        'token': params.token,
+        'version': '5',
+        'capabilities': capabilities,
+        'device': device,
+        'platform': 'ANDROID',
+        'clientType': 'ONE_ME',
+        'appVersion': _appVersion,
+        'osVersion': osVersion,
+      },
+    );
     return Ws2Config(uri: uri, userId: userId);
   }
 
@@ -59,16 +60,18 @@ class Ws2Config {
     String device = 'Komet',
   }) {
     final base = Uri.parse(endpoint);
-    final uri = base.replace(queryParameters: {
-      ...base.queryParameters,
-      'platform': 'ANDROID',
-      'version': '5',
-      'capabilities': capabilities,
-      'clientType': 'ONE_ME',
-      'appVersion': _appVersion,
-      'device': device,
-      'tgt': 'start',
-    });
+    final uri = base.replace(
+      queryParameters: {
+        ...base.queryParameters,
+        'platform': 'ANDROID',
+        'version': '5',
+        'capabilities': capabilities,
+        'clientType': 'ONE_ME',
+        'appVersion': _appVersion,
+        'device': device,
+        'tgt': 'start',
+      },
+    );
     return Ws2Config(uri: uri, userId: userId);
   }
 }
@@ -154,9 +157,7 @@ class Ws2Signaling {
           .sendCommand(command: command, extraJson: jsonEncode(extra))
           .timeout(timeout);
       final decoded = jsonDecode(response);
-      return decoded is Map<String, dynamic>
-          ? decoded
-          : <String, dynamic>{};
+      return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
     } catch (e) {
       throw Ws2CommandException(command, e);
     }
@@ -216,9 +217,45 @@ class Ws2Signaling {
     bool isVideoEnabled = false,
     bool isScreenSharingEnabled = false,
     bool isAnimojiEnabled = false,
+    bool? isFastScreenSharingEnabled,
+    bool? isAudioSharingEnabled,
   }) {
     return sendCommand(
       'change-media-settings',
+      extra: {
+        'mediaSettings': {
+          'isVideoEnabled': isVideoEnabled,
+          'isAudioEnabled': isAudioEnabled,
+          'isScreenSharingEnabled': isScreenSharingEnabled,
+          'isAnimojiEnabled': isAnimojiEnabled,
+          'isFastScreenSharingEnabled': ?isFastScreenSharingEnabled,
+          'isAudioSharingEnabled': ?isAudioSharingEnabled,
+        },
+      },
+    );
+  }
+
+  Future<void> switchTopology({
+    String topology = 'SERVER',
+    bool force = false,
+  }) {
+    return sendCommand(
+      'switch-topology',
+      extra: {'topology': topology, 'force': force},
+    );
+  }
+
+  Future<void> requestRealloc() => sendCommand('request-realloc');
+
+  /// Принять входящий звонок (сторона вызываемого).
+  Future<void> acceptCall({
+    bool isAudioEnabled = true,
+    bool isVideoEnabled = false,
+    bool isScreenSharingEnabled = false,
+    bool isAnimojiEnabled = false,
+  }) {
+    return sendCommand(
+      'accept-call',
       extra: {
         'mediaSettings': {
           'isVideoEnabled': isVideoEnabled,
@@ -230,59 +267,59 @@ class Ws2Signaling {
     );
   }
 
-  /// Принять входящий звонок (сторона вызываемого).
-  Future<void> acceptCall() => sendCommand('accept-call');
-
   Future<void> hangup({String reason = 'HUNGUP'}) =>
       sendCommand('hangup', extra: {'reason': reason});
 
   Future<void> allocateConsumer() => sendCommand(
-        'allocate-consumer',
-        extra: const {
-          'capabilities': {
-            'maxH264Decoders': 10,
-            'producerNotificationDataChannelVersion': 7,
-            'producerCommandDataChannelVersion': 2,
-            'audioMix': true,
-            'consumerUpdate': true,
-            'onDemandTracks': true,
-            'singleSession': true,
-            'unifiedPlan': true,
-            'fastScreenShare': true,
-            'producerScreenDataChannelVersion': 1,
-            'consumerScreenDataChannelVersion': 1,
-            'animojiDataChannelVersion': 2,
-            'animojiBackendRender': true,
-            'asrDataChannelVersion': 1,
-            'consumerFastScreenShare': true,
-            'consumerFastScreenShareQualityOnDemand': true,
-            'audioShare': true,
-            'simulcast': true,
-            'simulcastNativeOrder': true,
-            'red': true,
-            'videoTracksCount': 10,
-            'csrcAccessible': true,
-          },
-        },
-      );
+    'allocate-consumer',
+    extra: const {
+      'capabilities': {
+        'maxH264Decoders': 10,
+        'producerNotificationDataChannelVersion': 7,
+        'producerCommandDataChannelVersion': 2,
+        'audioMix': true,
+        'consumerUpdate': true,
+        'onDemandTracks': true,
+        'singleSession': true,
+        'unifiedPlan': true,
+        'fastScreenShare': true,
+        'producerScreenDataChannelVersion': 1,
+        'consumerScreenDataChannelVersion': 1,
+        'animojiDataChannelVersion': 2,
+        'animojiBackendRender': true,
+        'asrDataChannelVersion': 1,
+        'consumerFastScreenShare': true,
+        'consumerFastScreenShareQualityOnDemand': true,
+        'audioShare': true,
+        'simulcast': true,
+        'simulcastNativeOrder': true,
+        'red': true,
+        'videoTracksCount': 10,
+        'csrcAccessible': true,
+      },
+    },
+  );
 
-  Future<void> acceptProducer({
+  Future<Map<String, dynamic>> acceptProducer({
     required String description,
-    required List<int> ssrcs,
+    required List<String> ssrcs,
     Object? sessionId,
-  }) =>
-      sendCommand('accept-producer', extra: {
-        'description': description,
-        'ssrcs': ssrcs,
-        'sessionId': ?sessionId,
-      });
+  }) => sendCommand(
+    'accept-producer',
+    extra: {
+      'description': description,
+      if (ssrcs.isNotEmpty) 'ssrcs': ssrcs,
+      'sessionId': ?sessionId,
+    },
+  );
 
   Future<void> changeSimulcast({
     String mediaSource = 'CAMERA',
     required List<Map<String, dynamic>> layers,
-  }) =>
-      sendCommand('change-simulcast',
-          extra: {'mediaSource': mediaSource, 'layers': layers});
+  }) => sendCommand(
+    'change-simulcast',
+    extra: {'mediaSource': mediaSource, 'layers': layers},
+  );
 
   Future<void> close() async {
     await _notifSub?.cancel();

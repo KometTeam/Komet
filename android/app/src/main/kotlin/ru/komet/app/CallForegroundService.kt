@@ -20,7 +20,30 @@ class CallForegroundService : Service() {
     companion object {
         const val ACTION_START = "ru.komet.app.CALL_ONGOING_START"
         const val ACTION_STOP = "ru.komet.app.CALL_ONGOING_STOP"
+        const val ACTION_SCREEN_SHARE = "ru.komet.app.CALL_SCREEN_SHARE"
+        const val EXTRA_SCREEN_SHARE = "screenShare"
         const val ONGOING_ID = 424243
+
+        @Volatile
+        var screenShare = false
+
+        fun setScreenShare(ctx: Context, enabled: Boolean, caller: String) {
+            screenShare = enabled
+            val intent = Intent(ctx, CallForegroundService::class.java).apply {
+                action = ACTION_SCREEN_SHARE
+                putExtra(CallConst.EXTRA_CALLER, caller)
+                putExtra(EXTRA_SCREEN_SHARE, enabled)
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    ctx.startForegroundService(intent)
+                } else {
+                    ctx.startService(intent)
+                }
+            } catch (e: Exception) {
+                Log.w("KometFcm", "screen share FGS update failed: ${e.message}")
+            }
+        }
 
         fun start(ctx: Context, caller: String) {
             CallState.inCall = true
@@ -41,6 +64,7 @@ class CallForegroundService : Service() {
 
         fun stop(ctx: Context) {
             CallState.inCall = false
+            screenShare = false
             try {
                 ctx.startService(
                     Intent(ctx, CallForegroundService::class.java).apply {
@@ -65,6 +89,12 @@ class CallForegroundService : Service() {
                 @Suppress("DEPRECATION")
                 stopForeground(true)
                 stopSelf()
+            }
+            ACTION_SCREEN_SHARE -> {
+                screenShare = intent.getBooleanExtra(EXTRA_SCREEN_SHARE, false)
+                val caller = intent.getStringExtra(CallConst.EXTRA_CALLER) ?: "Звонок"
+                CallNotifier.ensureChannel(this)
+                startAsForeground(caller)
             }
             else -> {
                 val caller = intent?.getStringExtra(CallConst.EXTRA_CALLER) ?: "Звонок"
@@ -103,15 +133,16 @@ class CallForegroundService : Service() {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    ONGOING_ID, notif,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-                )
+                var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                if (screenShare) {
+                    types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                }
+                startForeground(ONGOING_ID, notif, types)
             } else {
                 startForeground(ONGOING_ID, notif)
             }
         } catch (e: Exception) {
-            Log.w("KometFcm", "startForeground(mic) failed: ${e.message}")
+            Log.w("KometFcm", "startForeground failed: ${e.message}")
             stopSelf()
         }
     }

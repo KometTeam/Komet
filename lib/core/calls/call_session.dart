@@ -7,6 +7,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../utils/logger.dart';
 import '../utils/parse.dart';
+import 'call_admin.dart';
+import 'call_bridge.dart';
 import 'call_info.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
@@ -24,6 +26,7 @@ class CallParticipant {
   bool videoEnabled;
   bool screenSharing;
   bool handRaised;
+  List<String> roles;
 
   CallParticipant({
     required this.id,
@@ -34,7 +37,12 @@ class CallParticipant {
     this.videoEnabled = false,
     this.screenSharing = false,
     this.handRaised = false,
+    this.roles = const [],
   });
+
+  bool get isAdmin => roles.contains('ADMIN') || roles.contains('CREATOR');
+  bool get isCreator => roles.contains('CREATOR');
+  bool get isSpeaker => roles.contains('SPEAKER');
 }
 
 class CallChatMessage {
@@ -50,8 +58,14 @@ class CallSession {
 
   final ConversationParams? params;
   final CallRole role;
+  final bool isGroup;
 
-  CallSession({required this.ws2Config, required this.role, this.params});
+  CallSession({
+    required this.ws2Config,
+    required this.role,
+    this.params,
+    this.isGroup = false,
+  });
 
   Ws2Signaling? _signaling;
   RTCPeerConnection? _pc;
@@ -81,8 +95,20 @@ class CallSession {
 
   bool _localVideo = false;
   bool _localScreen = false;
-  MediaStream? _localVideoStream;
+  MediaStream? _cameraStream;
+  MediaStream? _screenStream;
   RTCRtpSender? _videoSender;
+  RTCRtpSender? _screenSender;
+  bool _fastScreenShare = false;
+
+  bool _reconnecting = false;
+  bool _iceRestarting = false;
+  int _iceRestarts = 0;
+  static const int _maxIceRestarts = 6;
+  static const int _maxReconnectAttempts = 12;
+  static const Duration _maxReconnectDelay = Duration(seconds: 20);
+
+  bool get isReconnecting => _reconnecting;
 
   Timer? _levelTimer;
   final Map<int, int> _speakHold = {};
@@ -109,7 +135,15 @@ class CallSession {
 
   bool get localVideo => _localVideo;
   bool get localScreen => _localScreen;
-  MediaStream? get localVideoStream => _localVideoStream;
+  MediaStream? get localVideoStream =>
+      _localScreen ? _screenStream : _cameraStream;
+  MediaStream? get localCameraStream => _cameraStream;
+  MediaStream? get localScreenStream => _screenStream;
+
+  CallAdmin? get admin {
+    final signaling = _signaling;
+    return signaling == null ? null : CallAdmin(signaling);
+  }
 
   List<CallParticipant> get participants =>
       _participants.values.toList(growable: false);
@@ -166,15 +200,122 @@ class CallSession {
   Future<void> start() async {
     _setState(CallSessionState.connecting);
     info.region = ws2Config.uri.host;
-    final signaling = Ws2Signaling(ws2Config);
-    _signaling = signaling;
-    signaling.notifications.listen(_enqueue, onError: (_) => _end());
-    signaling.done.then((_) => _end());
-    await signaling.connect();
+    await _openSignaling();
     _levelTimer = Timer.periodic(
       const Duration(milliseconds: 300),
       (_) => unawaited(_sampleLevels()),
     );
+  }
+
+  Future<void> _openSignaling() async {
+    final signaling = Ws2Signaling(ws2Config);
+    _signaling = signaling;
+    signaling.notifications.listen(
+      _enqueue,
+      onError: (_) => _onSignalingLost(),
+    );
+    signaling.done.then((_) => _onSignalingLost());
+    await signaling.connect();
+    logger.i('[call] signaling connected to ${ws2Config.uri.host}');
+  }
+
+  void _onSignalingLost() {
+    if (_ended || _reconnecting) return;
+    logger.w('[call] signaling lost, reconnecting');
+    unawaited(_reconnect());
+  }
+
+  Future<void> _reconnect() async {
+    _reconnecting = true;
+    _setState(CallSessionState.connecting);
+    _notifyInfo();
+
+    for (var attempt = 1; attempt <= _maxReconnectAttempts; attempt++) {
+      final backoff = Duration(seconds: 1 << (attempt - 1));
+      final delay = backoff > _maxReconnectDelay ? _maxReconnectDelay : backoff;
+      await Future<void>.delayed(delay);
+      if (_ended) break;
+
+      logger.i('[call] reconnect attempt $attempt/$_maxReconnectAttempts');
+      try {
+        await _resetForReconnect();
+        await _openSignaling();
+        _reconnecting = false;
+        return;
+      } catch (e) {
+        logger.w('[call] reconnect attempt $attempt failed: $e');
+      }
+    }
+
+    _reconnecting = false;
+    if (!_ended) {
+      logger.w('[call] reconnect gave up');
+      _end();
+    }
+  }
+
+  Future<void> _restartIce() async {
+    if (_ended || _iceRestarting || _topology == 'SERVER') return;
+    if (_iceRestarts >= _maxIceRestarts) {
+      logger.w('[call] ice restart budget exhausted, ending call');
+      _end();
+      return;
+    }
+    _iceRestarting = true;
+    _iceRestarts++;
+    _setState(CallSessionState.connecting);
+    _notifyInfo();
+    logger.i('[call] ice restart $_iceRestarts/$_maxIceRestarts');
+    try {
+      _pendingCandidates.clear();
+      await _createAndSendOffer(iceRestart: true);
+    } catch (e) {
+      logger.w('[call] ice restart failed: $e');
+    } finally {
+      _iceRestarting = false;
+    }
+  }
+
+  Future<void> _resetForReconnect() async {
+    try {
+      await _signaling?.close();
+    } catch (_) {}
+    _signaling = null;
+
+    try {
+      await _probeChannel?.close();
+    } catch (_) {}
+    _probeChannel = null;
+
+    try {
+      await _pc?.close();
+    } catch (_) {}
+    _pc = null;
+
+    _videoSender = null;
+    _screenSender = null;
+    _remoteDescSet = false;
+    _pendingCandidates.clear();
+    _accepted = false;
+    _mediaConnected = false;
+    _sfuSessionId = null;
+
+    for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      try {
+        await track.stop();
+      } catch (_) {}
+    }
+    try {
+      await _localStream?.dispose();
+    } catch (_) {}
+    _localStream = null;
+
+    await _disposeStream(_cameraStream);
+    await _disposeStream(_screenStream);
+    _cameraStream = null;
+    _screenStream = null;
+    _localVideo = false;
+    _localScreen = false;
   }
 
   Future<void> _sampleLevels() async {
@@ -220,7 +361,12 @@ class CallSession {
   }
 
   void _enqueue(Map<String, dynamic> msg) {
-    _tail = _tail.then((_) => _onNotification(msg)).catchError((_) {});
+    _tail = _tail.then((_) => _onNotification(msg)).catchError((
+      Object e,
+      StackTrace st,
+    ) {
+      logger.w('[call] handler failed for ${msg['notification']}: $e\n$st');
+    });
   }
 
   Future<void> _onNotification(Map<String, dynamic> msg) async {
@@ -243,11 +389,17 @@ class CallSession {
         _applyRegisteredPeer(msg);
         break;
       case 'participant-joined':
+      case 'participant-added':
+        _onParticipantJoined(msg);
+        break;
       case 'media-settings-changed':
         _onParticipantMedia(msg);
         break;
       case 'participant-state-changed':
         _onParticipantStateChanged(msg);
+        break;
+      case 'roles-changed':
+        _onRolesChanged(msg);
         break;
       case 'participants-state-changed':
         _onParticipantsStateChanged(msg);
@@ -283,7 +435,7 @@ class CallSession {
 
   void _onWs2Error(Map<String, dynamic> msg) {
     final err = msg['error'];
-    logger.t('[call] ws2 error: $err');
+    logger.w('[call] ws2 error: $err');
     if (err == 'conversation-ended') _end();
   }
 
@@ -373,6 +525,7 @@ class CallSession {
         state: p['state'] as String?,
         mediaSettings: p['mediaSettings'],
         muteStates: p['muteStates'],
+        roles: p['roles'],
       );
     }
     _participants.removeWhere((key, _) => !seen.contains(key));
@@ -386,6 +539,7 @@ class CallSession {
     Object? mediaSettings,
     Object? muteStates,
     bool? handRaised,
+    Object? roles,
   }) {
     final p = _participants.putIfAbsent(
       id,
@@ -410,6 +564,9 @@ class CallSession {
       if (s is String) p.screenSharing = s == 'UNMUTE';
     }
     if (handRaised != null) p.handRaised = handRaised;
+    if (roles is List) {
+      p.roles = roles.whereType<String>().toList(growable: false);
+    }
     return p;
   }
 
@@ -434,22 +591,48 @@ class CallSession {
       mediaSettings: msg['mediaSettings'],
       muteStates: msg['muteStates'],
     );
-    _maybeAdoptPeer(msg);
+    _maybeAdoptPeer(id, msg);
     _notifyInfo();
   }
 
-  void _maybeAdoptPeer(Map<String, dynamic> msg) {
+  void _onParticipantJoined(Map<String, dynamic> msg) {
+    final nested = msg['participant'];
+    final p = nested is Map ? nested : msg;
+    final id = _participantIdFrom(
+      p['id'] ?? p['participantId'] ?? msg['participantId'],
+    );
+    if (id == null) return;
+    _upsertParticipant(
+      id,
+      externalId: _externalId(p['externalId']),
+      state: p['state'] as String?,
+      mediaSettings: p['mediaSettings'],
+      muteStates: p['muteStates'],
+      handRaised: _handFrom(p['participantState']),
+      roles: p['roles'],
+    );
+    _maybeAdoptPeer(id, p);
+    _notifyInfo();
+  }
+
+  void _maybeAdoptPeer(int id, Map<dynamic, dynamic> source) {
     if (role != CallRole.joiner || _peerId != null || _pc == null) return;
     if (_topology == 'SERVER') return;
-    final id = msg['participantId'];
-    if (id is! int || id == ws2Config.userId) return;
+    if (id == ws2Config.userId) return;
     _peerId = id;
-    final type = msg['participantType'];
+    final type = source['participantType'] ?? source['idType'];
     if (type is String && type.isNotEmpty) _peerType = type;
-    final deviceIdx = msg['deviceIdx'];
+    final deviceIdx = source['deviceIdx'];
     if (deviceIdx is int) _peerDeviceIdx = deviceIdx;
     logger.t('[call] adopting peer $_peerId on join');
     unawaited(_createAndSendOffer());
+  }
+
+  void _onRolesChanged(Map<String, dynamic> msg) {
+    final id = _participantIdFrom(msg['participantId']);
+    if (id == null) return;
+    _upsertParticipant(id, roles: msg['roles']);
+    _notifyInfo();
   }
 
   void _onParticipantStateChanged(Map<String, dynamic> msg) {
@@ -472,6 +655,7 @@ class CallSession {
         mediaSettings: p['mediaSettings'],
         muteStates: p['muteStates'],
         handRaised: _handFrom(p['participantState']),
+        roles: p['roles'],
       );
     }
     _notifyInfo();
@@ -484,6 +668,7 @@ class CallSession {
   }
 
   Future<void> _onConnection(Map<String, dynamic> msg) async {
+    logger.i('[call] connection notification received');
     final convParams = msg['conversationParams'];
     final conversation = msg['conversation'];
 
@@ -496,10 +681,11 @@ class CallSession {
     _topology =
         (conversation is Map ? conversation['topology']?.toString() : null) ??
         _topology;
-    logger.t('[call] connection role=$role peer=$_peerId topology=$_topology');
+    logger.i('[call] connection role=$role peer=$_peerId topology=$_topology');
 
     if (_topology == 'SERVER') {
       await _setupSfu();
+      await accept(activate: role != CallRole.caller);
       return;
     }
 
@@ -522,6 +708,7 @@ class CallSession {
     } else if (role == CallRole.joiner) {
       await _createAndSendOffer();
     }
+    await accept(activate: role != CallRole.caller);
   }
 
   Future<RTCPeerConnection> _createPc(List ice) async {
@@ -530,19 +717,35 @@ class CallSession {
       'sdpSemantics': 'unified-plan',
       'bundlePolicy': 'max-bundle',
       'rtcpMuxPolicy': 'require',
+      'tcpCandidatePolicy': 'enabled',
+      'continualGatheringPolicy': 'gather_continually',
+      'audioJitterBufferMaxPackets': 200,
     });
     pc.onIceCandidate = _onLocalCandidate;
     pc.onTrack = (event) => unawaited(_onRemoteTrack(event));
     pc.onDataChannel = (channel) => _bindProbeChannel(channel, ask: false);
-    pc.onIceConnectionState = (s) => logger.t('[call] ice $s');
+    pc.onIceConnectionState = (s) {
+      logger.i('[call] ice $s');
+      if (s != RTCIceConnectionState.RTCIceConnectionStateFailed) return;
+      if (_topology != 'SERVER' || _ended) return;
+      unawaited(_dumpIceStats(pc));
+      logger.w('[call][sfu] ice failed, request-realloc');
+      unawaited(
+        _signaling?.requestRealloc().catchError(
+              (e) => logger.w('[call] request-realloc failed: $e'),
+            ) ??
+            Future.value(),
+      );
+    };
     pc.onConnectionState = (s) {
-      logger.t('[call] pc $s');
+      logger.i('[call] pc $s');
       final connected =
           s == RTCPeerConnectionState.RTCPeerConnectionStateConnected;
       if (connected != _mediaConnected) {
         _mediaConnected = connected;
         _notifyInfo();
         if (connected) {
+          _iceRestarts = 0;
           if (role == CallRole.joiner || _topology == 'SERVER') {
             _setState(CallSessionState.active);
           }
@@ -550,10 +753,13 @@ class CallSession {
           unawaited(_collectReceivers());
         }
       }
-      if ((s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-              s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) &&
-          _topology != 'SERVER') {
+      if (_topology == 'SERVER') return;
+      if (s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
         _end();
+        return;
+      }
+      if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+        unawaited(_restartIce());
       }
     };
     return pc;
@@ -680,22 +886,67 @@ class CallSession {
       await _localStream?.dispose();
       _localStream = null;
       _videoSender = null;
-      await _disposeLocalVideoStream();
-      _localVideo = false;
-      _localScreen = false;
+      _screenSender = null;
     }
     _setState(CallSessionState.connecting);
     final pc = await _createPc(_iceServers);
     _pc = pc;
     await _addLocalMedia(pc);
-    logger.t('[call][sfu] allocate-consumer');
+    await _republishVideo(pc);
+    logger.i(
+      '[call][sfu] allocate-consumer camera=$_localVideo screen=$_localScreen',
+    );
     await _signaling?.allocateConsumer();
+    _fastScreenShare = true;
+  }
+
+  Future<void> _rebuildSfuPc() async {
+    try {
+      await _pc?.close();
+    } catch (_) {}
+    _pc = null;
+    _videoSender = null;
+    _screenSender = null;
+    _remoteDescSet = false;
+    _pendingCandidates.clear();
+
+    for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      try {
+        await track.stop();
+      } catch (_) {}
+    }
+    try {
+      await _localStream?.dispose();
+    } catch (_) {}
+    _localStream = null;
+
+    final pc = await _createPc(_iceServers);
+    _pc = pc;
+    await _addLocalMedia(pc);
+    await _republishVideo(pc);
+  }
+
+  Future<void> _republishVideo(RTCPeerConnection pc) async {
+    final camera = _cameraStream;
+    if (camera != null) {
+      final tracks = camera.getVideoTracks();
+      if (tracks.isNotEmpty) {
+        _videoSender = await pc.addTrack(tracks.first, camera);
+      }
+    }
+    final screen = _screenStream;
+    if (screen != null) {
+      final tracks = screen.getVideoTracks();
+      if (tracks.isNotEmpty) {
+        _screenSender = await pc.addTrack(tracks.first, screen);
+      }
+    }
   }
 
   Future<void> _onTopologyChanged(Map<String, dynamic> msg) async {
     final topo = msg['topology']?.toString();
     if (topo == null) return;
-    logger.t('[call] topology-changed -> $topo');
+    logger.i('[call] topology-changed -> $topo');
     info.topology = topo;
     final switchingToSfu = topo == 'SERVER' && _topology != 'SERVER';
     _topology = topo;
@@ -704,11 +955,18 @@ class CallSession {
   }
 
   Future<void> _onProducerUpdated(Map<String, dynamic> msg) async {
-    final pc = _pc;
-    if (pc == null) return;
+    if (_pc == null) return;
 
     final session = msg['sessionId'];
+    final previous = _sfuSessionId;
     if (session != null) _sfuSessionId = session;
+    if (previous != null && session != null && session != previous) {
+      logger.i('[call][sfu] session changed, recreating peer connection');
+      await _rebuildSfuPc();
+    }
+
+    final pc = _pc;
+    if (pc == null) return;
 
     final description = msg['description'];
     String? sdp;
@@ -720,34 +978,61 @@ class CallSession {
       sdp = description;
     }
     if (sdp == null) {
-      logger.t('[call][sfu] producer-updated without sdp: $msg');
+      logger.w('[call][sfu] producer-updated without sdp: $msg');
       return;
     }
 
-    logger.t('[call][sfu] producer offer: ${_mLines(sdp)} m-lines');
+    final ssrcs = _extractSsrcs(sdp);
+    logger.i(
+      '[call][sfu] producer offer: ${_mLines(sdp)} m-lines, '
+      'ssrcs=${ssrcs.length}, candidates=${_countCandidates(sdp)} '
+      '(${_candidateTypes(sdp)}), ${_sdpSummary(sdp)}, ice=${_iceServerUrls()}',
+    );
     await pc.setRemoteDescription(RTCSessionDescription(sdp, type));
     _remoteDescSet = true;
     await _flushCandidates();
+    await _addRemoteCandidatesFromSdp(pc, sdp);
 
     final answer = await pc.createAnswer({});
+    if (_pc != pc) return;
     await pc.setLocalDescription(answer);
-    await _waitIceGathering(pc, const Duration(seconds: 3));
+    if (_pc != pc) {
+      logger.w('[call][sfu] peer connection replaced, dropping answer');
+      return;
+    }
 
-    final local = await pc.getLocalDescription();
+    RTCSessionDescription? local;
+    try {
+      local = await pc.getLocalDescription();
+    } catch (e) {
+      logger.w('[call][sfu] getLocalDescription failed: $e');
+    }
     final answerSdp = local?.sdp ?? answer.sdp ?? '';
-    final ssrcs = _extractSsrcs(answerSdp);
-    logger.t(
+    if (answerSdp.isEmpty) return;
+    logger.i(
       '[call][sfu] answer: ${_mLines(answerSdp)} m-lines, '
-      'ssrcs=${ssrcs.length}',
+      'candidates=${_countCandidates(answerSdp)} '
+      '(${_candidateTypes(answerSdp)}), ${_sdpSummary(answerSdp)}, '
+      'gathering=${pc.iceGatheringState}',
     );
 
-    await _signaling?.acceptProducer(
-      description: answerSdp,
-      ssrcs: ssrcs,
-      sessionId: _sfuSessionId,
-    );
+    try {
+      final reply = await _signaling?.acceptProducer(
+        description: answerSdp,
+        ssrcs: ssrcs,
+        sessionId: _sfuSessionId,
+      );
+      logger.i('[call][sfu] accept-producer reply: $reply');
+    } catch (e) {
+      logger.w('[call][sfu] accept-producer failed: $e');
+    }
+
+    Timer(const Duration(seconds: 5), () {
+      if (_pc == pc && !_ended) unawaited(_dumpIceStats(pc));
+    });
 
     if (_wantVideo) await _publishCamera();
+    if (_accepted) await _sendMediaSettings();
     unawaited(_collectReceivers());
   }
 
@@ -768,36 +1053,120 @@ class CallSession {
     } catch (_) {}
   }
 
+  int _countCandidates(String sdp) =>
+      RegExp(r'^a=candidate:', multiLine: true).allMatches(sdp).length;
+
+  String _candidateTypes(String sdp) {
+    final counts = <String, int>{};
+    for (final m in RegExp(
+      r'^a=candidate:.* typ (\w+)',
+      multiLine: true,
+    ).allMatches(sdp)) {
+      final type = m.group(1) ?? '?';
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+    return counts.isEmpty
+        ? 'none'
+        : counts.entries.map((e) => '${e.key}=${e.value}').join(' ');
+  }
+
+  Future<void> _addRemoteCandidatesFromSdp(
+    RTCPeerConnection pc,
+    String sdp,
+  ) async {
+    final mid = RegExp(r'^a=mid:(\S+)', multiLine: true).firstMatch(sdp);
+    if (mid == null) return;
+    final seen = <String>{};
+    var added = 0;
+    for (final m in RegExp(
+      r'^a=(candidate:\S.*)$',
+      multiLine: true,
+    ).allMatches(sdp)) {
+      final line = m.group(1)!.trim();
+      if (!seen.add(line)) continue;
+      try {
+        await pc.addCandidate(RTCIceCandidate(line, mid.group(1), 0));
+        added++;
+      } catch (_) {}
+    }
+    logger.i(
+      '[call][sfu] remote candidates added=$added: '
+      '${seen.map((c) => c.split(' ').take(6).join(' ')).join(' | ')}',
+    );
+  }
+
+  Future<void> _dumpIceStats(RTCPeerConnection pc) async {
+    try {
+      final reports = await pc.getStats();
+      final candidates = <String, String>{};
+      for (final r in reports) {
+        if (r.type != 'local-candidate' && r.type != 'remote-candidate') {
+          continue;
+        }
+        final v = r.values;
+        candidates[r.id] =
+            '${v['candidateType']}/${v['protocol']} '
+            '${v['ip'] ?? v['address']}:${v['port']}';
+      }
+
+      for (final r in reports) {
+        if (r.type != 'candidate-pair' && r.type != 'googCandidatePair') {
+          continue;
+        }
+        final v = r.values;
+        final from = candidates[v['localCandidateId']] ?? '?';
+        final to = candidates[v['remoteCandidateId']] ?? '?';
+        logger.w(
+          '[call][sfu] pair ${v['state'] ?? v['googState']}: $from -> $to '
+          'sent=${v['requestsSent']} recv=${v['responsesReceived']} '
+          'inRecv=${v['requestsReceived']} nominated=${v['nominated']}',
+        );
+      }
+    } catch (e) {
+      logger.w('[call][sfu] ice stats failed: $e');
+    }
+  }
+
+  String _iceServerUrls() =>
+      _iceServers.whereType<Map>().map((s) => '${s['urls']}').join(' | ');
+
+  String _sdpSummary(String sdp) {
+    final bundle = RegExp(
+      r'^a=group:BUNDLE (.*)$',
+      multiLine: true,
+    ).firstMatch(sdp);
+    final mids = bundle == null
+        ? 'none'
+        : '${bundle.group(1)!.trim().split(RegExp(r'\s+')).length}';
+    final ufrags = RegExp(
+      r'^a=ice-ufrag:(\S+)',
+      multiLine: true,
+    ).allMatches(sdp).map((m) => m.group(1)).toSet().length;
+    var active = 0;
+    var total = 0;
+    for (final m in RegExp(r'^m=\S+ (\d+)', multiLine: true).allMatches(sdp)) {
+      total++;
+      if (m.group(1) != '0') active++;
+    }
+    final setup = RegExp(
+      r'^a=setup:(\S+)',
+      multiLine: true,
+    ).allMatches(sdp).map((m) => m.group(1)).toSet().join(',');
+    final lite = sdp.contains('a=ice-lite') ? ' ice-lite' : '';
+    return 'bundle=$mids ufrags=$ufrags active=$active/$total '
+        'setup=$setup$lite';
+  }
+
   int _mLines(String sdp) =>
       RegExp(r'^m=', multiLine: true).allMatches(sdp).length;
 
-  List<int> _extractSsrcs(String sdp) {
-    final set = <int>{};
-    for (final m in RegExp(r'^a=ssrc:(\d+)', multiLine: true).allMatches(sdp)) {
-      final v = int.tryParse(m.group(1) ?? '');
+  List<String> _extractSsrcs(String sdp) {
+    final set = <String>{};
+    for (final m in RegExp(r'a=ssrc:(\d+)', multiLine: true).allMatches(sdp)) {
+      final v = m.group(1);
       if (v != null) set.add(v);
     }
     return set.toList();
-  }
-
-  Future<void> _waitIceGathering(RTCPeerConnection pc, Duration timeout) async {
-    if (pc.iceGatheringState ==
-        RTCIceGatheringState.RTCIceGatheringStateComplete) {
-      return;
-    }
-    final completer = Completer<void>();
-    Timer? timer;
-    void finish() {
-      if (!completer.isCompleted) completer.complete();
-    }
-
-    pc.onIceGatheringState = (state) {
-      if (state == RTCIceGatheringState.RTCIceGatheringStateComplete) finish();
-    };
-    timer = Timer(timeout, finish);
-    await completer.future;
-    timer.cancel();
-    pc.onIceGatheringState = null;
   }
 
   String _videoDir(String sdp) {
@@ -861,12 +1230,12 @@ class CallSession {
     } catch (_) {}
   }
 
-  Future<void> _createAndSendOffer() async {
+  Future<void> _createAndSendOffer({bool iceRestart = false}) async {
     final pc = _pc;
     final peerId = _peerId;
     if (pc == null || peerId == null) return;
 
-    final offer = await pc.createOffer({});
+    final offer = await pc.createOffer(iceRestart ? {'iceRestart': true} : {});
     final sdp = offer.sdp ?? '';
     await pc.setLocalDescription(RTCSessionDescription(sdp, offer.type));
     logger.t('[call] our offer video: ${_videoDir(sdp)}');
@@ -926,6 +1295,13 @@ class CallSession {
               RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
         logger.t('[call] extra answer ignored (state=${pc.signalingState})');
         return;
+      }
+
+      if (type == 'offer' &&
+          pc.signalingState ==
+              RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+        logger.w('[call] offer glare, rolling back local offer');
+        await pc.setLocalDescription(RTCSessionDescription(null, 'rollback'));
       }
 
       await pc.setRemoteDescription(RTCSessionDescription(desc, type));
@@ -998,13 +1374,16 @@ class CallSession {
     );
   }
 
-  Future<void> accept() async {
+  Future<void> accept({bool activate = true}) async {
     if (_accepted) return;
     _accepted = true;
-    logger.t('[call] accepted');
-    await _signaling?.acceptCall();
-    await _sendMediaSettings();
-    _setState(CallSessionState.active);
+    logger.i('[call] accept-call sent (activate=$activate)');
+    await _signaling?.acceptCall(
+      isAudioEnabled: !_muted,
+      isVideoEnabled: _localVideo,
+      isScreenSharingEnabled: _localScreen,
+    );
+    if (activate) _setState(CallSessionState.active);
   }
 
   Future<void> sendAudioEnabledSignal(bool enabled) async {
@@ -1030,37 +1409,35 @@ class CallSession {
       isAudioEnabled: !_muted,
       isVideoEnabled: _localVideo,
       isScreenSharingEnabled: _localScreen,
+      isFastScreenSharingEnabled: _fastScreenShare ? _localScreen : null,
     );
   }
 
-  Future<void> setVideoEnabled(bool on) =>
-      on ? _startLocalVideo(screen: false) : _stopLocalVideo();
+  Future<void> setVideoEnabled(bool on) => on ? _startCamera() : _stopCamera();
 
   Future<void> setScreenSharing(bool on) =>
-      on ? _startLocalVideo(screen: true) : _stopLocalVideo();
+      on ? _startScreenShare() : _stopScreenShare();
 
-  Future<void> _startLocalVideo({required bool screen}) async {
+  Future<void> switchToServerTopology({bool force = false}) async {
+    if (_topology == 'SERVER') return;
+    try {
+      await _signaling?.switchTopology(force: force);
+    } catch (e) {
+      logger.w('[call] switch-topology failed: $e');
+    }
+  }
+
+  Future<void> _startCamera() async {
     final pc = _pc;
     if (pc == null) return;
 
-    MediaStream stream;
-    try {
-      stream = screen
-          ? await navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
-              'video': true,
-              'audio': false,
-            })
-          : await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-              'video': true,
-              'audio': false,
-            });
-    } catch (e) {
-      logger.t('[call] video capture failed: $e');
-      return;
-    }
+    final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+      'video': true,
+      'audio': false,
+    });
 
-    await _disposeLocalVideoStream();
-    _localVideoStream = stream;
+    await _disposeStream(_cameraStream);
+    _cameraStream = stream;
 
     final tracks = stream.getVideoTracks();
     final track = tracks.isEmpty ? null : tracks.first;
@@ -1072,28 +1449,109 @@ class CallSession {
       }
     }
 
-    _localVideo = !screen;
-    _localScreen = screen;
-
-    if (_topology != 'SERVER') await _createAndSendOffer();
+    _localVideo = true;
+    await _renegotiate();
     await _sendMediaSettings();
     _notifyInfo();
   }
 
-  Future<void> _stopLocalVideo() async {
+  Future<void> _stopCamera() async {
     try {
       await _videoSender?.replaceTrack(null);
     } catch (_) {}
-    await _disposeLocalVideoStream();
+    await _disposeStream(_cameraStream);
+    _cameraStream = null;
     _localVideo = false;
-    _localScreen = false;
     await _sendMediaSettings();
     _notifyInfo();
   }
 
-  Future<void> _disposeLocalVideoStream() async {
-    final stream = _localVideoStream;
-    _localVideoStream = null;
+  Future<void> _startScreenShare() async {
+    if (_pc == null) return;
+
+    await CallBridge.instance.setScreenShare(true);
+
+    _localScreen = true;
+    await _sendMediaSettings();
+    _notifyInfo();
+
+    final MediaStream stream;
+    try {
+      stream = await _captureScreen();
+    } catch (e) {
+      _localScreen = false;
+      await CallBridge.instance.setScreenShare(false);
+      await _sendMediaSettings();
+      _notifyInfo();
+      rethrow;
+    }
+    logger.i('[call] screen captured, topology=$_topology');
+
+    await _disposeStream(_screenStream);
+    _screenStream = stream;
+
+    final pc = _pc;
+    if (pc == null) return;
+
+    final tracks = stream.getVideoTracks();
+    final track = tracks.isEmpty ? null : tracks.first;
+    if (track != null) {
+      if (_screenSender == null) {
+        _screenSender = await pc.addTrack(track, stream);
+      } else {
+        await _screenSender!.replaceTrack(track);
+      }
+    }
+
+    logger.i('[call] screen share published, topology=$_topology');
+    await _sendMediaSettings();
+    _notifyInfo();
+  }
+
+  Future<MediaStream> _captureScreen() async {
+    if (!_isDesktop) {
+      return navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
+        'video': true,
+        'audio': false,
+      });
+    }
+    final sources = await desktopCapturer.getSources(
+      types: [SourceType.Screen],
+    );
+    if (sources.isEmpty) {
+      throw StateError('нет доступных экранов для захвата');
+    }
+    return navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
+      'video': {
+        'deviceId': {'exact': sources.first.id},
+        'mandatory': {'frameRate': 30.0},
+      },
+      'audio': false,
+    });
+  }
+
+  Future<void> _stopScreenShare() async {
+    try {
+      await _screenSender?.replaceTrack(null);
+    } catch (_) {}
+    await _disposeStream(_screenStream);
+    _screenStream = null;
+    _localScreen = false;
+    await CallBridge.instance.setScreenShare(false);
+    await _sendMediaSettings();
+    _notifyInfo();
+  }
+
+  Future<void> _renegotiate() async {
+    if (_topology == 'SERVER') return;
+    try {
+      await _createAndSendOffer();
+    } catch (e) {
+      logger.w('[call] renegotiation offer failed: $e');
+    }
+  }
+
+  Future<void> _disposeStream(MediaStream? stream) async {
     if (stream == null) return;
     for (final track in stream.getTracks()) {
       try {
@@ -1139,7 +1597,10 @@ class CallSession {
       await track.stop();
     }
     await _localStream?.dispose();
-    await _disposeLocalVideoStream();
+    await _disposeStream(_cameraStream);
+    await _disposeStream(_screenStream);
+    _cameraStream = null;
+    _screenStream = null;
     await _pc?.close();
     if (_ownRemoteStream) {
       try {

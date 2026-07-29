@@ -6,6 +6,5 @@ class CallLink {
 
   static bool isCallLink(String url) => token(url) != null;
 
-  static String? token(String url) =>
-      _pattern.firstMatch(url.trim())?.group(1);
+  static String? token(String url) => _pattern.firstMatch(url.trim())?.group(1);
 }
