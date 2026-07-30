@@ -35,58 +35,150 @@ void main() {
       expect(linkTarget('http://max.ru/somebot'), 'http://max.ru/somebot');
       expect(linkTarget('https://max.ru/somebot'), 'https://max.ru/somebot');
     });
+  });
 
-    test('a bare link is parsed as a max link once normalized', () {
-      final link = MaxLink.parse(linkTarget('max.ru/somebot?start=abc123'));
+  group('MaxLink.parse — не наши ссылки', () {
+    test('rejects other hosts and non-links', () {
+      expect(MaxLink.parse('https://example.com/somebot'), isNull);
+      expect(MaxLink.parse('evil.max.ru/phish'), isNull);
+      expect(MaxLink.parse('mailto:bot@max.ru'), isNull);
+      expect(MaxLink.parse(''), isNull);
+    });
 
-      expect(link!.kind, MaxLinkKind.public);
-      expect(link.startPayload, 'abc123');
+    test('rejects reserved site pages', () {
+      expect(MaxLink.parse('https://max.ru/login'), isNull);
+      expect(MaxLink.parse('https://max.ru/tos'), isNull);
     });
   });
 
-  group('MaxLink start payload', () {
-    test('parses a bot start link over http', () {
-      final link = MaxLink.parse('http://max.ru/id100000000001bot?start=abc123');
-
-      expect(link, isNotNull);
-      expect(link!.kind, MaxLinkKind.public);
-      expect(link.startPayload, 'abc123');
-      expect(link.baseUrl, 'https://max.ru/id100000000001bot');
-      expect(link.url, 'http://max.ru/id100000000001bot?start=abc123');
+  group('MaxLink.parse — контентные ссылки', () {
+    test('bare host, http and www all normalize to the root link', () {
+      expect(MaxLink.parse('max.ru'), isA<MaxRootLink>());
+      expect(MaxLink.parse('http://max.ru/'), isA<MaxRootLink>());
+      expect(MaxLink.parse('https://www.max.ru'), isA<MaxRootLink>());
+      expect(MaxLink.parse('max://max.ru/'), isA<MaxRootLink>());
     });
 
-    test('decodes the payload and ignores a trailing fragment', () {
-      final link = MaxLink.parse(
-        'https://www.max.ru/somebot?start=a%20b&ref=x#top',
-      );
+    test('public link keeps the canonical https url', () {
+      final link = MaxLink.parse('max.ru/somebot') as MaxContentLink;
 
-      expect(link!.startPayload, 'a b');
+      expect(link.kind, MaxContentKind.public);
+      expect(link.url, 'https://max.ru/somebot');
+      expect(link.baseUrl, 'https://max.ru/somebot');
+      expect(link.startPayload, isNull);
+      expect(link.messageId, isNull);
+    });
+
+    test('@nickname is a public link too', () {
+      final link = MaxLink.parse('https://max.ru/@somebot') as MaxContentLink;
+
+      expect(link.kind, MaxContentKind.public);
       expect(link.baseUrl, 'https://max.ru/somebot');
     });
 
-    test('keeps the payload empty for links without one', () {
-      expect(MaxLink.parse('https://max.ru/somebot')!.startPayload, isNull);
+    test('bot start payload is parsed and the base url drops it', () {
+      final link =
+          MaxLink.parse('http://max.ru/id100000000001_bot?start=a%20b')
+              as MaxContentLink;
+
+      expect(link.startPayload, 'a b');
+      expect(link.url, 'https://max.ru/id100000000001_bot?start=a%20b');
+      expect(link.baseUrl, 'https://max.ru/id100000000001_bot');
+    });
+
+    test('empty start payload is ignored', () {
+      final link = MaxLink.parse('max.ru/somebot?start=') as MaxContentLink;
+      expect(link.startPayload, isNull);
+    });
+
+    test('startapp opens a mini app and is cut at the first &', () {
+      final link =
+          MaxLink.parse('max.ru/somebot?startapp=deal%2F42&ref=x')
+              as MaxWebAppLink;
+
+      expect(link.startApp, 'deal/42');
+    });
+
+    test('message links carry the message id', () {
+      final byName =
+          MaxLink.parse('max.ru/somechannel/117008613873053494')
+              as MaxContentLink;
+      expect(byName.kind, MaxContentKind.public);
+      expect(byName.messageId, 117008613873053494);
+      expect(byName.baseUrl, 'https://max.ru/somechannel');
+
+      final byId =
+          MaxLink.parse('max.ru/c/1673760/117008613873053494')
+              as MaxContentLink;
+      expect(byId.kind, MaxContentKind.content);
+      expect(byId.messageId, 117008613873053494);
+      expect(byId.baseUrl, 'https://max.ru/c/1673760');
+    });
+
+    test('invite, call and sticker links keep their own types', () {
       expect(
-        MaxLink.parse('https://max.ru/somebot?start=')!.startPayload,
-        isNull,
+        (MaxLink.parse('max.ru/join/AbCdEf') as MaxContentLink).kind,
+        MaxContentKind.invite,
       );
+      expect(MaxLink.parse('max.ru/joincall/AbCdEf'), isA<MaxCallLink>());
       expect(
-        MaxLink.parse('https://max.ru/somebot?other=1')!.startPayload,
-        isNull,
+        (MaxLink.parse('max.ru/stickerset/512-abc') as MaxStickerSetLink).path,
+        'stickerset/512-abc',
       );
     });
 
-    test('leaves other link kinds untouched', () {
-      final invite = MaxLink.parse('https://max.ru/join/AbCdEf?start=x');
+    test('uid and cid open a contact and a chat', () {
+      expect(
+        (MaxLink.parse('max://max.ru/?uid=105587131') as MaxContactIdLink)
+            .userId,
+        105587131,
+      );
+      final chat = MaxLink.parse('max://max.ru/?cid=1673760') as MaxChatIdLink;
+      expect(chat.chatId, 1673760);
+      expect(chat.messageId, isNull);
+    });
+  });
 
-      expect(invite!.kind, MaxLinkKind.invite);
-      expect(invite.startPayload, isNull);
-      expect(invite.baseUrl, invite.url);
+  group('MaxLink.parse — внутренние маршруты', () {
+    test('auth keeps the full url with its token', () {
+      final link = MaxLink.parse('https://max.ru/:auth/tok3n') as MaxAuthLink;
+      expect(link.url, 'https://max.ru/:auth/tok3n');
     });
 
-    test('still rejects non-max links', () {
-      expect(MaxLink.parse('https://example.com/somebot?start=x'), isNull);
-      expect(MaxLink.parse('https://max.ru/?start=x'), isNull);
+    test('share and share-self-out are separate targets', () {
+      final share =
+          MaxLink.parse('https://max.ru/:share?text=%D0%BF%D1%80%D0%B8%D0%B2')
+              as MaxShareTextLink;
+      expect(share.text, 'прив');
+      expect(
+        MaxLink.parse('https://max.ru/:share-self-out'),
+        isA<MaxShareSelfLink>(),
+      );
+    });
+
+    test('folder needs an id, otherwise it stays a plain route', () {
+      expect(
+        (MaxLink.parse('max.ru/:folder?id=42') as MaxFolderLink).folderId,
+        '42',
+      );
+      expect(MaxLink.parse('max.ru/:folder'), isA<MaxRouteLink>());
+    });
+
+    test('current is a no-op target', () {
+      expect(MaxLink.parse('max.ru/:current'), isA<MaxCurrentLink>());
+    });
+
+    test('other routes keep their path and query params', () {
+      final route =
+          MaxLink.parse('max://max.ru/:profile?id=123&type=CHAT')
+              as MaxRouteLink;
+
+      expect(route.route, ':profile');
+      expect(route.params, {'id': '123', 'type': 'CHAT'});
+
+      final nested =
+          MaxLink.parse('https://max.ru/:Settings/Appearance') as MaxRouteLink;
+      expect(nested.route, ':settings/appearance');
     });
   });
 }

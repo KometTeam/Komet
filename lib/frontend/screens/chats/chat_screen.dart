@@ -242,6 +242,7 @@ class ChatScreen extends StatefulWidget {
   final String? commentPostId;
   final CachedMessage? postMessage;
   final String? botStartPayload;
+  final String? initialText;
 
   const ChatScreen({
     super.key,
@@ -259,6 +260,7 @@ class ChatScreen extends StatefulWidget {
     this.commentPostId,
     this.postMessage,
     this.botStartPayload,
+    this.initialText,
   });
 
   static final List<_ChatScreenState> _open = [];
@@ -2058,7 +2060,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (_myId == 0 || _commentsMode || _messageController.text.isNotEmpty) {
       return;
     }
-    final draft = DraftStore.instance.get(_myId, widget.chatId);
+    final shared = widget.initialText?.trim();
+    final draft = (shared != null && shared.isNotEmpty)
+        ? shared
+        : DraftStore.instance.get(_myId, widget.chatId);
     if (draft == null || draft.isEmpty) return;
     _messageController.text = draft;
     _messageController.selection = TextSelection.collapsed(

@@ -435,6 +435,7 @@ class ControlAttachment extends MessageAttachment {
   final String? title;
   final List<int>? userIds;
   final int? userId;
+  final String? startPayload;
 
   const ControlAttachment({
     super.previewData,
@@ -444,6 +445,7 @@ class ControlAttachment extends MessageAttachment {
     this.title,
     this.userIds,
     this.userId,
+    this.startPayload,
   }) : super(type: AttachmentType.control);
 
   bool get isBotStart => event == botStartedEvent;
@@ -463,6 +465,7 @@ class ControlAttachment extends MessageAttachment {
       userId: map['userId'] is int
           ? map['userId'] as int
           : int.tryParse(map['userId']?.toString() ?? ''),
+      startPayload: map['startPayload']?.toString(),
     );
   }
 
@@ -475,6 +478,7 @@ class ControlAttachment extends MessageAttachment {
     'title': title,
     'userIds': userIds,
     'userId': userId,
+    'startPayload': startPayload,
   };
 }
 

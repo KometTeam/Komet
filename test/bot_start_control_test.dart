@@ -8,7 +8,7 @@ void main() {
     CachedMessage parse(Map<String, dynamic> message) =>
         CachedMessage.fromPushPayload(1001, 2002, message);
 
-    test('is a control message and a start marker', () {
+    test('is control and shows the payload the server put into text', () {
       final message = parse({
         'id': '3003',
         'time': 1700000000000,
@@ -21,10 +21,47 @@ void main() {
       });
 
       expect(message.isControl, isTrue);
-      expect(message.isBotStartMarker, isTrue);
+      expect(message.botStartPayload, 'abc123');
+      expect(message.isSilentBotStart, isFalse);
     });
 
-    test('other control events are not start markers', () {
+    test('reads the payload off the attach when it is there', () {
+      final message = parse({
+        'id': '3006',
+        'time': 1700000000000,
+        'type': 'USER',
+        'sender': 1001,
+        'attaches': [
+          {
+            '_type': 'CONTROL',
+            'event': 'botStarted',
+            'startPayload': 'abc123',
+          },
+        ],
+      });
+
+      expect(message.botStartPayload, 'abc123');
+      expect(message.isSilentBotStart, isFalse);
+    });
+
+    test('a start without a payload stays hidden', () {
+      final message = parse({
+        'id': '3007',
+        'time': 1700000000000,
+        'type': 'USER',
+        'sender': 1001,
+        'text': '',
+        'attaches': [
+          {'_type': 'CONTROL', 'event': 'botStarted'},
+        ],
+      });
+
+      expect(message.isControl, isTrue);
+      expect(message.botStartPayload, isNull);
+      expect(message.isSilentBotStart, isTrue);
+    });
+
+    test('other control events are untouched', () {
       final message = parse({
         'id': '3004',
         'time': 1700000000000,
@@ -36,10 +73,11 @@ void main() {
       });
 
       expect(message.isControl, isTrue);
-      expect(message.isBotStartMarker, isFalse);
+      expect(message.botStartPayload, isNull);
+      expect(message.isSilentBotStart, isFalse);
     });
 
-    test('a plain message is neither', () {
+    test('a plain message is not a start at all', () {
       final message = parse({
         'id': '3005',
         'time': 1700000000000,
@@ -50,7 +88,8 @@ void main() {
       });
 
       expect(message.isControl, isFalse);
-      expect(message.isBotStartMarker, isFalse);
+      expect(message.botStartPayload, isNull);
+      expect(message.isSilentBotStart, isFalse);
     });
 
     test('the event name used on the wire stays stable', () {

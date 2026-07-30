@@ -152,6 +152,36 @@ class ChatListScreen extends StatefulWidget {
     this.archiveMode = false,
   });
 
+  static _ChatListScreenState? _root;
+
+  static bool selectTab(int index) {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._onNavTabSelected(index);
+    return true;
+  }
+
+  static bool selectFolder(String folderId) {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._onNavTabSelected(0);
+    return root._selectFolder(folderId);
+  }
+
+  static bool openSavedMessages() {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._openSavedMessages();
+    return true;
+  }
+
+  static bool openSearch() {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._openSearch();
+    return true;
+  }
+
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
@@ -553,6 +583,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   @override
   void initState() {
     super.initState();
+    if (!widget.forwardMode && !widget.archiveMode) ChatListScreen._root = this;
     _fabController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -1248,6 +1279,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   @override
   void dispose() {
+    if (ChatListScreen._root == this) ChatListScreen._root = null;
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     chats.chatsChanged.removeListener(_onChatsChanged);
@@ -1575,12 +1607,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: widget.forwardMode
-                                  ? null
-                                  : () => pushSwipeable(
-                                      context,
-                                      (_) => const SearchScreen(),
-                                    ),
+                              onTap: widget.forwardMode ? null : _openSearch,
                               child: GlossyPill(
                                 color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(50),
@@ -2543,28 +2570,31 @@ class _ChatListScreenState extends State<ChatListScreen>
     return f.title;
   }
 
+  bool _selectFolder(String folderId) {
+    final target = _folders.indexWhere((f) => f.id == folderId);
+    if (target < 0) return false;
+    setState(() => _selectedFolderId = folderId);
+    if (_folderPageController.hasClients) {
+      final cur = _folderPageController.page?.round() ?? 0;
+      if (cur == target) return true;
+      if ((target - cur).abs() > 1) {
+        final neighbor = target > cur ? target - 1 : target + 1;
+        _folderPageController.jumpToPage(neighbor);
+      }
+      _folderPageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    return true;
+  }
+
   Widget _buildFolderChip(String title, {required String folderId}) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
-      onTap: () {
-        final target = _folders.indexWhere((f) => f.id == folderId);
-        if (target < 0) return;
-        setState(() => _selectedFolderId = folderId);
-        if (_folderPageController.hasClients) {
-          final cur = _folderPageController.page?.round() ?? 0;
-          if (cur == target) return;
-          if ((target - cur).abs() > 1) {
-            final neighbor = target > cur ? target - 1 : target + 1;
-            _folderPageController.jumpToPage(neighbor);
-          }
-          _folderPageController.animateToPage(
-            target,
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      },
+      onTap: () => _selectFolder(folderId),
       child: GlossyPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
@@ -3189,6 +3219,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       ),
     );
   }
+
+  void _openSearch() =>
+      unawaited(pushSwipeable(context, (_) => const SearchScreen()));
 
   void _openSavedMessages() {
     CachedChat? self;

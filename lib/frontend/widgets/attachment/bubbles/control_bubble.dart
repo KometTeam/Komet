@@ -96,6 +96,12 @@ class _ControlBubbleState extends State<ControlBubble> {
           sender,
           const _ControlSegment(' закрепил(а) сообщение'),
         ], senderId);
+      case ControlAttachment.botStartedEvent:
+        final payload = widget.message.botStartPayload;
+        return _ControlText([
+          const _ControlSegment('Бот запущен'),
+          if (payload != null) _ControlSegment(': $payload'),
+        ], null);
       default:
         return _ControlText([
           _ControlSegment(control.title ?? ''),

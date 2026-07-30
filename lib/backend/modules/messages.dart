@@ -412,10 +412,18 @@ class CachedMessage {
     this.editHistory,
   });
 
-  bool get isBotStartMarker {
-    final control = attachments?.whereType<ControlAttachment>().firstOrNull;
-    return control != null && control.isBotStart;
+  ControlAttachment? get controlAttachment =>
+      attachments?.whereType<ControlAttachment>().firstOrNull;
+
+  String? get botStartPayload {
+    final control = controlAttachment;
+    if (control == null || !control.isBotStart) return null;
+    final payload = (control.startPayload ?? text)?.trim();
+    return (payload == null || payload.isEmpty) ? null : payload;
   }
+
+  bool get isSilentBotStart =>
+      (controlAttachment?.isBotStart ?? false) && botStartPayload == null;
 
   CachedMessage copyWith({
     String? status,
