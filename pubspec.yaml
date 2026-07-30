@@ -150,6 +150,7 @@ flutter:
     - assets/emoji_keywords.json
     - assets/lottie/
     - assets/wallpapers/patterns/
+    - assets/debug/
 
   fonts:
     - family: Inter

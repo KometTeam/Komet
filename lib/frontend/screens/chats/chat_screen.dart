@@ -3985,6 +3985,7 @@ class _ChatScreenState extends State<ChatScreen>
     postMessage: _postCommandMessage,
     updateMessage: _updateCommandMessage,
     sendPhotos: _sendPhotos,
+    sendVideoNote: _sendVideoNote,
   );
 
   Future<void> _scheduleMessage() async {
