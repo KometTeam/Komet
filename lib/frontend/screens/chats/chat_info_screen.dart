@@ -812,12 +812,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             : int.tryParse(phone?.toString() ?? '');
         if (phoneInt != null && phoneInt > 0) {
           items.add(
-            _simpleInfoCard(
-              cs,
-              l10n.loginPhoneNumber,
-              formatPhone(phoneInt)!,
-              entities: true,
-            ),
+            _simpleInfoCard(cs, l10n.loginPhoneNumber, formatPhone(phoneInt)!),
           );
         }
         final bio =
@@ -825,7 +820,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             (_contactData?.raw['about'] as String?);
         if (bio != null && bio.isNotEmpty) {
           if (items.isNotEmpty) items.add(const SizedBox(height: 8));
-          items.add(_simpleInfoCard(cs, l10n.chatInfoBio, bio, entities: true));
+          items.add(_simpleInfoCard(cs, l10n.chatInfoBio, bio));
         }
       }
     } else if (widget.chatType == 'CHANNEL') {
@@ -852,7 +847,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     String label,
     String value, {
     bool isLink = false,
-    bool entities = false,
   }) {
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -869,26 +863,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 4),
-            if (entities)
-              FormattedMessageText(
-                text: value,
-                ranges: const [],
-                entityMode: TextEntityMode.copy,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              )
-            else
-              Text(
-                value,
-                style: TextStyle(
-                  color: isLink ? cs.primary : cs.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+            FormattedMessageText(
+              text: value,
+              ranges: const [],
+              entityMode: TextEntityMode.copy,
+              style: TextStyle(
+                color: isLink ? cs.primary : cs.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
               ),
+            ),
           ],
         ),
       ),
@@ -913,7 +897,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 4),
-                Text(link, style: TextStyle(color: cs.primary, fontSize: 15)),
+                FormattedMessageText(
+                  text: link,
+                  ranges: const [],
+                  entityMode: TextEntityMode.copy,
+                  style: TextStyle(color: cs.primary, fontSize: 15),
+                ),
               ],
             ),
           ),

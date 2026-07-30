@@ -429,6 +429,8 @@ class LocationAttachment extends MessageAttachment {
 }
 
 class ControlAttachment extends MessageAttachment {
+  static const String botStartedEvent = 'botStarted';
+
   final String? event;
   final String? title;
   final List<int>? userIds;
@@ -443,6 +445,8 @@ class ControlAttachment extends MessageAttachment {
     this.userIds,
     this.userId,
   }) : super(type: AttachmentType.control);
+
+  bool get isBotStart => event == botStartedEvent;
 
   factory ControlAttachment.fromMap(Map<String, dynamic> map) {
     String? title = map['title']?.toString();

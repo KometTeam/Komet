@@ -3,8 +3,11 @@ enum MaxLinkKind { call, invite, user, content, public, auth, stickerSet }
 class MaxLink {
   final MaxLinkKind kind;
   final String url;
+  final String baseUrl;
+  final String? startPayload;
 
-  const MaxLink(this.kind, this.url);
+  const MaxLink(this.kind, this.url, {String? baseUrl, this.startPayload})
+    : baseUrl = baseUrl ?? url;
 
   static final RegExp _host = RegExp(
     r'^https?://(?:www\.)?max\.ru/(.+)$',
@@ -33,7 +36,8 @@ class MaxLink {
     final match = _host.firstMatch(url);
     if (match == null) return null;
 
-    final path = match.group(1)!.split('?').first.split('#').first;
+    final rest = match.group(1)!;
+    final path = rest.split('?').first.split('#').first;
     final segments = path
         .split('/')
         .where((s) => s.isNotEmpty)
@@ -59,6 +63,18 @@ class MaxLink {
 
     if (_reserved.contains(segments.first.toLowerCase())) return null;
     if (!_segment.hasMatch(segments.first)) return null;
-    return MaxLink(MaxLinkKind.public, url);
+    return MaxLink(
+      MaxLinkKind.public,
+      url,
+      baseUrl: 'https://max.ru/${segments.join('/')}',
+      startPayload: _startPayload(rest),
+    );
+  }
+
+  static String? _startPayload(String rest) {
+    final parts = rest.split('#').first.split('?');
+    if (parts.length < 2) return null;
+    final value = Uri.splitQueryString(parts[1])['start']?.trim();
+    return (value == null || value.isEmpty) ? null : value;
   }
 }

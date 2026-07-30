@@ -752,6 +752,7 @@ class MessageBubble extends StatelessWidget {
     final contentType = _contentType;
 
     if (message.isControl) {
+      if (message.isBotStartMarker) return const SizedBox.shrink();
       const controlShape = BubbleShape.singleMiddle;
       return Padding(
         padding: EdgeInsets.only(

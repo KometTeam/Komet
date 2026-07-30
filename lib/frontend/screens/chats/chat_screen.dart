@@ -241,6 +241,7 @@ class ChatScreen extends StatefulWidget {
   final int? initialMessageTime;
   final String? commentPostId;
   final CachedMessage? postMessage;
+  final String? botStartPayload;
 
   const ChatScreen({
     super.key,
@@ -257,7 +258,20 @@ class ChatScreen extends StatefulWidget {
     this.initialMessageTime,
     this.commentPostId,
     this.postMessage,
+    this.botStartPayload,
   });
+
+  static final List<_ChatScreenState> _open = [];
+
+  static bool startBotInVisibleChat(int chatId, String startPayload) {
+    for (final screen in _open.reversed) {
+      if (screen.widget.chatId != chatId) continue;
+      if (!screen.mounted || !screen._isRouteCurrent) continue;
+      unawaited(screen._sendBotStart(startPayload));
+      return true;
+    }
+    return false;
+  }
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -548,6 +562,7 @@ class _ChatScreenState extends State<ChatScreen>
   set _myId(int v) => _chatController.myId = v;
   CachedChat? chat;
   bool _peerIsBot = false;
+  bool _botStartRequested = false;
   ChatWallpaper? _wallpaper;
 
   bool get _composerFrosted =>
@@ -616,6 +631,7 @@ class _ChatScreenState extends State<ChatScreen>
     _previewChat = widget.channelSubscribed == false;
     _chatController.chatId = widget.chatId;
     _chatController.isMounted = () => mounted;
+    if (!_commentsMode) ChatScreen._open.add(this);
     unawaited(PushService.clearChatNotification(widget.chatId));
     unawaited(
       animojiModule
@@ -779,6 +795,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (cached != null) _applyPeerKind(cached.isBot);
     final info = await ContactInfoFetch.get(peerId);
     if (info != null) _applyPeerKind(info.isBot);
+    if ((info ?? cached)?.isBot ?? false) {
+      unawaited(BotInfoFetch.get(peerId));
+    }
   }
 
   void _applyPeerKind(bool isBot) {
@@ -943,7 +962,44 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted || !_isLoading) return;
       _shimmerController.repeat();
     });
-    _loadHistory();
+    unawaited(_loadHistory().then((_) => _sendPendingBotStart()));
+  }
+
+  bool get _isRouteCurrent {
+    if (!mounted) return false;
+    final route = ModalRoute.of(context);
+    return route == null || route.isCurrent;
+  }
+
+  Future<void> _sendPendingBotStart() async {
+    final payload = widget.botStartPayload;
+    if (payload == null || _botStartRequested || !mounted) return;
+    _botStartRequested = true;
+    await _sendBotStart(payload);
+  }
+
+  Future<void> _sendBotStart(String startPayload) async {
+    if (_myId == 0) {
+      final profile = await AppDatabase.loadActiveProfile();
+      if (!mounted) return;
+      _myId = profile?.id ?? 0;
+    }
+    try {
+      final sent = await messagesModule.sendBotStart(
+        widget.chatId,
+        startPayload,
+      );
+      if (!mounted) return;
+      if (sent == null) {
+        showCustomNotification(context, 'Не удалось запустить бота');
+        return;
+      }
+      await _persistOutgoing(
+        CachedMessage.fromPushPayload(_myId, widget.chatId, sent),
+      );
+    } catch (_) {
+      if (mounted) showCustomNotification(context, 'Не удалось запустить бота');
+    }
   }
 
   void _onLoadingFinished() {
@@ -1871,6 +1927,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    ChatScreen._open.remove(this);
     _chatController.persistSessionCache();
     if (_previewChat) {
       unawaited(chats.subscribeChat(api, widget.chatId, subscribe: false));

@@ -412,6 +412,11 @@ class CachedMessage {
     this.editHistory,
   });
 
+  bool get isBotStartMarker {
+    final control = attachments?.whereType<ControlAttachment>().firstOrNull;
+    return control != null && control.isBotStart;
+  }
+
   CachedMessage copyWith({
     String? status,
     bool? deleted,
@@ -807,6 +812,26 @@ class MessagesModule {
       'notify': notify,
     };
     return _api.sendRequest(Opcode.msgSend, payload);
+  }
+
+  Future<Map<String, dynamic>?> sendBotStart(
+    int chatId,
+    String startPayload,
+  ) async {
+    final response = await _api.sendRequest(Opcode.msgSend, {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {
+            '_type': 'CONTROL',
+            'event': ControlAttachment.botStartedEvent,
+            'startPayload': startPayload,
+          },
+        ],
+      },
+    });
+    return _sentMessageMap(response);
   }
 
   Future<String> _sendAndExtractMessageId(
