@@ -2183,7 +2183,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _startTextSelection(CachedMessage message, Offset globalPosition) {
-    if (message.isControl || (message.text?.isEmpty ?? true)) return;
+    if (message.isControl || message.selectableText == null) return;
     _textSelection.value = (id: message.id, pos: globalPosition);
   }
 
@@ -7228,7 +7228,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       return;
     }
     final selected = widget.selectedIds.value.contains(widget.message.id);
-    final hasText = widget.message.text?.isNotEmpty ?? false;
+    final hasText = widget.message.selectableText != null;
     if (selected && hasText && !widget.message.isControl) {
       widget.onStartTextSelection(globalPosition);
     } else {

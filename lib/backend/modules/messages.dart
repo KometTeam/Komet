@@ -415,6 +415,17 @@ class CachedMessage {
   ControlAttachment? get controlAttachment =>
       attachments?.whereType<ControlAttachment>().firstOrNull;
 
+  ForwardedMessageAttachment? get forwardedAttachment =>
+      attachments?.whereType<ForwardedMessageAttachment>().firstOrNull;
+
+  String? get selectableText {
+    final own = text;
+    if (own != null && own.isNotEmpty) return own;
+    final forwarded = forwardedAttachment?.originalText;
+    if (forwarded != null && forwarded.isNotEmpty) return forwarded;
+    return null;
+  }
+
   String? get botStartPayload {
     final control = controlAttachment;
     if (control == null || !control.isBotStart) return null;

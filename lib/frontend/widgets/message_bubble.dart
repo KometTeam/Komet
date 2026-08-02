@@ -1416,7 +1416,7 @@ class MessageBubble extends StatelessWidget {
 
   Widget _wrapSelectable(Widget textWidget) {
     final listenable = textSelection;
-    if (listenable == null || (message.text?.isEmpty ?? true)) {
+    if (listenable == null || message.selectableText == null) {
       return textWidget;
     }
     return ValueListenableBuilder<({String id, Offset pos})?>(
@@ -1453,7 +1453,7 @@ class MessageBubble extends StatelessWidget {
         (attachments.first as ForwardedMessageAttachment).originalContact !=
             null;
 
-    final forwarded = _getForwardedAttachment();
+    final forwarded = message.forwardedAttachment;
     final isForwarded = forwarded != null && !isForwardedContact;
 
     final reactionChips = _buildReactionChipsFor(
@@ -1475,29 +1475,32 @@ class MessageBubble extends StatelessWidget {
     );
     final ranges = message.formatRanges;
     final decryptedText = decryption?.plaintext;
-    final Widget baseTextWidget;
+    final Widget textWidget;
     if (decryption?.state == MessageDecryptionState.wrongKey) {
-      baseTextWidget = Text(
-        'неверный ключ',
-        style: textStyle.copyWith(
-          color: ctx.cs.error,
-          fontStyle: FontStyle.italic,
+      textWidget = _wrapSelectable(
+        Text(
+          'неверный ключ',
+          style: textStyle.copyWith(
+            color: ctx.cs.error,
+            fontStyle: FontStyle.italic,
+          ),
         ),
       );
     } else if (decryptedText != null) {
-      baseTextWidget = Text(decryptedText, style: textStyle);
+      textWidget = _wrapSelectable(Text(decryptedText, style: textStyle));
     } else if (isForwarded) {
-      baseTextWidget = _buildForwardedInlineText(ctx, forwarded);
+      textWidget = _buildForwardedInlineText(ctx, forwarded);
     } else if (FormattedMessageText.isFormatted(message.text, ranges)) {
-      baseTextWidget = FormattedMessageText(
-        text: message.text!,
-        ranges: ranges,
-        style: textStyle,
+      textWidget = _wrapSelectable(
+        FormattedMessageText(
+          text: message.text!,
+          ranges: ranges,
+          style: textStyle,
+        ),
       );
     } else {
-      baseTextWidget = Text(message.text ?? '', style: textStyle);
+      textWidget = _wrapSelectable(Text(message.text ?? '', style: textStyle));
     }
-    final textWidget = _wrapSelectable(baseTextWidget);
 
     final metaWidget = Row(
       mainAxisSize: MainAxisSize.min,
@@ -1665,25 +1668,18 @@ class MessageBubble extends StatelessWidget {
         ),
         if (hasOrigText) ...[
           const SizedBox(height: 2),
-          buildForwardedMessageText(ctx, forwarded),
+          _wrapSelectable(buildForwardedMessageText(ctx, forwarded)),
         ] else ...[
           const SizedBox(height: 2),
-          Text(
-            message.text ?? '',
-            style: TextStyle(color: ctx.text, fontSize: 16, height: 1.3),
+          _wrapSelectable(
+            Text(
+              message.text ?? '',
+              style: TextStyle(color: ctx.text, fontSize: 16, height: 1.3),
+            ),
           ),
         ],
       ],
     );
-  }
-
-  ForwardedMessageAttachment? _getForwardedAttachment() {
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) return null;
-    for (final a in attachments) {
-      if (a is ForwardedMessageAttachment) return a;
-    }
-    return null;
   }
 
   Widget _buildAttachmentContent(BubbleContext ctx) {

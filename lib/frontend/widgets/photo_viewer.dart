@@ -1016,6 +1016,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
   bool _active;
   late bool _hasBeenActive = _active;
   late bool _playWhenActive = _active;
+  bool _wasCompleted = false;
   bool _disposed = false;
 
   _VideoPlaybackSession({
@@ -1036,7 +1037,8 @@ class _VideoPlaybackSession extends ChangeNotifier {
 
   bool get loading => _loading;
   bool get error => _error;
-  bool get buffering => value?.isBuffering ?? false;
+  bool get completed => value?.isCompleted ?? false;
+  bool get buffering => (value?.isBuffering ?? false) && !completed;
   bool get active => _active;
   double? get dragValue => _dragValue;
   double get volume => _volume;
@@ -1097,6 +1099,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
       }
       controller.addListener(_onTick);
       _controller = controller;
+      _wasCompleted = controller.value.isCompleted;
       installed = true;
       old?.removeListener(_onTick);
       try {
@@ -1120,6 +1123,9 @@ class _VideoPlaybackSession extends ChangeNotifier {
   }
 
   void _onTick() {
+    final isCompleted = completed;
+    if (isCompleted && !_wasCompleted) _playWhenActive = false;
+    _wasCompleted = isCompleted;
     _notify();
   }
 
