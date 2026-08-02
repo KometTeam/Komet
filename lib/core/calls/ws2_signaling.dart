@@ -20,7 +20,7 @@ class Ws2Config {
 
   const Ws2Config({required this.uri, required this.userId});
 
-  static const _defaultCapabilities = '3c03f';
+  static const defaultCapabilities = '3c03f';
   static const _appVersion = 'sdk-0.1.16.4';
 
   /// Входящий звонок: из распакованных параметров [ConversationParams].
@@ -28,7 +28,7 @@ class Ws2Config {
   factory Ws2Config.fromVcp(
     ConversationParams params, {
     required String conversationId,
-    String capabilities = _defaultCapabilities,
+    String capabilities = defaultCapabilities,
     String device = 'Komet',
     String osVersion = '36',
   }) {
@@ -56,7 +56,7 @@ class Ws2Config {
   factory Ws2Config.fromEndpoint(
     String endpoint, {
     required int userId,
-    String capabilities = _defaultCapabilities,
+    String capabilities = defaultCapabilities,
     String device = 'Komet',
   }) {
     final base = Uri.parse(endpoint);
@@ -170,7 +170,7 @@ class Ws2Signaling {
     required String sdp,
     String participantType = 'USER',
     int deviceIdx = 0,
-    String capabilities = '1',
+    String capabilities = Ws2Config.defaultCapabilities,
   }) {
     return sendCommand(
       'transmit-data',
@@ -270,7 +270,7 @@ class Ws2Signaling {
   Future<void> hangup({String reason = 'HUNGUP'}) =>
       sendCommand('hangup', extra: {'reason': reason});
 
-  Future<void> allocateConsumer() => sendCommand(
+  Future<Map<String, dynamic>> allocateConsumer() => sendCommand(
     'allocate-consumer',
     extra: const {
       'capabilities': {
@@ -311,14 +311,6 @@ class Ws2Signaling {
       if (ssrcs.isNotEmpty) 'ssrcs': ssrcs,
       'sessionId': ?sessionId,
     },
-  );
-
-  Future<void> changeSimulcast({
-    String mediaSource = 'CAMERA',
-    required List<Map<String, dynamic>> layers,
-  }) => sendCommand(
-    'change-simulcast',
-    extra: {'mediaSource': mediaSource, 'layers': layers},
   );
 
   Future<void> close() async {

@@ -87,6 +87,8 @@ class CallSession {
   Future<void> _tail = Future.value();
 
   final Map<int, CallParticipant> _participants = {};
+  final Map<int, MediaStream> _participantStreams = {};
+  final _participantStreamUpdates = StreamController<int>.broadcast();
 
   String? _topology;
   List _iceServers = const [];
@@ -99,7 +101,9 @@ class CallSession {
   MediaStream? _screenStream;
   RTCRtpSender? _videoSender;
   RTCRtpSender? _screenSender;
-  bool _fastScreenShare = false;
+
+  Completer<void>? _gatherReady;
+  bool _gotConnection = false;
 
   bool _reconnecting = false;
   bool _iceRestarting = false;
@@ -147,6 +151,13 @@ class CallSession {
 
   List<CallParticipant> get participants =>
       _participants.values.toList(growable: false);
+
+  Map<int, MediaStream> get participantStreams =>
+      Map.unmodifiable(_participantStreams);
+
+  Stream<int> get participantStreamUpdates => _participantStreamUpdates.stream;
+
+  MediaStream? streamOf(int participantId) => _participantStreams[participantId];
 
   int get participantCount => _participants.length;
 
@@ -217,6 +228,13 @@ class CallSession {
     signaling.done.then((_) => _onSignalingLost());
     await signaling.connect();
     logger.i('[call] signaling connected to ${ws2Config.uri.host}');
+    Timer(const Duration(seconds: 10), () {
+      if (_ended || _gotConnection) return;
+      logger.w(
+        '[call] ws2 молчит 10 с: нотификация "connection" не пришла — '
+        'конференция закрыта или токен протух',
+      );
+    });
   }
 
   void _onSignalingLost() {
@@ -299,6 +317,7 @@ class CallSession {
     _accepted = false;
     _mediaConnected = false;
     _sfuSessionId = null;
+    await _clearParticipantStreams();
 
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       try {
@@ -370,6 +389,8 @@ class CallSession {
   }
 
   Future<void> _onNotification(Map<String, dynamic> msg) async {
+    final name = msg['notification'] ?? msg['response'] ?? msg['type'];
+    logger.i('[call] ws2 <- $name');
     if (msg['type'] == 'error') {
       _onWs2Error(msg);
       return;
@@ -668,6 +689,7 @@ class CallSession {
   }
 
   Future<void> _onConnection(Map<String, dynamic> msg) async {
+    _gotConnection = true;
     logger.i('[call] connection notification received');
     final convParams = msg['conversationParams'];
     final conversation = msg['conversation'];
@@ -896,8 +918,12 @@ class CallSession {
     logger.i(
       '[call][sfu] allocate-consumer camera=$_localVideo screen=$_localScreen',
     );
-    await _signaling?.allocateConsumer();
-    _fastScreenShare = true;
+    try {
+      final reply = await _signaling?.allocateConsumer();
+      logger.i('[call][sfu] allocate-consumer reply: $reply');
+    } catch (e) {
+      logger.w('[call][sfu] allocate-consumer failed: $e');
+    }
   }
 
   Future<void> _rebuildSfuPc() async {
@@ -909,6 +935,7 @@ class CallSession {
     _screenSender = null;
     _remoteDescSet = false;
     _pendingCandidates.clear();
+    await _clearParticipantStreams();
 
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       try {
@@ -955,6 +982,10 @@ class CallSession {
   }
 
   Future<void> _onProducerUpdated(Map<String, dynamic> msg) async {
+    logger.i(
+      '[call][sfu] producer-updated fields=${msg.keys.toList()} '
+      'sessionId=${msg['sessionId']}',
+    );
     if (_pc == null) return;
 
     final session = msg['sessionId'];
@@ -988,6 +1019,7 @@ class CallSession {
       'ssrcs=${ssrcs.length}, candidates=${_countCandidates(sdp)} '
       '(${_candidateTypes(sdp)}), ${_sdpSummary(sdp)}, ice=${_iceServerUrls()}',
     );
+    logger.i('[call][sfu] producer m-lines: ${_mLineDetails(sdp)}');
     await pc.setRemoteDescription(RTCSessionDescription(sdp, type));
     _remoteDescSet = true;
     await _flushCandidates();
@@ -998,6 +1030,12 @@ class CallSession {
     await pc.setLocalDescription(answer);
     if (_pc != pc) {
       logger.w('[call][sfu] peer connection replaced, dropping answer');
+      return;
+    }
+
+    await _awaitReflexiveCandidates(pc);
+    if (_pc != pc) {
+      logger.w('[call][sfu] peer connection replaced while gathering');
       return;
     }
 
@@ -1015,11 +1053,15 @@ class CallSession {
       '(${_candidateTypes(answerSdp)}), ${_sdpSummary(answerSdp)}, '
       'gathering=${pc.iceGatheringState}',
     );
+    logger.i('[call][sfu] answer m-lines: ${_mLineDetails(answerSdp)}');
+    await _logSenders();
 
     try {
+      final localSsrcs = _extractSsrcs(answerSdp);
+      logger.i('[call][sfu] accept-producer ssrcs=$localSsrcs');
       final reply = await _signaling?.acceptProducer(
-        description: answerSdp,
-        ssrcs: ssrcs,
+        description: _labelLocalTracks(answerSdp),
+        ssrcs: localSsrcs,
         sessionId: _sfuSessionId,
       );
       logger.i('[call][sfu] accept-producer reply: $reply');
@@ -1031,26 +1073,8 @@ class CallSession {
       if (_pc == pc && !_ended) unawaited(_dumpIceStats(pc));
     });
 
-    if (_wantVideo) await _publishCamera();
     if (_accepted) await _sendMediaSettings();
     unawaited(_collectReceivers());
-  }
-
-  Future<void> _publishCamera() async {
-    try {
-      await _signaling?.changeSimulcast(
-        mediaSource: 'CAMERA',
-        layers: const [
-          {
-            'rid': 'h',
-            'width': 1280,
-            'height': 720,
-            'fps': 30,
-            'bitrateKbps': 2000,
-          },
-        ],
-      );
-    } catch (_) {}
   }
 
   int _countCandidates(String sdp) =>
@@ -1160,6 +1184,46 @@ class CallSession {
   int _mLines(String sdp) =>
       RegExp(r'^m=', multiLine: true).allMatches(sdp).length;
 
+  String _mLineDetails(String sdp) {
+    final rows = <String>[];
+    String? kind;
+    String? port;
+    String? mid;
+    String? dir;
+    String? msid;
+
+    void flush() {
+      if (kind == null) return;
+      rows.add(
+        '[$kind:$port mid=${mid ?? '?'} ${dir ?? '?'} msid=${msid ?? '-'}]',
+      );
+    }
+
+    for (var line in sdp.split('\n')) {
+      line = line.trim();
+      if (line.startsWith('m=')) {
+        flush();
+        final parts = line.substring(2).split(' ');
+        kind = parts.isEmpty ? '?' : parts.first;
+        port = parts.length > 1 ? parts[1] : '?';
+        mid = null;
+        dir = null;
+        msid = null;
+      } else if (line.startsWith('a=mid:')) {
+        mid = line.substring(6);
+      } else if (line == 'a=sendrecv' ||
+          line == 'a=recvonly' ||
+          line == 'a=sendonly' ||
+          line == 'a=inactive') {
+        dir = line.substring(2);
+      } else if (line.startsWith('a=msid:')) {
+        msid = line.substring(7);
+      }
+    }
+    flush();
+    return rows.join(' ');
+  }
+
   List<String> _extractSsrcs(String sdp) {
     final set = <String>{};
     for (final m in RegExp(r'a=ssrc:(\d+)', multiLine: true).allMatches(sdp)) {
@@ -1167,6 +1231,35 @@ class CallSession {
       if (v != null) set.add(v);
     }
     return set.toList();
+  }
+
+  String _labelLocalTracks(String sdp) {
+    final self = 'u${ws2Config.userId}';
+    final names = <String, String>{};
+    final camera = _videoSender?.track?.id;
+    final screen = _screenSender?.track?.id;
+    if (camera != null && camera.isNotEmpty) names[camera] = '$self:sCAMERA';
+    if (screen != null && screen.isNotEmpty) names[screen] = '$self:sSCREEN';
+    if (names.isEmpty) return sdp;
+
+    var out = sdp;
+    for (final entry in names.entries) {
+      final id = RegExp.escape(entry.key);
+      final name = entry.value;
+      out = out.replaceAllMapped(
+        RegExp('^a=msid:(\\S+) $id\\s*\$', multiLine: true),
+        (m) => 'a=msid:${m[1]} $name',
+      );
+      out = out.replaceAllMapped(
+        RegExp('^(a=ssrc:\\d+ msid:\\S+) $id\\s*\$', multiLine: true),
+        (m) => '${m[1]} $name',
+      );
+      out = out.replaceAllMapped(
+        RegExp('^(a=ssrc:\\d+ label:)$id\\s*\$', multiLine: true),
+        (m) => '${m[1]}$name',
+      );
+    }
+    return out;
   }
 
   String _videoDir(String sdp) {
@@ -1191,14 +1284,45 @@ class CallSession {
 
   Future<void> _onRemoteTrack(RTCTrackEvent event) async {
     logger.t(
-      '[call] remote track: ${event.track.kind} streams=${event.streams.length}',
+      '[call] remote track: ${event.track.kind} id=${event.track.id} '
+      'streams=${event.streams.length}',
     );
+    await _bindParticipantTrack(event.track);
     if (event.streams.isNotEmpty) {
       _remoteStreamRef = event.streams.first;
       _remoteStream.add(event.streams.first);
     } else {
       await _collectReceivers();
     }
+  }
+
+  int? _participantFromTrackId(String? trackId) {
+    if (trackId == null) return null;
+    for (final prefix in const ['video-', 'audio-']) {
+      if (trackId.length > prefix.length && trackId.startsWith(prefix)) {
+        final parsed = _participantIdFrom(trackId.substring(prefix.length));
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _bindParticipantTrack(MediaStreamTrack track) async {
+    final id = _participantFromTrackId(track.id);
+    if (id == null || id == ws2Config.userId) return;
+    var stream = _participantStreams[id];
+    if (stream == null) {
+      stream = await createLocalMediaStream('komet_p$id');
+      _participantStreams[id] = stream;
+    }
+    if (stream.getTracks().any((t) => t.id == track.id)) return;
+    try {
+      await stream.addTrack(track);
+    } catch (_) {
+      return;
+    }
+    logger.t('[call] track ${track.id} -> participant $id');
+    if (!_participantStreamUpdates.isClosed) _participantStreamUpdates.add(id);
   }
 
   Future<void> _pushRemoteTrack(MediaStreamTrack track) async {
@@ -1216,6 +1340,26 @@ class CallSession {
     _remoteStream.add(stream);
   }
 
+  Future<void> _logSenders() async {
+    final pc = _pc;
+    if (pc == null) return;
+    try {
+      final rows = <String>[];
+      for (final tr in await pc.getTransceivers()) {
+        final sent = tr.sender.track;
+        final received = tr.receiver.track;
+        rows.add(
+          '[mid=${tr.mid} dir=${await tr.getCurrentDirection()} '
+          'send=${sent == null ? '-' : '${sent.kind}:${sent.id}'} '
+          'recv=${received == null ? '-' : '${received.kind}:${received.id}'}]',
+        );
+      }
+      logger.i('[call][sfu] transceivers: ${rows.join(' ')}');
+    } catch (e) {
+      logger.w('[call][sfu] transceiver dump failed: $e');
+    }
+  }
+
   Future<void> _collectReceivers() async {
     final pc = _pc;
     if (pc == null) return;
@@ -1223,7 +1367,8 @@ class CallSession {
       for (final tr in await pc.getTransceivers()) {
         final track = tr.receiver.track;
         if (track != null) {
-          logger.t('[call] receiver track: ${track.kind}');
+          logger.t('[call] receiver track: ${track.kind} id=${track.id}');
+          await _bindParticipantTrack(track);
           await _pushRemoteTrack(track);
         }
       }
@@ -1244,7 +1389,7 @@ class CallSession {
       participantType: _peerType,
       deviceIdx: _peerDeviceIdx,
       type: offer.type!,
-      sdp: sdp,
+      sdp: _labelLocalTracks(sdp),
     );
   }
 
@@ -1319,7 +1464,7 @@ class CallSession {
             participantType: _peerType,
             deviceIdx: _peerDeviceIdx,
             type: answer.type!,
-            sdp: answer.sdp!,
+            sdp: _labelLocalTracks(answer.sdp!),
           );
         }
         if (_current == CallSessionState.connecting) {
@@ -1360,7 +1505,42 @@ class CallSession {
     }
   }
 
+  static bool _isReflexive(String? line) =>
+      line != null &&
+      (line.contains(' typ srflx') || line.contains(' typ relay'));
+
+  Future<void> _awaitReflexiveCandidates(
+    RTCPeerConnection pc, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    if (pc.iceGatheringState ==
+        RTCIceGatheringState.RTCIceGatheringStateComplete) {
+      return;
+    }
+    try {
+      final current = await pc.getLocalDescription();
+      if (_isReflexive(current?.sdp)) return;
+    } catch (_) {}
+
+    final ready = Completer<void>();
+    _gatherReady = ready;
+    try {
+      await ready.future.timeout(timeout);
+      logger.i('[call][sfu] reflexive candidate gathered');
+    } catch (_) {
+      logger.w('[call][sfu] no reflexive candidate within $timeout');
+    } finally {
+      _gatherReady = null;
+    }
+  }
+
   void _onLocalCandidate(RTCIceCandidate candidate) {
+    final pending = _gatherReady;
+    if (pending != null &&
+        !pending.isCompleted &&
+        _isReflexive(candidate.candidate)) {
+      pending.complete();
+    }
     if (_topology == 'SERVER') return;
     final peerId = _peerId;
     if (peerId == null || candidate.candidate == null) return;
@@ -1409,7 +1589,6 @@ class CallSession {
       isAudioEnabled: !_muted,
       isVideoEnabled: _localVideo,
       isScreenSharingEnabled: _localScreen,
-      isFastScreenSharingEnabled: _fastScreenShare ? _localScreen : null,
     );
   }
 
@@ -1504,6 +1683,7 @@ class CallSession {
     }
 
     logger.i('[call] screen share published, topology=$_topology');
+    await _renegotiate();
     await _sendMediaSettings();
     _notifyInfo();
   }
@@ -1548,6 +1728,16 @@ class CallSession {
       await _createAndSendOffer();
     } catch (e) {
       logger.w('[call] renegotiation offer failed: $e');
+    }
+  }
+
+  Future<void> _clearParticipantStreams() async {
+    final streams = _participantStreams.values.toList(growable: false);
+    _participantStreams.clear();
+    for (final stream in streams) {
+      try {
+        await stream.dispose();
+      } catch (_) {}
     }
   }
 
@@ -1607,7 +1797,11 @@ class CallSession {
         await _remoteStreamRef?.dispose();
       } catch (_) {}
     }
+    await _clearParticipantStreams();
     await _signaling?.close();
+    if (!_participantStreamUpdates.isClosed) {
+      await _participantStreamUpdates.close();
+    }
     if (!_state.isClosed) await _state.close();
     if (!_remoteStream.isClosed) await _remoteStream.close();
     if (!_info.isClosed) await _info.close();

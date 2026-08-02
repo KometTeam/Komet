@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' show cos, pi;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart'
@@ -20,6 +21,7 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/logger.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
@@ -319,10 +321,19 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     await _session?.setMuted(next);
   }
 
+  static bool get _hasSpeakerphone =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
   Future<void> _toggleSpeaker() async {
     final next = !_isSpeaker;
     setState(() => _isSpeaker = next);
-    await Helper.setSpeakerphoneOn(next);
+    if (!_hasSpeakerphone) return;
+    try {
+      await Helper.setSpeakerphoneOn(next);
+    } catch (e) {
+      logger.w('[call] setSpeakerphoneOn недоступен: $e');
+    }
   }
 
   bool _videoBusy = false;
