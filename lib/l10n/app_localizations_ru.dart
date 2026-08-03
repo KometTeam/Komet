@@ -837,6 +837,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceGradientSubtitle => 'Объём и блики в Glossy-капсулах';
 
   @override
+  String get appearanceSpectrumTitle => 'Спектр на фоне';
+
+  @override
+  String get appearanceSpectrumSubtitle =>
+      'Экспериментально — живые полосы под интерфейсом';
+
+  @override
   String get appearanceAccentColorTitle => 'Акцентный цвет';
 
   @override

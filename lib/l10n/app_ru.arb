@@ -276,6 +276,8 @@
   "appearanceNavPillFrost": "G-FrostBlur",
   "appearanceGradientTitle": "Градиент",
   "appearanceGradientSubtitle": "Объём и блики в Glossy-капсулах",
+  "appearanceSpectrumTitle": "Спектр на фоне",
+  "appearanceSpectrumSubtitle": "Экспериментально — живые полосы под интерфейсом",
   "appearanceAccentColorTitle": "Акцентный цвет",
   "appearanceAccentColorSystem": "Системный",
   "appearanceAccentColorSubtitle": "Основной цвет интерфейса и пузырей",

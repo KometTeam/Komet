@@ -38,6 +38,7 @@ import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
+import '../../widgets/spectrum_tint.dart';
 import 'edit_profile_screen.dart';
 import 'info_screen.dart';
 import 'komet_settings_screen.dart';
@@ -52,7 +53,7 @@ class SettingsTab extends StatefulWidget {
   State<SettingsTab> createState() => _SettingsTabState();
 }
 
-class _SettingsTabState extends State<SettingsTab> {
+class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   ProfileData? _profile;
   bool _isPhoneVisible = false;
   ScrollController? _scrollController;
@@ -358,7 +359,7 @@ class _SettingsTabState extends State<SettingsTab> {
         final delta = expandedH - collapsedH;
         _syncHeaderDelta(delta);
         return Scaffold(
-          backgroundColor: cs.surface,
+          backgroundColor: spectrumSurfaceColor(cs),
           body: NotificationListener<ScrollNotification>(
             onNotification: (n) => _handleScrollNotification(n, delta),
             child: CustomScrollView(

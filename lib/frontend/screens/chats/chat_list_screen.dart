@@ -47,6 +47,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_spectrum_background.dart';
 import '../../../core/config/app_nav_pill_style.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
@@ -74,6 +75,8 @@ import '../../../main.dart'
         messagesModule,
         storiesModule;
 import '../../widgets/attachment/attachment_sheet.dart';
+import '../../widgets/spectrum_background.dart';
+import '../../widgets/spectrum_tint.dart';
 import '../../widgets/update_dialog.dart';
 import '../stories/story_composer_screen.dart';
 import '../stories/story_owner_info.dart';
@@ -189,7 +192,7 @@ class ChatListScreen extends StatefulWidget {
 enum _DeleteKind { personalLike, ownerGroup, blocked }
 
 class _ChatListScreenState extends State<ChatListScreen>
-    with TickerProviderStateMixin, RouteAware {
+    with TickerProviderStateMixin, RouteAware, SpectrumSurface {
   String? _selectedFolderId;
 
   List<ChatFolder> _folders = [];
@@ -2126,6 +2129,29 @@ class _ChatListScreenState extends State<ChatListScreen>
 
             return Stack(
               children: [
+                if (AppSpectrumBackground.isEnabled)
+                  Positioned.fill(
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([
+                        _navPageAnimController,
+                        _navDragDx,
+                      ]),
+                      child: const RepaintBoundary(child: SpectrumBackground()),
+                      builder: (context, child) {
+                        final pageDisplayT = _effectivePageNavRowT(
+                          inactiveWidth: inactiveWidth,
+                          bubbleLeftForIndex: bubbleLeftForPageT,
+                        );
+                        return Transform.translate(
+                          offset: Offset(
+                            -pageDisplayT * pageW * SpectrumTuning.parallax,
+                            0,
+                          ),
+                          child: child,
+                        );
+                      },
+                    ),
+                  ),
                 ClipRect(
                   child: SizedBox(
                     width: pageW,

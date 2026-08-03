@@ -834,6 +834,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Depth and highlights in Glossy capsules';
 
   @override
+  String get appearanceSpectrumTitle => 'Spectrum background';
+
+  @override
+  String get appearanceSpectrumSubtitle =>
+      'Experimental — living bars beneath the interface';
+
+  @override
   String get appearanceAccentColorTitle => 'Accent color';
 
   @override

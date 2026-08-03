@@ -18,6 +18,7 @@ import '../../widgets/chat_menu_overlay.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/prompt_dialog.dart';
 import '../../widgets/call_link_handler.dart';
+import '../../widgets/spectrum_tint.dart';
 import 'call_screen.dart';
 
 class CallsTab extends StatefulWidget {
@@ -27,7 +28,8 @@ class CallsTab extends StatefulWidget {
   State<CallsTab> createState() => _CallsTabState();
 }
 
-class _CallsTabState extends State<CallsTab> with ReloadOnReconnect {
+class _CallsTabState extends State<CallsTab>
+    with ReloadOnReconnect, SpectrumSurface {
   List<CallLogEntry> _calls = [];
   final Set<String> _removing = {};
   bool _isLoading = true;
@@ -469,7 +471,7 @@ class _CallsTabState extends State<CallsTab> with ReloadOnReconnect {
         : _calls;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: spectrumSurfaceColor(cs),
       body: SafeArea(
         bottom: false,
         child: Column(

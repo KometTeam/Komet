@@ -1652,6 +1652,18 @@ abstract class AppLocalizations {
   /// **'Depth and highlights in Glossy capsules'**
   String get appearanceGradientSubtitle;
 
+  /// No description provided for @appearanceSpectrumTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Spectrum background'**
+  String get appearanceSpectrumTitle;
+
+  /// No description provided for @appearanceSpectrumSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Experimental — living bars beneath the interface'**
+  String get appearanceSpectrumSubtitle;
+
   /// No description provided for @appearanceAccentColorTitle.
   ///
   /// In en, this message translates to:

@@ -318,6 +318,8 @@
   "appearanceNavPillFrost": "G-FrostBlur",
   "appearanceGradientTitle": "Gradient",
   "appearanceGradientSubtitle": "Depth and highlights in Glossy capsules",
+  "appearanceSpectrumTitle": "Spectrum background",
+  "appearanceSpectrumSubtitle": "Experimental — living bars beneath the interface",
   "appearanceAccentColorTitle": "Accent color",
   "appearanceAccentColorSystem": "System",
   "appearanceAccentColorSubtitle": "Main color of the interface and bubbles",

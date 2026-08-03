@@ -13,6 +13,7 @@ import '../../../core/config/app_chat_chrome.dart';
 import '../../../core/config/app_composer_background.dart';
 import '../../../core/config/app_composer_style.dart';
 import '../../../core/config/app_nav_pill_style.dart';
+import '../../../core/config/app_spectrum_background.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
@@ -128,6 +129,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             const _NavPillStyleCard(),
             const SizedBox(height: 12),
             const _GradientToggleCard(),
+            const SizedBox(height: 12),
+            const _SpectrumToggleCard(),
           ],
         ),
       ),
@@ -512,6 +515,58 @@ class _GradientToggleCard extends StatelessWidget {
               onChanged: (v) {
                 Haptics.selection();
                 AppPillGradient.save(v);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpectrumToggleCard extends StatelessWidget {
+  const _SpectrumToggleCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+      depth: 6,
+      child: Row(
+        children: [
+          Icon(Symbols.graphic_eq, color: cs.onSurface, size: 24, weight: 500),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.appearanceSpectrumTitle,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.appearanceSpectrumSubtitle,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: AppSpectrumBackground.current,
+            builder: (context, value, _) => Switch(
+              value: value,
+              onChanged: (v) {
+                Haptics.selection();
+                AppSpectrumBackground.save(v);
               },
             ),
           ),

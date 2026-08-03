@@ -14,6 +14,7 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import '../../widgets/spectrum_tint.dart';
 import '../../widgets/springy_tap.dart';
 import '../chats/chat_info_screen.dart';
 import 'nfc_exchange_sheet.dart';
@@ -28,7 +29,7 @@ class ContactsTab extends StatefulWidget {
   State<ContactsTab> createState() => _ContactsTabState();
 }
 
-class _ContactsTabState extends State<ContactsTab> {
+class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
   List<CachedContact> _contacts = [];
   bool _isLoading = true;
 
@@ -219,7 +220,7 @@ class _ContactsTabState extends State<ContactsTab> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: spectrumSurfaceColor(cs),
       body: SafeArea(
         bottom: false,
         child: Column(
