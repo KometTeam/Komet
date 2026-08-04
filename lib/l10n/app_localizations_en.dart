@@ -1394,6 +1394,131 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatInfoActionLeave => 'Leave';
 
   @override
+  String get chatInfoActionMuted => 'Muted';
+
+  @override
+  String get chatInfoNotificationsOn => 'Notifications on';
+
+  @override
+  String get chatInfoNotificationsOff => 'Notifications off';
+
+  @override
+  String get chatInfoMenuBlock => 'Block';
+
+  @override
+  String get chatInfoMenuUnblock => 'Unblock';
+
+  @override
+  String get chatInfoMenuDeleteChat => 'Delete chat';
+
+  @override
+  String get chatInfoMenuClearHistory => 'Clear history';
+
+  @override
+  String get chatInfoClearHistoryTitle => 'Clear history';
+
+  @override
+  String get chatInfoClearHistoryMessage =>
+      'All messages in this chat will be deleted permanently.';
+
+  @override
+  String get chatInfoClearHistoryForAll => 'For everyone';
+
+  @override
+  String get chatInfoClearHistoryConfirm => 'Clear';
+
+  @override
+  String get chatInfoClearHistoryDone => 'History cleared';
+
+  @override
+  String get chatInfoDeleteChatTitle => 'Delete chat';
+
+  @override
+  String get chatInfoDeleteChatMessage =>
+      'The chat will be deleted together with the whole conversation.';
+
+  @override
+  String get chatInfoDeleteChatConfirm => 'Delete';
+
+  @override
+  String get chatInfoLeaveGroupTitle => 'Leave group';
+
+  @override
+  String get chatInfoLeaveGroupMessage =>
+      'You will no longer receive messages from this group.';
+
+  @override
+  String get chatInfoLeaveChannelTitle => 'Leave channel';
+
+  @override
+  String get chatInfoLeaveChannelMessage =>
+      'You will no longer receive posts from this channel.';
+
+  @override
+  String get chatInfoLeaveConfirm => 'Leave';
+
+  @override
+  String get chatInfoLeaveFailed => 'Could not leave the chat';
+
+  @override
+  String get chatInfoCallConfirmTitle => 'Start a call';
+
+  @override
+  String chatInfoCallConfirmMessage(String name) {
+    return 'Call $name?';
+  }
+
+  @override
+  String get chatInfoConfirmYes => 'Yes';
+
+  @override
+  String get chatInfoConfirmNo => 'No';
+
+  @override
+  String get chatInfoCallFailed => 'Could not start the call';
+
+  @override
+  String get chatInfoBlockConfirmTitle => 'Block';
+
+  @override
+  String chatInfoBlockConfirmMessage(String name) {
+    return 'Are you sure you want to block $name?';
+  }
+
+  @override
+  String get chatInfoBlockDone => 'User blocked';
+
+  @override
+  String get chatInfoUnblockDone => 'User unblocked';
+
+  @override
+  String get chatInfoBlockFailed => 'Could not change the block state';
+
+  @override
+  String get chatInfoComplaintTitle => 'Report';
+
+  @override
+  String get chatInfoComplaintSubtitle => 'Choose a reason for the report';
+
+  @override
+  String get chatInfoComplaintSend => 'Report';
+
+  @override
+  String get chatInfoComplaintClose => 'Close';
+
+  @override
+  String get chatInfoComplaintEmpty => 'Could not load the report reasons';
+
+  @override
+  String get chatInfoComplaintSent => 'Report sent';
+
+  @override
+  String get chatInfoComplaintFailed => 'Could not send the report';
+
+  @override
+  String get chatInfoActionCancel => 'Cancel';
+
+  @override
   String get chatInfoBio => 'About';
 
   @override

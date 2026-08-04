@@ -1,5 +1,6 @@
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/protocol/packet.dart';
 
 class ComplaintReason {
   final int reasonId;
@@ -9,6 +10,8 @@ class ComplaintReason {
 }
 
 class ComplaintsModule {
+  static const int userTypeId = 6;
+
   static Map<int, List<ComplaintReason>>? _cache;
 
   static void clear() => _cache = null;
@@ -17,10 +20,15 @@ class ComplaintsModule {
     final cached = _cache;
     if (cached != null) return cached;
 
-    final response = await api.sendRequest(Opcode.complainReasonsGet, {
-      'complainSync': 0,
-    });
-    if (!response.isOk) return cached ?? const {};
+    final Packet response;
+    try {
+      response = await api.sendRequest(Opcode.complainReasonsGet, {
+        'complainSync': 0,
+      }, silent: true);
+    } catch (_) {
+      return const {};
+    }
+    if (!response.isOk) return const {};
 
     final payload = response.payload;
     if (payload is! Map) return const {};
@@ -65,14 +73,19 @@ class ComplaintsModule {
     required int reasonId,
     required int typeId,
     required List<int> ids,
-    required int parentId,
+    int? parentId,
   }) async {
-    final response = await api.sendRequest(Opcode.complain, {
-      'reasonId': reasonId,
-      'typeId': typeId,
-      'ids': ids,
-      'parentId': parentId,
-    });
+    final Packet response;
+    try {
+      response = await api.sendRequest(Opcode.complain, {
+        'reasonId': reasonId,
+        'typeId': typeId,
+        'ids': ids,
+        'parentId': ?parentId,
+      }, silent: true);
+    } catch (_) {
+      return false;
+    }
     if (!response.isOk) return false;
     final payload = response.payload;
     return payload is Map && payload['success'] == true;

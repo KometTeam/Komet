@@ -333,6 +333,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
     banners.clear();
     chats.resetForAccountSwitch();
 
@@ -348,6 +349,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
     banners.clear();
     chats.resetForAccountSwitch();
 
@@ -380,6 +382,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
     banners.clear();
     chats.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
@@ -431,6 +434,7 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
     banners.clear();
     chats.resetForAccountSwitch();
   }

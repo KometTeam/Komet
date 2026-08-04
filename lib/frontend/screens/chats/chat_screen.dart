@@ -109,6 +109,8 @@ import '../../widgets/liquid_glass.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_encryption_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
+import 'chat/retain_offset_physics.dart';
+import 'profile_action_sheets.dart';
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -546,6 +548,7 @@ class _ChatScreenState extends State<ChatScreen>
   static const double _avgMessageHeight = 72.0;
   static const double _historyPrefetchExtent = _avgMessageHeight * 8;
   static const double _scrollDownRevealExtent = _avgMessageHeight * 30;
+  static const double _scrollDownRevealFactor = 0.6;
   static const double _scrollDownTeleportFactor = 2.0;
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
@@ -596,6 +599,12 @@ class _ChatScreenState extends State<ChatScreen>
   late final AnimationController _scrollDownAnimController;
   late final CurvedAnimation _scrollDownCurved;
   bool _scrollDownVisible = false;
+  final ValueNotifier<int> _newMessageCount = ValueNotifier(0);
+  bool _clearCountScheduled = false;
+  bool _retainOffsetOnce = false;
+  late final ScrollPhysics _listPhysics = RetainOffsetScrollPhysics(
+    retain: _consumeRetainOffset,
+  );
   int _listEpoch = 0;
   final List<({String id, double pixels, double alignment})> _returnStack = [];
   bool _returningToAnchor = false;
@@ -1151,6 +1160,7 @@ class _ChatScreenState extends State<ChatScreen>
           chatType: widget.chatType,
           heroTag: _profileHeroTag,
           initialTab: initialTab,
+          openedFromChat: true,
           onJumpToMessage: (chatRoute == null || widget.embedded)
               ? null
               : (messageId, time) {
@@ -1613,6 +1623,52 @@ class _ChatScreenState extends State<ChatScreen>
     _loadGroupSenderNames();
   }
 
+  bool _consumeRetainOffset() {
+    if (!_retainOffsetOnce) return false;
+    _retainOffsetOnce = false;
+    return true;
+  }
+
+  void _retainOffsetForNextLayout() {
+    _retainOffsetOnce = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _retainOffsetOnce = false;
+    });
+  }
+
+  String? _viewportAnchorId() {
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || !listBox.attached) return null;
+    final height = listBox.size.height;
+    for (final message in _messages) {
+      final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final dy = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+      if (dy >= 0 && dy <= height) return message.id;
+    }
+    return null;
+  }
+
+  Future<void> _holdScrollAfterAppend(String? anchorId, double? beforeDy) async {
+    if (anchorId == null || beforeDy == null) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_scrollController.hasClients) return;
+
+    final afterDy = _messageOffsetInList(anchorId);
+    if (afterDy == null) return;
+    final delta = beforeDy - afterDy;
+    if (delta.abs() <= 0.5) return;
+
+    final pos = _scrollController.position;
+    if (pos.userScrollDirection != ScrollDirection.idle) return;
+    final target = (pos.pixels + delta).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    if ((target - pos.pixels).abs() <= 0.5) return;
+    _scrollController.jumpTo(target);
+  }
+
   double? _messageOffsetInList(String messageId) {
     final listBox = _listKey.currentContext?.findRenderObject();
     final box = _keyForMessage(messageId).currentContext?.findRenderObject();
@@ -1863,11 +1919,19 @@ class _ChatScreenState extends State<ChatScreen>
     if (comment.senderId == _myId) return;
     if (_messages.any((m) => m.id == comment.id)) return;
     final nearBottom = _isNearListBottom();
+    final anchorId = nearBottom ? null : _viewportAnchorId();
+    final anchorDy = anchorId == null ? null : _messageOffsetInList(anchorId);
+    if (!nearBottom) _retainOffsetForNextLayout();
     _messages.add(comment);
     _syncReactionNotifiersFromMessages();
     _bumpMessages();
     unawaited(_resolveCommentNames([comment]));
-    if (nearBottom) _scrollToBottom();
+    if (nearBottom) {
+      _scrollToBottom();
+    } else {
+      _noteMissedMessage();
+      unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
+    }
   }
 
   bool _isNearListBottom() {
@@ -1959,6 +2023,7 @@ class _ChatScreenState extends State<ChatScreen>
     _floatingDate.dispose();
     _scrollDownCurved.dispose();
     _scrollDownAnimController.dispose();
+    _newMessageCount.dispose();
     _hasText.dispose();
     _scheduledCount.dispose();
     _showAttachmentPanel.removeListener(_onAttachPanelToggle);
@@ -2885,6 +2950,11 @@ class _ChatScreenState extends State<ChatScreen>
         if (message.senderId == _myId) return;
         if (_messages.any((m) => m.id == message.id)) return;
         final nearBottom = _isNearBottom();
+        final anchorId = nearBottom ? null : _viewportAnchorId();
+        final anchorDy = anchorId == null
+            ? null
+            : _messageOffsetInList(anchorId);
+        if (!nearBottom) _retainOffsetForNextLayout();
         _lastSentId = message.id;
         _messages.add(message);
         _bumpMessages();
@@ -2894,6 +2964,8 @@ class _ChatScreenState extends State<ChatScreen>
           _scrollToBottom();
           _scheduleReadMarker();
         } else {
+          _noteMissedMessage();
+          unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
           _reapplyPinIfNeeded();
         }
         _prank.checkTrigger(message);
@@ -3335,20 +3407,27 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _clearHistory() async {
-    final confirmed = await showConfirmDialog(
+    final current = chat;
+    final canClearForAll =
+        (widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL') &&
+        (current?.iAmAdmin(_myId) ?? false);
+    final choice = await showBlurredConfirm(
       context,
       title: 'Очистить историю',
       message:
           'Все сообщения в этом чате будут удалены без возможности '
           'восстановления.',
       confirmLabel: 'Очистить',
+      cancelLabel: 'Отмена',
       destructive: true,
+      checkboxLabel: canClearForAll ? 'Для всех' : null,
     );
-    if (!mounted || !confirmed) return;
+    if (!mounted || !choice.confirmed) return;
     final err = await chats.clearHistory(
       api,
       chatId: widget.chatId,
-      lastEventTime: chat?.lastEventTime ?? 0,
+      lastEventTime: current?.lastEventTime ?? 0,
+      forAll: canClearForAll && choice.checked,
     );
     if (!mounted) return;
     if (err != null) {
@@ -4191,6 +4270,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _scrollToBottom() {
     _returnStack.clear();
+    _newMessageCount.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
       final pos = _scrollController.position;
@@ -4221,15 +4301,30 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _updateScrollDownVisible() {
-    if (!_scrollController.hasClients) return;
+    if (!_scrollController.hasClients) {
+      _setScrollDownVisible(_newMessageCount.value > 0);
+      return;
+    }
     final pos = _scrollController.position;
+    final atBottom = _isNearBottom();
     if (_returnStack.isNotEmpty &&
-        _isNearBottom() &&
+        atBottom &&
         pos.userScrollDirection != ScrollDirection.idle) {
       _returnStack.clear();
     }
-    final show =
-        pos.pixels >= _scrollDownRevealExtent || _returnStack.isNotEmpty;
+    if (atBottom && _newMessageCount.value > 0) _clearNewMessageCountSoon();
+    final reveal = math.min(
+      _scrollDownRevealExtent,
+      pos.viewportDimension * _scrollDownRevealFactor,
+    );
+    _setScrollDownVisible(
+      pos.pixels >= reveal ||
+          _returnStack.isNotEmpty ||
+          _newMessageCount.value > 0,
+    );
+  }
+
+  void _setScrollDownVisible(bool show) {
     if (show == _scrollDownVisible) return;
     _scrollDownVisible = show;
     if (show) {
@@ -4237,6 +4332,22 @@ class _ChatScreenState extends State<ChatScreen>
     } else {
       _scrollDownAnimController.reverse();
     }
+  }
+
+  void _noteMissedMessage() {
+    _newMessageCount.value++;
+    _updateScrollDownVisible();
+  }
+
+  void _clearNewMessageCountSoon() {
+    if (_clearCountScheduled) return;
+    _clearCountScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _clearCountScheduled = false;
+      if (!mounted || !_isNearBottom()) return;
+      _newMessageCount.value = 0;
+      _updateScrollDownVisible();
+    });
   }
 
   void _pushReturnAnchor(String messageId) {
@@ -5332,6 +5443,7 @@ class _ChatScreenState extends State<ChatScreen>
                   return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
+                    physics: _listPhysics,
                     cacheExtent: cacheExtent,
                     slivers: [
                       SliverPadding(
@@ -5627,22 +5739,62 @@ class _ChatScreenState extends State<ChatScreen>
         child: SizedBox(
           width: 46,
           height: 46,
-          child: GlossyPill(
-            color: frosted || _liquidChrome ? AppFrost.pillTint(cs) : null,
-            blurSigma: frosted && !_liquidChrome ? AppFrost.sigma : null,
-            liquid: _liquidChrome,
-            backdropKey: _pillBackdrop,
-            elevated: true,
-            onTap: _onScrollDownTap,
-            child: Center(
-              child: Icon(
-                Symbols.keyboard_arrow_down,
-                color: cs.onSurface,
-                weight: 500,
-                size: 26,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: GlossyPill(
+                  color: frosted || _liquidChrome
+                      ? AppFrost.pillTint(cs)
+                      : null,
+                  blurSigma: frosted && !_liquidChrome ? AppFrost.sigma : null,
+                  liquid: _liquidChrome,
+                  backdropKey: _pillBackdrop,
+                  elevated: true,
+                  onTap: _onScrollDownTap,
+                  child: Center(
+                    child: Icon(
+                      Symbols.keyboard_arrow_down,
+                      color: cs.onSurface,
+                      weight: 500,
+                      size: 26,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              Positioned(
+                top: -5,
+                right: -3,
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _newMessageCount,
+                  builder: (context, count, _) =>
+                      count <= 0 ? const SizedBox.shrink() : _unreadBadge(cs, count),
+                ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _unreadBadge(ColorScheme cs, int count) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 21),
+      height: 21,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: cs.primary,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: TextStyle(
+          color: cs.onPrimary,
+          fontSize: 12,
+          height: 1,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -6303,13 +6455,12 @@ class _ChatScreenState extends State<ChatScreen>
     }
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     _keyboardBeforeStickers = keyboard > 120 || _messageFocusNode.hasFocus;
-    if (keyboard > 120) _stickers.panelHeight = keyboard;
+    if (keyboard > 120) _stickers.setBaseHeight(keyboard);
     FocusManager.instance.primaryFocus?.unfocus();
     _stickers.showPanel.value = true;
   }
 
   Future<void> _sendSticker(StickerItem sticker) async {
-    _stickers.hide();
     await _sendAttachMessage([
       StickerAttachment(
         stickerId: sticker.id.toString(),

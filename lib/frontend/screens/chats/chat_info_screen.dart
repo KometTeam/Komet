@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../contacts/edit_contact_sheet.dart';
+import '../../../backend/modules/complaints.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
+import '../../../core/calls/call_controller.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
@@ -17,6 +19,7 @@ import '../../widgets/animated_text_swap.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/formatted_message_text.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
@@ -24,9 +27,11 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
 import '../../../backend/modules/chats.dart';
+import '../calls/call_screen.dart';
 import '../contacts/open_contact_profile.dart';
 import 'chat_screen.dart';
 import 'group_invite_sheets.dart';
+import 'profile_action_sheets.dart';
 
 class _MemberInfo {
   final int id;
@@ -69,6 +74,7 @@ class ChatInfoScreen extends StatefulWidget {
   final int? dialogPeerId;
   final ChatInfoTab? initialTab;
   final Object? heroTag;
+  final bool openedFromChat;
 
   final void Function(String messageId, int time)? onJumpToMessage;
 
@@ -81,6 +87,7 @@ class ChatInfoScreen extends StatefulWidget {
     this.dialogPeerId,
     this.initialTab,
     this.heroTag,
+    this.openedFromChat = false,
     this.onJumpToMessage,
   });
 
@@ -123,6 +130,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   int _mediaChatId = 0;
   String? _anchorMsgId;
 
+  int _dontDisturbUntil = 0;
+  int _lastEventTime = 0;
+  bool _blocked = false;
+  bool _muteBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -137,8 +149,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     super.dispose();
   }
 
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   List<String> get _tabs {
-    final l10n = AppLocalizations.of(context)!;
     final showInfo = AppShowExtraInfo.current.value;
     switch (widget.chatType) {
       case 'DIALOG':
@@ -193,6 +206,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _chatInfo = info;
 
     _mediaChatId = (info?.raw['id'] as int?) ?? widget.chatId;
+
+    final cached = await chats.getChat(_myId, _mediaChatId);
+    if (!mounted) return;
+    if (cached.isNotEmpty) {
+      _dontDisturbUntil = cached.first.dontDisturbUntil;
+      _lastEventTime = cached.first.lastEventTime;
+    }
+    final serverEventTime = (info?.raw['lastEventTime'] as int?) ?? 0;
+    if (serverEventTime > _lastEventTime) _lastEventTime = serverEventTime;
+
     final lastMessage = info?.raw['lastMessage'];
     if (lastMessage is Map) {
       _anchorMsgId = lastMessage['id']?.toString();
@@ -235,6 +258,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           _presenceStatus = st;
           _isOnline = st == 1;
         }
+
+        if (!_isBot && _otherId != _myId) _loadBlockedState(_otherId!);
       }
     } else if (info == null) {
       setState(() => _isLoading = false);
@@ -253,6 +278,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         }
       });
     }
+  }
+
+  Future<void> _loadBlockedState(int peerId) async {
+    final blocked = await ContactsModule.isBlocked(api, peerId);
+    if (!mounted || blocked == _blocked) return;
+    setState(() => _blocked = blocked);
   }
 
   String? _initialTabLabel() {
@@ -478,10 +509,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           if (_isLoading)
             ..._loadingBlocks(cs)
           else ...[
-            Text(
-              _subtitle(),
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-              textAlign: TextAlign.center,
+            SelectionArea(
+              child: Text(
+                _subtitle(),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
             ),
             const SizedBox(height: 20),
             _buildActions(cs),
@@ -520,32 +553,78 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _buildMoreButton(ColorScheme cs) {
-    final canEdit = widget.chatType == 'DIALOG' && _isContact;
-    if (!canEdit) {
+    final entries = _moreMenuEntries();
+    if (entries.isEmpty) {
       return IconButton(
         icon: Icon(Icons.more_vert, color: cs.onSurface),
-        onPressed: () {},
+        onPressed: null,
       );
     }
-    final l10n = AppLocalizations.of(context)!;
-    return PopupMenuButton<String>(
+    return PopupMenuButton<VoidCallback>(
       icon: Icon(Icons.more_vert, color: cs.onSurface),
-      onSelected: (v) {
-        if (v == 'edit') _openEdit();
-      },
+      onSelected: (action) => action(),
       itemBuilder: (_) => [
-        PopupMenuItem<String>(
-          value: 'edit',
-          child: Row(
-            children: [
-              Icon(Symbols.edit, size: 20, color: cs.onSurface),
-              const SizedBox(width: 12),
-              Text(l10n.editContactMenu),
-            ],
+        for (final entry in entries)
+          PopupMenuItem<VoidCallback>(
+            value: entry.onTap,
+            child: Row(
+              children: [
+                Icon(
+                  entry.icon,
+                  size: 20,
+                  color: entry.destructive ? cs.error : cs.onSurface,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  entry.label,
+                  style: entry.destructive ? TextStyle(color: cs.error) : null,
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
+  }
+
+  List<({IconData icon, String label, bool destructive, VoidCallback onTap})>
+  _moreMenuEntries() {
+    if (_isLoading) return const [];
+    final entries =
+        <({IconData icon, String label, bool destructive, VoidCallback onTap})>[];
+
+    if (widget.chatType == 'DIALOG') {
+      if (_isContact) {
+        entries.add((
+          icon: Symbols.edit,
+          label: l10n.editContactMenu,
+          destructive: false,
+          onTap: _openEdit,
+        ));
+      }
+      if (!_isBot && _otherId != null && _otherId != _myId) {
+        entries.add((
+          icon: _blocked ? Symbols.lock_open : Symbols.block,
+          label: _blocked ? l10n.chatInfoMenuUnblock : l10n.chatInfoMenuBlock,
+          destructive: !_blocked,
+          onTap: _toggleBlock,
+        ));
+      }
+      entries.add((
+        icon: Symbols.delete,
+        label: l10n.chatInfoMenuDeleteChat,
+        destructive: true,
+        onTap: _deleteChat,
+      ));
+    }
+
+    entries.add((
+      icon: Symbols.mop,
+      label: l10n.chatInfoMenuClearHistory,
+      destructive: true,
+      onTap: _clearHistory,
+    ));
+
+    return entries;
   }
 
   Future<void> _openEdit() async {
@@ -611,22 +690,24 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       children: [
         const SizedBox(width: 36),
         Flexible(
-          child: ProfileHeroName(
-            tag: widget.heroTag,
-            text: custom,
-            style: nameStyle,
-            child: AnimatedTextSwap(
-              showAlternate: _showRealName,
-              alignment: Alignment.center,
-              alternate: Text(
-                real ?? custom,
-                style: nameStyle,
-                textAlign: TextAlign.center,
-              ),
-              child: Text(
-                custom,
-                style: nameStyle,
-                textAlign: TextAlign.center,
+          child: SelectionArea(
+            child: ProfileHeroName(
+              tag: widget.heroTag,
+              text: custom,
+              style: nameStyle,
+              child: AnimatedTextSwap(
+                showAlternate: _showRealName,
+                alignment: Alignment.center,
+                alternate: Text(
+                  real ?? custom,
+                  style: nameStyle,
+                  textAlign: TextAlign.center,
+                ),
+                child: Text(
+                  custom,
+                  style: nameStyle,
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           ),
@@ -653,7 +734,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   String _subtitle() {
-    final l10n = AppLocalizations.of(context)!;
     switch (widget.chatType) {
       case 'DIALOG':
         if (_peerDeleted) return l10n.chatInfoMemberDeleted;
@@ -676,62 +756,56 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
   }
 
-  Widget _buildActions(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
-    final List<({IconData icon, String label, VoidCallback? onTap})> btns;
+  bool get _isMuted {
+    if (_dontDisturbUntil == ChatsModule.muteOff) return false;
+    if (_dontDisturbUntil < 0) return true;
+    return _dontDisturbUntil > DateTime.now().millisecondsSinceEpoch;
+  }
 
+  bool get _iAmAdmin {
+    final info = _chatInfo;
+    if (info == null || _myId == 0) return false;
+    return info.isOwner(_myId) || info.isAdmin(_myId);
+  }
+
+  bool get _isGroupOrChannel =>
+      widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL';
+
+  Widget _buildActions(ColorScheme cs) {
+    final muteBtn = (
+      icon: _isMuted ? Icons.notifications_off : Icons.notifications,
+      label: _isMuted
+          ? l10n.chatInfoActionMuted
+          : l10n.contactProfileActionSound,
+      onTap: _muteBusy ? null : _toggleMute,
+    );
+    final chatBtn = (
+      icon: Icons.chat_bubble,
+      label: l10n.contactProfileActionChat,
+      onTap: _openChat,
+    );
+    final leaveBtn = (
+      icon: Icons.exit_to_app,
+      label: l10n.chatInfoActionLeave,
+      onTap: _leaveChat,
+    );
+
+    final List<({IconData icon, String label, VoidCallback? onTap})> btns;
     if (widget.chatType == 'DIALOG') {
-      if (_isBot) {
-        btns = [
+      btns = [
+        chatBtn,
+        muteBtn,
+        if (!_isBot)
           (
-            icon: Icons.chat_bubble,
-            label: l10n.contactProfileActionChat,
-            onTap: _openChat,
+            icon: Icons.call,
+            label: l10n.contactProfileActionCall,
+            onTap: _confirmAndStartCall,
           ),
-          (
-            icon: Icons.notifications,
-            label: l10n.contactProfileActionSound,
-            onTap: null,
-          ),
-        ];
-      } else {
-        btns = [
-          (
-            icon: Icons.chat_bubble,
-            label: l10n.contactProfileActionChat,
-            onTap: _openChat,
-          ),
-          (
-            icon: Icons.notifications,
-            label: l10n.contactProfileActionSound,
-            onTap: null,
-          ),
-          (icon: Icons.call, label: l10n.contactProfileActionCall, onTap: null),
-        ];
-      }
+      ];
     } else if (widget.chatType == 'CHANNEL') {
-      btns = [
-        (
-          icon: Icons.notifications,
-          label: l10n.contactProfileActionSound,
-          onTap: null,
-        ),
-        (icon: Icons.exit_to_app, label: l10n.chatInfoActionLeave, onTap: null),
-      ];
+      btns = [muteBtn, leaveBtn];
     } else {
-      btns = [
-        (
-          icon: Icons.chat_bubble,
-          label: l10n.contactProfileActionChat,
-          onTap: null,
-        ),
-        (
-          icon: Icons.notifications,
-          label: l10n.contactProfileActionSound,
-          onTap: null,
-        ),
-        (icon: Icons.exit_to_app, label: l10n.chatInfoActionLeave, onTap: null),
-      ];
+      btns = [chatBtn, muteBtn, leaveBtn];
     }
 
     return Padding(
@@ -748,14 +822,223 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   void _openChat() {
+    if (widget.openedFromChat) {
+      Navigator.of(context).pop();
+      return;
+    }
     pushSwipeable(
       context,
       (_) => ChatScreen(
-        chatId: widget.chatId,
+        chatId: _mediaChatId,
         name: widget.name,
         imageUrl: widget.imageUrl,
-        chatType: 'DIALOG',
+        chatType: widget.chatType,
       ),
+    );
+  }
+
+  Future<void> _toggleMute() async {
+    if (_muteBusy) return;
+    setState(() => _muteBusy = true);
+    final muted = _isMuted;
+    final target = muted ? ChatsModule.muteOff : ChatsModule.muteForever;
+    final error = await chats.setChatMute(
+      api,
+      chatId: _mediaChatId,
+      dontDisturbUntil: target,
+    );
+    if (!mounted) return;
+    setState(() {
+      _muteBusy = false;
+      if (error == null) _dontDisturbUntil = target;
+    });
+    showCustomNotification(
+      context,
+      error ??
+          (muted ? l10n.chatInfoNotificationsOn : l10n.chatInfoNotificationsOff),
+    );
+  }
+
+  Future<void> _confirmAndStartCall() async {
+    final peerId = _otherId;
+    if (peerId == null || peerId == _myId) return;
+
+    final choice = await showBlurredConfirm(
+      context,
+      title: l10n.chatInfoCallConfirmTitle,
+      message: l10n.chatInfoCallConfirmMessage(_customName),
+      confirmLabel: l10n.chatInfoConfirmYes,
+      cancelLabel: l10n.chatInfoConfirmNo,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final navigator = Navigator.of(context);
+    final avatarUrl = widget.imageUrl.isNotEmpty ? widget.imageUrl : null;
+    final active = CallController.instance.activeSession;
+    if (active != null) {
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              CallScreen(name: _customName, avatarUrl: avatarUrl, session: active),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final session = await CallController.instance.startOutgoing(peerId);
+      if (!mounted) return;
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            name: _customName,
+            avatarUrl: avatarUrl,
+            session: session,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showCustomNotification(context, l10n.chatInfoCallFailed);
+    }
+  }
+
+  Future<void> _leaveChat() async {
+    final isChannel = widget.chatType == 'CHANNEL';
+    final choice = await showBlurredConfirm(
+      context,
+      title: isChannel
+          ? l10n.chatInfoLeaveChannelTitle
+          : l10n.chatInfoLeaveGroupTitle,
+      message: isChannel
+          ? l10n.chatInfoLeaveChannelMessage
+          : l10n.chatInfoLeaveGroupMessage,
+      confirmLabel: l10n.chatInfoLeaveConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final ok = await chats.leaveChat(api, chatId: _mediaChatId);
+    if (!mounted) return;
+    if (!ok) {
+      showCustomNotification(context, l10n.chatInfoLeaveFailed);
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _clearHistory() async {
+    final canClearForAll = _isGroupOrChannel && _iAmAdmin;
+    final choice = await showBlurredConfirm(
+      context,
+      title: l10n.chatInfoClearHistoryTitle,
+      message: l10n.chatInfoClearHistoryMessage,
+      confirmLabel: l10n.chatInfoClearHistoryConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
+      destructive: true,
+      checkboxLabel: canClearForAll ? l10n.chatInfoClearHistoryForAll : null,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final error = await chats.clearHistory(
+      api,
+      chatId: _mediaChatId,
+      lastEventTime: _lastEventTime,
+      forAll: canClearForAll && choice.checked,
+    );
+    if (!mounted) return;
+    showCustomNotification(context, error ?? l10n.chatInfoClearHistoryDone);
+  }
+
+  Future<void> _deleteChat() async {
+    final choice = await showBlurredConfirm(
+      context,
+      title: l10n.chatInfoDeleteChatTitle,
+      message: l10n.chatInfoDeleteChatMessage,
+      confirmLabel: l10n.chatInfoDeleteChatConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final error = await chats.deleteChat(
+      api,
+      chatId: _mediaChatId,
+      lastEventTime: _lastEventTime,
+      forAll: false,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      showCustomNotification(context, error);
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _toggleBlock() async {
+    final peerId = _otherId;
+    if (peerId == null) return;
+
+    final block = !_blocked;
+    if (block) {
+      final choice = await showBlurredConfirm(
+        context,
+        title: l10n.chatInfoBlockConfirmTitle,
+        message: l10n.chatInfoBlockConfirmMessage(_customName),
+        confirmLabel: l10n.chatInfoConfirmYes,
+        cancelLabel: l10n.chatInfoConfirmNo,
+        destructive: true,
+      );
+      if (!mounted || !choice.confirmed) return;
+    }
+
+    final ok = await ContactsModule.setBlocked(api, peerId, block);
+    if (!mounted) return;
+    if (!ok) {
+      showCustomNotification(context, l10n.chatInfoBlockFailed);
+      return;
+    }
+    setState(() => _blocked = block);
+    showCustomNotification(
+      context,
+      block ? l10n.chatInfoBlockDone : l10n.chatInfoUnblockDone,
+    );
+    if (block) await _openComplaintCard(peerId);
+  }
+
+  Future<void> _openComplaintCard(int peerId) async {
+    if (!mounted) return;
+    await showComplaintCard(
+      context,
+      title: l10n.chatInfoComplaintTitle,
+      subtitle: l10n.chatInfoComplaintSubtitle,
+      sendLabel: l10n.chatInfoComplaintSend,
+      closeLabel: l10n.chatInfoComplaintClose,
+      emptyLabel: l10n.chatInfoComplaintEmpty,
+      loadReasons: () async {
+        final reasons = await ComplaintsModule.reasonsFor(
+          api,
+          ComplaintsModule.userTypeId,
+        );
+        return reasons
+            .map((r) => (id: r.reasonId, title: r.reasonTitle))
+            .toList();
+      },
+      onSend: (reasonId) async {
+        final ok = await ComplaintsModule.sendComplaint(
+          api,
+          reasonId: reasonId,
+          typeId: ComplaintsModule.userTypeId,
+          ids: [peerId],
+        );
+        if (!mounted) return ok;
+        showCustomNotification(
+          context,
+          ok ? l10n.chatInfoComplaintSent : l10n.chatInfoComplaintFailed,
+        );
+        return ok;
+      },
     );
   }
 
@@ -789,7 +1072,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _buildPersistentInfo(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     final items = <Widget>[];
 
     if (widget.chatType == 'DIALOG') {
@@ -836,9 +1118,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
 
     if (items.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [...items, const SizedBox(height: 16)],
+    return SelectionArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [...items, const SizedBox(height: 16)],
+      ),
     );
   }
 
@@ -880,7 +1164,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _linkCard(ColorScheme cs, String link) {
-    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
@@ -916,7 +1199,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _collapsibleDescCard(ColorScheme cs, String desc) {
-    final l10n = AppLocalizations.of(context)!;
     const int collapsedLines = 3;
     final isLong = desc.length > 120;
 
@@ -1041,7 +1323,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _tabBody(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     if (_selectedTab == 'Info') return _buildInfoTabContent(cs);
     if (_selectedTab == l10n.chatInfoTabMembers) {
       return _buildMembersTabContent(cs);
@@ -1159,7 +1440,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _buildInfoTabContent(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     final items = <Widget>[];
 
     if (widget.chatType == 'CHAT') {
@@ -1173,9 +1453,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
     items.add(_buildInfoRowsCard(cs));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: items,
+    return SelectionArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: items,
+      ),
     );
   }
 
@@ -1220,7 +1502,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _buildMembersTabContent(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
@@ -1266,7 +1547,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         ),
       );
     }
-    final l10n = AppLocalizations.of(context)!;
     return InkWell(
       onTap: () => _fetchMembersPage(),
       borderRadius: BorderRadius.circular(14),
@@ -1316,7 +1596,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   );
 
   Widget _memberTile(ColorScheme cs, _MemberInfo member) {
-    final l10n = AppLocalizations.of(context)!;
     final name =
         member.name ??
         ContactCache.get(member.id) ??
@@ -1436,7 +1715,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _buildAllInfoRows(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     final rows = <({String label, String value})>[];
     final chat = _chatInfo?.raw;
     if (chat == null) {
@@ -1558,7 +1836,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   List<({String label, String value})> _buildExtraContactRows() {
-    final l10n = AppLocalizations.of(context)!;
     final c = _contactData;
     if (c == null) return const [];
     final rows = <({String label, String value})>[];
@@ -1613,7 +1890,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget? _trailingFor(String label, ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     if (label != l10n.chatInfoRowId) return null;
     if (widget.chatType != 'DIALOG') return null;
     if (_contactData == null) return null;

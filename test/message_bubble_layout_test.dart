@@ -3,9 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/frontend/widgets/message_bubble.dart';
 import 'package:komet/l10n/app_localizations.dart';
+import 'package:komet/models/attachment.dart';
 
 const int _me = 1;
 const int _peer = 7;
+const double _photoWidth = 180;
 
 CachedMessage _message({
   required String text,
@@ -33,6 +35,36 @@ CachedMessage _message({
           },
         }
       : null,
+);
+
+CachedMessage _photoReply() => CachedMessage(
+  id: '1',
+  accountId: _me,
+  chatId: 2,
+  senderId: _peer,
+  text: 'Вот те раз, не может быть',
+  time: DateTime(2026, 1, 1, 5, 46).millisecondsSinceEpoch,
+  status: 'sent',
+  attachments: [
+    PhotoAttachment(
+      baseUrl: 'https://example.com/synthetic.jpg',
+      width: _photoWidth.toInt(),
+      height: 240,
+    ),
+  ],
+  payload: {
+    'link': {
+      'type': 'REPLY',
+      'message': {
+        'id': '9',
+        'sender': _me,
+        'text':
+            'Эта функция, она для «спамеров - скамеров» и «мутных - анонимов»',
+        'time': 0,
+        'attaches': [],
+      },
+    },
+  },
 );
 
 Future<void> _pumpColumn(
@@ -181,6 +213,24 @@ void main() {
 
     expect(dialogGaps, everyElement(2.0));
     expect(groupGaps, dialogGaps);
+  });
+
+  testWidgets('a reply above a photo stays inside the photo width', (
+    tester,
+  ) async {
+    await _pumpBubble(tester, _photoReply());
+
+    final quote = _rectOf(
+      tester,
+      find
+          .ancestor(of: find.text('Вы'), matching: find.byType(Container))
+          .first,
+    );
+    final caption = _rectOf(tester, find.text('Вот те раз, не может быть'));
+
+    expect(quote.width, closeTo(_photoWidth - 16, 1));
+    expect(quote.left, greaterThan(0));
+    expect(quote.right, lessThanOrEqualTo(caption.left + _photoWidth));
   });
 
   testWidgets('a bubble without a header or reply still hugs its text', (

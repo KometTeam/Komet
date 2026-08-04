@@ -73,6 +73,85 @@ class _RenderZeroIntrinsicWidth extends RenderProxyBox {
   double computeMaxIntrinsicWidth(double height) => 0;
 }
 
+class _HeaderAboveMatchWidth extends MultiChildRenderObjectWidget {
+  _HeaderAboveMatchWidth({required Widget content, required Widget header})
+    : super(children: [content, header]);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderHeaderAboveMatchWidth();
+}
+
+class _HeaderAboveMatchWidthParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderHeaderAboveMatchWidth extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _HeaderAboveMatchWidthParentData>,
+        RenderBoxContainerDefaultsMixin<
+          RenderBox,
+          _HeaderAboveMatchWidthParentData
+        > {
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _HeaderAboveMatchWidthParentData) {
+      child.parentData = _HeaderAboveMatchWidthParentData();
+    }
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      firstChild!.getMinIntrinsicWidth(height);
+
+  @override
+  double computeMaxIntrinsicWidth(double height) =>
+      firstChild!.getMaxIntrinsicWidth(height);
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      firstChild!.getMinIntrinsicHeight(width) +
+      lastChild!.getMinIntrinsicHeight(width);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      firstChild!.getMaxIntrinsicHeight(width) +
+      lastChild!.getMaxIntrinsicHeight(width);
+
+  @override
+  void performLayout() {
+    final RenderBox content = firstChild!;
+    final RenderBox header = childAfter(content)!;
+
+    content.layout(constraints.loosen(), parentUsesSize: true);
+    final double width = constraints.constrainWidth(content.size.width);
+
+    header.layout(
+      BoxConstraints.tightFor(width: width).enforce(constraints.loosen()),
+      parentUsesSize: true,
+    );
+
+    (header.parentData! as _HeaderAboveMatchWidthParentData).offset =
+        Offset.zero;
+    (content.parentData! as _HeaderAboveMatchWidthParentData).offset = Offset(
+      0,
+      header.size.height,
+    );
+
+    size = constraints.constrain(
+      Size(width, header.size.height + content.size.height),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+}
+
 /// Stacks [bottom] directly beneath [top] and forces [bottom] to take exactly
 /// [top]'s rendered width. Used to keep an inline keyboard and a comments footer
 /// pinned to their post's natural width instead of stretching to the bubble max
@@ -872,11 +951,20 @@ class MessageBubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ?senderHeader,
-              if (reply != null) ...[
-                _buildReplyQuote(context, cs, textColor, reply),
-                const SizedBox(height: 4),
-              ],
-              contentWithReactions,
+              if (reply == null)
+                contentWithReactions
+              else
+                _HeaderAboveMatchWidth(
+                  content: contentWithReactions,
+                  header: Padding(
+                    padding: EdgeInsets.only(
+                      left: padding == EdgeInsets.zero ? 8 : 0,
+                      right: padding == EdgeInsets.zero ? 8 : 0,
+                      bottom: 4,
+                    ),
+                    child: _buildReplyQuote(context, cs, textColor, reply),
+                  ),
+                ),
             ],
           );
 

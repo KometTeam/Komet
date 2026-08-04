@@ -2702,6 +2702,240 @@ abstract class AppLocalizations {
   /// **'Leave'**
   String get chatInfoActionLeave;
 
+  /// No description provided for @chatInfoActionMuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Muted'**
+  String get chatInfoActionMuted;
+
+  /// No description provided for @chatInfoNotificationsOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications on'**
+  String get chatInfoNotificationsOn;
+
+  /// No description provided for @chatInfoNotificationsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications off'**
+  String get chatInfoNotificationsOff;
+
+  /// No description provided for @chatInfoMenuBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get chatInfoMenuBlock;
+
+  /// No description provided for @chatInfoMenuUnblock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock'**
+  String get chatInfoMenuUnblock;
+
+  /// No description provided for @chatInfoMenuDeleteChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete chat'**
+  String get chatInfoMenuDeleteChat;
+
+  /// No description provided for @chatInfoMenuClearHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear history'**
+  String get chatInfoMenuClearHistory;
+
+  /// No description provided for @chatInfoClearHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear history'**
+  String get chatInfoClearHistoryTitle;
+
+  /// No description provided for @chatInfoClearHistoryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'All messages in this chat will be deleted permanently.'**
+  String get chatInfoClearHistoryMessage;
+
+  /// No description provided for @chatInfoClearHistoryForAll.
+  ///
+  /// In en, this message translates to:
+  /// **'For everyone'**
+  String get chatInfoClearHistoryForAll;
+
+  /// No description provided for @chatInfoClearHistoryConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get chatInfoClearHistoryConfirm;
+
+  /// No description provided for @chatInfoClearHistoryDone.
+  ///
+  /// In en, this message translates to:
+  /// **'History cleared'**
+  String get chatInfoClearHistoryDone;
+
+  /// No description provided for @chatInfoDeleteChatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete chat'**
+  String get chatInfoDeleteChatTitle;
+
+  /// No description provided for @chatInfoDeleteChatMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The chat will be deleted together with the whole conversation.'**
+  String get chatInfoDeleteChatMessage;
+
+  /// No description provided for @chatInfoDeleteChatConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get chatInfoDeleteChatConfirm;
+
+  /// No description provided for @chatInfoLeaveGroupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave group'**
+  String get chatInfoLeaveGroupTitle;
+
+  /// No description provided for @chatInfoLeaveGroupMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You will no longer receive messages from this group.'**
+  String get chatInfoLeaveGroupMessage;
+
+  /// No description provided for @chatInfoLeaveChannelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave channel'**
+  String get chatInfoLeaveChannelTitle;
+
+  /// No description provided for @chatInfoLeaveChannelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You will no longer receive posts from this channel.'**
+  String get chatInfoLeaveChannelMessage;
+
+  /// No description provided for @chatInfoLeaveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get chatInfoLeaveConfirm;
+
+  /// No description provided for @chatInfoLeaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not leave the chat'**
+  String get chatInfoLeaveFailed;
+
+  /// No description provided for @chatInfoCallConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a call'**
+  String get chatInfoCallConfirmTitle;
+
+  /// No description provided for @chatInfoCallConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Call {name}?'**
+  String chatInfoCallConfirmMessage(String name);
+
+  /// No description provided for @chatInfoConfirmYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get chatInfoConfirmYes;
+
+  /// No description provided for @chatInfoConfirmNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get chatInfoConfirmNo;
+
+  /// No description provided for @chatInfoCallFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start the call'**
+  String get chatInfoCallFailed;
+
+  /// No description provided for @chatInfoBlockConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get chatInfoBlockConfirmTitle;
+
+  /// No description provided for @chatInfoBlockConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to block {name}?'**
+  String chatInfoBlockConfirmMessage(String name);
+
+  /// No description provided for @chatInfoBlockDone.
+  ///
+  /// In en, this message translates to:
+  /// **'User blocked'**
+  String get chatInfoBlockDone;
+
+  /// No description provided for @chatInfoUnblockDone.
+  ///
+  /// In en, this message translates to:
+  /// **'User unblocked'**
+  String get chatInfoUnblockDone;
+
+  /// No description provided for @chatInfoBlockFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change the block state'**
+  String get chatInfoBlockFailed;
+
+  /// No description provided for @chatInfoComplaintTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get chatInfoComplaintTitle;
+
+  /// No description provided for @chatInfoComplaintSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a reason for the report'**
+  String get chatInfoComplaintSubtitle;
+
+  /// No description provided for @chatInfoComplaintSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get chatInfoComplaintSend;
+
+  /// No description provided for @chatInfoComplaintClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get chatInfoComplaintClose;
+
+  /// No description provided for @chatInfoComplaintEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the report reasons'**
+  String get chatInfoComplaintEmpty;
+
+  /// No description provided for @chatInfoComplaintSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Report sent'**
+  String get chatInfoComplaintSent;
+
+  /// No description provided for @chatInfoComplaintFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the report'**
+  String get chatInfoComplaintFailed;
+
+  /// No description provided for @chatInfoActionCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get chatInfoActionCancel;
+
   /// No description provided for @chatInfoBio.
   ///
   /// In en, this message translates to:

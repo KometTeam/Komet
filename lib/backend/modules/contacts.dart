@@ -328,6 +328,70 @@ class ContactsModule {
     return true;
   }
 
+  static final Set<int> _blockedIds = <int>{};
+  static bool _blockedLoaded = false;
+
+  static void clearBlockedCache() {
+    _blockedIds.clear();
+    _blockedLoaded = false;
+  }
+
+  static const int _blockedPageSize = 100;
+  static const int _blockedMaxPages = 20;
+
+  static Future<bool> isBlocked(Api api, int contactId) async {
+    if (!_blockedLoaded) await _loadBlockedIds(api);
+    return _blockedIds.contains(contactId);
+  }
+
+  static Future<void> _loadBlockedIds(Api api) async {
+    final ids = <int>{};
+    try {
+      for (var page = 0; page < _blockedMaxPages; page++) {
+        final map = await api.sendRequestMap(Opcode.contactList, {
+          'status': 'BLOCKED',
+          'count': _blockedPageSize,
+          'from': page * _blockedPageSize,
+        });
+        final contacts = map?['contacts'];
+        if (contacts is! List) return;
+        ids.addAll(
+          contacts.whereType<Map>().map((c) => c['id']).whereType<int>(),
+        );
+        if (contacts.length < _blockedPageSize) break;
+      }
+    } catch (e) {
+      logger.w('Не удалось получить список заблокированных: $e');
+      return;
+    }
+    _blockedIds
+      ..clear()
+      ..addAll(ids);
+    _blockedLoaded = true;
+  }
+
+  static Future<bool> setBlocked(Api api, int contactId, bool blocked) async {
+    try {
+      final packet = await api.sendRequest(Opcode.contactUpdate, {
+        'contactId': contactId,
+        'action': blocked ? 'BLOCK' : 'UNBLOCK',
+      });
+      if (packet.isError) return false;
+    } catch (e) {
+      logger.w('setBlocked $contactId: $e');
+      return false;
+    }
+
+    if (blocked) {
+      _blockedIds.add(contactId);
+    } else {
+      _blockedIds.remove(contactId);
+    }
+    ContactInfoFetch.invalidate(contactId);
+    revision.value++;
+    return true;
+  }
+
   static Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
     int accountId,

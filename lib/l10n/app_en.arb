@@ -601,6 +601,59 @@
   "sharedCopyLink": "Copy link",
   "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",
+  "chatInfoActionMuted": "Muted",
+  "chatInfoNotificationsOn": "Notifications on",
+  "chatInfoNotificationsOff": "Notifications off",
+  "chatInfoMenuBlock": "Block",
+  "chatInfoMenuUnblock": "Unblock",
+  "chatInfoMenuDeleteChat": "Delete chat",
+  "chatInfoMenuClearHistory": "Clear history",
+  "chatInfoClearHistoryTitle": "Clear history",
+  "chatInfoClearHistoryMessage": "All messages in this chat will be deleted permanently.",
+  "chatInfoClearHistoryForAll": "For everyone",
+  "chatInfoClearHistoryConfirm": "Clear",
+  "chatInfoClearHistoryDone": "History cleared",
+  "chatInfoDeleteChatTitle": "Delete chat",
+  "chatInfoDeleteChatMessage": "The chat will be deleted together with the whole conversation.",
+  "chatInfoDeleteChatConfirm": "Delete",
+  "chatInfoLeaveGroupTitle": "Leave group",
+  "chatInfoLeaveGroupMessage": "You will no longer receive messages from this group.",
+  "chatInfoLeaveChannelTitle": "Leave channel",
+  "chatInfoLeaveChannelMessage": "You will no longer receive posts from this channel.",
+  "chatInfoLeaveConfirm": "Leave",
+  "chatInfoLeaveFailed": "Could not leave the chat",
+  "chatInfoCallConfirmTitle": "Start a call",
+  "chatInfoCallConfirmMessage": "Call {name}?",
+  "@chatInfoCallConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInfoConfirmYes": "Yes",
+  "chatInfoConfirmNo": "No",
+  "chatInfoCallFailed": "Could not start the call",
+  "chatInfoBlockConfirmTitle": "Block",
+  "chatInfoBlockConfirmMessage": "Are you sure you want to block {name}?",
+  "@chatInfoBlockConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInfoBlockDone": "User blocked",
+  "chatInfoUnblockDone": "User unblocked",
+  "chatInfoBlockFailed": "Could not change the block state",
+  "chatInfoComplaintTitle": "Report",
+  "chatInfoComplaintSubtitle": "Choose a reason for the report",
+  "chatInfoComplaintSend": "Report",
+  "chatInfoComplaintClose": "Close",
+  "chatInfoComplaintEmpty": "Could not load the report reasons",
+  "chatInfoComplaintSent": "Report sent",
+  "chatInfoComplaintFailed": "Could not send the report",
+  "chatInfoActionCancel": "Cancel",
   "chatInfoBio": "About",
   "chatInfoInviteLink": "Invite link",
   "chatInfoCollapse": "Collapse",

@@ -1402,6 +1402,131 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatInfoActionLeave => 'Покинуть';
 
   @override
+  String get chatInfoActionMuted => 'Без звука';
+
+  @override
+  String get chatInfoNotificationsOn => 'Уведомления включены';
+
+  @override
+  String get chatInfoNotificationsOff => 'Уведомления отключены';
+
+  @override
+  String get chatInfoMenuBlock => 'Заблокировать';
+
+  @override
+  String get chatInfoMenuUnblock => 'Разблокировать';
+
+  @override
+  String get chatInfoMenuDeleteChat => 'Удалить чат';
+
+  @override
+  String get chatInfoMenuClearHistory => 'Очистить историю';
+
+  @override
+  String get chatInfoClearHistoryTitle => 'Очистить историю';
+
+  @override
+  String get chatInfoClearHistoryMessage =>
+      'Все сообщения в этом чате будут удалены без возможности восстановления.';
+
+  @override
+  String get chatInfoClearHistoryForAll => 'Для всех';
+
+  @override
+  String get chatInfoClearHistoryConfirm => 'Очистить';
+
+  @override
+  String get chatInfoClearHistoryDone => 'История очищена';
+
+  @override
+  String get chatInfoDeleteChatTitle => 'Удалить чат';
+
+  @override
+  String get chatInfoDeleteChatMessage =>
+      'Чат будет удалён вместе со всей перепиской.';
+
+  @override
+  String get chatInfoDeleteChatConfirm => 'Удалить';
+
+  @override
+  String get chatInfoLeaveGroupTitle => 'Покинуть группу';
+
+  @override
+  String get chatInfoLeaveGroupMessage =>
+      'Вы больше не будете получать сообщения этой группы.';
+
+  @override
+  String get chatInfoLeaveChannelTitle => 'Покинуть канал';
+
+  @override
+  String get chatInfoLeaveChannelMessage =>
+      'Вы больше не будете получать публикации этого канала.';
+
+  @override
+  String get chatInfoLeaveConfirm => 'Покинуть';
+
+  @override
+  String get chatInfoLeaveFailed => 'Не удалось покинуть чат';
+
+  @override
+  String get chatInfoCallConfirmTitle => 'Начать звонок';
+
+  @override
+  String chatInfoCallConfirmMessage(String name) {
+    return 'Позвонить $name?';
+  }
+
+  @override
+  String get chatInfoConfirmYes => 'Да';
+
+  @override
+  String get chatInfoConfirmNo => 'Нет';
+
+  @override
+  String get chatInfoCallFailed => 'Не удалось начать звонок';
+
+  @override
+  String get chatInfoBlockConfirmTitle => 'Заблокировать';
+
+  @override
+  String chatInfoBlockConfirmMessage(String name) {
+    return 'Вы уверены, что хотите заблокировать $name?';
+  }
+
+  @override
+  String get chatInfoBlockDone => 'Пользователь заблокирован';
+
+  @override
+  String get chatInfoUnblockDone => 'Пользователь разблокирован';
+
+  @override
+  String get chatInfoBlockFailed => 'Не удалось изменить блокировку';
+
+  @override
+  String get chatInfoComplaintTitle => 'Пожаловаться';
+
+  @override
+  String get chatInfoComplaintSubtitle => 'Выберите причину жалобы';
+
+  @override
+  String get chatInfoComplaintSend => 'Пожаловаться';
+
+  @override
+  String get chatInfoComplaintClose => 'Закрыть';
+
+  @override
+  String get chatInfoComplaintEmpty => 'Не удалось загрузить причины жалобы';
+
+  @override
+  String get chatInfoComplaintSent => 'Жалоба отправлена';
+
+  @override
+  String get chatInfoComplaintFailed => 'Не удалось отправить жалобу';
+
+  @override
+  String get chatInfoActionCancel => 'Отмена';
+
+  @override
   String get chatInfoBio => 'О себе';
 
   @override
