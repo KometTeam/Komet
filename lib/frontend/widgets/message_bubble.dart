@@ -21,6 +21,7 @@ import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'formatted_message_text.dart';
+import 'sending_clock_icon.dart';
 import 'photo_viewer.dart';
 import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
@@ -1371,7 +1372,10 @@ class MessageBubble extends StatelessWidget {
           ),
           if (ctx.isMe) ...[
             const SizedBox(width: 3),
-            Icon(statusVisual.icon, size: 13, color: statusVisual.color),
+            if (isSendingStatus(status))
+              SendingClockIcon(color: statusVisual.color, size: 13)
+            else
+              Icon(statusVisual.icon, size: 13, color: statusVisual.color),
           ],
           if (ctx.message.deleted) ...[
             const SizedBox(width: 3),
@@ -1676,6 +1680,27 @@ class MessageBubble extends StatelessWidget {
         : (ContactCache.get(reply.senderId) ?? 'Сообщение');
     final rawPreview = reply.previewText();
     final quotedId = reply.messageId;
+
+    if (reply.missing) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          color: accent.withValues(alpha: 0.10),
+          border: Border(left: BorderSide(color: accent, width: 3)),
+        ),
+        child: Text(
+          'сообщение удалено',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: textColor.withValues(alpha: 0.7),
+            fontSize: 13,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
 
     final quote = Container(
       padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),

@@ -80,7 +80,11 @@ import '../../widgets/spectrum_tint.dart';
 import '../../widgets/update_dialog.dart';
 import '../stories/story_composer_screen.dart';
 import '../stories/story_owner_info.dart';
+import '../../../backend/modules/webapp.dart';
+import '../../../models/story.dart';
+import '../webapp/open_mini_app.dart';
 import '../stories/story_ring.dart';
+import '../../widgets/sending_clock_icon.dart';
 import '../stories/story_viewer_screen.dart';
 import '../downloads_screen.dart';
 
@@ -291,6 +295,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       _storiesDockedOpen,
       _storiesAnimClosing,
       _storiesOverscrollRevealArmed,
+      storiesModule.storiesChanged.value,
       _sessionState,
       identityHashCode(_profile),
     ]);
@@ -728,6 +733,21 @@ class _ChatListScreenState extends State<ChatListScreen>
     return {
       me: StoryOwnerInfo(name: 'Ваша история', avatarUrl: self.avatarUrl),
     };
+  }
+
+  StoryPreview? _storyPreviewFor(int ownerId) {
+    if (!AppStories.current.value || ownerId == 0) return null;
+    final preview = storiesModule.previewFor(ownerId);
+    return (preview == null || preview.isEmpty) ? null : preview;
+  }
+
+  void _openStoriesForOwner(int ownerId, [Offset? origin]) {
+    final index = storiesModule.previews.indexWhere(
+      (p) => p.owner.ownerId == ownerId,
+    );
+    if (index < 0) return;
+    Haptics.tap();
+    _openStories(index, origin);
   }
 
   void _openStories(int index, [Offset? origin]) {
@@ -1849,6 +1869,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         previewCipherText: isPlaceholder
                             ? null
                             : chat.lastMsgTextOneLine,
+                        hasMiniApp: _hasMiniApp(secondId, chat),
                       ),
                     );
                   } else {
@@ -2656,6 +2677,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _ownStatusIcon(ColorScheme cs, String status, bool read) {
+    if (isSendingStatus(status)) {
+      return SendingClockIcon(color: cs.outline, size: 14);
+    }
     IconData icon;
     Color color;
     switch (status) {
@@ -2791,6 +2815,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     int? previewMessageId,
     String previewPrefix = '',
     String? previewCipherText,
+    bool hasMiniApp = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -2839,8 +2864,16 @@ class _ChatListScreenState extends State<ChatListScreen>
           )
         : _buildPreviewLine(cs, message, messageRanges, draft, messageItalic);
 
-    final Widget avatarCircle = CircleAvatar(
-      radius: 24,
+    final storyOwnerId = chatType == 'DIALOG'
+        ? presenceUserId
+        : (int.tryParse(id) ?? 0);
+    final story = (_isSelectionMode || widget.forwardMode)
+        ? null
+        : _storyPreviewFor(storyOwnerId);
+    final avatarRadius = story == null ? 24.0 : 20.0;
+
+    final CircleAvatar rawAvatar = CircleAvatar(
+      radius: avatarRadius,
       backgroundColor: cs.surfaceContainerHighest,
       backgroundImage: imageUrl.isNotEmpty
           ? CachedNetworkImageProvider(
@@ -2852,10 +2885,34 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: imageUrl.isEmpty
           ? Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 20),
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: story == null ? 20 : 17,
+              ),
             )
           : null,
     );
+
+    final Widget avatarCircle = story == null
+        ? rawAvatar
+        : Builder(
+            builder: (avatarContext) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _openStoriesForOwner(
+                storyOwnerId,
+                storyOriginOf(avatarContext),
+              ),
+              child: StoryAvatarRing(
+                diameter: avatarRadius * 2,
+                total: story.totalCount,
+                read: story.readCount,
+                strokeWidth: 2.2,
+                ringGap: 4,
+                haloWidth: 1.5,
+                child: rawAvatar,
+              ),
+            ),
+          );
     return SpringyTap(
       key: ValueKey('chat_$id'),
       child: InkWell(
@@ -3060,6 +3117,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   size: 16,
                                   weight: 400,
                                 ),
+                              if (hasMiniApp) ...[
+                                const SizedBox(width: 8),
+                                _miniAppButton(
+                                  cs,
+                                  botId: presenceUserId,
+                                  chatId: int.tryParse(id) ?? 0,
+                                  name: name,
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -3069,6 +3135,42 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _hasMiniApp(int contactId, CachedChat chat) {
+    if (contactId == 0 || widget.forwardMode || _isSelectionMode) return false;
+    final options = ContactCache.getOptions(contactId);
+    if (options != null && options.any(kMiniAppOptions.contains)) return true;
+    return chat.options.any(kMiniAppOptions.contains);
+  }
+
+  Widget _miniAppButton(
+    ColorScheme cs, {
+    required int botId,
+    required int chatId,
+    required String name,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => unawaited(
+        openMiniApp(context, botId: botId, chatId: chatId, title: name),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        decoration: BoxDecoration(
+          color: cs.primary,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          AppLocalizations.of(context)!.miniAppOpen,
+          style: TextStyle(
+            color: cs.onPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

@@ -8,6 +8,7 @@ import '../../../../core/config/komet_settings.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
+import '../../sending_clock_icon.dart';
 import '../../photo_viewer.dart';
 
 enum MessageType { text, attachment, voice, control }
@@ -202,6 +203,9 @@ class BubbleContext {
 
   Widget _statusIconFor(String? status, {Color? color, double size = 14}) {
     final v = messageStatusVisual(status, dimColor: color ?? dim);
+    if (isSendingStatus(status)) {
+      return SendingClockIcon(color: v.color, size: size);
+    }
     return Icon(v.icon, size: size, color: v.color);
   }
 }

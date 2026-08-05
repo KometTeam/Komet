@@ -4502,6 +4502,18 @@ abstract class AppLocalizations {
   /// **'Open profile'**
   String get contactBubbleOpenProfile;
 
+  /// No description provided for @miniAppOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get miniAppOpen;
+
+  /// No description provided for @miniAppFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the app'**
+  String get miniAppFailed;
+
   /// No description provided for @editContactMenu.
   ///
   /// In en, this message translates to:

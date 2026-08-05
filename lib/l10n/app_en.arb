@@ -1029,6 +1029,8 @@
   "contactBubbleNew": "New contact",
   "contactBubbleAlreadyAdded": "Already in your contacts",
   "contactBubbleOpenProfile": "Open profile",
+  "miniAppOpen": "Open",
+  "miniAppFailed": "Couldn't open the app",
   "editContactMenu": "Edit contact",
   "editContactTitle": "Edit contact",
   "editContactFirstName": "First name",

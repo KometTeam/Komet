@@ -132,6 +132,7 @@ class VideoAttachment extends MessageAttachment {
   final int? height;
   final int? duration;
   final int? size;
+  final String? localPath;
 
   final int? videoType;
 
@@ -149,6 +150,7 @@ class VideoAttachment extends MessageAttachment {
     this.duration,
     this.size,
     this.videoType,
+    this.localPath,
   }) : super(type: AttachmentType.video);
 
   factory VideoAttachment.fromMap(Map<String, dynamic> map) {

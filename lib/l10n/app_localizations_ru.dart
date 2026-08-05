@@ -2366,6 +2366,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get contactBubbleOpenProfile => 'Открыть профиль';
 
   @override
+  String get miniAppOpen => 'Открыть';
+
+  @override
+  String get miniAppFailed => 'Не удалось открыть приложение';
+
+  @override
   String get editContactMenu => 'Редактировать контакт';
 
   @override

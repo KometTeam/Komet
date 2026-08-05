@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
@@ -10,11 +15,14 @@ import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../core/config/app_show_extra_info.dart';
+import '../../../core/config/app_stories.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
 import '../../../models/contact_info.dart';
+import '../../../models/story.dart';
 import '../../widgets/animated_text_swap.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
@@ -24,11 +32,16 @@ import '../../widgets/formatted_message_text.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/profile_header_scroll.dart';
 import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
 import '../../../backend/modules/chats.dart';
 import '../calls/call_screen.dart';
 import '../contacts/open_contact_profile.dart';
+import '../stories/story_owner_info.dart';
+import '../stories/story_peanut.dart';
+import '../stories/story_ring.dart';
+import '../stories/story_viewer_screen.dart';
 import 'chat_screen.dart';
 import 'group_invite_sheets.dart';
 import 'profile_action_sheets.dart';
@@ -98,7 +111,7 @@ class ChatInfoScreen extends StatefulWidget {
 class _ChatInfoScreenState extends State<ChatInfoScreen>
     with ReloadOnReconnect {
   final _tabScrollController = ScrollController();
-  final _bodyScrollController = ScrollController();
+  ScrollController? _bodyScrollController;
 
   int _myId = 0;
   bool _isLoading = true;
@@ -136,17 +149,37 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _muteBusy = false;
   bool _addContactBusy = false;
 
+  StoryPreview? _storyPreview;
+  List<Story> _unreadStories = const [];
+  final GlobalKey _avatarKey = GlobalKey();
+
+  final PageController _avatarPageController = PageController();
+  List<String> _avatarPages = const [];
+  int _avatarIndex = 0;
+  int _avatarTotal = 0;
+
+  double _headerDelta = 0;
+  bool _expandArmed = false;
+  bool _headerEverExpanded = false;
+
   @override
   void initState() {
     super.initState();
-    _bodyScrollController.addListener(_onBodyScroll);
+    storiesModule.storiesChanged.addListener(_onStoriesChanged);
     _load();
+  }
+
+  void _onStoriesChanged() {
+    if (!mounted) return;
+    setState(_refreshUnreadStories);
   }
 
   @override
   void dispose() {
+    storiesModule.storiesChanged.removeListener(_onStoriesChanged);
     _tabScrollController.dispose();
-    _bodyScrollController.dispose();
+    _bodyScrollController?.dispose();
+    _avatarPageController.dispose();
     super.dispose();
   }
 
@@ -261,6 +294,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         }
 
         if (!_isBot && _otherId != _myId) _loadBlockedState(_otherId!);
+        if (!_isBot) unawaited(_loadStories(_otherId!));
+        unawaited(_loadAvatarHistory(_otherId!));
       }
     } else if (info == null) {
       setState(() => _isLoading = false);
@@ -394,13 +429,18 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
 
     var added = 0;
+    final fresh = <int>[];
     for (final e in page.members) {
       if (_seenMemberIds.add(e.id)) {
         _addMember(_memberFrom(e));
+        fresh.add(e.id);
         added++;
       }
     }
     if (added > 0) _rebuildMembers();
+    if (fresh.isNotEmpty && AppStories.current.value) {
+      unawaited(storiesModule.loadOwnersPreviews(fresh));
+    }
 
     final total = _chatInfo?.participantsCount;
     if (page.members.isEmpty ||
@@ -419,7 +459,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     if (_membersLoading || _membersEnd) return;
     if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers)
       return;
-    final pos = _bodyScrollController.position;
+    final controller = _bodyScrollController;
+    if (controller == null || !controller.hasClients) return;
+    final pos = controller.position;
     if (pos.pixels >= pos.maxScrollExtent - 400) {
       _fetchMembersPage();
     }
@@ -473,26 +515,430 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       backgroundColor: cs.surface,
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: const ConnectionSpinner(),
-      body: SafeArea(child: _buildScrollBody(cs)),
+      body: _buildScrollBody(cs),
     );
   }
 
+  static const double _headerAvatarSize = 96;
+  static const double _headerCollapsedBody = 232;
+  static const double _headerVignette = 64;
+
+  bool get _headerHasPhoto => widget.imageUrl.isNotEmpty && !_peerDeleted;
+
   Widget _buildScrollBody(ColorScheme cs) {
-    return CustomScrollView(
-      controller: _bodyScrollController,
-      slivers: [
-        SliverAppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          floating: true,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back, color: cs.onSurface),
-            onPressed: () => Navigator.pop(context),
+    return LayoutBuilder(
+      builder: (context, viewport) {
+        final media = MediaQuery.of(context);
+        final topPad = media.padding.top;
+        final collapsedH = topPad + _headerCollapsedBody;
+        final expandedH = _headerHasPhoto
+            ? math.max(
+                collapsedH,
+                math.min(media.size.width, viewport.maxHeight * 0.62),
+              )
+            : collapsedH;
+        final delta = expandedH - collapsedH;
+        _syncHeaderDelta(delta);
+        final controller = _bodyScrollController ??=
+            (ScrollController(initialScrollOffset: delta)
+              ..addListener(_onBodyScroll));
+
+        return NotificationListener<ScrollNotification>(
+          onNotification: (n) => _onHeaderScrollNotification(n, delta),
+          child: CustomScrollView(
+            key: ValueKey(delta),
+            controller: controller,
+            physics: HeaderPullScrollPhysics(
+              delta: delta,
+              isArmed: () => _expandArmed,
+              parent: const BouncingScrollPhysics(),
+            ),
+            slivers: [
+              SliverPersistentHeader(
+                delegate: MorphHeaderDelegate(
+                  collapsedExtent: collapsedH,
+                  expandedExtent: expandedH,
+                  headerBuilder: (ctx, t) =>
+                      _buildMorphHeader(ctx, cs, _headerHasPhoto ? t : 0.0),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: math.max(0, viewport.maxHeight - collapsedH),
+                  ),
+                  child: _buildBody(cs),
+                ),
+              ),
+            ],
           ),
-          actions: [_buildMoreButton(cs)],
+        );
+      },
+    );
+  }
+
+  void _syncHeaderDelta(double delta) {
+    if (_headerDelta == delta) return;
+    final prev = _headerDelta;
+    _headerDelta = delta;
+    if (_bodyScrollController == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _bodyScrollController;
+      if (!mounted || c == null || !c.hasClients) return;
+      final target = (c.offset + (delta - prev)).clamp(
+        0.0,
+        c.position.maxScrollExtent,
+      );
+      c.jumpTo(target);
+    });
+  }
+
+  bool _onHeaderScrollNotification(ScrollNotification n, double delta) {
+    if (n.depth != 0) return false;
+    if (n is ScrollStartNotification) {
+      if (n.dragDetails != null) {
+        _expandArmed = delta > 0 && n.metrics.pixels <= delta + 8;
+      }
+    } else if (n is ScrollEndNotification) {
+      _snapHeader(delta);
+    }
+    return false;
+  }
+
+  void _snapHeader(double delta) {
+    final c = _bodyScrollController;
+    if (c == null || !c.hasClients || delta <= 0) return;
+    final offset = c.offset;
+    if (offset <= 0 || offset >= delta) return;
+    final target = (offset < delta / 2 ? 0.0 : delta).clamp(
+      0.0,
+      c.position.maxScrollExtent,
+    );
+    if ((target - offset).abs() < 1) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !c.hasClients) return;
+      c.animateTo(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  Widget _buildMorphHeader(BuildContext context, ColorScheme cs, double t) {
+    final topPad = MediaQuery.paddingOf(context).top;
+    if (t > 0) _headerEverExpanded = true;
+    final iconColor = Color.lerp(cs.onSurface, Colors.white, t)!;
+    final nameColor = Color.lerp(cs.onSurface, Colors.white, t)!;
+    final subColor = Color.lerp(
+      cs.onSurfaceVariant,
+      Colors.white.withValues(alpha: 0.85),
+      t,
+    )!;
+    final ringOpacity = (1 - t * 3).clamp(0.0, 1.0);
+    final chipOpacity = ((t - 0.3) / 0.5).clamp(0.0, 1.0);
+    final unread = _unreadStories;
+    final totalPhotos = math.max(_avatarTotal, _avatarPages.length);
+
+    return ClipRect(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          const size = _headerAvatarSize;
+          final avatarRect = Rect.lerp(
+            Rect.fromLTWH((w - size) / 2, topPad + 52, size, size),
+            Rect.fromLTWH(0, 0, w, h),
+            t,
+          )!;
+          final radius = lerpDouble(size / 2, 0, t)!;
+
+          return Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned.fromRect(
+                rect: avatarRect,
+                child: _headerAvatar(cs, radius, t),
+              ),
+              if (_headerHasPhoto) ...[
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: topPad + 72,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: t,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.black45, Colors.transparent],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 170,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: t,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black54],
+                            stops: [0.0, 0.62],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: _headerVignette,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: t,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              cs.surface.withValues(alpha: 0),
+                              cs.surface.withValues(alpha: 0.55),
+                              cs.surface,
+                            ],
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              Positioned.fromRect(
+                rect: avatarRect.inflate(7 * (1 - t)),
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: ringOpacity,
+                    child: CustomPaint(
+                      painter: _storyPreview == null
+                          ? null
+                          : SegmentedRingPainter(
+                              total: _storyPreview!.totalCount,
+                              read: _storyPreview!.readCount,
+                              unreadColors: [cs.primary, cs.tertiary, cs.primary],
+                              readColor: cs.outlineVariant,
+                              strokeWidth: 3.4,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 4,
+                right: 4,
+                top: topPad + 4,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back, color: iconColor),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Expanded(
+                      child: chipOpacity > 0 && unread.isNotEmpty
+                          ? Align(
+                              alignment: Alignment.centerLeft,
+                              child: Opacity(
+                                opacity: chipOpacity,
+                                child: _storyChip(unread),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    if (chipOpacity > 0 && totalPhotos > 1)
+                      Opacity(
+                        opacity: chipOpacity,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Text(
+                            '${_avatarIndex + 1}/$totalPhotos',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    _buildMoreButton(cs, iconColor),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: lerpDouble(16, 18, t)!,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _headerAligned(t, _buildNameRow(cs, nameColor, t)),
+                    const SizedBox(height: 2),
+                    _headerAligned(
+                      t,
+                      SelectionArea(
+                        child: Text(
+                          _subtitle(),
+                          style: TextStyle(color: subColor, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _headerAligned(double t, Widget child) {
+    return Align(
+      alignment: Alignment.lerp(Alignment.center, Alignment.centerLeft, t)!,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: lerpDouble(12, 18, t)!),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _headerAvatar(ColorScheme cs, double radius, double t) {
+    final expanded = t > 0.5;
+    final openHistory = _headerHasPhoto
+        ? () => AvatarHistoryScreen.open(
+            context,
+            contactId: _otherId ?? widget.dialogPeerId ?? 0,
+            name: widget.name,
+            currentAvatarUrl: _avatarPages.isEmpty
+                ? widget.imageUrl
+                : _avatarPages[_avatarIndex.clamp(0, _avatarPages.length - 1)],
+          )
+        : null;
+    final openStories = _storyPreview == null ? null : _openStories;
+
+    return KeyedSubtree(
+      key: _avatarKey,
+      child: ProfileHeroAvatar(
+        tag: widget.heroTag,
+        size: _headerAvatarSize,
+        child: GestureDetector(
+          onTap: expanded ? openHistory : (openStories ?? openHistory),
+          onLongPress: expanded ? null : (openStories == null ? null : openHistory),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: _headerAvatarContent(cs, t),
+          ),
         ),
-        SliverToBoxAdapter(child: _buildBody(cs)),
-      ],
+      ),
+    );
+  }
+
+  Widget _headerAvatarContent(ColorScheme cs, double t) {
+    if (_peerDeleted) {
+      return _ghostAvatar(radius: _headerAvatarSize / 2, fontSize: 52);
+    }
+    final pages = _avatarPages.isNotEmpty
+        ? _avatarPages
+        : (widget.imageUrl.isEmpty ? const <String>[] : [widget.imageUrl]);
+    if (pages.isEmpty) {
+      return KometAvatar(
+        name: widget.name,
+        size: _headerAvatarSize,
+        fontSize: 36,
+        fadeIn: false,
+      );
+    }
+    return PageView.builder(
+      controller: _avatarPageController,
+      itemCount: pages.length,
+      physics: t > 0.99
+          ? const PageScrollPhysics()
+          : const NeverScrollableScrollPhysics(),
+      onPageChanged: (i) => setState(() => _avatarIndex = i),
+      itemBuilder: (_, i) => CachedNetworkImage(
+        imageUrl: pages[i],
+        fit: BoxFit.cover,
+        memCacheWidth: _headerEverExpanded ? 720 : 288,
+        fadeInDuration: const Duration(milliseconds: 150),
+        errorWidget: (_, _, _) => ColoredBox(
+          color: cs.surfaceContainerHigh,
+          child: Center(
+            child: Text(
+              widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 32),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _refreshUnreadStories() {
+    final preview = _storyPreview;
+    if (preview == null || preview.unreadCount <= 0) {
+      _unreadStories = const [];
+      return;
+    }
+    final stories = storiesModule.cachedStories(preview.owner.ownerId);
+    if (stories == null || stories.isEmpty) {
+      _unreadStories = const [];
+      return;
+    }
+    final from = (stories.length - preview.unreadCount).clamp(
+      0,
+      stories.length,
+    );
+    _unreadStories = stories.sublist(from);
+  }
+
+  Widget _storyChip(List<Story> unread) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openStories,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          StoryPeanut(stories: unread),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              '${unread.length} '
+              '${pluralRu(unread.length, 'история', 'истории', 'историй')}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Outfit',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -502,29 +948,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(height: 4),
-          _avatar(),
-          const SizedBox(height: 14),
-          _buildNameRow(cs),
-          const SizedBox(height: 4),
           if (_isLoading)
             ..._loadingBlocks(cs)
           else ...[
-            SelectionArea(
-              child: Text(
-                _subtitle(),
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 20),
             _buildActions(cs),
             const SizedBox(height: 16),
             _buildPersistentInfo(cs),
             _buildTabBar(cs),
             const SizedBox(height: 12),
             _buildTabContent(cs),
-            const SizedBox(height: 40),
+            SizedBox(height: 40 + MediaQuery.paddingOf(context).bottom),
           ],
         ],
       ),
@@ -553,16 +986,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     return widget.name;
   }
 
-  Widget _buildMoreButton(ColorScheme cs) {
+  Widget _buildMoreButton(ColorScheme cs, [Color? iconColor]) {
     final entries = _moreMenuEntries();
+    final color = iconColor ?? cs.onSurface;
     if (entries.isEmpty) {
       return IconButton(
-        icon: Icon(Icons.more_vert, color: cs.onSurface),
+        icon: Icon(Icons.more_vert, color: color),
         onPressed: null,
       );
     }
     return PopupMenuButton<VoidCallback>(
-      icon: Icon(Icons.more_vert, color: cs.onSurface),
+      icon: Icon(Icons.more_vert, color: color),
       onSelected: (action) => action(),
       itemBuilder: (_) => [
         for (final entry in entries)
@@ -675,10 +1109,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     return null;
   }
 
-  Widget _buildNameRow(ColorScheme cs) {
+  Widget _buildNameRow(ColorScheme cs, Color textColor, double t) {
     final nameStyle = TextStyle(
-      color: cs.onSurface,
-      fontSize: 22,
+      color: textColor,
+      fontSize: lerpDouble(22, 25, t)!,
       fontWeight: FontWeight.w700,
       fontFamily: 'Outfit',
     );
@@ -687,9 +1121,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     final hasToggle = _isContact && real != null && real != custom;
 
     return Row(
+      mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const SizedBox(width: 36),
+        SizedBox(width: (hasToggle ? 30.0 : 0.0) * (1 - t)),
         Flexible(
           child: SelectionArea(
             child: ProfileHeroName(
@@ -703,24 +1138,34 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                   real ?? custom,
                   style: nameStyle,
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 child: Text(
                   custom,
                   style: nameStyle,
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
           ),
         ),
         SizedBox(
-          width: 36,
+          width: hasToggle ? 30 : 0,
+          height: 28,
           child: hasToggle
               ? IconButton(
                   padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   iconSize: 20,
-                  color: _showRealName ? cs.primary : cs.onSurfaceVariant,
+                  color: _showRealName
+                      ? Color.lerp(cs.primary, Colors.white, t)
+                      : textColor.withValues(alpha: 0.7),
                   icon: Icon(
                     _showRealName ? Symbols.visibility : Symbols.visibility_off,
                   ),
@@ -1183,7 +1628,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           items.add(_simpleInfoCard(cs, l10n.chatInfoBio, bio));
         }
       }
-    } else if (widget.chatType == 'CHANNEL') {
+    } else {
       final link = _chatInfo?.link;
       if (link != null && link.isNotEmpty) {
         items.add(_linkCard(cs, link));
@@ -1520,15 +1965,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   Widget _buildInfoTabContent(ColorScheme cs) {
     final items = <Widget>[];
 
-    if (widget.chatType == 'CHAT') {
-      final desc = _chatInfo?.description;
-      if (desc != null && desc.isNotEmpty) {
-        items
-          ..add(_infoCard(cs, l10n.contactProfileInfoDescription, desc))
-          ..add(const SizedBox(height: 8));
-      }
-    }
-
     items.add(_buildInfoRowsCard(cs));
 
     return SelectionArea(
@@ -1546,36 +1982,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       depth: 6,
       child: _buildAllInfoRows(cs),
-    );
-  }
-
-  Widget _infoCard(ColorScheme cs, String label, String value) {
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(14),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      depth: 6,
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -1699,6 +2105,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         ? l10n.chatInfoRoleOwner
         : (member.isAdmin ? l10n.chatInfoRoleAdmin : null);
 
+    final story = member.blocked || !AppStories.current.value
+        ? null
+        : storiesModule.previewOf(member.id);
+    final avatarRadius = story == null ? 22.0 : 19.0;
+
     return InkWell(
       onTap: member.isMe
           ? null
@@ -1714,24 +2125,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           children: [
             if (member.blocked)
               _ghostAvatar()
-            else if (avatar != null && avatar.isNotEmpty)
-              CircleAvatar(
-                radius: 22,
-                backgroundImage: CachedNetworkImageProvider(
-                  avatar,
-                  maxWidth: 144,
-                  maxHeight: 144,
-                ),
-                backgroundColor: cs.primaryContainer,
-              )
             else
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: TextStyle(color: cs.onPrimaryContainer, fontSize: 16),
-                ),
+              _memberAvatar(
+                cs,
+                story: story,
+                radius: avatarRadius,
+                name: name,
+                avatarUrl: avatar,
               ),
             const SizedBox(width: 14),
             Expanded(
@@ -1762,6 +2162,71 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _memberAvatar(
+    ColorScheme cs, {
+    required StoryPreview? story,
+    required double radius,
+    required String name,
+    String? avatarUrl,
+  }) {
+    final circle = (avatarUrl != null && avatarUrl.isNotEmpty)
+        ? CircleAvatar(
+            radius: radius,
+            backgroundImage: CachedNetworkImageProvider(
+              avatarUrl,
+              maxWidth: 144,
+              maxHeight: 144,
+            ),
+            backgroundColor: cs.primaryContainer,
+          )
+        : CircleAvatar(
+            radius: radius,
+            backgroundColor: cs.primaryContainer,
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: TextStyle(
+                color: cs.onPrimaryContainer,
+                fontSize: radius * 0.72,
+              ),
+            ),
+          );
+    if (story == null) return circle;
+    return Builder(
+      builder: (avatarContext) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openMemberStories(avatarContext, story, name, avatarUrl),
+        child: StoryAvatarRing(
+          diameter: radius * 2,
+          total: story.totalCount,
+          read: story.readCount,
+          strokeWidth: 2.2,
+          ringGap: 3,
+          haloWidth: 1.5,
+          child: circle,
+        ),
+      ),
+    );
+  }
+
+  void _openMemberStories(
+    BuildContext avatarContext,
+    StoryPreview story,
+    String name,
+    String? avatarUrl,
+  ) {
+    Haptics.tap();
+    unawaited(
+      openStoryViewer(
+        context,
+        previews: [story],
+        origin: storyOriginOf(avatarContext),
+        ownerOverrides: {
+          story.owner.ownerId: StoryOwnerInfo(name: name, avatarUrl: avatarUrl),
+        },
       ),
     );
   }
@@ -2023,34 +2488,66 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  Widget _avatar() {
-    const size = 96.0;
-    final peerId = widget.chatType == 'DIALOG' ? _otherId : null;
-    final hasHistory =
-        peerId != null && widget.imageUrl.isNotEmpty && !_peerDeleted;
-    return ProfileHeroAvatar(
-      tag: widget.heroTag,
-      size: size,
-      child: GestureDetector(
-        onTap: hasHistory
-            ? () => AvatarHistoryScreen.open(
-                context,
-                contactId: peerId,
-                name: widget.name,
-                currentAvatarUrl: widget.imageUrl,
-              )
-            : null,
-        child: _peerDeleted
-            ? _ghostAvatar(radius: size / 2, fontSize: 52)
-            : KometAvatar(
-                name: widget.name,
-                imageUrl: widget.imageUrl,
-                size: size,
-                fontSize: 36,
-                fadeIn: false,
-              ),
-      ),
+  Future<void> _loadAvatarHistory(int peerId) async {
+    if (!_headerHasPhoto) return;
+    final cached = ContactsModule.cachedPhotos(peerId);
+    if (cached != null) _applyAvatarPhotos(cached);
+    final photos = await ContactsModule.fetchPhotos(api, peerId, count: 30);
+    if (!mounted) return;
+    _applyAvatarPhotos(photos);
+  }
+
+  void _applyAvatarPhotos(ContactPhotos photos) {
+    final urls = <String>[];
+    if (widget.imageUrl.isNotEmpty) urls.add(widget.imageUrl);
+    for (final url in photos.urls) {
+      if (url.isNotEmpty && !urls.contains(url)) urls.add(url);
+    }
+    if (urls.isEmpty || listEquals(urls, _avatarPages)) return;
+    setState(() {
+      _avatarPages = urls;
+      _avatarTotal = math.max(photos.total, urls.length);
+      _avatarIndex = _avatarIndex.clamp(0, urls.length - 1);
+    });
+  }
+
+  Future<void> _loadStories(int peerId) async {
+    if (!AppStories.current.value || _peerDeleted) return;
+    final cached = storiesModule.previewOf(peerId);
+    if (cached != null && !cached.isEmpty && mounted) {
+      setState(() {
+        _storyPreview = cached;
+        _refreshUnreadStories();
+      });
+    }
+    final fresh = await storiesModule.loadOwnerPreview(
+      StoryOwner(ownerId: peerId),
     );
+    if (!mounted) return;
+    setState(() {
+      _storyPreview = (fresh == null || fresh.isEmpty) ? null : fresh;
+      _refreshUnreadStories();
+    });
+  }
+
+  Future<void> _openStories() async {
+    final preview = _storyPreview;
+    if (preview == null) return;
+    Haptics.tap();
+    final avatarContext = _avatarKey.currentContext;
+    await openStoryViewer(
+      context,
+      previews: [preview],
+      origin: avatarContext == null ? null : storyOriginOf(avatarContext),
+      ownerOverrides: {
+        preview.owner.ownerId: StoryOwnerInfo(
+          name: _customName,
+          avatarUrl: _contactData?.avatarUrl ?? widget.imageUrl,
+        ),
+      },
+    );
+    if (!mounted) return;
+    await _loadStories(preview.owner.ownerId);
   }
 
   List<Widget> _loadingBlocks(ColorScheme cs) {
@@ -2064,10 +2561,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
 
     return [
-      const SizedBox(height: 4),
-      block(110, 16, r: 6),
-      const SizedBox(height: 24),
-      block(240, 54, r: 14),
+      block(double.infinity, 60, r: 14),
       const SizedBox(height: 16),
       block(double.infinity, 36, r: 20),
       const SizedBox(height: 12),

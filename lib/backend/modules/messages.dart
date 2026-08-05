@@ -297,6 +297,8 @@ class ReplyInfo {
     this.attachments,
   });
 
+  bool get missing => previewText().isEmpty;
+
   static ReplyInfo? fromPayload(Map<String, dynamic>? payload) {
     if (payload == null) return null;
     final link = payload['link'];

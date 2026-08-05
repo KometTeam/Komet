@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:photo_manager/photo_manager.dart';
+
+import 'desktop_video_probe.dart';
 
 enum GalleryPermission { granted, limited, denied }
 
@@ -134,17 +137,37 @@ class _AssetGalleryItem implements GalleryItem {
   }
 }
 
+const Set<String> kGalleryImageExtensions = {
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.heic',
+  '.heif',
+};
+
+const Set<String> kGalleryVideoExtensions = {
+  '.mp4',
+  '.mov',
+  '.m4v',
+  '.mkv',
+  '.webm',
+  '.avi',
+  '.3gp',
+};
+
+String _fileExtension(String path) {
+  final dot = path.lastIndexOf('.');
+  if (dot < 0) return '';
+  return path.substring(dot).toLowerCase();
+}
+
+bool isVideoPath(String path) =>
+    kGalleryVideoExtensions.contains(_fileExtension(path));
+
 class _DesktopGallerySource implements GallerySource {
-  static const _imageExtensions = {
-    '.jpg',
-    '.jpeg',
-    '.png',
-    '.gif',
-    '.webp',
-    '.bmp',
-    '.heic',
-    '.heif',
-  };
 
   @override
   Future<GalleryPermission> ensurePermission() async =>
@@ -157,13 +180,30 @@ class _DesktopGallerySource implements GallerySource {
       if (!dir.existsSync()) continue;
       try {
         for (final entity in dir.listSync(followLinks: false)) {
-          if (entity is! File || !_isImage(entity.path)) continue;
+          if (entity is! File || !_isMedia(entity.path)) continue;
           entries.add((file: entity, modified: entity.statSync().modified));
         }
       } catch (_) {}
     }
     entries.sort((a, b) => b.modified.compareTo(a.modified));
-    return entries.take(limit).map((e) => _FileGalleryItem(e.file)).toList();
+    final items = entries
+        .take(limit)
+        .map((e) => _FileGalleryItem(e.file))
+        .toList();
+    const batch = 8;
+    const eager = 24;
+
+    Future<void> probeRange(int from, int to) async {
+      for (var i = from; i < to; i += batch) {
+        final end = i + batch > to ? to : i + batch;
+        await Future.wait(items.sublist(i, end).map((it) => it.probe()));
+      }
+    }
+
+    final head = items.length < eager ? items.length : eager;
+    await probeRange(0, head);
+    if (head < items.length) unawaited(probeRange(head, items.length));
+    return items;
   }
 
   @override
@@ -180,35 +220,45 @@ class _DesktopGallerySource implements GallerySource {
       Directory('$home/Pictures'),
       Directory('$home/Изображения'),
       Directory('$home/Images'),
+      Directory('$home/Videos'),
+      Directory('$home/Видео'),
+      Directory('$home/Movies'),
     ];
   }
 
-  bool _isImage(String path) {
-    final dot = path.lastIndexOf('.');
-    if (dot < 0) return false;
-    return _imageExtensions.contains(path.substring(dot).toLowerCase());
+  bool _isMedia(String path) {
+    final ext = _fileExtension(path);
+    return kGalleryImageExtensions.contains(ext) ||
+        kGalleryVideoExtensions.contains(ext);
   }
 }
 
 class _FileGalleryItem implements GalleryItem {
   final File file;
+  Duration? _duration;
 
-  _FileGalleryItem(this.file);
+  _FileGalleryItem(this.file, {Duration? duration}) : _duration = duration;
+
+  Future<void> probe() async {
+    if (!isVideo || _duration != null) return;
+    _duration = await DesktopVideoProbe.duration(file.path);
+  }
 
   @override
   String get id => file.path;
 
   @override
-  bool get isVideo => false;
+  bool get isVideo => isVideoPath(file.path);
 
   @override
-  Duration? get duration => null;
+  Duration? get duration => _duration;
 
   @override
   File? get localFile => file;
 
   @override
-  Future<Uint8List?> thumbnail(int size) async => null;
+  Future<Uint8List?> thumbnail(int size) async =>
+      isVideo ? DesktopVideoProbe.thumbnail(file.path, size) : null;
 
   @override
   Future<File?> originFile() async => file;
@@ -220,5 +270,7 @@ class _FileGalleryItem implements GalleryItem {
   }) async => null;
 
   @override
-  Future<(int, int)?> dimensions() => imageFileDimensions(file);
+  Future<(int, int)?> dimensions() => isVideo
+      ? DesktopVideoProbe.dimensions(file.path)
+      : imageFileDimensions(file);
 }

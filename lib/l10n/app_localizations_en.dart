@@ -2352,6 +2352,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactBubbleOpenProfile => 'Open profile';
 
   @override
+  String get miniAppOpen => 'Open';
+
+  @override
+  String get miniAppFailed => 'Couldn\'t open the app';
+
+  @override
   String get editContactMenu => 'Edit contact';
 
   @override

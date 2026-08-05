@@ -773,6 +773,8 @@
   "contactBubbleNew": "Новый контакт",
   "contactBubbleAlreadyAdded": "Уже твой контакт",
   "contactBubbleOpenProfile": "Открыть профиль",
+  "miniAppOpen": "Открыть",
+  "miniAppFailed": "Не удалось открыть приложение",
   "editContactMenu": "Редактировать контакт",
   "editContactTitle": "Редактировать контакт",
   "editContactFirstName": "Имя",

@@ -465,6 +465,10 @@ class ContactsModule {
     }
   }
 
+  static final Map<int, ContactPhotos> _photosHead = {};
+
+  static ContactPhotos? cachedPhotos(int contactId) => _photosHead[contactId];
+
   static Future<ContactPhotos> fetchPhotos(
     Api api,
     int contactId, {
@@ -482,7 +486,9 @@ class ContactsModule {
         ? rawUrls.whereType<String>().toList()
         : <String>[];
     final total = map['total'] is int ? map['total'] as int : urls.length;
-    return ContactPhotos(urls: urls, total: total);
+    final photos = ContactPhotos(urls: urls, total: total);
+    if (from == 0) _photosHead[contactId] = photos;
+    return photos;
   }
 
   static Future<List<CachedContact>> getContacts(int accountId) async {

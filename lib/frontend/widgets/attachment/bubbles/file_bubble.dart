@@ -17,6 +17,7 @@ import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../decrypted_photo.dart';
 import '../../photo_viewer.dart';
+import '../../upload_progress_ring.dart';
 import 'bubble_context.dart';
 
 class FileBubble extends StatelessWidget {
@@ -69,11 +70,24 @@ class FileBubble extends StatelessWidget {
                   color: isMe ? ctx.systemTint : ctx.cs.primaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  Symbols.description,
-                  color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-                  size: 20,
-                ),
+                child: ctx.uploadProgress == null
+                    ? Icon(
+                        Symbols.description,
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer
+                            : ctx.cs.primary,
+                        size: 20,
+                      )
+                    : UploadProgressRing(
+                        progress: ctx.uploadProgress!,
+                        color: isMe
+                            ? ctx.cs.onPrimaryContainer
+                            : ctx.cs.primary,
+                        size: 38,
+                        strokeWidth: 2.4,
+                        iconSize: 14,
+                        padding: const EdgeInsets.all(4),
+                      ),
               ),
               const SizedBox(width: 10),
               Flexible(

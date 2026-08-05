@@ -1,12 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/core/config/app_stories.dart';
+import 'package:komet/core/utils/haptics.dart';
+import 'package:komet/frontend/screens/stories/story_owner_info.dart';
+import 'package:komet/frontend/screens/stories/story_ring.dart';
+import 'package:komet/frontend/screens/stories/story_viewer_screen.dart';
 import 'package:komet/frontend/widgets/encryption_lock_badge.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/online_dot.dart';
 import 'package:komet/frontend/widgets/profile_hero.dart';
+import 'package:komet/main.dart' show storiesModule;
+import 'package:komet/models/story.dart';
 
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
@@ -120,12 +129,11 @@ class ChatHeaderRow extends StatelessWidget {
                 children: [
                   _withOnlineDot(
                     cs,
-                    ProfileHeroAvatar(
-                      tag: heroTag,
-                      size: 44,
-                      child: imageUrl.isNotEmpty
+                    _heroAvatar(
+                      44,
+                      (d) => imageUrl.isNotEmpty
                           ? CircleAvatar(
-                              radius: 22,
+                              radius: d / 2,
                               backgroundImage: CachedNetworkImageProvider(
                                 imageUrl,
                                 maxWidth: 144,
@@ -133,13 +141,13 @@ class ChatHeaderRow extends StatelessWidget {
                               ),
                             )
                           : CircleAvatar(
-                              radius: 22,
+                              radius: d / 2,
                               backgroundColor: cs.primaryContainer,
                               child: Text(
                                 name.isNotEmpty ? name[0].toUpperCase() : '?',
                                 style: TextStyle(
                                   color: cs.onPrimaryContainer,
-                                  fontSize: 16,
+                                  fontSize: d * 0.36,
                                   fontWeight: FontWeight.w600,
                                   fontFamily: 'Outfit',
                                 ),
@@ -287,12 +295,11 @@ class ChatHeaderRow extends StatelessWidget {
               children: [
                 _withOnlineDot(
                   cs,
-                  ProfileHeroAvatar(
-                    tag: heroTag,
-                    size: 36,
-                    child: imageUrl.isNotEmpty
+                  _heroAvatar(
+                    36,
+                    (d) => imageUrl.isNotEmpty
                         ? CircleAvatar(
-                            radius: 18,
+                            radius: d / 2,
                             backgroundImage: CachedNetworkImageProvider(
                               imageUrl,
                               maxWidth: 144,
@@ -300,13 +307,13 @@ class ChatHeaderRow extends StatelessWidget {
                             ),
                           )
                         : CircleAvatar(
-                            radius: 18,
+                            radius: d / 2,
                             backgroundColor: cs.primaryContainer,
                             child: Text(
                               name.isNotEmpty ? name[0].toUpperCase() : '?',
                               style: TextStyle(
                                 color: cs.onPrimaryContainer,
-                                fontSize: 12,
+                                fontSize: d / 3,
                               ),
                             ),
                           ),
@@ -392,6 +399,67 @@ class ChatHeaderRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  int get _storyOwnerId => chatType == 'DIALOG' ? chatId ^ myId : chatId;
+
+  Widget _heroAvatar(
+    double size,
+    Widget Function(double diameter) avatarBuilder,
+  ) {
+    final ownerId = _storyOwnerId;
+    if (!AppStories.current.value || ownerId <= 0) {
+      return ProfileHeroAvatar(
+        tag: heroTag,
+        size: size,
+        child: avatarBuilder(size),
+      );
+    }
+    const gap = 3.0;
+    return ValueListenableBuilder<int>(
+      valueListenable: storiesModule.storiesChanged,
+      builder: (context, _, _) {
+        final preview = storiesModule.previewFor(ownerId);
+        final hasStory = preview != null && !preview.isEmpty;
+        final inner = hasStory ? size - gap * 2 : size;
+        return GestureDetector(
+          behavior: hasStory
+              ? HitTestBehavior.opaque
+              : HitTestBehavior.deferToChild,
+          onTap: hasStory ? () => _openStories(context, preview) : null,
+          child: StoryAvatarRing(
+            diameter: inner,
+            total: preview?.totalCount ?? 0,
+            read: preview?.readCount ?? 0,
+            strokeWidth: 2,
+            ringGap: hasStory ? gap : 0,
+            haloWidth: 1.2,
+            child: ProfileHeroAvatar(
+              tag: heroTag,
+              size: inner,
+              child: avatarBuilder(inner),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openStories(BuildContext context, StoryPreview preview) {
+    Haptics.tap();
+    unawaited(
+      openStoryViewer(
+        context,
+        previews: [preview],
+        origin: storyOriginOf(context),
+        ownerOverrides: {
+          preview.owner.ownerId: StoryOwnerInfo(
+            name: name,
+            avatarUrl: imageUrl.isEmpty ? null : imageUrl,
+          ),
+        },
+      ),
     );
   }
 
