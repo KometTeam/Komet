@@ -1535,16 +1535,29 @@ class _ChatListScreenState extends State<ChatListScreen>
                                           child: GestureDetector(
                                             behavior: HitTestBehavior.opaque,
                                             onTap: () => _openStories(0),
-                                            child: Container(
-                                              width: 50 * (1.0 - _pullRatio),
-                                              height: 32,
-                                              margin: const EdgeInsets.only(
-                                                right: 8,
-                                              ),
-                                              child: FoldedStoryStack(
-                                                previews:
-                                                    storiesModule.previews,
-                                                opacity: 1.0 - _pullRatio,
+                                            child: SizedBox(
+                                              width:
+                                                  (FoldedStoryStack.widthFor(
+                                                        storiesModule
+                                                            .previews
+                                                            .length,
+                                                      ) +
+                                                      8) *
+                                                  (1.0 - _pullRatio),
+                                              height: FoldedStoryStack.outerSize,
+                                              child: OverflowBox(
+                                                alignment: Alignment.centerLeft,
+                                                maxWidth:
+                                                    FoldedStoryStack.widthFor(
+                                                      storiesModule
+                                                          .previews
+                                                          .length,
+                                                    ),
+                                                child: FoldedStoryStack(
+                                                  previews:
+                                                      storiesModule.previews,
+                                                  opacity: 1.0 - _pullRatio,
+                                                ),
                                               ),
                                             ),
                                           ),

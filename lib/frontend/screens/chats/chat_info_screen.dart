@@ -18,6 +18,7 @@ import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
@@ -157,6 +158,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   List<String> _avatarPages = const [];
   int _avatarIndex = 0;
   int _avatarTotal = 0;
+  bool _avatarHover = false;
+  bool _avatarHistoryBusy = false;
+  bool _avatarHistoryLoaded = false;
 
   double _headerDelta = 0;
   bool _expandArmed = false;
@@ -627,7 +631,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   Widget _buildMorphHeader(BuildContext context, ColorScheme cs, double t) {
     final topPad = MediaQuery.paddingOf(context).top;
-    if (t > 0) _headerEverExpanded = true;
+    if (t > 0) {
+      _headerEverExpanded = true;
+      final peerId = _otherId;
+      if (!_avatarHistoryLoaded && peerId != null) {
+        unawaited(_loadAvatarHistory(peerId));
+      }
+    }
     final iconColor = Color.lerp(cs.onSurface, Colors.white, t)!;
     final nameColor = Color.lerp(cs.onSurface, Colors.white, t)!;
     final subColor = Color.lerp(
@@ -841,29 +851,152 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
     return KeyedSubtree(
       key: _avatarKey,
-      child: ProfileHeroAvatar(
-        tag: widget.heroTag,
-        size: _headerAvatarSize,
-        child: GestureDetector(
-          onTap: expanded ? openHistory : (openStories ?? openHistory),
-          onLongPress: expanded ? null : (openStories == null ? null : openHistory),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            child: _headerAvatarContent(cs, t),
+      child: GestureDetector(
+        onTap: expanded ? openHistory : (openStories ?? openHistory),
+        onLongPress: expanded
+            ? null
+            : (openStories == null ? null : openHistory),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ProfileHeroAvatar(
+              tag: widget.heroTag,
+              size: _headerAvatarSize,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(radius),
+                child: _headerAvatarContent(cs),
+              ),
+            ),
+            Offstage(
+              offstage: t < 0.5 || _avatarPages.length < 2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(radius),
+                child: _avatarPager(cs, t),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _avatarPager(ColorScheme cs, double t) {
+    final pages = _avatarPages;
+    if (pages.length < 2) return const SizedBox.shrink();
+    final interactive = t > 0.5;
+    return MouseRegion(
+      onEnter: (_) {
+        if (!_avatarHover) setState(() => _avatarHover = true);
+      },
+      onExit: (_) {
+        if (_avatarHover) setState(() => _avatarHover = false);
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: PointerDeviceKind.values.toSet(),
+              scrollbars: false,
+              overscroll: false,
+            ),
+            child: PageView.builder(
+              controller: _avatarPageController,
+              itemCount: pages.length,
+              physics: interactive
+                  ? const PageScrollPhysics()
+                  : const NeverScrollableScrollPhysics(),
+              onPageChanged: (i) => setState(() => _avatarIndex = i),
+              itemBuilder: (_, i) => _avatarPhoto(cs, pages[i]),
+            ),
+          ),
+          if (interactive && _avatarHover) ...[
+            _avatarArrow(
+              alignment: Alignment.centerLeft,
+              icon: Icons.chevron_left,
+              enabled: _avatarIndex > 0,
+              onTap: () => _stepAvatar(-1),
+            ),
+            _avatarArrow(
+              alignment: Alignment.centerRight,
+              icon: Icons.chevron_right,
+              enabled: _avatarIndex < pages.length - 1,
+              onTap: () => _stepAvatar(1),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _avatarArrow({
+    required Alignment alignment,
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return Align(
+      alignment: alignment,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 150),
+          opacity: enabled ? 1 : 0,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Colors.black38,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: Colors.white, size: 24),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _headerAvatarContent(ColorScheme cs, double t) {
+  void _stepAvatar(int delta) {
+    final target = (_avatarIndex + delta).clamp(0, _avatarPages.length - 1);
+    if (target == _avatarIndex) return;
+    _avatarPageController.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _avatarPhoto(ColorScheme cs, String url) {
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: BoxFit.cover,
+      memCacheWidth: _headerEverExpanded ? 720 : 288,
+      fadeInDuration: const Duration(milliseconds: 150),
+      errorWidget: (_, _, _) => ColoredBox(
+        color: cs.surfaceContainerHigh,
+        child: Center(
+          child: Text(
+            widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 32),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerAvatarContent(ColorScheme cs) {
     if (_peerDeleted) {
       return _ghostAvatar(radius: _headerAvatarSize / 2, fontSize: 52);
     }
-    final pages = _avatarPages.isNotEmpty
-        ? _avatarPages
-        : (widget.imageUrl.isEmpty ? const <String>[] : [widget.imageUrl]);
-    if (pages.isEmpty) {
+    final url = _avatarPages.isNotEmpty ? _avatarPages.first : widget.imageUrl;
+    if (url.isEmpty) {
       return KometAvatar(
         name: widget.name,
         size: _headerAvatarSize,
@@ -871,29 +1004,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         fadeIn: false,
       );
     }
-    return PageView.builder(
-      controller: _avatarPageController,
-      itemCount: pages.length,
-      physics: t > 0.99
-          ? const PageScrollPhysics()
-          : const NeverScrollableScrollPhysics(),
-      onPageChanged: (i) => setState(() => _avatarIndex = i),
-      itemBuilder: (_, i) => CachedNetworkImage(
-        imageUrl: pages[i],
-        fit: BoxFit.cover,
-        memCacheWidth: _headerEverExpanded ? 720 : 288,
-        fadeInDuration: const Duration(milliseconds: 150),
-        errorWidget: (_, _, _) => ColoredBox(
-          color: cs.surfaceContainerHigh,
-          child: Center(
-            child: Text(
-              widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 32),
-            ),
-          ),
-        ),
-      ),
-    );
+    return _avatarPhoto(cs, url);
   }
 
   void _refreshUnreadStories() {
@@ -1254,30 +1365,27 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       btns = [chatBtn, muteBtn, leaveBtn];
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              for (int i = 0; i < btns.length; i++) ...[
-                _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
-                if (i < btns.length - 1) const SizedBox(width: 8),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            for (int i = 0; i < btns.length; i++) ...[
+              _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
+              if (i < btns.length - 1) const SizedBox(width: 8),
             ],
-          ),
-          if (_canAddContact) ...[
-            const SizedBox(height: 8),
-            _wideActionBtn(
-              cs,
-              Symbols.person_add,
-              l10n.contactProfileActionAddContact,
-              _addContactBusy ? null : _addToContacts,
-            ),
           ],
+        ),
+        if (_canAddContact) ...[
+          const SizedBox(height: 8),
+          _wideActionBtn(
+            cs,
+            Symbols.person_add,
+            l10n.contactProfileActionAddContact,
+            _addContactBusy ? null : _addToContacts,
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -2489,12 +2597,20 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Future<void> _loadAvatarHistory(int peerId) async {
-    if (!_headerHasPhoto) return;
+    if (!_headerHasPhoto || _avatarHistoryBusy) return;
+    _avatarHistoryBusy = true;
     final cached = ContactsModule.cachedPhotos(peerId);
     if (cached != null) _applyAvatarPhotos(cached);
-    final photos = await ContactsModule.fetchPhotos(api, peerId, count: 30);
-    if (!mounted) return;
-    _applyAvatarPhotos(photos);
+    try {
+      final photos = await ContactsModule.fetchPhotos(api, peerId, count: 30);
+      if (!mounted) return;
+      _avatarHistoryLoaded = true;
+      _applyAvatarPhotos(photos);
+    } catch (e) {
+      logger.w('Не удалось получить историю аватарок $peerId: $e');
+    } finally {
+      _avatarHistoryBusy = false;
+    }
   }
 
   void _applyAvatarPhotos(ContactPhotos photos) {

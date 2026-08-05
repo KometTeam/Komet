@@ -844,7 +844,14 @@ class MessageBubble extends StatelessWidget {
     }
 
     final shape = _computeShape();
-    final hasPhotoCap = _computeHasPhotoWithCaption();
+    final hasReactions = _hasReactions();
+    final hasPhotoCap =
+        _computeHasPhotoWithCaption() ||
+        (contentType == MessageType.attachment &&
+            hasReactions &&
+            !_isSticker &&
+            !_isVideoNote &&
+            _jumboAnimojiUrls == null);
     final hasMultiPhotos = _computeHasMultiplePhotosNoCaption();
     final textColor = bubbleTextColor(context);
 
@@ -901,8 +908,7 @@ class MessageBubble extends StatelessWidget {
           )
         : _buildContent(makeCtx());
 
-    final reactionsUnder = _reactionsUnderBubble(contentType);
-    final reactionsInside = contentType != MessageType.text && !reactionsUnder;
+    final reactionsInside = contentType != MessageType.text;
 
     final reply = message.replyInfo;
 
@@ -915,7 +921,15 @@ class MessageBubble extends StatelessWidget {
         ? Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [bubbleContent, _reactionsBar(cs)],
+            children: [
+              bubbleContent,
+              _reactionsBar(
+                cs,
+                inset: padding == EdgeInsets.zero
+                    ? const EdgeInsets.fromLTRB(8, 4, 8, 6)
+                    : const EdgeInsets.only(top: 4),
+              ),
+            ],
           )
         : bubbleContent;
 
@@ -1031,7 +1045,6 @@ class MessageBubble extends StatelessWidget {
                   )
                 else
                   bubbleBox,
-                if (reactionsUnder) _reactionsBar(cs),
               ],
             ),
           ],
@@ -1267,25 +1280,22 @@ class MessageBubble extends StatelessWidget {
     return null;
   }
 
-  bool _reactionsUnderBubble(MessageType contentType) {
-    if (contentType != MessageType.attachment) return false;
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) return false;
-    if (attachments.first is ForwardedMessageAttachment) return false;
-    if (attachments.any((a) => a is ContactAttachment)) return false;
-    if (attachments.whereType<PhotoAttachment>().length >= 2) return false;
-    return true;
+  bool _hasReactions() {
+    final info = ReactionInfo.fromMap(_resolveReactionInfo());
+    return info != null && info.counters.isNotEmpty;
   }
 
-  Widget _reactionsBar(ColorScheme cs) {
+  Widget _reactionsBar(ColorScheme cs, {required EdgeInsets inset}) {
     final listenable = reactionsListenable;
     if (listenable != null) {
       return ValueListenableBuilder<Map<String, dynamic>?>(
         valueListenable: listenable,
-        builder: (context, info, _) => _buildReactionsBarFor(cs, info),
+        builder: (context, info, _) =>
+            _buildReactionsBarFor(cs, info, inset: inset),
       );
     }
-    return _buildReactionsBar(cs);
+    final info = message.payload?['reactionInfo'];
+    return _buildReactionsBarFor(cs, info is Map ? info : null, inset: inset);
   }
 
   Widget _buildContent(BubbleContext ctx) {
@@ -1386,16 +1396,15 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildReactionsBar(ColorScheme cs) {
-    final info = message.payload?['reactionInfo'];
-    return _buildReactionsBarFor(cs, info is Map ? info : null);
-  }
-
-  Widget _buildReactionsBarFor(ColorScheme cs, Map? info) {
+  Widget _buildReactionsBarFor(
+    ColorScheme cs,
+    Map? info, {
+    EdgeInsets inset = const EdgeInsets.only(top: 4),
+  }) {
     final chips = _buildReactionChipsFor(cs, ReactionInfo.fromMap(info));
     if (chips.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: inset,
       child: Wrap(spacing: 4, runSpacing: 4, children: chips),
     );
   }

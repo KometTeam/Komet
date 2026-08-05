@@ -388,6 +388,19 @@ class _StorySelfTileState extends State<StorySelfTile> {
 
 /// Свёрнутая мини-стопка колец, показывается в заголовке при закрытом доке.
 class FoldedStoryStack extends StatelessWidget {
+  static const int maxShown = 3;
+  static const double avatarSize = 28;
+  static const double _rim = 1.5;
+  static const double _gap = 1.5;
+  static const double step = 14;
+
+  static const double outerSize = avatarSize + (_rim + _gap) * 2;
+
+  static double widthFor(int count) {
+    final shown = count > maxShown ? maxShown : (count < 1 ? 1 : count);
+    return outerSize + step * (shown - 1);
+  }
+
   final List<StoryPreview> previews;
   final double opacity;
 
@@ -400,35 +413,43 @@ class FoldedStoryStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final shown = previews.take(3).toList();
+    final shown = previews.take(maxShown).toList();
     return Opacity(
       opacity: opacity.clamp(0.0, 1.0),
-      child: Stack(
-      children: [
-        for (var i = 0; i < shown.length; i++)
-          Positioned(
-            left: i * 14.0,
-            child: StoryOwnerBuilder(
-              owner: shown[i].owner,
-              builder: (context, info) => Container(
-                padding: const EdgeInsets.all(1.5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: cs.surface,
-                  border: Border.all(
-                    color: shown[i].hasUnread ? cs.primary : cs.outlineVariant,
-                    width: 1.5,
+      child: SizedBox(
+        height: outerSize,
+        width: widthFor(shown.length),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (var i = 0; i < shown.length; i++)
+              Positioned(
+                left: i * step,
+                top: 0,
+                child: StoryOwnerBuilder(
+                  owner: shown[i].owner,
+                  builder: (context, info) => Container(
+                    padding: const EdgeInsets.all(_gap),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: cs.surface,
+                      border: Border.all(
+                        color: shown[i].hasUnread
+                            ? cs.primary
+                            : cs.outlineVariant,
+                        width: _rim,
+                      ),
+                    ),
+                    child: KometAvatar(
+                      name: info?.name.isNotEmpty == true ? info!.name : '?',
+                      size: avatarSize,
+                      imageUrl: info?.avatarUrl,
+                    ),
                   ),
                 ),
-                child: KometAvatar(
-                  name: info?.name.isNotEmpty == true ? info!.name : '?',
-                  size: 28,
-                  imageUrl: info?.avatarUrl,
-                ),
               ),
-            ),
-          ),
-      ],
+          ],
+        ),
       ),
     );
   }
