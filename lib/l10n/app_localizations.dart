@@ -2360,6 +2360,12 @@ abstract class AppLocalizations {
   /// **'Call'**
   String get contactProfileActionCall;
 
+  /// No description provided for @contactProfileActionAddContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to contacts'**
+  String get contactProfileActionAddContact;
+
   /// No description provided for @contactProfileInfoPhone.
   ///
   /// In en, this message translates to:

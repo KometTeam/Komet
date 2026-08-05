@@ -1196,6 +1196,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactProfileActionCall => 'Call';
 
   @override
+  String get contactProfileActionAddContact => 'Add to contacts';
+
+  @override
   String get contactProfileInfoPhone => 'Phone';
 
   @override

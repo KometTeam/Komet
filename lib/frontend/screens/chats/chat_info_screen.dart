@@ -134,6 +134,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   int _lastEventTime = 0;
   bool _blocked = false;
   bool _muteBusy = false;
+  bool _addContactBusy = false;
 
   @override
   void initState() {
@@ -810,14 +811,60 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (int i = 0; i < btns.length; i++) ...[
-            _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
-            if (i < btns.length - 1) const SizedBox(width: 8),
+          Row(
+            children: [
+              for (int i = 0; i < btns.length; i++) ...[
+                _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
+                if (i < btns.length - 1) const SizedBox(width: 8),
+              ],
+            ],
+          ),
+          if (_canAddContact) ...[
+            const SizedBox(height: 8),
+            _wideActionBtn(
+              cs,
+              Symbols.person_add,
+              l10n.contactProfileActionAddContact,
+              _addContactBusy ? null : _addToContacts,
+            ),
           ],
         ],
       ),
+    );
+  }
+
+  bool get _canAddContact =>
+      widget.chatType == 'DIALOG' &&
+      !_isContact &&
+      !_isBot &&
+      !_peerDeleted &&
+      _otherId != null &&
+      _otherId != _myId;
+
+  Future<void> _addToContacts() async {
+    final peerId = _otherId;
+    if (peerId == null || _addContactBusy) return;
+    setState(() => _addContactBusy = true);
+
+    CachedContact? contact;
+    try {
+      contact = await ContactsModule.addContact(api, peerId, '');
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      _addContactBusy = false;
+      if (contact != null) {
+        _localContact = contact;
+        _showRealName = false;
+      }
+    });
+    showCustomNotification(
+      context,
+      contact != null ? l10n.nfcContactAdded : l10n.addContactError,
     );
   }
 
@@ -1067,6 +1114,37 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _wideActionBtn(
+    ColorScheme cs,
+    IconData icon,
+    String label, [
+    VoidCallback? onTap,
+  ]) {
+    return GlossyPill(
+      onTap: onTap,
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      depth: 6,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: cs.primary, size: 22),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(color: cs.onSurface, fontSize: 13),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

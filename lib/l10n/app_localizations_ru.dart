@@ -1201,6 +1201,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get contactProfileActionCall => 'Звонок';
 
   @override
+  String get contactProfileActionAddContact => 'Добавить в контакты';
+
+  @override
   String get contactProfileInfoPhone => 'Телефон';
 
   @override

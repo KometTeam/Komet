@@ -398,6 +398,7 @@
   "contactProfileActionChat": "Чат",
   "contactProfileActionSound": "Звук",
   "contactProfileActionCall": "Звонок",
+  "contactProfileActionAddContact": "Добавить в контакты",
   "contactProfileInfoPhone": "Телефон",
   "contactProfileInfoCountry": "Страна",
   "contactProfileInfoGender": "Пол",

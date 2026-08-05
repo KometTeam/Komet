@@ -159,7 +159,7 @@ class ContactsModule {
     final resp = await api.sendRequest(Opcode.contactUpdate, {
       'action': 'ADD',
       'contactId': id,
-      'firstName': firstName,
+      if (firstName.isNotEmpty) 'firstName': firstName,
     });
 
     final profile = await AppDatabase.loadActiveProfile();

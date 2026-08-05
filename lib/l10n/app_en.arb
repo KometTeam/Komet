@@ -454,6 +454,7 @@
   "contactProfileActionChat": "Chat",
   "contactProfileActionSound": "Sound",
   "contactProfileActionCall": "Call",
+  "contactProfileActionAddContact": "Add to contacts",
   "contactProfileInfoPhone": "Phone",
   "contactProfileInfoCountry": "Country",
   "contactProfileInfoGender": "Gender",
