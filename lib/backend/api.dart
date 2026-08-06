@@ -121,7 +121,7 @@ class Api {
       }
       if (gen != _connectGen) return;
 
-      ({String host, int port}) endpoint;
+      ({String host, int port, bool trustMincifryCa}) endpoint;
       try {
         endpoint = await ServerConfig.loadEndpoint().timeout(_endpointTimeout);
       } catch (e) {
@@ -129,9 +129,12 @@ class Api {
         endpoint = (
           host: ServerConfig.defaultHost,
           port: ServerConfig.defaultPort,
+          trustMincifryCa: ServerConfig.defaultTrustMincifryCa,
         );
       }
       if (gen != _connectGen) return;
+
+      setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
 
       final (session, wireLog) = await _buildSessionOptions(endpoint);
       if (gen != _connectGen) return;
@@ -366,7 +369,7 @@ class Api {
   /// Строит устройство-поля и создаёт сессию ядра. Заодно заполняет
   /// [_userAgent] и [_deviceId] для геттеров.
   Future<(KolibriSession, Stream<WireLogEvent>)> _buildSessionOptions(
-    ({String host, int port}) endpoint,
+    ({String host, int port, bool trustMincifryCa}) endpoint,
   ) async {
     final deviceInfo = DeviceInfoPlugin();
 

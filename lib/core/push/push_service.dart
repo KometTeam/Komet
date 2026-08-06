@@ -16,6 +16,7 @@ import '../calls/ws2_signaling.dart';
 import '../protocol/opcode_map.dart';
 import '../storage/app_instance.dart';
 import '../storage/token_storage.dart';
+import '../transport/tls_config.dart';
 import '../utils/logger.dart';
 
 const _channelId = 'komet_messages';
@@ -56,6 +57,7 @@ Future<void> _handleCallDecline(String payloadJson) async {
 
   // Фоновый изолят: инициализируем ядро перед vcp-декодом/сигналингом.
   await initKolibri();
+  await TlsConfig.applyMincifryTrust();
 
   final params = ConversationParams.decode(vcp);
   if (params == null) return;
@@ -93,6 +95,7 @@ Future<void> _handleReply(String payloadJson, String text) async {
       SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
     } catch (_) {}
   }
+  await TlsConfig.applyMincifryTrust();
 
   final plugin = FlutterLocalNotificationsPlugin();
   final notifId = chatId & 0x7fffffff;

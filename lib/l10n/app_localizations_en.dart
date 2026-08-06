@@ -64,6 +64,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverPortLabel => 'Port';
 
   @override
+  String get serverTrustMincifryTitle => 'Trust the Минцифры CA';
+
+  @override
+  String get serverTrustMincifrySubtitle =>
+      'Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.';
+
+  @override
   String get serverApply => 'Apply and reconnect';
 
   @override

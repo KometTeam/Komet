@@ -27,6 +27,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
     text: '${ServerConfig.defaultPort}',
   );
   bool _busy = false;
+  bool _trustMincifryCa = ServerConfig.defaultTrustMincifryCa;
 
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
     setState(() {
       _hostController.text = endpoint.host;
       _portController.text = '${endpoint.port}';
+      _trustMincifryCa = endpoint.trustMincifryCa;
     });
   }
 
@@ -55,6 +57,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(ServerConfig.prefHostKey, host);
       await prefs.setInt(ServerConfig.prefPortKey, port);
+      await prefs.setBool(ServerConfig.prefTrustMincifryKey, _trustMincifryCa);
       await api.disconnect();
       unawaited(api.connect());
       final online = await api.stateStream
@@ -82,8 +85,10 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(ServerConfig.prefHostKey);
       await prefs.remove(ServerConfig.prefPortKey);
+      await prefs.remove(ServerConfig.prefTrustMincifryKey);
       _hostController.text = ServerConfig.defaultHost;
       _portController.text = '${ServerConfig.defaultPort}';
+      _trustMincifryCa = ServerConfig.defaultTrustMincifryCa;
       await api.disconnect();
       api.connect();
       final online = await api.stateStream
@@ -153,6 +158,49 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 enabled: !_busy,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.serverTrustMincifryTitle,
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            l10n.serverTrustMincifrySubtitle,
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 12.5,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Switch(
+                      value: _trustMincifryCa,
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(() => _trustMincifryCa = v),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               FilledButton(

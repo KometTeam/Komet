@@ -18,6 +18,8 @@
   "serverSettingsTitle": "Сервер",
   "serverHostLabel": "Хост",
   "serverPortLabel": "Порт",
+  "serverTrustMincifryTitle": "Доверять сертификату Минцифры",
+  "serverTrustMincifrySubtitle": "Нужно для api2.oneme.ru: его сертификат выпущен под корнем Russian Trusted Root CA, которого нет в обычном хранилище. Корень зашит в приложение, остальные хосты проверяются как раньше.",
   "serverApply": "Применить и переподключиться",
   "serverUseDefault": "Сбросить к умолчанию",
   "serverInvalidHostOrPort": "Укажите корректный хост и порт (1–65535)",

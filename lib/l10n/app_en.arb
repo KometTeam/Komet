@@ -18,6 +18,8 @@
   "serverSettingsTitle": "Server",
   "serverHostLabel": "Host",
   "serverPortLabel": "Port",
+  "serverTrustMincifryTitle": "Trust the Минцифры CA",
+  "serverTrustMincifrySubtitle": "Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.",
   "serverApply": "Apply and reconnect",
   "serverUseDefault": "Reset to default",
   "serverInvalidHostOrPort": "Enter a valid host and port (1–65535)",

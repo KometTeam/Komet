@@ -206,6 +206,18 @@ abstract class AppLocalizations {
   /// **'Port'**
   String get serverPortLabel;
 
+  /// No description provided for @serverTrustMincifryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust the Минцифры CA'**
+  String get serverTrustMincifryTitle;
+
+  /// No description provided for @serverTrustMincifrySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.'**
+  String get serverTrustMincifrySubtitle;
+
   /// No description provided for @serverApply.
   ///
   /// In en, this message translates to:

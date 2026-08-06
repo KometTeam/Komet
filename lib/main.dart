@@ -174,6 +174,7 @@ void _installLogCapture() {
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await initKolibri();
+  await TlsConfig.applyMincifryTrust();
   DebugTest.parse(args);
   _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(
