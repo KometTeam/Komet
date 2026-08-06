@@ -869,9 +869,12 @@ class MessageBubble extends StatelessWidget {
         nextMessage?.senderId != message.senderId;
     final showSenderName = _showsSenderName;
 
-    final maxBubbleWidth = math.min(MediaQuery.sizeOf(context).width * 0.75, 560.0);
     final keyboard = _inlineKeyboard;
     final isVideoNote = _isVideoNote;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final maxBubbleWidth = isVideoNote
+        ? math.min(screenWidth - 24, 560.0)
+        : math.min(screenWidth * 0.75, 560.0);
     final noBubbleBackground = isVideoNote || _isSticker || jumboAnimoji != null;
     final bubbleColor = noBubbleBackground
         ? Colors.transparent

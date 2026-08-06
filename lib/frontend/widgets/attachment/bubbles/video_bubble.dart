@@ -23,18 +23,13 @@ class VideoBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final message = ctx.message;
     if (video.isNote) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          VideoNoteBubble(
-            attachment: video,
-            messageId: message.id,
-            chatId: message.chatId,
-            cs: ctx.cs,
-          ),
-          const SizedBox(height: 6),
-          ctx.meta(),
-        ],
+      return VideoNoteBubble(
+        attachment: video,
+        messageId: message.id,
+        chatId: message.chatId,
+        cs: ctx.cs,
+        textColor: ctx.text,
+        meta: ctx.meta(),
       );
     }
     final hasCaption = message.text != null && message.text!.isNotEmpty;
