@@ -144,6 +144,7 @@ class SpoofingService {
       'instance_id': profile.instanceId,
       'client_session_id': profile.clientSessionId,
       'push_device_type': profile.pushDeviceType,
+      'user_agent': profile.userAgent,
     };
   }
 

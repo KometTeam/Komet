@@ -20,8 +20,10 @@ class Ws2Config {
 
   const Ws2Config({required this.uri, required this.userId});
 
-  static const defaultCapabilities = '3c03f';
-  static const _appVersion = 'sdk-0.1.16.4';
+  static const defaultCapabilities = '3c02f';
+  static const _appVersion = 'sdk-0.2.1.3';
+  static const defaultDevice = 'Android/Unknown';
+  static const defaultOsVersion = '34';
 
   /// Входящий звонок: из распакованных параметров [ConversationParams].
   /// `userId` — часть после `:` в [ConversationParams.turnUser].
@@ -29,23 +31,22 @@ class Ws2Config {
     ConversationParams params, {
     required String conversationId,
     String capabilities = defaultCapabilities,
-    String device = 'Komet',
-    String osVersion = '36',
+    String? device,
+    String? osVersion,
   }) {
     final userId = int.tryParse((params.turnUser ?? '').split(':').last) ?? 0;
     final uri = Uri.parse(params.wsEndpoint).replace(
       queryParameters: {
         'userId': '$userId',
-        'entityType': 'USER',
-        'conversationId': conversationId,
         'token': params.token,
+        'conversationId': conversationId,
         'version': '5',
         'capabilities': capabilities,
-        'device': device,
+        'device': device ?? defaultDevice,
         'platform': 'ANDROID',
         'clientType': 'ONE_ME',
         'appVersion': _appVersion,
-        'osVersion': osVersion,
+        'osVersion': osVersion ?? defaultOsVersion,
       },
     );
     return Ws2Config(uri: uri, userId: userId);
@@ -57,19 +58,20 @@ class Ws2Config {
     String endpoint, {
     required int userId,
     String capabilities = defaultCapabilities,
-    String device = 'Komet',
+    String? device,
+    String? osVersion,
   }) {
     final base = Uri.parse(endpoint);
     final uri = base.replace(
       queryParameters: {
         ...base.queryParameters,
-        'platform': 'ANDROID',
         'version': '5',
         'capabilities': capabilities,
+        'device': device ?? defaultDevice,
+        'platform': 'ANDROID',
         'clientType': 'ONE_ME',
         'appVersion': _appVersion,
-        'device': device,
-        'tgt': 'start',
+        'osVersion': osVersion ?? defaultOsVersion,
       },
     );
     return Ws2Config(uri: uri, userId: userId);
@@ -283,16 +285,7 @@ class Ws2Signaling {
         'singleSession': true,
         'unifiedPlan': true,
         'fastScreenShare': true,
-        'producerScreenDataChannelVersion': 1,
-        'consumerScreenDataChannelVersion': 1,
-        'animojiDataChannelVersion': 2,
-        'animojiBackendRender': true,
-        'asrDataChannelVersion': 1,
-        'consumerFastScreenShare': true,
         'consumerFastScreenShareQualityOnDemand': true,
-        'audioShare': true,
-        'simulcast': true,
-        'simulcastNativeOrder': true,
         'red': true,
         'videoTracksCount': 10,
         'csrcAccessible': true,

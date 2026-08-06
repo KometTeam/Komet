@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'contacts.dart';
 import '../api.dart';
+import '../../core/calls/ws2_signaling.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/ids.dart';
 import '../../core/utils/logger.dart';
@@ -178,13 +179,13 @@ class CallsModule {
 
   String _internalParams() => jsonEncode({
     'platform': 'ANDROID',
-    'sdkVersion': '0.1.16.4',
+    'sdkVersion': '0.2.1.3',
     'clientAppKey': 'CGPGAGLGDIHBABABA',
     'deviceId': _api.deviceId ?? '',
     'protocolVersion': 5,
     'onlyAdminCanRecord': false,
     'isWaitForAdminEnabled': false,
-    'hexCapability': '3c03f',
+    'hexCapability': Ws2Config.defaultCapabilities,
   });
 
   Future<CallLinkPreview?> resolveCallLink(String url) async {

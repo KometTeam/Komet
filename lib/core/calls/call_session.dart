@@ -11,6 +11,7 @@ import 'call_admin.dart';
 import 'call_bridge.dart';
 import 'call_info.dart';
 import 'conversation_params.dart';
+import 'sfu_data_channel.dart';
 import 'ws2_signaling.dart';
 
 enum CallRole { caller, callee, joiner }
@@ -102,7 +103,7 @@ class CallSession {
   RTCRtpSender? _videoSender;
   RTCRtpSender? _screenSender;
 
-  Completer<void>? _gatherReady;
+  Completer<void>? _gatherDone;
   bool _gotConnection = false;
 
   bool _reconnecting = false;
@@ -123,6 +124,27 @@ class CallSession {
   RTCDataChannel? _probeChannel;
   bool _peerIsKomet = false;
 
+  final List<RTCDataChannel> _sfuChannels = [];
+  SfuCommandChannel? _sfuCommands;
+  StreamSubscription<Map<String, int>>? _sfuSlotSub;
+  StreamSubscription<Map<String, int>>? _sfuLevelSub;
+  final Map<int, int> _slotParticipant = {};
+  Timer? _layoutDebounce;
+  Timer? _videoStatsTimer;
+  List<String> _lastLayout = const [];
+  bool _layoutSent = false;
+
+  static const int _maxVideoSlots = 10;
+  static const int _sfuSpeakLevel = 50;
+  static const Duration _levelTtl = Duration(seconds: 6);
+  final Map<int, ({int level, DateTime at})> _levelState = {};
+
+  static const List<String> _sfuChannelLabels = [
+    'producerCommand',
+    'producerNotification',
+  ];
+
+  static const bool _kometProbeEnabled = false;
   static const String _probeQuestion = 'AreYouKomet?';
   static const String _probeAnswer = 'YesImKomet😎';
 
@@ -206,6 +228,7 @@ class CallSession {
 
   void _notifyInfo() {
     if (!_info.isClosed) _info.add(null);
+    if (_topology == 'SERVER') _scheduleDisplayLayout();
   }
 
   Future<void> start() async {
@@ -304,6 +327,7 @@ class CallSession {
       await _probeChannel?.close();
     } catch (_) {}
     _probeChannel = null;
+    await _closeSfuChannels();
 
     try {
       await _pc?.close();
@@ -339,7 +363,7 @@ class CallSession {
 
   Future<void> _sampleLevels() async {
     final pc = _pc;
-    if (pc == null || _ended) return;
+    if (pc == null || _ended || _topology == 'SERVER') return;
     if (!_mediaConnected || _current != CallSessionState.active) return;
 
     var local = 0.0;
@@ -456,7 +480,7 @@ class CallSession {
 
   void _onWs2Error(Map<String, dynamic> msg) {
     final err = msg['error'];
-    logger.w('[call] ws2 error: $err');
+    logger.w('[call] ws2 error: $err raw=$msg');
     if (err == 'conversation-ended') _end();
   }
 
@@ -569,20 +593,17 @@ class CallSession {
     if (externalId != null) p.externalId = externalId;
     if (state != null) p.state = state;
     if (mediaSettings is Map) {
-      final a = mediaSettings['isAudioEnabled'];
-      final v = mediaSettings['isVideoEnabled'];
-      final s = mediaSettings['isScreenSharingEnabled'];
-      if (a is bool) p.audioEnabled = a;
-      if (v is bool) p.videoEnabled = v;
-      if (s is bool) p.screenSharing = s;
+      p.audioEnabled = mediaSettings['isAudioEnabled'] == true;
+      p.videoEnabled = mediaSettings['isVideoEnabled'] == true;
+      p.screenSharing = mediaSettings['isScreenSharingEnabled'] == true;
     }
     if (muteStates is Map) {
       final a = muteStates['AUDIO'];
       final v = muteStates['VIDEO'];
       final s = muteStates['SCREEN_SHARING'];
-      if (a is String) p.audioEnabled = a == 'UNMUTE';
-      if (v is String) p.videoEnabled = v == 'UNMUTE';
-      if (s is String) p.screenSharing = s == 'UNMUTE';
+      if (a is String && a != 'UNMUTE') p.audioEnabled = false;
+      if (v is String && v != 'UNMUTE') p.videoEnabled = false;
+      if (s is String && s != 'UNMUTE') p.screenSharing = false;
     }
     if (handRaised != null) p.handRaised = handRaised;
     if (roles is List) {
@@ -606,11 +627,15 @@ class CallSession {
   void _onParticipantMedia(Map<String, dynamic> msg) {
     final id = _participantIdFrom(msg['participantId']);
     if (id == null) return;
-    _upsertParticipant(
+    final p = _upsertParticipant(
       id,
       externalId: _externalId(msg['externalId']),
       mediaSettings: msg['mediaSettings'],
       muteStates: msg['muteStates'],
+    );
+    logger.i(
+      '[call] media $id video=${p.videoEnabled} audio=${p.audioEnabled} '
+      'screen=${p.screenSharing} raw=${msg['mediaSettings']}',
     );
     _maybeAdoptPeer(id, msg);
     _notifyInfo();
@@ -706,8 +731,8 @@ class CallSession {
     logger.i('[call] connection role=$role peer=$_peerId topology=$_topology');
 
     if (_topology == 'SERVER') {
-      await _setupSfu();
       await accept(activate: role != CallRole.caller);
+      await _setupSfu();
       return;
     }
 
@@ -744,8 +769,17 @@ class CallSession {
       'audioJitterBufferMaxPackets': 200,
     });
     pc.onIceCandidate = _onLocalCandidate;
+    pc.onIceGatheringState = (s) {
+      logger.i('[call] ice gathering $s');
+      if (s != RTCIceGatheringState.RTCIceGatheringStateComplete) return;
+      final done = _gatherDone;
+      if (done != null && !done.isCompleted) done.complete();
+    };
     pc.onTrack = (event) => unawaited(_onRemoteTrack(event));
-    pc.onDataChannel = (channel) => _bindProbeChannel(channel, ask: false);
+    pc.onDataChannel = (channel) {
+      if (!_kometProbeEnabled) return;
+      _bindProbeChannel(channel, ask: false);
+    };
     pc.onIceConnectionState = (s) {
       logger.i('[call] ice $s');
       if (s != RTCIceConnectionState.RTCIceConnectionStateFailed) return;
@@ -797,8 +831,180 @@ class CallSession {
     }
   }
 
+  Future<void> _openSfuChannels(RTCPeerConnection pc) async {
+    await _closeSfuChannels();
+    final commands = SfuCommandChannel();
+    _sfuCommands = commands;
+    _sfuSlotSub = commands.slotUpdates.listen(_onSfuSlots);
+    _sfuLevelSub = commands.audioLevels.listen(_onSfuLevels);
+    for (final label in _sfuChannelLabels) {
+      try {
+        final channel = await pc.createDataChannel(
+          label,
+          RTCDataChannelInit()
+            ..ordered = true
+            ..maxRetransmitTime = 10000000,
+        );
+        channel.onDataChannelState = (state) {
+          logger.i('[call][sfu] data channel $label $state');
+          if (state == RTCDataChannelState.RTCDataChannelOpen) {
+            _scheduleDisplayLayout();
+          }
+        };
+        commands.bind(channel);
+        _sfuChannels.add(channel);
+      } catch (e) {
+        logger.w('[call][sfu] data channel $label failed: $e');
+      }
+    }
+  }
+
+  void _onSfuLevels(Map<String, int> levels) {
+    final now = DateTime.now();
+    levels.forEach((key, level) {
+      final id = _participantIdFrom(key.split(':').first);
+      if (id != null) _levelState[id] = (level: level, at: now);
+    });
+    _levelState.removeWhere((_, v) => now.difference(v.at) > _levelTtl);
+
+    final loud = _levelState.entries
+        .where((e) => e.value.level >= _sfuSpeakLevel)
+        .map((e) => e.key)
+        .toSet();
+    logger.i('[call][sfu] levels: $levels speaking=$loud');
+    if (loud.length == _speaking.length && loud.containsAll(_speaking)) return;
+    _speaking = loud;
+    _notifyInfo();
+  }
+
+  void _onSfuSlots(Map<String, int> slots) {
+    if (slots.isEmpty) return;
+    _slotParticipant.clear();
+    slots.forEach((key, slot) {
+      if (slot < 0) return;
+      final id = _participantIdFrom(key.split(':').first);
+      if (id != null) _slotParticipant[slot] = id;
+    });
+    unawaited(_rebindSlotTracks());
+  }
+
+  Future<void> _rebindSlotTracks() async {
+    await _clearParticipantStreams();
+    await _collectReceivers();
+    _notifyInfo();
+  }
+
+  void _scheduleDisplayLayout() {
+    _layoutDebounce?.cancel();
+    _layoutDebounce = Timer(
+      const Duration(milliseconds: 300),
+      () => unawaited(_publishDisplayLayout()),
+    );
+  }
+
+  Future<void> _publishDisplayLayout({bool force = false}) async {
+    final commands = _sfuCommands;
+    if (commands == null || _topology != 'SERVER' || _ended) return;
+    final items = <SfuLayoutItem>[];
+    for (final p in _participants.values) {
+      if (p.isSelf || items.length >= _maxVideoSlots) continue;
+      if (!p.videoEnabled && !p.screenSharing) continue;
+      items.add(
+        SfuLayoutItem(
+          trackKey: 'u${p.id}:${p.screenSharing ? 'sSCREEN' : 'sCAMERA'}',
+        ),
+      );
+    }
+    final keys = items.map((i) => i.trackKey).toList(growable: false);
+    if (!force &&
+        _layoutSent &&
+        keys.length == _lastLayout.length &&
+        keys.every(_lastLayout.contains)) {
+      return;
+    }
+    if (!await commands.sendDisplayLayout(items)) return;
+    _lastLayout = keys;
+    _layoutSent = true;
+  }
+
+  Set<String> _videoSlotMids(String sdp) {
+    final mids = <String>{};
+    String? kind;
+    String? mid;
+    var recvOnly = false;
+
+    void flush() {
+      final id = mid;
+      if (kind == 'video' && recvOnly && id != null) mids.add(id);
+    }
+
+    for (var line in sdp.split('\n')) {
+      line = line.trim();
+      if (line.startsWith('m=')) {
+        flush();
+        kind = line.substring(2).split(' ').first;
+        mid = null;
+        recvOnly = false;
+      } else if (line.startsWith('a=mid:')) {
+        mid = line.substring(6);
+      } else if (line == 'a=recvonly') {
+        recvOnly = true;
+      }
+    }
+    flush();
+    return mids;
+  }
+
+  Future<void> _prepareVideoSlot(RTCPeerConnection pc, String offerSdp) async {
+    final mids = _videoSlotMids(offerSdp);
+    if (mids.isEmpty) return;
+    for (final transceiver in await pc.getTransceivers()) {
+      final mid = transceiver.mid;
+      if (!mids.contains(mid)) continue;
+      final tracks =
+          _cameraStream?.getVideoTracks() ?? const <MediaStreamTrack>[];
+      if (tracks.isNotEmpty) {
+        try {
+          await transceiver.sender.replaceTrack(tracks.first);
+        } catch (e) {
+          logger.w('[call][sfu] video slot $mid replaceTrack failed: $e');
+        }
+      }
+      try {
+        await transceiver.setDirection(TransceiverDirection.SendOnly);
+      } catch (e) {
+        logger.w('[call][sfu] video slot $mid setDirection failed: $e');
+        continue;
+      }
+      _videoSender = transceiver.sender;
+      logger.i('[call][sfu] video slot mid=$mid -> sendonly');
+      return;
+    }
+  }
+
+  Future<void> _closeSfuChannels() async {
+    _layoutDebounce?.cancel();
+    _layoutDebounce = null;
+    await _sfuSlotSub?.cancel();
+    _sfuSlotSub = null;
+    await _sfuLevelSub?.cancel();
+    _sfuLevelSub = null;
+    await _sfuCommands?.dispose();
+    _sfuCommands = null;
+    _slotParticipant.clear();
+    _lastLayout = const [];
+    _layoutSent = false;
+    final channels = List<RTCDataChannel>.from(_sfuChannels);
+    _sfuChannels.clear();
+    for (final channel in channels) {
+      try {
+        await channel.close();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _setupKometProbe(RTCPeerConnection pc) async {
-    if (_topology == 'SERVER') return;
+    if (!_kometProbeEnabled || _topology == 'SERVER') return;
     try {
       final channel = await pc.createDataChannel(
         'komet',
@@ -897,6 +1103,7 @@ class CallSession {
 
   Future<void> _setupSfu() async {
     if (_pc != null) {
+      await _closeSfuChannels();
       await _pc!.close();
       _pc = null;
       _probeChannel = null;
@@ -915,6 +1122,7 @@ class CallSession {
     _pc = pc;
     await _addLocalMedia(pc);
     await _republishVideo(pc);
+    await _openSfuChannels(pc);
     logger.i(
       '[call][sfu] allocate-consumer camera=$_localVideo screen=$_localScreen',
     );
@@ -927,6 +1135,7 @@ class CallSession {
   }
 
   Future<void> _rebuildSfuPc() async {
+    await _closeSfuChannels();
     try {
       await _pc?.close();
     } catch (_) {}
@@ -951,6 +1160,7 @@ class CallSession {
     _pc = pc;
     await _addLocalMedia(pc);
     await _republishVideo(pc);
+    await _openSfuChannels(pc);
   }
 
   Future<void> _republishVideo(RTCPeerConnection pc) async {
@@ -1020,10 +1230,12 @@ class CallSession {
       '(${_candidateTypes(sdp)}), ${_sdpSummary(sdp)}, ice=${_iceServerUrls()}',
     );
     logger.i('[call][sfu] producer m-lines: ${_mLineDetails(sdp)}');
+    logger.i('[call][sfu] producer video codecs: ${_videoCodecs(sdp)}');
     await pc.setRemoteDescription(RTCSessionDescription(sdp, type));
     _remoteDescSet = true;
     await _flushCandidates();
     await _addRemoteCandidatesFromSdp(pc, sdp);
+    await _prepareVideoSlot(pc, sdp);
 
     final answer = await pc.createAnswer({});
     if (_pc != pc) return;
@@ -1033,7 +1245,7 @@ class CallSession {
       return;
     }
 
-    await _awaitReflexiveCandidates(pc);
+    await _awaitIceGathering(pc);
     if (_pc != pc) {
       logger.w('[call][sfu] peer connection replaced while gathering');
       return;
@@ -1054,14 +1266,18 @@ class CallSession {
       'gathering=${pc.iceGatheringState}',
     );
     logger.i('[call][sfu] answer m-lines: ${_mLineDetails(answerSdp)}');
+    logger.i('[call][sfu] answer video codecs: ${_videoCodecs(answerSdp)}');
+    logger.i(
+      '[call][sfu] video feedback: offer=[${_videoFeedback(sdp)}] '
+      'answer=[${_videoFeedback(answerSdp)}]',
+    );
     await _logSenders();
 
     try {
-      final localSsrcs = _extractSsrcs(answerSdp);
-      logger.i('[call][sfu] accept-producer ssrcs=$localSsrcs');
+      logger.i('[call][sfu] accept-producer ssrcs=$ssrcs');
       final reply = await _signaling?.acceptProducer(
         description: _labelLocalTracks(answerSdp),
-        ssrcs: localSsrcs,
+        ssrcs: ssrcs,
         sessionId: _sfuSessionId,
       );
       logger.i('[call][sfu] accept-producer reply: $reply');
@@ -1072,9 +1288,18 @@ class CallSession {
     Timer(const Duration(seconds: 5), () {
       if (_pc == pc && !_ended) unawaited(_dumpIceStats(pc));
     });
+    _videoStatsTimer?.cancel();
+    _videoStatsTimer = Timer.periodic(const Duration(seconds: 5), (t) {
+      if (_pc != pc || _ended) {
+        t.cancel();
+        return;
+      }
+      unawaited(_dumpVideoStats(pc));
+    });
 
     if (_accepted) await _sendMediaSettings();
     unawaited(_collectReceivers());
+    unawaited(_publishDisplayLayout(force: true));
   }
 
   int _countCandidates(String sdp) =>
@@ -1117,6 +1342,41 @@ class CallSession {
       '[call][sfu] remote candidates added=$added: '
       '${seen.map((c) => c.split(' ').take(6).join(' ')).join(' | ')}',
     );
+  }
+
+  Future<void> _dumpVideoStats(RTCPeerConnection pc) async {
+    try {
+      final rows = <String>[];
+      for (final r in await pc.getStats()) {
+        if (r.type != 'inbound-rtp') continue;
+        final v = r.values;
+        if (v['kind'] != 'video' && v['mediaType'] != 'video') continue;
+        rows.add(
+          '[ssrc=${v['ssrc']} bytes=${v['bytesReceived']} '
+          'packets=${v['packetsReceived']} decoded=${v['framesDecoded']} '
+          '${v['frameWidth']}x${v['frameHeight']}]',
+        );
+      }
+      var transportBytes = 0;
+      var audioBytes = 0;
+      for (final r in await pc.getStats()) {
+        final v = r.values;
+        if (r.type == 'transport') {
+          final b = v['bytesReceived'];
+          if (b is num) transportBytes += b.toInt();
+        } else if (r.type == 'inbound-rtp' &&
+            (v['kind'] == 'audio' || v['mediaType'] == 'audio')) {
+          final b = v['bytesReceived'];
+          if (b is num) audioBytes += b.toInt();
+        }
+      }
+      logger.i(
+        '[call][sfu] inbound video: ${rows.join(' ')} '
+        '| transport=$transportBytes audio=$audioBytes',
+      );
+    } catch (e) {
+      logger.w('[call][sfu] video stats failed: $e');
+    }
   }
 
   Future<void> _dumpIceStats(RTCPeerConnection pc) async {
@@ -1179,6 +1439,38 @@ class CallSession {
     final lite = sdp.contains('a=ice-lite') ? ' ice-lite' : '';
     return 'bundle=$mids ufrags=$ufrags active=$active/$total '
         'setup=$setup$lite';
+  }
+
+  String _videoFeedback(String sdp) {
+    final fb = <String>{};
+    var inVideo = false;
+    for (var line in sdp.split('\n')) {
+      line = line.trim();
+      if (line.startsWith('m=')) {
+        inVideo = line.startsWith('m=video');
+      } else if (inVideo && line.startsWith('a=rtcp-fb:')) {
+        final idx = line.indexOf(' ');
+        if (idx > 0) fb.add(line.substring(idx + 1));
+      } else if (inVideo && line.startsWith('a=extmap:')) {
+        if (line.contains('transport-wide-cc')) fb.add('extmap:transport-cc');
+      }
+    }
+    return fb.isEmpty ? 'нет' : fb.join(', ');
+  }
+
+  String _videoCodecs(String sdp) {
+    final codecs = <String>{};
+    var inVideo = false;
+    for (var line in sdp.split('\n')) {
+      line = line.trim();
+      if (line.startsWith('m=')) {
+        inVideo = line.startsWith('m=video');
+      } else if (inVideo && line.startsWith('a=rtpmap:')) {
+        final m = RegExp(r'^a=rtpmap:\d+ ([^/]+)/').firstMatch(line);
+        if (m != null) codecs.add(m.group(1)!);
+      }
+    }
+    return codecs.isEmpty ? 'нет' : codecs.join(',');
   }
 
   int _mLines(String sdp) =>
@@ -1298,6 +1590,10 @@ class CallSession {
 
   int? _participantFromTrackId(String? trackId) {
     if (trackId == null) return null;
+    final slot = RegExp(r'^video-pat-(\d+)$').firstMatch(trackId);
+    if (slot != null) {
+      return _slotParticipant[int.parse(slot.group(1)!)];
+    }
     for (final prefix in const ['video-', 'audio-']) {
       if (trackId.length > prefix.length && trackId.startsWith(prefix)) {
         final parsed = _participantIdFrom(trackId.substring(prefix.length));
@@ -1505,41 +1801,31 @@ class CallSession {
     }
   }
 
-  static bool _isReflexive(String? line) =>
-      line != null &&
-      (line.contains(' typ srflx') || line.contains(' typ relay'));
-
-  Future<void> _awaitReflexiveCandidates(
+  Future<void> _awaitIceGathering(
     RTCPeerConnection pc, {
-    Duration timeout = const Duration(seconds: 4),
+    Duration timeout = const Duration(seconds: 5),
   }) async {
     if (pc.iceGatheringState ==
         RTCIceGatheringState.RTCIceGatheringStateComplete) {
       return;
     }
+    final done = Completer<void>();
+    _gatherDone = done;
     try {
-      final current = await pc.getLocalDescription();
-      if (_isReflexive(current?.sdp)) return;
-    } catch (_) {}
-
-    final ready = Completer<void>();
-    _gatherReady = ready;
-    try {
-      await ready.future.timeout(timeout);
-      logger.i('[call][sfu] reflexive candidate gathered');
+      await done.future.timeout(timeout);
+      logger.i('[call][sfu] relay candidate gathered');
     } catch (_) {
-      logger.w('[call][sfu] no reflexive candidate within $timeout');
+      logger.w('[call][sfu] no relay candidate within $timeout');
     } finally {
-      _gatherReady = null;
+      _gatherDone = null;
     }
   }
 
   void _onLocalCandidate(RTCIceCandidate candidate) {
-    final pending = _gatherReady;
-    if (pending != null &&
-        !pending.isCompleted &&
-        _isReflexive(candidate.candidate)) {
-      pending.complete();
+    final line = candidate.candidate;
+    if (line != null && line.contains(' typ relay')) {
+      final done = _gatherDone;
+      if (done != null && !done.isCompleted) done.complete();
     }
     if (_topology == 'SERVER') return;
     final peerId = _peerId;
@@ -1732,9 +2018,14 @@ class CallSession {
   }
 
   Future<void> _clearParticipantStreams() async {
-    final streams = _participantStreams.values.toList(growable: false);
+    final entries = Map<int, MediaStream>.from(_participantStreams);
     _participantStreams.clear();
-    for (final stream in streams) {
+    for (final id in entries.keys) {
+      if (!_participantStreamUpdates.isClosed) {
+        _participantStreamUpdates.add(id);
+      }
+    }
+    for (final stream in entries.values) {
       try {
         await stream.dispose();
       } catch (_) {}
@@ -1779,10 +2070,12 @@ class CallSession {
 
   Future<void> _dispose() async {
     _levelTimer?.cancel();
+    _videoStatsTimer?.cancel();
     try {
       await _probeChannel?.close();
     } catch (_) {}
     _probeChannel = null;
+    await _closeSfuChannels();
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       await track.stop();
     }

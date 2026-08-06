@@ -51,9 +51,13 @@ class Api {
 
   int? _callsSeed;
   String? _deviceId;
+  String? _callsDevice;
+  String? _callsOsVersion;
 
   int? get callsSeed => _callsSeed;
   String? get deviceId => _deviceId;
+  String? get callsDevice => _callsDevice;
+  String? get callsOsVersion => _callsOsVersion;
 
   /// Сырой доступ к сессии ядра — для медиа-загрузок (data-plane).
   KolibriSession? get session => _session;
@@ -387,6 +391,10 @@ class Api {
     String instanceId = await DeviceIdentity.instanceId();
     int clientSessionId = DeviceIdentity.clientSessionId;
 
+    String? androidManufacturer;
+    String? androidModel;
+    int? androidSdkInt;
+
     if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
       osVersion = linuxInfo.name;
@@ -398,15 +406,20 @@ class Api {
       final androidInfo = await deviceInfo.androidInfo;
       osVersion = 'Android ${androidInfo.version.release}';
       deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
+      androidManufacturer = androidInfo.manufacturer;
+      androidModel = androidInfo.model;
+      androidSdkInt = androidInfo.version.sdkInt;
     } else if (Platform.isWindows) {
       final windowsInfo = await deviceInfo.windowsInfo;
       osVersion = windowsInfo.productName;
     }
 
+    String? spoofUserAgent;
     final spoofed = await SpoofingService.getSpoofedSessionData(
       scope: spoofScope,
     );
     if (spoofed != null) {
+      spoofUserAgent = spoofed['user_agent'] as String?;
       final sDeviceType = spoofed['device_type'] as String?;
       if (sDeviceType != null && sDeviceType != 'IOS') deviceType = sDeviceType;
       final sDeviceName = spoofed['device_name'] as String?;
@@ -447,6 +460,19 @@ class Api {
       final sClientSession = spoofed['client_session_id'];
       if (sClientSession is int) clientSessionId = sClientSession;
     }
+
+    _callsDevice = _resolveCallsDevice(
+      spoofed: spoofed != null,
+      deviceName: deviceName,
+      spoofUserAgent: spoofUserAgent,
+      manufacturer: androidManufacturer,
+      model: androidModel,
+    );
+    _callsOsVersion = _resolveCallsOsVersion(
+      spoofed: spoofed != null,
+      osVersion: osVersion,
+      sdkInt: androidSdkInt,
+    );
 
     _userAgent = {
       'deviceType': deviceType,
@@ -490,6 +516,64 @@ class Api {
       proxy: proxy,
     );
   }
+
+  static String? _resolveCallsDevice({
+    required bool spoofed,
+    required String deviceName,
+    String? spoofUserAgent,
+    String? manufacturer,
+    String? model,
+  }) {
+    if (!spoofed &&
+        manufacturer != null &&
+        manufacturer.isNotEmpty &&
+        model != null &&
+        model.isNotEmpty) {
+      return '$manufacturer/$model';
+    }
+    final parts = deviceName.trim().split(RegExp(r'\s+'))
+      ..removeWhere((p) => p.isEmpty);
+    if (parts.isEmpty) return null;
+    final fallbackModel = parts.length > 1
+        ? parts.sublist(1).join(' ')
+        : parts.first;
+    return '${parts.first}/'
+        '${_modelFromUserAgent(spoofUserAgent) ?? fallbackModel}';
+  }
+
+  static String? _modelFromUserAgent(String? userAgent) {
+    if (userAgent == null || userAgent.isEmpty) return null;
+    final match = RegExp(r'Android\s+[\d.]+;\s*([^;)]+)').firstMatch(userAgent);
+    final model = match
+        ?.group(1)
+        ?.replaceFirst(RegExp(r'\s+Build/.*$'), '')
+        .trim();
+    return model == null || model.isEmpty ? null : model;
+  }
+
+  static String _resolveCallsOsVersion({
+    required bool spoofed,
+    required String osVersion,
+    int? sdkInt,
+  }) {
+    if (!spoofed && sdkInt != null && sdkInt > 0) return '$sdkInt';
+    final release = RegExp(
+      r'^Android\s+(\d+)',
+    ).firstMatch(osVersion.trim())?.group(1);
+    return '${_androidSdkForRelease(int.tryParse(release ?? ''))}';
+  }
+
+  static int _androidSdkForRelease(int? release) => switch (release) {
+    null => 34,
+    <= 9 => 28,
+    10 => 29,
+    11 => 30,
+    12 => 31,
+    13 => 33,
+    14 => 34,
+    15 => 35,
+    _ => 36,
+  };
 
   static Future<String?> _buildProxyUrl() async {
     final p = await ProxyConfig.load();

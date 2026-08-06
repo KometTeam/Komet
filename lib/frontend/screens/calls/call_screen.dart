@@ -74,6 +74,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   late final AnimationController _videoController;
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  final Map<int, RTCVideoRenderer> _tileRenderers = {};
+  StreamSubscription<int>? _tileStreamSub;
   bool _rendererReady = false;
   bool _localRendererReady = false;
   bool _videoAttached = false;
@@ -88,6 +90,38 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   final Map<int, _PeerInfo> _peerInfo = {};
 
   bool get _isGroup => widget.isGroup || (_session?.participantCount ?? 0) > 2;
+
+  void _onTileStream(int id) {
+    final stream = _session?.streamOf(id);
+    final existing = _tileRenderers[id];
+    if (existing != null) {
+      existing.srcObject = stream;
+      if (mounted) setState(() {});
+      return;
+    }
+    if (stream == null) return;
+    unawaited(_createTileRenderer(id, stream));
+  }
+
+  Future<void> _createTileRenderer(int id, MediaStream stream) async {
+    final renderer = RTCVideoRenderer();
+    await renderer.initialize();
+    if (!mounted) {
+      await renderer.dispose();
+      return;
+    }
+    renderer.srcObject = stream;
+    _tileRenderers[id] = renderer;
+    setState(() {});
+  }
+
+  RTCVideoRenderer? _tileRenderer(CallParticipant p) {
+    if (p.isSelf) return null;
+    final own = _tileRenderers[p.id];
+    final src = own?.srcObject;
+    if (src != null && src.getVideoTracks().isNotEmpty) return own;
+    return _tileVideoReady ? _remoteRenderer : null;
+  }
 
   bool get _tileVideoReady {
     if (_session?.topology == 'SERVER') return false;
@@ -215,6 +249,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       setState(() {});
     });
     _remoteStreamSub = session.remoteStreamStream.listen(_attachStream);
+    _tileStreamSub = session.participantStreamUpdates.listen(_onTileStream);
     _kometSub = session.peerKometDetected.listen((_) => _showKometBadge());
     _chatSub = session.chatMessages.listen(_onChatMessage);
     if (session.peerIsKomet) {
@@ -383,6 +418,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _kometSub?.cancel();
     _chatSub?.cancel();
     _remoteStreamSub?.cancel();
+    _tileStreamSub?.cancel();
+    for (final renderer in _tileRenderers.values) {
+      renderer.srcObject = null;
+      renderer.dispose();
+    }
+    _tileRenderers.clear();
     _dotsController.dispose();
     _videoController.dispose();
     if (_rendererReady) _remoteRenderer.srcObject = null;
@@ -622,8 +663,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     final url = p.isSelf ? _avatarUrl : info?.avatar;
     final muted = p.isSelf ? _isMuted : !p.audioEnabled;
     final speaking = !muted && _session?.isSpeaking(p.id) == true;
+    final renderer = _tileRenderer(p);
     final showVideo =
-        !p.isSelf && (p.videoEnabled || p.screenSharing) && _tileVideoReady;
+        !p.isSelf && (p.videoEnabled || p.screenSharing) && renderer != null;
 
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -634,7 +676,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           : null,
       padding: EdgeInsets.all(showVideo ? 0 : 12),
       child: showVideo
-          ? _videoTile(cs, name, muted, p.handRaised, p.screenSharing)
+          ? _videoTile(cs, renderer, name, muted, p.handRaised, p.screenSharing)
           : _avatarTile(cs, name, url, muted, p.handRaised, p.screenSharing),
     );
   }
@@ -719,6 +761,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   Widget _videoTile(
     ColorScheme cs,
+    RTCVideoRenderer renderer,
     String name,
     bool muted,
     bool hand,
@@ -730,7 +773,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
         fit: StackFit.expand,
         children: [
           RTCVideoView(
-            _remoteRenderer,
+            renderer,
             objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
           ),
           Positioned(

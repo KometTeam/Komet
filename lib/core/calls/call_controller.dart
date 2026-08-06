@@ -150,6 +150,8 @@ class CallController {
     final config = Ws2Config.fromEndpoint(
       out.endpoint,
       userId: out.callsUserId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(ws2Config: config, role: CallRole.caller);
     _bind(session);
@@ -167,6 +169,8 @@ class CallController {
     final config = Ws2Config.fromEndpoint(
       out.endpoint,
       userId: out.callsUserId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(
       ws2Config: config,
@@ -188,6 +192,8 @@ class CallController {
     final config = Ws2Config.fromEndpoint(
       params.endpoint,
       userId: params.callsUserId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(
       ws2Config: config,
@@ -206,6 +212,8 @@ class CallController {
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(
       ws2Config: config,
@@ -225,6 +233,8 @@ class CallController {
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final signaling = Ws2Signaling(config);
     try {

@@ -141,7 +141,9 @@ class GlossyPill extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: borderRadius,
-          border: GlossyDecor.rimBorder(base),
+          border: borderSide != null
+              ? Border.fromBorderSide(borderSide!)
+              : GlossyDecor.rimBorder(base),
           boxShadow: [GlossyDecor.dropShadow(base, depth)],
         ),
         child: LiquidGlassSurface(
@@ -204,7 +206,9 @@ class GlossyPill extends StatelessWidget {
           borderRadius: borderRadius,
           color: gradient ? null : base,
           gradient: gradient ? GlossyDecor.fillGradient(base) : null,
-          border: GlossyDecor.rimBorder(base),
+          border: borderSide != null
+              ? Border.fromBorderSide(borderSide!)
+              : GlossyDecor.rimBorder(base),
           boxShadow: [GlossyDecor.dropShadow(base, depth)],
         ),
         child: ClipRRect(
