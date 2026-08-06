@@ -174,7 +174,6 @@ void _installLogCapture() {
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await initKolibri();
-  await TlsConfig.applyMincifryTrust();
   DebugTest.parse(args);
   _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(
@@ -185,6 +184,7 @@ void main(List<String> args) async {
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
+  await TlsConfig.applyMincifryTrust();
   await AppDatabase.init();
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {
