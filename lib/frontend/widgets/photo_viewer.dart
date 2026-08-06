@@ -21,6 +21,7 @@ import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../models/attachment.dart';
 import 'attachment/photo_hero.dart';
+import 'animated_slash_icon.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
 import 'liquid_glass.dart';
@@ -1354,8 +1355,10 @@ class _VideoControlPanel extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        volume == 0 ? Symbols.volume_off : Symbols.volume_up,
+                      AnimatedSlashIcon(
+                        icon: Symbols.volume_up,
+                        slashedIcon: Symbols.volume_off,
+                        slashed: volume == 0,
                         color: Colors.white,
                         size: 20,
                       ),

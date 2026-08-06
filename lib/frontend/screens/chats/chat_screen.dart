@@ -12,9 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chat_preview.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/comments.dart';
-import 'package:komet/backend/modules/file_uploader.dart';
-import 'package:komet/backend/modules/upload_notification_service.dart';
-import 'package:komet/backend/modules/media_send.dart';
+import 'package:komet/backend/modules/upload_service.dart';
 import 'package:komet/backend/modules/webapp.dart';
 import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/frontend/widgets/sending_clock_icon.dart';
@@ -45,6 +43,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
+import '../../../core/storage/chat_members_store.dart';
 import '../../../core/crypto/chat_crypto_service.dart';
 import '../../../core/crypto/encrypted_photo.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
@@ -69,6 +68,7 @@ import 'chat/command_panel_controller.dart';
 import 'chat/sticker_panel_controller.dart';
 import 'chat/chat_search_controller.dart';
 import 'chat/message_search_result.dart';
+import 'chat/typing_label.dart';
 import 'chat/upload_status.dart';
 import 'chat/view/search_view.dart';
 import 'chat/view/composer_input.dart';
@@ -317,7 +317,8 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<UploadStatus> _uploadStatus = ValueNotifier(
     const UploadStatus(),
   );
-  StreamSubscription<UploadEvent>? _uploadSub;
+  String? _uploadStatusJobId;
+  ValueListenable<UploadBytes>? _uploadStatusBytes;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<MessageEvent>? _messageEventSub;
   StreamSubscription<Map<String, CommentsInfo>>? _commentsInfoSub;
@@ -350,10 +351,10 @@ class _ChatScreenState extends State<ChatScreen>
     formatElapsed: formatVoiceElapsed,
   );
 
-  StreamSubscription<MediaSendEvent>? _mediaSendSub;
+  StreamSubscription<UploadJobEvent>? _uploadEventSub;
 
   ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
-      _photoUploadProgress[m.id] ?? MediaSendService.instance.progressFor(m.id);
+      _photoUploadProgress[m.id] ?? UploadService.instance.progressFor(m.id);
 
   ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
     final existing = _reactionNotifiers[m.id];
@@ -498,7 +499,6 @@ class _ChatScreenState extends State<ChatScreen>
 
   int _otherStatus = 0;
   int? _otherSeenTime;
-  int? _participantsCount;
 
   final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
   final ValueNotifier<List<CachedMessage>> _pendingForwards = ValueNotifier(
@@ -661,7 +661,8 @@ class _ChatScreenState extends State<ChatScreen>
           .catchError((_) {}),
     );
     WidgetsBinding.instance.addObserver(this);
-    _mediaSendSub = MediaSendService.instance.events.listen(_onMediaSendEvent);
+    _uploadEventSub = UploadService.instance.events.listen(_onUploadEvent);
+    _syncUploadStatus();
     chats.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
     _scrollController.addListener(_onScrollForDate);
@@ -751,6 +752,9 @@ class _ChatScreenState extends State<ChatScreen>
     ChatActivityStore.instance
         .listenable(widget.chatId)
         .addListener(_recomputeHeaderStatus);
+    ChatMembersStore.instance
+        .listenable(widget.chatId)
+        .addListener(_recomputeHeaderStatus);
     _connSub = api.stateStream.listen((_) {
       if (mounted) _recomputeHeaderStatus();
     });
@@ -798,11 +802,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (widget.chatType == 'CHANNEL') {
       final link = info?['link'];
       if (link is String && link.isNotEmpty) _channelLink = link;
-    }
-    final count = info?['participantsCount'] as int?;
-    if (count != null && count != _participantsCount) {
-      _participantsCount = count;
-      _recomputeHeaderStatus();
     }
   }
 
@@ -2009,7 +2008,7 @@ class _ChatScreenState extends State<ChatScreen>
       unawaited(chats.subscribeChat(api, widget.chatId, subscribe: false));
     }
     WidgetsBinding.instance.removeObserver(this);
-    _mediaSendSub?.cancel();
+    _uploadEventSub?.cancel();
     chats.chatsChanged.removeListener(_onChatsBump);
     _otherUnread.dispose();
     _animojiHold.dispose();
@@ -2039,7 +2038,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scheduledCount.dispose();
     _showAttachmentPanel.removeListener(_onAttachPanelToggle);
     _showAttachmentPanel.dispose();
-    _uploadSub?.cancel();
+    _detachUploadStatus();
     _pushSub?.cancel();
     _messageEventSub?.cancel();
     _commentsInfoSub?.cancel();
@@ -2058,6 +2057,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _photoUploadProgress.clear();
     ChatActivityStore.instance
+        .listenable(widget.chatId)
+        .removeListener(_recomputeHeaderStatus);
+    ChatMembersStore.instance
         .listenable(widget.chatId)
         .removeListener(_recomputeHeaderStatus);
     PresenceFetch.revision.removeListener(_onPresenceChanged);
@@ -2958,7 +2960,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_commentsMode) return;
     switch (event) {
       case MessageAddedEvent(:final message):
-        if (message.senderId == _myId) return;
+        if (message.senderId == _myId && !message.isControl) return;
         if (_messages.any((m) => m.id == message.id)) return;
         final nearBottom = _isNearBottom();
         final anchorId = nearBottom ? null : _viewportAnchorId();
@@ -3292,9 +3294,11 @@ class _ChatScreenState extends State<ChatScreen>
         _previewChat = false;
         _subscribing = false;
         chat = result.chat;
-        _participantsCount =
-            result.subscribersCount ?? ((_participantsCount ?? 0) + 1);
       });
+      ChatMembersStore.instance.setCount(
+        widget.chatId,
+        result.subscribersCount,
+      );
       _recomputeHeaderStatus();
       showCustomNotification(context, 'Вы подписались на канал');
     } catch (e) {
@@ -3596,17 +3600,27 @@ class _ChatScreenState extends State<ChatScreen>
     _headerStatusNotifier.value = _headerStatus();
   }
 
+  int get _memberCount =>
+      ChatMembersStore.instance.count(widget.chatId) ??
+      chat?.participants.length ??
+      0;
+
+  bool get _isGroupChat =>
+      widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL';
+
   String _headerStatus() {
     final conn = connectionStatusLabel(api.state);
     if (conn != null) return conn;
-    final activity = ChatActivityStore.instance.activity(widget.chatId);
-    if (activity != null) return activity.label;
+    final activity = ChatActivityStore.instance.snapshot(widget.chatId);
+    if (activity != null) {
+      return chatActivityLabel(activity, withNames: _isGroupChat);
+    }
     if (widget.chatType == 'CHAT') {
-      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      final count = _memberCount;
       return '$count участников';
     }
     if (widget.chatType == 'CHANNEL') {
-      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      final count = _memberCount;
       return '$count подписчиков';
     }
     if (_otherStatus == 1) return 'В сети';
@@ -3627,6 +3641,14 @@ class _ChatScreenState extends State<ChatScreen>
       userId,
       chatActivityFromType(payload['type']),
     );
+    unawaited(_ensureTypingName(userId));
+  }
+
+  Future<void> _ensureTypingName(int userId) async {
+    if (!_isGroupChat) return;
+    if (ContactCache.get(userId) != null) return;
+    final resolved = await messagesModule.ensureContactNames({userId});
+    if (resolved && mounted) _recomputeHeaderStatus();
   }
 
   void _clearTyping(int userId) {
@@ -5804,8 +5826,13 @@ class _ChatScreenState extends State<ChatScreen>
                 right: -3,
                 child: ValueListenableBuilder<int>(
                   valueListenable: _newMessageCount,
-                  builder: (context, count, _) =>
-                      count <= 0 ? const SizedBox.shrink() : _unreadBadge(cs, count),
+                  builder: (context, count, _) => count <= 0
+                      ? const SizedBox.shrink()
+                      : AnimatedValueSwap<int>(
+                          value: count > 99 ? 100 : count,
+                          alignment: Alignment.centerRight,
+                          builder: (context, value) => _unreadBadge(cs, value),
+                        ),
                 ),
               ),
             ],
@@ -6021,7 +6048,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  String _addOptimisticFileMessage(FileAttachment attachment) {
+  CachedMessage _addOptimisticFileMessage(FileAttachment attachment) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = _nextTempId();
     final msg = CachedMessage(
@@ -6038,7 +6065,7 @@ class _ChatScreenState extends State<ChatScreen>
     _bumpMessages();
     Haptics.send();
     _scrollToBottom();
-    return tempId;
+    return msg;
   }
 
   void _updateFileMessageStatus(
@@ -6073,7 +6100,7 @@ class _ChatScreenState extends State<ChatScreen>
         name: entry.filename,
         size: entry.size,
       ),
-    );
+    ).id;
     _showAttachmentPanel.value = false;
     try {
       final realId = await messagesModule.sendFileMessage(
@@ -6092,7 +6119,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<bool> _sendFileById(int fileId) async {
-    final tempId = _addOptimisticFileMessage(FileAttachment(fileId: fileId));
+    final tempId = _addOptimisticFileMessage(
+      FileAttachment(fileId: fileId),
+    ).id;
     try {
       final realId = await messagesModule.sendFileMessage(widget.chatId, fileId);
       final ok = realId != null;
@@ -6205,7 +6234,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     unawaited(
-      MediaSendService.instance.sendPhotos(
+      UploadService.instance.sendPhotos(
         accountId: _myId,
         chatId: widget.chatId,
         tempId: tempId,
@@ -6274,7 +6303,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     unawaited(
-      MediaSendService.instance.sendVideo(
+      UploadService.instance.sendVideo(
         accountId: _myId,
         chatId: widget.chatId,
         tempId: tempId,
@@ -6286,9 +6315,10 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  void _onMediaSendEvent(MediaSendEvent event) {
+  void _onUploadEvent(UploadJobEvent event) {
     if (!mounted || event.chatId != widget.chatId) return;
-    if (event is MediaSendDone) {
+    _syncUploadStatus();
+    if (event is UploadJobDone) {
       if (event.scheduled) {
         Haptics.send();
         _markHasScheduled();
@@ -6309,18 +6339,52 @@ class _ChatScreenState extends State<ChatScreen>
         _messages[idx] = real;
         _bumpMessages();
       }
-    } else if (event is MediaSendFailed) {
+    } else if (event is UploadJobFailed) {
       if (event.scheduled) {
         Haptics.error();
         showCustomNotification(context, 'Не удалось запланировать');
         return;
       }
       _failPhotoMessage(event.tempId);
+      if (event.kind == UploadKind.file) {
+        showCustomNotification(context, 'Ошибка: ${event.reason}');
+      }
     }
   }
 
+  void _syncUploadStatus() {
+    final job = UploadService.instance.activeFileJob(widget.chatId);
+    if (job?.id == _uploadStatusJobId) return;
+    _detachUploadStatus();
+    if (job == null) {
+      _uploadStatus.value = const UploadStatus();
+      return;
+    }
+    _uploadStatusJobId = job.id;
+    _uploadStatusBytes = job.bytes;
+    job.bytes.addListener(_onUploadBytes);
+    _onUploadBytes();
+  }
+
+  void _onUploadBytes() {
+    final bytes = _uploadStatusBytes?.value;
+    if (bytes == null) return;
+    _uploadStatus.value = UploadStatus(
+      active: true,
+      sent: bytes.sent,
+      total: bytes.total,
+    );
+  }
+
+  void _detachUploadStatus() {
+    _uploadStatusBytes?.removeListener(_onUploadBytes);
+    _uploadStatusBytes = null;
+    _uploadStatusJobId = null;
+  }
+
   void _mergePendingMedia() {
-    final service = MediaSendService.instance;
+    _syncUploadStatus();
+    final service = UploadService.instance;
     var changed = false;
 
     for (var i = _messages.length - 1; i >= 0; i--) {
@@ -6380,7 +6444,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     showCustomNotification(context, 'Загрузка…');
     unawaited(
-      MediaSendService.instance.sendPhotos(
+      UploadService.instance.sendPhotos(
         accountId: _myId,
         chatId: widget.chatId,
         tempId: _nextTempId(),
@@ -6634,156 +6698,28 @@ class _ChatScreenState extends State<ChatScreen>
     required int size,
     int? scheduledTime,
   }) async {
-    final file = (name: filename, size: size);
-    final done = Completer<void>();
+    if (_myId == 0) return;
 
     _showAttachmentPanel.value = false;
-    _uploadStatus.value = UploadStatus(active: true, total: file.size);
 
-    final scheduled = scheduledTime != null;
-    final tempId = scheduled
+    final placeholder = scheduledTime != null
         ? null
         : _addOptimisticFileMessage(
-            FileAttachment(name: file.name, size: file.size),
+            FileAttachment(name: filename, size: size),
           );
-    ValueNotifier<List<double>>? fileProgress;
-    if (tempId != null) {
-      fileProgress = ValueNotifier<List<double>>(const [0]);
-      _photoUploadProgress[tempId] = fileProgress;
-    }
 
-    UploadNotificationService.start(file.name);
-
-    var notifLastSent = 0;
-    var notifLastMs = DateTime.now().millisecondsSinceEpoch;
-    var notifSpeedBps = 0;
-    var notifLastPercent = -1;
-
-    void stopNotif() => UploadNotificationService.stop();
-
-    _uploadSub?.cancel();
-    _uploadSub = fileUploader
-        .upload(
-          chatId: widget.chatId,
-          file: source,
-          filename: file.name,
-          totalSize: file.size,
-          scheduledTime: scheduledTime,
-        )
-        .listen(
-          (event) {
-            if (!mounted) return;
-            switch (event) {
-              case UploadProgress(:final sent, :final total):
-                _uploadStatus.value = UploadStatus(
-                  active: true,
-                  sent: sent,
-                  total: total,
-                );
-                if (total > 0) {
-                  fileProgress?.value = [(sent / total).clamp(0.0, 1.0)];
-                }
-                final nowMs = DateTime.now().millisecondsSinceEpoch;
-                final elapsed = nowMs - notifLastMs;
-                if (elapsed >= 500) {
-                  notifSpeedBps = ((sent - notifLastSent) * 1000 / elapsed)
-                      .round();
-                  notifLastSent = sent;
-                  notifLastMs = nowMs;
-                }
-                final percent = total > 0 ? (sent * 100 ~/ total) : 0;
-                if (percent != notifLastPercent) {
-                  notifLastPercent = percent;
-                  UploadNotificationService.update(
-                    filename: file.name,
-                    progressPercent: percent,
-                    speedBps: notifSpeedBps,
-                  );
-                }
-              case UploadDone(
-                :final fileId,
-                :final token,
-                :final url,
-                :final messageId,
-              ):
-                stopNotif();
-                FileHistoryCache.add(
-                  FileHistoryEntry(
-                    fileId: fileId,
-                    url: url,
-                    token: token,
-                    filename: file.name,
-                    size: file.size,
-                    sentAt: DateTime.now(),
-                  ),
-                );
-                if (scheduled) {
-                  Haptics.send();
-                  showCustomNotification(
-                    context,
-                    'Запланировано на '
-                    '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(scheduledTime))}',
-                  );
-                } else {
-                  _disposePhotoProgress(tempId!);
-                  _updateFileMessageStatus(
-                    tempId,
-                    'sent',
-                    realId: messageId,
-                    attachment: FileAttachment(
-                      fileId: fileId,
-                      fileToken: token,
-                      name: file.name,
-                      size: file.size,
-                    ),
-                  );
-                }
-              case UploadError(:final message):
-                stopNotif();
-                showCustomNotification(context, 'Ошибка: $message');
-                if (tempId != null) {
-                  _disposePhotoProgress(tempId);
-                  _updateFileMessageStatus(tempId, 'error');
-                }
-            }
-          },
-          onDone: () {
-            if (!mounted) return;
-            stopNotif();
-            if (tempId != null) {
-              final inFlight = _messages.firstWhere(
-                (m) => m.id == tempId,
-                orElse: () => CachedMessage(
-                  id: '',
-                  accountId: 0,
-                  chatId: 0,
-                  senderId: 0,
-                  time: 0,
-                ),
-              );
-              if (inFlight.id == tempId && inFlight.status == 'sending') {
-                _disposePhotoProgress(tempId);
-                _updateFileMessageStatus(tempId, 'error');
-              }
-            }
-            _uploadStatus.value = const UploadStatus();
-            _uploadSub = null;
-            if (!done.isCompleted) done.complete();
-          },
-          onError: (Object e) {
-            if (!mounted) return;
-            stopNotif();
-            showCustomNotification(context, 'Ошибка: $e');
-            if (tempId != null) {
-              _disposePhotoProgress(tempId);
-              _updateFileMessageStatus(tempId, 'error');
-            }
-            _uploadStatus.value = const UploadStatus();
-            _uploadSub = null;
-            if (!done.isCompleted) done.complete();
-          },
-        );
-    return done.future;
+    final sending = UploadService.instance.sendFile(
+      accountId: _myId,
+      chatId: widget.chatId,
+      tempId: placeholder?.id ?? _nextTempId(),
+      source: source,
+      filename: filename,
+      size: size,
+      placeholder: placeholder,
+      scheduledTime: scheduledTime,
+    );
+    _syncUploadStatus();
+    await sending;
   }
 }
 

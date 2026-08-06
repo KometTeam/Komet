@@ -16,6 +16,7 @@ import '../../../core/utils/format.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/info_action_sheet.dart';
@@ -867,10 +868,10 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Icon(
-                                  _isPhoneVisible
-                                      ? Symbols.visibility
-                                      : Symbols.visibility_off,
+                                AnimatedSlashIcon(
+                                  icon: Symbols.visibility,
+                                  slashedIcon: Symbols.visibility_off,
+                                  slashed: !_isPhoneVisible,
                                   size: 14,
                                   color: Color.lerp(
                                     cs.mutedText,

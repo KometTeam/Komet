@@ -25,6 +25,7 @@ import '../../../core/utils/logger.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import 'call_participants_sheet.dart';
@@ -1260,7 +1261,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             onTap: _toggleSpeaker,
           ),
           _CallButton(
-            icon: video ? Symbols.videocam : Symbols.videocam_off,
+            icon: Symbols.videocam,
+            slashedIcon: Symbols.videocam_off,
+            slashed: !video,
             label: l10n.callVideoLabel,
             background: video ? cs.primary : cs.surfaceContainerHighest,
             foreground: video ? cs.onPrimary : cs.onSurface,
@@ -1276,7 +1279,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             onTap: _toggleScreen,
           ),
           _CallButton(
-            icon: _isMuted ? Symbols.mic_off : Symbols.mic,
+            icon: Symbols.mic,
+            slashedIcon: Symbols.mic_off,
+            slashed: _isMuted,
             label: _isMuted ? l10n.callUnmute : l10n.callMute,
             background: _isMuted ? cs.primary : cs.surfaceContainerHighest,
             foreground: _isMuted ? cs.onPrimary : cs.onSurface,
@@ -1340,6 +1345,8 @@ class _CallingDots extends StatelessWidget {
 
 class _CallButton extends StatelessWidget {
   final IconData icon;
+  final IconData? slashedIcon;
+  final bool slashed;
   final String label;
   final Color background;
   final Color foreground;
@@ -1352,8 +1359,25 @@ class _CallButton extends StatelessWidget {
     required this.background,
     required this.foreground,
     required this.onTap,
+    this.slashedIcon,
+    this.slashed = false,
     this.busy = false,
   });
+
+  Widget _buildIcon() {
+    final crossed = slashedIcon;
+    if (crossed == null) {
+      return Icon(icon, color: foreground, size: 26, fill: 1);
+    }
+    return AnimatedSlashIcon(
+      icon: icon,
+      slashedIcon: crossed,
+      slashed: slashed,
+      color: foreground,
+      size: 26,
+      fill: 1,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1372,7 +1396,7 @@ class _CallButton extends StatelessWidget {
             child: Center(
               child: busy
                   ? SmallSpinner(size: 22, color: foreground)
-                  : Icon(icon, color: foreground, size: 26, fill: 1),
+                  : _buildIcon(),
             ),
           ),
         ),

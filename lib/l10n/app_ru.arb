@@ -802,5 +802,48 @@
   "downloadsClearTitle": "Очистить историю загрузок?",
   "downloadsClearBody": "Файлы останутся на устройстве, но этот список будет очищен.",
   "downloadsClearConfirm": "Очистить",
-  "downloadsHistoryCleared": "История загрузок очищена"
+  "downloadsHistoryCleared": "История загрузок очищена",
+  "uploadNotificationPhotos": "{count, plural, =1{Фото} other{{count} фото}}",
+  "@uploadNotificationPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationVideo": "Видео",
+  "uploadNotificationFile": "Файл",
+  "uploadNotificationMultiple": "{count, plural, other{Отправка файлов: {count}}}",
+  "@uploadNotificationMultiple": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationPreparing": "Подготовка…",
+  "uploadSpeedBytes": "{value} Б/с",
+  "@uploadSpeedBytes": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedKb": "{value} КБ/с",
+  "@uploadSpeedKb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedMb": "{value} МБ/с",
+  "@uploadSpeedMb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  }
 }

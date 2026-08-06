@@ -4681,6 +4681,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Download history cleared'**
   String get downloadsHistoryCleared;
+
+  /// No description provided for @uploadNotificationPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Photo} other{{count} photos}}'**
+  String uploadNotificationPhotos(int count);
+
+  /// No description provided for @uploadNotificationVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get uploadNotificationVideo;
+
+  /// No description provided for @uploadNotificationFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get uploadNotificationFile;
+
+  /// No description provided for @uploadNotificationMultiple.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{Sending {count} files}}'**
+  String uploadNotificationMultiple(int count);
+
+  /// No description provided for @uploadNotificationPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing…'**
+  String get uploadNotificationPreparing;
+
+  /// No description provided for @uploadSpeedBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} B/s'**
+  String uploadSpeedBytes(String value);
+
+  /// No description provided for @uploadSpeedKb.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} KB/s'**
+  String uploadSpeedKb(String value);
+
+  /// No description provided for @uploadSpeedMb.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} MB/s'**
+  String uploadSpeedMb(String value);
 }
 
 class _AppLocalizationsDelegate

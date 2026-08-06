@@ -1058,5 +1058,48 @@
   "downloadsClearTitle": "Clear download history?",
   "downloadsClearBody": "The files will stay on the device, but this list will be cleared.",
   "downloadsClearConfirm": "Clear",
-  "downloadsHistoryCleared": "Download history cleared"
+  "downloadsHistoryCleared": "Download history cleared",
+  "uploadNotificationPhotos": "{count, plural, =1{Photo} other{{count} photos}}",
+  "@uploadNotificationPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationVideo": "Video",
+  "uploadNotificationFile": "File",
+  "uploadNotificationMultiple": "{count, plural, other{Sending {count} files}}",
+  "@uploadNotificationMultiple": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationPreparing": "Preparing…",
+  "uploadSpeedBytes": "{value} B/s",
+  "@uploadSpeedBytes": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedKb": "{value} KB/s",
+  "@uploadSpeedKb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedMb": "{value} MB/s",
+  "@uploadSpeedMb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -3108,6 +3108,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               Expanded(
                                 child: ActivitySubtitle(
                                   chatId: int.tryParse(id) ?? 0,
+                                  group: chatType != 'DIALOG',
                                   child: messageLine,
                                 ),
                               ),

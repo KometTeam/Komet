@@ -29,6 +29,8 @@ flutter build windows --release
 
 Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
+**Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with `flutter analyze`; the build commands above are documentation only.
+
 ## Build Flavors
 
 | Flavor | App ID | Notes |

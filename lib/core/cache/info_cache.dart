@@ -7,6 +7,7 @@ import '../../models/bot_info.dart';
 import '../../models/chat_info.dart';
 import '../../models/contact_info.dart';
 import '../protocol/opcode_map.dart';
+import '../storage/chat_members_store.dart';
 
 Api? _api;
 
@@ -336,6 +337,7 @@ class ChatInfoFetch {
     if (chats is! List || chats.isEmpty) return null;
     final first = chats.first;
     if (first is! Map) return null;
+    ChatMembersStore.instance.applyChatPayload(first);
     return ChatInfo.fromMap(Map<String, dynamic>.from(first));
   }
 }

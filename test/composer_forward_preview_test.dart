@@ -109,6 +109,8 @@ void main() {
 
     await tester.tap(find.byIcon(Symbols.close));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
 
     expect(cancelCount, 1);
     expect(find.text('Пересылка от вас'), findsNothing);

@@ -2457,4 +2457,49 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get downloadsHistoryCleared => 'История загрузок очищена';
+
+  @override
+  String uploadNotificationPhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count фото',
+      one: 'Фото',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get uploadNotificationVideo => 'Видео';
+
+  @override
+  String get uploadNotificationFile => 'Файл';
+
+  @override
+  String uploadNotificationMultiple(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Отправка файлов: $count',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get uploadNotificationPreparing => 'Подготовка…';
+
+  @override
+  String uploadSpeedBytes(String value) {
+    return '$value Б/с';
+  }
+
+  @override
+  String uploadSpeedKb(String value) {
+    return '$value КБ/с';
+  }
+
+  @override
+  String uploadSpeedMb(String value) {
+    return '$value МБ/с';
+  }
 }

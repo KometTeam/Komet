@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/calls/call_admin.dart';
 import '../../../core/calls/call_session.dart';
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/prompt_dialog.dart';
@@ -497,8 +498,10 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
             Icon(Symbols.screen_share, size: 18, color: cs.primary),
           if (p.videoEnabled)
             Icon(Symbols.videocam, size: 18, color: cs.onSurfaceVariant),
-          Icon(
-            p.audioEnabled ? Symbols.mic : Symbols.mic_off,
+          AnimatedSlashIcon(
+            icon: Symbols.mic,
+            slashedIcon: Symbols.mic_off,
+            slashed: !p.audioEnabled,
             size: 18,
             color: p.audioEnabled ? cs.onSurfaceVariant : cs.error,
           ),

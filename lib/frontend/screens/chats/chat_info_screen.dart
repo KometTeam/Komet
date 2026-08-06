@@ -17,6 +17,7 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/chat_members_store.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/haptics.dart';
@@ -24,6 +25,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
 import '../../../models/contact_info.dart';
 import '../../../models/story.dart';
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/animated_text_swap.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
@@ -170,7 +172,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   void initState() {
     super.initState();
     storiesModule.storiesChanged.addListener(_onStoriesChanged);
+    ChatMembersStore.instance
+        .listenable(widget.chatId)
+        .addListener(_onMemberCountChanged);
     _load();
+  }
+
+  int? get _memberCount => ChatMembersStore.instance.count(widget.chatId);
+
+  void _onMemberCountChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onStoriesChanged() {
@@ -181,6 +192,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   @override
   void dispose() {
     storiesModule.storiesChanged.removeListener(_onStoriesChanged);
+    ChatMembersStore.instance
+        .listenable(widget.chatId)
+        .removeListener(_onMemberCountChanged);
     _tabScrollController.dispose();
     _bodyScrollController?.dispose();
     _avatarPageController.dispose();
@@ -446,7 +460,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       unawaited(storiesModule.loadOwnersPreviews(fresh));
     }
 
-    final total = _chatInfo?.participantsCount;
+    final total = _memberCount;
     if (page.members.isEmpty ||
         added == 0 ||
         page.marker == _memberMarker ||
@@ -496,6 +510,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Future<void> _refreshMembers() async {
+    final info = await ChatInfoFetch.get(widget.chatId, forceRefresh: true);
+    if (!mounted) return;
+    if (info != null) _chatInfo = info;
     _contactMembers.clear();
     _otherMembers.clear();
     _seenMemberIds
@@ -1277,8 +1294,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                   color: _showRealName
                       ? Color.lerp(cs.primary, Colors.white, t)
                       : textColor.withValues(alpha: 0.7),
-                  icon: Icon(
-                    _showRealName ? Symbols.visibility : Symbols.visibility_off,
+                  icon: AnimatedSlashIcon(
+                    icon: Symbols.visibility,
+                    slashedIcon: Symbols.visibility_off,
+                    slashed: !_showRealName,
                   ),
                   tooltip: real,
                   onPressed: () =>
@@ -1303,10 +1322,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         }
         return '';
       case 'CHAT':
-        final total = _chatInfo?.participantsCount ?? _members.length;
+        final total = _memberCount ?? _members.length;
         return '$total ${pluralRu(total, 'участник', 'участника', 'участников')}';
       case 'CHANNEL':
-        final count = _chatInfo?.participantsCount ?? 0;
+        final count = _memberCount ?? 0;
         return '$count ${pluralRu(count, 'подписчик', 'подписчика', 'подписчиков')}';
       default:
         return '';
@@ -1330,7 +1349,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   Widget _buildActions(ColorScheme cs) {
     final muteBtn = (
-      icon: _isMuted ? Icons.notifications_off : Icons.notifications,
+      icon: Icons.notifications,
+      slashedIcon: Icons.notifications_off,
+      slashed: _isMuted,
       label: _isMuted
           ? l10n.chatInfoActionMuted
           : l10n.contactProfileActionSound,
@@ -1338,16 +1359,29 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
     final chatBtn = (
       icon: Icons.chat_bubble,
+      slashedIcon: null,
+      slashed: false,
       label: l10n.contactProfileActionChat,
       onTap: _openChat,
     );
     final leaveBtn = (
       icon: Icons.exit_to_app,
+      slashedIcon: null,
+      slashed: false,
       label: l10n.chatInfoActionLeave,
       onTap: _leaveChat,
     );
 
-    final List<({IconData icon, String label, VoidCallback? onTap})> btns;
+    final List<
+      ({
+        IconData icon,
+        IconData? slashedIcon,
+        bool slashed,
+        String label,
+        VoidCallback? onTap,
+      })
+    >
+    btns;
     if (widget.chatType == 'DIALOG') {
       btns = [
         chatBtn,
@@ -1355,6 +1389,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         if (!_isBot)
           (
             icon: Icons.call,
+            slashedIcon: null,
+            slashed: false,
             label: l10n.contactProfileActionCall,
             onTap: _confirmAndStartCall,
           ),
@@ -1371,7 +1407,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         Row(
           children: [
             for (int i = 0; i < btns.length; i++) ...[
-              _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
+              _actionBtn(
+                cs,
+                btns[i].icon,
+                btns[i].label,
+                onTap: btns[i].onTap,
+                slashedIcon: btns[i].slashedIcon,
+                slashed: btns[i].slashed,
+              ),
               if (i < btns.length - 1) const SizedBox(width: 8),
             ],
           ],
@@ -1645,9 +1688,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   Widget _actionBtn(
     ColorScheme cs,
     IconData icon,
-    String label, [
+    String label, {
     VoidCallback? onTap,
-  ]) {
+    IconData? slashedIcon,
+    bool slashed = false,
+  }) {
     return Expanded(
       child: GlossyPill(
         onTap: onTap,
@@ -1658,7 +1703,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: cs.primary, size: 22),
+            if (slashedIcon != null)
+              AnimatedSlashIcon(
+                icon: icon,
+                slashedIcon: slashedIcon,
+                slashed: slashed,
+                color: cs.primary,
+                size: 22,
+              )
+            else
+              Icon(icon, color: cs.primary, size: 22),
             const SizedBox(height: 4),
             Text(
               label,

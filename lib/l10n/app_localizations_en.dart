@@ -2443,4 +2443,49 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloadsHistoryCleared => 'Download history cleared';
+
+  @override
+  String uploadNotificationPhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos',
+      one: 'Photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get uploadNotificationVideo => 'Video';
+
+  @override
+  String get uploadNotificationFile => 'File';
+
+  @override
+  String uploadNotificationMultiple(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sending $count files',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get uploadNotificationPreparing => 'Preparing…';
+
+  @override
+  String uploadSpeedBytes(String value) {
+    return '$value B/s';
+  }
+
+  @override
+  String uploadSpeedKb(String value) {
+    return '$value KB/s';
+  }
+
+  @override
+  String uploadSpeedMb(String value) {
+    return '$value MB/s';
+  }
 }
