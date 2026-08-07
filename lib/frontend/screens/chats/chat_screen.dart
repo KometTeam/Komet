@@ -560,6 +560,12 @@ class _ChatScreenState extends State<ChatScreen>
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
   static const double _pinnedBannerLift = 6.0;
+  static const double _unreadSeparatorHeight = 30.0;
+  static const double _unreadSeparatorInset = 72.0;
+  static const double _unreadAnchorFallbackAlignment = 0.3;
+  static const int _jumpStallLimit = 8;
+  static const int _jumpFrameLimit = 240;
+  static const double _jumpStepMaxScreens = 4.0;
 
   final BackdropKey _barBackdrop = BackdropKey();
   final BackdropKey _pillBackdrop = BackdropKey();
@@ -1038,18 +1044,39 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  void _positionToMessage(String messageId, double alignment) {
+  double _unreadAnchorAlignment() {
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || listBox.size.height <= 0) {
+      return _unreadAnchorFallbackAlignment;
+    }
+    final glossy = AppVisualStyle.current.value.glossyChrome;
+    final chromeBottom = _effectiveChrome == ChatChromeStyle.color
+        ? 0.0
+        : MediaQuery.paddingOf(context).top +
+              (glossy ? _glossyHeaderHeight : kToolbarHeight) +
+              _pinnedBannerHeight.value;
+    final desiredTop =
+        chromeBottom + _unreadSeparatorHeight + _unreadSeparatorInset;
+    return (desiredTop / listBox.size.height).clamp(0.0, 0.5);
+  }
+
+  void _positionToMessage(String messageId) {
     _pinnedMessageId = messageId;
-    _pinnedAlignment = alignment.clamp(0.0, 1.0);
+    _jumpCacheExtent.value = _jumpCacheExtentPx;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _pinnedAlignment = _unreadAnchorAlignment();
       _scrollToLoadedMessage(
         messageId,
         alignment: _pinnedAlignment,
         highlight: false,
         notifyIfMissing: false,
         onSettled: () {
-          if (mounted) setState(_markPositioned);
+          if (!mounted) return;
+          setState(_markPositioned);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _jumpCacheExtent.value = null;
+          });
         },
       );
     });
@@ -1105,7 +1132,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (firstUnread > 0 || !_hasMoreHistory) {
         _initialPositionDone = true;
-        _positionToMessage(_messages[firstUnread].id, 0.15);
+        _positionToMessage(_messages[firstUnread].id);
       } else {
         _positioningInFlight = true;
         unawaited(_loadUntilUnreadReady());
@@ -1222,7 +1249,7 @@ class _ChatScreenState extends State<ChatScreen>
     _positioningInFlight = false;
     _initialPositionDone = true;
     if (idx >= 0) {
-      _positionToMessage(_messages[idx].id, 0.15);
+      _positionToMessage(_messages[idx].id);
     } else {
       setState(_markPositioned);
     }
@@ -2673,7 +2700,7 @@ class _ChatScreenState extends State<ChatScreen>
         }
         return _FrostedPanel(
           sigma: AppFrost.sigma,
-          tint: AppFrost.panelTint(cs),
+          tint: AppFrost.glassTint(cs),
           border: Border(top: AppFrost.hairline(cs)),
           backdropKey: _barBackdrop,
           child: child,
@@ -3095,7 +3122,7 @@ class _ChatScreenState extends State<ChatScreen>
           : (chrome == ChatChromeStyle.transparent && !glossy)
           ? _FrostedPanel(
               sigma: AppFrost.sigma,
-              tint: AppFrost.panelTint(cs),
+              tint: AppFrost.glassTint(cs),
               border: Border(bottom: AppFrost.hairline(cs)),
               backdropKey: _barBackdrop,
               child: const SizedBox.expand(),
@@ -3136,6 +3163,7 @@ class _ChatScreenState extends State<ChatScreen>
                             glossy: glossy,
                             frosted:
                                 glossy && chrome == ChatChromeStyle.transparent,
+                            backdropVisible: t == 0 && s == 0,
                             liquid: _liquidChrome,
                             backdropKey: _pillBackdrop,
                             cs: cs,
@@ -4835,12 +4863,7 @@ class _ChatScreenState extends State<ChatScreen>
       messageId,
     ).currentContext?.findRenderObject();
     if (laidOut is! RenderBox || !laidOut.attached) {
-      var below = 0.0;
-      for (var i = pos + 1; i < items.length; i++) {
-        below += items[i] is _MessageItem ? _avgMessageHeight : 44.0;
-      }
-      final maxExtent = _scrollController.position.maxScrollExtent;
-      _scrollController.jumpTo(below.clamp(0.0, maxExtent).toDouble());
+      _jumpNearMessage(messageId);
     }
 
     if (highlight) {
@@ -4858,10 +4881,72 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  ({int oldest, int newest}) _visibleItemRange(
+    List<Object> items,
+    RenderBox listBox,
+  ) {
+    var oldest = -1;
+    var newest = -1;
+    final viewportBottom = listBox.size.height;
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      if (item is! _MessageItem) continue;
+      final box = _messageKeys[item.message.id]?.currentContext
+          ?.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final top = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+      if (top + box.size.height <= 0 || top >= viewportBottom) continue;
+      if (oldest == -1) oldest = i;
+      newest = i;
+    }
+    return (oldest: oldest, newest: newest);
+  }
+
+  double _jumpStepScreens(int index, ({int oldest, int newest}) visible) {
+    if (visible.oldest == -1) return 1;
+    final perScreen = visible.newest - visible.oldest + 1;
+    if (perScreen <= 0) return 1;
+    final away = index < visible.oldest
+        ? visible.oldest - index
+        : index - visible.newest;
+    return (away / perScreen).clamp(1.0, _jumpStepMaxScreens);
+  }
+
+  bool _jumpNearMessage(String messageId) {
+    if (!_scrollController.hasClients) return false;
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || listBox.size.height <= 0) return false;
+    final items = _buildCombinedItems();
+    final index = items.indexWhere(
+      (it) => it is _MessageItem && it.message.id == messageId,
+    );
+    if (index == -1) return false;
+
+    final visible = _visibleItemRange(items, listBox);
+    final position = _scrollController.position;
+    final step = position.viewportDimension * _jumpStepScreens(index, visible);
+    final double next;
+    if (visible.oldest == -1 || index < visible.oldest) {
+      next = position.pixels + step;
+    } else if (index > visible.newest) {
+      next = position.pixels - step;
+    } else {
+      return false;
+    }
+    final clamped = next.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((clamped - position.pixels).abs() < 0.5) return false;
+    _scrollController.jumpTo(clamped);
+    return true;
+  }
+
   void _alignLoadedMessage(
     String messageId,
     double alignment,
     int attempt, {
+    int frames = 0,
     VoidCallback? onSettled,
   }) {
     if (!mounted || !_scrollController.hasClients) {
@@ -4871,15 +4956,17 @@ class _ChatScreenState extends State<ChatScreen>
     final listBox = _listKey.currentContext?.findRenderObject();
     final box = _keyForMessage(messageId).currentContext?.findRenderObject();
     if (listBox is! RenderBox || box is! RenderBox || !box.attached) {
-      if (attempt >= 8) {
+      if (attempt >= _jumpStallLimit || frames >= _jumpFrameLimit) {
         onSettled?.call();
         return;
       }
+      final moved = _jumpNearMessage(messageId);
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _alignLoadedMessage(
           messageId,
           alignment,
-          attempt + 1,
+          moved ? 0 : attempt + 1,
+          frames: frames + 1,
           onSettled: onSettled,
         ),
       );
@@ -4899,7 +4986,8 @@ class _ChatScreenState extends State<ChatScreen>
     if (viewportHeight <= 0 ||
         delta.abs() <= 0.5 ||
         (target - pos.pixels).abs() <= 0.5 ||
-        attempt >= 8) {
+        attempt >= _jumpStallLimit ||
+        frames >= _jumpFrameLimit) {
       onSettled?.call();
       return;
     }
@@ -4910,6 +4998,7 @@ class _ChatScreenState extends State<ChatScreen>
         messageId,
         alignment,
         attempt + 1,
+        frames: frames + 1,
         onSettled: onSettled,
       ),
     );
@@ -5790,52 +5879,59 @@ class _ChatScreenState extends State<ChatScreen>
         builder: (context, child) {
           final t = _scrollDownCurved.value;
           if (t == 0) return const SizedBox.shrink();
+          final backdropVisible = t >= 1;
           return Opacity(
             opacity: t,
-            child: Transform.scale(scale: 0.82 + 0.18 * t, child: child),
+            child: Transform.scale(
+              scale: 0.82 + 0.18 * t,
+              child: SizedBox(
+                width: 46,
+                height: 46,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: GlossyPill(
+                        color: frosted || _liquidChrome
+                            ? AppFrost.glassTint(cs)
+                            : null,
+                        blurSigma: frosted && !_liquidChrome && backdropVisible
+                            ? AppFrost.sigma
+                            : null,
+                        liquid: _liquidChrome,
+                        backdropKey: _pillBackdrop,
+                        elevated: true,
+                        onTap: _onScrollDownTap,
+                        child: child!,
+                      ),
+                    ),
+                    Positioned(
+                      top: -5,
+                      right: -3,
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: _newMessageCount,
+                        builder: (context, count, _) => count <= 0
+                            ? const SizedBox.shrink()
+                            : AnimatedValueSwap<int>(
+                                value: count > 99 ? 100 : count,
+                                alignment: Alignment.centerRight,
+                                builder: (context, value) =>
+                                    _unreadBadge(cs, value),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         },
-        child: SizedBox(
-          width: 46,
-          height: 46,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                child: GlossyPill(
-                  color: frosted || _liquidChrome
-                      ? AppFrost.pillTint(cs)
-                      : null,
-                  blurSigma: frosted && !_liquidChrome ? AppFrost.sigma : null,
-                  liquid: _liquidChrome,
-                  backdropKey: _pillBackdrop,
-                  elevated: true,
-                  onTap: _onScrollDownTap,
-                  child: Center(
-                    child: Icon(
-                      Symbols.keyboard_arrow_down,
-                      color: cs.onSurface,
-                      weight: 500,
-                      size: 26,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: -5,
-                right: -3,
-                child: ValueListenableBuilder<int>(
-                  valueListenable: _newMessageCount,
-                  builder: (context, count, _) => count <= 0
-                      ? const SizedBox.shrink()
-                      : AnimatedValueSwap<int>(
-                          value: count > 99 ? 100 : count,
-                          alignment: Alignment.centerRight,
-                          builder: (context, value) => _unreadBadge(cs, value),
-                        ),
-                ),
-              ),
-            ],
+        child: Center(
+          child: Icon(
+            Symbols.keyboard_arrow_down,
+            color: cs.onSurface,
+            weight: 500,
+            size: 26,
           ),
         ),
       ),
@@ -6862,7 +6958,7 @@ class _PinnedMessageBanner extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final content = Material(
       color: frosted
-          ? AppFrost.panelTint(cs)
+          ? AppFrost.glassTint(cs)
           : floating
           ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
           : cs.surfaceContainerHigh,

@@ -254,7 +254,7 @@ class _StickerPanelState extends State<StickerPanel>
       height: widget.height,
       child: GlassSurface(
         liquid: false,
-        frostTint: AppFrost.panelTint(cs),
+        frostTint: AppFrost.glassTint(cs),
         border: Border(top: AppFrost.hairline(cs)),
         child: SafeArea(
           top: false,

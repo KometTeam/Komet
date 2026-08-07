@@ -20,6 +20,7 @@ import 'package:komet/models/story.dart';
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
   final bool frosted;
+  final bool backdropVisible;
   final bool liquid;
   final BackdropKey? backdropKey;
   final ColorScheme cs;
@@ -46,6 +47,7 @@ class ChatHeaderRow extends StatelessWidget {
     super.key,
     required this.glossy,
     required this.frosted,
+    this.backdropVisible = true,
     this.liquid = false,
     this.backdropKey,
     required this.cs,
@@ -73,9 +75,10 @@ class ChatHeaderRow extends StatelessWidget {
   Widget build(BuildContext context) =>
       glossy ? _glossyRow(context) : _materialRow(context);
 
-  Color? get _pillColor => frosted || liquid ? AppFrost.pillTint(cs) : null;
+  Color? get _pillColor => frosted || liquid ? AppFrost.glassTint(cs) : null;
 
-  double? get _pillBlur => frosted && !liquid ? AppFrost.sigma : null;
+  double? get _pillBlur =>
+      frosted && !liquid && backdropVisible ? AppFrost.sigma : null;
 
   Widget _glossyRow(BuildContext context) {
     final nameStyle = TextStyle(

@@ -408,7 +408,7 @@ class ComposerInputBar extends StatelessWidget {
                                                 : recording
                                                 ? cs.error
                                                 : _frost
-                                                ? AppFrost.inputTint(cs)
+                                                ? AppFrost.glassTint(cs)
                                                 : cs.surfaceContainerHighest,
                                             onTap:
                                                 (hasText ||
@@ -523,7 +523,7 @@ class ComposerInputBar extends StatelessWidget {
     if (_flat) return child;
     return GlossyPill(
       color: _translucent
-          ? AppFrost.inputTint(cs)
+          ? AppFrost.glassTint(cs)
           : Color.alphaBlend(
               cs.surfaceContainerHighest.withValues(alpha: 0.92),
               cs.surface,
@@ -741,7 +741,7 @@ class ComposerInputBar extends StatelessWidget {
     if (!_translucent && chrome != ChatChromeStyle.transparent) return child;
     return GlassSurface(
       liquid: _liquid,
-      frostTint: AppFrost.panelTint(cs),
+      frostTint: AppFrost.glassTint(cs),
       border: Border(top: AppFrost.hairline(cs)),
       backdropKey: backdropKey,
       child: child,

@@ -2318,7 +2318,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                       return GlossyPill(
                                         onTap: _toggleFab,
                                         color: frost || liquid
-                                            ? AppFrost.fabTint(cs)
+                                            ? AppFrost.glassTint(cs)
                                             : cs.primaryContainer,
                                         blurSigma: frost
                                             ? AppFrost.sigma

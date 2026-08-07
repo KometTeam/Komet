@@ -797,7 +797,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                           backgroundColor: liquid
                               ? null
                               : (frost
-                                    ? AppFrost.navPillTint(cs)
+                                    ? AppFrost.glassTint(cs)
                                     : _composerColor(cs)),
                           borderColor: _composerBorderColor(cs),
                         );
