@@ -142,6 +142,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   int _memberMarker = 0;
   bool _membersLoading = false;
   bool _membersEnd = false;
+  static const int _memberRenderChunk = 24;
+  int _memberRenderLimit = _memberRenderChunk;
+  bool _memberFillScheduled = false;
 
   int _mediaChatId = 0;
   String? _anchorMsgId;
@@ -455,7 +458,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         added++;
       }
     }
-    if (added > 0) _rebuildMembers();
+    if (added > 0) {
+      _rebuildMembers();
+      _scheduleMemberFillCheck();
+    }
     if (fresh.isNotEmpty && AppStories.current.value) {
       unawaited(storiesModule.loadOwnersPreviews(fresh));
     }
@@ -472,17 +478,38 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     if (!initial) setState(() {});
   }
 
+  bool _revealMoreMembers() {
+    if (_memberRenderLimit >= _members.length) return false;
+    setState(() => _memberRenderLimit += _memberRenderChunk);
+    _scheduleMemberFillCheck();
+    return true;
+  }
+
+  void _scheduleMemberFillCheck() {
+    if (_memberFillScheduled) return;
+    _memberFillScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _memberFillScheduled = false;
+      if (!mounted) return;
+      if (_memberRenderLimit >= _members.length) return;
+      final controller = _bodyScrollController;
+      if (controller == null || !controller.hasClients) return;
+      if (controller.position.maxScrollExtent > 0) return;
+      _revealMoreMembers();
+    });
+  }
+
   void _onBodyScroll() {
     if (!mounted || widget.chatType != 'CHAT') return;
-    if (_membersLoading || _membersEnd) return;
     if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers)
       return;
     final controller = _bodyScrollController;
     if (controller == null || !controller.hasClients) return;
     final pos = controller.position;
-    if (pos.pixels >= pos.maxScrollExtent - 400) {
-      _fetchMembersPage();
-    }
+    if (pos.pixels < pos.maxScrollExtent - 400) return;
+    if (_revealMoreMembers()) return;
+    if (_membersLoading || _membersEnd) return;
+    _fetchMembersPage();
   }
 
   String? get _inviteLink {
@@ -522,6 +549,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _memberMarker = 0;
     _membersEnd = false;
     _membersLoading = false;
+    _memberRenderLimit = _memberRenderChunk;
     _rebuildMembers();
     if (mounted) setState(() {});
     await _fetchMembersPage(initial: true);
@@ -2148,6 +2176,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _buildMembersTabContent(ColorScheme cs) {
+    final hasHidden = _members.length > _memberRenderLimit;
+    final shown = hasHidden ? _members.take(_memberRenderLimit) : _members;
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
@@ -2170,8 +2200,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               () => _openInviteLink(_inviteLink!),
             ),
           ],
-          ..._members.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
-          if (_membersLoading || !_membersEnd) ...[
+          ...shown.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
+          if (hasHidden || _membersLoading || !_membersEnd) ...[
             _listDivider(cs),
             _membersFooter(cs),
           ],
@@ -2194,7 +2224,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       );
     }
     return InkWell(
-      onTap: () => _fetchMembersPage(),
+      onTap: () {
+        if (!_revealMoreMembers()) _fetchMembersPage();
+      },
       borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

@@ -62,6 +62,9 @@ class VideoNoteRecorder(
     private var fpsRange: Range<Int>? = null
     private var hasOis = false
     private var hasEis = false
+    private var hasFlash = false
+    private var torchOn = false
+    private var previewRequest: CaptureRequest.Builder? = null
 
     private var cameraDevice: CameraDevice? = null
     private var session: CameraCaptureSession? = null
@@ -119,6 +122,8 @@ class VideoNoteRecorder(
                 )?.contains(
                     CameraCharacteristics.CONTROL_VIDEO_STABILIZATION_MODE_ON,
                 ) == true
+                hasFlash = ch.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                if (!hasFlash) torchOn = false
                 return true
             }
         }
@@ -310,13 +315,21 @@ class VideoNoteRecorder(
                         CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON,
                     )
                 }
+                previewRequest = req
+                applyTorch(req)
                 s.setRepeatingRequest(req.build(), null, camHandler)
                 Log.i(
                     tag,
                     "preview session configured fpsRange=$fpsRange " +
-                        "ois=$hasOis eis=$hasEis",
+                        "ois=$hasOis eis=$hasEis flash=$hasFlash",
                 )
-                result.success(mapOf("textureId" to textureId, "size" to edge))
+                result.success(
+                    mapOf(
+                        "textureId" to textureId,
+                        "size" to edge,
+                        "hasFlash" to hasFlash,
+                    ),
+                )
             }
         } catch (e: Exception) {
             Log.e(tag, "preview session failed", e)
@@ -377,6 +390,38 @@ class VideoNoteRecorder(
     // Смена камеры на лету (в т.ч. во время записи): GL-конвейер и
     // MediaRecorder не трогаем, пересоздаются только CameraDevice и сессия —
     // кадры новой камеры продолжают приходить в тот же SurfaceTexture.
+    private fun applyTorch(req: CaptureRequest.Builder) {
+        req.set(
+            CaptureRequest.FLASH_MODE,
+            if (torchOn && hasFlash) {
+                CaptureRequest.FLASH_MODE_TORCH
+            } else {
+                CaptureRequest.FLASH_MODE_OFF
+            },
+        )
+    }
+
+    fun setTorch(on: Boolean, result: MethodChannel.Result) {
+        if (!hasFlash) {
+            result.success(false); return
+        }
+        val s = session
+        val req = previewRequest
+        if (s == null || req == null) {
+            result.error("NOT_READY", "no preview session", null); return
+        }
+        torchOn = on
+        try {
+            applyTorch(req)
+            s.setRepeatingRequest(req.build(), null, camHandler)
+            result.success(torchOn)
+        } catch (e: Exception) {
+            Log.e(tag, "torch failed", e)
+            torchOn = false
+            result.error("TORCH_FAILED", e.message, null)
+        }
+    }
+
     fun switchCamera(rawResult: MethodChannel.Result) {
         val result = OnceResult(rawResult)
         if (cameraDevice == null || !glReady) {
@@ -389,6 +434,7 @@ class VideoNoteRecorder(
         }
         try { session?.close() } catch (_: Exception) {}
         session = null
+        previewRequest = null
         try { cameraDevice?.close() } catch (_: Exception) {}
         cameraDevice = null
         if (!selectCamera(newFacing)) {

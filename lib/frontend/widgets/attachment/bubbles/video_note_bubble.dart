@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 import 'package:komet/main.dart';
 
+import '../../../../core/media/media_playback.dart';
 import '../../../../core/media/video_note_preloader.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
@@ -19,6 +20,9 @@ class VideoNoteBubble extends StatefulWidget {
   final VideoAttachment attachment;
   final String messageId;
   final int chatId;
+  final int senderId;
+  final bool isMe;
+  final int time;
   final ColorScheme cs;
   final Color textColor;
   final Widget meta;
@@ -28,6 +32,9 @@ class VideoNoteBubble extends StatefulWidget {
     required this.attachment,
     required this.messageId,
     required this.chatId,
+    required this.senderId,
+    required this.isMe,
+    required this.time,
     required this.cs,
     required this.textColor,
     required this.meta,
@@ -91,9 +98,30 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     _PreviewPool.unregister(this);
     _expand.dispose();
     _ringProgress.dispose();
-    _controller?.removeListener(_onTick);
-    _controller?.dispose();
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) {
+      controller.removeListener(_onTick);
+      MediaPlayback.instance.releaseVideoNote(controller);
+    }
     super.dispose();
+  }
+
+  void _claimPlayback() {
+    final controller = _controller;
+    if (controller == null) return;
+    MediaPlayback.instance.activateVideoNote(
+      VideoNoteTrack(
+        cacheName: _cacheName,
+        chatId: widget.chatId,
+        messageId: widget.messageId,
+        senderId: widget.senderId,
+        isMe: widget.isMe,
+        time: widget.time,
+        controller: controller,
+        preview: _preview,
+      ),
+    );
   }
 
   void _onTick() {
@@ -149,6 +177,14 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
 
   Future<VideoPlayerController?> _ensureController(File file) async {
     if (_controller != null) return _controller;
+    final live = MediaPlayback.instance.liveVideoNote(_cacheName);
+    if (live != null) {
+      _controller = live;
+      live.addListener(_onTick);
+      _PreviewPool.pin(this);
+      if (mounted) setState(() {});
+      return live;
+    }
     final running = _initializing;
     if (running != null) {
       await running;
@@ -174,6 +210,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     }
 
     _controller = controller;
+    MediaPlayback.instance.holdVideoNote(controller);
     await controller.setLooping(true);
     await controller.seekTo(Duration.zero);
     controller.addListener(_onTick);
@@ -185,9 +222,10 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   void _releasePreview() {
     final controller = _controller;
     if (controller == null) return;
+    if (MediaPlayback.instance.isActiveVideoNote(controller)) return;
     _controller = null;
     controller.removeListener(_onTick);
-    controller.dispose();
+    MediaPlayback.instance.releaseVideoNote(controller);
     if (mounted) setState(() {});
   }
 
@@ -227,6 +265,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     if (other != null && other != this) await other._pause();
     _playingNote = this;
     _PreviewPool.pin(this);
+    _claimPlayback();
     await controller.play();
     _expand.forward();
     if (mounted) setState(() {});
@@ -362,36 +401,42 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
         child: Stack(
           alignment: Alignment.center,
           children: [
-            ClipOval(
-              child: SizedBox(
-                width: size,
-                height: size,
-                child: AnimatedSwitcher(
-                  duration: _swapDuration,
-                  child: ready
-                      ? SizedBox.expand(
-                          key: const ValueKey('note-video'),
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            clipBehavior: Clip.hardEdge,
-                            child: SizedBox(
-                              width: controller!.value.size.width,
-                              height: controller.value.size.height,
-                              child: VideoPlayer(controller),
+            RepaintBoundary(
+              child: ClipOval(
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: AnimatedSwitcher(
+                    duration: _swapDuration,
+                    child: ready
+                        ? SizedBox.expand(
+                            key: const ValueKey('note-video'),
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              clipBehavior: Clip.hardEdge,
+                              child: SizedBox(
+                                width: controller!.value.size.width,
+                                height: controller.value.size.height,
+                                child: VideoPlayer(controller),
+                              ),
+                            ),
+                          )
+                        : preview != null
+                        ? SizedBox.expand(
+                            key: const ValueKey('note-preview'),
+                            child: Image.memory(
+                              preview,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                            ),
+                          )
+                        : SizedBox.expand(
+                            key: const ValueKey('note-empty'),
+                            child: ColoredBox(
+                              color: widget.cs.surfaceContainerHighest,
                             ),
                           ),
-                        )
-                      : preview != null
-                      ? Image.memory(
-                          preview,
-                          key: const ValueKey('note-preview'),
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                        )
-                      : Container(
-                          key: const ValueKey('note-empty'),
-                          color: widget.cs.surfaceContainerHighest,
-                        ),
+                  ),
                 ),
               ),
             ),

@@ -13,7 +13,18 @@ class NativeVideoNoteRecorder {
   static const _channel = MethodChannel('ru.komet.app/video_note');
 
   int? textureId;
+  bool hasFlash = false;
   bool get isAvailable => Platform.isAndroid;
+
+  Future<bool> requestPermission() async {
+    if (!isAvailable) return false;
+    try {
+      return await _channel.invokeMethod<bool>('permission') ?? false;
+    } catch (e) {
+      logger.w('NativeVideoNoteRecorder.requestPermission: $e');
+      return false;
+    }
+  }
 
   Future<bool> init({bool front = true, int size = 480, int fps = 30}) async {
     if (!isAvailable) return false;
@@ -24,6 +35,7 @@ class NativeVideoNoteRecorder {
         'fps': fps,
       });
       textureId = res?['textureId'] as int?;
+      hasFlash = res?['hasFlash'] as bool? ?? false;
       return textureId != null;
     } catch (e) {
       logger.w('NativeVideoNoteRecorder.init: $e');
@@ -38,6 +50,16 @@ class NativeVideoNoteRecorder {
       return true;
     } catch (e) {
       logger.w('NativeVideoNoteRecorder.switchCamera: $e');
+      return false;
+    }
+  }
+
+  Future<bool> setTorch(bool on) async {
+    if (!isAvailable || !hasFlash) return false;
+    try {
+      return await _channel.invokeMethod<bool>('torch', {'on': on}) ?? false;
+    } catch (e) {
+      logger.w('NativeVideoNoteRecorder.setTorch: $e');
       return false;
     }
   }
@@ -69,5 +91,6 @@ class NativeVideoNoteRecorder {
       await _channel.invokeMethod('dispose');
     } catch (_) {}
     textureId = null;
+    hasFlash = false;
   }
 }

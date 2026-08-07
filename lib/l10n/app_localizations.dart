@@ -1652,6 +1652,18 @@ abstract class AppLocalizations {
   /// **'G-FrostBlur'**
   String get appearanceNavPillFrost;
 
+  /// No description provided for @playbackPillAt.
+  ///
+  /// In en, this message translates to:
+  /// **'at'**
+  String get playbackPillAt;
+
+  /// No description provided for @playbackPillYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get playbackPillYou;
+
   /// No description provided for @appearanceGradientTitle.
   ///
   /// In en, this message translates to:

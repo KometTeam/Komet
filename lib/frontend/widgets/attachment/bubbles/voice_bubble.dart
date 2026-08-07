@@ -6,6 +6,7 @@ import 'package:komet/main.dart';
 import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/komet_settings.dart';
+import '../../../../core/media/media_playback.dart';
 import '../../../../core/media/voice_audio_controller.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
@@ -25,6 +26,7 @@ class VoiceMessageBubble extends StatefulWidget {
   final String? waveData;
   final int chatId;
   final String messageId;
+  final int senderId;
   final int? audioId;
   final String? preloadedText;
 
@@ -42,6 +44,7 @@ class VoiceMessageBubble extends StatefulWidget {
     this.waveData,
     required this.chatId,
     required this.messageId,
+    required this.senderId,
     this.audioId,
     this.preloadedText,
   });
@@ -67,8 +70,8 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   void initState() {
     super.initState();
     _transcriptionText = widget.preloadedText;
-    _audio = VoiceAudioController(
-      cacheName: '${widget.audioId ?? widget.messageId}.ogg',
+    _audio = MediaPlayback.instance.acquireVoice(
+      cacheName: _cacheName,
       resolveUrl: () async => widget.url,
       fallbackDuration: Duration(seconds: widget.duration),
     );
@@ -78,8 +81,29 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   @override
   void dispose() {
     _audio.failure.removeListener(_onFailure);
-    _audio.dispose();
+    MediaPlayback.instance.releaseVoice(_audio);
     super.dispose();
+  }
+
+  String get _cacheName => '${widget.audioId ?? widget.messageId}.ogg';
+
+  void _claimPlayback() {
+    MediaPlayback.instance.activateVoice(
+      VoiceTrack(
+        cacheName: _cacheName,
+        chatId: widget.chatId,
+        messageId: widget.messageId,
+        senderId: widget.senderId,
+        isMe: widget.isMe,
+        time: widget.time,
+        audio: _audio,
+      ),
+    );
+  }
+
+  void _toggle() {
+    _claimPlayback();
+    _audio.toggle();
   }
 
   void _onFailure() {
@@ -153,7 +177,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
   Widget _buildPlayButton() {
     return GestureDetector(
-      onTap: _audio.toggle,
+      onTap: _toggle,
       child: Container(
         width: 32,
         height: 32,
@@ -249,6 +273,8 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
               const SizedBox(width: 10),
               Expanded(
                 child: _SeekableWaveform(
+                  onClaim: _claimPlayback,
+                  onToggle: _toggle,
                   audio: _audio,
                   amps: _amps,
                   active: waveActiveColor,
@@ -427,12 +453,16 @@ class _SeekableWaveform extends StatefulWidget {
   final List<int> amps;
   final Color active;
   final Color inactive;
+  final VoidCallback onClaim;
+  final VoidCallback onToggle;
 
   const _SeekableWaveform({
     required this.audio,
     required this.amps,
     required this.active,
     required this.inactive,
+    required this.onClaim,
+    required this.onToggle,
   });
 
   @override
@@ -447,6 +477,10 @@ class _SeekableWaveformState extends State<_SeekableWaveform> {
 
   VoiceAudioController get _audio => widget.audio;
 
+  void _claimPlayback() => widget.onClaim();
+
+  void _toggle() => widget.onToggle();
+
   double _secondsAt(double dx) {
     final total = _audio.duration.value;
     if (_width <= 0 || total <= 0) return 0;
@@ -455,14 +489,16 @@ class _SeekableWaveformState extends State<_SeekableWaveform> {
 
   void _onTapUp(TapUpDetails details) {
     if (!_audio.downloaded.value) {
-      _audio.toggle();
+      _toggle();
       return;
     }
+    _claimPlayback();
     _audio.seekTo(_secondsAt(details.localPosition.dx));
   }
 
   void _onDragStart(DragStartDetails details) {
     if (!_audio.downloaded.value) return;
+    _claimPlayback();
     _audio.scrubStart();
     _audio.scrubTo(_secondsAt(details.localPosition.dx));
   }

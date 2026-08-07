@@ -45,6 +45,7 @@ import 'komet_settings_screen.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
+import '../../widgets/media_playback_pill.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -379,6 +380,11 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                     expandedExtent: expandedH,
                     headerBuilder: (ctx, t) =>
                         _buildHeader(ctx, cs, fullName, phone, t),
+                  ),
+                ),
+                const SliverToBoxAdapter(
+                  child: MediaPlaybackPill(
+                    margin: EdgeInsets.fromLTRB(16, 8, 16, 0),
                   ),
                 ),
                 SliverToBoxAdapter(

@@ -276,6 +276,8 @@
   "appearanceNavPillSubtitle": "Переключатель разделов на экране чатов",
   "appearanceNavPillGlossy": "Glossy",
   "appearanceNavPillFrost": "G-FrostBlur",
+  "playbackPillAt": "в",
+  "playbackPillYou": "Вы",
   "appearanceGradientTitle": "Градиент",
   "appearanceGradientSubtitle": "Объём и блики в Glossy-капсулах",
   "appearanceSpectrumTitle": "Спектр на фоне",

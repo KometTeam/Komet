@@ -332,24 +332,34 @@ class ComposerInputBar extends StatelessWidget {
                             ),
                           ),
                           Positioned.fill(
-                            child: ValueListenableBuilder<bool>(
-                              valueListenable: voiceRec.isRecording,
-                              builder: (context, recording, _) => IgnorePointer(
-                                ignoring: !recording,
-                                child: AnimatedSlide(
-                                  offset: recording
-                                      ? Offset.zero
-                                      : const Offset(0.06, 0),
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeOutCubic,
-                                  child: AnimatedOpacity(
-                                    opacity: recording ? 1 : 0,
-                                    duration: const Duration(milliseconds: 180),
-                                    curve: Curves.easeOut,
-                                    child: _voiceRecordingIndicator(cs),
+                            child: AnimatedBuilder(
+                              animation: Listenable.merge([
+                                voiceRec.isRecording,
+                                note.isRecording,
+                              ]),
+                              builder: (context, _) {
+                                final video = note.isRecording.value;
+                                final recording =
+                                    video || voiceRec.isRecording.value;
+                                return IgnorePointer(
+                                  ignoring: !recording,
+                                  child: AnimatedSlide(
+                                    offset: recording
+                                        ? Offset.zero
+                                        : const Offset(0.06, 0),
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeOutCubic,
+                                    child: AnimatedOpacity(
+                                      opacity: recording ? 1 : 0,
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      curve: Curves.easeOut,
+                                      child: _recordingIndicator(cs, video),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -390,13 +400,26 @@ class ComposerInputBar extends StatelessWidget {
                           valueListenable: hasText,
                           builder: (context, hasText, _) => ValueListenableBuilder<bool>(
                             valueListenable: voiceRec.locked,
-                            builder: (context, locked, _) =>
+                            builder: (context, voiceLocked, _) =>
                                 ValueListenableBuilder<bool>(
                                   valueListenable: voiceRec.isRecording,
-                                  builder: (context, recording, _) =>
-                                      ValueListenableBuilder<bool>(
-                                        valueListenable: note.videoNoteMode,
-                                        builder: (context, videoMode, _) {
+                                  builder: (context, voiceRecording, _) =>
+                                      AnimatedBuilder(
+                                        animation: Listenable.merge([
+                                          note.videoNoteMode,
+                                          note.isRecording,
+                                          note.locked,
+                                        ]),
+                                        builder: (context, _) {
+                                          final videoMode =
+                                              note.videoNoteMode.value;
+                                          final noteRecording =
+                                              note.isRecording.value;
+                                          final recording =
+                                              voiceRecording || noteRecording;
+                                          final locked = noteRecording
+                                              ? note.locked.value
+                                              : voiceLocked;
                                           final sendMode =
                                               hasText ||
                                               hasForward ||
@@ -416,9 +439,11 @@ class ComposerInputBar extends StatelessWidget {
                                                     forceSend)
                                                 ? onSendText
                                                 : locked
-                                                ? () => voiceRec.stop(
-                                                    cancel: false,
-                                                  )
+                                                ? () => noteRecording
+                                                      ? note.stop(cancel: false)
+                                                      : voiceRec.stop(
+                                                          cancel: false,
+                                                        )
                                                 : null,
                                             onLongPress:
                                                 (hasText &&
@@ -783,7 +808,14 @@ class ComposerInputBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _voiceLockChip(cs, a),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: note.isRecording,
+                    builder: (context, video, _) => _lockChip(
+                      cs,
+                      a,
+                      video ? note.lockDrag : voiceRec.lockDrag,
+                    ),
+                  ),
                   Transform.scale(
                     scale: 1.0 + a * 0.14 + a * v * 0.24,
                     child: pill,
@@ -797,11 +829,15 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
-  Widget _voiceLockChip(ColorScheme cs, double reveal) {
+  Widget _lockChip(
+    ColorScheme cs,
+    double reveal,
+    ValueListenable<double> lockDrag,
+  ) {
     return Positioned(
       bottom: 62,
       child: ValueListenableBuilder<double>(
-        valueListenable: voiceRec.lockDrag,
+        valueListenable: lockDrag,
         builder: (context, lock, _) => Opacity(
           opacity: (reveal * (0.5 + lock * 0.5)).clamp(0.0, 1.0),
           child: Transform.translate(
@@ -843,7 +879,7 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
-  Widget _voiceRecordingIndicator(ColorScheme cs) {
+  Widget _recordingIndicator(ColorScheme cs, bool video) {
     return Container(
       color: Color.alphaBlend(
         cs.surfaceContainerHighest.withValues(alpha: 0.92),
@@ -852,20 +888,23 @@ class ComposerInputBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          ValueListenableBuilder<double>(
-            valueListenable: voiceRec.amplitude,
-            builder: (context, amp, child) => TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: amp),
-              duration: const Duration(milliseconds: 120),
-              builder: (context, v, child) =>
-                  Transform.scale(scale: 1.0 + v * 0.7, child: child),
-              child: child,
+          if (video)
+            _RecordingDot(color: cs.error)
+          else
+            ValueListenableBuilder<double>(
+              valueListenable: voiceRec.amplitude,
+              builder: (context, amp, child) => TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: amp),
+                duration: const Duration(milliseconds: 120),
+                builder: (context, v, child) =>
+                    Transform.scale(scale: 1.0 + v * 0.7, child: child),
+                child: child,
+              ),
+              child: _RecordingDot(color: cs.error),
             ),
-            child: _RecordingDot(color: cs.error),
-          ),
           const SizedBox(width: 12),
           ValueListenableBuilder<int>(
-            valueListenable: voiceRec.elapsedMs,
+            valueListenable: video ? note.elapsedMs : voiceRec.elapsedMs,
             builder: (context, ms, _) => Text(
               formatElapsed(ms),
               style: TextStyle(
@@ -878,8 +917,22 @@ class ComposerInputBar extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: ValueListenableBuilder<double>(
-              valueListenable: voiceRec.cancelDrag,
+              valueListenable: video ? note.cancelDrag : voiceRec.cancelDrag,
               builder: (context, drag, _) {
+                if (video) {
+                  return Opacity(
+                    opacity: (0.55 + drag * 0.45).clamp(0.0, 1.0),
+                    child: Center(
+                      child: Text(
+                        '‹ Влево — отмена',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  );
+                }
                 if (drag > 0.01) {
                   return Opacity(
                     opacity: (0.45 + drag * 0.55).clamp(0.0, 1.0),
@@ -921,16 +974,20 @@ class ComposerInputBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           ValueListenableBuilder<bool>(
-            valueListenable: voiceRec.locked,
+            valueListenable: video ? note.locked : voiceRec.locked,
             builder: (context, locked, _) => locked
                 ? GestureDetector(
-                    onTap: () => voiceRec.stop(cancel: true),
+                    onTap: () => video
+                        ? note.stop(cancel: true)
+                        : voiceRec.stop(cancel: true),
                     behavior: HitTestBehavior.opaque,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Icon(Symbols.delete, size: 22, color: cs.error),
                     ),
                   )
+                : video
+                ? const SizedBox.shrink()
                 : Text(
                     '‹ влево — отмена',
                     style: TextStyle(color: cs.mutedText, fontSize: 11),

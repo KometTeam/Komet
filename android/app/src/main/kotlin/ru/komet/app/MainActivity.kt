@@ -84,6 +84,7 @@ class MainActivity : FlutterActivity() {
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
+        const val CAMERA_PERM_REQUEST = 7712
         val NFC_READER_FLAGS = NfcAdapter.FLAG_READER_NFC_A or
             NfcAdapter.FLAG_READER_NFC_B or
             NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
@@ -241,6 +242,7 @@ class MainActivity : FlutterActivity() {
             "ru.komet.app/video_note",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "permission" -> requestCameraPermission(result)
                 "init" -> {
                     val front = call.argument<Boolean>("front") ?: true
                     val size = call.argument<Int>("size") ?: 480
@@ -258,6 +260,10 @@ class MainActivity : FlutterActivity() {
                 "start" -> noteRecorder?.start(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "switch" -> noteRecorder?.switchCamera(result)
+                "torch" -> noteRecorder?.setTorch(
+                    call.argument<Boolean>("on") ?: false,
+                    result,
+                )
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "stop" -> noteRecorder?.stop(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
@@ -595,12 +601,42 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private var cameraPermResult: MethodChannel.Result? = null
+
+    private fun requestCameraPermission(result: MethodChannel.Result) {
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.CAMERA,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            result.success(true); return
+        }
+        if (cameraPermResult != null) {
+            result.success(false); return
+        }
+        cameraPermResult = result
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.CAMERA),
+            CAMERA_PERM_REQUEST,
+        )
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERM_REQUEST) {
+            val pending = cameraPermResult
+            cameraPermResult = null
+            pending?.success(
+                grantResults.isNotEmpty() &&
+                    grantResults.all { it == PackageManager.PERMISSION_GRANTED },
+            )
+            return
+        }
         if (requestCode != BLE_PERMS_REQUEST) return
         if (!NfcExchange.active) return
         val granted = grantResults.isNotEmpty() &&

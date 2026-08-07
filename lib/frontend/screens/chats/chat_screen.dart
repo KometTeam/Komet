@@ -116,6 +116,8 @@ import 'chat_encryption_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 import 'chat/retain_offset_physics.dart';
 import 'profile_action_sheets.dart';
+import '../../../core/media/media_playback.dart';
+import '../../widgets/media_playback_pill.dart';
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -308,6 +310,7 @@ class _ChatScreenState extends State<ChatScreen>
   int _readMarkTime = 0;
   Timer? _readMarkTimer;
   final GlobalKey _listKey = GlobalKey();
+  final GlobalKey _unreadSeparatorKey = GlobalKey();
   final Object _profileHeroTag = UniqueKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
@@ -349,6 +352,7 @@ class _ChatScreenState extends State<ChatScreen>
     isMounted: () => mounted,
     onRecorded: _sendVideoNote,
     formatElapsed: formatVoiceElapsed,
+    bottomInset: () => _composerHeight.value,
   );
 
   StreamSubscription<UploadJobEvent>? _uploadEventSub;
@@ -677,6 +681,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_scheduleReadMarker);
     _scrollController.addListener(_exitTextSelectionOnScroll);
     _scrollController.addListener(_updateScrollDownVisible);
+    MediaPlayback.instance.enterChat(widget.chatId);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
     AppChatChrome.current.addListener(_onVisualStyleChanged);
     AppComposerStyle.current.addListener(_onVisualStyleChanged);
@@ -1049,14 +1054,16 @@ class _ChatScreenState extends State<ChatScreen>
     if (listBox is! RenderBox || listBox.size.height <= 0) {
       return _unreadAnchorFallbackAlignment;
     }
+    final separator =
+        _unreadSeparatorKey.currentContext?.size?.height ??
+        _unreadSeparatorHeight;
     final glossy = AppVisualStyle.current.value.glossyChrome;
     final chromeBottom = _effectiveChrome == ChatChromeStyle.color
         ? 0.0
         : MediaQuery.paddingOf(context).top +
               (glossy ? _glossyHeaderHeight : kToolbarHeight) +
               _pinnedBannerHeight.value;
-    final desiredTop =
-        chromeBottom + _unreadSeparatorHeight + _unreadSeparatorInset;
+    final desiredTop = chromeBottom + separator + _unreadSeparatorInset;
     return (desiredTop / listBox.size.height).clamp(0.0, 0.5);
   }
 
@@ -1292,6 +1299,7 @@ class _ChatScreenState extends State<ChatScreen>
     final atBottom = candidate.id == _messages.last.id;
 
     if (_unreadAnchorTime != null &&
+        _userDidScroll &&
         _unreadSeparatorScrolledPast(
           atBottom,
           topIndex,
@@ -2049,6 +2057,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_updateScrollDownVisible);
     _readMarkTimer?.cancel();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
+    MediaPlayback.instance.leaveChat(widget.chatId);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
     AppComposerStyle.current.removeListener(_onVisualStyleChanged);
     AppComposerBackground.current.removeListener(_onVisualStyleChanged);
@@ -4893,9 +4902,15 @@ class _ChatScreenState extends State<ChatScreen>
       if (item is! _MessageItem) continue;
       final box = _messageKeys[item.message.id]?.currentContext
           ?.findRenderObject();
-      if (box is! RenderBox || !box.attached) continue;
+      if (box is! RenderBox || !box.attached) {
+        if (oldest != -1) break;
+        continue;
+      }
       final top = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
-      if (top + box.size.height <= 0 || top >= viewportBottom) continue;
+      if (top + box.size.height <= 0 || top >= viewportBottom) {
+        if (oldest != -1) break;
+        continue;
+      }
       if (oldest == -1) oldest = i;
       newest = i;
     }
@@ -5201,6 +5216,7 @@ class _ChatScreenState extends State<ChatScreen>
     final cs = Theme.of(context).colorScheme;
     final accent = cs.primary;
     return Padding(
+      key: _unreadSeparatorKey,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       child: Row(
         children: [
@@ -5311,13 +5327,43 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  Widget? _buildPinnedBanner({required bool floating}) {
+  Widget _buildPinnedAndPill() {
+    return ValueListenableBuilder<PlaybackKind?>(
+      valueListenable: MediaPlayback.instance.primary,
+      builder: (context, kind, _) {
+        final merged = kind != null;
+        final banner = _buildPinnedBanner(
+          floating: true,
+          borderRadius: merged
+              ? const BorderRadius.vertical(top: Radius.circular(16))
+              : null,
+        );
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ?banner,
+            MediaPlaybackPill(
+              borderRadius: banner == null
+                  ? BorderRadius.circular(16)
+                  : const BorderRadius.vertical(bottom: Radius.circular(16)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget? _buildPinnedBanner({
+    required bool floating,
+    BorderRadius? borderRadius,
+  }) {
     final pinned = chat;
     if (pinned == null || !pinned.hasPinnedMessage) return null;
     return _PinnedMessageBanner(
       text: pinned.pinnedMsgText,
       isPreview: pinned.pinnedMsgIsPreview,
       floating: floating,
+      borderRadius: borderRadius,
       frosted: _effectiveChrome == ChatChromeStyle.transparent,
       liquid: _liquidChrome,
       backdropKey: _pillBackdrop,
@@ -5363,6 +5409,7 @@ class _ChatScreenState extends State<ChatScreen>
                   ),
                 ),
               ),
+              VideoNoteRecordingLayer(controller: _note),
               if (frosted)
                 Positioned(left: 0, right: 0, bottom: 0, child: composer),
               SearchOverlay(
@@ -5388,21 +5435,10 @@ class _ChatScreenState extends State<ChatScreen>
         _pinnedBannerLift;
   }
 
-  void _resetPinnedBannerHeight() {
-    if (_pinnedBannerHeight.value == 0) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && chat?.hasPinnedMessage != true) {
-        _pinnedBannerHeight.value = 0;
-      }
-    });
-  }
-
   Widget _buildUnderlapBody() {
     final cs = Theme.of(context).colorScheme;
     final vignette = _effectiveChrome == ChatChromeStyle.none;
     final bannerTop = _pinnedBannerTop();
-    final banner = _buildPinnedBanner(floating: true);
-    if (banner == null) _resetPinnedBannerHeight();
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -5434,16 +5470,15 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
         ],
-        if (banner != null)
-          Positioned(
-            top: bannerTop,
-            left: 8,
-            right: 8,
-            child: _MeasureSize(
-              onHeight: (value) => _pinnedBannerHeight.value = value,
-              child: banner,
-            ),
+        Positioned(
+          top: bannerTop,
+          left: 8,
+          right: 8,
+          child: _MeasureSize(
+            onHeight: (value) => _pinnedBannerHeight.value = value,
+            child: _buildPinnedAndPill(),
           ),
+        ),
         ValueListenableBuilder<double>(
           valueListenable: _composerHeight,
           builder: (context, height, _) => Positioned(
@@ -5459,6 +5494,7 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
         ),
+        VideoNoteRecordingLayer(controller: _note),
         Positioned(
           left: 0,
           right: 0,
@@ -6940,6 +6976,7 @@ class _PinnedMessageBanner extends StatelessWidget {
   final bool floating;
   final bool frosted;
   final bool liquid;
+  final BorderRadius? borderRadius;
   final BackdropKey? backdropKey;
 
   const _PinnedMessageBanner({
@@ -6948,10 +6985,13 @@ class _PinnedMessageBanner extends StatelessWidget {
     required this.onTap,
     this.onUnpin,
     this.floating = false,
+    this.borderRadius,
     this.frosted = false,
     this.liquid = false,
     this.backdropKey,
   });
+
+  BorderRadius get _radius => borderRadius ?? BorderRadius.circular(16);
 
   @override
   Widget build(BuildContext context) {
@@ -6962,7 +7002,7 @@ class _PinnedMessageBanner extends StatelessWidget {
           : floating
           ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
           : cs.surfaceContainerHigh,
-      borderRadius: floating ? BorderRadius.circular(16) : null,
+      borderRadius: floating ? _radius : null,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,

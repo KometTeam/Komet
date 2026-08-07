@@ -838,6 +838,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceNavPillFrost => 'G-FrostBlur';
 
   @override
+  String get playbackPillAt => 'в';
+
+  @override
+  String get playbackPillYou => 'Вы';
+
+  @override
   String get appearanceGradientTitle => 'Градиент';
 
   @override

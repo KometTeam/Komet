@@ -46,6 +46,20 @@ Future<bool> openChatById(
   int? messageId,
   int? messageTime,
   String? initialText,
+}) => openChatAtMessage(
+  context,
+  chatId,
+  messageId: messageId?.toString(),
+  messageTime: messageTime,
+  initialText: initialText,
+);
+
+Future<bool> openChatAtMessage(
+  BuildContext context,
+  int chatId, {
+  String? messageId,
+  int? messageTime,
+  String? initialText,
 }) async {
   final myId = await currentAccountId();
   if (myId == 0) return false;
@@ -68,7 +82,7 @@ Future<bool> openChatById(
       name: name,
       imageUrl: chat.iconUrl ?? '',
       chatType: chat.type,
-      initialMessageId: messageId?.toString(),
+      initialMessageId: messageId,
       initialMessageTime: messageTime,
       initialText: initialText,
     ),

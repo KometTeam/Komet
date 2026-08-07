@@ -1933,6 +1933,7 @@ class MessageBubble extends StatelessWidget {
       waveData: waveData,
       chatId: message.chatId,
       messageId: message.id,
+      senderId: message.senderId,
       audioId: audioId,
       preloadedText: cachedTranscription?.text,
     );

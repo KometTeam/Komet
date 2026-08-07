@@ -87,6 +87,7 @@ import '../stories/story_ring.dart';
 import '../../widgets/sending_clock_icon.dart';
 import '../stories/story_viewer_screen.dart';
 import '../downloads_screen.dart';
+import '../../widgets/media_playback_pill.dart';
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -1750,6 +1751,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                         },
                       ),
               ),
+            ),
+          if (!widget.forwardMode)
+            const MediaPlaybackPill(
+              margin: EdgeInsets.fromLTRB(20, 6, 20, 2),
             ),
           if (!widget.forwardMode) _buildInformerBanner(),
         ],

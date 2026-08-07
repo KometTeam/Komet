@@ -52,6 +52,7 @@ class VoiceAudioController {
   Timer? _ticker;
   Future<void>? _loading;
   double _sliceOffset = 0;
+  double _speed = 1;
   int _startGeneration = 0;
   bool _scrubbing = false;
   bool _resumeAfterScrub = false;
@@ -85,6 +86,7 @@ class VoiceAudioController {
     final player = _player;
     if (player != null) {
       player.play();
+      _applySpeed();
       playing.value = true;
       _startTicker();
       return;
@@ -102,6 +104,31 @@ class VoiceAudioController {
     _player?.pause();
     playing.value = false;
     _stopTicker();
+  }
+
+  void setSpeed(double speed) {
+    if (_disposed) return;
+    _speed = speed;
+    _applySpeed();
+  }
+
+  void stopAndReset() {
+    if (_disposed) return;
+    pause();
+    _disposePlayer();
+    _finished = false;
+    _sliceOffset = 0;
+    position.value = 0;
+  }
+
+  void _applySpeed() {
+    final player = _player;
+    if (player == null) return;
+    try {
+      player.setPlaybackRate(_speed);
+    } catch (e) {
+      logger.w('VoiceAudioController.setSpeed($cacheName): $e');
+    }
   }
 
   Future<void> seekTo(double seconds) async {
@@ -239,6 +266,7 @@ class VoiceAudioController {
       _player = player;
       player.state.addListener(_onPlayerState);
       player.play();
+      _applySpeed();
       playing.value = true;
       _startTicker();
     } catch (e) {

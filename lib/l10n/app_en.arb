@@ -318,6 +318,8 @@
   "appearanceNavPillSubtitle": "Section switcher on the chats screen",
   "appearanceNavPillGlossy": "Glossy",
   "appearanceNavPillFrost": "G-FrostBlur",
+  "playbackPillAt": "at",
+  "playbackPillYou": "You",
   "appearanceGradientTitle": "Gradient",
   "appearanceGradientSubtitle": "Depth and highlights in Glossy capsules",
   "appearanceSpectrumTitle": "Spectrum background",

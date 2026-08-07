@@ -834,6 +834,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceNavPillFrost => 'G-FrostBlur';
 
   @override
+  String get playbackPillAt => 'at';
+
+  @override
+  String get playbackPillYou => 'You';
+
+  @override
   String get appearanceGradientTitle => 'Gradient';
 
   @override

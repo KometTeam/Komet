@@ -88,6 +88,7 @@ import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
+import 'frontend/widgets/floating_video_note.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
@@ -1011,6 +1012,9 @@ class KometAppState extends State<KometApp>
                             RepaintBoundary(
                               key: _captureBoundaryKey,
                               child: sChild!,
+                            ),
+                            const Positioned.fill(
+                              child: FloatingVideoNoteLayer(),
                             ),
                             if (fpsOn) const FpsOverlayLayer(),
                           ],
