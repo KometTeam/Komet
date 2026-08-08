@@ -6,6 +6,7 @@ import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/utils/text_format.dart';
 import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
 import '../../sending_clock_icon.dart';
@@ -19,6 +20,20 @@ typedef ForwardedSourceTap =
     void Function(ForwardedMessageAttachment forwarded);
 
 final Expando<({bool full, String text})> _clockTextCache = Expando();
+
+class BubblePresentation {
+  final String? text;
+  final List<FormatRange> formatRanges;
+  final String? sourceMessageId;
+  final int? sourceChatId;
+
+  const BubblePresentation({
+    this.text,
+    this.formatRanges = const [],
+    this.sourceMessageId,
+    this.sourceChatId,
+  });
+}
 
 ({IconData icon, Color color}) messageStatusVisual(
   String? status, {
@@ -75,6 +90,7 @@ class BubbleContext {
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(StickerAttachment sticker)? onStickerTap;
   final ForwardedSourceTap? onForwardedSourceTap;
+  final BubblePresentation? presentation;
 
   BubbleContext({
     required this.context,
@@ -97,7 +113,42 @@ class BubbleContext {
     this.onStickerTap,
     this.onForwardedSourceTap,
     this.reactionInfo,
+    this.presentation,
   }) : dim = text.withValues(alpha: 0.7);
+
+  String? get contentText =>
+      presentation == null ? message.text : presentation!.text;
+
+  List<FormatRange> get contentFormatRanges =>
+      presentation == null ? message.formatRanges : presentation!.formatRanges;
+
+  String get sourceMessageId => presentation?.sourceMessageId ?? message.id;
+
+  int get sourceChatId => presentation?.sourceChatId ?? message.chatId;
+
+  BubbleContext withPresentation(BubblePresentation value) => BubbleContext(
+    context: context,
+    cs: cs,
+    text: text,
+    shape: shape,
+    contentType: contentType,
+    hasPhotoWithCaption: hasPhotoWithCaption,
+    hasMultiplePhotosNoCaption: hasMultiplePhotosNoCaption,
+    message: message,
+    isMe: isMe,
+    myId: myId,
+    chatType: chatType,
+    chatId: chatId,
+    chatName: chatName,
+    photoActions: photoActions,
+    overrideStatus: overrideStatus,
+    otherReadTime: otherReadTime,
+    uploadProgress: uploadProgress,
+    onStickerTap: onStickerTap,
+    onForwardedSourceTap: onForwardedSourceTap,
+    reactionInfo: reactionInfo,
+    presentation: value,
+  );
 
   String get clockText {
     final full = KometSettings.fullTimestamp.value;
@@ -115,15 +166,16 @@ class BubbleContext {
 
   Widget caption() {
     final style = TextStyle(color: text, fontSize: 16, height: 1.3);
-    final ranges = message.formatRanges;
-    if (FormattedMessageText.isFormatted(message.text, ranges)) {
+    final captionText = contentText;
+    final ranges = contentFormatRanges;
+    if (FormattedMessageText.isFormatted(captionText, ranges)) {
       return FormattedMessageText(
-        text: message.text!,
+        text: captionText!,
         ranges: ranges,
         style: style,
       );
     }
-    return Text(message.text ?? '', style: style);
+    return Text(captionText ?? '', style: style);
   }
 
   Widget meta() {

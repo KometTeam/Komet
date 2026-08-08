@@ -19,6 +19,13 @@ class VideoBubble extends StatelessWidget {
 
   const VideoBubble({super.key, required this.ctx, required this.video});
 
+  static double layoutWidth(VideoAttachment video) {
+    return (video.width?.toDouble() ?? 200.0).clamp(
+      BubbleContext.photoMinSize,
+      BubbleContext.photoMaxSize,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final message = ctx.message;
@@ -27,6 +34,8 @@ class VideoBubble extends StatelessWidget {
         attachment: video,
         messageId: message.id,
         chatId: message.chatId,
+        sourceMessageId: ctx.sourceMessageId,
+        sourceChatId: ctx.sourceChatId,
         senderId: message.senderId,
         isMe: ctx.isMe,
         time: message.time,
@@ -36,7 +45,9 @@ class VideoBubble extends StatelessWidget {
         uploadProgress: ctx.uploadProgress,
       );
     }
-    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
+    final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
+    final hasCaption = resolvedCaption != null;
     final thumb = video.thumbnail;
     final durationMs = video.duration;
     final previewUrl = (thumb != null && thumb.isNotEmpty)
@@ -45,12 +56,8 @@ class VideoBubble extends StatelessWidget {
         ? video.baseUrl!
         : (video.previewData ?? '');
 
-    final w = video.width;
     final h = video.height;
-    final width = (w?.toDouble() ?? 200.0).clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
+    final width = layoutWidth(video);
     final height = (h?.toDouble() ?? 150.0).clamp(
       BubbleContext.photoMinSize,
       BubbleContext.photoMaxSize,
@@ -192,7 +199,7 @@ class VideoBubble extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Expanded(child: ctx.caption()),
+                Expanded(child: resolvedCaption),
                 ctx.meta(),
               ],
             ),
@@ -212,8 +219,8 @@ class VideoBubble extends StatelessWidget {
     Haptics.tap();
 
     final sources = await messagesModule.getVideoSources(
-      messageId: ctx.message.id,
-      chatId: ctx.message.chatId,
+      messageId: ctx.sourceMessageId,
+      chatId: ctx.sourceChatId,
       token: token,
       videoId: videoId,
     );

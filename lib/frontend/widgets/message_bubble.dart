@@ -529,19 +529,48 @@ class MessageBubble extends StatelessWidget {
   });
 
   bool _computeHasPhotoWithCaption() {
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) return false;
+    final attachments = _contentAttachments;
+    if (attachments.isEmpty) return false;
     final hasPhoto = attachments.any((a) => a is PhotoAttachment);
-    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final hasCaption = _contentText?.isNotEmpty ?? false;
     return hasPhoto && hasCaption;
   }
 
   bool _computeHasMultiplePhotosNoCaption() {
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) return false;
+    final attachments = _contentAttachments;
+    if (attachments.isEmpty) return false;
     final photoCount = attachments.whereType<PhotoAttachment>().length;
-    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final hasCaption = _contentText?.isNotEmpty ?? false;
     return photoCount >= 2 && !hasCaption;
+  }
+
+  ForwardedMessageAttachment? get _forwarded => message.forwardedAttachment;
+
+  List<MessageAttachment> get _contentAttachments {
+    final forwarded = _forwarded;
+    if (forwarded != null) {
+      if (forwarded.originalContact != null) {
+        return [forwarded.originalContact!];
+      }
+      return forwarded.originalAttachments
+              ?.where((a) => a is! InlineKeyboardAttachment)
+              .toList() ??
+          const [];
+    }
+    return message.attachments
+            ?.where((a) => a is! InlineKeyboardAttachment)
+            .toList() ??
+        const [];
+  }
+
+  MessageAttachment? get _primaryAttachment {
+    final attachments = _contentAttachments;
+    return attachments.isEmpty ? null : attachments.first;
+  }
+
+  String? get _contentText {
+    final forwarded = _forwarded;
+    return forwarded == null ? message.text : forwarded.originalText;
   }
 
   bool get _showsSenderName =>
@@ -577,22 +606,15 @@ class MessageBubble extends StatelessWidget {
   }
 
   bool get _hasShareAttachment {
-    final a = message.attachments;
-    return a != null && a.isNotEmpty && a.first is ShareAttachment;
+    return _primaryAttachment is ShareAttachment;
   }
 
   bool get _isVideoNote {
-    final a = message.attachments;
-    if (a == null || a.isEmpty) return false;
-    final first = a.first;
+    final first = _primaryAttachment;
     return first is VideoAttachment && first.isNote;
   }
 
-  bool get _isSticker {
-    final a = message.attachments;
-    if (a == null || a.isEmpty) return false;
-    return a.first is StickerAttachment;
-  }
+  bool get _isSticker => _primaryAttachment is StickerAttachment;
 
   static const int _jumboAnimojiLimit = 4;
 
@@ -621,26 +643,14 @@ class MessageBubble extends StatelessWidget {
 
   MessageType _computeContentType() {
     if (message.isControl) return MessageType.control;
-    final attachments = message.attachments
-        ?.where((a) => a is! InlineKeyboardAttachment)
-        .toList();
-    if (attachments != null && attachments.isNotEmpty) {
+    final attachments = _contentAttachments;
+    if (attachments.isNotEmpty) {
       final first = attachments.first;
-      if (first is ForwardedMessageAttachment) {
-        final fwd = first;
-        final hasContact = fwd.originalContact != null;
-        final hasPhoto =
-            fwd.originalAttachments != null &&
-            fwd.originalAttachments!.any((a) => a is PhotoAttachment);
-        final hasOther =
-            fwd.originalAttachments != null &&
-            fwd.originalAttachments!.isNotEmpty;
-        if (hasContact || hasPhoto || hasOther) return MessageType.attachment;
-        return MessageType.text;
-      }
       if (first is ContactAttachment) return MessageType.attachment;
       if (first is UnknownAttachment) return MessageType.text;
-      if (first.type == AttachmentType.audio) return MessageType.voice;
+      if (first.type == AttachmentType.audio) {
+        return _forwarded == null ? MessageType.voice : MessageType.attachment;
+      }
       if (first is ShareAttachment) {
         return AppLinkPreview.current.value
             ? MessageType.attachment
@@ -648,6 +658,8 @@ class MessageBubble extends StatelessWidget {
       }
       return MessageType.attachment;
     }
+
+    if (_forwarded != null) return MessageType.text;
 
     final payload = message.payload;
     if (payload == null) return MessageType.text;
@@ -1781,6 +1793,7 @@ class MessageBubble extends StatelessWidget {
   ) {
     final origText = forwarded.originalText;
     final hasOrigText = origText != null && origText.isNotEmpty;
+    final forwardedCtx = _forwardedContext(ctx, forwarded);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1793,7 +1806,7 @@ class MessageBubble extends StatelessWidget {
         ),
         if (hasOrigText) ...[
           const SizedBox(height: 2),
-          _wrapSelectable(buildForwardedMessageText(ctx, forwarded)),
+          _wrapSelectable(forwardedCtx.caption()),
         ] else ...[
           const SizedBox(height: 2),
           _wrapSelectable(
@@ -1815,35 +1828,76 @@ class MessageBubble extends StatelessWidget {
 
     final first = attachments.first;
     if (first is ForwardedMessageAttachment) {
-      final fwd = first;
-      if (fwd.originalContact != null) {
-        return ForwardedContactBubble(ctx: ctx, forwarded: fwd);
-      }
-      final photos = fwd.originalAttachments
-          ?.whereType<PhotoAttachment>()
-          .toList();
-      if (photos != null && photos.isNotEmpty) {
-        return ForwardedPhotoBubble(ctx: ctx, forwarded: fwd, photos: photos);
-      }
-      final stickers = fwd.originalAttachments
-          ?.whereType<StickerAttachment>()
-          .toList();
-      if (stickers != null && stickers.isNotEmpty) {
-        return ForwardedStickerBubble(
-          ctx: ctx,
-          forwarded: fwd,
-          sticker: stickers.first,
-        );
-      }
-      final files = fwd.originalAttachments;
-      if (files != null && files.isNotEmpty) {
-        return ForwardedGenericBubble(
-          ctx: ctx,
-          forwarded: fwd,
-          attachments: files,
-        );
-      }
-      return _buildTextContent(ctx);
+      return _buildForwardedAttachmentContent(ctx, first);
+    }
+
+    return _buildNativeAttachmentContent(ctx, attachments);
+  }
+
+  BubbleContext _forwardedContext(
+    BubbleContext ctx,
+    ForwardedMessageAttachment forwarded,
+  ) => ctx.withPresentation(
+    BubblePresentation(
+      text: forwarded.originalText,
+      formatRanges: forwarded.originalFormatRanges,
+      sourceMessageId: forwarded.originalMessageId,
+      sourceChatId: forwarded.originalChatId,
+    ),
+  );
+
+  Widget _buildForwardedAttachmentContent(
+    BubbleContext ctx,
+    ForwardedMessageAttachment forwarded,
+  ) {
+    final forwardedCtx = _forwardedContext(ctx, forwarded);
+    final attachments =
+        forwarded.originalAttachments
+            ?.where((a) => a is! InlineKeyboardAttachment)
+            .toList() ??
+        const <MessageAttachment>[];
+    final content = _buildNativeAttachmentContent(
+      forwardedCtx,
+      attachments,
+      contact: forwarded.originalContact,
+      hasContentAbove: true,
+    );
+    final primary =
+        forwarded.originalContact ??
+        (attachments.isEmpty ? null : attachments.first);
+    final floatingHeader =
+        primary is StickerAttachment ||
+        (primary is VideoAttachment && primary.isNote);
+
+    if (floatingHeader) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ForwardedHeaderFloating(ctx: ctx, forwarded: forwarded),
+          const SizedBox(height: 6),
+          content,
+        ],
+      );
+    }
+
+    return _HeaderAboveMatchWidth(
+      content: content,
+      header: Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: ForwardedHeader(ctx: ctx, forwarded: forwarded),
+      ),
+    );
+  }
+
+  Widget _buildNativeAttachmentContent(
+    BubbleContext ctx,
+    List<MessageAttachment> attachments, {
+    ContactAttachment? contact,
+    bool hasContentAbove = false,
+  }) {
+    if (contact != null) {
+      return ContactBubble(ctx: ctx, contact: contact);
     }
 
     final contacts = attachments.whereType<ContactAttachment>().toList();
@@ -1866,7 +1920,11 @@ class MessageBubble extends StatelessWidget {
       return _buildGenericAttachment(ctx, attachments.first);
     }
 
-    return PhotoBubble(ctx: ctx, photos: photos);
+    return PhotoBubble(
+      ctx: ctx,
+      photos: photos,
+      hasContentAbove: hasContentAbove,
+    );
   }
 
   Widget _buildGenericAttachment(
@@ -1887,29 +1945,34 @@ class MessageBubble extends StatelessWidget {
         );
       case AttachmentType.call:
         return CallBubble(ctx: ctx, call: attachment as CallAttachment);
+      case AttachmentType.audio:
+        return Padding(
+          padding: _paddingFor(MessageType.voice, ctx.shape),
+          child: _buildVoiceAttachment(ctx, attachment as AudioAttachment),
+        );
       default:
         return _buildTextContent(ctx);
     }
   }
 
   Widget _buildVoiceContent(BubbleContext ctx) {
-    int duration = 0;
-    String url = '';
-    String? waveData;
-    int? audioId;
-
+    AudioAttachment? audio;
     final attaches = message.attachments;
     if (attaches != null && attaches.isNotEmpty) {
       for (final a in attaches) {
         if (a is AudioAttachment) {
-          duration = ((a.duration ?? 0) / 1000).round();
-          url = a.fileUrl ?? a.baseUrl ?? '';
-          waveData = a.waveform;
-          audioId = a.audioId;
+          audio = a;
           break;
         }
       }
     }
+
+    return _buildVoiceAttachment(ctx, audio);
+  }
+
+  Widget _buildVoiceAttachment(BubbleContext ctx, AudioAttachment? audio) {
+    var duration = ((audio?.duration ?? 0) / 1000).round();
+    var url = audio?.fileUrl ?? audio?.baseUrl ?? '';
 
     if (duration == 0 && url.isEmpty) {
       final payload = message.payload;
@@ -1918,7 +1981,7 @@ class MessageBubble extends StatelessWidget {
       url = voice?['url']?.toString() ?? '';
     }
 
-    final cachedTranscription = TranscriptionCache.get(message.id);
+    final cachedTranscription = TranscriptionCache.get(ctx.sourceMessageId);
 
     return VoiceMessageBubble(
       duration: duration,
@@ -1930,11 +1993,13 @@ class MessageBubble extends StatelessWidget {
       otherReadTime: otherReadTime,
       time: message.time,
       cs: ctx.cs,
-      waveData: waveData,
+      waveData: audio?.waveform,
       chatId: message.chatId,
       messageId: message.id,
+      sourceChatId: ctx.sourceChatId,
+      sourceMessageId: ctx.sourceMessageId,
       senderId: message.senderId,
-      audioId: audioId,
+      audioId: audio?.audioId,
       preloadedText: cachedTranscription?.text,
       uploadProgress: ctx.uploadProgress,
     );

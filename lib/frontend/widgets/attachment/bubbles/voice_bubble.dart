@@ -26,6 +26,8 @@ class VoiceMessageBubble extends StatefulWidget {
   final String? waveData;
   final int chatId;
   final String messageId;
+  final int? sourceChatId;
+  final String? sourceMessageId;
   final int senderId;
   final int? audioId;
   final String? preloadedText;
@@ -45,6 +47,8 @@ class VoiceMessageBubble extends StatefulWidget {
     this.waveData,
     required this.chatId,
     required this.messageId,
+    this.sourceChatId,
+    this.sourceMessageId,
     required this.senderId,
     this.audioId,
     this.preloadedText,
@@ -87,7 +91,11 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     super.dispose();
   }
 
-  String get _cacheName => '${widget.audioId ?? widget.messageId}.ogg';
+  String get _cacheName => '${widget.audioId ?? _sourceMessageId}.ogg';
+
+  int get _sourceChatId => widget.sourceChatId ?? widget.chatId;
+
+  String get _sourceMessageId => widget.sourceMessageId ?? widget.messageId;
 
   void _claimPlayback() {
     MediaPlayback.instance.activateVoice(
@@ -434,8 +442,8 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       return;
     }
 
-    if (TranscriptionCache.has(widget.messageId)) {
-      final cached = TranscriptionCache.get(widget.messageId)!;
+    if (TranscriptionCache.has(_sourceMessageId)) {
+      final cached = TranscriptionCache.get(_sourceMessageId)!;
       setState(() {
         _transcriptionText = cached.text ?? 'не удалось распознать текст';
         _transcriptionVisible = true;
@@ -449,12 +457,12 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
     try {
       final result = await messagesModule.requestTranscription(
-        widget.chatId,
-        int.tryParse(widget.messageId) ?? 0,
+        _sourceChatId,
+        int.tryParse(_sourceMessageId) ?? 0,
         widget.audioId!,
       );
 
-      TranscriptionCache.put(widget.messageId, result);
+      TranscriptionCache.put(_sourceMessageId, result);
 
       if (!mounted) return;
       setState(() {

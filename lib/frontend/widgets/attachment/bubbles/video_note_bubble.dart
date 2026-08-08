@@ -23,6 +23,8 @@ class VideoNoteBubble extends StatefulWidget {
   final VideoAttachment attachment;
   final String messageId;
   final int chatId;
+  final String? sourceMessageId;
+  final int? sourceChatId;
   final int senderId;
   final bool isMe;
   final int time;
@@ -36,6 +38,8 @@ class VideoNoteBubble extends StatefulWidget {
     required this.attachment,
     required this.messageId,
     required this.chatId,
+    this.sourceMessageId,
+    this.sourceChatId,
     required this.senderId,
     required this.isMe,
     required this.time,
@@ -217,8 +221,8 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     return VideoNotePreloader.load(
       _cacheName,
       () => messagesModule.getVideoUrl(
-        messageId: widget.messageId,
-        chatId: widget.chatId,
+        messageId: widget.sourceMessageId ?? widget.messageId,
+        chatId: widget.sourceChatId ?? widget.chatId,
         token: token,
         videoId: videoId,
       ),

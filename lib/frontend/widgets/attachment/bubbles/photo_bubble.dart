@@ -21,14 +21,12 @@ class PhotoBubble extends StatelessWidget {
 
   final BubbleContext ctx;
   final List<PhotoAttachment> photos;
-  final Widget? caption;
   final bool hasContentAbove;
 
   const PhotoBubble({
     super.key,
     required this.ctx,
     required this.photos,
-    this.caption,
     this.hasContentAbove = false,
   });
 
@@ -42,10 +40,8 @@ class PhotoBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final message = ctx.message;
-    final hasMessageCaption = message.text != null && message.text!.isNotEmpty;
-    final resolvedCaption =
-        caption ?? (hasMessageCaption ? ctx.caption() : null);
+    final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
+    final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
     final hasCaption = resolvedCaption != null;
     final count = photos.length;
 
